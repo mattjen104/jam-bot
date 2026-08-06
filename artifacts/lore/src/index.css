@@ -5144,14 +5144,28 @@
 .fdrow__t1 .fdrow__artist { color: #fff; }
 
 /* ── Popular-crossing sentence (Also-On-Air onboarding crossing sort) ──────
-   Lime = crossing with Lore's most-played; canary = new on air / first
-   hearing; orange-red = already in the library. The tiny "+" seeds the
-   artist and flips its name to the library colour. */
+   Two-tone: bright white = artist in your library (or seeded this session);
+   the same gray as the surrounding sentence for everything else. Non-library
+   names carry a dotted underline and are themselves the click-to-add target. */
 .fdrow__pop-sentence { color: hsl(var(--foreground) / 0.85); }
-.fdrow__t1 .fdrow__artist--pop { color: #fff; }
 .fdrow__t1 .fdrow__artist--lib { color: #fff; }
-/* Artist names in the Also sentence that can be added — show pointer. */
-.fdrow__artist--addable { cursor: pointer; }
+/* Gray, addable artist name — dotted underline is the only affordance. */
+.fdrow__t1 .fdrow__artist--add {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  font-weight: 400;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.fdrow__t1 .fdrow__artist--add:hover { color: #fff; }
 /* ── Also-On-Air right-edge scrubber ─────────────────────────────────────
    One tick per station in the current sort order; tick length tracks the
    popular-crossing weight (the lime gradient IS the sort), canary ticks
@@ -5207,9 +5221,7 @@
   border-radius: 6px;
   pointer-events: none;
 }
-/* Neutral setlist filler names (heard-but-not-kept, not popular, not new) */
-.fdrow__t1 .fdrow__artist--set { color: hsl(var(--foreground) / 0.55); font-weight: 400; }
-/* "+N more" / "less" setlist expand affordance */
+/* "N more" / "less" setlist expand affordance */
 .fdrow__setmore {
   appearance: none;
   background: none;
@@ -5257,15 +5269,14 @@
   gap: 5px;
   max-width: 100%;
 }
-/* Base pill — small rounded button, no border, background tint for contrast */
+/* Base pill — plain text button, touch-friendly padding, no background */
 .also-pill {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 8px;
+  padding: 3px 2px;
   border: none;
-  border-radius: 99px;
+  background: none;
   font-family: var(--app-font-display);
   font-size: 13px;
   font-weight: 400;
@@ -5286,34 +5297,18 @@
   white-space: nowrap;
   max-width: 180px;
 }
-/* "+" badge — trailing, lighter weight */
-.also-pill__plus {
-  font-size: 0.98em;
-  font-weight: 400;
-  line-height: 1;
-  flex-shrink: 0;
-  color: hsl(var(--library));
-}
-/* Default state — unseeded, not popular: subtle muted background, pointer */
-.also-pill--default {
-  background: hsl(var(--muted) / 0.7);
-  color: hsl(var(--foreground) / 0.9);
+/* Addable state — gray to match the sentence text, dotted underline */
+.also-pill--add {
+  color: hsl(var(--foreground) / 0.85);
   cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }
-.also-pill--default:hover { opacity: 0.8; }
-/* Popular state — lime tint */
-.also-pill--pop {
-  background: hsl(var(--accent) / 0.18);
-  color: hsl(var(--accent));
-  cursor: pointer;
-}
-.also-pill--pop:hover { opacity: 0.8; }
-/* Seeded / already-in-library state — orange-red tint, inert */
+.also-pill--add:hover { color: #fff; }
+/* Seeded / already-in-library state — bright white, inert */
 .also-pill--lib {
-  background: hsl(var(--library) / 0.15);
-  color: hsl(var(--library));
+  color: #fff;
   cursor: default;
-  opacity: 0.7;
 }
 /* Lime sort triangle next to the Also On Air tab — flips popular-heavy /
    deep-cuts station ordering (client-side re-sort, no refetch). */
@@ -5901,9 +5896,14 @@ body * {
 .slim-nav__btn {
   font-size: 17px !important;
 }
-/* Grayscale brand: big bright-white wordmark, left-justified. */
+/* Grayscale brand: wordmark in the dial-sentence gray, left-justified. */
 .dial-topbar__letter {
-  color: #fff;
+  color: hsl(var(--foreground) / 0.85);
+}
+/* Wordmark (all pages) + its dotted underline match the same gray. */
+.dial-topbar__wordmark {
+  color: hsl(var(--foreground) / 0.85);
+  text-decoration-color: hsl(var(--foreground) / 0.85);
 }
 /* Moon in the time-travel strip — the phase-accurate time indicator. */
 .dial-timetravel__label svg.moon-glyph {
@@ -5936,6 +5936,98 @@ body * {
 .dial-density-spine__bin--daystart {
   margin-left: 5px;
   box-shadow: -3px 0 0 -1px hsl(0 0% 30%);
+}
+
+/* ── Hero art sidebar — time chevrons, time label, reserved set panel ── */
+.dial-hero__artwrap { position: relative; }
+.dial-hero__chev {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  appearance: none;
+  border: none;
+  background: hsl(var(--background) / 0.55);
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 34px !important;
+  line-height: 1;
+  padding: 12px 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.dial-hero__chev--prev { left: 0; border-radius: 0 6px 6px 0; }
+.dial-hero__chev--next { right: 0; border-radius: 6px 0 0 6px; }
+.dial-hero__chev:disabled { opacity: 0.25; cursor: default; }
+.dial-hero__chev:hover:not(:disabled) { color: #fff; }
+/* Where-in-time label — floats over the top of the art when stepped back */
+.dial-hero__timelabel {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  background: hsl(var(--background) / 0.8);
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 15px !important;
+  padding: 2px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+/* Reserved set panel — bottom quarter of the sidebar; expanded "this set"
+   artists render here instead of pushing rows around inline. */
+.dial-hero__setpanel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 25%;
+  min-height: 96px;
+  z-index: 7;
+  background: hsl(var(--background) / 0.92);
+  border-top: 1px solid hsl(var(--border) / 0.6);
+  padding: 8px 12px;
+  overflow-y: auto;
+}
+.dial-hero__setpanel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.dial-hero__setpanel-title {
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 15px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dial-hero__setpanel-close {
+  appearance: none;
+  background: none;
+  border: none;
+  color: hsl(var(--foreground) / 0.7);
+  cursor: pointer;
+  font-size: 15px !important;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+.dial-hero__setpanel-close:hover { color: #fff; }
+/* Moon phase — top right of the front-door topbar */
+.dial-topbar--all .dial-topbar__moon-tr {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+  z-index: 2;
+  display: inline-flex;
+  padding-right: 4px;
+  color: #fff;
 }
 
 /* ── Typography policy: no bold, no italic, anywhere. ── */

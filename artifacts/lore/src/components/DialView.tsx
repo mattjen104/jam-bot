@@ -183,29 +183,19 @@ function liveSentence(
 // Popular-crossing sentence — Also-On-Air "onboarding crossing sort"
 // ---------------------------------------------------------------------------
 
-/** Is this artist "new" — first spin on Lore ever, or never heard by this listener? */
-function popArtistIsNew(a: PopularCrossingArtist): boolean {
-  return !a.popular && (a.debut || !a.heard);
-}
-
-/** Colour precedence for a popular-crossing setlist name. */
-function popArtistCls(a: PopularCrossingArtist, inLib: boolean): string {
-  if (inLib) return "fdrow__artist fdrow__artist--lib";
-  if (a.popular) return "fdrow__artist fdrow__artist--pop";
-  return "fdrow__artist fdrow__artist--set";
-}
-
-/** Cap on setlist names shown before the "+N more" expand affordance. */
+/** Cap on setlist names shown before the "N more" expand affordance. */
 const SETLIST_VISIBLE = 8;
 
 /**
  * Full in-order setlist for Also-On-Air rows: every artist in the station's
- * recent set, in spin order. Lime = crossing with Lore's most-played pool;
- * canary = new-to-Lore / new-to-me; plain = heard-but-not-kept filler.
+ * recent set, in spin order. Two-tone scheme: bright white = in your library
+ * (or seeded this session); gray = everything else. Non-library names carry a
+ * dotted underline and are themselves the click target to add the artist —
+ * once added they flip to white and stop being clickable.
  * Library artists are excluded (they surface in ON AIR), but artists seeded
- * via "+" this session stay visible in orange-red until the next refresh so
- * they don't vanish under the click. Every non-library name keeps its "+".
- * Long sets collapse behind a "+N more" toggle to keep the dial legible.
+ * this session stay visible in white until the next refresh so they don't
+ * vanish under the click.
+ * Long sets collapse behind an "N more" toggle to keep the dial legible.
  */
 function PopCrossingLine({ artists, seedsLower, onAdd }: {
   artists: PopularCrossingArtist[];
@@ -222,19 +212,18 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
   const visible = expanded ? set : set.slice(0, SETLIST_VISIBLE);
   const hidden = set.length - visible.length;
 
-  const span = (a: PopularCrossingArtist) => (
-    <b key={a.name} className={popArtistCls(a, inLib(a))}>
-      {!inLib(a) && (
-        <button
-          type="button"
-          className="fdrow__addplus"
-          aria-label={`Add ${a.name} to your artists`}
-          onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
-        >＋</button>
-      )}
-      {a.name}
-    </b>
-  );
+  const span = (a: PopularCrossingArtist) =>
+    inLib(a) ? (
+      <b key={a.name} className="fdrow__artist fdrow__artist--lib">{a.name}</b>
+    ) : (
+      <button
+        key={a.name}
+        type="button"
+        className="fdrow__artist fdrow__artist--add"
+        aria-label={`Add ${a.name} to your artists`}
+        onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
+      >{a.name}</button>
+    );
   const nodes: ReactNode[] = [];
   visible.forEach((a, i) => {
     if (i > 0) nodes.push(" · ");
@@ -250,7 +239,7 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
           className="fdrow__setmore"
           aria-expanded={false}
           onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
-        >{`+${hidden} more`}</button>
+        >{`${hidden} more`}</button>
       )}
       {expanded && set.length > SETLIST_VISIBLE && (
         <button
@@ -270,12 +259,10 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
  * Renders artist names as a flex-wrap pill grid — every line starts at the
  * same left edge, no ragged wrap, each chip is a touch-friendly tap target.
  *
- * Colour rules:
- *   - seeded this session → orange-red (library colour); no "+" badge.
- *   - popular (rare-spin criterion) → lime green.
- *   - default → subtle muted background with trailing "+" badge.
- * Clicking an unseeded chip adds the artist and the chip immediately updates
- * to the seeded state via the seedsLower set.
+ * Two-tone rules (same as the inline sentence):
+ *   - in library / seeded this session → bright white, inert.
+ *   - everything else → gray with a dotted underline; clicking the name adds
+ *     the artist and the chip immediately flips to white via seedsLower.
  */
 function AlsoSentence({ artists, seedsLower, onAdd }: {
   artists: PopularCrossingArtist[];
@@ -285,11 +272,8 @@ function AlsoSentence({ artists, seedsLower, onAdd }: {
   const isSeeded = (a: PopularCrossingArtist) =>
     a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
 
-  const pillCls = (a: PopularCrossingArtist): string => {
-    if (isSeeded(a)) return "also-pill also-pill--lib";
-    if (a.popular)   return "also-pill also-pill--pop";
-    return "also-pill also-pill--default";
-  };
+  const pillCls = (a: PopularCrossingArtist): string =>
+    isSeeded(a) ? "also-pill also-pill--lib" : "also-pill also-pill--add";
 
   return (
     <div className="also-pill-grid">
@@ -303,7 +287,6 @@ function AlsoSentence({ artists, seedsLower, onAdd }: {
             onClick={addable ? (e) => { e.stopPropagation(); onAdd(a.name); } : undefined}
             aria-label={addable ? `Add ${a.name}` : a.name}
           >
-            {addable && <span className="also-pill__plus" aria-hidden="true">+</span>}
             <span className="also-pill__name">{a.name}</span>
           </button>
         );
@@ -433,9 +416,12 @@ interface FrontDoorRowProps {
   setArtists?: PopularCrossingArtist[] | null;
   seedsLower?: Set<string>;
   onAddArtist?: (name: string) => void;
+  /** When provided, "this set" opens the reserved sidebar panel instead of
+      expanding inline (the row never renders fdrow__also-block). */
+  onSetExpand?: (artists: PopularCrossingArtist[]) => void;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -462,8 +448,10 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
   }, [safeShow, displayMode, setArtists, seedsLower, onAddArtist]);
   const crossing = remainingSet.length > 0 && seedsLower && onAddArtist
     ? crossingSentence(ds.station.name, safeShow, displayMode, {
-        expanded: alsoExpanded,
-        onToggle: () => setAlsoExpanded((v) => !v),
+        expanded: onSetExpand ? false : alsoExpanded,
+        onToggle: onSetExpand
+          ? () => onSetExpand(remainingSet)
+          : () => setAlsoExpanded((v) => !v),
         node: null, // expanded content rendered as fdrow__also-block below tier1
       })
     : probe;
@@ -523,7 +511,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
         {/* "this set:" expanded block — shows the full station setlist below the
             crossing sentence when the listener clicks "this set".
             "this set:" label on the left is the collapse trigger. */}
-        {alsoExpanded && remainingSet.length > 0 && seedsLower && onAddArtist && (
+        {!onSetExpand && alsoExpanded && remainingSet.length > 0 && seedsLower && onAddArtist && (
           <div className="fdrow__also-block" onClick={(e) => e.stopPropagation()}>
             <AlsoSentence artists={remainingSet} seedsLower={seedsLower} onAdd={onAddArtist} />
           </div>
@@ -2201,6 +2189,31 @@ export function DialView() {
   // Passed to DialTimeTravelStrip so it renders data-mode="past" correctly.
   const effectiveTtMode: TtMode = ttMode === "top" ? "top" : (pastScan.isAtLiveEdge ? "live" : "past");
 
+  // ── Reserved sidebar set panel — expanded "this set" artists render here
+  // (bottom quarter of the hero art sidebar) instead of expanding inline.
+  const [setPanel, setSetPanel] = useState<{ slug: string; name: string; artists: PopularCrossingArtist[] } | null>(null);
+  const toggleSetPanel = useCallback((slug: string, name: string, artists: PopularCrossingArtist[]) => {
+    setSetPanel((cur) => (cur?.slug === slug ? null : { slug, name, artists }));
+  }, []);
+
+  // ── Hero art time-travel swipe — horizontal drag on the art steps runs.
+  const swipeStartX = useRef<number | null>(null);
+  const swipedRef = useRef(false);
+  const heroSwipeHandlers = {
+    onPointerDown: (e: React.PointerEvent) => { swipeStartX.current = e.clientX; },
+    onPointerUp: (e: React.PointerEvent) => {
+      if (swipeStartX.current != null) {
+        const dx = e.clientX - swipeStartX.current;
+        if (Math.abs(dx) > 48) {
+          swipedRef.current = true;
+          if (dx > 0) pastScan.prevRun();
+          else if (!pastScan.isAtLiveEdge) pastScan.nextRun();
+        }
+      }
+      swipeStartX.current = null;
+    },
+  };
+
   // ── Fine-landing effect — fire startPastReplay(fineIdx) on crossing step ──
   // Fires when the user steps to a specific crossing (swipe or row click).
   useEffect(() => {
@@ -2328,6 +2341,16 @@ export function DialView() {
               tracks the scrubbed date. (Solo/LP toggle machinery kept.) */}
           <span className="dial-topbar__wordmark" aria-label="Lore">
             <span className="dial-topbar__letter" aria-hidden="true">Lore</span>
+          </span>
+
+          {/* Moon phase — top right; tracks the scrubbed date in past mode. */}
+          <span className="dial-topbar__moon-tr" aria-hidden="true">
+            <MoonPhaseGlyph
+              size={26}
+              date={pastScan.currentRun && !pastScan.isAtLiveEdge
+                ? new Date(`${pastScan.currentRun.day}T12:00:00`)
+                : new Date()}
+            />
           </span>
 
           {/* Global search hidden — SearchOverlay machinery kept for later. */}
@@ -2474,14 +2497,17 @@ export function DialView() {
       {level === "all" ? (
         <div className="dial-hero">
           {renderTopbar()}
-          <div className="dial-hero__artwrap">
+          <div className="dial-hero__artwrap" {...heroSwipeHandlers}>
             <div
               className="dial-hero__art"
               style={{ backgroundImage: `url(${heroArt})` }}
               role="button"
               tabIndex={0}
               aria-label="Open album art fullscreen"
-              onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
+              onClick={(e) => {
+                if (swipedRef.current) { swipedRef.current = false; return; }
+                artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -2491,6 +2517,42 @@ export function DialView() {
               }}
             />
             <SlimSectionNav overlay />
+            {/* Time chevrons — click (or swipe the art) to step runs back/forward. */}
+            <button
+              type="button"
+              className="dial-hero__chev dial-hero__chev--prev"
+              aria-label="Back in time — previous run"
+              onClick={(e) => { e.stopPropagation(); pastScan.prevRun(); }}
+            >‹</button>
+            <button
+              type="button"
+              className="dial-hero__chev dial-hero__chev--next"
+              aria-label="Forward in time — next run"
+              disabled={pastScan.isAtLiveEdge}
+              aria-disabled={pastScan.isAtLiveEdge}
+              onClick={(e) => { e.stopPropagation(); pastScan.nextRun(); }}
+            >›</button>
+            {/* Where-in-time label — only when stepped back from the live edge. */}
+            {pastScan.currentRun && !pastScan.isAtLiveEdge && (
+              <span className="dial-hero__timelabel">
+                {pastScan.currentRun.station.name} · {runDate(pastScan.currentRun.day)}
+              </span>
+            )}
+            {/* Reserved set panel — expanded "this set" artists, bottom quarter. */}
+            {setPanel && (
+              <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                <div className="dial-hero__setpanel-head">
+                  <span className="dial-hero__setpanel-title">{setPanel.name} · this set</span>
+                  <button
+                    type="button"
+                    className="dial-hero__setpanel-close"
+                    aria-label="Close set panel"
+                    onClick={() => setSetPanel(null)}
+                  >✕</button>
+                </div>
+                <AlsoSentence artists={setPanel.artists} seedsLower={seedsLower} onAdd={addSeed} />
+              </div>
+            )}
           </div>
           {/* Sort toggle moved into the time-travel (filter) strip.
               ＋ Artists button hidden — addArtistsOpen machinery kept. */}
@@ -2560,24 +2622,10 @@ export function DialView() {
       {/* Main scroll body */}
       <div className="dial-body">
         <AlbumAvatarPicker compact />
-        {/* Time-travel strip — compact run-nav + Top sets toggle.
-            Rendered above Zone 1 once zones have settled on the front door. */}
-        {level === "all" && zone1Settled && (
-          <DialTimeTravelStrip
-            mode={effectiveTtMode}
-            pastScan={{
-              currentRun: pastScan.currentRun,
-              isAtLiveEdge: pastScan.isAtLiveEdge,
-              prevRun: pastScan.prevRun,
-              nextRun: pastScan.nextRun,
-            }}
-            onModeChange={handleTtModeChange}
-            rangeDays={ttRangeDays}
-            onRangeChange={setTtRangeDays}
-            sortDesc={popSortDesc}
-            onSortToggle={() => setPopSortDesc((v) => !v)}
-          />
-        )}
+        {/* Time-travel strip hidden — the range pills, sort toggle, and run-nav
+            arrows are gone from the flow; time travel now lives on the hero art
+            sidebar (chevrons + swipe), and the moon moved to the topbar.
+            DialTimeTravelStrip machinery kept for later. */}
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
@@ -2729,6 +2777,7 @@ export function DialView() {
                                       setArtists={popMap.get(row.ds.station.slug) ?? null}
                                       seedsLower={seedsLower}
                                       onAddArtist={addSeed}
+                                      onSetExpand={(artists) => toggleSetPanel(row.ds.station.slug, row.ds.station.name, artists)}
                                     />
                                   </div>
                                 )
