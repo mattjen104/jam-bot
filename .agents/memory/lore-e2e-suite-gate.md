@@ -1,14 +1,18 @@
 ---
 name: Lore e2e suite gate
-description: which lore browser specs gate merges and why the rest are excluded
+description: which lore browser specs gate merges, fixture pitfalls, and what was deleted
 ---
-`lore-e2e-suite` validation runs `artifacts/lore/e2e/run-e2e-suite-gate.sh` (fails loudly if Chromium or the lore dev server is missing, same pattern as the tone gate). It runs only the fully route-intercepted specs: importPickerEntryPoints and spotifyConnectCallback. interstitialTone stays in its own `tone-e2e` gate.
+`lore-e2e-suite` validation runs `artifacts/lore/e2e/run-e2e-suite-gate.sh` (fails loudly if Chromium or the lore dev server is missing, same pattern as the tone gate). It runs the fully route-intercepted specs: importPickerEntryPoints, spotifyConnectCallback, librarySyncLifecycle (dial-style SyncBar lifecycle), and ntsOnAirBadge (dial front-door on-air show + DJ attribution). interstitialTone stays in its own `tone-e2e` gate.
 
-Excluded specs each carry a `// GATE-EXCLUDED:` header comment:
+Still excluded (carries `// GATE-EXCLUDED:` header):
 - fallbackNotice — discovers run IDs from LIVE spin data via pinned MBID/picker anchors that drifted out of the dev DB; live-data flaky. Stabilizing means route-intercepting the discovery endpoints.
-- libraryPromptVisibility + spotifyConnectButton — target `library-prompt`, a banner removed when the connect surface moved into the Library page.
-- librarySyncLifecycle — targets `library-sync`/`library-sync-receipt`/`library-sync-button` testids removed in the Library dial-style redesign (only `library-sync-receipt-toggle` survives).
-- linerNotesSheet — tests RecordPeekNav, currently hidden (not rendered) in App.tsx.
-- ntsOnAirBadge — clicks `station-<slug>` cards from StationList, which is no longer mounted anywhere (front door is the dial hero).
 
-**How to apply:** when repairing/reviving one of these specs, add it back to the gate script's spec list and drop its GATE-EXCLUDED header. If UI it tests returns (e.g. RecordPeekNav un-hidden), the matching spec is the ready-made regression net.
+Deleted (UI intentionally removed; do not resurrect without the UI):
+- libraryPromptVisibility + spotifyConnectButton — `library-prompt` banner removed; connect surface covered by importPickerEntryPoints.
+- linerNotesSheet — RecordPeekNav and the NowPlaying panel (incl. LinerNotesSheet) are both unmounted; section nav is SlimSectionNav.
+
+Fixture pitfalls learned while reviving specs (**How to apply** when writing new lore Playwright specs):
+- Generated clients zod-parse responses: Station fixtures need ALL required fields (incl. `clickcount`, `upcomingShowCount`); NowPlaying needs `isLibraryHit`/`isArtistHit`. A missing field silently kills the query → dial renders nothing.
+- POSTs often carry query strings (`/api/me/library/sync?service=spotify`); register BOTH `**/path` and `**/path?**` globs or the stub is bypassed.
+- Dial "DJs on air" band needs: live pulse in `GET /api/stations/now-playing` (fresh playedAt) + a today-schedule run bracketing now with `show.djName`. The row renders as one sentence button ("Ben UFO selected … on Hessle Audio nts-1") — station display NAME may not appear; assert on the button's accessible name, not the station name.
+- Anonymous dial (no library/seeds) shows the "Pick the artists you love" onboarding placeholder — a reliable load anchor for negative tests.

@@ -1,238 +1,223 @@
-// GATE-EXCLUDED: clicks station-<slug> cards from StationList, which is no longer mounted (front door is the dial hero).
-// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
 import { test, expect } from "@playwright/test";
 
 /**
- * End-to-end tests confirming the NTS "On air" badge renders correctly in the
- * live station view (NowPlaying.tsx, data-testid="on-air-show").
+ * End-to-end tests confirming on-air show + DJ attribution renders on the
+ * dial front door (DialView.tsx), the surface that replaced the old
+ * StationList / NowPlaying sidebar.
  *
- * The NTS adapter (parseNtsLive) populates a `show` field on each spin that
- * carries `name` (the show title) and an optional `djName` (the host).
- * logSpinIfChanged persists this as a showId on the spins row, which the
- * GET /api/stations/:slug/now-playing route joins back and returns as
- * `nowPlaying.show`.
+ * A station is "live" when GET /api/stations/now-playing reports a recent
+ * spin for it (useDialData liveBySlug). The current schedule run's
+ * show.name / show.djName drive the attribution sentence rendered in the
+ * "DJs on air" band ("<DJ> · <Show>" / "<DJ> is on air").
  *
- * These tests use route interception to inject a controlled fixture for
- * /api/stations/nts-1/now-playing so the badge is always present regardless
- * of what NTS is actually broadcasting at test time.
- *
- * The NowPlaying aside uses xl:hidden, so all tests run at a 1024×768
- * viewport to keep it visible.
+ * All API routes are intercepted so the tests run deterministically
+ * regardless of what NTS is actually broadcasting at test time.
  */
 
 const NTS_SLUG = "nts-1";
 const SHOW_NAME = "Hessle Audio";
 const DJ_NAME = "Ben UFO";
 
-/** Minimal valid StationNowPlayingResponse fixture with a full show+DJ. */
-function makeNowPlayingFixture(opts: {
-  showName: string;
-  djName: string | null;
-}) {
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const STATION = {
+  id: 1,
+  slug: NTS_SLUG,
+  name: "NTS 1",
+  org: "NTS",
+  city: "London",
+  country: "GB",
+  streamUrl: "https://stream-relay-geo.ntslive.net/stream",
+  streamQuality: null,
+  streamFormat: "aac",
+  mode: "live",
+  homepageUrl: "https://www.nts.live",
+  donateUrl: "https://www.nts.live/membership",
+  logoUrl: null,
+  attribution: true,
+  tags: null,
+  mayHaveAds: false,
+  votes: 0,
+  clickcount: 0,
+  upcomingShowCount: 0,
+};
+
+/** A fresh unresolved spin — makes the station count as live on the dial. */
+function makeNowPlaying() {
   return {
-    station: {
-      slug: NTS_SLUG,
-      name: "NTS 1",
-      org: "NTS",
-      country: "GB",
-      streamUrl: "https://stream-relay-geo.ntslive.net/stream",
-      streamQuality: null,
-      streamFormat: "aac",
-      mode: "live",
-      homepageUrl: "https://www.nts.live",
-      donateUrl: "https://www.nts.live/membership",
-      logoUrl: null,
-      attribution: true,
-    },
-    nowPlaying: {
-      rawArtist: opts.djName ?? opts.showName,
-      rawTitle: opts.showName,
-      source: "nts_live",
-      confidence: "unresolved",
-      playedAt: new Date().toISOString(),
-      artworkUrl: null,
-      recording: null,
-      show: {
-        name: opts.showName,
-        djName: opts.djName,
+    spinId: 900,
+    rawArtist: "Some Artist",
+    rawTitle: "Some Track",
+    source: "nts_live",
+    confidence: "unresolved",
+    playedAt: new Date().toISOString(),
+    artworkUrl: null,
+    recording: null,
+    show: { name: SHOW_NAME, djName: DJ_NAME },
+    isFirstSpin: false,
+    isLibraryHit: false,
+    isArtistHit: false,
+  };
+}
+
+/** Today's schedule: one run bracketing "now", attributed to show + DJ. */
+function makeSchedule(opts: { djName: string | null; showName?: string }) {
+  const now = Date.now();
+  return {
+    items: [
+      {
+        stationSlug: NTS_SLUG,
+        runs: [
+          {
+            runId: 1,
+            show: {
+              name: opts.showName ?? SHOW_NAME,
+              djName: opts.djName,
+              pickerId: null,
+            },
+            spinCount: 4,
+            resolvedCount: 0,
+            startedAt: new Date(now - 60 * 60 * 1000).toISOString(),
+            endedAt: new Date(now + 60 * 60 * 1000).toISOString(),
+          },
+        ],
       },
-    },
+    ],
   };
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Route-interception helper
 // ---------------------------------------------------------------------------
 
-/**
- * Intercept the per-station now-playing endpoint and serve a fixture.
- * Called before navigating so the route is in place for the first fetch.
- */
-async function interceptNowPlaying(
-  page: Parameters<Parameters<typeof test>[1]>[0],
-  fixture: ReturnType<typeof makeNowPlayingFixture>,
+async function installDialRoutes(
+  page: import("@playwright/test").Page,
+  opts: {
+    /** Live pulse for the station (null → station is not live). */
+    live: boolean;
+    /** Schedule fixture (null → empty schedule, no attribution). */
+    schedule: ReturnType<typeof makeSchedule> | null;
+  },
 ) {
-  await page.route(`**/api/stations/${NTS_SLUG}/now-playing`, (route) => {
-    void route.fulfill({
+  // Soft-fetched listener endpoints — anonymous defaults.
+  await page.route("**/api/me/**", (route) =>
+    route.fulfill({ status: 404, json: { error: "Not found" } }),
+  );
+  await page.route("**/api/me/connections", (route) =>
+    route.fulfill({ json: { connections: [] } }),
+  );
+  await page.route("**/api/me/crossings**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/me/picker-names", (route) =>
+    route.fulfill({ json: { names: [], hasLibrary: false, hasSeeds: false } }),
+  );
+  await page.route("**/api/me/pickers/overlap**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+
+  // Station directory — a single NTS station.
+  await page.route("**/api/stations", (route) =>
+    route.fulfill({ json: { stations: [STATION] } }),
+  );
+
+  // Live pulse list — drives liveBySlug.
+  await page.route("**/api/stations/now-playing", (route) =>
+    route.fulfill({
+      json: { items: opts.live ? [{ slug: NTS_SLUG, nowPlaying: makeNowPlaying() }] : [] },
+    }),
+  );
+
+  // SSE stream — fulfill with an empty event stream (REST pulse is enough).
+  await page.route("**/api/stations/now-playing/stream", (route) =>
+    route.fulfill({
       status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(fixture),
-    });
-  });
+      headers: { "content-type": "text/event-stream" },
+      body: ": ok\n\n",
+    }),
+  );
+
+  // Per-station now-playing (player dock / active station).
+  await page.route(`**/api/stations/${NTS_SLUG}/now-playing`, (route) =>
+    route.fulfill({
+      json: { station: STATION, nowPlaying: opts.live ? makeNowPlaying() : null },
+    }),
+  );
+
+  // Schedule (today + yesterday) — the attribution source.
+  await page.route("**/api/stations/schedule**", (route) =>
+    route.fulfill({ json: opts.schedule ?? { items: [] } }),
+  );
+
+  // Recent spins / artist frequency — empty is safe.
+  await page.route("**/api/stations/recent-spins**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/stations/artist-frequency**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+
+  // Anything else under /api — harmless empty.
+  await page.route("**/api/pickers/**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-test.describe("NTS 'On air' badge in the live station view", () => {
-  test.use({
-    viewport: { width: 1024, height: 768 },
-  });
-
-  test("badge is visible when the NTS spin carries show + DJ data", async ({
+test.describe("On-air show + DJ attribution on the dial front door", () => {
+  test("live station with attributed show renders in the DJs-on-air band", async ({
     page,
   }) => {
-    const fixture = makeNowPlayingFixture({
-      showName: SHOW_NAME,
-      djName: DJ_NAME,
+    await installDialRoutes(page, {
+      live: true,
+      schedule: makeSchedule({ djName: DJ_NAME }),
     });
-    await interceptNowPlaying(page, fixture);
-
     await page.goto("/lore/");
 
-    // Wait for the station list to load — NTS 1 must appear.
-    const ntsCard = page.getByTestId(`station-${NTS_SLUG}`);
-    await expect(ntsCard).toBeVisible({ timeout: 10_000 });
+    // The DJs-on-air zone label must appear (attributed live show, no crossings).
+    await expect(page.getByText("DJs on air")).toBeVisible({ timeout: 15_000 });
 
-    // Select the NTS 1 station to load the NowPlaying sidebar.
-    await ntsCard.click();
-
-    // The "On air" badge must appear.
-    const badge = page.getByTestId("on-air-show");
-    await expect(badge).toBeVisible({ timeout: 10_000 });
+    // The row carries the DJ credit and the show name in one sentence
+    // ("Ben UFO selected … on Hessle Audio").
+    const row = page.getByRole("button", { name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`) });
+    await expect(row).toBeVisible();
   });
 
-  test("show name appears inside the badge", async ({ page }) => {
-    const fixture = makeNowPlayingFixture({
-      showName: SHOW_NAME,
-      djName: DJ_NAME,
-    });
-    await interceptNowPlaying(page, fixture);
-
-    await page.goto("/lore/");
-
-    const ntsCard = page.getByTestId(`station-${NTS_SLUG}`);
-    await expect(ntsCard).toBeVisible({ timeout: 10_000 });
-    await ntsCard.click();
-
-    const badge = page.getByTestId("on-air-show");
-    await expect(badge).toBeVisible({ timeout: 10_000 });
-    await expect(badge).toContainText(SHOW_NAME);
-  });
-
-  test("DJ name appears inside the badge when djName is set", async ({
+  test("DJ credit is absent when the schedule has no attribution", async ({
     page,
   }) => {
-    const fixture = makeNowPlayingFixture({
-      showName: SHOW_NAME,
-      djName: DJ_NAME,
-    });
-    await interceptNowPlaying(page, fixture);
-
+    await installDialRoutes(page, { live: true, schedule: null });
     await page.goto("/lore/");
 
-    const ntsCard = page.getByTestId(`station-${NTS_SLUG}`);
-    await expect(ntsCard).toBeVisible({ timeout: 10_000 });
-    await ntsCard.click();
+    // Dial settles into the onboarding placeholder (no library, no seeds)…
+    await expect(
+      page.getByText("Pick the artists you love", { exact: false }),
+    ).toBeVisible({ timeout: 15_000 });
 
-    const badge = page.getByTestId("on-air-show");
-    await expect(badge).toBeVisible({ timeout: 10_000 });
-    await expect(badge).toContainText(DJ_NAME);
+    // …and with no schedule attribution there is no DJ credit.
+    await expect(page.getByText(DJ_NAME)).not.toBeVisible();
+    await expect(page.getByText("DJs on air")).not.toBeVisible();
   });
 
-  test("Follow button renders inside the badge when djName is set", async ({
-    page,
-  }) => {
-    const fixture = makeNowPlayingFixture({
-      showName: SHOW_NAME,
-      djName: DJ_NAME,
+  test("offline station never claims an on-air DJ", async ({ page }) => {
+    // Schedule attributes the show, but the station has no live pulse.
+    await installDialRoutes(page, {
+      live: false,
+      schedule: makeSchedule({ djName: DJ_NAME }),
     });
-    await interceptNowPlaying(page, fixture);
-
     await page.goto("/lore/");
 
-    const ntsCard = page.getByTestId(`station-${NTS_SLUG}`);
-    await expect(ntsCard).toBeVisible({ timeout: 10_000 });
-    await ntsCard.click();
+    await expect(
+      page.getByText("Pick the artists you love", { exact: false }),
+    ).toBeVisible({ timeout: 15_000 });
 
-    const badge = page.getByTestId("on-air-show");
-    await expect(badge).toBeVisible({ timeout: 10_000 });
-
-    // The FollowButton renders a button with "Follow" (or "Following") text
-    // inside the badge whenever djName is non-null.
-    const followBtn = badge.getByRole("button", { name: /follow/i });
-    await expect(followBtn).toBeVisible();
-  });
-
-  test("badge is absent when the spin has no show data", async ({ page }) => {
-    // Return a fixture with show: null — the badge must not render.
-    await page.route(`**/api/stations/${NTS_SLUG}/now-playing`, (route) => {
-      void route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          station: makeNowPlayingFixture({ showName: SHOW_NAME, djName: DJ_NAME }).station,
-          nowPlaying: {
-            rawArtist: "Unknown",
-            rawTitle: "Unknown track",
-            source: "nts_live",
-            confidence: "unresolved",
-            playedAt: new Date().toISOString(),
-            artworkUrl: null,
-            recording: null,
-            show: null,
-          },
-        }),
-      });
-    });
-
-    await page.goto("/lore/");
-
-    const ntsCard = page.getByTestId(`station-${NTS_SLUG}`);
-    await expect(ntsCard).toBeVisible({ timeout: 10_000 });
-    await ntsCard.click();
-
-    // Wait for the NowPlaying panel to settle — title appears when np is set.
-    await expect(page.getByTestId("now-playing-title")).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // The badge must not be present when there is no show.
-    await expect(page.getByTestId("on-air-show")).not.toBeVisible();
-  });
-
-  test("badge renders with show name only when djName is null", async ({
-    page,
-  }) => {
-    // A show without a named DJ — badge shows but no Follow button.
-    const fixture = makeNowPlayingFixture({
-      showName: SHOW_NAME,
-      djName: null,
-    });
-    await interceptNowPlaying(page, fixture);
-
-    await page.goto("/lore/");
-
-    const ntsCard = page.getByTestId(`station-${NTS_SLUG}`);
-    await expect(ntsCard).toBeVisible({ timeout: 10_000 });
-    await ntsCard.click();
-
-    const badge = page.getByTestId("on-air-show");
-    await expect(badge).toBeVisible({ timeout: 10_000 });
-    await expect(badge).toContainText(SHOW_NAME);
-
-    // Follow button must NOT appear when djName is absent.
-    await expect(badge.getByRole("button", { name: /follow/i })).not.toBeVisible();
+    // No live pulse → no DJs-on-air band, no live DJ credit.
+    await expect(page.getByText("DJs on air")).not.toBeVisible();
+    await expect(page.getByText(DJ_NAME)).not.toBeVisible();
   });
 });

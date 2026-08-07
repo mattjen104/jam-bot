@@ -1,19 +1,19 @@
-// GATE-EXCLUDED: targets library-sync / library-sync-receipt / library-sync-button testids removed in the Library dial-style redesign.
-// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
 import { test, expect } from "@playwright/test";
 
 /**
- * End-to-end tests for the Library sync job lifecycle and receipt display.
+ * End-to-end tests for the Library sync (export keeps → Spotify) lifecycle,
+ * rewritten for the dial-style Library redesign (SyncBar in pages/Library.tsx).
  *
  * All API routes are intercepted so the tests run deterministically without
- * a real Spotify connection.  The fixtures mirror the shapes produced by
- * GET /api/me/library/sync and POST /api/me/library/sync in routes/me/index.ts.
+ * a real Spotify connection. The fixtures mirror the shapes produced by
+ * GET /api/me/library/sync and POST /api/me/library/sync.
  *
  * Scenarios:
- *   1. Receipt renders with correct counts when the server reports a done job.
- *   2. "Show details" toggle reveals / hides the unavailable-item list.
- *   3. Sync button triggers a job and the receipt appears once polling resolves.
- *   4. canWrite:false → static error message is shown; no crash.
+ *   1. SyncBar renders a done job: "Synced …" label + "N saved" count.
+ *   2. Receipt toggle ("Show match details") reveals / hides unavailable and
+ *      search-matched rows.
+ *   3. "Sync now" starts a job and the done state appears once polling resolves.
+ *   4. canWrite:false 403 → library-sync-error with Reconnect Spotify button.
  */
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ const DONE_JOB = {
   },
 };
 
-/** A done sync job with 1 search-matched item (shows the toggle). */
+/** A done sync job with 1 search-matched item (also shows the toggle). */
 const DONE_JOB_WITH_SEARCH = {
   ...DONE_JOB,
   jobId: 43,
@@ -104,21 +104,22 @@ const EMPTY_LIBRARY = { items: [], cursor: null };
 
 /**
  * Install the standard "authenticated Spotify user" stubs on every test page.
- * All individual tests may add additional route overrides on top of this base.
+ * Individual tests may add additional route overrides on top of this base
+ * (later registrations win in Playwright).
  */
 async function installBaseRoutes(
   page: import("@playwright/test").Page,
   overrides: {
     syncGet?: unknown;
-    syncPost?: { status: number; body: unknown };
+    syncGetStatus?: number;
   } = {},
 ) {
-  // Connections — authenticated, has Spotify
+  // Connections — authenticated, has Spotify.
   await page.route("**/api/me/connections", (route) =>
     route.fulfill({ json: CONNECTIONS_WITH_SPOTIFY }),
   );
 
-  // Library — empty kept list (sync section always visible if hasSpotify)
+  // Library — empty kept list (SyncBar is visible whenever hasSpotify).
   await page.route("**/api/me/library?**", (route) =>
     route.fulfill({ json: EMPTY_LIBRARY }),
   );
@@ -126,41 +127,43 @@ async function installBaseRoutes(
     route.fulfill({ json: EMPTY_LIBRARY }),
   );
 
-  // Import job — none
-  await page.route("**/api/me/library/import", (route) =>
-    route.fulfill({ status: 404, json: { error: "No import jobs found" } }),
-  );
-
-  // Sync GET — latest job
-  const syncGet = overrides.syncGet ?? DONE_JOB;
-  await page.route("**/api/me/library/sync", async (route) => {
+  // Import job — none (suppresses the import strip).
+  await page.route("**/api/me/library/import?**", (route) => {
     if (route.request().method() === "GET") {
-      return route.fulfill({ json: syncGet });
+      return route.fulfill({ status: 404, json: { error: "No import jobs found" } });
     }
-    // POST — handled below or by the override
-    if (overrides.syncPost) {
-      return route.fulfill({
-        status: overrides.syncPost.status,
-        json: overrides.syncPost.body,
-      });
+    return route.continue();
+  });
+  await page.route("**/api/me/library/import", (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ status: 404, json: { error: "No import jobs found" } });
     }
-    return route.fulfill({ json: { jobId: 42, status: "pending" } });
+    return route.continue();
   });
 
-  // Sync GET /:jobId — return the same done job
+  // Sync — latest job (GET), acknowledge start (POST).
+  const syncGet = overrides.syncGet ?? DONE_JOB;
+  const syncGetStatus = overrides.syncGetStatus ?? 200;
+  const syncHandler = (route: import("@playwright/test").Route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ status: syncGetStatus, json: syncGet });
+    }
+    return route.fulfill({ status: 202, json: { jobId: 42, status: "pending" } });
+  };
+  // POST goes to /sync?service=spotify — register both glob variants.
+  await page.route("**/api/me/library/sync", syncHandler);
+  await page.route("**/api/me/library/sync?**", syncHandler);
   await page.route("**/api/me/library/sync/**", (route) =>
-    route.fulfill({ json: syncGet }),
+    route.fulfill({ status: syncGetStatus, json: syncGet }),
   );
 }
 
 // ---------------------------------------------------------------------------
-// Test suite 1 — Receipt renders from a pre-existing done job
+// Test suite 1 — SyncBar renders a pre-existing done job
 // ---------------------------------------------------------------------------
 
-test.describe("Library sync receipt — done job on page load", () => {
-  test("receipt section is visible with correct synced and unavailable counts", async ({
-    page,
-  }) => {
+test.describe("Library sync — done job on page load", () => {
+  test("SyncBar shows Synced label and saved count", async ({ page }) => {
     await installBaseRoutes(page, { syncGet: DONE_JOB });
     await page.goto("/lore/library");
 
@@ -168,88 +171,69 @@ test.describe("Library sync receipt — done job on page load", () => {
     const syncSection = page.getByTestId("library-sync");
     await expect(syncSection).toBeVisible({ timeout: 10_000 });
 
-    // Receipt must render automatically — no click needed.
-    const receipt = page.getByTestId("library-sync-receipt");
-    await expect(receipt).toBeVisible({ timeout: 5_000 });
+    // Done-job summary renders in the bar: "Synced <date>" + "2 saved".
+    await expect(syncSection).toContainText("Synced");
+    await expect(syncSection).toContainText("2 saved");
 
-    // Count labels are in the receipt.
-    await expect(receipt).toContainText("2");
-    await expect(receipt).toContainText("synced");
-    await expect(receipt).toContainText("1");
-    await expect(receipt).toContainText("not on Spotify");
-  });
-
-  test("receipt section shows alreadySaved count when non-zero", async ({
-    page,
-  }) => {
-    const jobWithSaved = {
-      ...DONE_JOB,
-      results: { ...DONE_JOB.results, synced: 1, alreadySaved: 2 },
-    };
-    await installBaseRoutes(page, { syncGet: jobWithSaved });
-    await page.goto("/lore/library");
-
-    const receipt = page.getByTestId("library-sync-receipt");
-    await expect(receipt).toBeVisible({ timeout: 10_000 });
-    await expect(receipt).toContainText("already saved");
+    // Idle button is enabled and labelled "Sync now".
+    const syncButton = page.getByTestId("library-sync-button");
+    await expect(syncButton).toBeVisible();
+    await expect(syncButton).toContainText("Sync now");
+    await expect(syncButton).not.toBeDisabled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Test suite 2 — "Show details" toggle reveals unavailable-item list
+// Test suite 2 — receipt toggle reveals match details
 // ---------------------------------------------------------------------------
 
 test.describe("Library sync receipt — details toggle", () => {
-  test("toggle shows and hides unavailable track list", async ({ page }) => {
+  test("toggle shows and hides the unavailable track list", async ({ page }) => {
     await installBaseRoutes(page, { syncGet: DONE_JOB });
     await page.goto("/lore/library");
 
-    const receipt = page.getByTestId("library-sync-receipt");
-    await expect(receipt).toBeVisible({ timeout: 10_000 });
-
-    // Toggle button must be present (unavailableItems.length > 0).
+    // Toggle button appears because unavailableItems.length > 0.
     const toggle = page.getByTestId("library-sync-receipt-toggle");
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toContainText("Show details");
+    await expect(toggle).toBeVisible({ timeout: 10_000 });
+    await expect(toggle).toContainText("Show match details");
 
-    // Click to open.
+    // Click to open — the "Not on Spotify" receipt rows render.
     await toggle.click();
     await expect(toggle).toContainText("Hide details");
-    // The unavailable track should now be visible.
-    await expect(receipt).toContainText("Unavailable Track");
-    await expect(receipt).toContainText("Obscure Artist");
+    const row = page.getByTestId("library-unavailable-row");
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("Unavailable Track");
+    await expect(row).toContainText("Obscure Artist");
+    await expect(page.getByText("Not on Spotify")).toBeVisible();
 
     // Click to collapse.
     await toggle.click();
-    await expect(toggle).toContainText("Show details");
-    await expect(receipt).not.toContainText("Unavailable Track");
+    await expect(toggle).toContainText("Show match details");
+    await expect(row).not.toBeVisible();
   });
 
-  test("toggle shows search-matched item list", async ({ page }) => {
+  test("toggle shows the search-matched item list", async ({ page }) => {
     await installBaseRoutes(page, { syncGet: DONE_JOB_WITH_SEARCH });
     await page.goto("/lore/library");
 
-    const receipt = page.getByTestId("library-sync-receipt");
-    await expect(receipt).toBeVisible({ timeout: 10_000 });
-    await expect(receipt).toContainText("1");
-    await expect(receipt).toContainText("matched by search");
-
     const toggle = page.getByTestId("library-sync-receipt-toggle");
+    await expect(toggle).toBeVisible({ timeout: 10_000 });
     await toggle.click();
-    await expect(receipt).toContainText("Found By Search");
+
+    await expect(page.getByText("Matched by search")).toBeVisible();
+    await expect(page.getByText("Found By Search")).toBeVisible();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Test suite 3 — Sync button triggers a job; receipt appears after polling
+// Test suite 3 — Sync button triggers a job; done state appears after polling
 // ---------------------------------------------------------------------------
 
-test.describe("Library sync — button triggers job and receipt appears", () => {
-  test("clicking Sync now starts a job and the receipt renders once done", async ({
+test.describe("Library sync — button triggers job", () => {
+  test("clicking Sync now starts a job and the done state renders", async ({
     page,
   }) => {
-    // Initial state: no sync job yet.
-    let syncGetCallCount = 0;
+    let postSeen = false;
 
     await page.route("**/api/me/connections", (route) =>
       route.fulfill({ json: CONNECTIONS_WITH_SPOTIFY }),
@@ -260,52 +244,51 @@ test.describe("Library sync — button triggers job and receipt appears", () => 
     await page.route("**/api/me/library", (route) =>
       route.fulfill({ json: EMPTY_LIBRARY }),
     );
+    await page.route("**/api/me/library/import?**", (route) =>
+      route.fulfill({ status: 404, json: { error: "No import jobs found" } }),
+    );
     await page.route("**/api/me/library/import", (route) =>
       route.fulfill({ status: 404, json: { error: "No import jobs found" } }),
     );
 
-    // GET /api/me/library/sync — first call returns 404 (no job yet),
-    // subsequent calls return the done job (simulating worker completion).
-    await page.route("**/api/me/library/sync", async (route) => {
+    // GET before POST → 404 (no job yet); after POST → done job.
+    const syncHandler = (route: import("@playwright/test").Route) => {
       if (route.request().method() === "POST") {
-        // Acknowledge the sync start.
-        return route.fulfill({
-          status: 202,
-          json: { jobId: 42, status: "pending" },
-        });
+        postSeen = true;
+        return route.fulfill({ status: 202, json: { jobId: 42, status: "pending" } });
       }
-      syncGetCallCount++;
-      if (syncGetCallCount <= 1) {
-        return route.fulfill({
-          status: 404,
-          json: { error: "No sync jobs found" },
-        });
+      if (!postSeen) {
+        return route.fulfill({ status: 404, json: { error: "No sync jobs found" } });
       }
       return route.fulfill({ json: DONE_JOB });
-    });
-
+    };
+    await page.route("**/api/me/library/sync", syncHandler);
+    await page.route("**/api/me/library/sync?**", syncHandler);
     await page.route("**/api/me/library/sync/**", (route) =>
       route.fulfill({ json: DONE_JOB }),
     );
 
     await page.goto("/lore/library");
 
-    // Sync section and button must be visible.
     const syncButton = page.getByTestId("library-sync-button");
     await expect(syncButton).toBeVisible({ timeout: 10_000 });
     await expect(syncButton).toContainText("Sync now");
     await expect(syncButton).not.toBeDisabled();
 
-    // Trigger the sync.
-    await syncButton.click();
+    // Idle label before any job exists.
+    await expect(page.getByTestId("library-sync")).toContainText(
+      "Export keeps → Spotify",
+    );
 
-    // Receipt must appear within a reasonable timeout after React Query refetches.
-    const receipt = page.getByTestId("library-sync-receipt");
-    await expect(receipt).toBeVisible({ timeout: 10_000 });
-    await expect(receipt).toContainText("synced");
+    // Trigger the sync — the done state must appear after refetch.
+    await syncButton.click();
+    await expect(page.getByTestId("library-sync")).toContainText("Synced", {
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("library-sync")).toContainText("2 saved");
   });
 
-  test("progress bar and phase label are shown while job is running", async ({
+  test("running job disables the button and shows the phase label", async ({
     page,
   }) => {
     await installBaseRoutes(page, { syncGet: RUNNING_JOB });
@@ -314,15 +297,13 @@ test.describe("Library sync — button triggers job and receipt appears", () => 
     const syncSection = page.getByTestId("library-sync");
     await expect(syncSection).toBeVisible({ timeout: 10_000 });
 
-    // Progress section must be visible when status=running.
-    const progress = page.getByTestId("library-sync-progress");
-    await expect(progress).toBeVisible({ timeout: 5_000 });
-    // Phase label for "matching".
-    await expect(progress).toContainText("Matching");
+    // Phase label for "matching" renders in the bar.
+    await expect(syncSection).toContainText("Matching on Spotify…");
 
     // The sync button must be disabled while running.
     const syncButton = page.getByTestId("library-sync-button");
     await expect(syncButton).toBeDisabled();
+    await expect(syncButton).toContainText("Syncing…");
   });
 });
 
@@ -331,32 +312,14 @@ test.describe("Library sync — button triggers job and receipt appears", () => 
 // ---------------------------------------------------------------------------
 
 test.describe("Library sync — canWrite:false error handling", () => {
-  test("shows reconnect error message after 403 and does not crash", async ({
-    page,
-  }) => {
-    await installBaseRoutes(page, {
-      // No existing sync job.
-      syncGet: { status: 404, error: "No sync jobs found" } as unknown,
-      syncPost: {
-        status: 403,
-        body: {
-          error: "canWrite:false",
-          message:
-            "Your Spotify connection doesn't have write access. Reconnect Spotify to grant it.",
-          reAuthUrl: null,
-        },
-      },
-    });
+  test("shows reconnect error after 403 and does not crash", async ({ page }) => {
+    await installBaseRoutes(page);
 
-    // Override the GET to actually return 404 (installBaseRoutes uses the object directly)
-    await page.route("**/api/me/library/sync", async (route) => {
+    // Override sync routes: no existing job, POST → 403.
+    const syncHandler = (route: import("@playwright/test").Route) => {
       if (route.request().method() === "GET") {
-        return route.fulfill({
-          status: 404,
-          json: { error: "No sync jobs found" },
-        });
+        return route.fulfill({ status: 404, json: { error: "No sync jobs found" } });
       }
-      // POST → 403
       return route.fulfill({
         status: 403,
         json: {
@@ -366,7 +329,12 @@ test.describe("Library sync — canWrite:false error handling", () => {
           reAuthUrl: null,
         },
       });
-    });
+    };
+    await page.route("**/api/me/library/sync", syncHandler);
+    await page.route("**/api/me/library/sync?**", syncHandler);
+    await page.route("**/api/me/library/sync/**", (route) =>
+      route.fulfill({ status: 404, json: { error: "No sync jobs found" } }),
+    );
 
     await page.goto("/lore/library");
 
@@ -374,77 +342,17 @@ test.describe("Library sync — canWrite:false error handling", () => {
     await expect(syncButton).toBeVisible({ timeout: 10_000 });
     await expect(syncButton).toContainText("Sync now");
 
-    // Trigger the sync.
+    // Trigger the sync — error branch must render.
     await syncButton.click();
-
-    // Error message must appear — see Library.tsx handleSync error branch.
     const errorMsg = page.getByTestId("library-sync-error");
     await expect(errorMsg).toBeVisible({ timeout: 5_000 });
-    await expect(errorMsg).toContainText("Reconnect Spotify");
+    await expect(errorMsg).toContainText("write access");
 
-    // No receipt must be shown — the job was never created.
-    await expect(page.getByTestId("library-sync-receipt")).not.toBeVisible();
+    // The reconnect affordance is offered.
+    await expect(page.getByTestId("library-reconnect-spotify")).toBeVisible();
 
-    // Page must still be functional (no crash — sync section still rendered).
+    // Page still functional — sync section rendered, no receipt toggle.
     await expect(page.getByTestId("library-sync")).toBeVisible();
-  });
-
-  test("error message is cleared on a subsequent successful sync attempt", async ({
-    page,
-  }) => {
-    let postCallCount = 0;
-
-    await page.route("**/api/me/connections", (route) =>
-      route.fulfill({ json: CONNECTIONS_WITH_SPOTIFY }),
-    );
-    await page.route("**/api/me/library?**", (route) =>
-      route.fulfill({ json: EMPTY_LIBRARY }),
-    );
-    await page.route("**/api/me/library", (route) =>
-      route.fulfill({ json: EMPTY_LIBRARY }),
-    );
-    await page.route("**/api/me/library/import", (route) =>
-      route.fulfill({ status: 404, json: { error: "No import jobs found" } }),
-    );
-
-    // First POST → 403; second POST → 202.
-    await page.route("**/api/me/library/sync", async (route) => {
-      if (route.request().method() === "POST") {
-        postCallCount++;
-        if (postCallCount === 1) {
-          return route.fulfill({
-            status: 403,
-            json: { error: "canWrite:false", message: "No write access", reAuthUrl: null },
-          });
-        }
-        return route.fulfill({ status: 202, json: { jobId: 42, status: "pending" } });
-      }
-      // GET — return done job on second attempt, 404 on first.
-      return route.fulfill(
-        postCallCount >= 2
-          ? { json: DONE_JOB }
-          : { status: 404, json: { error: "No sync jobs found" } },
-      );
-    });
-    await page.route("**/api/me/library/sync/**", (route) =>
-      route.fulfill({ json: DONE_JOB }),
-    );
-
-    await page.goto("/lore/library");
-
-    const syncButton = page.getByTestId("library-sync-button");
-    await expect(syncButton).toBeVisible({ timeout: 10_000 });
-
-    // First click — fail.
-    await syncButton.click();
-    const errorMsg = page.getByTestId("library-sync-error");
-    await expect(errorMsg).toBeVisible({ timeout: 5_000 });
-
-    // Second click — succeed; error must disappear.
-    await syncButton.click();
-    await expect(errorMsg).not.toBeVisible();
-    await expect(page.getByTestId("library-sync-receipt")).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("library-sync-receipt-toggle")).not.toBeVisible();
   });
 });
