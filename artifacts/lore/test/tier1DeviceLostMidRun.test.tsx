@@ -3,19 +3,27 @@
  * Tier-1 past-replay resilience — Spotify device goes missing mid-run.
  *
  * The Tier-1 path queues the whole run in ONE spotifyQueueRun call and then
- * relies on Spotify's autonomous advance. These tests confirm the fallback
- * ladder still activates when the device disappears:
+ * relies on Spotify's autonomous advance.  When the device disappears Tier-1
+ * does NOT activate a fallback ladder — it stays active and silent, polling
+ * the player state and re-syncing the queue index when the device returns.
  *
  * - 409 (no active device) from the queue-run call → pastRunFailed hard stop,
  *   no silent re-fire, no per-track driver resurrection, index-sync poll stops.
- * - Device-lost poll threshold (pure state machine): the exact
- *   processDeviceConfirmation sequence a Tier-1 driver would run reaches
- *   "device-lost", and the past-orientation ladder lands on preview/skip —
- *   never passthrough.
+ * - Mid-run device disappearance (null/rejected poll): ride remains active
+ *   and silent — no re-queue, no fallback, no crash.  Index re-syncs when the
+ *   device comes back and reports a track.
  * - Driver active-gate suppression (PlayerProvider.tsx Tier-1 gate): while
  *   pastModeTier === 1 the Spotify driver receives active === false so its
  *   per-track play commands cannot race the bulk queue-run; a Tier-4 ride
  *   keeps the driver active.
+ *
+ * NOTE: The pure-helper suite below ("device-lost threshold and
+ * past-orientation fallback ladder") tests the processDeviceConfirmation /
+ * resolveFallback state machines used by the per-track Spotify driver (Tiers
+ * 2–4).  Tier-1 intentionally suppresses that driver (active === false) and
+ * therefore never runs those paths — the pure tests are included here for
+ * coverage of the shared helpers, NOT as a claim that Tier-1 activates the
+ * fallback ladder on device loss.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
@@ -635,10 +643,15 @@ describe("Tier 1: Spotify driver active-gate suppression", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Device-lost poll threshold + past-orientation fallback ladder (pure)
+// Pure state-machine helpers — processDeviceConfirmation / resolveFallback
+//
+// These helpers are used by the per-track Spotify driver (Tiers 2–4).
+// Tier-1 suppresses that driver entirely (active === false) and therefore
+// never reaches these code paths on device loss.  The tests here validate
+// the pure functions in isolation; they make no claim about Tier-1 behavior.
 // ---------------------------------------------------------------------------
 
-describe("device-lost threshold and past-orientation fallback ladder", () => {
+describe("device-lost threshold and past-orientation fallback ladder (pure helpers — Tiers 2–4, not Tier-1)", () => {
   it("a silent device reaches 'device-lost' after exactly DEVICE_LOST_POLLS ticks", () => {
     const cur = { sawPlaying: false, noDevicePolls: 0 };
     let outcome: ReturnType<typeof processDeviceConfirmation> | null = null;
