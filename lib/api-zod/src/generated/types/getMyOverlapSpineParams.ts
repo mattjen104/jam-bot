@@ -8,15 +8,22 @@
 
 export type GetMyOverlapSpineParams = {
   /**
-   * Station primary key.
-   */
-  stationId: number;
+ * UTC calendar day shorthand (YYYY-MM-DD).  When provided, `from`/`to` are derived automatically (full UTC day).  `stationId` is optional in this mode — when omitted, aggregates all stations crossed on that day.
+
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+  day?: string;
   /**
-   * Start of the window (inclusive), ISO 8601.
-   */
-  from: Date;
+ * Station primary key.  Required when using explicit `from`/`to` range. Optional when using `day` shorthand.
+
+ */
+  stationId?: number;
   /**
-   * End of the window (exclusive), ISO 8601.
+   * Start of the window (inclusive), ISO 8601.  Required with explicit range mode.
    */
-  to: Date;
+  from?: Date;
+  /**
+   * End of the window (exclusive), ISO 8601.  Required with explicit range mode.
+   */
+  to?: Date;
 };

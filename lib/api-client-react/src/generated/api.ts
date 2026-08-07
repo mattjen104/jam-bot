@@ -111,11 +111,11 @@ import type {
   SongExploderClaimResponse,
   SongExploderEpisodeListResult,
   SpotifyDevicesResult,
-  SpotifyQueueRunRequest,
-  SpotifyQueueRunResult,
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
+  SpotifyQueueRunRequest,
+  SpotifyQueueRunResult,
   SpotifySaveResult,
   SpotifyStatus,
   StationArchive,
@@ -4704,7 +4704,7 @@ export function useGetStationsRecentSpins<
 }
 
 /**
- * Returns all spin-runs (grouped by station, day, and show) for every station on the given UTC calendar day, ordered chronologically within each station. Powers the show timeline on station cards on the home schedule page.
+ * Returns all spin-runs (grouped by station, day, and show) for every station on the given UTC calendar day, ordered chronologically within each station. Each run includes the station's IANA timezone so clients can present and slice the set in the place where it aired.
 
  * @summary Show-run timeline for all stations on a given calendar day
  */
@@ -7195,29 +7195,6 @@ export const useSpotifyLogout = <
 };
 
 /**
- * Queue an entire replay run on the listener's Spotify Connect device in a
- * single gapless call. uris must be spotify:track:<id> URIs already known
- * client-side. Requires Premium and an active device. Never call per-track.
- *
- * @summary Queue an entire replay run on the listener's Spotify Connect device
- */
-export const getSpotifyQueueRunUrl = () => {
-  return `/api/spotify/queue-run`;
-};
-
-export const spotifyQueueRun = async (
-  spotifyQueueRunRequest: SpotifyQueueRunRequest,
-  options?: RequestInit,
-): Promise<SpotifyQueueRunResult> => {
-  return customFetch<SpotifyQueueRunResult>(getSpotifyQueueRunUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(spotifyQueueRunRequest),
-  });
-};
-
-/**
  * Resolves the MBID to a Spotify track (exact link > ISRC > artist+title search) and starts playback on the listener's active Spotify device via the Connect API. Requires Premium and an open Spotify app somewhere.
 
  * @summary Play a recording (full track) on the listener's own Spotify
@@ -7303,6 +7280,94 @@ export const useSpotifyPlay = <
   TContext
 > => {
   return useMutation(getSpotifyPlayMutationOptions(options));
+};
+
+/**
+ * Starts playing a list of spotify:track:<id> URIs in order on the listener's Connect device — a single gapless call for the whole past-crossing run. Requires Premium and an active (or pinned) device. Never call this per-track; pass the full run's uris array at once.
+
+ * @summary Queue an entire replay run on the listener's Spotify Connect device
+ */
+export const getSpotifyQueueRunUrl = () => {
+  return `/api/spotify/queue-run`;
+};
+
+export const spotifyQueueRun = async (
+  spotifyQueueRunRequest: SpotifyQueueRunRequest,
+  options?: RequestInit,
+): Promise<SpotifyQueueRunResult> => {
+  return customFetch<SpotifyQueueRunResult>(getSpotifyQueueRunUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(spotifyQueueRunRequest),
+  });
+};
+
+export const getSpotifyQueueRunMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyQueueRun>>,
+    TError,
+    { data: BodyType<SpotifyQueueRunRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spotifyQueueRun>>,
+  TError,
+  { data: BodyType<SpotifyQueueRunRequest> },
+  TContext
+> => {
+  const mutationKey = ["spotifyQueueRun"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spotifyQueueRun>>,
+    { data: BodyType<SpotifyQueueRunRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return spotifyQueueRun(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpotifyQueueRunMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spotifyQueueRun>>
+>;
+export type SpotifyQueueRunMutationBody = BodyType<SpotifyQueueRunRequest>;
+export type SpotifyQueueRunMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Queue an entire replay run on the listener's Spotify Connect device
+ */
+export const useSpotifyQueueRun = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyQueueRun>>,
+    TError,
+    { data: BodyType<SpotifyQueueRunRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spotifyQueueRun>>,
+  TError,
+  { data: BodyType<SpotifyQueueRunRequest> },
+  TContext
+> => {
+  return useMutation(getSpotifyQueueRunMutationOptions(options));
 };
 
 /**
@@ -8825,7 +8890,8 @@ export function useGetMyOverlapRuns<
 }
 
 /**
- * Returns all spins within the run (identified by the run anchor min(spin.id)) whose MBID is in the caller's library, ordered by playedAt asc. These are the fine detents for the two-speed dial scan — swipe left/right on the now-playing card steps through them. Returns an empty moments list when runId is not a run anchor or the run has no library crossings.
+ * Returns all spins within the run whose MBID is in the caller's library, ordered by playedAt asc. These are the fine detents for the two-speed dial scan — swipe left/right on the now-playing card steps through them.
+runId semantics: the server resolves the run partition (station + show + UTC day) from the given spin ID and returns all crossing moments in that partition. Callers sourced from /me/overlaps/runs will receive the canonical run anchor (min spin ID per partition), which is the recommended input. Passing any other spin ID that exists in the same partition returns the same result. Returns an empty list when no spin with that ID exists or the run has no library crossings.
 
  * @summary Library-crossing moments within a broadcast run
  */
@@ -8924,7 +8990,7 @@ Only bins with at least one resolved spin appear in the response; the client fil
 
  * @summary Hourly density bins for the time-axis spine visualisation
  */
-export const getGetMyOverlapSpineUrl = (params: GetMyOverlapSpineParams) => {
+export const getGetMyOverlapSpineUrl = (params?: GetMyOverlapSpineParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -8941,7 +9007,7 @@ export const getGetMyOverlapSpineUrl = (params: GetMyOverlapSpineParams) => {
 };
 
 export const getMyOverlapSpine = async (
-  params: GetMyOverlapSpineParams,
+  params?: GetMyOverlapSpineParams,
   options?: RequestInit,
 ): Promise<OverlapSpineResponse> => {
   return customFetch<OverlapSpineResponse>(getGetMyOverlapSpineUrl(params), {
@@ -8960,7 +9026,7 @@ export const getGetMyOverlapSpineQueryOptions = <
   TData = Awaited<ReturnType<typeof getMyOverlapSpine>>,
   TError = ErrorType<ApiError>,
 >(
-  params: GetMyOverlapSpineParams,
+  params?: GetMyOverlapSpineParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getMyOverlapSpine>>,
@@ -8999,7 +9065,7 @@ export function useGetMyOverlapSpine<
   TData = Awaited<ReturnType<typeof getMyOverlapSpine>>,
   TError = ErrorType<ApiError>,
 >(
-  params: GetMyOverlapSpineParams,
+  params?: GetMyOverlapSpineParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getMyOverlapSpine>>,

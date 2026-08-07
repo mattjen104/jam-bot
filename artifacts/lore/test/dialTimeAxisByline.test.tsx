@@ -18,6 +18,7 @@ import {
   pastTimingLabel,
   pastServiceClause,
   crossingSentence,
+  classifySetTimeContext,
 } from "../src/components/dialViewHelpers";
 import type { DialShow, DialSpin } from "../src/hooks/useDialData";
 
@@ -59,67 +60,60 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
 }
 
 // ---------------------------------------------------------------------------
-// pastTimingLabel
+// Station-local set time contexts
 // ---------------------------------------------------------------------------
 
-describe("pastTimingLabel — time granularity", () => {
-  it("renders minutes for < 1h", () => {
-    const label = pastTimingLabel(minsAgo(23), null);
-    expect(label).toBe("23 minutes ago");
+describe("classifySetTimeContext", () => {
+  const zone = "America/Los_Angeles";
+  const now = new Date("2026-08-08T20:00:00Z"); // 13:00 Saturday in Los Angeles
+
+  it("distinguishes now from the current set", () => {
+    expect(classifySetTimeContext({
+      startedAt: new Date("2026-08-08T19:30:00Z"), stationIanaTimezone: zone, now, isNow: true,
+    })).toMatchObject({ kind: "now", label: "now", daypart: "day" });
+    expect(classifySetTimeContext({
+      startedAt: new Date("2026-08-08T19:00:00Z"), stationIanaTimezone: zone, now, isCurrentSet: true,
+    })).toMatchObject({ kind: "current-set", label: "in the current set", daypart: "day" });
   });
 
-  it("renders '1 minute ago' for ≤ 1 min", () => {
-    const label = pastTimingLabel(minsAgo(0), null);
-    expect(label).toBe("1 minute ago");
+  it("calls another same-local-day set the last set", () => {
+    expect(classifySetTimeContext({
+      startedAt: new Date("2026-08-08T14:00:00Z"), stationIanaTimezone: zone, now,
+    })).toMatchObject({ kind: "last-set", label: "in the last set", day: "2026-08-08" });
   });
 
-  it("renders word-form hours for < 12h", () => {
-    const label = pastTimingLabel(minsAgo(120), null); // 2 hours
-    expect(label).toBe("two hours ago");
+  it("calls the previous station-local night last night", () => {
+    expect(classifySetTimeContext({
+      startedAt: new Date("2026-08-08T06:30:00Z"), stationIanaTimezone: zone, now, // Fri 23:30 PDT
+    })).toMatchObject({ kind: "last-night", label: "last night", daypart: "night" });
   });
 
-  it("renders 'one hour ago' for exactly 1h", () => {
-    const label = pastTimingLabel(minsAgo(60), null);
-    expect(label).toBe("one hour ago");
+  it("uses the station timezone, not UTC/browser time, for day and daypart", () => {
+    const result = classifySetTimeContext({
+      startedAt: new Date("2026-08-08T03:30:00Z"), stationIanaTimezone: zone, now,
+    }); // Friday 20:30 PDT, rather than Saturday 03:30 UTC
+    expect(result).toMatchObject({ kind: "dated", day: "2026-08-07", daypart: "day" });
+    expect(result.label).toMatch(/Friday day/);
   });
 
-  it("renders 'eleven hours ago' for 11h", () => {
-    const label = pastTimingLabel(minsAgo(660), null);
-    expect(label).toBe("eleven hours ago");
+  it("keeps 9pm through 4:59am in the night slice across midnight", () => {
+    const atNine = classifySetTimeContext({
+      startedAt: new Date("2026-08-08T04:00:00Z"), stationIanaTimezone: zone, now,
+    }); // Fri 21:00 PDT
+    const atFourFiftyNine = classifySetTimeContext({
+      startedAt: new Date("2026-08-08T11:59:00Z"), stationIanaTimezone: zone, now,
+    }); // Sat 04:59 PDT
+    const atFive = classifySetTimeContext({
+      startedAt: new Date("2026-08-08T12:00:00Z"), stationIanaTimezone: zone, now,
+    }); // Sat 05:00 PDT
+    expect(atNine.daypart).toBe("night");
+    expect(atFourFiftyNine.daypart).toBe("night");
+    expect(atFive.daypart).toBe("day");
   });
 
-  it("renders weekday + daypart using station timezone when < 7d", () => {
-    // Tuesday at 21:30 UTC = Tuesday at 14:30 PDT (America/Los_Angeles)
-    // 14:30 = afternoon
-    const playedAt = new Date("2026-08-04T21:30:00Z"); // recent enough to be < 7d
-    const label = pastTimingLabel(playedAt, "America/Los_Angeles");
-    // Tuesday afternoon in LA
-    expect(label).toMatch(/tuesday/i);
-    expect(label).toMatch(/afternoon/i);
-  });
-
-  it("renders 03:00 UTC on US/Pacific station as the previous evening, not morning", () => {
-    // 03:00 UTC = 20:00 PDT (previous calendar day = Tuesday evening)
-    const playedAt = new Date("2026-08-05T03:00:00Z"); // Wednesday 03:00 UTC = Tuesday 20:00 PDT
-    const label = pastTimingLabel(playedAt, "America/Los_Angeles");
-    expect(label).toMatch(/tuesday/i);
-    expect(label).toMatch(/evening/i);
-  });
-
-  it("renders absolute date when station has no timezone (< 7d)", () => {
-    // Within 7d but no tz → absolute date, never a guessed daypart
-    const playedAt = minsAgo(48 * 60); // 2 days ago
-    const label = pastTimingLabel(playedAt, null);
-    // Should be a month-day format, not a weekday+daypart
-    expect(label).not.toMatch(/morning|afternoon|evening|night/i);
-    expect(label).toMatch(/\w{3} \d+/); // e.g. "Aug 4"
-  });
-
-  it("renders absolute date for > 7d regardless of timezone", () => {
-    const playedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-    const label = pastTimingLabel(playedAt, "America/Chicago");
-    expect(label).not.toMatch(/ago/);
-    expect(label).not.toMatch(/morning|afternoon|evening|night/i);
+  it("falls back to an honest absolute date when a station timezone is absent", () => {
+    const label = pastTimingLabel(new Date("2026-08-01T12:00:00Z"), null);
+    expect(label).toMatch(/Aug 1, 2026/);
   });
 });
 
@@ -165,16 +159,22 @@ describe("pastServiceClause", () => {
 // ---------------------------------------------------------------------------
 
 describe("crossingSentence — past context", () => {
-  it("uses pastTimingLabel instead of 'now' or 'this set' in past mode", () => {
-    const show = makeShow({ crossings: 2, topArtists: ["Radiohead"] });
+  it("uses the coherent last-set label instead of 'now' or 'current set' in past mode", () => {
+    const show = makeShow({
+      crossings: 2,
+      topArtists: ["Radiohead"],
+      startedAt: new Date().toISOString(),
+    });
     const result = crossingSentence("KEXP", show, "personal", undefined, {
-      playedAt: minsAgo(45),
-      stationIanaTimezone: null,
+      playedAt: new Date(),
+      setStartedAt: new Date(),
+      stationIanaTimezone: "America/Los_Angeles",
+      isCurrentSet: false,
     });
     expect(result).not.toBeNull();
     const t = text(result!.node);
-    expect(t).toMatch(/45 minutes ago/);
-    expect(t).not.toMatch(/this set/i);
+    expect(t).toMatch(/in the last set/i);
+    expect(t).not.toMatch(/current set/i);
     expect(t).not.toMatch(/\bnow\b/);
   });
 
@@ -249,7 +249,7 @@ describe("crossingSentence — past context", () => {
   });
 
   it("no toggle affordance in past mode", () => {
-    // In live mode, "this set" is a toggle button; in past mode there's no toggle.
+    // In live mode, "current set" is a toggle button; in past mode there's no toggle.
     const show = makeShow({ crossings: 3, topArtists: ["Radiohead", "Portishead"] });
     const result = crossingSentence("KEXP", show, "personal", undefined, {
       playedAt: minsAgo(180),
@@ -264,12 +264,12 @@ describe("crossingSentence — past context", () => {
 // crossingSentence — live mode unchanged (regression guard)
 // ---------------------------------------------------------------------------
 
-describe("crossingSentence — live mode output unchanged", () => {
-  it("returns 'this set' (not a past label) when no past context provided", () => {
+describe("crossingSentence — live mode", () => {
+  it("returns 'in the current set' (not a past label) when no past context provided", () => {
     const show = makeShow({ crossings: 2, topArtists: ["Radiohead"] });
     const liveResult = crossingSentence("KEXP", show, "personal");
     const t = text(liveResult!.node);
-    expect(t).toMatch(/this set/i);
+    expect(t).toMatch(/in the current set/i);
     expect(t).not.toMatch(/ago/);
   });
 

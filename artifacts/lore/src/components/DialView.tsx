@@ -33,7 +33,9 @@ import {
   usableShowName,
   buildAttributedSentence,
   dialShowAsAttribution,
+  classifySetTimeContext,
   type ReasonResult,
+  type SetDaypart,
 } from "./dialViewHelpers";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { heroArtCandidates } from "../lib/artRes";
@@ -92,12 +94,22 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function fmtHM(iso: string): string {
+function fmtHM(iso: string, timeZone?: string | null): string {
   const d = new Date(iso);
-  const h = d.getHours();
-  const m = d.getMinutes().toString().padStart(2, "0");
-  const ampm = h >= 12 ? "pm" : "am";
-  return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${m}${ampm}`;
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      ...(timeZone ? { timeZone } : {}),
+    }).formatToParts(d);
+    const value = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? "";
+    return `${value("hour")}:${value("minute")}${value("dayPeriod").toLowerCase()}`;
+  } catch {
+    return fmtHM(iso);
+  }
 }
 
 function agoLabel(iso: string): string {
@@ -344,6 +356,9 @@ export interface SetPanelSet {
   stationSlug: string;
   stationName: string;
   startedAt: string;
+  /** Station-local IANA timezone the set aired in — clock labels must render
+   * in this zone, never the listener's. */
+  ianaTimezone: string | null;
   showName: string | null;
   /** Individual eligible DJ identities — scope matching is by membership so a
    * co-hosted set surfaces under EACH host's drill, never only under the
@@ -405,7 +420,7 @@ export function setPanelTabLabel(tab: SetPanelTab, sets: SetPanelSet[]): string 
   }
   const setId = tab.scope.setId;
   const set = sets.find((candidate) => candidate.id === setId);
-  return set ? `${fmtHM(set.startedAt)} · ${set.stationName}` : "Set";
+  return set ? `${fmtHM(set.startedAt, set.ianaTimezone)} · ${set.stationName}` : "Set";
 }
 
 /** Streaming services a displayed setlist can export to. Qobuz has no
@@ -1025,6 +1040,10 @@ function RunRow({ run, focused = false }: { run: OverlapRun; focused?: boolean }
   const [, navigate] = useLocation();
   const djName = run.show?.djName ?? null;
   const showName = run.show?.name ?? null;
+  const time = classifySetTimeContext({
+    startedAt: new Date(run.startedAt),
+    stationIanaTimezone: run.station.ianaTimezone,
+  });
 
   return (
     <div
@@ -1053,7 +1072,7 @@ function RunRow({ run, focused = false }: { run: OverlapRun; focused?: boolean }
           <span className="fdrow__discover"> · {run.discover} new</span>
         )}
         <span className="fdrow__replay-badge"> · ▶ hear it</span>
-        <span className="fdrow__run-day">{run.day}</span>
+        <span className="fdrow__run-day">{time.label}</span>
       </div>
     </div>
   );
@@ -1142,7 +1161,7 @@ function StationDetailView({
         ));
 
         const first = show.spins.find((sp) => sp.isLibraryHit);
-        const when = `${fmtHM(show.startedAt)}–${isLive ? "now" : fmtHM(show.endedAt)} · ${agoLabel(isLive ? show.endedAt : show.endedAt)}`;
+        const when = `${fmtHM(show.startedAt, show.ianaTimezone)}–${isLive ? "now" : fmtHM(show.endedAt, show.ianaTimezone)} · ${agoLabel(show.endedAt)}`;
 
         let cls = "dial-fatblk";
         if (isLive) cls += " dial-fatblk--live";
@@ -1220,7 +1239,7 @@ function ShowTracklistView({
         <div className="dial-djhd__name">{show.showName}</div>
         <div className="dial-djhd__sub">
           {show.djName && <><b style={{ fontStyle: "normal", fontWeight: 400 }}>{show.djName}</b>{" · "}</>}
-          {station.station.name} · {fmtHM(show.startedAt)}{isLive ? "–now" : `–${fmtHM(show.endedAt)}`}
+          {station.station.name} · {fmtHM(show.startedAt, show.ianaTimezone)}{isLive ? "–now" : `–${fmtHM(show.endedAt, show.ianaTimezone)}`}
         </div>
         <div className="dial-djhd__stats">
           <div className="dial-djhd__stat">
@@ -1254,7 +1273,7 @@ function ShowTracklistView({
 
       {show.spins.map((sp, i) => (
         <div key={i} className={`dial-trow${sp.isLibraryHit ? " dial-trow--hit" : ""}`}>
-          <div className="dial-trow__time">{fmtHM(sp.playedAt)}</div>
+          <div className="dial-trow__time">{fmtHM(sp.playedAt, show.ianaTimezone)}</div>
           <div className="dial-trow__content">
             <div className="dial-trow__title">{sp.title}</div>
             <div className="dial-trow__artist">{sp.artist}</div>
@@ -1537,7 +1556,7 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
     const warm = show.crossings > 0 && !isFuture;
     return (
       <div className={`dial-sch-row${isLive ? " dial-sch-row--live" : ""}${warm ? " dial-sch-row--warm" : ""}${isFuture ? " dial-sch-row--future" : ""}`}>
-        <div className="dial-sch-time">{fmtHM(show.startedAt)}</div>
+        <div className="dial-sch-time">{fmtHM(show.startedAt, show.ianaTimezone)}</div>
         <div className="dial-sch-info">
           <div className="dial-sch-show">{show.showName}</div>
           {show.djName && <div className="dial-sch-dj"><b>{show.djName}</b></div>}
@@ -1614,7 +1633,7 @@ function OfflineRow({
   // Broadcast date + time for the row timing label.
   const timingSrc = lastShow?.startedAt ?? null;
   const timing = timingSrc
-    ? `${runDate(timingSrc)} · ${clockTime(timingSrc)}`
+    ? `${runDate(timingSrc, lastShow?.ianaTimezone)} · ${clockTime(timingSrc, lastShow?.ianaTimezone)}`
     : "";
 
   // ── Tier 1: reason — via buildAttributedSentence ────────────────────────
@@ -2202,6 +2221,31 @@ export function DialView() {
   // Fetch the recent crossing runs (reverse-chrono) — coarse scan detents.
   // Always fetched so coarse navigation is immediately available on first ← tap.
   const { data: recentRuns = [] } = useMyOverlapRunsRecent({ days: ttRangeDays });
+  const [setDay, setSetDay] = useState<string | null>(null);
+  const [setDaypart, setSetDaypart] = useState<"all" | SetDaypart>("all");
+  const availableSetDays = useMemo(
+    () => [...new Set(recentRuns.map((run) => classifySetTimeContext({
+      startedAt: new Date(run.startedAt),
+      stationIanaTimezone: run.station.ianaTimezone,
+    }).day).filter((day): day is string => day != null))],
+    [recentRuns],
+  );
+  const slicedRuns = useMemo(() => {
+    const targetDay = setDay ?? availableSetDays[0] ?? null;
+    return recentRuns
+      .filter((run) => {
+        const context = classifySetTimeContext({
+          startedAt: new Date(run.startedAt),
+          stationIanaTimezone: run.station.ianaTimezone,
+        });
+        return (!targetDay || context.day === targetDay) &&
+          (setDaypart === "all" || context.daypart === setDaypart);
+      })
+      .sort((a, b) => (b.owned + b.discover) - (a.owned + a.discover));
+  }, [recentRuns, availableSetDays, setDay, setDaypart]);
+  useEffect(() => {
+    if (setDay != null && !availableSetDays.includes(setDay)) setSetDay(null);
+  }, [availableSetDays, setDay]);
 
   // Two-level past-scan state machine (coarse = runs, fine = crossing moments).
   const pastScan = usePastScanState(recentRuns);
@@ -2348,6 +2392,7 @@ export function DialView() {
           stationSlug: ds.station.slug,
           stationName: ds.station.name,
           startedAt: show.startedAt,
+          ianaTimezone: show.ianaTimezone ?? ds.station.ianaTimezone ?? null,
           showName: usableShowName(show),
           djNames,
           artists,
@@ -2412,6 +2457,7 @@ export function DialView() {
         stationSlug: row.ds.station.slug,
         stationName: row.ds.station.name,
         startedAt,
+        ianaTimezone: row.show?.ianaTimezone ?? row.ds.station.ianaTimezone ?? null,
         showName: usableShowName(row.show),
         djNames,
         artists,
@@ -2434,6 +2480,7 @@ export function DialView() {
         stationSlug: "replay",
         stationName: ride.replayLabel ?? "Replay",
         startedAt: currentRun?.day ? `${currentRun.day}T00:00:00Z` : new Date().toISOString(),
+        ianaTimezone: currentRun?.station.ianaTimezone ?? null,
         showName: null,
         djNames: [],
         artists: ride.queue.map((item) => ({ name: item.artist, inLibrary: false })),
@@ -2456,7 +2503,7 @@ export function DialView() {
     // replay tab only takes focus when nothing is open at all.
     openSetTab({ kind: "set", setId: id }, shouldActivateReplayTab(activeSetTabId));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ride.active, ride.queue, ride.index, ride.replayLabel, currentRun?.day, openSetTab]);
+  }, [ride.active, ride.queue, ride.index, ride.replayLabel, currentRun?.day, currentRun?.station.ianaTimezone, openSetTab]);
 
   /** Plays a displayed setlist as an ordered queue through the agnostic
    * player — same seed pattern as every other startReplay call-site, so
@@ -2901,6 +2948,35 @@ export function DialView() {
                 
                 {effectiveTtMode === "past" && (
                   <>
+                    <section className="dial-set-slice" aria-label="Filter sets by station-local time">
+                      <label className="dial-set-slice__label">
+                        Day
+                        <select
+                          value={setDay ?? availableSetDays[0] ?? ""}
+                          onChange={(event) => setSetDay(event.target.value || null)}
+                          aria-label="Set day"
+                        >
+                          {availableSetDays.map((day) => <option key={day} value={day}>{day}</option>)}
+                        </select>
+                      </label>
+                      <div className="dial-set-slice__dayparts" role="group" aria-label="Set daypart">
+                        {(["all", "day", "night"] as const).map((part) => (
+                          <button
+                            key={part}
+                            type="button"
+                            className={setDaypart === part ? "is-active" : ""}
+                            aria-pressed={setDaypart === part}
+                            onClick={() => setSetDaypart(part)}
+                          >{part === "all" ? "All sets" : `${part[0]!.toUpperCase()}${part.slice(1)} sets`}</button>
+                        ))}
+                      </div>
+                      <span className="dial-set-slice__count">{slicedRuns.length} ranked by crossings</span>
+                    </section>
+                    {slicedRuns.length > 0 && (
+                      <div className="dial-set-slice__runs">
+                        {slicedRuns.map((run) => <RunRow key={run.runId} run={run} />)}
+                      </div>
+                    )}
                     {currentRun ? (
                       <>
                         {/* Coarse detent: the run row (click → archive page) */}

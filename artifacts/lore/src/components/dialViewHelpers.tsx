@@ -134,7 +134,7 @@ export function usableShowName(show: DialShow | null): string | null {
  *   No DJ, show known   → "[artists] on [Show] {timing}"
  *   Neither             → "[artists] {timing}"
  *
- * When `also` is provided and timing is "this set", the phrase "this set"
+ * When `also` is provided and timing is "in the current set", that phrase
  * becomes a clickable button that toggles the appended "Also, …" tail.
  * For "now" sentences the timing stays plain text with a leading comma.
  *
@@ -153,8 +153,8 @@ export function buildAttributedSentence(
 ): ReactNode {
   // Build the timing element.
   // "now" → plain ", now" (comma rule)
-  // "this set" + toggle → clickable button
-  // "this set" without toggle / any other string → plain " <timing>"
+   // "in the current set" + toggle → clickable button
+   // "in the current set" without toggle / any other string → plain " <timing>"
   const timingEl: ReactNode = !timing ? null :
     timing === "now" ? ", now" :
     also ? (
@@ -166,7 +166,7 @@ export function buildAttributedSentence(
           aria-expanded={also.expanded}
           aria-label={also.expanded ? "Hide the rest of this set" : "Show the rest of this set"}
           onClick={(e) => { e.stopPropagation(); also.onToggle(); }}
-        >this set</button>
+        >in the current set</button>
       </>
     ) : ` ${timing}`;
 
@@ -307,20 +307,22 @@ export function crossingSentence(
   const dj = djList.length === 1 ? djList[0] : null;
   const showName = usableShowName(show);
 
-  // Past-mode: timing comes from the playedAt timestamp localised to the
-  // station's timezone.  No "this set" toggle in past mode (the timing label
-  // replaces it).  Live-mode: "now" vs. "this set" as before.
+  // Past-mode timing comes from the set start localised to the station's
+  // timezone. Live-mode distinguishes "now" from "in the current set".
   const serviceClause = pastServiceClause(past?.resolvedService);
   let timing: string;
   let activeAlso: (AlsoToggle & { node: ReactNode }) | undefined;
   if (past) {
-    timing = pastTimingLabel(past.playedAt, past.stationIanaTimezone ?? null);
+    timing = classifySetTimeContext({
+      startedAt: past.setStartedAt ?? past.playedAt,
+      stationIanaTimezone: past.stationIanaTimezone ?? null,
+      isCurrentSet: past.isCurrentSet ?? false,
+    }).label;
     activeAlso = undefined;
   } else {
     const isLive = !!(current?.isLibraryHit || current?.isArtistHit);
-    timing = isLive ? "now" : "this set";
-    // Only wire the toggle when timing is "this set" — live sentences have no
-    // "this set" word to click, so no toggle affordance is offered.
+    timing = isLive ? "now" : "in the current set";
+    // Only wire the toggle for the current-set sentence.
     activeAlso = !isLive ? also : undefined;
   }
 
@@ -362,86 +364,103 @@ export function crossingSentence(
 }
 
 // ---------------------------------------------------------------------------
-// Past-mode time formatting and service attribution
+// Station-local set time contexts and service attribution
 // ---------------------------------------------------------------------------
 
-const HOUR_WORDS = [
-  "one", "two", "three", "four", "five", "six",
-  "seven", "eight", "nine", "ten", "eleven",
-] as const;
+export type SetDaypart = "day" | "night";
+export type SetTimeContext =
+  | { kind: "now"; label: "now"; day: string | null; daypart: SetDaypart | null }
+  | { kind: "current-set"; label: "in the current set"; day: string | null; daypart: SetDaypart | null }
+  | { kind: "last-set"; label: "in the last set"; day: string | null; daypart: SetDaypart | null }
+  | { kind: "last-night"; label: "last night"; day: string; daypart: "night" }
+  | { kind: "dated"; label: string; day: string | null; daypart: SetDaypart | null };
 
-/**
- * Formats a past `playedAt` timestamp as a human-readable timing label,
- * degrading with distance.  Daypart uses the **station's** local timezone so
- * "Tuesday night" reflects where the show aired, not where the listener is.
- *
- * | Distance  | Format                         |
- * |-----------|--------------------------------|
- * | < 1 h     | "23 minutes ago"               |
- * | < 12 h    | "two hours ago"                |
- * | < 7 d     | "Tuesday night" (station-local)|
- * | older     | "Jul 15"                       |
- *
- * A null or invalid `stationIanaTimezone` falls back to absolute date format
- * for the < 7d case — never a guessed daypart.
- */
+interface LocalSetTime {
+  day: string;
+  weekday: string;
+  daypart: SetDaypart;
+  dateLabel: string;
+}
+
+function localSetTime(startedAt: Date, stationIanaTimezone: string | null | undefined): LocalSetTime | null {
+  if (!stationIanaTimezone || Number.isNaN(startedAt.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: stationIanaTimezone,
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      hourCycle: "h23",
+    }).formatToParts(startedAt);
+    const value = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? "";
+    const hour = Number(value("hour"));
+    const year = value("year");
+    const month = value("month");
+    const dayOfMonth = value("day");
+    const numericMonth = new Intl.DateTimeFormat("en-US", {
+      timeZone: stationIanaTimezone,
+      month: "2-digit",
+    }).format(startedAt);
+    if (!year || !month || !dayOfMonth || !Number.isFinite(hour)) return null;
+    return {
+      day: `${year}-${numericMonth}-${dayOfMonth.padStart(2, "0")}`,
+      weekday: value("weekday"),
+      // Night begins at 9pm and continues through 4:59am, by the station's
+      // clock, so a local overnight program keeps its intended identity.
+      daypart: hour >= 21 || hour < 5 ? "night" : "day",
+      dateLabel: `${month} ${dayOfMonth}, ${year}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The one Dial vocabulary for station-local set time. */
+export function classifySetTimeContext({
+  startedAt,
+  stationIanaTimezone,
+  now = new Date(),
+  isNow = false,
+  isCurrentSet = false,
+}: {
+  startedAt: Date;
+  stationIanaTimezone: string | null | undefined;
+  now?: Date;
+  isNow?: boolean;
+  isCurrentSet?: boolean;
+}): SetTimeContext {
+  const local = localSetTime(startedAt, stationIanaTimezone);
+  if (isNow) return { kind: "now", label: "now", day: local?.day ?? null, daypart: local?.daypart ?? null };
+  if (isCurrentSet) return { kind: "current-set", label: "in the current set", day: local?.day ?? null, daypart: local?.daypart ?? null };
+  if (!local) {
+    if (Number.isNaN(startedAt.getTime())) {
+      return { kind: "dated", label: "an earlier set", day: null, daypart: null };
+    }
+    return {
+      kind: "dated",
+      label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(startedAt),
+      day: null,
+      daypart: null,
+    };
+  }
+  const localNow = localSetTime(now, stationIanaTimezone);
+  const previousLocalDay = localSetTime(new Date(now.getTime() - 24 * 60 * 60 * 1000), stationIanaTimezone)?.day;
+  if (local.day === localNow?.day) return { kind: "last-set", label: "in the last set", day: local.day, daypart: local.daypart };
+  if (local.day === previousLocalDay && local.daypart === "night") {
+    return { kind: "last-night", label: "last night", day: local.day, daypart: "night" };
+  }
+  return { kind: "dated", label: `${local.weekday} ${local.daypart} · ${local.dateLabel}`, day: local.day, daypart: local.daypart };
+}
+
+/** Compatibility formatter for individual past spins. Set copy uses the shared classifier. */
 export function pastTimingLabel(
   playedAt: Date,
   stationIanaTimezone: string | null,
 ): string {
-  const elapsedMs = Date.now() - playedAt.getTime();
-  const elapsedMin = Math.max(0, Math.round(elapsedMs / 60_000));
-
-  // < 1h → "X minutes ago"
-  if (elapsedMin < 60) {
-    return elapsedMin <= 1 ? "1 minute ago" : `${elapsedMin} minutes ago`;
-  }
-
-  // < 12h → word-form "X hours ago"
-  const elapsedH = Math.round(elapsedMin / 60);
-  if (elapsedH < 12) {
-    const word = HOUR_WORDS[elapsedH - 1] ?? `${elapsedH}`;
-    return `${word} hour${elapsedH === 1 ? "" : "s"} ago`;
-  }
-
-  // < 7d → weekday + daypart in station-local time (requires a valid tz)
-  if (elapsedMs < 7 * 24 * 60 * 60 * 1000 && stationIanaTimezone) {
-    try {
-      const fmt = new Intl.DateTimeFormat("en-US", {
-        timeZone: stationIanaTimezone,
-        weekday: "long",
-        hour: "numeric",
-        hour12: true,
-      });
-      const parts = fmt.formatToParts(playedAt);
-      const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
-      const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
-      const isPM = (parts.find((p) => p.type === "dayPeriod")?.value ?? "").toLowerCase() === "pm";
-      const h24 = isPM
-        ? hour === 12 ? 12 : hour + 12
-        : hour === 12 ? 0 : hour;
-      const daypart =
-        h24 >= 5 && h24 < 12 ? "morning"
-        : h24 >= 12 && h24 < 17 ? "afternoon"
-        : h24 >= 17 && h24 < 21 ? "evening"
-        : h24 >= 21 ? "night"
-        : "late night"; // midnight–5 am
-      if (weekday) return `${weekday} ${daypart}`;
-    } catch {
-      // Invalid timezone — fall through to absolute date
-    }
-  }
-
-  // Older or no usable timezone → absolute date (e.g., "Jul 15")
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  if (stationIanaTimezone) {
-    try {
-      opts.timeZone = stationIanaTimezone;
-    } catch {
-      /* ignore invalid tz */
-    }
-  }
-  return new Intl.DateTimeFormat("en-US", opts).format(playedAt);
+  return classifySetTimeContext({ startedAt: playedAt, stationIanaTimezone }).label;
 }
 
 /**
@@ -478,6 +497,10 @@ export interface PastContext {
    * subject of a provenance verb.
    */
   resolvedService?: string | null;
+  /** Set start enables coherent set-level time wording for replayed crossings. */
+  setStartedAt?: Date;
+  /** True only when this crossing belongs to the current set. */
+  isCurrentSet?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -513,8 +536,8 @@ export function intoSet(startedAt: string): string {
  *
  * Sentence language hierarchy (personal mode):
  *   DJ known              → "[DJ] selected [Artist] on [Show]"
- *   No DJ, show known     → "[Artist] on [Show] now / this set"
- *   Neither               → "[Artist] on now / this set"
+ *   No DJ, show known     → "[Artist] on [Show] now / in the current set"
+ *   Neither               → "[Artist] on now / in the current set"
  * Song titles are never shown — the player handles that.
  */
 export function reason(
@@ -593,7 +616,7 @@ export function reason(
     const nn = show.topArtists.length > 0 ? nameNodes(show.topArtists) : null;
     return {
       r: 3, cls: "w3",
-      node: buildAttributedSentence(nn, show.crossings, "of yours", dj, showName, "this set"),
+      node: buildAttributedSentence(nn, show.crossings, "of yours", dj, showName, "in the current set"),
     };
   }
 
@@ -602,7 +625,7 @@ export function reason(
     const nn = show.topArtistNames.length > 0 ? nameNodes(show.topArtistNames) : null;
     return {
       r: 4, cls: "w4",
-      node: buildAttributedSentence(nn, show.artistCrossings, "artists of yours", dj, showName, "this set"),
+      node: buildAttributedSentence(nn, show.artistCrossings, "artists of yours", dj, showName, "in the current set"),
     };
   }
 

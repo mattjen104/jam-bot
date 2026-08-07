@@ -5089,6 +5089,50 @@
   color: hsl(var(--muted-foreground) / 0.55);
 }
 
+/* Station-local set day/daypart slice in the time-travel panel. */
+.dial-set-slice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 10px;
+  padding: 9px var(--dial-lane-pad);
+  border-bottom: 1px solid hsl(var(--border) / 0.45);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+}
+.dial-set-slice__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dial-set-slice select {
+  max-width: 130px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font: inherit;
+  padding: 3px 4px;
+}
+.dial-set-slice__dayparts { display: inline-flex; gap: 3px; }
+.dial-set-slice__dayparts button {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font: inherit;
+  padding: 3px 7px;
+}
+.dial-set-slice__dayparts button.is-active {
+  border-color: hsl(var(--library) / 0.65);
+  background: hsl(var(--library) / 0.14);
+  color: hsl(var(--library));
+}
+.dial-set-slice__count { margin-left: auto; opacity: .72; }
+.dial-set-slice__runs { border-bottom: 1px solid hsl(var(--border) / 0.3); }
+
 .fdrow__c { flex: 1; min-width: 0; position: relative; z-index: 1; }
 
 /* Now-playing row artwork — right-edge fade from album art into background */

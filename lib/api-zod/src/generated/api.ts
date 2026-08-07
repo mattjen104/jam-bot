@@ -297,6 +297,12 @@ export const ListStationsResponse = zod.object({
           .describe(
             'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming. Stations that mix both are resolved to \"human\" or \"automated\" at query time and never returned as \"mixed\". Null when not yet classified.',
           ),
+        ianaTimezone: zod
+          .string()
+          .nullish()
+          .describe(
+            "Best-effort IANA timezone for station-local schedule and set presentation.",
+          ),
       })
       .describe("A curated radio station in the public directory."),
   ),
@@ -673,6 +679,12 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming. Stations that mix both are resolved to \"human\" or \"automated\" at query time and never returned as \"mixed\". Null when not yet classified.',
+        ),
+      ianaTimezone: zod
+        .string()
+        .nullish()
+        .describe(
+          "Best-effort IANA timezone for station-local schedule and set presentation.",
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -1510,6 +1522,12 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming. Stations that mix both are resolved to \"human\" or \"automated\" at query time and never returned as \"mixed\". Null when not yet classified.',
+        ),
+      ianaTimezone: zod
+        .string()
+        .nullish()
+        .describe(
+          "Best-effort IANA timezone for station-local schedule and set presentation.",
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -3236,7 +3254,7 @@ export const GetStationsRecentSpinsResponse = zod
   .describe("Per-station recent spins for a given calendar day.");
 
 /**
- * Returns all spin-runs (grouped by station, day, and show) for every station on the given UTC calendar day, ordered chronologically within each station. Powers the show timeline on station cards on the home schedule page.
+ * Returns all spin-runs (grouped by station, day, and show) for every station on the given UTC calendar day, ordered chronologically within each station. Each run includes the station's IANA timezone so clients can present and slice the set in the place where it aired.
 
  * @summary Show-run timeline for all stations on a given calendar day
  */
@@ -3278,6 +3296,12 @@ export const GetStationsScheduleResponse = zod
               resolvedCount: zod.number(),
               startedAt: zod.string(),
               endedAt: zod.string(),
+              ianaTimezone: zod
+                .string()
+                .nullable()
+                .describe(
+                  "Station-local IANA timezone for this set. Null only when Lore cannot confidently determine the station's timezone.",
+                ),
             })
             .describe("One spin-run block for a station on a given day."),
         ),
@@ -4260,11 +4284,6 @@ export const GetSpotifyStatusResponse = zod
  * @summary Play a recording (full track) on the listener's own Spotify
  */
 
-export const SpotifyQueueRunBody = zod.object({
-  uris: zod.array(zod.string().min(1)).min(1),
-  deviceId: zod.string().nullish(),
-});
-
 export const SpotifyPlayBody = zod.object({
   mbid: zod.string().min(1),
   deviceId: zod
@@ -4288,6 +4307,31 @@ export const SpotifyPlayResponse = zod
     durationMs: zod.number().nullish(),
   })
   .describe("Full-track playback started on the listener's own device.");
+
+/**
+ * Starts playing a list of spotify:track:<id> URIs in order on the listener's Connect device — a single gapless call for the whole past-crossing run. Requires Premium and an active (or pinned) device. Never call this per-track; pass the full run's uris array at once.
+
+ * @summary Queue an entire replay run on the listener's Spotify Connect device
+ */
+
+export const SpotifyQueueRunBody = zod
+  .object({
+    uris: zod
+      .array(zod.string())
+      .min(1)
+      .describe("Spotify track URIs to queue, in playback order."),
+    deviceId: zod
+      .string()
+      .nullish()
+      .describe("Target device id; omit or null to use the active device."),
+  })
+  .describe(
+    "Queue an entire replay run on the listener's Spotify Connect device in one gapless call. uris must be spotify:track:<id> URIs already known client-side (e.g. from recording links). Requires Premium and an active device. Never pass these per-track; always pass the full run at once.\n",
+  );
+
+export const SpotifyQueueRunResponse = zod.object({
+  queued: zod.number().describe("Number of tracks queued."),
+});
 
 /**
  * Resolves the MBID to a Spotify track (exact link > ISRC > artist+title search) and saves it to the listener's library. Works on any Spotify tier (no Premium requirement). A 403 with code `insufficient_scope` means the connection predates library access — reconnect to grant it.
@@ -4794,10 +4838,19 @@ export const GetMyOverlapRunsResponse = zod.object({
     zod.object({
       runId: zod.number(),
       day: zod.string().regex(getMyOverlapRunsResponseItemsItemDayRegExp),
+      startedAt: zod
+        .date()
+        .describe(
+          "First logged spin in the set. Use with station.ianaTimezone for station-local set labels and day\/night slicing.",
+        ),
       station: zod.object({
         slug: zod.string(),
         name: zod.string(),
         stationClass: zod.string().nullable(),
+        ianaTimezone: zod
+          .string()
+          .nullable()
+          .describe("IANA timezone of the station that aired this set."),
       }),
       show: zod.union([
         zod.object({
@@ -4813,14 +4866,17 @@ export const GetMyOverlapRunsResponse = zod.object({
 });
 
 /**
- * Returns all spins within the run (identified by the run anchor min(spin.id)) whose MBID is in the caller's library, ordered by playedAt asc. These are the fine detents for the two-speed dial scan — swipe left/right on the now-playing card steps through them. Returns an empty moments list when runId is not a run anchor or the run has no library crossings.
+ * Returns all spins within the run whose MBID is in the caller's library, ordered by playedAt asc. These are the fine detents for the two-speed dial scan — swipe left/right on the now-playing card steps through them.
+runId semantics: the server resolves the run partition (station + show + UTC day) from the given spin ID and returns all crossing moments in that partition. Callers sourced from /me/overlaps/runs will receive the canonical run anchor (min spin ID per partition), which is the recommended input. Passing any other spin ID that exists in the same partition returns the same result. Returns an empty list when no spin with that ID exists or the run has no library crossings.
 
  * @summary Library-crossing moments within a broadcast run
  */
 export const GetMyRunCrossingsParams = zod.object({
   runId: zod.coerce
     .number()
-    .describe("min(spin.id) for the run — the run anchor."),
+    .describe(
+      "Spin ID identifying the run partition. The canonical value is min(spin.id) for the run, as returned by \/me\/overlaps\/runs. Any spin ID from the same partition (station + show + UTC day) returns the same crossing moments.\n",
+    ),
 });
 
 export const GetMyRunCrossingsResponse = zod.object({
@@ -4855,10 +4911,36 @@ Only bins with at least one resolved spin appear in the response; the client fil
 
  * @summary Hourly density bins for the time-axis spine visualisation
  */
+export const getMyOverlapSpineQueryDayRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
 export const GetMyOverlapSpineQueryParams = zod.object({
-  stationId: zod.coerce.number().describe("Station primary key."),
-  from: zod.date().describe("Start of the window (inclusive), ISO 8601."),
-  to: zod.date().describe("End of the window (exclusive), ISO 8601."),
+  day: zod.coerce
+    .string()
+    .regex(getMyOverlapSpineQueryDayRegExp)
+    .optional()
+    .describe(
+      "UTC calendar day shorthand (YYYY-MM-DD).  When provided, `from`\/`to` are derived automatically (full UTC day).  `stationId` is optional in this mode — when omitted, aggregates all stations crossed on that day.\n",
+    ),
+  stationId: zod.coerce
+    .number()
+    .optional()
+    .describe(
+      "Station primary key.  Required when using explicit `from`\/`to` range. Optional when using `day` shorthand.\n",
+    ),
+  from: zod
+    .date()
+    .optional()
+    .describe(
+      "Start of the window (inclusive), ISO 8601.  Required with explicit range mode.",
+    ),
+  to: zod
+    .date()
+    .optional()
+    .describe(
+      "End of the window (exclusive), ISO 8601.  Required with explicit range mode.",
+    ),
 });
 
 export const GetMyOverlapSpineResponse = zod.object({

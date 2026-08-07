@@ -124,8 +124,10 @@ export interface OverlapStation {
 export interface OverlapRun {
   runId: number;
   day: string;
+  /** First logged spin in the set (absolute ISO time). */
+  startedAt: string;
   stationId: number;
-  station: { slug: string; name: string; stationClass: string };
+  station: { slug: string; name: string; stationClass: string; ianaTimezone: string | null };
   show: { name: string; djName: string | null } | null;
   owned: number;
   discover: number;

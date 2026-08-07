@@ -17,4 +17,6 @@ export interface StationScheduleRun {
   resolvedCount: number;
   startedAt: string;
   endedAt: string;
+  /** Station-local IANA timezone for this set. Null only when Lore cannot confidently determine the station's timezone. */
+  ianaTimezone: string | null;
 }

@@ -11,4 +11,9 @@ export type OverlapRunItemStation = {
   name: string;
   /** @nullable */
   stationClass: string | null;
+  /**
+   * IANA timezone of the station that aired this set.
+   * @nullable
+   */
+  ianaTimezone: string | null;
 };

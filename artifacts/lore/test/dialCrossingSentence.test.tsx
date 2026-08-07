@@ -82,14 +82,14 @@ function markup(node: ReactNode): string {
 // ---------------------------------------------------------------------------
 
 describe("crossingSentence — 1 artist (on air form)", () => {
-  it("renders '<Artist> on <Show> this set.' without a DJ", () => {
+  it("renders '<Artist> on <Show> in the current set.' without a DJ", () => {
     const show = makeShow({ crossings: 1, topArtists: ["Portishead"] });
     const result = crossingSentence("KCRW", show);
     expect(result).not.toBeNull();
-    expect(text(result!.node)).toBe("Portishead on Morning Mix this set.");
+    expect(text(result!.node)).toBe("Portishead on Morning Mix in the current set.");
   });
 
-  it("renders '<DJ> selected <Artist> on <Show> this set.' when a DJ is present", () => {
+  it("renders '<DJ> selected <Artist> on <Show> in the current set.' when a DJ is present", () => {
     const show = makeShow({
       crossings: 1,
       topArtists: ["Portishead"],
@@ -97,7 +97,7 @@ describe("crossingSentence — 1 artist (on air form)", () => {
     });
     const result = crossingSentence("KCRW", show);
     expect(result).not.toBeNull();
-    expect(text(result!.node)).toBe("Tom Schnabel selected Portishead on Morning Mix this set.");
+    expect(text(result!.node)).toBe("Tom Schnabel selected Portishead on Morning Mix in the current set.");
   });
 
   it("hasTrack is true for 1-artist form", () => {
@@ -122,17 +122,17 @@ describe("crossingSentence — 1 artist (on air form)", () => {
     });
     const result = crossingSentence("KCRW", show);
     // DJ is suppressed — artist leads with show name
-    expect(text(result!.node)).toBe("Portishead on Morning Mix this set.");
+    expect(text(result!.node)).toBe("Portishead on Morning Mix in the current set.");
     expect(text(result!.node)).not.toContain("KCRW —");
   });
 });
 
 describe("crossingSentence — 2 artists (multi-artist form)", () => {
-  it("renders '<A> and <B> on <Show> this set.' for exactly 2 artists", () => {
+  it("renders '<A> and <B> on <Show> in the current set.' for exactly 2 artists", () => {
     const show = makeShow({ crossings: 2, topArtists: ["Portishead", "Massive Attack"] });
     const result = crossingSentence("KCRW", show);
     expect(result).not.toBeNull();
-    expect(text(result!.node)).toBe("Portishead and Massive Attack on Morning Mix this set.");
+    expect(text(result!.node)).toBe("Portishead and Massive Attack on Morning Mix in the current set.");
   });
 
   it("wraps each artist name in <b> element", () => {
@@ -144,14 +144,14 @@ describe("crossingSentence — 2 artists (multi-artist form)", () => {
     expect(html).toContain("Massive Attack");
   });
 
-  it("renders '<DJ> selected <A> and <B> on <Show> this set.' when a DJ is present", () => {
+  it("renders '<DJ> selected <A> and <B> on <Show> in the current set.' when a DJ is present", () => {
     const show = makeShow({
       crossings: 2,
       topArtists: ["Portishead", "Massive Attack"],
       djName: "Tom Schnabel",
     });
     const result = crossingSentence("KCRW", show);
-    expect(text(result!.node)).toBe("Tom Schnabel selected Portishead and Massive Attack on Morning Mix this set.");
+    expect(text(result!.node)).toBe("Tom Schnabel selected Portishead and Massive Attack on Morning Mix in the current set.");
   });
 
   it("uses artist-crossing names when only artistCrossings > 0", () => {
@@ -161,7 +161,7 @@ describe("crossingSentence — 2 artists (multi-artist form)", () => {
       topArtistNames: ["The Cure", "Siouxsie and the Banshees"],
     });
     const result = crossingSentence("4ZZZ", show);
-    expect(text(result!.node)).toBe("The Cure and Siouxsie and the Banshees on Morning Mix this set.");
+    expect(text(result!.node)).toBe("The Cure and Siouxsie and the Banshees on Morning Mix in the current set.");
   });
 });
 
@@ -171,7 +171,7 @@ describe("crossingSentence — 6 artists (boundary of shown list)", () => {
   it("renders all 6 names joined with Oxford comma and 'and' before the last", () => {
     const show = makeShow({ crossings: 6, topArtists: SIX });
     const result = crossingSentence("KCRW", show);
-    expect(text(result!.node)).toBe("A, B, C, D, E, and F on Morning Mix this set.");
+    expect(text(result!.node)).toBe("A, B, C, D, E, and F on Morning Mix in the current set.");
   });
 
   it("does not append '… and N more' when exactly 6 names fit", () => {
@@ -188,27 +188,27 @@ describe("crossingSentence — 7+ artists (overflow form)", () => {
   it("shows 6 names then 'and 1 more' for 7 artists", () => {
     const show = makeShow({ crossings: 7, topArtists: SEVEN });
     const result = crossingSentence("KCRW", show);
-    expect(text(result!.node)).toBe("A, B, C, D, E, F, and 1 more on Morning Mix this set.");
+    expect(text(result!.node)).toBe("A, B, C, D, E, F, and 1 more on Morning Mix in the current set.");
   });
 
   it("shows 6 names then 'and 2 more' for 8 artists", () => {
     const show = makeShow({ crossings: 8, topArtists: EIGHT });
     const result = crossingSentence("KCRW", show);
-    expect(text(result!.node)).toBe("A, B, C, D, E, F, and 2 more on Morning Mix this set.");
+    expect(text(result!.node)).toBe("A, B, C, D, E, F, and 2 more on Morning Mix in the current set.");
   });
 });
 
 describe("crossingSentence — count fallback (no artist names available)", () => {
-  it("renders singular '1 track of yours on <Show> this set.' when count is 1 and topArtists is empty", () => {
+  it("renders singular '1 track of yours on <Show> in the current set.' when count is 1 and topArtists is empty", () => {
     const show = makeShow({ crossings: 1, topArtists: [] });
     const result = crossingSentence("KCRW", show);
-    expect(text(result!.node)).toBe("1 track of yours on Morning Mix this set.");
+    expect(text(result!.node)).toBe("1 track of yours on Morning Mix in the current set.");
   });
 
-  it("renders plural '3 tracks of yours on <Show> this set.' when count is 3", () => {
+  it("renders plural '3 tracks of yours on <Show> in the current set.' when count is 3", () => {
     const show = makeShow({ crossings: 3, topArtists: [] });
     const result = crossingSentence("KCRW", show);
-    expect(text(result!.node)).toBe("3 tracks of yours on Morning Mix this set.");
+    expect(text(result!.node)).toBe("3 tracks of yours on Morning Mix in the current set.");
   });
 
   it("returns null when there are no crossings at all", () => {
@@ -230,7 +230,7 @@ describe("crossingSentence — station name suppression", () => {
     const show = makeShow({ crossings: 2, topArtists: ["KCRW", "Portishead"] });
     const result = crossingSentence("KCRW", show);
     // Only Portishead remains → 1-artist form with show name
-    expect(text(result!.node)).toBe("Portishead on Morning Mix this set.");
+    expect(text(result!.node)).toBe("Portishead on Morning Mix in the current set.");
   });
 });
 
@@ -279,20 +279,20 @@ describe("reason — r=2 library artist on air", () => {
 // reason() — r=3 (exact show crossings)
 // ---------------------------------------------------------------------------
 
-describe("reason — r=3 (exact show crossings, already aired this set)", () => {
+describe("reason — r=3 (exact show crossings, already aired in the current set)", () => {
   it("returns r=3 with artist names when topArtists is non-empty", () => {
     const show = makeShow({ crossings: 2, topArtists: ["Portishead", "Massive Attack"] });
     const rz = reason(show, 0);
     expect(rz.r).toBe(3);
     expect(rz.cls).toBe("w3");
-    expect(text(rz.node)).toBe("Portishead and Massive Attack on Morning Mix this set.");
+    expect(text(rz.node)).toBe("Portishead and Massive Attack on Morning Mix in the current set.");
   });
 
   it("returns r=3 with count fallback when topArtists is empty", () => {
     const show = makeShow({ crossings: 4, topArtists: [] });
     const rz = reason(show, 0);
     expect(rz.r).toBe(3);
-    expect(text(rz.node)).toBe("4 of yours on Morning Mix this set.");
+    expect(text(rz.node)).toBe("4 of yours on Morning Mix in the current set.");
   });
 
   it("bolds the count fallback", () => {
@@ -304,7 +304,7 @@ describe("reason — r=3 (exact show crossings, already aired this set)", () => 
   it("singular 'N of yours' with show name in count fallback", () => {
     const show = makeShow({ crossings: 1, topArtists: [] });
     const rz = reason(show, 0);
-    expect(text(rz.node)).toBe("1 of yours on Morning Mix this set.");
+    expect(text(rz.node)).toBe("1 of yours on Morning Mix in the current set.");
   });
 });
 
@@ -318,14 +318,14 @@ describe("reason — r=4 (artist crossings, no exact show match)", () => {
     const rz = reason(show, 0);
     expect(rz.r).toBe(4);
     expect(rz.cls).toBe("w4");
-    expect(text(rz.node)).toBe("The Cure and Joy Division on Morning Mix this set.");
+    expect(text(rz.node)).toBe("The Cure and Joy Division on Morning Mix in the current set.");
   });
 
   it("returns r=4 with count fallback when topArtistNames is empty", () => {
     const show = makeShow({ artistCrossings: 5, topArtistNames: [] });
     const rz = reason(show, 0);
     expect(rz.r).toBe(4);
-    expect(text(rz.node)).toBe("5 artists of yours on Morning Mix this set.");
+    expect(text(rz.node)).toBe("5 artists of yours on Morning Mix in the current set.");
   });
 
   it("bolds the count in the fallback sentence", () => {

@@ -549,10 +549,12 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     .select({
       runId: sql<number>`min(${spinsTable.id})`,
       day: spinDayExpr,
+      startedAt: sql<string>`min(${spinsTable.playedAt})`,
       stationId: stationsTable.id,
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
       stationClass: stationsTable.stationClass,
+      stationIanaTimezone: stationsTable.ianaTimezone,
       showName: showsTable.name,
       djName: showsTable.djName,
       owned: sql<number>`count(*) filter (where ${spinsTable.mbid} in (${userMbids}))::int`,
@@ -573,6 +575,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
       stationsTable.slug,
       stationsTable.name,
       stationsTable.stationClass,
+      stationsTable.ianaTimezone,
       showsTable.name,
       showsTable.djName,
     )
@@ -591,11 +594,13 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     items: rows.map((r) => ({
       runId: r.runId,
       day: r.day,
+      startedAt: new Date(r.startedAt).toISOString(),
       stationId: r.stationId,
       station: {
         slug: r.stationSlug,
         name: r.stationName,
         stationClass: r.stationClass,
+        ianaTimezone: r.stationIanaTimezone ?? null,
       },
       show: r.showName
         ? {

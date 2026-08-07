@@ -1460,8 +1460,8 @@ paths:
       description: >
         Returns all spin-runs (grouped by station, day, and show) for every
         station on the given UTC calendar day, ordered chronologically within
-        each station. Powers the show timeline on station cards on the home
-        schedule page.
+        each station. Each run includes the station's IANA timezone so clients
+        can present and slice the set in the place where it aired.
       parameters:
         - name: date
           in: query
@@ -3611,6 +3611,9 @@ components:
             Stations that mix both are resolved to "human" or "automated" at
             query time and never returned as "mixed". Null when not yet
             classified.
+        ianaTimezone:
+          type: ["string", "null"]
+          description: Best-effort IANA timezone for station-local schedule and set presentation.
       required:
         - id
         - slug
@@ -6542,7 +6545,27 @@ components:
           type: string
         endedAt:
           type: string
-      required: [runId, show, spinCount, resolvedCount, startedAt, endedAt]
+        ianaTimezone:
+          type: string
+          nullable: true
+          description: Station-local IANA timezone for this set. Null only when Lore cannot confidently determine the station's timezone.
+      required: [runId, show, spinCount, resolvedCount, startedAt, endedAt, ianaTimezone]
+    StationSchedule:
+      type: object
+      properties:
+        stationSlug:
+          type: string
+        stationName:
+          type: string
+        ianaTimezone:
+          type: string
+          nullable: true
+          description: Station-local IANA timezone for presenting every run.
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationScheduleRun"
+      required: [stationSlug, stationName, ianaTimezone, runs]
     StationsRecentSpinsResult:
       type: object
       description: Per-station recent spins for a given calendar day.
@@ -7247,6 +7270,10 @@ components:
         day:
           type: string
           pattern: '^\d{4}-\d{2}-\d{2}$'
+        startedAt:
+          type: string
+          format: date-time
+          description: First logged spin in the set. Use with station.ianaTimezone for station-local set labels and day/night slicing.
         station:
           type: object
           properties:
@@ -7256,7 +7283,10 @@ components:
               type: string
             stationClass:
               type: ["string", "null"]
-          required: [slug, name, stationClass]
+            ianaTimezone:
+              type: ["string", "null"]
+              description: IANA timezone of the station that aired this set.
+          required: [slug, name, stationClass, ianaTimezone]
         show:
           anyOf:
             - type: object
@@ -7271,7 +7301,7 @@ components:
           type: integer
         discover:
           type: integer
-      required: [runId, day, station, show, owned, discover]
+      required: [runId, day, startedAt, station, show, owned, discover]
     RunCrossingMomentsResponse:
       type: object
       properties:

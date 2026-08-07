@@ -15,12 +15,28 @@ const BLK_GAP = 6;
 const BLK_STRIDE = BLK_W + BLK_GAP;
 const LANE_PAD = 15;
 
-function fmtHM(iso: string): string {
+/** Format an ISO timestamp as "h:mmam/pm" in the given IANA timezone (or the
+ *  browser's local time when no timezone is supplied). */
+function fmtHM(iso: string, timeZone?: string | null): string {
   const d = new Date(iso);
-  const h = d.getHours();
-  const m = d.getMinutes().toString().padStart(2, "0");
-  const ampm = h >= 12 ? "pm" : "am";
-  return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${m}${ampm}`;
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      ...(timeZone ? { timeZone } : {}),
+    }).formatToParts(d);
+    const value = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? "";
+    return `${value("hour")}:${value("minute")}${value("dayPeriod").toLowerCase()}`;
+  } catch {
+    // Fallback: browser-local without Intl (very old environments)
+    const h = d.getHours();
+    const m = d.getMinutes().toString().padStart(2, "0");
+    const ampm = h >= 12 ? "pm" : "am";
+    return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${m}${ampm}`;
+  }
 }
 
 /** Compact reason phrase for the lane header — mirrors the reason() rung logic
@@ -87,12 +103,12 @@ interface ShowBlockProps {
 }
 
 function ShowBlock({ show, onClick }: ShowBlockProps) {
-  const { state, showName, djName, startedAt, endedAt, crossings, topArtists, currentTrack, isPickerShow } = show;
+  const { state, showName, djName, startedAt, endedAt, ianaTimezone, crossings, topArtists, currentTrack, isPickerShow } = show;
   const isLive = state === "live";
   const isPast = state === "past";
 
-  const startFmt = fmtHM(startedAt);
-  const endFmt = isLive ? "now" : fmtHM(endedAt);
+  const startFmt = fmtHM(startedAt, ianaTimezone);
+  const endFmt = isLive ? "now" : fmtHM(endedAt, ianaTimezone);
 
   return (
     <button className={blockClasses(show)} onClick={onClick} type="button">

@@ -77,6 +77,8 @@ export interface DialShow {
   djNames?: string[];
   startedAt: string;
   endedAt: string;
+  /** Station-local IANA timezone for this set; null only when unavailable. */
+  ianaTimezone: string | null;
   /** visual state of the block */
   state: "live" | "past" | "future";
   spins: DialSpin[];
@@ -888,6 +890,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
           pickerId,
           startedAt: run.startedAt,
           endedAt: run.endedAt,
+          ianaTimezone: run.ianaTimezone ?? station.ianaTimezone ?? null,
           state,
           spins: runSpins,
           crossings,

@@ -160,7 +160,7 @@ describe("live sentence", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "Diane Kamikaze", crossings: 2, topArtists: ["Deftones", "Portishead"], currentTrack: null,
     }));
-    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze selected Deftones and Portishead on Morning Mix this set.");
+    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze selected Deftones and Portishead on Morning Mix in the current set.");
     expect(leadingSentence(container).querySelectorAll("b.fdrow__artist")).toHaveLength(2);
     expect(leadingSentence(container).textContent).not.toContain("Test Track");
     expect(container.querySelector(".fdrow")?.classList.contains("fdrow--z1")).toBe(true);
@@ -179,7 +179,7 @@ describe("live sentence", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: null, crossings: 3, currentTrack: null,
     }));
-    expect(leadingSentence(container).textContent).toBe("3 tracks of yours on Morning Mix this set.");
+    expect(leadingSentence(container).textContent).toBe("3 tracks of yours on Morning Mix in the current set.");
   });
 
   it("goes dark instead of echoing repeated and placeholder values", () => {
@@ -337,7 +337,7 @@ describe("fallback and interaction", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("this set"));
+    fireEvent.click(screen.getByText("in the current set"));
     expect(onSetExpand).toHaveBeenCalledOnce();
     expect(onTuneIn).not.toHaveBeenCalled();
     expect(document.querySelector(".fdrow__also-block")).toBeNull();

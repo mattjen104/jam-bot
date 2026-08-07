@@ -124,6 +124,7 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
     djName: "DJ Tester",
     startedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
     endedAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    ianaTimezone: null,
     state: "live",
     spins: [],
     crossings: 0,

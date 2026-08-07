@@ -283,6 +283,11 @@ export interface Station {
    * @nullable
    */
   automationClass?: StationAutomationClass;
+  /**
+   * Best-effort IANA timezone for station-local schedule and set presentation.
+   * @nullable
+   */
+  ianaTimezone?: string | null;
 }
 
 export interface StationList {
@@ -2137,15 +2142,19 @@ export interface SpotifyStatus {
 }
 
 /**
- * Queue an entire replay run on the listener's Spotify Connect device in one
- * gapless call. uris must be spotify:track:<id> URIs already known client-side
- * (e.g. from recording links). Requires Premium and an active device.
- * Never pass these per-track; always pass the full run at once.
+ * Queue an entire replay run on the listener's Spotify Connect device in one gapless call. uris must be spotify:track:<id> URIs already known client-side (e.g. from recording links). Requires Premium and an active device. Never pass these per-track; always pass the full run at once.
+
  */
 export interface SpotifyQueueRunRequest {
-  /** Spotify track URIs to queue, in playback order. */
+  /**
+   * Spotify track URIs to queue, in playback order.
+   * @minItems 1
+   */
   uris: string[];
-  /** @nullable */
+  /**
+   * Target device id; omit or null to use the active device.
+   * @nullable
+   */
   deviceId?: string | null;
 }
 
@@ -2515,6 +2524,16 @@ export interface StationScheduleRun {
   resolvedCount: number;
   startedAt: string;
   endedAt: string;
+  /** Station-local IANA timezone for this set. Null only when Lore cannot confidently determine the station's timezone. */
+  ianaTimezone: string | null;
+}
+
+export interface StationSchedule {
+  stationSlug: string;
+  stationName: string;
+  /** Station-local IANA timezone for presenting every run. */
+  ianaTimezone: string | null;
+  runs: StationScheduleRun[];
 }
 
 export type StationsRecentSpinsResultItemsItem = {
@@ -2962,6 +2981,11 @@ export type OverlapRunItemStation = {
   name: string;
   /** @nullable */
   stationClass: string | null;
+  /**
+   * IANA timezone of the station that aired this set.
+   * @nullable
+   */
+  ianaTimezone: string | null;
 };
 
 export type OverlapRunItemShow = {
@@ -2974,6 +2998,8 @@ export interface OverlapRunItem {
   runId: number;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   day: string;
+  /** First logged spin in the set. Use with station.ianaTimezone for station-local set labels and day/night slicing. */
+  startedAt: string;
   station: OverlapRunItemStation;
   show: OverlapRunItemShow;
   owned: number;
@@ -3329,17 +3355,24 @@ export const GetMyOverlapRunsOrder = {
 
 export type GetMyOverlapSpineParams = {
   /**
-   * Station primary key.
-   */
-  stationId: number;
+ * UTC calendar day shorthand (YYYY-MM-DD).  When provided, `from`/`to` are derived automatically (full UTC day).  `stationId` is optional in this mode — when omitted, aggregates all stations crossed on that day.
+
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+  day?: string;
   /**
-   * Start of the window (inclusive), ISO 8601.
-   */
-  from: string;
+ * Station primary key.  Required when using explicit `from`/`to` range. Optional when using `day` shorthand.
+
+ */
+  stationId?: number;
   /**
-   * End of the window (exclusive), ISO 8601.
+   * Start of the window (inclusive), ISO 8601.  Required with explicit range mode.
    */
-  to: string;
+  from?: string;
+  /**
+   * End of the window (exclusive), ISO 8601.  Required with explicit range mode.
+   */
+  to?: string;
 };
 
 export type GetStationSocialPresenceParams = {

@@ -73,4 +73,9 @@ export interface Station {
    * @nullable
    */
   automationClass?: StationAutomationClass;
+  /**
+   * Best-effort IANA timezone for station-local schedule and set presentation.
+   * @nullable
+   */
+  ianaTimezone?: string | null;
 }

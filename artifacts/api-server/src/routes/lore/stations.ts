@@ -1040,6 +1040,7 @@ router.get("/stations/schedule", h(async (req, res) => {
     .select({
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
+      ianaTimezone: stationsTable.ianaTimezone,
       runId: spinRunIdExpr,
       spinCount: sql<number>`count(*)::int`,
       resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
@@ -1066,6 +1067,7 @@ router.get("/stations/schedule", h(async (req, res) => {
     .groupBy(
       stationsTable.slug,
       stationsTable.name,
+      stationsTable.ianaTimezone,
       spinDayExpr,
       spinsTable.showId,
       showsTable.name,
@@ -1105,6 +1107,7 @@ router.get("/stations/schedule", h(async (req, res) => {
       resolvedCount: r.resolvedCount,
       startedAt: new Date(r.startedAt).toISOString(),
       endedAt: new Date(r.endedAt).toISOString(),
+      ianaTimezone: r.ianaTimezone ?? null,
     })),
   }));
 
