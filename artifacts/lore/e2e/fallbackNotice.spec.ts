@@ -1,6 +1,4 @@
-// GATE-EXCLUDED: depends on live spin data for pinned MBID/picker anchors that have drifted out of the dev DB (spin-replay-0 no longer renders); live-data flaky.
-// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
  * End-to-end tests for the "hear it in context" → fallback notice flow.
@@ -14,78 +12,201 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
  *
  * Both archive page kinds carry the same notice:
  *   - StationRun  (/archive/station-runs/:runId)
- *   - PickerRun   (/archive/picker-runs/:runId)
+ *   - PickerRun   (/archive/selector-runs/:runId — the canonical route;
+ *     /archive/picker-runs/:runId is a legacy redirect that DROPS the query
+ *     string, so deep links with ?play=1&from= must use the canonical path)
  *
- * Run IDs are derived groupings (min spin/pick id per run), so they drift
- * between environments as data is re-ingested. The tests therefore discover
- * real run IDs at runtime through the public API instead of hardcoding them:
- *   - Station run: first archived run in GET /api/recordings/:mbid/spins
- *   - Picker run:  first resolved run in GET /api/pickers/:handle/archive
- *
- * Stable anchors used for discovery:
- *   - Recording MBID: 163a820c-e2a2-4219-aa90-8b528f31754d (a resolved spin)
- *   - Picker handle: nts-floating-points (has runs with resolved picks)
- *   - "from" MBID used in the fallback tests: "nonexistent-mbid-xyz" (never
- *     in any run's resolved tracklist by construction)
+ * All API routes are intercepted with fixtures, so the spec has NO live-data
+ * dependence: run IDs, MBIDs, and tracklists are fixed by construction and
+ * cannot drift with the dev database.
  */
 
 const REAL_MBID = "163a820c-e2a2-4219-aa90-8b528f31754d";
-const PICKER_HANDLE = "nts-floating-points";
+const OTHER_MBID = "9d7af8d4-1111-4a3b-9d11-000000000002";
 const ABSENT_MBID = "nonexistent-mbid-xyz";
+const STATION_RUN_ID = 4101;
+const PICKER_RUN_ID = 4202;
+const PICKER_HANDLE = "nts-floating-points";
 
 // ---------------------------------------------------------------------------
-// Run discovery helpers — resolve real run IDs from the live API (memoized)
+// Fixtures
 // ---------------------------------------------------------------------------
 
-let stationRunId: number | undefined;
-let pickerRun: { runId: number; resolvedMbid: string } | undefined;
+const recordingFixture = {
+  mbid: REAL_MBID,
+  title: "Go Your Own Way",
+  artist: "Fleetwood Mac",
+  artistMbid: "bd13909f-1c29-4c27-a874-d4aaf27c5b1a",
+  durationMs: 218000,
+  artworkUrl: null,
+  links: [],
+};
 
-/** First archived station run that contains REAL_MBID as a resolved spin. */
-async function getStationRunId(request: APIRequestContext): Promise<number> {
-  if (stationRunId !== undefined) return stationRunId;
-  const res = await request.get(`/api/recordings/${REAL_MBID}/spins`);
-  expect(res.ok()).toBe(true);
-  const body = (await res.json()) as {
-    spins: Array<{ runId: number | null }>;
-  };
-  const withRun = body.spins.find((s) => s.runId != null);
-  expect(
-    withRun,
-    `expected recording ${REAL_MBID} to have at least one archived spin`,
-  ).toBeTruthy();
-  stationRunId = withRun!.runId!;
-  return stationRunId;
-}
+const spinsFixture = {
+  mbid: REAL_MBID,
+  spins: [
+    {
+      playedAt: "2026-07-01T12:00:00.000Z",
+      source: "spinitron",
+      confidence: "recording_id",
+      station: { name: "Test FM", slug: "test-fm" },
+      show: { name: "Morning Drift", djName: "DJ Fixture" },
+      runId: STATION_RUN_ID,
+    },
+  ],
+};
 
-/** First picker run (for PICKER_HANDLE) with resolved picks, plus one of
- *  its resolved MBIDs — the "present in the run" control case. */
-async function getPickerRun(
-  request: APIRequestContext,
-): Promise<{ runId: number; resolvedMbid: string }> {
-  if (pickerRun !== undefined) return pickerRun;
-  const archiveRes = await request.get(
-    `/api/pickers/${PICKER_HANDLE}/archive`,
+const stationRunFixture = {
+  station: { slug: "test-fm", name: "Test FM", stationClass: "community" },
+  run: {
+    runId: STATION_RUN_ID,
+    date: "2026-07-01",
+    show: { name: "Morning Drift", djName: "DJ Fixture" },
+    spinCount: 2,
+    resolvedCount: 2,
+    sourceUrl: null,
+    startedAt: "2026-07-01T12:00:00.000Z",
+    endedAt: "2026-07-01T14:00:00.000Z",
+  },
+  tracks: [
+    {
+      position: 1,
+      playedAt: "2026-07-01T12:00:00.000Z",
+      rawArtist: "Fleetwood Mac",
+      rawTitle: "Go Your Own Way",
+      confidence: "recording_id",
+      recording: {
+        mbid: REAL_MBID,
+        title: "Go Your Own Way",
+        artist: "Fleetwood Mac",
+        artworkUrl: null,
+        links: [],
+      },
+    },
+    {
+      position: 2,
+      playedAt: "2026-07-01T12:04:00.000Z",
+      rawArtist: "Someone Else",
+      rawTitle: "Another Song",
+      confidence: "text",
+      recording: null,
+    },
+  ],
+};
+
+const pickerRunFixture = {
+  picker: { handle: PICKER_HANDLE, name: "Floating Points" },
+  run: {
+    runId: PICKER_RUN_ID,
+    title: "Late Night Selections",
+    pickedAt: "2026-07-02T22:00:00.000Z",
+    sourceUrl: null,
+  },
+  tracks: [
+    {
+      position: 1,
+      pickedAt: "2026-07-02T22:00:00.000Z",
+      rawArtist: "Resolved Artist",
+      rawTitle: "Resolved Pick",
+      confidence: "recording_id",
+      recording: {
+        mbid: OTHER_MBID,
+        title: "Resolved Pick",
+        artist: "Resolved Artist",
+        artworkUrl: null,
+        links: [],
+      },
+    },
+    {
+      position: 2,
+      pickedAt: "2026-07-02T22:05:00.000Z",
+      rawArtist: "Unresolved Artist",
+      rawTitle: "Unresolved Pick",
+      confidence: "text",
+      recording: null,
+    },
+  ],
+};
+
+const emptyInsights = (runId: number) => ({
+  runId,
+  insights: { genreBreakdown: null, discoveryScore: null },
+});
+
+// ---------------------------------------------------------------------------
+// Route interception — most-recently-registered handler wins, so the broad
+// catch-all goes FIRST and specific fixtures after it.
+// ---------------------------------------------------------------------------
+
+async function interceptApi(page: Page): Promise<void> {
+  // Catch-all: any API endpoint not explicitly fixtured returns an empty
+  // object so no request ever escapes to the live server.
+  await page.route("**/api/**", (route) => route.fulfill({ json: {} }));
+
+  // PlayerProvider polls the webplayer on-air read model and dereferences
+  // `.items`, so the catch-all's `{}` would crash the whole app shell.
+  await page.route("**/api/player/onair", (route) =>
+    route.fulfill({ json: { items: [] } }),
   );
-  expect(archiveRes.ok()).toBe(true);
-  const archive = (await archiveRes.json()) as {
-    runs: Array<{ runId: number; resolvedCount: number }>;
-  };
-  const run = archive.runs.find((r) => r.resolvedCount > 0);
-  expect(
-    run,
-    `expected picker ${PICKER_HANDLE} to have a run with resolved picks`,
-  ).toBeTruthy();
 
-  const runRes = await request.get(`/api/archive/picker-runs/${run!.runId}`);
-  expect(runRes.ok()).toBe(true);
-  const detail = (await runRes.json()) as {
-    tracks: Array<{ recording: { mbid: string } | null }>;
-  };
-  const resolved = detail.tracks.find((t) => t.recording != null);
-  expect(resolved).toBeTruthy();
-  pickerRun = { runId: run!.runId, resolvedMbid: resolved!.recording!.mbid };
-  return pickerRun;
+  // ReplayPlaylistPanel dereferences `.targets` from the replay
+  // playlist-targets read model.
+  await page.route("**/api/replay/*/playlist-targets", (route) =>
+    route.fulfill({ json: { targets: [] } }),
+  );
+
+  // Song page endpoints
+  await page.route(`**/api/recordings/${REAL_MBID}`, (route) =>
+    route.fulfill({ json: recordingFixture }),
+  );
+  await page.route(`**/api/recordings/${REAL_MBID}/spins`, (route) =>
+    route.fulfill({ json: spinsFixture }),
+  );
+  await page.route(`**/api/recordings/${REAL_MBID}/segues`, (route) =>
+    route.fulfill({ json: { mbid: REAL_MBID, next: [] } }),
+  );
+  await page.route(`**/api/recordings/${REAL_MBID}/picks`, (route) =>
+    route.fulfill({ json: { mbid: REAL_MBID, picks: [] } }),
+  );
+  // EntryLadder dereferences `entry.picks`, so the catch-all `{}` would crash
+  // the Song page before spin-replay links render.
+  await page.route(`**/api/recordings/${REAL_MBID}/entry**`, (route) =>
+    route.fulfill({
+      json: { rung: "empty", framing: null, picks: [], invitation: null },
+    }),
+  );
+  await page.route(`**/api/recordings/${REAL_MBID}/knowledge`, (route) =>
+    route.fulfill({ json: { knowledge: null, album: null, claims: [] } }),
+  );
+  await page.route(`**/api/recordings/${REAL_MBID}/preview`, (route) =>
+    route.fulfill({
+      json: { mbid: REAL_MBID, previewUrl: null, artworkUrl: null, source: null },
+    }),
+  );
+
+  // StationRun archive page
+  await page.route(
+    `**/api/archive/station-runs/${STATION_RUN_ID}`,
+    (route) => route.fulfill({ json: stationRunFixture }),
+  );
+  await page.route(
+    `**/api/archive/station-runs/${STATION_RUN_ID}/insights`,
+    (route) => route.fulfill({ json: emptyInsights(STATION_RUN_ID) }),
+  );
+
+  // PickerRun archive page
+  await page.route(`**/api/archive/picker-runs/${PICKER_RUN_ID}`, (route) =>
+    route.fulfill({ json: pickerRunFixture }),
+  );
+  await page.route(
+    `**/api/archive/picker-runs/${PICKER_RUN_ID}/insights`,
+    (route) => route.fulfill({ json: emptyInsights(PICKER_RUN_ID) }),
+  );
 }
+
+test.beforeEach(async ({ page }) => {
+  await interceptApi(page);
+});
 
 // ---------------------------------------------------------------------------
 // Integrated flow: Song page → deep link with absent MBID → fallback notice
@@ -96,14 +217,14 @@ test.describe("Song page → 'Hear it in context' → fallback notice (integrate
     "discovers run URL from Song page link, navigates with absent from= MBID, " +
       "sees fallback notice, dismisses it",
     async ({ page }) => {
-      // Step 1: Land on the Song page for a real recording
+      // Step 1: Land on the Song page for the fixtured recording
       await page.goto(`/lore/song/${REAL_MBID}`);
 
       // Wait for the "Hear it in context" link in the spin history section
       const spinReplayLink = page.getByTestId("spin-replay-0");
       await expect(spinReplayLink).toBeVisible({ timeout: 10_000 });
 
-      // Step 2: Read the href the Song page generated — it encodes the real run ID
+      // Step 2: Read the href the Song page generated — it encodes the run ID
       const href = await spinReplayLink.getAttribute("href");
       expect(href).toMatch(/\/archive\/station-runs\/\d+/);
       expect(href).toContain(`from=${REAL_MBID}`);
@@ -141,12 +262,14 @@ test.describe("Song page — 'Hear it in context' links", () => {
   }) => {
     await page.goto(`/lore/song/${REAL_MBID}`);
 
-    // Wait for the spin history section to appear (real network call)
+    // Wait for the spin history section to appear
     const spinReplayLink = page.getByTestId("spin-replay-0");
     await expect(spinReplayLink).toBeVisible({ timeout: 10_000 });
 
     const href = await spinReplayLink.getAttribute("href");
-    expect(href).toMatch(/\/archive\/station-runs\/\d+/);
+    expect(href).toMatch(
+      new RegExp(`/archive/station-runs/${STATION_RUN_ID}`),
+    );
     expect(href).toContain("play=1");
     expect(href).toContain(`from=${REAL_MBID}`);
   });
@@ -159,13 +282,11 @@ test.describe("Song page — 'Hear it in context' links", () => {
 test.describe("StationRun — fallback notice via 'hear it in context' deep link", () => {
   test("shows the amber fallback notice when the song MBID is absent from the run", async ({
     page,
-    request,
   }) => {
     // Navigate directly to the run URL with a non-existent from= MBID —
     // exactly what the Song page link does when that song was unresolved.
-    const runId = await getStationRunId(request);
     await page.goto(
-      `/lore/archive/station-runs/${runId}?play=1&from=${ABSENT_MBID}`,
+      `/lore/archive/station-runs/${STATION_RUN_ID}?play=1&from=${ABSENT_MBID}`,
     );
 
     // Wait for the page to finish loading — the run heading is unique
@@ -181,11 +302,9 @@ test.describe("StationRun — fallback notice via 'hear it in context' deep link
 
   test("hides the fallback notice after the user clicks Dismiss", async ({
     page,
-    request,
   }) => {
-    const runId = await getStationRunId(request);
     await page.goto(
-      `/lore/archive/station-runs/${runId}?play=1&from=${ABSENT_MBID}`,
+      `/lore/archive/station-runs/${STATION_RUN_ID}?play=1&from=${ABSENT_MBID}`,
     );
 
     // Wait for the notice to appear
@@ -201,12 +320,10 @@ test.describe("StationRun — fallback notice via 'hear it in context' deep link
 
   test("does NOT show the fallback notice when the song MBID is present in the run", async ({
     page,
-    request,
   }) => {
-    // REAL_MBID belongs to this run (it was played), so no fallback is shown.
-    const runId = await getStationRunId(request);
+    // REAL_MBID is a resolved track in the fixtured run, so no fallback.
     await page.goto(
-      `/lore/archive/station-runs/${runId}?play=1&from=${REAL_MBID}`,
+      `/lore/archive/station-runs/${STATION_RUN_ID}?play=1&from=${REAL_MBID}`,
     );
 
     await expect(page.locator("h1")).toBeVisible({ timeout: 10_000 });
@@ -224,13 +341,11 @@ test.describe("StationRun — fallback notice via 'hear it in context' deep link
 test.describe("PickerRun — fallback notice via 'hear it in context' deep link", () => {
   test("shows the amber fallback notice when the song MBID is absent from the run's picks", async ({
     page,
-    request,
   }) => {
     // Navigate directly to a picker run with a from= MBID that is not in the
     // run's resolved picks — the picker-run counterpart of the station flow.
-    const { runId } = await getPickerRun(request);
     await page.goto(
-      `/lore/archive/picker-runs/${runId}?play=1&from=${ABSENT_MBID}`,
+      `/lore/archive/selector-runs/${PICKER_RUN_ID}?play=1&from=${ABSENT_MBID}`,
     );
 
     // Wait for the run page to finish loading — the run heading is unique
@@ -246,11 +361,9 @@ test.describe("PickerRun — fallback notice via 'hear it in context' deep link"
 
   test("hides the fallback notice after the user clicks Dismiss", async ({
     page,
-    request,
   }) => {
-    const { runId } = await getPickerRun(request);
     await page.goto(
-      `/lore/archive/picker-runs/${runId}?play=1&from=${ABSENT_MBID}`,
+      `/lore/archive/selector-runs/${PICKER_RUN_ID}?play=1&from=${ABSENT_MBID}`,
     );
 
     // Wait for the notice to appear
@@ -266,12 +379,10 @@ test.describe("PickerRun — fallback notice via 'hear it in context' deep link"
 
   test("does NOT show the fallback notice when the song MBID is present in the run's picks", async ({
     page,
-    request,
   }) => {
-    // The discovered MBID is a resolved pick in this run, so no fallback.
-    const { runId, resolvedMbid } = await getPickerRun(request);
+    // OTHER_MBID is a resolved pick in the fixtured run, so no fallback.
     await page.goto(
-      `/lore/archive/picker-runs/${runId}?play=1&from=${resolvedMbid}`,
+      `/lore/archive/selector-runs/${PICKER_RUN_ID}?play=1&from=${OTHER_MBID}`,
     );
 
     await expect(page.locator("h1")).toBeVisible({ timeout: 10_000 });

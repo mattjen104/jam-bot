@@ -12,12 +12,8 @@
 #   - librarySyncLifecycle.spec.ts     (SyncBar lifecycle: done job, receipt toggle,
 #                                       Sync now trigger, canWrite:false 403 path)
 #   - ntsOnAirBadge.spec.ts            (dial front-door on-air show + DJ attribution)
-#
-# Explicitly EXCLUDED specs (kept in e2e/ for reference / future repair):
-#   - fallbackNotice.spec.ts        — discovers run IDs from LIVE spin data for a
-#                                     pinned MBID/picker handle; the anchors have
-#                                     drifted out of the dev DB (spin-replay-0 no
-#                                     longer renders), so it is live-data flaky.
+#   - fallbackNotice.spec.ts           (archive-run fallback notice; all API routes
+#                                       intercepted with fixtures)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -81,6 +77,7 @@ RUN_SPECS=(
   e2e/spotifyConnectCallback.spec.ts
   e2e/librarySyncLifecycle.spec.ts
   e2e/ntsOnAirBadge.spec.ts
+  e2e/fallbackNotice.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
