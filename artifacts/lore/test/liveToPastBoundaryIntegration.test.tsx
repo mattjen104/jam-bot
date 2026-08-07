@@ -23,6 +23,11 @@ import {
   vi,
   type Mock,
 } from "vitest";
+
+// This file renders a full PlayerProvider integration harness with many async
+// effects. Under CI load the default 5 s timeout is too tight.
+vi.setConfig({ testTimeout: 30_000 });
+
 import { cleanup, render, screen, act } from "@testing-library/react";
 import { useRef, useEffect, useState } from "react";
 

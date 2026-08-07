@@ -10,6 +10,10 @@
 
 import React from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+
+// These tests render a full Library page with many async effects.
+// Under CI load the default 5 s timeout is too tight; bump it file-wide.
+vi.setConfig({ testTimeout: 30_000 });
 import { cleanup, render, screen, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 

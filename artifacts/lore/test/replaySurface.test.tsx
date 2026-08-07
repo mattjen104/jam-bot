@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+
+// The replay surface renders a heavy component tree with async effects.
+// Under CI load the default 5 s timeout is too tight; bump it file-wide.
+vi.setConfig({ testTimeout: 30_000 });
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Route, Router } from "wouter";

@@ -268,6 +268,76 @@ interface QueueArtist {
   inLibrary: boolean;
 }
 
+/**
+ * Compute the set-panel snapshot for a live station row.
+ * Pure function — exported so it can be tested independently of the component.
+ * `listedArtists` (from the crossing popMap) takes precedence over spin-derived
+ * artists when provided, matching the behaviour of `openLiveQueue`.
+ */
+export function computeLivePanel(
+  row: { ds: DialStation; show: DialShow | null },
+  listedArtists?: Array<{ name: string; inLibrary: boolean }> | null,
+): { slug: string; stationName: string; startedAt: string; artists: QueueArtist[]; progress: number } {
+  const spins = row.show?.spins ?? [];
+  const spinArtists = spins
+    .map((spin) => ({ name: spin.artist, inLibrary: spin.isLibraryHit || spin.isArtistHit }))
+    .filter((a) => a.name.trim());
+  const artists = listedArtists?.length
+    ? listedArtists.map((a) => ({ name: a.name, inLibrary: a.inLibrary }))
+    : spinArtists;
+  const currentIndex = Math.max(0, spins.findIndex((spin) =>
+    spin.playedAt === row.show?.currentTrack?.playedAt,
+  ));
+  return {
+    slug: row.ds.station.slug,
+    stationName: row.ds.station.name,
+    startedAt: row.show?.startedAt ?? new Date().toISOString(),
+    artists,
+    progress: artists.length > 0 ? Math.min(1, (currentIndex + 1) / artists.length) : 0,
+  };
+}
+
+/**
+ * Keeps an open live-set panel's progress in sync with live now-playing data.
+ *
+ * Exported so it can be tested in isolation via a thin wrapper component.
+ *
+ * Call with the full set of live rows (`sortedRows`, not just Zone 1) so that
+ * stations that shift zones — or that were opened from Zone 3 — are covered.
+ * Replay panels (slug === "replay") are driven by the ride effect and are
+ * intentionally skipped here.
+ *
+ * The internal ref prevents `panel` from appearing in the sync-effect's dep
+ * array, which would cause a write→re-run→write loop.
+ */
+export function useLivePanelSync(
+  panel: { slug: string; artists: QueueArtist[] } | null,
+  liveRows: Array<{ ds: DialStation; show: DialShow | null }>,
+  onProgress: (progress: number) => void,
+): void {
+  // Stable refs — updated every render so the effect always sees current values
+  // without needing them as explicit deps.
+  const panelRef = useRef(panel);
+  useEffect(() => { panelRef.current = panel; }, [panel]);
+  const onProgressRef = useRef(onProgress);
+  useEffect(() => { onProgressRef.current = onProgress; }, [onProgress]);
+
+  useEffect(() => {
+    const p = panelRef.current;
+    if (!p || p.slug === "replay") return;
+    const row = liveRows.find((r) => r.ds.station.slug === p.slug);
+    if (!row) return;
+    const spins = row.show?.spins ?? [];
+    const currentIndex = Math.max(0, spins.findIndex((s) =>
+      s.playedAt === row.show?.currentTrack?.playedAt,
+    ));
+    const progress = p.artists.length > 0
+      ? Math.min(1, (currentIndex + 1) / p.artists.length)
+      : 0;
+    onProgressRef.current(progress);
+  }, [liveRows]);
+}
+
 /** A complete broadcast run retained by the set-panel tab model. */
 export interface SetPanelSet {
   id: string;
@@ -2291,10 +2361,15 @@ export function DialView() {
     return sets;
   }, [stations]);
 
+  // Merge order: openedSets first (holds the listedArtists fallback for sets
+  // that had no spins at click time), then broadcastSets overwrites with live
+  // station data so that progress and artist lists stay current as the now-
+  // playing spin advances. Sets that exist only in openedSets (e.g. replay)
+  // are unaffected because broadcastSets skips shows with zero spins.
   const allSets = useMemo<SetPanelSet[]>(() => {
     const merged = new Map<string, SetPanelSet>();
-    for (const set of broadcastSets) merged.set(set.id, set);
     for (const set of Object.values(openedSets)) merged.set(set.id, set);
+    for (const set of broadcastSets) merged.set(set.id, set);
     return [...merged.values()];
   }, [broadcastSets, openedSets]);
 

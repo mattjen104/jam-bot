@@ -13,6 +13,11 @@
  * and Song → PickerRun without requiring a real browser or network.
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+
+// These tests render full Song / StationRun / PickerRun pages with async
+// player effects. Under CI load the default 5 s timeout is too tight.
+vi.setConfig({ testTimeout: 30_000 });
+
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";

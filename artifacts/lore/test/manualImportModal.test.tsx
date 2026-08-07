@@ -20,6 +20,11 @@
  */
 import React from "react";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
+
+// This file renders a ManualImportModal with async extraction flows.
+// Under CI load the default 5 s timeout is too tight; bump it file-wide.
+vi.setConfig({ testTimeout: 30_000 });
+
 import { cleanup, render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
