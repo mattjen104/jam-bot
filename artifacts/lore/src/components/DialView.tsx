@@ -582,7 +582,7 @@ function ZoneLabel({ label, hint, accent }: {
 }
 
 // ---------------------------------------------------------------------------
-// DensitySpine — interactive crossing-density spine for coarse run navigation
+// RunDensitySpine — interactive crossing-density spine for coarse run navigation
 // ---------------------------------------------------------------------------
 
 /**
@@ -597,7 +597,7 @@ function ZoneLabel({ label, hint, accent }: {
  *
  * Suppressed in Top Sets mode (caller controls visibility).
  */
-export function DensitySpine({
+export function RunDensitySpine({
   runs,
   activeIdx,
   onRunSelect,
@@ -2518,7 +2518,7 @@ export function DialView() {
                         {/* Density spine — coarse run navigation.
                             Drag to scan runs; tap a bin to jump to that run.
                             Suppressed in Top Sets mode (caller controls render). */}
-                        <DensitySpine
+                        <RunDensitySpine
                           runs={recentRuns}
                           activeIdx={pastScan.coarseIdx}
                           onRunSelect={pastScan.jumpToRunByIndex}

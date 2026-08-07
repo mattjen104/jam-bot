@@ -714,7 +714,7 @@ describe("(h) swipe/click wiring — crossing rows and startReplay", () => {
     expect(row0.classList.contains("dial-past-crossing--active")).toBe(false);
   });
 
-  it("DensitySpine bins render with data-run-idx attributes after entering past mode", async () => {
+  it("RunDensitySpine bins render with data-run-idx attributes after entering past mode", async () => {
     mockDialDataSettled();
     renderDial();
 
@@ -730,7 +730,7 @@ describe("(h) swipe/click wiring — crossing rows and startReplay", () => {
     expect(bin.dataset.day).toBe("2026-08-05");
   });
 
-  it("clicking a DensitySpine bin jumps to that run index", async () => {
+  it("clicking a RunDensitySpine bin jumps to that run index", async () => {
     // Setup two runs so there's a bin to click
     (useMyOverlapRunsRecent as ReturnType<typeof vi.fn>).mockReturnValue({
       data: [

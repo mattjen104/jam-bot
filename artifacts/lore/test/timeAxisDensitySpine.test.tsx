@@ -1,5 +1,5 @@
 /**
- * Tests for the DensitySpine component.
+ * Tests for the TimeAxisDensitySpine component.
  *
  * Key invariants:
  *  - owned and discover render as two separate opposed elements, never summed
@@ -16,9 +16,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
 
 import {
-  DensitySpine,
+  TimeAxisDensitySpine,
   type DensityBin,
-} from "../src/components/DensitySpine";
+} from "../src/components/TimeAxisDensitySpine";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,15 +41,15 @@ function makeDayBins(overrides: Partial<Record<number, Partial<DensityBin>>> = {
   }));
 }
 
-function render(props: React.ComponentProps<typeof DensitySpine>): string {
-  return renderToStaticMarkup(<DensitySpine {...props} />);
+function render(props: React.ComponentProps<typeof TimeAxisDensitySpine>): string {
+  return renderToStaticMarkup(<TimeAxisDensitySpine {...props} />);
 }
 
 // ---------------------------------------------------------------------------
 // Bin rendering
 // ---------------------------------------------------------------------------
 
-describe("DensitySpine — bin rendering", () => {
+describe("TimeAxisDensitySpine — bin rendering", () => {
   it("renders one bin element per input bin", () => {
     const bins = [makeBin(0), makeBin(1), makeBin(2)];
     const html = render({ bins, nowMs: hourMs(3) });
@@ -115,7 +115,7 @@ describe("DensitySpine — bin rendering", () => {
 // Markers
 // ---------------------------------------------------------------------------
 
-describe("DensitySpine — markers", () => {
+describe("TimeAxisDensitySpine — markers", () => {
   it("renders the live edge", () => {
     const bins = makeDayBins();
     const html = render({ bins, nowMs: hourMs(12) });
@@ -157,7 +157,7 @@ describe("DensitySpine — markers", () => {
 // Invariants — no infrastructure state leaked
 // ---------------------------------------------------------------------------
 
-describe("DensitySpine — no prefetch state leakage", () => {
+describe("TimeAxisDensitySpine — no prefetch state leakage", () => {
   it("does not contain any prefetch or materialization state in the rendered output", () => {
     const bins = makeDayBins({ 6: { owned: 3, discover: 5 } });
     const html = render({ bins, nowMs: hourMs(24) });

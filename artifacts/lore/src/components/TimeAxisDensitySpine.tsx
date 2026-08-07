@@ -1,5 +1,5 @@
 /**
- * DensitySpine — time-axis density visualisation and coarse navigation surface.
+ * TimeAxisDensitySpine — time-axis density visualisation and coarse navigation surface.
  *
  * Renders a horizontal strip of hourly bins showing how much of each hour
  * crossed the listener's library (owned) and how much was new (discover) as
@@ -31,7 +31,7 @@ export interface DensityBin {
   discover: number;
 }
 
-export interface DensitySpineProps {
+export interface TimeAxisDensitySpineProps {
   bins: DensityBin[];
   /** UTC epoch ms for "now" — where the live edge is drawn. */
   nowMs: number;
@@ -63,7 +63,7 @@ const TOTAL_HEIGHT_PX = CHANNEL_HEIGHT_PX * 2 + BASELINE_HEIGHT_PX;
 // Component
 // ---------------------------------------------------------------------------
 
-export function DensitySpine({
+export function TimeAxisDensitySpine({
   bins,
   nowMs,
   playheadMs,
@@ -72,7 +72,7 @@ export function DensitySpine({
   onScrub,
   onTap,
   className = "",
-}: DensitySpineProps) {
+}: TimeAxisDensitySpineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 

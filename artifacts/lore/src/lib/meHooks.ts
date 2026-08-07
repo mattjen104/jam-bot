@@ -1191,7 +1191,7 @@ export function useMyOverlapSpine(
 /**
  * Expands a sparse server response into a dense 24-bin array covering the
  * full UTC day, filling missing hours as unknown (owned=0, discover=0).
- * The DensitySpine renders empty bins as the "unknown" texture.
+ * The TimeAxisDensitySpine renders empty bins as the "unknown" texture.
  */
 export function fillSpineBins(
   day: string,
