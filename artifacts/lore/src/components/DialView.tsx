@@ -20,7 +20,6 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
-import { SlimSectionNav } from "./SlimSectionNav";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { useSocialMode, setSocialEnabled } from "../lib/social";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
@@ -2334,7 +2333,6 @@ export function DialView() {
                 }
               }}
             />
-            <SlimSectionNav overlay />
             {/* Time chevrons — click (or swipe the art) to step runs back/forward. */}
             <button
               type="button"

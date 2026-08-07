@@ -270,6 +270,16 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("(a) strip renders with → disabled in live mode", () => {
+  it("keeps the front door focused on the dial without section navigation buttons", () => {
+    mockDialDataSettled();
+    renderDial();
+
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Radio" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Selectors" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Library" })).toBeNull();
+  });
+
   it("the Next run arrow is disabled and aria-disabled when at live edge", () => {
     mockDialDataSettled();
     renderDial();
