@@ -9,7 +9,8 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test --config playwright.config.ts"
+    "test:e2e": "playwright test --config playwright.config.ts",
+    "test:e2e:tone-gate": "bash e2e/run-interstitial-tone-gate.sh"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

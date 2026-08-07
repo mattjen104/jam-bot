@@ -95,4 +95,5 @@
 - [Playwright autoplay testing](playwright-autoplay-testing.md) — 3 defaults silently allow autoplay (default policy flag, --mute-audio, evaluate's userGesture); a no-gesture control test is mandatory.
 - [Tier-1 prefetch loop & interstitial gating](tier1-prefetch-loop.md) — zero-link items need a fetched-set or prefetch loops when queue-run is deferred; interstitial must gate spotifyQueueRun too.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
+- [Crossing-tone e2e merge gate](tone-e2e-gate.md) — `tone-e2e` validation runs the autoplay-policy Playwright spec; fails loudly when Chromium or the lore dev server is missing, so restart the lore workflow first.
 - [lore-tests merge gate](lore-tests-gate.md) — lore vitest suite gates merges via flock-wrapped validation; copy/grammar changes must update tests or the suite rots.

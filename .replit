@@ -38,6 +38,10 @@ args = "server-db-tests"
 task = "workflow.run"
 args = "lore-tests"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "tone-e2e"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -78,6 +82,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "flock /tmp/lore-vitest.lock pnpm --filter @workspace/lore exec vitest run"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "tone-e2e"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "flock /tmp/lore-e2e.lock pnpm --filter @workspace/lore run test:e2e:tone-gate"
 
 [workflows.workflow.metadata]
 isValidation = true
