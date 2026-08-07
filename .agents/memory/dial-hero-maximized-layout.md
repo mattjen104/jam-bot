@@ -17,3 +17,5 @@ Gotchas:
 - `avatarUrl` is never falsy (RUMOURS local fallback) — guards on it are dead code.
 - The fullscreen overlay img is `width: 100vw`; landscape needs a height-fit override or it crops.
 - App-preview screenshots can race the hero image load and show a black square — re-shoot before diagnosing.
+- NEVER re-declare `.dial-hero__artwrap { position: relative }` late in index.css — it silently clobbers the landscape `position: fixed` and the art drops in-flow after the padding (looks like the art is "squished into a sidebar"). Base rule already sets relative.
+- Wide desktop (≥1100px landscape): emphasis is inverted — dial is a fixed-width right sidebar (`--dial-col-w`, clamp 380–540px) and the art owns the remaining left region, height-capped square centered via flex on the artwrap.

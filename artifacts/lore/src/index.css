@@ -1580,6 +1580,32 @@
   /* Fullscreen overlay: fit the art to the height instead of the width */
   .dial-art-fullscreen img { width: auto; height: 100dvh; margin: 0 auto; }
 }
+/* Wide desktop: invert the emphasis — the album is the page, the dial is a
+   fixed-width sidebar pinned right. The art stays a square capped by the
+   viewport height, centered in the remaining left region. */
+@media (orientation: landscape) and (min-width: 1100px) {
+  :root {
+    --dial-col-w: clamp(380px, 32vw, 540px);
+    --hero-art-size: min(
+      calc(100dvh - var(--shell-h, 0px)),
+      calc(100vw - var(--dial-col-w))
+    );
+  }
+  .dial-hero__artwrap {
+    width: calc(100vw - var(--dial-col-w));
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .dial-hero__art {
+    flex: none;
+    width: var(--hero-art-size);
+    height: var(--hero-art-size);
+  }
+  .dial-root--front {
+    padding-left: calc(100vw - var(--dial-col-w));
+  }
+}
 
 /* Unstyled button wrapper so the moon glyph is tappable without changing
    the wordmark's appearance */
@@ -1636,6 +1662,13 @@
 .dial-root--art-open .dial-topbar--all > *:not(.dial-topbar__wordmark),
 .dial-root--art-open .dial-topbar__letter {
   opacity: 0;
+  pointer-events: none;
+}
+/* Landscape: the artwrap is position:fixed inside the z-raised hero, so it
+   would sit above the fullscreen overlay and swallow its click-to-close.
+   pointer-events:none above handles the wrapper itself; its absolutely
+   positioned children (chevrons, set panel) need it explicitly too. */
+.dial-root--art-open .dial-hero__artwrap * {
   pointer-events: none;
 }
 @keyframes dial-art-fullscreen-in {
@@ -2115,7 +2148,9 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 12px;
+  /* Let summary sentences use the full page width and height now that the
+     completed-library strip is intentionally absent. */
+  padding: 0 0 12px;
 }
 .dial-loading {
   padding: 24px 15px;
@@ -5817,8 +5852,10 @@ body * {
   box-shadow: -3px 0 0 -1px hsl(0 0% 30%);
 }
 
-/* ── Hero art sidebar — time chevrons, time label, reserved set panel ── */
-.dial-hero__artwrap { position: relative; }
+/* ── Hero art sidebar — time chevrons, time label, reserved set panel ──
+   NOTE: no position rule here — the base .dial-hero__artwrap is already
+   relative, and the landscape media block sets it fixed; re-declaring
+   relative this late in the file silently breaks the desktop layout. */
 .dial-hero__chev {
   position: absolute;
   top: 50%;

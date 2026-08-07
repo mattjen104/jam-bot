@@ -3,11 +3,12 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * End-to-end tests for the service-picker screen in ManualImportModal.
  *
- * There are four entry points that open the modal:
+ * There are three entry points that open the modal:
  *   1. Library empty-state CTA  (data-testid="library-import-cta")
  *   2. Stats-bar "Add music"    (data-testid="library-import-open", always visible in hero)
  *   3. Reconnect prompt         (data-testid="library-reconnect-prompt" → library-import-open)
- *   4. ImportStrip "Add more +" (data-testid="import-strip-done" → aria-label="Add more music")
+ * (The former ImportStrip "Add more +" entry point is gone — completed import
+ * jobs intentionally render no strip at all.)
  *
  * After each trigger the test verifies:
  *   - data-testid="service-picker" is visible
@@ -148,6 +149,12 @@ async function assertServicePicker(page: Page) {
 test.describe("import picker entry point: empty-state CTA", () => {
   test("clicks library-import-cta and shows service picker", async ({ page }) => {
     await installRoutes(page, { library: LIBRARY_EMPTY });
+    // An empty library triggers the first-run auto-open of the import modal
+    // (once per session). Mark the session as already prompted so the modal
+    // stays closed and the CTA is actually clickable.
+    await page.addInitScript(() => {
+      sessionStorage.setItem("lore:first-run-prompted", "1");
+    });
     await page.goto("/lore/library");
 
     const cta = page.getByTestId("library-import-cta");
@@ -196,26 +203,6 @@ test.describe("import picker entry point: reconnect prompt", () => {
 
     // Click the "Add music" button scoped inside the reconnect prompt
     await prompt.getByTestId("library-import-open").click();
-
-    await assertServicePicker(page);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Entry point 4 — ImportStrip "Add more +" link
-// ---------------------------------------------------------------------------
-
-test.describe("import picker entry point: ImportStrip Add more +", () => {
-  test("done import strip Add more + button shows service picker", async ({ page }) => {
-    await installRoutes(page, { library: LIBRARY_WITH_ITEMS, importJob: DONE_IMPORT_JOB });
-    await page.goto("/lore/library");
-
-    // The strip is rendered by AppLayout above every page; wait for it.
-    const strip = page.getByTestId("import-strip-done");
-    await expect(strip).toBeVisible({ timeout: 15_000 });
-
-    // "Add more +" fires lore:open-import-modal which Library.tsx listens to.
-    await strip.getByRole("button", { name: "Add more music" }).click();
 
     await assertServicePicker(page);
   });

@@ -7,7 +7,6 @@
  * chrome above the scroll body.
  */
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
-import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
@@ -2455,10 +2454,7 @@ export function DialView() {
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
                   hasSeeds={hasSeeds || visibleSeeds.length > 0}
-                  seeds={visibleSeeds}
                   liveLoading={liveLoading}
-                  onAddSeed={addSeed}
-                  onRemoveSeed={removeSeed}
                 />
               </>
             )}
@@ -2566,13 +2562,6 @@ export function DialView() {
                     {withReason.length > 0 && (
                       <>
                         <>
-                          {(hasSeeds || visibleSeeds.length > 0) && (
-                              <SeedBar
-                                seeds={visibleSeeds}
-                                onAddSeed={addSeed}
-                                onRemoveSeed={removeSeed}
-                              />
-                            )}
                             {/* Map over the FULL array so isSampling index is always the
                                 unsliced position; rows beyond zone1Visible are null until
                                 zone1Expanded is true. */}
@@ -2639,10 +2628,7 @@ export function DialView() {
                           isSpotifyConnected={isSpotifyConnected}
                           hasLibrary={hasLibrary}
                           hasSeeds={hasSeeds || visibleSeeds.length > 0}
-                          seeds={visibleSeeds}
                           liveLoading={liveLoading}
-                          onAddSeed={addSeed}
-                          onRemoveSeed={removeSeed}
                         />
                       </>
                     )}
@@ -2855,60 +2841,16 @@ function DialRowSkeleton({ delay = 0 }: { delay?: 0 | 1 | 2 }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Seed prompt sub-components
-// SeedInput is shared (./SeedInput.tsx). SeedBar is local — it wraps the chips
-// and the shared SeedInput and appends the Dial-specific "Import library →" link.
-// ---------------------------------------------------------------------------
-
-function SeedBar({
-  seeds,
-  onAddSeed,
-  onRemoveSeed,
-}: {
-  seeds: string[];
-  onAddSeed: (artist: string) => void;
-  onRemoveSeed: (artist: string) => void;
-}) {
-  return (
-    <div className="seed-bar">
-      <span className="seed-bar__label">Tuned for</span>
-      <div className="seed-bar__chips">
-        {seeds.map((s) => (
-          <span key={s} className="seed-chip seed-chip--sm">
-            {s}
-            <button
-              type="button"
-              className="seed-chip__remove"
-              aria-label={`Remove ${s}`}
-              onClick={() => onRemoveSeed(s)}
-            >×</button>
-          </span>
-        ))}
-        {seeds.length < 10 && (
-          <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="+ artist" />
-        )}
-      </div>
-    </div>
-  );
-}
-
 function Zone1Placeholder({
   isSpotifyConnected,
   hasLibrary,
   hasSeeds,
-  seeds,
   liveLoading,
-  onAddSeed,
-  onRemoveSeed,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
   hasSeeds: boolean;
-  seeds: string[];
   liveLoading: boolean;
-  onAddSeed: (artist: string) => void;
-  onRemoveSeed: (artist: string) => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -2928,11 +2870,6 @@ function Zone1Placeholder({
     return (
       <div className="z1-placeholder z1-placeholder--seeded">
         <div className="seed-bar-row">
-          <SeedBar
-            seeds={seeds}
-            onAddSeed={onAddSeed}
-            onRemoveSeed={onRemoveSeed}
-          />
           <button
             type="button"
             className="seed-bar__edit-link"

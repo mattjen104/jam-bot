@@ -15,3 +15,6 @@ Fixture pitfalls learned while reviving specs (**How to apply** when writing new
 - Anonymous dial (no library/seeds) shows the "Pick the artists you love" onboarding placeholder — a reliable load anchor for negative tests.
 - Register a broad `**/api/**` catch-all FIRST (most-recent handler wins), but several components crash on `{}`: /api/player/onair needs `{items:[]}`, /api/replay/*/playlist-targets needs `{targets:[]}`, /api/recordings/:mbid/entry needs `{rung:"empty",picks:[]}`, and run insights need `{genreBreakdown:null,discoveryScore:null}` (an empty array crashes on `.top`).
 - `/archive/picker-runs/:id` is a legacy Redirect that DROPS the query string — deep links with ?play=1&from= must use `/archive/selector-runs/:id`.
+
+- Library first-run auto-open: an empty library (+ no seeds, no avatar) auto-opens the import modal once per session — empty-state specs must pre-set `sessionStorage lore:first-run-prompted=1` via addInitScript or clicks get intercepted.
+- The ImportStrip "Add more +" entry point is gone (done jobs render no strip); its spec was removed — don't resurrect it.
