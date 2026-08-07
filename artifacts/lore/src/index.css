@@ -2126,6 +2126,44 @@
   color: hsl(var(--muted-foreground));
 }
 
+/* ── Station-load error state ───────────────────────────────────────────── */
+/* Compact inline notice — keeps the same mono scale as .dial-loading so it
+   sits naturally at the front-door type size on both portrait and landscape. */
+.dial-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 15px;
+  font-family: var(--app-font-mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground));
+}
+.dial-error__msg {
+  flex: 1;
+}
+.dial-error__retry {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid hsl(var(--muted-foreground) / 0.4);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.dial-error__retry:hover,
+.dial-error__retry:focus-visible {
+  border-color: hsl(var(--muted-foreground) / 0.8);
+  color: hsl(var(--foreground));
+  outline: none;
+}
+
 /* ── TimeAxisDensitySpine — time-axis density visualisation and coarse nav ────────── */
 /* The spine sits in the scan toolbar above Zone 1 in live mode.
    Bins are rendered as proportional bar columns with two channels:

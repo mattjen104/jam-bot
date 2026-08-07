@@ -221,6 +221,8 @@ function mockDialDataSettled() {
     hasLibrary: true,
     overlapByPickerId: new Map<number, number>(),
     pickerNameToId: new Map<string, number>(),
+    stationsError: false,
+    refetchStations: vi.fn(),
   });
 }
 

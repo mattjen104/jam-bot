@@ -524,6 +524,10 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   pickerNameToId: Map<string, number>;
   crossingSourceMode: DialDisplayMode;
   crossingError: boolean;
+  /** True when the station-list request has failed (network error or non-2xx response). */
+  stationsError: boolean;
+  /** Re-request the station list without navigating away. */
+  refetchStations: () => void;
 } {
   const today = todayStr();
   const yesterday = yesterdayStr();
@@ -574,7 +578,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   }, []);
 
   // ── fetch stations ──────────────────────────────────────────────────────
-  const { data: stationsData, isLoading: stationsLoading } = useListStations();
+  const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations();
 
   // ── live pulse (30s polling) ─────────────────────────────────────────────
   const { data: liveData, isLoading: liveLoading } = useListStationsNowPlaying({
@@ -1013,5 +1017,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     pickerNameToId,
     crossingSourceMode,
     crossingError: displayMode === "blended" && blendedError && blendedCrossings == null,
+    stationsError,
+    refetchStations: () => { void refetchStations(); },
   };
 }

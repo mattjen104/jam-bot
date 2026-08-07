@@ -1393,6 +1393,8 @@ export function DialView() {
     pickerNameToId,
     crossingSourceMode,
     crossingError,
+    stationsError,
+    refetchStations,
   } = useDialData(displayMode);
 
   useEffect(() => {
@@ -2746,12 +2748,27 @@ export function DialView() {
             )}
 
 
+            {/* Error state: station-list request failed */}
+            {!isCoreLoading && stationsError && (
+              <div className="dial-error">
+                <span className="dial-error__msg">Station data unavailable</span>
+                <button
+                  type="button"
+                  className="dial-error__retry"
+                  onClick={refetchStations}
+                  aria-label="Retry loading stations"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             {/* Spinner while the live pulse hasn't arrived yet */}
             {isCoreLoading && (
               <div className="dial-loading">Loading stations…</div>
             )}
 
-            {sortedRows.length === 0 && offlineStations.length === 0 && !isLoading && (
+            {sortedRows.length === 0 && offlineStations.length === 0 && !isLoading && !stationsError && (
               <div className="dial-loading" style={{ opacity: 0.4 }}>No stations online</div>
             )}
           </>
