@@ -39,6 +39,11 @@ vi.mock("../src/hooks/useDialData", async (importOriginal) => {
   return { ...actual, useDialData: vi.fn() };
 });
 
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal);
+});
+
 const { tasteSeeds, mutateAsync, mattStarter, startMattLibrary } = vi.hoisted(() => ({
   tasteSeeds: vi.fn(() => ({ data: [] as string[] })),
   mutateAsync: vi.fn(async (artists: string[]) => ({ artists })),
@@ -91,6 +96,9 @@ vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
 vi.mock("../src/components/StationLane", () => ({ StationLane: () => null }));
 vi.mock("../src/components/ContextRail", () => ({ ContextRail: () => null }));
 vi.mock("../src/components/SearchOverlay", () => ({ SearchOverlay: () => null }));
+vi.mock("../src/hooks/useStationPresence", () => ({
+  useStationPresence: vi.fn(() => new Map()),
+}));
 vi.mock("../src/hooks/useFrontDoorScan", () => ({
   useFrontDoorScan: vi.fn(() => ({
     scanning: false,

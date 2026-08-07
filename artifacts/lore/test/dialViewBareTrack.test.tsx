@@ -31,6 +31,11 @@ vi.mock("../src/hooks/useDialData", () => ({
   normalizeDjName: vi.fn((s: string | null) => s ?? ""),
 }));
 
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal);
+});
+
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
   const { makeMeHooksMock } = await import("./helpers/meHooksMock");
   return makeMeHooksMock(importOriginal, {
@@ -67,6 +72,23 @@ vi.mock("../src/components/ContextRail", () => ({
 }));
 vi.mock("../src/components/SearchOverlay", () => ({
   SearchOverlay: () => null,
+}));
+vi.mock("../src/hooks/useStationPresence", () => ({
+  useStationPresence: vi.fn(() => new Map()),
+}));
+vi.mock("../src/hooks/useFrontDoorScan", () => ({
+  useFrontDoorScan: vi.fn(() => ({
+    scanning: false,
+    samplingIdx: null,
+    dwellMs: 7000,
+    progress: 0,
+    toggle: vi.fn(),
+    back: vi.fn(),
+    next: vi.fn(),
+    land: vi.fn(),
+    adjustDwell: vi.fn(),
+    stop: vi.fn(),
+  })),
 }));
 
 // ---------------------------------------------------------------------------

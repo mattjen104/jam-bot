@@ -12,6 +12,13 @@
  *     zone auto-expands; station at unsliced index 7 is marked sampling
  *  7. Expansion resets on slug-set change; does NOT reset on same slugs with
  *     new object identities
+ *
+ * NOTE: the hero-art dial refactor removed the per-zone collapse/expand
+ * affordance ("Collapse zone"/"Expand zone" buttons + lore.zone.N.collapsed
+ * localStorage) and the estimated zone-count badge (.fdzone-lbl__n). The
+ * describe blocks that exercised those features were dropped; the inline
+ * "See all N"/"See less" truncation toggle (and its scan auto-expand and
+ * slug-set reset behaviour) is the surviving contract and is still covered.
  */
 
 import React from "react";
@@ -36,6 +43,11 @@ vi.mock("../src/hooks/useDialData", () => ({
   togglePin: vi.fn(),
   normalizeDjName: vi.fn((s: string | null) => s ?? ""),
 }));
+
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal);
+});
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
   const { makeMeHooksMock } = await import("./helpers/meHooksMock");
@@ -80,6 +92,9 @@ vi.mock("../src/components/LibraryChip", () => ({
 }));
 vi.mock("../src/components/ManualImportModal", () => ({
   ManualImportModal: () => null,
+}));
+vi.mock("../src/hooks/useStationPresence", () => ({
+  useStationPresence: vi.fn(() => new Map()),
 }));
 
 // useFrontDoorScan is extracted so it can be mocked per-test to control
@@ -481,7 +496,50 @@ describe("Expansion state reset behaviour", () => {
     expect(screen.getAllByRole("button", { name: "See less" }).length).toBeGreaterThanOrEqual(1);
   });
 
+  /**
+   * Transient-shrink resilience.
+   *
+   * When a slow-connection refetch temporarily drops stations and then restores
+   * the original set, Zone 1 should stay expanded rather than collapsing on the
+   * user mid-session.
+   *
+   *   expand (9 slugs) → shrink (7 slugs) → collapses to default truncated view
+   *                    → recover (9 slugs) → silently re-expands (key matches
+   *                                          the expand-time anchor)
+   *
+   * Only a genuinely different slug set (new stations appear / old ones stay
+   * gone) triggers a permanent reset.
+   */
+
+  it("restores expanded state when the full slug set recovers after a transient shrink", () => {
+    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations9);
+    mockGhosts([]);
+    mockScan(null);
+    const { rerender } = renderDial();
+
+    // Expand Zone 1.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 9" })); });
+    expect(fdrowCount()).toBe(9);
+
+    // Simulate a fast refetch that temporarily drops two stations.
+    const stations7 = stations9.slice(0, 7);
+    mockDialData(stations7);
+    act(() => { rerender(<DialView />); });
+
+    // Slug key changed → zone collapses to default truncated view.
+    expect(fdrowCount()).toBe(5);
+    expect(screen.getByRole("button", { name: "See all 7" })).toBeTruthy();
+
+    // Full set returns (same nine slugs as the original expanded state).
+    mockDialData(stations9);
+    act(() => { rerender(<DialView />); });
+
+    // Key matches the expand-time anchor → zone silently re-expands.
+    expect(fdrowCount()).toBe(9);
+  });
 });
+
 
 // ---------------------------------------------------------------------------
 // New sort/band tests (Task #1038)

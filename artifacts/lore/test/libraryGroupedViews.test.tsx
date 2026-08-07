@@ -81,9 +81,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// ===========================================================================
+// ---------------------------------------------------------------------------
 // Pure-function tests — buildAlbumGroups
-// ===========================================================================
+// ---------------------------------------------------------------------------
 
 describe("buildAlbumGroups", () => {
   it("returns an empty array when given no items", () => {
@@ -139,9 +139,9 @@ describe("buildAlbumGroups", () => {
   });
 });
 
-// ===========================================================================
+// ---------------------------------------------------------------------------
 // Pure-function tests — buildArtistGroups
-// ===========================================================================
+// ---------------------------------------------------------------------------
 
 describe("buildArtistGroups", () => {
   it("returns an empty array when given no items", () => {
@@ -195,9 +195,9 @@ describe("buildArtistGroups", () => {
   });
 });
 
-// ===========================================================================
+// ---------------------------------------------------------------------------
 // Component tests — AlbumGroupRow
-// ===========================================================================
+// ---------------------------------------------------------------------------
 
 describe("AlbumGroupRow", () => {
   function makeGroup(items: LibraryItem[]): AlbumGroup {
@@ -320,9 +320,9 @@ describe("AlbumGroupRow", () => {
   });
 });
 
-// ===========================================================================
+// ---------------------------------------------------------------------------
 // Component tests — ArtistGroupRow
-// ===========================================================================
+// ---------------------------------------------------------------------------
 
 describe("ArtistGroupRow", () => {
   function makeArtistGroup(albums: { title: string; items: LibraryItem[] }[]): ArtistGroup {
@@ -397,7 +397,7 @@ describe("ArtistGroupRow", () => {
     render(
       <ArtistGroupRow group={group} openDoorMbid={null} setOpenDoorMbid={vi.fn()} />,
     );
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByTestId("library-artist-group").querySelector("[role='button']")!);
     expect(screen.getByText("Album 1")).toBeTruthy();
     expect(screen.getByText("Album 2")).toBeTruthy();
     expect(screen.getAllByTestId("library-row")).toHaveLength(2);

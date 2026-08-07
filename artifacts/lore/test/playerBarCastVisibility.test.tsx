@@ -70,7 +70,7 @@ describe("PlayerBar cast button visibility", () => {
   it("shows the device picker when connected with a premium tier", () => {
     renderBar(makeSpotify({ connected: true, product: "premium" }));
     expect(screen.getByTestId("device-picker-button")).toBeTruthy();
-    expect(screen.queryByTestId("cast-connect-button")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Connect Spotify" })).toBeNull();
   });
 
   it("shows the device picker when connected with an UNKNOWN tier", () => {
@@ -81,7 +81,7 @@ describe("PlayerBar cast button visibility", () => {
   it("hides the picker for an explicitly free-tier account", () => {
     renderBar(makeSpotify({ connected: true, product: "free", premium: false }));
     expect(screen.queryByTestId("device-picker-button")).toBeNull();
-    expect(screen.queryByTestId("cast-connect-button")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Connect Spotify" })).toBeNull();
   });
 
   it("shows a connect entry point when Spotify is configured but not connected", () => {

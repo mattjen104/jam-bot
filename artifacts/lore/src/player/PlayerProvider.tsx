@@ -2824,7 +2824,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!tier1LinkBatchDone) return;
 
     // Collect Spotify URIs from all queue items at or after the current index.
-    // Hard-stop if ANY item is missing a URI — no silent filtering.
+    // Hard-stop if ANY item is missing a URI — no silent filtering. This runs
+    // even while the crossing interstitial is armed: a run that cannot resolve
+    // must fail loudly regardless of the gate, and it also stops the link-
+    // prefetch loop from re-fetching empty-links items indefinitely.
     const slice = queue.slice(index);
     const uris: string[] = [];
     for (const item of slice) {
@@ -2845,6 +2848,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       uris.push(uri);
     }
     if (uris.length === 0) return;
+
+    // ⚠️ FLAGGED — interstitial crossing gate. While the live→past interstitial
+    // is armed (silence placeholder or Lore tone, plus any device-mismatch
+    // confirmation) no Spotify command may reach the Connect device. The
+    // per-track Spotify driver is suppressed the same way via
+    // `active && !interstitialArmed`; the Tier-1 bulk queue-run must honour the
+    // identical gate so the whole run is not front-loaded onto the listener's
+    // device before they confirm at the boundary. URI resolution / hard-stop
+    // above still runs while armed; only the device command itself is deferred.
+    if (interstitialArmed) return;
 
     tier1RunQueuedRef.current = true;
     void spotifyQueueRun({
@@ -2881,6 +2894,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     spotify.premium,
     spotify.pinnedDevice,
     tier1LinkBatchDone,
+    interstitialArmed,
     // intentionally omit currentItemForTier1 — links are part of queue
   ]);
 
