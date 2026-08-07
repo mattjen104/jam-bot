@@ -15,7 +15,7 @@ import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
-import { SeedBar, SeedInput } from "./SeedInput";
+import { SeedInput } from "./SeedInput";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
@@ -1092,6 +1092,83 @@ const ZONE1_VISIBLE = 5;
 const ZONE2_VISIBLE = 3;
 const ZONE3_VISIBLE = 3;
 
+/** Stable, case-insensitive ordering for the listener's configured artists. */
+export function sortTasteSeeds(seeds: string[]): string[] {
+  return [...seeds].sort((a, b) => {
+    const lowerA = a.toLocaleLowerCase();
+    const lowerB = b.toLocaleLowerCase();
+    if (lowerA < lowerB) return -1;
+    if (lowerA > lowerB) return 1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
+
+function TunedArtistsPanel({
+  seeds,
+  onAddSeed,
+  onRemoveSeed,
+  onClose,
+}: {
+  seeds: string[];
+  onAddSeed: (artist: string) => void;
+  onRemoveSeed: (artist: string) => void;
+  onClose: () => void;
+}) {
+  const sortedSeeds = useMemo(() => sortTasteSeeds(seeds), [seeds]);
+
+  return (
+    <section className="dial-hero__tuned-panel" aria-labelledby="tuned-artists-title">
+      <div className="dial-hero__tuned-head">
+        <div>
+          <p className="dial-hero__tuned-kicker">Your dial</p>
+          <h2 id="tuned-artists-title">Tuned artists</h2>
+        </div>
+        <button
+          type="button"
+          className="dial-hero__tuned-close"
+          aria-label="Close tuned artists"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </div>
+      <p className="dial-hero__tuned-copy">
+        Lore will look for these artists on live radio.
+      </p>
+      {sortedSeeds.length > 0 ? (
+        <ul className="dial-hero__tuned-list">
+          {sortedSeeds.map((artist, index) => (
+            <li key={`${artist}-${index}`} className="dial-hero__tuned-item">
+              <span>{artist}</span>
+              <button
+                type="button"
+                className="dial-hero__tuned-remove"
+                aria-label={`Remove ${artist}`}
+                onClick={() => onRemoveSeed(artist)}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="dial-hero__tuned-empty">
+          No tuned artists yet. Add one to personalize your dial.
+        </p>
+      )}
+      <div className="dial-hero__tuned-add">
+        <label htmlFor="tuned-artist-input">Add an artist</label>
+        <SeedInput
+          seeds={seeds}
+          onAdd={onAddSeed}
+          placeholder="e.g. Radiohead"
+          inputId="tuned-artist-input"
+        />
+      </div>
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Stations list view
 // ---------------------------------------------------------------------------
@@ -1712,6 +1789,8 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const wordmarkRef = useRef<HTMLButtonElement>(null);
+  const [tunedArtistsOpen, setTunedArtistsOpen] = useState(false);
   const { enabled: socialEnabled } = useSocialMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
@@ -1815,6 +1894,11 @@ export function DialView() {
     });
     void seedWriteRef.current.catch(() => undefined);
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
+
+  const closeTunedArtists = useCallback(() => {
+    setTunedArtistsOpen(false);
+    wordmarkRef.current?.focus();
+  }, []);
 
   // Popular crossings — Also-On-Air sentences + sort order.
   const { data: popCrossings = [] } = useMyPopularCrossings();
@@ -2631,9 +2715,16 @@ export function DialView() {
           {/* Wordmark — plain "Lore" text, left-justified like the list.
               The moon moved down to the time-travel strip, where its phase
               tracks the scrubbed date. (Solo/LP toggle machinery kept.) */}
-          <span className="dial-topbar__wordmark" aria-label="Lore">
+          <button
+            ref={wordmarkRef}
+            type="button"
+            className={`dial-topbar__wordmark${tunedArtistsOpen ? " dial-topbar__wordmark--active" : ""}`}
+            aria-label="Lore — tuned artists"
+            aria-pressed={tunedArtistsOpen}
+            onClick={() => setTunedArtistsOpen((open) => !open)}
+          >
             <span className="dial-topbar__letter" aria-hidden="true">Lore</span>
-          </span>
+          </button>
 
           {/* Moon phase — top right; tracks the scrubbed date in past mode. */}
           <span className="dial-topbar__moon-tr" aria-hidden="true">
@@ -2797,48 +2888,59 @@ export function DialView() {
       {level === "all" ? (
         <div className="dial-hero">
           {renderTopbar()}
-          <div className="dial-hero__artwrap">
-            <div
-              className="dial-hero__art"
-              style={{ backgroundImage: `url(${heroArt})` }}
-              role="button"
-              tabIndex={0}
-              aria-label="Open album art fullscreen"
-              onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  artOpenerRef.current = e.currentTarget;
-                  setAlbumArtOpen(true);
-                }
-              }}
-            />
-            {/* Queue panel owns time navigation as well as the selected set. */}
-            <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                <div className="dial-hero__setpanel-head">
-                  <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
-                  <span className="dial-hero__setpanel-title">
-                    {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
-                  </span>
-                  <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
+          <div className={`dial-hero__artwrap${tunedArtistsOpen ? " dial-hero__artwrap--tuned" : ""}`}>
+            {tunedArtistsOpen ? (
+              <TunedArtistsPanel
+                seeds={visibleSeeds}
+                onAddSeed={addSeed}
+                onRemoveSeed={removeSeed}
+                onClose={closeTunedArtists}
+              />
+            ) : (
+              <>
+                <div
+                  className="dial-hero__art"
+                  style={{ backgroundImage: `url(${heroArt})` }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Open album art fullscreen"
+                  onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      artOpenerRef.current = e.currentTarget;
+                      setAlbumArtOpen(true);
+                    }
+                  }}
+                />
+                {/* Queue panel owns time navigation as well as the selected set. */}
+                <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                    <div className="dial-hero__setpanel-head">
+                      <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
+                      <span className="dial-hero__setpanel-title">
+                        {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
+                      </span>
+                      <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
+                    </div>
+                    {setTabs.length > 0 ? (
+                      <TabbedSetPanel
+                        tabs={setTabs}
+                        activeId={activeSetTabId}
+                        allSets={allSets}
+                        seedsLower={seedsLower}
+                        onSelect={setActiveSetTabId}
+                        onClose={closeSetTab}
+                        onScope={openSetTab}
+                        onAdd={addSeed}
+                        onRemove={removeSeed}
+                        onPlay={playSetlist}
+                      />
+                    ) : (
+                      <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
+                    )}
                 </div>
-                {setTabs.length > 0 ? (
-                  <TabbedSetPanel
-                    tabs={setTabs}
-                    activeId={activeSetTabId}
-                    allSets={allSets}
-                    seedsLower={seedsLower}
-                    onSelect={setActiveSetTabId}
-                    onClose={closeSetTab}
-                    onScope={openSetTab}
-                    onAdd={addSeed}
-                    onRemove={removeSeed}
-                    onPlay={playSetlist}
-                  />
-                ) : (
-                  <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
-                )}
-            </div>
+              </>
+            )}
           </div>
           {/* Sort toggle moved into the time-travel (filter) strip.
               ＋ Artists button hidden — addArtistsOpen machinery kept. */}
@@ -3062,11 +3164,6 @@ export function DialView() {
                     {/* Zone 1: crossing rows */}
                     {withReason.length > 0 && (
                       <>
-                        <SeedBar
-                          seeds={visibleSeeds}
-                          onAddSeed={addSeed}
-                          onRemoveSeed={removeSeed}
-                        />
                         <>
                             {/* All live crossing rows are visible by default. */}
                             <div id="zone1-rows">
@@ -3374,7 +3471,7 @@ function Zone1Placeholder({
   if (hasSeeds) {
     return (
       <div className="z1-placeholder z1-placeholder--seeded">
-        <SeedBar seeds={seeds} onAddSeed={onAddSeed} onRemoveSeed={onRemoveSeed} />
+        <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="Add another artist" />
         <div className="z1-placeholder__status">
           <span className="dial-live-skeleton__pip" />
           <span className="z1-placeholder__lbl">Finding live matches for your artists…</span>

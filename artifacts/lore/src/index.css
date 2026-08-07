@@ -5890,6 +5890,28 @@ body * {
   color: hsl(var(--foreground) / 0.85);
   text-decoration-color: hsl(var(--foreground) / 0.85);
 }
+.dial-topbar__wordmark {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: hsl(var(--foreground) / 0.85);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.dial-topbar__wordmark:hover,
+.dial-topbar__wordmark--active {
+  color: hsl(var(--accent));
+  text-decoration-color: hsl(var(--accent));
+}
+.dial-topbar__wordmark:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 /* Day boundary markers keep the wide-range spine legible. */
 .dial-density-spine__bin--daystart {
   margin-left: 5px;
@@ -5953,6 +5975,138 @@ body * {
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-display);
   font-size: 14px;
+}
+
+/* ── Tuned artists mode — the wordmark swaps the entire hero/sidebar surface
+   for this management panel. It deliberately occupies the same square as the
+   album art so the radio rows never move or share space with the panel. ── */
+.dial-hero__artwrap--tuned {
+  aspect-ratio: 1;
+}
+.dial-hero__tuned-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(20px, 4vw, 42px);
+  background:
+    radial-gradient(circle at 85% 0%, hsl(var(--accent) / .12), transparent 42%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+.dial-hero__tuned-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dial-hero__tuned-kicker {
+  margin: 0 0 5px;
+  color: hsl(var(--accent));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.dial-hero__tuned-head h2 {
+  margin: 0;
+  font-family: var(--app-font-display);
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 400;
+  line-height: 1;
+}
+.dial-hero__tuned-close,
+.dial-hero__tuned-remove {
+  appearance: none;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font: inherit;
+}
+.dial-hero__tuned-close {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  font-size: 22px;
+  line-height: 1;
+}
+.dial-hero__tuned-close:hover,
+.dial-hero__tuned-remove:hover {
+  border-color: hsl(var(--accent) / .7);
+  color: hsl(var(--accent));
+}
+.dial-hero__tuned-close:focus-visible,
+.dial-hero__tuned-remove:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.dial-hero__tuned-copy,
+.dial-hero__tuned-empty {
+  max-width: 32rem;
+  margin: 16px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-display);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.dial-hero__tuned-list {
+  display: grid;
+  gap: 7px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dial-hero__tuned-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 6px 0 6px 10px;
+  border-bottom: 1px solid hsl(var(--border) / .45);
+  font-family: var(--app-font-display);
+  font-size: 17px;
+}
+.dial-hero__tuned-remove {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-color: transparent;
+  font-size: 19px;
+  line-height: 1;
+}
+.dial-hero__tuned-add {
+  margin-top: auto;
+  padding-top: 22px;
+}
+.dial-hero__tuned-add > label {
+  display: block;
+  margin-bottom: 7px;
+  color: hsl(var(--foreground) / .75);
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.dial-hero__tuned-add .seed-input-row {
+  width: 100%;
+}
+
+@media (orientation: landscape) {
+  .dial-hero__artwrap--tuned {
+    aspect-ratio: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .dial-hero__tuned-panel { padding: 18px 16px; }
+  .dial-hero__tuned-head h2 { font-size: 27px; }
+  .dial-hero__tuned-item { font-size: 16px; }
 }
 
 /* The queue uses artist names rather than chips so its order reads as a set.

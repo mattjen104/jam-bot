@@ -2,11 +2,10 @@
 /**
  * Regression guard for the Dial seed-input type-to-add flow.
  *
- * Exercises the full cycle in the Dial's original context — the exact page
- * where SeedInput and SeedBar lived before Task #1189 extracted them into a
- * shared component:
+ * Exercises the full cycle through the Dial's tuned-artists panel:
  *
- *   type artist name → submit → chip appears → remove chip → chip disappears
+ *   open Lore wordmark → type artist name → submit → artist appears →
+ *   remove artist → artist disappears
  *
  * Any missed context dependency (hook wiring, provider, prop threading) would
  * break one of these steps and surface here before reaching production.
@@ -126,9 +125,8 @@ import type { DialStation } from "../src/hooks/useDialData";
 // Helpers
 // ---------------------------------------------------------------------------
 
-// A live station with an artist crossing so Zone 1 has content. The inline
-// SeedBar (which hosts SeedInput + the seed chips) only renders alongside a
-// Zone 1 crossing row, so the seed-input flow needs at least one live station.
+// A live station with an artist crossing keeps the radio surface populated
+// while the wordmark swaps the hero/sidebar to the tuned-artists panel.
 function makeZone1Station(): DialStation {
   return {
     station: {
@@ -181,6 +179,14 @@ function mockDial() {
   });
 }
 
+function openTunedArtists() {
+  const wordmark = screen.getByRole("button", { name: "Lore — tuned artists" });
+  expect(wordmark.getAttribute("aria-pressed")).toBe("false");
+  fireEvent.click(wordmark);
+  expect(wordmark.getAttribute("aria-pressed")).toBe("true");
+  return screen.getByRole("textbox", { name: "Artist name" });
+}
+
 // ---------------------------------------------------------------------------
 // Teardown
 // ---------------------------------------------------------------------------
@@ -198,13 +204,12 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Dial SeedInput — type-to-add full cycle", () => {
+describe("Dial tuned artists — type-to-add full cycle", () => {
   it("adds a typed artist name as a chip and removes it on the × button", async () => {
     mockDial();
     render(<DialView />);
 
-    // The seed input renders in the onboarding section (no library, no seeds).
-    const input = screen.getByRole("textbox", { name: "Artist name" });
+    const input = openTunedArtists();
     fireEvent.change(input, { target: { value: "Radiohead" } });
 
     // Click Add — triggers optimistic update synchronously.
@@ -238,7 +243,7 @@ describe("Dial SeedInput — type-to-add full cycle", () => {
     mockDial();
     render(<DialView />);
 
-    const input = screen.getByRole("textbox", { name: "Artist name" });
+    const input = openTunedArtists();
     fireEvent.change(input, { target: { value: "Arcade Fire" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -256,7 +261,7 @@ describe("Dial SeedInput — type-to-add full cycle", () => {
     mockDial();
     render(<DialView />);
 
-    const input = screen.getByRole("textbox", { name: "Artist name" }) as HTMLInputElement;
+    const input = openTunedArtists() as HTMLInputElement;
     fireEvent.change(input, { target: { value: "LCD Soundsystem" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
@@ -269,7 +274,7 @@ describe("Dial SeedInput — type-to-add full cycle", () => {
     mockDial();
     render(<DialView />);
 
-    const input = screen.getByRole("textbox", { name: "Artist name" });
+    const input = openTunedArtists();
     fireEvent.change(input, { target: { value: "Portishead" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
@@ -284,7 +289,7 @@ describe("Dial SeedInput — type-to-add full cycle", () => {
     mockDial();
     render(<DialView />);
 
-    const input = screen.getByRole("textbox", { name: "Artist name" });
+    const input = openTunedArtists();
 
     fireEvent.change(input, { target: { value: "Radiohead" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
@@ -293,16 +298,29 @@ describe("Dial SeedInput — type-to-add full cycle", () => {
       expect(screen.getByRole("button", { name: "Remove Radiohead" })).toBeTruthy();
     });
 
-    // After the first seed appears, the SeedBar renders an inline "+ artist" input.
-    // That input also has aria-label "Artist name".
-    const inputs = screen.getAllByRole("textbox", { name: "Artist name" });
-    const activeInput = inputs[inputs.length - 1];
-    fireEvent.change(activeInput, { target: { value: "Portishead" } });
+    fireEvent.change(input, { target: { value: "Portishead" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith(["Radiohead", "Portishead"]);
     });
+  });
+
+  it("sorts artists alphabetically and restores the live sidebar when closed", () => {
+    tasteSeeds.mockReturnValue({ data: ["zola jesus", "Arcade Fire", "Beach House"] });
+    mockDial();
+    render(<DialView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Lore — tuned artists" }));
+    expect(screen.getByRole("heading", { name: "Tuned artists" })).toBeTruthy();
+    expect(screen.queryByText("Choose a live set")).toBeNull();
+    expect([...document.querySelectorAll(".dial-hero__tuned-item > span")].map((node) => node.textContent))
+      .toEqual(["Arcade Fire", "Beach House", "zola jesus"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close tuned artists" }));
+    expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
+    expect(screen.getByText("Choose a live set")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Lore — tuned artists" }));
   });
 });
 

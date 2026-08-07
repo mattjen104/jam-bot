@@ -8,10 +8,12 @@ export function SeedInput({
   seeds,
   onAdd,
   placeholder = "e.g. Radiohead",
+  inputId,
 }: {
   seeds: string[];
   onAdd: (artist: string) => void;
   placeholder?: string;
+  inputId?: string;
 }) {
   const [value, setValue] = useState("");
 
@@ -25,6 +27,7 @@ export function SeedInput({
   return (
     <div className="seed-input-row">
       <input
+        id={inputId}
         className="seed-input"
         type="text"
         placeholder={placeholder}
