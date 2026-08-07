@@ -26,6 +26,7 @@ import {
   type Station,
 } from "@workspace/api-client-react";
 import { useWpOnAir } from "../webplayer/hooks";
+import interstitialToneUrl from "../assets/interstitial-tone.wav";
 import { useRadioPlayer, type PlayerStatus } from "../hooks/useRadioPlayer";
 import {
   useSpotifyConnect,
@@ -342,20 +343,16 @@ export interface RideApi {
   setPreferredService: (svc: "youtube" | "apple-music" | "bandcamp" | null) => void;
 
   /**
-   * ⚠️ FLAGGED — companion-mode live-to-past crossing detected.
+   * Companion-mode live-to-past crossing detected.
    * True on the edge where the audio pipeline crosses from live broadcast
-   * (station passthrough) to past replay (service-orchestrated). A Lore-authored
-   * interstitial tone must play here to mark the boundary honestly.
+   * (station passthrough) to past replay (service-orchestrated). The
+   * Lore-authored interstitial tone plays here to mark the boundary honestly.
    *
    * While armed, the preview-drive playback effect is gated — past audio does
-   * not start until the interstitial clears.
-   *
-   * DO NOT merge the interstitial wiring without explicit human sign-off on the
-   * companion-mode defensibility call. Using silence as placeholder until the
-   * Lore asset is produced and approved.
+   * not start until the interstitial tone finishes and the gate clears.
    */
   interstitialArmed: boolean;
-  /** Dismiss the interstitial after it plays (or while the silence placeholder runs). */
+  /** Dismiss the interstitial after the tone plays (or immediately, on demand). */
   dismissInterstitial: () => void;
 
   /**
@@ -652,6 +649,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const tier1RunQueuedRef = useRef(false);
   // Set of MBIDs currently being link-fetched by the Tier-1 prefetch effect.
   const tier1FetchingRef = useRef<Set<string>>(new Set());
+  // MBIDs whose Tier-1 link prefetch has COMPLETED (even with zero links).
+  // Without this, an item whose fetch legitimately returned no links stays
+  // "pending" forever (links.length === 0), re-fetching in a tight effect loop
+  // whenever the queue-run has not yet fired (e.g. while the live→past
+  // interstitial gate is armed).
+  const tier1FetchedRef = useRef<Set<string>>(new Set());
   // True once ALL Tier-1 link-prefetch fetches for the current ride have
   // completed (resolved or errored). Resets to false on each new ride start.
   // Added to queue-run effect deps so validation only fires after all links
@@ -665,12 +668,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // current item changes before a prior fetch completes.
   const tier23LinkFetchingRef = useRef<Set<string>>(new Set());
 
-  // ⚠️ FLAGGED — live-to-past pipeline crossing interstitial.
+  // Live-to-past pipeline crossing interstitial.
   // Set when the audio pipeline crosses from live broadcast to past replay.
-  // While true, the preview-drive playback effect is gated (past audio waits).
-  // The interstitial wiring is present; DO NOT merge without explicit human
-  // sign-off on the companion-mode defensibility call. Silence is the placeholder
-  // until the Lore-authored tone asset is produced and approved.
+  // While true, the preview-drive playback effect is gated (past audio waits)
+  // and the Lore-authored interstitial tone plays to mark the boundary.
   const [interstitialArmed, setInterstitialArmed] = useState(false);
   // Ref mirror so stable callbacks (tryAltDriverRef etc.) can read without
   // being captured in their closure dependency arrays.
@@ -809,6 +810,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setPastRunFailed(false);
     tier1RunQueuedRef.current = false;
     tier1FetchingRef.current = new Set();
+    tier1FetchedRef.current = new Set();
     setTier1LinkBatchDone(false);
     tierRefinedRef.current = false;
     tier23LinkFetchingRef.current = new Set();
@@ -840,11 +842,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           radioRef.current.status !== "idle" &&
           radioRef.current.status !== "error");
       if (wasLiveAudio && newOrientation === "past") {
-        // ⚠️ FLAGGED — companion-mode interstitial crossing.
+        // Companion-mode interstitial crossing.
         // Arms the gate: the preview-drive playback effect will not start audio
-        // until interstitialArmed clears (see auto-dismiss effect below).
-        // The audio asset requires explicit human sign-off before this fires audio.
-        // Using silence as placeholder until the Lore-authored tone is approved.
+        // until interstitialArmed clears (see tone-playback effect below, which
+        // plays the Lore-authored interstitial tone and then dismisses).
         setInterstitialArmed(true);
         // Device continuity: on the first live→past crossing this session, fetch
         // the device list, find the currently-active output, compare it to the
@@ -915,6 +916,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setPastRunFailed(false);
       tier1RunQueuedRef.current = false;
       tier1FetchingRef.current = new Set();
+    tier1FetchedRef.current = new Set();
       setTier1LinkBatchDone(false);
       tierRefinedRef.current = false;
       tier23LinkFetchingRef.current = new Set();
@@ -986,11 +988,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           radioRef.current.status !== "idle" &&
           radioRef.current.status !== "error");
       if (wasLiveAudio && newOrientation === "past") {
-        // ⚠️ FLAGGED — companion-mode interstitial crossing.
+        // Companion-mode interstitial crossing.
         // Arms the gate: the preview-drive playback effect will not start audio
-        // until interstitialArmed clears (see auto-dismiss effect below).
-        // The audio asset requires explicit human sign-off before this fires audio.
-        // Using silence as placeholder until the Lore-authored tone is approved.
+        // until interstitialArmed clears (see tone-playback effect below, which
+        // plays the Lore-authored interstitial tone and then dismisses).
         setInterstitialArmed(true);
         // Device continuity: fetch devices, find the active output, compare to
         // the pinned device. If mismatch, set deviceMismatch so the UI shows a
@@ -1032,6 +1033,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Reset past-mode tier state for the new ride.
       tier1RunQueuedRef.current = false;
       tier1FetchingRef.current = new Set();
+    tier1FetchedRef.current = new Set();
       setTier1LinkBatchDone(false);
       tierRefinedRef.current = false;
       tier23LinkFetchingRef.current = new Set();
@@ -1369,10 +1371,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // the next available driver before falling back to preview/broadcast.
 
   const spotifyDriver = useSpotifyDriver({
-    // ⚠️ FLAGGED — interstitial gate. While interstitialArmed is true the
-    // Spotify driver must not command the connected device. Passing
+    // Interstitial gate. While interstitialArmed is true the Spotify driver
+    // must not command the connected device. Passing
     // `active && !interstitialArmed` suppresses the driver's play effect for
-    // the entire crossing window (silence placeholder or real Lore tone).
+    // the entire crossing window while the Lore interstitial tone plays.
     // ⚠️ Tier 1 past-mode gate: when the bulk uris-array queue call owns the
     // run, suppress the Spotify driver's per-track play commands entirely so
     // they do not race with the single queue-run call.
@@ -1539,20 +1541,41 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    *  auto-dismiss effect can proceed and past playback can begin. */
   const dismissDeviceMismatch = useCallback(() => setDeviceMismatch(false), []);
 
-  // ⚠️ FLAGGED — interstitial auto-dismiss.
-  // When the interstitial is armed but no device check is pending and no device
-  // mismatch is blocking, dismiss the interstitial after the silence placeholder
-  // duration. INTERSTITIAL_SILENCE_MS is 0 (no perceptible pause) until the
-  // Lore-authored tone is approved; at that point replace 0 with the asset
-  // duration in milliseconds.
-  const INTERSTITIAL_SILENCE_MS = 0;
+  // Interstitial tone playback + dismiss.
+  // When the interstitial is armed and no device check is pending and no device
+  // mismatch is blocking, play the Lore-authored crossing tone, then dismiss the
+  // gate so past playback can begin. INTERSTITIAL_SILENCE_MS matches the bundled
+  // asset's duration (1.2s) and doubles as a fallback timer in case the browser
+  // refuses playback (autoplay policy, missing codec) or the `ended` event never
+  // fires — the crossing must never wedge the player.
+  const INTERSTITIAL_SILENCE_MS = 1200;
   useEffect(() => {
     if (!interstitialArmed || deviceCheckPending || deviceMismatch) return;
-    const id = window.setTimeout(
-      () => setInterstitialArmed(false),
-      INTERSTITIAL_SILENCE_MS,
-    );
-    return () => window.clearTimeout(id);
+    let done = false;
+    const dismiss = () => {
+      if (done) return;
+      done = true;
+      setInterstitialArmed(false);
+    };
+    const tone = new Audio(interstitialToneUrl);
+    tone.addEventListener("ended", dismiss);
+    try {
+      // Playback refused (autoplay policy, unsupported environment) — dismiss
+      // immediately rather than holding the gate for a tone that never sounds.
+      const p = tone.play();
+      if (p && typeof p.catch === "function") p.catch(dismiss);
+    } catch {
+      dismiss();
+    }
+    // Fallback: dismiss after the asset duration (+ small margin) even if the
+    // `ended` event never fires.
+    const id = window.setTimeout(dismiss, INTERSTITIAL_SILENCE_MS + 300);
+    return () => {
+      window.clearTimeout(id);
+      tone.removeEventListener("ended", dismiss);
+      tone.pause();
+      tone.src = "";
+    };
   }, [interstitialArmed, deviceCheckPending, deviceMismatch]);
 
   // Apple Music configuration flag — derived from app config (server token).
@@ -1698,7 +1721,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       skipApple: boolean,
       skipBandcamp = false,
     ) => {
-      // ⚠️ FLAGGED — interstitial gate.
+      // Interstitial gate.
       // While the live→past interstitial is armed, no driver may command audio.
       // We read from the ref (not state) so this closure always sees the latest
       // value without requiring the ref to be in the deps array.
@@ -1776,7 +1799,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Fires when the user explicitly picks YouTube or Apple Music from the
   // options panel.  The cascade is adjusted: skipApple=true sends us straight
   // to YouTube; skipApple=false tries Apple Music first then falls to YouTube.
-  // ⚠️ FLAGGED — interstitial gate: suppressed while crossing is pending.
+  // Interstitial gate: suppressed while the crossing tone is playing.
   useEffect(() => {
     if (!active || !preferredService || !currentMbid || !currentItem) return;
     if (playbackMode !== "resolve_to_service") return;
@@ -2349,8 +2372,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Drive playback of the current item: resolve its preview, then play it.
   useEffect(() => {
     if (!active) return undefined;
-    // ⚠️ FLAGGED — interstitial gate: hold off past-audio start until the
-    // live→past interstitial clears (silence plays + device check resolves).
+    // Interstitial gate: hold off past-audio start until the live→past
+    // interstitial clears (the Lore tone plays + device check resolves).
     if (interstitialArmed) {
       setStatus("loading");
       return undefined;
@@ -2575,7 +2598,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     // Items already with links — or already in-flight — are "not pending".
     const pending = slice.filter(
-      (item) => item.links.length === 0 && !tier1FetchingRef.current.has(item.mbid),
+      (item) =>
+        item.links.length === 0 &&
+        !tier1FetchingRef.current.has(item.mbid) &&
+        !tier1FetchedRef.current.has(item.mbid),
     );
 
     if (pending.length === 0) {
@@ -2606,8 +2632,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           );
         })
         .finally(() => {
-          tier1FetchingRef.current.delete(targetMbid);
+          // Stale-request guard FIRST: if the ride was replaced while this
+          // fetch was in flight, the per-ride sets now belong to the NEW ride
+          // and must not be mutated by this settled request — otherwise a
+          // replacement ride reusing the same MBID would see it as "already
+          // fetched", skip the lookup, and hard-stop with a missing URI.
           if (token !== rideRef.current) return;
+          tier1FetchingRef.current.delete(targetMbid);
+          tier1FetchedRef.current.add(targetMbid);
           // Set batch done once the last in-flight fetch completes.
           if (tier1FetchingRef.current.size === 0) {
             setTier1LinkBatchDone(true);
@@ -2637,6 +2669,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (pastModeTier !== 1) return;
     if (playbackMode !== "resolve_to_service") return;
     if (tier1RunQueuedRef.current) return; // already queued for this ride
+    // Interstitial gate: while the live→past crossing tone is playing (or the
+    // device-mismatch confirmation is pending) no audio command may fire —
+    // including the Tier-1 bulk queue-run, which starts playback immediately.
+    if (interstitialArmed) return;
     if (!spotify.connected || !spotify.premium) return;
     // Gate: all link-prefetch fetches must have completed.
     if (!tier1LinkBatchDone) return;
@@ -2675,6 +2711,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     timeOrientation,
     pastModeTier,
     playbackMode,
+    interstitialArmed,
     queue,
     index,
     spotify.connected,

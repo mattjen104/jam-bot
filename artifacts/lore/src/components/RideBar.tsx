@@ -357,10 +357,10 @@ export function RideBar({
       data-testid="ride-bar"
     >
       {/* ── Live-to-past crossing interstitial gate ─────────────────────── */}
-      {/* ⚠️ FLAGGED — companion-mode interstitial crossing.                  */}
-      {/* Shown while the interstitial is armed (silence placeholder or a     */}
-      {/* real Lore tone once approved). If a device mismatch was detected,   */}
-      {/* the listener must confirm before past replay begins.                */}
+      {/* Companion-mode interstitial crossing.                               */}
+      {/* Shown while the interstitial is armed (the Lore crossing tone is    */}
+      {/* playing). If a device mismatch was detected, the listener must      */}
+      {/* confirm before past replay begins.                                  */}
       {ride.interstitialArmed ? (
         <div
           className="border-b border-border/60 bg-background/40"

@@ -92,3 +92,4 @@
 - [Crossings route merge-splice](crossings-route-merge-splice.md) — twin handlers in me/crossings.ts get merge-spliced repeatedly; typecheck both handlers after merges; CrossingsRow shared from lib/db.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
 - [Lore brutalist typography block](lore-brutalist-typography.md) — `body *` !important uniform font-size at end of index.css overrides all per-rule sizes; resize type by editing that block only.
+- [Tier-1 prefetch loop & interstitial gating](tier1-prefetch-loop.md) — zero-link items need a fetched-set or prefetch loops when queue-run is deferred; interstitial must gate spotifyQueueRun too.

@@ -29,7 +29,8 @@ import { useRef, useEffect, useState } from "react";
 // ---------------------------------------------------------------------------
 // Hoist mock variables so they are defined BEFORE vi.mock factories run
 // ---------------------------------------------------------------------------
-const { mockGetSpotifyDevices, mockSpotifyPlay } = vi.hoisted(() => ({
+const { mockGetSpotifyDevices, mockSpotifyPlay, mockSpotifyQueueRun } = vi.hoisted(() => ({
+  mockSpotifyQueueRun: vi.fn(async () => ({ queued: 1 })),
   mockGetSpotifyDevices: vi.fn(async () => ({
     devices: [] as Array<{
       id: string;
@@ -59,6 +60,7 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
     getSpotifyDevices: mockGetSpotifyDevices,
     spotifyLogout: vi.fn(async () => {}),
     spotifyPlay: mockSpotifyPlay,
+    spotifyQueueRun: mockSpotifyQueueRun,
     spotifyPause: vi.fn(async () => {}),
     spotifyResume: vi.fn(async () => {}),
     getSpotifyPlayer: vi.fn(async () => ({
@@ -328,9 +330,12 @@ describe("device continuity at live→past crossing (provider integration)", () 
   function LiveThenPastCrosser({
     deviceToPin,
     devicesToReturn,
+    pastSeed,
   }: {
     deviceToPin: typeof PINNED_DEVICE | null;
     devicesToReturn: Array<typeof PINNED_DEVICE>;
+    /** Optional seed for the past run (e.g. with a Spotify link for Tier-1). */
+    pastSeed?: RideSeed;
   }) {
     const { ride, spotify } = usePlayer();
     const step = useRef<"init" | "live" | "past">("init");
@@ -349,7 +354,7 @@ describe("device continuity at live→past crossing (provider integration)", () 
     useEffect(() => {
       if (step.current !== "live" || !ride.active) return;
       step.current = "past";
-      ride.startReplay([makeSeed("dev-past")], "Past Run");
+      ride.startReplay([pastSeed ?? makeSeed("dev-past")], "Past Run");
     }); // eslint-disable-line react-hooks/exhaustive-deps
 
     return null;
@@ -387,10 +392,12 @@ describe("device continuity at live→past crossing (provider integration)", () 
       </>,
     );
     await flushAll(10, 20);
+    // Advance past the interstitial tone duration so the gate dismisses.
+    await flush(1600);
     // The crossing DID happen (arm-count = 1) but devices matched so no mismatch gate.
     expect(screen.getByTestId("arm-count").textContent).toBe("1");
     expect(screen.getByTestId("device-mismatch").textContent).toBe("ok");
-    // Interstitial auto-dismissed (no deviceMismatch to block it).
+    // Interstitial dismissed after the tone played (no deviceMismatch to block it).
     expect(screen.getByTestId("interstitial").textContent).toBe("idle");
   });
 
@@ -406,6 +413,8 @@ describe("device continuity at live→past crossing (provider integration)", () 
       </>,
     );
     await flushAll(10, 20);
+    // Advance past the interstitial tone duration so the gate dismisses.
+    await flush(1600);
     // Crossing happened but no mismatch gate (no pinned device → skip check).
     expect(screen.getByTestId("arm-count").textContent).toBe("1");
     expect(screen.getByTestId("device-mismatch").textContent).toBe("ok");
@@ -426,6 +435,8 @@ describe("device continuity at live→past crossing (provider integration)", () 
       </>,
     );
     await flushAll(10, 20);
+    // Advance past the interstitial tone duration so the gate dismisses.
+    await flush(1600);
     // Crossing happened but no mismatch (pin unreachable → fetchDevices toast, not us).
     expect(screen.getByTestId("arm-count").textContent).toBe("1");
     expect(screen.getByTestId("device-mismatch").textContent).toBe("ok");
@@ -489,15 +500,18 @@ describe("device continuity at live→past crossing (provider integration)", () 
     // time we assert. The important invariant is deviceFetchCalls <= 1 above.
   });
 
-  it("spotifyPlay NOT called while interstitialArmed; called after dismissDeviceMismatch clears the gate", async () => {
-    // This test verifies the CORE SAFETY INVARIANT: the Spotify driver must not
-    // command the Connect device while the interstitial gate is armed.
+  it("no Spotify audio command while interstitialArmed; the Tier-1 queue-run fires after dismissDeviceMismatch clears the gate", async () => {
+    // This test verifies the CORE SAFETY INVARIANT: no Spotify audio command
+    // (per-track spotifyPlay OR Tier-1 bulk spotifyQueueRun) may fire while the
+    // interstitial gate is armed and the crossing tone is playing.
     //
     // Mechanism:
     //   - useSpotifyDriver receives `active && !interstitialArmed` as its `active`
     //     prop → its play effect is suppressed during the crossing.
-    //   - dismissDeviceMismatch() clears deviceMismatch → auto-dismiss fires →
-    //     interstitialArmed clears → Spotify driver gets active=true → spotifyPlay fires.
+    //   - The Tier-1 queue-run effect returns early while interstitialArmed.
+    //   - dismissDeviceMismatch() clears deviceMismatch → the crossing tone plays
+    //     out → interstitialArmed clears → the Tier-1 queue-run fires (past
+    //     replay at Tier 1 uses one bulk uris-array call, not per-track plays).
 
     // Add a "Confirm" button that calls dismissDeviceMismatch from inside the tree.
     function ConfirmButton() {
@@ -511,12 +525,29 @@ describe("device continuity at live→past crossing (provider integration)", () 
       );
     }
 
+    // Give the past seed a real Spotify link so the Tier-1 queue-run has a URI
+    // for every queue item (missing URIs are a hard stop by design).
+    const pastSeed: RideSeed = {
+      ...makeSeed("dev-past-linked"),
+      links: [
+        {
+          url: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC",
+          kind: "spotify",
+        } as any,
+      ],
+    };
+
+    // Track the audio-element play spy so we can assert the crossing tone
+    // actually played during the armed window.
+    const mediaPlaySpy = window.HTMLMediaElement.prototype.play as Mock;
+
     renderWithProvider(
       <>
         <LiveThenPastCrosser
           deviceToPin={PINNED_DEVICE}
           // Kitchen (pinned) is reachable but not active; bedroom is active.
           devicesToReturn={[{ ...PINNED_DEVICE, isActive: false }, ACTIVE_DEVICE_MISMATCH]}
+          pastSeed={pastSeed}
         />
         <StateCapture />
         <ConfirmButton />
@@ -528,30 +559,45 @@ describe("device continuity at live→past crossing (provider integration)", () 
     expect(screen.getByTestId("interstitial").textContent).toBe("armed");
     expect(screen.getByTestId("device-mismatch").textContent).toBe("mismatch");
 
-    // Reset the call counter after the crossing — spotifyPlay may have fired for
-    // the preceding live ride. We care only about calls during the armed window.
+    // Reset call counters after the crossing — commands may have fired for the
+    // preceding live ride. We care only about calls during the armed window.
     mockSpotifyPlay.mockClear();
+    mockSpotifyQueueRun.mockClear();
+    mediaPlaySpy.mockClear();
 
-    // Flush a few more rounds while still armed — Spotify driver must stay silent.
+    // Flush a few more rounds while still armed — no audio command may fire.
     await flushAll(6, 20);
 
-    // ── Critical assertion: NO spotifyPlay command while gate is armed. ──
+    // ── Critical assertions: NO Spotify audio command while gate is armed. ──
     expect(mockSpotifyPlay).not.toHaveBeenCalled();
+    expect(mockSpotifyQueueRun).not.toHaveBeenCalled();
 
-    // User confirms the device — clears deviceMismatch → auto-dismiss fires.
+    // User confirms the device — clears deviceMismatch → the crossing tone plays.
     act(() => {
       screen.getByTestId("confirm-dismiss").click();
     });
-    // Let the auto-dismiss settle and the Spotify driver activate.
-    await flushAll(15, 20);
+    // The tone is now playing but has not finished: the gate must still be
+    // armed and the queue-run still suppressed.
+    await flushAll(5, 20);
+    expect(mediaPlaySpy).toHaveBeenCalled(); // the interstitial tone started
+    expect(screen.getByTestId("interstitial").textContent).toBe("armed");
+    expect(mockSpotifyQueueRun).not.toHaveBeenCalled();
+
+    // Let the interstitial tone play out (fallback timer ≥ asset duration).
+    await flush(1600);
+    // Extra settle rounds so the now-unsuppressed queue-run effect fires.
+    await flushAll(10, 20);
 
     // Gate should be clear now.
     expect(screen.getByTestId("interstitial").textContent).toBe("idle");
     expect(screen.getByTestId("device-mismatch").textContent).toBe("ok");
 
-    // ── spotifyPlay was called at least once after the gate cleared. ──
-    // The Spotify driver is now active and commands the track.
-    expect(mockSpotifyPlay).toHaveBeenCalled();
+    // ── Past replay actually starts: the Tier-1 bulk queue-run was called ──
+    // with the past seed's URI after the gate cleared.
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(1);
+    expect(mockSpotifyQueueRun.mock.calls[0][0]).toMatchObject({
+      uris: ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"],
+    });
   });
 });
 
@@ -733,5 +779,79 @@ describe("adaptive prefetch orientation gate (provider integration)", () => {
       ([mbid]: [string]) => mbid,
     );
     expect(fetchedMbids).not.toContain(SEED_AHEAD.mbid);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Tier-1 prefetch ownership — stale link lookups must not mark items as
+//    fetched for a REPLACEMENT ride that reuses the same MBID.
+// ---------------------------------------------------------------------------
+describe("Tier-1 prefetch ownership across ride replacement", () => {
+  it("re-fetches links for a replacement ride's item when the prior ride's lookup was still pending", async () => {
+    const SHARED_MBID = "mbid-shared-replacement";
+    const seedA: RideSeed = {
+      mbid: SHARED_MBID, title: "Track A", artist: "Test Artist", artworkUrl: null, links: [],
+    };
+    const seedB: RideSeed = {
+      mbid: SHARED_MBID, title: "Track B", artist: "Test Artist", artworkUrl: null, links: [],
+    };
+
+    // First getRecording call (ride A): a deferred promise we settle AFTER
+    // ride B replaces the ride. Subsequent calls (ride B) resolve immediately
+    // with a real Spotify link so the Tier-1 queue-run can fire.
+    let resolveStale!: (v: { links: unknown[] }) => void;
+    const stale = new Promise<{ links: unknown[] }>((res) => { resolveStale = res; });
+    const { getRecording } = await import("@workspace/api-client-react");
+    (getRecording as Mock)
+      .mockImplementationOnce(() => stale)
+      .mockImplementation(async () => ({
+        links: [{ url: "https://open.spotify.com/track/7ouMYWpwJ422jRcDASZB7P", kind: "spotify" }],
+      }));
+
+    function Replacer() {
+      const { ride, spotify } = usePlayer();
+      const step = useRef<"init" | "pinned" | "rideA" | "rideB">("init");
+      useEffect(() => {
+        if (step.current !== "init" || !spotify.connected || !spotify.premium) return;
+        step.current = "pinned";
+        spotify.pinDevice(PINNED_DEVICE); // Tier 1 requires an active/pinned device
+        ride.setPlaybackMode("resolve_to_service");
+      }, [spotify.connected, spotify.premium]); // eslint-disable-line react-hooks/exhaustive-deps
+      useEffect(() => {
+        // Start ride A only once the pin has propagated to state, so the tier
+        // selector sees hasActiveDevice=true and picks Tier 1.
+        if (step.current !== "pinned" || !spotify.pinnedDevice) return;
+        step.current = "rideA";
+        ride.startReplay([seedA], "Ride A");
+      }); // eslint-disable-line react-hooks/exhaustive-deps
+      return (
+        <button
+          type="button"
+          data-testid="start-ride-b"
+          onClick={() => ride.startReplay([seedB], "Ride B")}
+        />
+      );
+    }
+
+    renderWithProvider(<><Replacer /><StateCapture /></>);
+    // Ride A starts; its link lookup for SHARED_MBID is now pending (deferred).
+    await flushAll(6, 20);
+    expect((getRecording as Mock).mock.calls.some(([m]: [string]) => m === SHARED_MBID)).toBe(true);
+    mockSpotifyQueueRun.mockClear();
+
+    // Replace the ride while the lookup is still in flight.
+    act(() => { screen.getByTestId("start-ride-b").click(); });
+    await flushAll(2, 10);
+    // NOW settle the stale ride-A request — after ride B reset the per-ride sets.
+    await act(async () => { resolveStale({ links: [] }); await vi.advanceTimersByTimeAsync(10); });
+    await flushAll(10, 20);
+
+    // Ride B's item must NOT have been treated as already-fetched by the stale
+    // settle: its own lookup runs, gets the Spotify link, and the Tier-1
+    // queue-run fires with that URI instead of hard-stopping on a missing URI.
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(1);
+    expect(mockSpotifyQueueRun.mock.calls[0][0]).toMatchObject({
+      uris: ["spotify:track:7ouMYWpwJ422jRcDASZB7P"],
+    });
   });
 });
