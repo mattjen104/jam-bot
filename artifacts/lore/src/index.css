@@ -5988,7 +5988,12 @@ body * {
   height: 25%;
   min-height: 96px;
   z-index: 7;
-  background: hsl(var(--background) / 0.92);
+  /* Fully opaque: underlying dial-row text must never show through the open
+     panel (header through pill grid). Blur is a backstop for any subpixel
+     seams at the panel edges. */
+  background: hsl(var(--background));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border-top: 1px solid hsl(var(--border) / 0.6);
   padding: 8px 12px;
   overflow-y: auto;
