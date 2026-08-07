@@ -417,6 +417,19 @@ export interface RideApi {
    * explicitly so the listener knows why playback stopped.
    */
   pastRunFailed: boolean;
+
+  /**
+   * After a `pastRunFailed` hard stop: retry the Tier-1 bulk Spotify
+   * queue-run.  Explicit listener action — never fired automatically.
+   */
+  retryPastRun: () => void;
+
+  /**
+   * After a `pastRunFailed` hard stop: continue the ride without Spotify by
+   * re-selecting the playback tier with Spotify ineligible (embed tier or
+   * Tier-4 cue sheet).
+   */
+  continuePastRunWithCueSheet: () => void;
 }
 
 /** One scan hop — the preview currently sounding during a preview-mode scan. */
@@ -1480,6 +1493,44 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [altDriversAllFailed, currentMbid, currentItem, preferredService, retryCurrentTrack]);
 
   const retrySpotify = retryService;
+
+  /**
+   * Retry the Tier-1 bulk Spotify queue-run after a hard-stop failure
+   * (`pastRunFailed`).  Clears the failure state and re-arms the one-shot
+   * queue-run ref so the queue-run effect fires again.  Explicit listener
+   * action only — never called automatically (no silent re-fire).
+   */
+  const retryPastRun = useCallback(() => {
+    setPastRunFailed(false);
+    tier1RunQueuedRef.current = false;
+    setStatus("loading");
+  }, []);
+
+  /**
+   * After a Tier-1 hard-stop failure, continue the ride without Spotify:
+   * re-select the playback tier with Spotify marked ineligible (best embed
+   * tier if one exists, otherwise the Tier-4 cue sheet).  The queue-run ref
+   * stays armed so the failed Tier-1 path can never silently resurrect.
+   */
+  const continuePastRunWithCueSheet = useCallback(() => {
+    setPastRunFailed(false);
+    // Keep tier1RunQueuedRef.current = true — Tier 1 must not re-fire.
+    const tier = selectPastModeTier({
+      spotify: { connected: false, premium: false, hasActiveDevice: false },
+      guidedOptions: GUIDED_SERVICE_OPTIONS,
+      lastUsedService: null,
+    });
+    let label: string | null = null;
+    if (tier !== 1) {
+      const opt = GUIDED_SERVICE_OPTIONS.find((o) => serviceOptionTier(o) === tier);
+      label = opt?.label ?? null;
+    }
+    // Allow the Tier 2/3 refinement effect to run for the new tier.
+    tierRefinedRef.current = false;
+    setPastModeTier(tier);
+    setPastModeTierLabel(label);
+    setStatus("loading");
+  }, []);
 
   /** Dismiss the live→past interstitial after it plays (or during silence placeholder). */
   const dismissInterstitial = useCallback(() => setInterstitialArmed(false), []);
@@ -2899,6 +2950,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             ? { artist: queue[index + 1]!.artist, title: queue[index + 1]!.title }
             : null,
         pastRunFailed,
+        retryPastRun,
+        continuePastRunWithCueSheet,
       },
       spotify,
       scan: {
@@ -2966,6 +3019,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       pastModeTierLabel,
       cueSheetVisible,
       pastRunFailed,
+      retryPastRun,
+      continuePastRunWithCueSheet,
       spotify,
       scanActive,
       toggleScan,

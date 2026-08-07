@@ -408,6 +408,98 @@ describe("Tier 1: 409 no-active-device from spotifyQueueRun", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Recovery paths after a pastRunFailed hard stop
+// ---------------------------------------------------------------------------
+
+describe("Tier 1: recovery after pastRunFailed", () => {
+  beforeEach(makeTier1Eligible);
+
+  async function failTheRun() {
+    mockSpotifyQueueRun.mockRejectedValueOnce(make409());
+
+    renderPlayer();
+    await flush();
+
+    act(() => {
+      latest!.ride.startReplay(
+        [makeSpotifySeed("aaa"), makeSpotifySeed("bbb")],
+        "Test Run",
+        { timeOrientation: "past" },
+      );
+    });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(1);
+    expect(latest!.ride.pastRunFailed).toBe(true);
+    expect(latest!.ride.status).toBe("error");
+  }
+
+  it("retryPastRun clears the failure and re-fires the bulk queue-run", async () => {
+    await failTheRun();
+
+    mockSpotifyQueueRun.mockResolvedValue({ queued: 2 });
+    act(() => { latest!.ride.retryPastRun(); });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(2);
+    expect(latest!.ride.pastRunFailed).toBe(false);
+    expect(latest!.ride.status).not.toBe("error");
+    expect(latest!.ride.pastModeTier).toBe(1);
+    expect(latest!.ride.active).toBe(true);
+  });
+
+  it("retryPastRun that fails again returns to the hard-stop state (no loop)", async () => {
+    await failTheRun();
+
+    mockSpotifyQueueRun.mockRejectedValueOnce(make409());
+    act(() => { latest!.ride.retryPastRun(); });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(2);
+    expect(latest!.ride.pastRunFailed).toBe(true);
+    expect(latest!.ride.status).toBe("error");
+
+    // No silent re-fire after the second failure either.
+    await act(async () => { vi.advanceTimersByTime(10_000); });
+    await flush();
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(2);
+  });
+
+  it("continuePastRunWithCueSheet drops to Tier 4 without Spotify and never re-fires the queue-run", async () => {
+    await failTheRun();
+
+    act(() => { latest!.ride.continuePastRunWithCueSheet(); });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    expect(latest!.ride.pastRunFailed).toBe(false);
+    // No guided options mocked → re-selection without Spotify lands on Tier 4.
+    expect(latest!.ride.pastModeTier).toBe(4);
+    expect(latest!.ride.active).toBe(true);
+
+    // The Tier-1 queue-run must stay dead even as timers pass.
+    await act(async () => { vi.advanceTimersByTime(10_000); });
+    await flush();
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("continuePastRunWithCueSheet shows the Tier-4 cue sheet for the run", async () => {
+    await failTheRun();
+
+    act(() => { latest!.ride.continuePastRunWithCueSheet(); });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    // Seeds have no spinDurationSeconds → cue sheet appears immediately.
+    expect(latest!.ride.cueSheetVisible).toBe(true);
+    expect(latest!.ride.cueSheetNext).toEqual({ artist: "Artist", title: "Track bbb" });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Device lost AFTER a successful queue-run (mid-run disappearance)
 // ---------------------------------------------------------------------------
 

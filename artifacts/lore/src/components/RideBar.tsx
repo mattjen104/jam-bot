@@ -626,7 +626,26 @@ export function RideBar({
           data-testid="past-run-failed"
         >
           <StopCircle className="h-3.5 w-3.5 shrink-0" />
-          Playback stopped — a track in this run couldn't be loaded from the connected service.
+          <span className="flex-1">
+            Playback stopped — a track in this run couldn't be loaded from the
+            connected service.
+          </span>
+          <button
+            type="button"
+            onClick={ride.retryPastRun}
+            data-testid="past-run-retry"
+            className="shrink-0 rounded border border-destructive/40 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-destructive transition-colors hover:bg-destructive/15"
+          >
+            Retry on Spotify
+          </button>
+          <button
+            type="button"
+            onClick={ride.continuePastRunWithCueSheet}
+            data-testid="past-run-cue-sheet"
+            className="shrink-0 rounded border border-destructive/40 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-destructive transition-colors hover:bg-destructive/15"
+          >
+            Continue with cue sheet
+          </button>
         </div>
       )}
 
