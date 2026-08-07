@@ -259,4 +259,37 @@ describe("RideBar past-mode tier UI", () => {
     expect(screen.getByTestId("past-run-retry")).toBeTruthy();
     expect(screen.getByTestId("past-run-cue-sheet")).toBeTruthy();
   });
+
+  it("renders both recovery buttons in the failure banner and fires the ride actions", () => {
+    const retryPastRun = vi.fn();
+    const continuePastRunWithCueSheet = vi.fn();
+    render(
+      <RideBar
+        ride={makeRide({
+          pastRunFailed: true,
+          retryPastRun,
+          continuePastRunWithCueSheet,
+        })}
+        spotify={spotify}
+      />,
+    );
+    const retryBtn = screen.getByTestId("past-run-retry");
+    const cueBtn = screen.getByTestId("past-run-cue-sheet");
+    expect(retryBtn.textContent).toContain("Retry on Spotify");
+    expect(cueBtn.textContent).toContain("Continue with cue sheet");
+
+    fireEvent.click(retryBtn);
+    expect(retryPastRun).toHaveBeenCalledTimes(1);
+    expect(continuePastRunWithCueSheet).not.toHaveBeenCalled();
+
+    fireEvent.click(cueBtn);
+    expect(continuePastRunWithCueSheet).toHaveBeenCalledTimes(1);
+    expect(retryPastRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render the recovery buttons when the run has not failed", () => {
+    render(<RideBar ride={makeRide()} spotify={spotify} />);
+    expect(screen.queryByTestId("past-run-retry")).toBeNull();
+    expect(screen.queryByTestId("past-run-cue-sheet")).toBeNull();
+  });
 });
