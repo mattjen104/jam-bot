@@ -15,6 +15,7 @@ import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
+import { SeedBar, SeedInput } from "./SeedInput";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
@@ -262,34 +263,67 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
  *   - everything else → gray with a dotted underline; clicking the name adds
  *     the artist and the chip immediately flips to white via seedsLower.
  */
+interface QueueArtist {
+  name: string;
+  inLibrary: boolean;
+}
+
+/**
+ * The player queue intentionally has one renderer for broadcast and replay
+ * sets. A click is a real toggle for taste seeds; hard library matches remain
+ * visibly completed but are not removed from the listener's external library.
+ */
+export function SetQueueList({ artists, seedsLower, onAdd, onRemove, progress }: {
+  artists: QueueArtist[];
+  seedsLower: Set<string>;
+  onAdd: (name: string) => void;
+  onRemove: (name: string) => void;
+  progress: number;
+}) {
+  const completed = Math.max(0, Math.min(100, progress * 100));
+  return (
+    <div className="set-queue" aria-label="Set queue">
+      <div className="set-queue__progress" style={{ width: `${completed}%` }} aria-hidden="true" />
+      <div className="set-queue__artists">
+        {artists.map((artist, index) => {
+          const key = artist.name.trim().toLowerCase();
+          const seeded = seedsLower.has(key);
+          const inLibrary = artist.inLibrary || seeded;
+          const canToggle = !artist.inLibrary || seeded;
+          return (
+            <button
+              key={`${key}-${index}`}
+              type="button"
+              className={`set-queue__artist${inLibrary ? " set-queue__artist--library" : " set-queue__artist--add"}`}
+              aria-label={canToggle
+                ? `${inLibrary ? "Remove" : "Add"} ${artist.name} ${inLibrary ? "from" : "to"} your artists`
+                : `${artist.name} is in your library`}
+              onClick={canToggle ? (e) => {
+                e.stopPropagation();
+                if (inLibrary) onRemove(artist.name);
+                else onAdd(artist.name);
+              } : undefined}
+            >{artist.name}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AlsoSentence({ artists, seedsLower, onAdd }: {
   artists: PopularCrossingArtist[];
   seedsLower: Set<string>;
   onAdd: (name: string) => void;
 }) {
-  const isSeeded = (a: PopularCrossingArtist) =>
-    a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
-
-  const pillCls = (a: PopularCrossingArtist): string =>
-    isSeeded(a) ? "also-pill also-pill--lib" : "also-pill also-pill--add";
-
   return (
-    <div className="also-pill-grid">
-      {artists.map((a) => {
-        const addable = !isSeeded(a);
-        return (
-          <button
-            key={a.name}
-            type="button"
-            className={pillCls(a)}
-            onClick={addable ? (e) => { e.stopPropagation(); onAdd(a.name); } : undefined}
-            aria-label={addable ? `Add ${a.name}` : a.name}
-          >
-            <span className="also-pill__name">{a.name}</span>
-          </button>
-        );
-      })}
-    </div>
+    <SetQueueList
+      artists={artists.map((artist) => ({ name: artist.name, inLibrary: artist.inLibrary }))}
+      seedsLower={seedsLower}
+      onAdd={onAdd}
+      onRemove={() => undefined}
+      progress={0}
+    />
   );
 }
 
@@ -414,9 +448,8 @@ interface FrontDoorRowProps {
   setArtists?: PopularCrossingArtist[] | null;
   seedsLower?: Set<string>;
   onAddArtist?: (name: string) => void;
-  /** When provided, "this set" opens the reserved sidebar panel instead of
-      expanding inline (the row never renders fdrow__also-block). */
-  onSetExpand?: (artists: PopularCrossingArtist[]) => void;
+  /** Opens the persistent player queue for this station's complete set. */
+  onSetExpand?: () => void;
 }
 
 export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand }: FrontDoorRowProps) {
@@ -448,7 +481,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
     ? crossingSentence(ds.station.name, safeShow, displayMode, {
         expanded: onSetExpand ? false : alsoExpanded,
         onToggle: onSetExpand
-          ? () => onSetExpand(remainingSet)
+          ? onSetExpand
           : () => setAlsoExpanded((v) => !v),
         node: null, // expanded content rendered as fdrow__also-block below tier1
       })
@@ -1850,29 +1883,21 @@ export function DialView() {
   }, [offlineStations]);
   const visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
 
-  // --- per-zone truncation (spec §16) ---
-  // Zone 1: rung-1 rows are never hidden — expand the budget to cover them all.
-  const rung1Count = useMemo(() => withReason.filter((r) => r.rz.r === 1).length, [withReason]);
-  const zone1Visible = Math.max(Math.min(ZONE1_VISIBLE, 7), rung1Count);
-
-  const [zone1Expanded, setZone1Expanded] = useState(false);
   const [zone2Expanded, setZone2Expanded] = useState(false);
   const [zone3Expanded, setZone3Expanded] = useState(false);
   /** Scrub → expand whichever collapsed band hides the row, then scroll to it. */
   const handleScrub = useCallback((item: ScrubItem) => {
     // Band membership is looked up by slug (not scrub index) so the logic is
     // independent of the current display order / sort direction.
-    const z1Idx = zone1Display.findIndex((r) => r.ds.station.slug === item.slug);
-    if (z1Idx >= zone1Visible) setZone1Expanded(true);
     const restIdx = restBand.findIndex((r) => r.ds.station.slug === item.slug);
     if (restIdx >= ZONE3_VISIBLE) setZone3Expanded(true);
     setScrubTarget(item.slug);
-  }, [zone1Display, restBand, zone1Visible]);
+  }, [restBand]);
   useEffect(() => {
     if (!scrubTarget) return;
     const el = document.querySelector(`[data-scrub-slug="${CSS.escape(scrubTarget)}"]`);
     if (el) el.scrollIntoView({ block: "center" });
-  }, [scrubTarget, zone1Expanded, zone3Expanded]);
+  }, [scrubTarget, zone3Expanded]);
 
 
   // ── Time-travel mode (top sets toggle) ─────────────────────────────────────
@@ -2007,30 +2032,49 @@ export function DialView() {
   // "top" when top-sets mode is active, otherwise "live".
   const effectiveTtMode: TtMode = ttMode === "top" ? "top" : (pastScan.isAtLiveEdge ? "live" : "past");
 
-  // ── Reserved sidebar set panel — expanded "this set" artists render here
-  // (bottom quarter of the hero art sidebar) instead of expanding inline.
-  const [setPanel, setSetPanel] = useState<{ slug: string; name: string; artists: PopularCrossingArtist[] } | null>(null);
-  const toggleSetPanel = useCallback((slug: string, name: string, artists: PopularCrossingArtist[]) => {
-    setSetPanel((cur) => (cur?.slug === slug ? null : { slug, name, artists }));
+  // ── Player queue panel ──────────────────────────────────────────────────
+  // This is deliberately player-context state, not an expandable row. It lets
+  // live broadcasts and fixed replays share the same set-list surface.
+  const [setPanel, setSetPanel] = useState<{
+    slug: string;
+    stationName: string;
+    startedAt: string;
+    artists: QueueArtist[];
+    progress: number;
+  } | null>(null);
+  const openLiveQueue = useCallback((row: { ds: DialStation; show: DialShow | null }, listedArtists?: PopularCrossingArtist[] | null) => {
+    const spins = row.show?.spins ?? [];
+    const spinArtists = spins.map((spin) => ({
+      name: spin.artist,
+      inLibrary: spin.isLibraryHit || spin.isArtistHit,
+    })).filter((artist) => artist.name.trim());
+    const artists = listedArtists?.length
+      ? listedArtists.map((artist) => ({ name: artist.name, inLibrary: artist.inLibrary }))
+      : spinArtists;
+    const currentIndex = Math.max(0, spins.findIndex((spin) =>
+      spin.playedAt === row.show?.currentTrack?.playedAt,
+    ));
+    setSetPanel({
+      slug: row.ds.station.slug,
+      stationName: row.ds.station.name,
+      startedAt: row.show?.startedAt ?? new Date().toISOString(),
+      artists,
+      progress: artists.length > 0
+        ? Math.min(1, (currentIndex + 1) / artists.length)
+        : 0,
+    });
   }, []);
 
-  // ── Hero art time-travel swipe — horizontal drag on the art steps runs.
-  const swipeStartX = useRef<number | null>(null);
-  const swipedRef = useRef(false);
-  const heroSwipeHandlers = {
-    onPointerDown: (e: React.PointerEvent) => { swipeStartX.current = e.clientX; },
-    onPointerUp: (e: React.PointerEvent) => {
-      if (swipeStartX.current != null) {
-        const dx = e.clientX - swipeStartX.current;
-        if (Math.abs(dx) > 48) {
-          swipedRef.current = true;
-          if (dx > 0) pastScan.prevRun();
-          else if (!pastScan.isAtLiveEdge) pastScan.nextRun();
-        }
-      }
-      swipeStartX.current = null;
-    },
-  };
+  useEffect(() => {
+    if (!ride.active || ride.queue.length === 0) return;
+    setSetPanel({
+      slug: "replay",
+      stationName: ride.replayLabel ?? "Replay",
+      startedAt: currentRun?.day ? `${currentRun.day}T00:00:00Z` : new Date().toISOString(),
+      artists: ride.queue.map((item) => ({ name: item.artist, inLibrary: false })),
+      progress: (ride.index + 1) / ride.queue.length,
+    });
+  }, [ride.active, ride.queue, ride.index, ride.replayLabel, currentRun?.day]);
 
   // ── Fine-landing effect — fire startPastReplay(fineIdx) on crossing step ──
   // Fires when the user steps to a specific crossing (swipe or row click).
@@ -2041,35 +2085,24 @@ export function DialView() {
   }, [pastScan.fineIdx]);
 
   // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
-  // stations does NOT reset expansion; only a real membership change does.
-  const zone1SlugKey = useMemo(() => withReason.map((r) => r.ds.station.slug).sort().join(","), [withReason]);
+  // stations does NOT reset the collapsed secondary bands.
   const zone2SlugKey = useMemo(() => ghost.map((g) => g.slug).sort().join(","), [ghost]);
   const zone3SlugKey = useMemo(() => alsoOnAir.map((r) => r.ds.station.slug).sort().join(","), [alsoOnAir]);
 
   // Track previous slug keys so the reset effect only fires on genuine membership
   // changes and NOT on the initial mount.
-  const prevZone1SlugKey = useRef<string | null>(null);
   const prevZone2SlugKey = useRef<string | null>(null);
   const prevZone3SlugKey = useRef<string | null>(null);
 
   // Expand-time anchor — the slug key that was current when the user last clicked
   // "See all". If the zone's membership temporarily shrinks and then recovers to
   // exactly this key, the zone silently re-expands rather than staying collapsed.
-  const zone1ExpandAnchor = useRef<string | null>(null);
   const zone2ExpandAnchor = useRef<string | null>(null);
   const zone3ExpandAnchor = useRef<string | null>(null);
 
   // Reset expansion when zone membership genuinely changes.
   // If the new key matches the expand-time anchor the user set, re-expand
   // silently instead of resetting (transient-shrink recovery).
-  useEffect(() => {
-    if (prevZone1SlugKey.current === null) { prevZone1SlugKey.current = zone1SlugKey; return; }
-    if (prevZone1SlugKey.current === zone1SlugKey) return;
-    prevZone1SlugKey.current = zone1SlugKey;
-    if (zone1ExpandAnchor.current === zone1SlugKey) { setZone1Expanded(true); return; }
-    setZone1Expanded(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zone1SlugKey]);
   useEffect(() => {
     if (prevZone2SlugKey.current === null) { prevZone2SlugKey.current = zone2SlugKey; return; }
     if (prevZone2SlugKey.current === zone2SlugKey) return;
@@ -2101,18 +2134,6 @@ export function DialView() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan.scanning, scan.samplingIdx]);
-
-  // Auto-expand Zone 1 when the scan cursor advances into a hidden row so the
-  // highlighted station is always visible.  setZone1Expanded(true) when already
-  // true is a React no-op (no re-render), so the dependency on zone1Visible alone
-  // is safe.
-  useEffect(() => {
-    if (scan.samplingIdx == null) return;
-    // scan indexes into withReason; convert to the displayed position, which is
-    // reversed when the triangle sort is flipped.
-    const displayIdx = popSortDesc ? scan.samplingIdx : withReason.length - 1 - scan.samplingIdx;
-    if (displayIdx >= zone1Visible) setZone1Expanded(true);
-  }, [scan.samplingIdx, zone1Visible, popSortDesc, withReason.length]);
 
   // Active row index: scan cursor → playing station → none (-1)
   const activeIdx = useMemo(() => {
@@ -2232,7 +2253,11 @@ export function DialView() {
           scrubSlug={row.ds.station.slug}
           isActive={row.ds.station.slug === radio.station?.slug}
           isSampling={false}
-          onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+          onTuneIn={() => {
+            scan.stop();
+            openLiveQueue(row);
+            void radio.toggle(row.ds.station);
+          }}
           displayMode={crossingSourceMode}
           presence={presenceMap.get(row.ds.station.id)}
           artworkUrl={activeArtworkUrl}
@@ -2255,7 +2280,11 @@ export function DialView() {
             scrubSlug={row.ds.station.slug}
             isActive={row.ds.station.slug === radio.station?.slug}
             isSampling={false}
-            onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+          onTuneIn={() => {
+            scan.stop();
+            openLiveQueue(row);
+            void radio.toggle(row.ds.station);
+          }}
             displayMode={crossingSourceMode}
             presence={presenceMap.get(row.ds.station.id)}
             artworkUrl={activeArtworkUrl}
@@ -2315,17 +2344,14 @@ export function DialView() {
       {level === "all" ? (
         <div className="dial-hero">
           {renderTopbar()}
-          <div className="dial-hero__artwrap" {...heroSwipeHandlers}>
+          <div className="dial-hero__artwrap">
             <div
               className="dial-hero__art"
               style={{ backgroundImage: `url(${heroArt})` }}
               role="button"
               tabIndex={0}
               aria-label="Open album art fullscreen"
-              onClick={(e) => {
-                if (swipedRef.current) { swipedRef.current = false; return; }
-                artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true);
-              }}
+              onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -2334,42 +2360,21 @@ export function DialView() {
                 }
               }}
             />
-            {/* Time chevrons — click (or swipe the art) to step runs back/forward. */}
-            <button
-              type="button"
-              className="dial-hero__chev dial-hero__chev--prev"
-              aria-label="Back in time — previous run"
-              onClick={(e) => { e.stopPropagation(); pastScan.prevRun(); }}
-            >‹</button>
-            <button
-              type="button"
-              className="dial-hero__chev dial-hero__chev--next"
-              aria-label="Forward in time — next run"
-              disabled={pastScan.isAtLiveEdge}
-              aria-disabled={pastScan.isAtLiveEdge}
-              onClick={(e) => { e.stopPropagation(); pastScan.nextRun(); }}
-            >›</button>
-            {/* Where-in-time label — only when stepped back from the live edge. */}
-            {pastScan.currentRun && !pastScan.isAtLiveEdge && (
-              <span className="dial-hero__timelabel">
-                {pastScan.currentRun.station.name} · {runDate(pastScan.currentRun.day)}
-              </span>
-            )}
-            {/* Reserved set panel — expanded "this set" artists, bottom quarter. */}
-            {setPanel && (
-              <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+            {/* Queue panel owns time navigation as well as the selected set. */}
+            <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                 <div className="dial-hero__setpanel-head">
-                  <span className="dial-hero__setpanel-title">{setPanel.name} · this set</span>
-                  <button
-                    type="button"
-                    className="dial-hero__setpanel-close"
-                    aria-label="Close set panel"
-                    onClick={() => setSetPanel(null)}
-                  >✕</button>
+                  <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
+                  <span className="dial-hero__setpanel-title">
+                    {setPanel ? `${fmtHM(setPanel.startedAt)} · ${setPanel.stationName}` : "Choose a live set"}
+                  </span>
+                  <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
                 </div>
-                <AlsoSentence artists={setPanel.artists} seedsLower={seedsLower} onAdd={addSeed} />
-              </div>
-            )}
+                {setPanel ? (
+                  <SetQueueList artists={setPanel.artists} seedsLower={seedsLower} onAdd={addSeed} onRemove={removeSeed} progress={setPanel.progress} />
+                ) : (
+                  <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
+                )}
+            </div>
           </div>
           {/* Sort toggle moved into the time-travel (filter) strip.
               ＋ Artists button hidden — addArtistsOpen machinery kept. */}
@@ -2454,7 +2459,10 @@ export function DialView() {
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
                   hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                  seeds={visibleSeeds}
                   liveLoading={liveLoading}
+                  onAddSeed={addSeed}
+                  onRemoveSeed={removeSeed}
                 />
               </>
             )}
@@ -2561,13 +2569,15 @@ export function DialView() {
                     {/* Zone 1: crossing rows */}
                     {withReason.length > 0 && (
                       <>
+                        <SeedBar
+                          seeds={visibleSeeds}
+                          onAddSeed={addSeed}
+                          onRemoveSeed={removeSeed}
+                        />
                         <>
-                            {/* Map over the FULL array so isSampling index is always the
-                                unsliced position; rows beyond zone1Visible are null until
-                                zone1Expanded is true. */}
+                            {/* All live crossing rows are visible by default. */}
                             <div id="zone1-rows">
-                              {zone1Display.map((row, i) =>
-                                !zone1Expanded && i >= zone1Visible ? null : (
+                              {zone1Display.map((row) => (
                                   <div key={row.ds.station.slug}>
                                     <FrontDoorRow
                                       ds={row.ds}
@@ -2576,28 +2586,21 @@ export function DialView() {
                                       scrubSlug={row.ds.station.slug}
                                       isActive={row.ds.station.slug === radio.station?.slug}
                                       isSampling={scan.samplingIdx != null && withReason[scan.samplingIdx]?.ds.station.slug === row.ds.station.slug}
-                                      onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                                      onTuneIn={() => {
+                                        scan.stop();
+                                        openLiveQueue(row, popMap.get(row.ds.station.slug));
+                                        void radio.toggle(row.ds.station);
+                                      }}
                                       displayMode={crossingSourceMode}
                                       presence={presenceMap.get(row.ds.station.id)}
                                       setArtists={popMap.get(row.ds.station.slug) ?? null}
                                       seedsLower={seedsLower}
                                       onAddArtist={addSeed}
-                                      onSetExpand={(artists) => toggleSetPanel(row.ds.station.slug, row.ds.station.name, artists)}
+                                       onSetExpand={() => openLiveQueue(row, popMap.get(row.ds.station.slug))}
                                     />
                                   </div>
-                                )
-                              )}
+                              ))}
                             </div>
-                            {withReason.length > zone1Visible && (
-                              <button
-                                className="dial-show-more"
-                                aria-expanded={zone1Expanded}
-                                aria-controls="zone1-rows"
-                                onClick={() => { if (!zone1Expanded) zone1ExpandAnchor.current = zone1SlugKey; else zone1ExpandAnchor.current = null; setZone1Expanded((e) => !e); }}
-                              >
-                                {zone1Expanded ? "See less" : `See all ${withReason.length}`}
-                              </button>
-                            )}
                         </>
                       </>
                     )}
@@ -2628,7 +2631,10 @@ export function DialView() {
                           isSpotifyConnected={isSpotifyConnected}
                           hasLibrary={hasLibrary}
                           hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                          seeds={visibleSeeds}
                           liveLoading={liveLoading}
+                          onAddSeed={addSeed}
+                          onRemoveSeed={removeSeed}
                         />
                       </>
                     )}
@@ -2845,12 +2851,18 @@ function Zone1Placeholder({
   isSpotifyConnected,
   hasLibrary,
   hasSeeds,
+  seeds,
   liveLoading,
+  onAddSeed,
+  onRemoveSeed,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
   hasSeeds: boolean;
+  seeds: string[];
   liveLoading: boolean;
+  onAddSeed: (artist: string) => void;
+  onRemoveSeed: (artist: string) => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -2869,15 +2881,7 @@ function Zone1Placeholder({
   if (hasSeeds) {
     return (
       <div className="z1-placeholder z1-placeholder--seeded">
-        <div className="seed-bar-row">
-          <button
-            type="button"
-            className="seed-bar__edit-link"
-            onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
-          >
-            Edit artists →
-          </button>
-        </div>
+        <SeedBar seeds={seeds} onAddSeed={onAddSeed} onRemoveSeed={onRemoveSeed} />
         <div className="z1-placeholder__status">
           <span className="dial-live-skeleton__pip" />
           <span className="z1-placeholder__lbl">Finding live matches for your artists…</span>
@@ -2894,6 +2898,7 @@ function Zone1Placeholder({
         <p className="z1-placeholder__pitch">
           Pick the artists you love — Lore will show you when they're playing live.
         </p>
+        <SeedInput seeds={seeds} onAdd={onAddSeed} />
       </div>
     </div>
   );

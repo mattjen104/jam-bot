@@ -311,6 +311,38 @@ describe("fallback and interaction", () => {
     expect(container.querySelectorAll("[role=button]")).toHaveLength(1);
   });
 
+  it("opens the persistent queue with the full ordered set when its set affordance is clicked", () => {
+    const onSetExpand = vi.fn();
+    const onTuneIn = vi.fn();
+    render(
+      <FrontDoorRow
+        ds={makeDialStation()}
+        show={makeShow({
+          crossings: 1,
+          topArtists: ["First Artist"],
+          currentTrack: makeSpin({ artist: "Current Artist", isLibraryHit: false }),
+        })}
+        ov={0}
+        isActive={false}
+        isSampling={false}
+        onTuneIn={onTuneIn}
+        setArtists={[
+          { name: "First Artist", inLibrary: false, popular: false, debut: false, heard: false },
+          { name: "Current Artist", inLibrary: false, popular: false, debut: false, heard: false },
+          { name: "Final Artist", inLibrary: false, popular: false, debut: false, heard: false },
+        ]}
+        seedsLower={new Set()}
+        onAddArtist={vi.fn()}
+        onSetExpand={onSetExpand}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("this set"));
+    expect(onSetExpand).toHaveBeenCalledOnce();
+    expect(onTuneIn).not.toHaveBeenCalled();
+    expect(document.querySelector(".fdrow__also-block")).toBeNull();
+  });
+
   it("continues to show the lifetime overlap caption for weak-match rows", () => {
     const { container } = renderRow(makeDialStation(), null, 7);
     expect(container.querySelector(".fdrow__ov-caption")?.textContent).toContain("7 artists you know play here");

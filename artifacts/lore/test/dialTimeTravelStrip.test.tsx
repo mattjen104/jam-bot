@@ -237,10 +237,7 @@ function renderDial() {
   );
 }
 
-// Run navigation moved from the (now-hidden) DialTimeTravelStrip onto the
-// hero-art time chevrons. The button semantics are the same — ‹ steps back in
-// time, › steps forward toward the live edge (disabled at the live edge) — only
-// the aria-labels changed.
+// Run navigation lives on the persistent set-queue panel.
 function getNextBtn() {
   return screen.getByRole("button", { name: "Forward in time — next run" });
 }
@@ -249,11 +246,10 @@ function getPrevBtn() {
   return screen.getByRole("button", { name: "Back in time — previous run" });
 }
 
-// The "where in time" label. In live mode nothing is shown (the topbar moon is
-// the only time indicator); once stepped back, .dial-hero__timelabel carries
-// "<station> · <date>".
+// The persistent queue panel labels its current selection, or prompts at the
+// live edge before a crossing is chosen.
 function getTimeLabel() {
-  return document.querySelector(".dial-hero__timelabel");
+  return document.querySelector(".dial-hero__setpanel-title");
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +267,7 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("(a) strip renders with → disabled in live mode", () => {
+describe("(a) queue panel renders with → disabled in live mode", () => {
   it("keeps the front door focused on the dial without section navigation buttons", () => {
     mockDialDataSettled();
     renderDial();
@@ -299,9 +295,8 @@ describe("(a) strip renders with → disabled in live mode", () => {
     mockDialDataSettled();
     renderDial();
 
-    // At the live edge there is no hero time label — the topbar moon glyph is
-    // the only time indicator, and it is decorative (aria-hidden).
-    expect(getTimeLabel()).toBeNull();
+    // The queue prompts until a station/set has been selected.
+    expect(getTimeLabel()?.textContent).toContain("Choose a live set");
     expect(screen.queryByText("Today")).toBeNull();
 
     const topbarMoon = document.querySelector(".dial-topbar__moon-tr");
@@ -337,7 +332,7 @@ describe("(b) stepping ← shows most recent crossing run", () => {
     expect(nextBtn.hasAttribute("disabled")).toBe(false);
   });
 
-  it("hero time label appears with station + date once stepped back", () => {
+  it("topbar moon tracks the scrubbed day once stepped back", () => {
     mockDialDataSettled();
     renderDial();
 
@@ -345,16 +340,7 @@ describe("(b) stepping ← shows most recent crossing run", () => {
       fireEvent.click(getPrevBtn());
     });
 
-    // Once stepped back from the live edge, the hero time label shows the
-    // landed run's station name and day (station · <date>). The DJ name is no
-    // longer part of this compact indicator.
-    const ttLabel = getTimeLabel();
-    expect(ttLabel).toBeTruthy();
-    expect(ttLabel?.textContent).toContain("KEXP");
-    // runDate("2026-08-05") renders as a short UTC date (e.g. "Aug 5, 2026").
-    expect(ttLabel?.textContent).toMatch(/2026/);
-
-    // The topbar moon now tracks the scrubbed day and stays decorative.
+    // The topbar moon tracks the scrubbed day and stays decorative.
     const topbarMoon = document.querySelector(".dial-topbar__moon-tr");
     const moon = topbarMoon?.querySelector("svg.moon-glyph");
     expect(moon).toBeTruthy();
@@ -402,8 +388,8 @@ describe("(c) stepping → from the most recent run returns to live mode", () =>
       fireEvent.click(getNextBtn());
     });
 
-    // Back to live mode — the hero time label is gone again and → re-disables.
-    expect(getTimeLabel()).toBeNull();
+    // Back to live mode — the queue prompt returns and → re-disables.
+    expect(getTimeLabel()?.textContent).toContain("Choose a live set");
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });
@@ -415,8 +401,8 @@ describe("(d) 'Top sets' toggle is hidden for now (machinery kept for later)", (
     renderDial();
 
     expect(screen.queryByRole("button", { name: "⭐ Top sets" })).toBeNull();
-    // Live edge: no hero time label, and the run-nav chevrons are present.
-    expect(getTimeLabel()).toBeNull();
+    // Live edge: the queue prompt and run-nav chevrons are present.
+    expect(getTimeLabel()?.textContent).toContain("Choose a live set");
     expect(getPrevBtn()).toBeTruthy();
     expect(getNextBtn()).toBeTruthy();
   });
@@ -478,9 +464,8 @@ describe("(f) empty recent-runs: ← keeps the view at live edge", () => {
       fireEvent.click(getPrevBtn());
     });
 
-    // Stays at live edge — no coarse candidates to navigate to. No hero time
-    // label is shown, and → remains disabled.
-    expect(getTimeLabel()).toBeNull();
+    // Stays at live edge — no coarse candidates to navigate to.
+    expect(getTimeLabel()?.textContent).toContain("Choose a live set");
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });

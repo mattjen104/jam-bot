@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 /**
- * Per-zone truncation + inline "See all / See less" toggle tests.
+ * Zone visibility tests.
  *
  * Covers:
- *  1. Zone 1 with 9 rows, 0 rung-1 → 5 rendered, control reads "See all 9"
- *  2. Zone 1 with 9 rows, 8 rung-1 → all 8 rung-1 rendered (rung-1 exemption)
- *  3. Zone 1 with exactly 5 rows → no control rendered
- *  4. Click "See all N" → all rows render, control reads "See less", aria-expanded=true
+ *  1. Zone 1 with 9 rows → every live crossing is rendered, no control.
+ *  2. Zone 1 keeps currently-playing (rung-1) rows at the leading edge.
+ *  3. Zone 1 with exactly 5 rows → no control rendered.
  *  5. Zone 2 with 7 ghosts → 3 rendered; Zone 3 with 12 → 3 rendered
- *  6. Scan regression: Zone 1 collapsed at 5 of 9; advance samplingIdx to 7 →
- *     zone auto-expands; station at unsliced index 7 is marked sampling
- *  7. Expansion resets on slug-set change; does NOT reset on same slugs with
- *     new object identities
+ *  6. Scan regression: station at unsliced index 7 is marked sampling.
  *
  * NOTE: the hero-art dial refactor removed the per-zone collapse/expand
  * affordance ("Collapse zone"/"Expand zone" buttons + lore.zone.N.collapsed
@@ -304,8 +300,8 @@ function ghostRowCount() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Zone 1 truncation — 9 rows, 0 rung-1", () => {
-  it("renders 5 rows and shows 'See all 9' control when collapsed", () => {
+describe("Zone 1 live crossings", () => {
+  it("renders all 9 rows with no See all control", () => {
     // 9 Zone-1 stations with artistCrossings (r=2), none rung-1.
     const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
     mockDialData(stations);
@@ -314,15 +310,13 @@ describe("Zone 1 truncation — 9 rows, 0 rung-1", () => {
 
     renderDial();
 
-    expect(fdrowCount()).toBe(5);
-    const btn = screen.getByRole("button", { name: "See all 9" });
-    expect(btn).toBeTruthy();
-    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(fdrowCount()).toBe(9);
+    expect(screen.queryByRole("button", { name: /^See all 9$/ })).toBeNull();
   });
 });
 
-describe("Zone 1 rung-1 exemption — 9 rows, 8 rung-1", () => {
-  it("renders all 8 rung-1 rows (exemption fires, budget = max(5,8) = 8)", () => {
+describe("Zone 1 live ordering", () => {
+  it("keeps every rung-1 row visible", () => {
     // 8 rung-1 stations + 1 rung-2 station = 9 total Zone 1
     const rung1Stations = Array.from({ length: 8 }, (_, i) => makeRung1Station(`r1s${i}`));
     const rung2Station = makeZone1Station("r2s0", false);
@@ -332,11 +326,7 @@ describe("Zone 1 rung-1 exemption — 9 rows, 8 rung-1", () => {
 
     renderDial();
 
-    // Budget = max(5, 8) = 8, so 8 rows visible (the 8 rung-1 + the 9th is hidden).
-    expect(fdrowCount()).toBe(8);
-    // Control appears because total (9) > zone1Visible (8).
-    const btn = screen.getByRole("button", { name: "See all 9" });
-    expect(btn).toBeTruthy();
+    expect(fdrowCount()).toBe(9);
   });
 });
 
@@ -352,27 +342,6 @@ describe("Zone 1 — exactly 5 rows", () => {
     expect(fdrowCount()).toBe(5);
     // No "See all" button should exist.
     expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
-  });
-});
-
-describe("Zone 1 — click See all → expand; click See less → collapse", () => {
-  it("expands all rows, button becomes 'See less' with aria-expanded=true", () => {
-    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
-    mockDialData(stations);
-    mockGhosts([]);
-    mockScan(null);
-
-    renderDial();
-
-    const btn = screen.getByRole("button", { name: "See all 9" });
-    act(() => { fireEvent.click(btn); });
-
-    expect(fdrowCount()).toBe(9);
-    // Task #921 added a second inline "See less" in the zone header; both
-    // should carry aria-expanded=true when expanded.
-    const lessBtns = screen.getAllByRole("button", { name: "See less" });
-    expect(lessBtns.length).toBeGreaterThanOrEqual(1);
-    expect(lessBtns.every((b) => b.getAttribute("aria-expanded") === "true")).toBe(true);
   });
 });
 
@@ -400,18 +369,17 @@ describe("Zone 2 and Zone 3 truncation", () => {
   });
 });
 
-describe("Scan regression — auto-expand when scan index exceeds visible budget", () => {
-  it("Zone 1 collapsed at 5/9; advancing samplingIdx to 7 auto-expands, station 7 is sampling", () => {
+describe("Scan regression", () => {
+  it("sampling index 7 marks station 7 without needing expansion", () => {
     const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
     mockDialData(stations);
     mockGhosts([]);
 
-    // Initial render: samplingIdx=null (collapsed).
+    // Initial render: all live crossings are visible.
     mockScan(null, false);
     const { rerender } = renderDial();
 
-    // Confirm collapsed.
-    expect(fdrowCount()).toBe(5);
+    expect(fdrowCount()).toBe(9);
 
     // Advance scan to index 7 (beyond the 5-row visible budget).
     mockScan(7, true);
@@ -419,7 +387,6 @@ describe("Scan regression — auto-expand when scan index exceeds visible budget
       rerender(<DialView />);
     });
 
-    // Zone 1 should have auto-expanded.
     expect(fdrowCount()).toBe(9);
 
     // The row at unsliced index 7 should carry the sampling class.
@@ -428,115 +395,6 @@ describe("Scan regression — auto-expand when scan index exceeds visible budget
     // Station at index 7 is "s7".
     const samplingRow = samplingRows[0];
     expect(samplingRow.textContent).toContain("s7");
-  });
-});
-
-
-describe("Expansion state reset behaviour", () => {
-  it("resets to collapsed when slug set changes", () => {
-    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
-    mockDialData(stations9);
-    mockGhosts([]);
-    mockScan(null);
-    const { rerender } = renderDial();
-
-    // Expand Zone 1.
-    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 9" })); });
-    expect(fdrowCount()).toBe(9);
-
-    // Simulate a live update — new slug set (different stations).
-    const stations9New = Array.from({ length: 9 }, (_, i) => makeZone1Station(`new${i}`));
-    mockDialData(stations9New);
-    act(() => { rerender(<DialView />); });
-
-    // Should have collapsed back to 5.
-    expect(fdrowCount()).toBe(5);
-    expect(screen.getByRole("button", { name: "See all 9" })).toBeTruthy();
-  });
-
-  it("does NOT reset when same slugs arrive with new object identities", () => {
-    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
-    mockDialData(stations9);
-    mockGhosts([]);
-    mockScan(null);
-    const { rerender } = renderDial();
-
-    // Expand Zone 1.
-    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 9" })); });
-    expect(fdrowCount()).toBe(9);
-
-    // Re-render with fresh objects but same slugs.
-    const stationsCopy = stations9.map((ds) => ({ ...ds, station: { ...ds.station } }));
-    mockDialData(stationsCopy);
-    act(() => { rerender(<DialView />); });
-
-    // Should remain expanded.
-    expect(fdrowCount()).toBe(9);
-    expect(screen.getAllByRole("button", { name: "See less" }).length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("does NOT reset when same slugs arrive in a different order (live rerank)", () => {
-    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
-    mockDialData(stations9);
-    mockGhosts([]);
-    mockScan(null);
-    const { rerender } = renderDial();
-
-    // Expand Zone 1.
-    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 9" })); });
-    expect(fdrowCount()).toBe(9);
-
-    // Re-render with same slugs but reversed order (simulates a live rescore).
-    const reordered = [...stations9].reverse();
-    mockDialData(reordered);
-    act(() => { rerender(<DialView />); });
-
-    // Same membership → should remain expanded.
-    expect(fdrowCount()).toBe(9);
-    expect(screen.getAllByRole("button", { name: "See less" }).length).toBeGreaterThanOrEqual(1);
-  });
-
-  /**
-   * Transient-shrink resilience.
-   *
-   * When a slow-connection refetch temporarily drops stations and then restores
-   * the original set, Zone 1 should stay expanded rather than collapsing on the
-   * user mid-session.
-   *
-   *   expand (9 slugs) → shrink (7 slugs) → collapses to default truncated view
-   *                    → recover (9 slugs) → silently re-expands (key matches
-   *                                          the expand-time anchor)
-   *
-   * Only a genuinely different slug set (new stations appear / old ones stay
-   * gone) triggers a permanent reset.
-   */
-
-  it("restores expanded state when the full slug set recovers after a transient shrink", () => {
-    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
-    mockDialData(stations9);
-    mockGhosts([]);
-    mockScan(null);
-    const { rerender } = renderDial();
-
-    // Expand Zone 1.
-    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 9" })); });
-    expect(fdrowCount()).toBe(9);
-
-    // Simulate a fast refetch that temporarily drops two stations.
-    const stations7 = stations9.slice(0, 7);
-    mockDialData(stations7);
-    act(() => { rerender(<DialView />); });
-
-    // Slug key changed → zone collapses to default truncated view.
-    expect(fdrowCount()).toBe(5);
-    expect(screen.getByRole("button", { name: "See all 7" })).toBeTruthy();
-
-    // Full set returns (same nine slugs as the original expanded state).
-    mockDialData(stations9);
-    act(() => { rerender(<DialView />); });
-
-    // Key matches the expand-time anchor → zone silently re-expands.
-    expect(fdrowCount()).toBe(9);
   });
 });
 
