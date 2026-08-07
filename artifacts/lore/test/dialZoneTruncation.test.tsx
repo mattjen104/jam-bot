@@ -8,10 +8,9 @@
  *  3. Zone 1 with exactly 5 rows → no control rendered
  *  4. Click "See all N" → all rows render, control reads "See less", aria-expanded=true
  *  5. Zone 2 with 7 ghosts → 3 rendered; Zone 3 with 12 → 3 rendered
- *  6. ZoneLabel n= shows 9 while collapsed at 5
- *  7. Scan regression: Zone 1 collapsed at 5 of 9; advance samplingIdx to 7 →
+ *  6. Scan regression: Zone 1 collapsed at 5 of 9; advance samplingIdx to 7 →
  *     zone auto-expands; station at unsliced index 7 is marked sampling
- *  8. Expansion resets on slug-set change; does NOT reset on same slugs with
+ *  7. Expansion resets on slug-set change; does NOT reset on same slugs with
  *     new object identities
  */
 

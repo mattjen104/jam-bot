@@ -567,47 +567,19 @@ interface GhostRowProps {
   /** Called when the station has no qualifying run (runId === null). */
   onTuneIn: () => void;
 }
-function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }: {
+function ZoneLabel({ label, hint, accent }: {
   label: string;
-  n?: number;
   hint?: string;
   accent?: "library" | "picker" | "live";
-  /** When true, renders the count with a leading ~ to signal it's a pre-load estimate */
-  estimated?: boolean;
-  /** When true, the zone is fully collapsed (no rows shown) */
-  collapsed?: boolean;
-  /** When provided, renders a collapse/expand toggle button on the label */
-  onCollapse?: () => void;
 }) {
   return (
-    <div className={`fdzone-lbl${collapsed ? " fdzone-lbl--collapsed" : ""}`}>
+    <div className="fdzone-lbl">
       {accent && <span className={`fdzone-lbl__pip fdzone-lbl__pip--${accent}`} />}
       <span className="fdzone-lbl__text">{label}</span>
-      {n != null && (
-        <span className={`fdzone-lbl__n${accent === "picker" ? " fdzone-lbl__n--picker" : ""}${estimated ? " fdzone-lbl__n--est" : ""}`}>
-          {estimated ? `~${n}` : n}
-        </span>
-      )}
-      {hint && !collapsed && <span className="fdzone-lbl__hint">{hint}</span>}
-      {onCollapse != null && (
-        <button
-          type="button"
-          className="fdzone-lbl__collapse"
-          aria-label={collapsed ? "Expand zone" : "Collapse zone"}
-          aria-expanded={!collapsed}
-          onClick={(e) => { e.stopPropagation(); onCollapse(); }}
-        >
-          {collapsed ? "▸" : "▾"}
-        </button>
-      )}
+      {hint && <span className="fdzone-lbl__hint">{hint}</span>}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// DialTimeTravelStrip — run nav (← Prev | label | →) + Top sets toggle
-// ---------------------------------------------------------------------------
-
 
 // ---------------------------------------------------------------------------
 // DensitySpine — interactive crossing-density spine for coarse run navigation
@@ -709,159 +681,6 @@ export function DensitySpine({
 }
 
 export type TtMode = "live" | "past" | "top";
-
-/**
- * Narrow handle type for the PastScanHandle passed to DialTimeTravelStrip.
- * Only exposes what the strip needs; the full state machine lives in
- * usePastScanState.
- */
-export interface PastScanHandle {
-  currentRun: OverlapRun | null;
-  isAtLiveEdge: boolean;
-  prevRun: () => void;
-  nextRun: () => void;
-}
-
-/**
- * Compact controls row above Zone 1.
- *
- * Navigation model (replaces calendar day-stepping):
- *   ← → buttons step through crossing runs (coarse detents) rather than
- *   calendar days. The strip owns no data — it delegates to pastScan and
- *   emits mode-change callbacks.
- *
- *   ← (Previous run): step to the next older run; in top mode, exits top mode.
- *   → (Next run):     step to the next newer run; disabled at the live edge
- *                     (coarseIdx === null) and in top mode.
- *   ⭐ Top sets:       toggles all-time ranked mode.
- */
-/** Dial range options — how far back the coarse scan reaches. */
-const TT_RANGE_OPTIONS: { days: number; label: string }[] = [
-  { days: 2, label: "2d" },
-  { days: 7, label: "1w" },
-  { days: 30, label: "1m" },
-];
-
-export function DialTimeTravelStrip({
-  mode,
-  pastScan,
-  onModeChange,
-  rangeDays,
-  onRangeChange,
-  sortDesc,
-  onSortToggle,
-}: {
-  mode: TtMode;
-  pastScan: PastScanHandle;
-  onModeChange: (m: TtMode) => void;
-  rangeDays: number;
-  onRangeChange: (days: number) => void;
-  sortDesc?: boolean;
-  onSortToggle?: () => void;
-}) {
-  const handlePrev = () => {
-    if (mode === "top") {
-      // Pressing ← from top mode exits to live.
-      onModeChange("live");
-      return;
-    }
-    pastScan.prevRun();
-  };
-
-  const handleNext = () => {
-    if (mode === "top" || pastScan.isAtLiveEdge) return;
-    pastScan.nextRun();
-  };
-
-  const handleTopToggle = () => {
-    onModeChange(mode === "top" ? "live" : "top");
-  };
-
-  // The day label is gone — the moon IS the time indicator. Its phase is
-  // computed for the scrubbed date (today at the live edge, the run's day
-  // when stepped back into ghost sets). Station/DJ context stays as text.
-  let label: string;
-  let labelPrefix: string | null = null;
-  let scrubDate = new Date();
-  if (mode === "top") {
-    label = "Top sets · all time";
-    labelPrefix = label;
-  } else if (pastScan.currentRun) {
-    const run = pastScan.currentRun;
-    const djName = run.show?.djName ?? null;
-    const showName = run.show?.name ?? null;
-    const by = djName ?? showName ?? null;
-    labelPrefix = by ? `${run.station.name} · ${by}` : run.station.name;
-    label = `${labelPrefix} · ${runDate(run.day)}`;
-    scrubDate = new Date(`${run.day}T12:00:00`);
-  } else {
-    label = "Today";
-  }
-
-  // Disable → only when in top mode or when already at the live edge.
-  // In "past" mode (stepped back), → should be enabled so the user can step forward.
-  const nextDisabled = mode === "top" || pastScan.isAtLiveEdge;
-
-  return (
-    <div className="dial-timetravel" data-mode={mode}>
-      <button
-        type="button"
-        className="dial-timetravel__arrow"
-        aria-label="Previous run"
-        onClick={handlePrev}
-      >
-        ←
-      </button>
-      <span className="dial-timetravel__label" title={label} aria-label={label}>
-        {labelPrefix && <>{labelPrefix}{mode !== "top" && " · "}</>}
-        {mode !== "top" && <MoonPhaseGlyph size={22} date={scrubDate} />}
-      </span>
-      <button
-        type="button"
-        className="dial-timetravel__arrow dial-timetravel__arrow--next"
-        aria-label="Next run"
-        disabled={nextDisabled}
-        aria-disabled={nextDisabled}
-        onClick={handleNext}
-      >
-        →
-      </button>
-      {/* Dial range — widens the scan window (and the density spine). */}
-      {mode !== "top" && (
-        <span className="dial-timetravel__range" role="group" aria-label="Dial range">
-          {TT_RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.days}
-              type="button"
-              className={`dial-timetravel__range-btn${rangeDays === opt.days ? " dial-timetravel__range-btn--active" : ""}`}
-              aria-pressed={rangeDays === opt.days}
-              aria-label={`Scan back ${opt.days} days`}
-              onClick={() => onRangeChange(opt.days)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </span>
-      )}
-      {/* Sort triangle — lives here in the filter strip, not the logo area. */}
-      {mode !== "top" && onSortToggle && (
-        <button
-          type="button"
-          className="dial-tab-sort"
-          aria-label={sortDesc
-            ? "Sorted by most crossings first — tap for least crossings and deep cuts first"
-            : "Sorted by least crossings and deep cuts first — tap for most crossings first"}
-          aria-pressed={!sortDesc}
-          title={sortDesc ? "Most crossings first" : "Deep cuts first"}
-          onClick={onSortToggle}
-        >
-          {sortDesc ? "▲" : "▼"}
-        </button>
-      )}
-      {/* ⭐ Top sets toggle hidden for now — handleTopToggle kept for later. */}
-    </div>
-  );
-}
 
 // Constants for the past-scan density spine.
 // Synthetic timestamps assign each run a unique X-position (oldest run → smallest
@@ -2186,7 +2005,6 @@ export function DialView() {
 
   // Effective mode: "past" when the user has stepped back at least one run,
   // "top" when top-sets mode is active, otherwise "live".
-  // Passed to DialTimeTravelStrip so it renders data-mode="past" correctly.
   const effectiveTtMode: TtMode = ttMode === "top" ? "top" : (pastScan.isAtLiveEdge ? "live" : "past");
 
   // ── Reserved sidebar set panel — expanded "this set" artists render here
@@ -2622,10 +2440,8 @@ export function DialView() {
       {/* Main scroll body */}
       <div className="dial-body">
         <AlbumAvatarPicker compact />
-        {/* Time-travel strip hidden — the range pills, sort toggle, and run-nav
-            arrows are gone from the flow; time travel now lives on the hero art
-            sidebar (chevrons + swipe), and the moon moved to the topbar.
-            DialTimeTravelStrip machinery kept for later. */}
+        {/* Time travel lives on the hero art sidebar (chevrons + swipe);
+            the moon lives in the topbar. */}
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>

@@ -2126,86 +2126,6 @@
   color: hsl(var(--muted-foreground));
 }
 
-/* ── Time-travel strip — day nav + Top sets toggle ──────────────────────── */
-.dial-timetravel {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 15px;
-  border-bottom: 1px solid hsl(var(--border) / 0.35);
-  background: hsl(var(--background));
-}
-
-.dial-timetravel__arrow {
-  flex-shrink: 0;
-  padding: 4px 10px;
-  background: none;
-  border: 1px solid hsl(var(--border) / 0.5);
-  border-radius: 5px;
-  font-size: 16px;
-  line-height: 1;
-  color: hsl(var(--foreground) / 0.8);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, opacity 0.12s;
-}
-.dial-timetravel__arrow:hover:not(:disabled) {
-  background: hsl(var(--secondary) / 0.4);
-  color: hsl(var(--foreground));
-}
-.dial-timetravel__arrow:disabled,
-.dial-timetravel__arrow[aria-disabled="true"] {
-  opacity: 0.3;
-  cursor: default;
-  pointer-events: none;
-}
-
-.dial-timetravel__label {
-  flex: 1;
-  text-align: center;
-  font-family: var(--app-font-mono);
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: hsl(var(--foreground) / 0.75);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dial-timetravel[data-mode="day"] .dial-timetravel__label {
-  color: hsl(var(--foreground));
-}
-
-.dial-timetravel[data-mode="top"] .dial-timetravel__label {
-  color: hsl(var(--library));
-}
-
-.dial-timetravel__top {
-  flex-shrink: 0;
-  margin-left: 4px;
-  padding: 4px 10px;
-  background: none;
-  border: 1px solid hsl(var(--border) / 0.5);
-  border-radius: 5px;
-  font-family: var(--app-font-mono);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-  white-space: nowrap;
-}
-.dial-timetravel__top:hover {
-  background: hsl(var(--secondary) / 0.35);
-  color: hsl(var(--foreground));
-}
-.dial-timetravel__top--active {
-  background: hsl(var(--library) / 0.15);
-  border-color: hsl(var(--library) / 0.55);
-  color: hsl(var(--library));
-}
-
 /* ── DensitySpine — time-axis density visualisation and coarse nav ────────── */
 /* The spine sits in the scan toolbar above Zone 1 in live mode.
    Bins are rendered as proportional bar columns with two channels:
@@ -5310,24 +5230,6 @@
   color: #fff;
   cursor: default;
 }
-/* Lime sort triangle next to the Also On Air tab — flips popular-heavy /
-   deep-cuts station ordering (client-side re-sort, no refetch). */
-.dial-tab-sort {
-  appearance: none;
-  background: transparent;
-  border: 1px solid hsl(var(--accent) / 0.4);
-  border-radius: 4px;
-  color: hsl(var(--accent));
-  font-size: 12px;
-  line-height: 1;
-  width: 22px;
-  height: 22px;
-  align-self: center;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
-}
-.dial-tab-sort:hover { background: hsl(var(--accent) / 0.1); border-color: hsl(var(--accent) / 0.7); }
 /* Entity-type colours for the attribution sentence — blue selector palette */
 .fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
 .fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 400; font-style: normal; }
@@ -5642,17 +5544,6 @@
   letter-spacing: 0.13em;
   color: hsl(var(--muted-foreground));
 }
-/* count badge — inherits zone accent colour via inline style */
-.fdzone-lbl__n {
-  font-family: var(--app-font-mono);
-  font-size: 10px;
-  color: hsl(var(--library));
-}
-.fdzone-lbl__n--picker { color: hsl(var(--selector-dj)); }
-.fdzone-lbl__n--dim    { color: hsl(var(--faint)); }
-/* Estimated count shown during crossings-loading skeleton — slightly muted to
-   signal it's a pre-score approximation, not the final value */
-.fdzone-lbl__n--est    { opacity: 0.55; }
 /* hint pushes to the right edge, Newsreader italic per spec */
 .fdzone-lbl__hint {
   margin-left: auto;
@@ -5664,29 +5555,6 @@
   letter-spacing: 0;
   color: hsl(var(--muted-foreground) / 0.45);
 }
-/* collapse/expand toggle — sits at the trailing edge of the zone header */
-.fdzone-lbl__collapse {
-  margin-left: auto;
-  background: none;
-  border: none;
-  padding: 0 2px;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  color: hsl(var(--muted-foreground) / 0.5);
-  transition: color 0.15s;
-  flex-shrink: 0;
-}
-.fdzone-lbl__collapse:hover {
-  color: hsl(var(--muted-foreground));
-}
-/* when the zone is collapsed the whole label row gets a slight bottom border
-   so it reads as a closed section, not an orphaned header */
-.fdzone-lbl--collapsed {
-  border-bottom: 1px solid hsl(var(--border) / 0.3);
-  margin-bottom: 2px;
-}
-
 /* Zone label row — wraps ZoneLabel + optional inline collapse button */
 .fdzone-lbl-row {
   display: flex;
@@ -5904,33 +5772,6 @@ body * {
 .dial-topbar__wordmark {
   color: hsl(var(--foreground) / 0.85);
   text-decoration-color: hsl(var(--foreground) / 0.85);
-}
-/* Moon in the time-travel strip — the phase-accurate time indicator. */
-.dial-timetravel__label svg.moon-glyph {
-  vertical-align: middle;
-  color: #fff;
-}
-
-/* Dial range pills — pinned to the strip's right edge. */
-.dial-timetravel__range {
-  margin-left: auto;
-  display: inline-flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.dial-timetravel__range-btn {
-  background: none;
-  border: none;
-  padding: 4px 8px;
-  cursor: pointer;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: hsl(0 0% 46%);
-}
-.dial-timetravel__range-btn--active {
-  color: #fff;
-  text-decoration: underline;
-  text-underline-offset: 4px;
 }
 /* Day boundary markers keep the wide-range spine legible. */
 .dial-density-spine__bin--daystart {
