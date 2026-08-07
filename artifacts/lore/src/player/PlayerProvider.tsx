@@ -466,6 +466,14 @@ export interface RideApi {
    * Tier-4 cue sheet).
    */
   continuePastRunWithCueSheet: () => void;
+
+  /**
+   * After a `pastRunFailed` hard stop with a known culprit (`pastRunFailure`):
+   * drop that track from the queue and re-attempt the Tier-1 run with the
+   * rest. No-op queue change when the failing track is unknown — falls back
+   * to a plain retry.
+   */
+  skipPastRunTrack: () => void;
 }
 
 /** One scan hop — the preview currently sounding during a preview-mode scan. */
@@ -1620,6 +1628,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setPastModeTierLabel(label);
     setStatus("loading");
   }, []);
+
+  /**
+   * After a Tier-1 hard-stop failure with a named culprit: remove the failing
+   * track from the queue and re-arm the one-shot queue-run ref so the Tier-1
+   * bulk run re-fires with the remaining tracks. When the culprit is unknown
+   * (pastRunFailure === null) this behaves like a plain retry — nothing is
+   * removed. Explicit listener action only.
+   */
+  const skipPastRunTrack = useCallback(() => {
+    const failed = pastRunFailure;
+    setPastRunFailed(false);
+    setPastRunFailure(null);
+    tier1RunQueuedRef.current = false;
+    if (failed) {
+      const pos = queue.findIndex((i) => i.mbid === failed.mbid);
+      if (pos !== -1) {
+        const nextQ = queue.filter((_, i) => i !== pos);
+        if (nextQ.length === 0) {
+          // Nothing left to play — end honestly rather than spin forever.
+          setQueue(nextQ);
+          setStatus("ended");
+          return;
+        }
+        setQueue(nextQ);
+        if (pos < index) {
+          setIndex(index - 1);
+        } else if (index >= nextQ.length) {
+          setIndex(nextQ.length - 1);
+        }
+      }
+    }
+    setStatus("loading");
+  }, [pastRunFailure, queue, index]);
 
   /** Dismiss the live→past interstitial after it plays (or during silence placeholder). */
   const dismissInterstitial = useCallback(() => setInterstitialArmed(false), []);
@@ -3112,6 +3153,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         pastRunFailure,
         retryPastRun,
         continuePastRunWithCueSheet,
+        skipPastRunTrack,
       },
       spotify,
       scan: {
@@ -3182,6 +3224,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       pastRunFailure,
       retryPastRun,
       continuePastRunWithCueSheet,
+      skipPastRunTrack,
       spotify,
       scanActive,
       toggleScan,

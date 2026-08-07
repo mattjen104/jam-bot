@@ -639,6 +639,16 @@ export function RideBar({
           >
             Retry on Spotify
           </button>
+          {ride.pastRunFailure ? (
+            <button
+              type="button"
+              onClick={ride.skipPastRunTrack}
+              data-testid="past-run-skip"
+              className="shrink-0 rounded border border-destructive/40 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-destructive transition-colors hover:bg-destructive/15"
+            >
+              Skip this track
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={ride.continuePastRunWithCueSheet}

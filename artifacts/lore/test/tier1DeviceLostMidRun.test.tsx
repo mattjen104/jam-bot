@@ -484,6 +484,43 @@ describe("Tier 1: recovery after pastRunFailed", () => {
     expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(2);
   });
 
+  it("skipPastRunTrack drops the failing track and re-fires the queue-run with the rest", async () => {
+    await failTheRun();
+    // The failure names the current track (aaa).
+    expect(latest!.ride.pastRunFailure?.mbid).toBe("aaa");
+
+    mockSpotifyQueueRun.mockResolvedValue({ queued: 1 });
+    act(() => { latest!.ride.skipPastRunTrack(); });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    // Failure cleared, aaa gone from the queue.
+    expect(latest!.ride.pastRunFailed).toBe(false);
+    expect(latest!.ride.pastRunFailure).toBeNull();
+    expect(latest!.ride.queue.map((q) => q.mbid)).toEqual(["bbb"]);
+    expect(latest!.ride.status).not.toBe("error");
+
+    // Queue-run re-fired with only the remaining URI.
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(2);
+    const [callArg] = mockSpotifyQueueRun.mock.calls[1] as [{ uris: string[] }];
+    expect(callArg.uris).toEqual(["spotify:track:bbb"]);
+  });
+
+  it("skipPastRunTrack surfaces a fresh named failure when the next attempt fails too", async () => {
+    await failTheRun();
+
+    mockSpotifyQueueRun.mockRejectedValueOnce(make409());
+    act(() => { latest!.ride.skipPastRunTrack(); });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(2);
+    expect(latest!.ride.pastRunFailed).toBe(true);
+    // The new culprit is the remaining track, not the one already skipped.
+    expect(latest!.ride.pastRunFailure?.mbid).toBe("bbb");
+    expect(latest!.ride.status).toBe("error");
+  });
+
   it("continuePastRunWithCueSheet drops to Tier 4 without Spotify and never re-fires the queue-run", async () => {
     await failTheRun();
 

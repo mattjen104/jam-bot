@@ -92,6 +92,9 @@ function makeRide(overrides: Partial<RideApi> = {}): RideApi {
     cueSheetNext: null,
     pastRunFailed: false,
     pastRunFailure: null,
+    retryPastRun: vi.fn(),
+    continuePastRunWithCueSheet: vi.fn(),
+    skipPastRunTrack: vi.fn(),
     ...overrides,
   };
 }
@@ -222,5 +225,38 @@ describe("RideBar past-mode tier UI", () => {
     expect(el.textContent).toContain(
       "a track in this run couldn't be loaded from the connected service",
     );
+  });
+
+  it("shows a Skip action when the failing track is named, and it calls skipPastRunTrack", () => {
+    const skipPastRunTrack = vi.fn();
+    render(
+      <RideBar
+        ride={makeRide({
+          pastRunFailed: true,
+          pastRunFailure: {
+            mbid: "mbid-2",
+            title: "Dreams",
+            artist: "Fleetwood Mac",
+            service: "Spotify",
+          },
+          skipPastRunTrack,
+        })}
+        spotify={spotify}
+      />,
+    );
+    const skip = screen.getByTestId("past-run-skip");
+    expect(skip.textContent).toContain("Skip this track");
+    fireEvent.click(skip);
+    expect(skipPastRunTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the Skip action when the failing track is unknown (pastRunFailure null)", () => {
+    render(
+      <RideBar ride={makeRide({ pastRunFailed: true })} spotify={spotify} />,
+    );
+    expect(screen.queryByTestId("past-run-skip")).toBeNull();
+    // Retry and cue-sheet actions remain available.
+    expect(screen.getByTestId("past-run-retry")).toBeTruthy();
+    expect(screen.getByTestId("past-run-cue-sheet")).toBeTruthy();
   });
 });

@@ -476,6 +476,36 @@ describe("Past-mode Tier 1 (Spotify Connect)", () => {
     });
   });
 
+  it("skipPastRunTrack removes the URI-less culprit and the run proceeds with the rest", async () => {
+    renderPlayer();
+    await flush();
+
+    act(() => {
+      latest!.ride.startReplay(
+        [makeSpotifySeed("aaa"), makeNoLinkSeed("bbb"), makeSpotifySeed("ccc")],
+        "Test Run",
+        { timeOrientation: "past" },
+      );
+    });
+    await flush();
+
+    // Hard stop names the URI-less track.
+    expect(latest!.ride.pastRunFailed).toBe(true);
+    expect(latest!.ride.pastRunFailure?.mbid).toBe("bbb");
+
+    act(() => { latest!.ride.skipPastRunTrack(); });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    // Failure cleared, culprit removed, queue-run fired with the remaining URIs.
+    expect(latest!.ride.pastRunFailed).toBe(false);
+    expect(latest!.ride.pastRunFailure).toBeNull();
+    expect(latest!.ride.queue.map((q) => q.mbid)).toEqual(["aaa", "ccc"]);
+    expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(1);
+    const [callArg] = (mockSpotifyQueueRun as Mock).mock.calls[0] as [{ uris: string[] }];
+    expect(callArg.uris).toEqual(["spotify:track:aaa", "spotify:track:ccc"]);
+  });
+
   it("does NOT call spotifyQueueRun multiple times when index advances", async () => {
     renderPlayer();
     await flush();
