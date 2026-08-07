@@ -5876,6 +5876,22 @@ body * {
   color: #fff;
 }
 
+/* ── Mobile portrait front door: album art at the very top of the screen;
+   the Lore wordmark + moon bar moves below the album cover. ── */
+@media (orientation: portrait) {
+  .dial-hero {
+    display: flex;
+    flex-direction: column;
+  }
+  .dial-hero__artwrap { order: 1; }
+  .dial-hero .dial-topbar--all {
+    order: 2;
+    /* No longer at the physical top — safe-area padding not needed. */
+    padding-top: 6px;
+    padding-bottom: 4px;
+  }
+}
+
 /* ── Typography policy: no bold, no italic, anywhere. ── */
 b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   font-weight: 400;
