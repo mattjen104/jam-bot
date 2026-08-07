@@ -23,6 +23,7 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // Module mocks — must precede imports of the subjects.
@@ -203,7 +204,14 @@ function mockDialData(stations: DialStation[]) {
 }
 
 function renderDial() {
-  return render(<DialView />);
+  // DialView consumes react-query hooks directly, so it must render inside a
+  // QueryClientProvider.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <DialView />
+    </QueryClientProvider>,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -251,17 +259,21 @@ describe("reason() r=6 — 24h station exact crossings row label", () => {
     expect(text).toContain("here in the last 24h");
   });
 
-  it("lands the row in Zone 1 ('On air, with a reason')", () => {
+  it("lands the row in Zone 1 (history band), not the Zone 3 'DJs on air' band", () => {
     mockDialData([makeR6Station("r6-zone1", 4)]);
     renderDial();
 
-    // The Zone 1 heading must be present
-    expect(
-      screen.getByText("On air, with a reason", { selector: ".fdzone-lbl__text" }),
-    ).toBeTruthy();
+    // The fdrow must exist and carry the Zone 1 history class (r=6/r=7 →
+    // fdrow--hist), never the Zone 3 dim class (r=0/r=5 → fdrow--dim).
+    const rows = document.querySelectorAll(".fdrow");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].classList.contains("fdrow--hist")).toBe(true);
+    expect(rows[0].classList.contains("fdrow--dim")).toBe(false);
 
-    // The fdrow must exist (Zone 1 row rendered)
-    expect(document.querySelectorAll(".fdrow")).toHaveLength(1);
+    // The Zone 3 "DJs on air" band must not appear for a crossing row.
+    expect(
+      screen.queryByText("DJs on air", { selector: ".fdzone-lbl__text" }),
+    ).toBeNull();
   });
 });
 
@@ -301,14 +313,18 @@ describe("reason() r=7 — 24h station artist crossings row label", () => {
     expect(text).toContain("here in the last 24h");
   });
 
-  it("lands the row in Zone 1 ('On air, with a reason')", () => {
+  it("lands the row in Zone 1 (history band), not the Zone 3 'DJs on air' band", () => {
     mockDialData([makeR7Station("r7-zone1", 2)]);
     renderDial();
 
+    const rows = document.querySelectorAll(".fdrow");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].classList.contains("fdrow--hist")).toBe(true);
+    expect(rows[0].classList.contains("fdrow--dim")).toBe(false);
+
     expect(
-      screen.getByText("On air, with a reason", { selector: ".fdzone-lbl__text" }),
-    ).toBeTruthy();
-    expect(document.querySelectorAll(".fdrow")).toHaveLength(1);
+      screen.queryByText("DJs on air", { selector: ".fdzone-lbl__text" }),
+    ).toBeNull();
   });
 });
 

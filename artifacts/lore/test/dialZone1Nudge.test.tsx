@@ -16,6 +16,7 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // Module mocks — must precede imports of the subjects.
@@ -206,6 +207,21 @@ function mockDialData(overrides: Record<string, unknown> = {}) {
   (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(baseDialData(overrides));
 }
 
+// DialView now consumes react-query hooks (e.g. useGetStationNowPlaying), so
+// every render must be wrapped in a QueryClientProvider. renderDial() provides
+// the provider and a rerender that keeps the same client wrapped.
+function renderDial() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const wrap = (ui: React.ReactElement) => (
+    <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
+  );
+  const utils = render(wrap(<DialView />));
+  const rerender = (ui: React.ReactElement) => utils.rerender(wrap(ui));
+  return { ...utils, rerender };
+}
+
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -227,21 +243,21 @@ afterEach(() => {
 describe("Zone 1 nudge — appears when loaded with no crossings", () => {
   it("renders the nudge when crossingsLoading=false, hasLibrary=true, and no crossing rows exist", () => {
     mockDialData({ stations: [] });
-    render(<DialView />);
+    renderDial();
 
     expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
   });
 
   it("also renders the nudge when hasSeeds=true with no crossing rows", () => {
     mockDialData({ stations: [], hasLibrary: false, hasSeeds: true });
-    render(<DialView />);
+    renderDial();
 
     expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
   });
 
   it("renders the nudge even when live stations exist but none have crossings", () => {
     mockDialData({ stations: [makeNoCrossStation("kexp"), makeNoCrossStation("wfmu")] });
-    render(<DialView />);
+    renderDial();
 
     expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
   });
@@ -251,7 +267,7 @@ describe("Zone 1 nudge — disappears when the first crossing row arrives", () =
   it("clears the nudge as soon as withReason is non-empty", () => {
     // Start with no crossing rows → nudge visible.
     mockDialData({ stations: [] });
-    const { rerender } = render(<DialView />);
+    const { rerender } = renderDial();
     expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
 
     // Flip: a crossing station arrives → nudge must be gone.
@@ -265,7 +281,7 @@ describe("Zone 1 nudge — disappears when the first crossing row arrives", () =
 
   it("crossing rows are rendered after the nudge clears", () => {
     mockDialData({ stations: [] });
-    const { rerender } = render(<DialView />);
+    const { rerender } = renderDial();
 
     (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
       baseDialData({ stations: [makeCrossingStation("kexp")] }),
@@ -282,7 +298,7 @@ describe("Zone 1 nudge — disappears when the first crossing row arrives", () =
 describe("Zone 1 nudge — absent in non-nudge states", () => {
   it("is absent while crossingsLoading=true (scores still in flight)", () => {
     mockDialData({ crossingsLoading: true, stations: [] });
-    render(<DialView />);
+    renderDial();
     // Advance past the skeleton delay so content settles.
     act(() => { vi.advanceTimersByTime(200); });
 
@@ -291,7 +307,7 @@ describe("Zone 1 nudge — absent in non-nudge states", () => {
 
   it("is absent when neither hasLibrary nor hasSeeds is true", () => {
     mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    render(<DialView />);
+    renderDial();
 
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
   });
@@ -301,7 +317,7 @@ describe("Zone 1 nudge — seed-change transitions mid-session (no page reload)"
   it("appears when hasSeeds flips true mid-session with no crossings", () => {
     // Start: no library, no seeds → nudge must NOT be visible.
     mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    const { rerender } = render(<DialView />);
+    const { rerender } = renderDial();
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
 
     // Mid-session: user adds a taste seed → hasSeeds becomes true, still no crossings.
@@ -316,7 +332,7 @@ describe("Zone 1 nudge — seed-change transitions mid-session (no page reload)"
   it("hides when all seeds are removed even with no crossings", () => {
     // Start: seeds present, no crossings → nudge visible.
     mockDialData({ hasLibrary: false, hasSeeds: true, stations: [] });
-    const { rerender } = render(<DialView />);
+    const { rerender } = renderDial();
     expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
 
     // Mid-session: user removes all seeds → hasSeeds flips false, still no crossings.
@@ -333,7 +349,7 @@ describe("Zone 1 nudge — library import completes mid-session (no page reload)
   it("stays hidden while crossings are still loading after hasLibrary flips true", () => {
     // Phase 1: no library, no seeds → nudge absent.
     mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    const { rerender } = render(<DialView />);
+    const { rerender } = renderDial();
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
 
     // Phase 2: import finishes → hasLibrary flips true, but crossings are still
@@ -352,7 +368,7 @@ describe("Zone 1 nudge — library import completes mid-session (no page reload)
   it("shows the nudge once crossings settle with no results after a library import", () => {
     // Phase 1: no library, no seeds → nudge absent.
     mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    const { rerender } = render(<DialView />);
+    const { rerender } = renderDial();
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
 
     // Phase 2: hasLibrary flips true, crossings still loading → still hidden.

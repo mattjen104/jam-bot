@@ -13,7 +13,15 @@
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+// DialView consumes react-query hooks directly, so every render must be wrapped
+// in a QueryClientProvider.
+function render(ui: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
 
 // ---------------------------------------------------------------------------
 // Module-level mocks — must precede all imports of the subjects.
@@ -110,15 +118,53 @@ import type { DialStation } from "../src/hooks/useDialData";
 // Helpers
 // ---------------------------------------------------------------------------
 
+// A live station with an artist crossing so Zone 1 has content. The inline
+// SeedBar (which hosts SeedInput + the seed chips) only renders alongside a
+// Zone 1 crossing row, so the seed-input flow needs at least one live station.
+function makeZone1Station(): DialStation {
+  return {
+    station: {
+      slug: "seed-station",
+      name: "Seed Radio",
+      automationClass: null,
+      streamUrl: null,
+      websiteUrl: null,
+      hidden: false,
+      favorite: false,
+    } as DialStation["station"],
+    isLive: true,
+    shows: [{
+      runId: 1,
+      showName: "Seed Show",
+      djName: null,
+      startedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      endedAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+      state: "live",
+      spins: [],
+      crossings: 0,
+      artistCrossings: 1,
+      topArtists: [],
+      topArtistNames: ["Seed Artist"],
+      currentTrack: null,
+      isPickerShow: false,
+      pickerId: null,
+    }],
+    crossings: 0,
+    artistCrossings: 1,
+    lifetimeCrossings: 0,
+    lifetimeArtistCrossings: 1,
+  } as DialStation;
+}
+
 function mockDial() {
   (useDialData as ReturnType<typeof vi.fn>).mockReturnValue({
-    stations: [] as DialStation[],
+    stations: [makeZone1Station()],
     isLoading: false,
     isCoreLoading: false,
     liveLoading: false,
     crossingsLoading: false,
     hasLibrary: false,
-    hasSeeds: false,
+    hasSeeds: true,
     liveArtistSuggestions: [],
     onboardingArtists: [],
     onboardingArtistsLoading: false,
@@ -251,3 +297,6 @@ describe("Dial SeedInput — type-to-add full cycle", () => {
     });
   });
 });
+
+
+

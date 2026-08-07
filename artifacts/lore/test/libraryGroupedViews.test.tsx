@@ -243,7 +243,7 @@ describe("AlbumGroupRow", () => {
         setOpenDoorMbid={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByTestId("library-album-group").querySelector("[role='button']")!);
     expect(screen.getAllByTestId("library-row")).toHaveLength(2);
   });
 
@@ -278,7 +278,7 @@ describe("AlbumGroupRow", () => {
     render(<Wrapper />);
 
     // Expand the group
-    fireEvent.click(screen.getByRole("button", { name: /^(?!remove).*/i }));
+    fireEvent.click(screen.getByTestId("library-album-group").querySelector("[role='button']")!);
     expect(screen.getAllByTestId("library-row")).toHaveLength(1);
 
     // Simulate un-keep of the last track → parent removes this group row

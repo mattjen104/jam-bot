@@ -74,6 +74,15 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
   });
 });
 
+// PlayerProvider reads /api/config via useAppConfig (React Query). Stub the
+// meHooks barrel so a real QueryClientProvider isn't required.
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useAppConfig: vi.fn(() => ({ data: null, isLoading: false })),
+  });
+});
+
 import {
   PlayerProvider,
   usePlayer,

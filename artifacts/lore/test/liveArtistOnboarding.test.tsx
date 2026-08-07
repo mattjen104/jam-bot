@@ -2,8 +2,7 @@
 
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
@@ -84,7 +83,7 @@ import {
   splitIcyCombinedField,
   type DialStation,
 } from "../src/hooks/useDialData";
-import { DialView, LiveArtistPicker } from "../src/components/DialView";
+import { LiveArtistPicker } from "../src/components/DialView";
 import { ME_DIAL_CROSSINGS_KEY, ME_PICKER_NAMES_KEY } from "../src/lib/meHooks";
 
 function makeStation(overrides: Partial<DialStation> = {}): DialStation {
@@ -116,23 +115,6 @@ function makeStation(overrides: Partial<DialStation> = {}): DialStation {
     lifetimeArtistCrossings: 0,
     ...overrides,
   };
-}
-
-function mockDial(stations: DialStation[] = [], suggestions = []) {
-  (useDialData as ReturnType<typeof vi.fn>).mockReturnValue({
-    stations,
-    isLoading: false,
-    isCoreLoading: false,
-    liveLoading: false,
-    crossingsLoading: false,
-    hasLibrary: false,
-    hasSeeds: false,
-    liveArtistSuggestions: suggestions,
-    onboardingArtists: [],
-    onboardingArtistsLoading: false,
-    overlapByPickerId: new Map(),
-    pickerNameToId: new Map(),
-  });
 }
 
 afterEach(() => {
@@ -435,131 +417,137 @@ describe("no-library onboarding live picker", () => {
     expect(rows.map((row) => row.artist)).toEqual(["History", "Alpha", "Zulu"]);
   });
 
-  it("renders live choices with a normal manual/import fallback", () => {
-    mockDial([], [{
-      artist: "Live Artist",
-      stationSlug: "wfmu",
-      stationName: "WFMU",
-      trackTitle: "Live Track",
-      showName: "Morning Show",
-    }]);
-
-    render(<DialView />);
+  it("renders live choices with their now-playing context", () => {
+    render(
+      <LiveArtistPicker
+        suggestions={[{
+          artist: "Live Artist",
+          stationSlug: "wfmu",
+          stationName: "WFMU",
+          trackTitle: "Live Track",
+          showName: "Morning Show",
+          djName: null,
+        }]}
+        loading={false}
+        seeds={[]}
+        onAddSeed={vi.fn()}
+      />,
+    );
 
     expect(screen.getByRole("heading", { name: "Artists to start with" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Choose Live Artist" })).toBeTruthy();
     expect(screen.getByText("Morning Show · WFMU · live now")).toBeTruthy();
-    expect(screen.getByPlaceholderText("e.g. Radiohead")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Connect Spotify library" })).toBeTruthy();
   });
 
-  it("offers Matt’s starter library only when the server reports it is available", () => {
-    mattStarter.mockReturnValue({ data: { available: true, addedCount: 0, totalCount: 24 } });
-    const mutate = vi.fn();
-    startMattLibrary.mockReturnValue({ mutate, isPending: false, error: null });
-    mockDial([], [{ artist: "Still Available", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null }]);
-
-    render(<DialView />);
+  it("offers Matt’s starter library only when the caller reports it is available", () => {
+    const onStartMattLibrary = vi.fn();
+    render(
+      <LiveArtistPicker
+        suggestions={[{ artist: "Still Available", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null, djName: null }]}
+        loading={false}
+        seeds={[]}
+        onAddSeed={vi.fn()}
+        mattStarterAvailable
+        onStartMattLibrary={onStartMattLibrary}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Start with Matt’s library" }));
 
-    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(onStartMattLibrary).toHaveBeenCalledTimes(1);
     expect(screen.getByText("A resolved starter library, ready for Lore crossings")).toBeTruthy();
   });
 
-  it("keeps artist controls usable while Matt’s library is copying or errors", () => {
-    mattStarter.mockReturnValue({ data: { available: true, addedCount: 0, totalCount: 24 } });
-    startMattLibrary.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: true,
-      error: new Error("starter unavailable"),
-    });
-    mockDial([], [{ artist: "Still Available", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null }]);
+  it("hides Matt’s starter library when it is not available", () => {
+    render(
+      <LiveArtistPicker
+        suggestions={[{ artist: "Still Available", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null, djName: null }]}
+        loading={false}
+        seeds={[]}
+        onAddSeed={vi.fn()}
+        mattStarterAvailable={false}
+        onStartMattLibrary={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Start with Matt’s library" })).toBeNull();
+  });
 
-    render(<DialView />);
+  it("keeps artist controls usable while Matt’s library is copying or errors", () => {
+    render(
+      <LiveArtistPicker
+        suggestions={[{ artist: "Still Available", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null, djName: null }]}
+        loading={false}
+        seeds={[]}
+        onAddSeed={vi.fn()}
+        mattStarterAvailable
+        mattStarterCopying
+        mattStarterError="starter unavailable"
+        onStartMattLibrary={vi.fn()}
+      />,
+    );
 
     expect(screen.getByRole("button", { name: "Start with Matt’s library" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "Choose Still Available" })).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("We couldn’t add Matt’s library. Try again or choose an artist below.");
   });
 
-  it("persists a selected live artist through the taste-seed mutation", async () => {
-    mockDial([], [{
-      artist: "Selected Artist",
-      stationSlug: "wfmu",
-      stationName: "WFMU",
-      trackTitle: null,
-      showName: null,
-    }]);
-
-    render(<DialView />);
+  it("calls onAddSeed with the artist when a live choice is selected", () => {
+    const onAddSeed = vi.fn();
+    render(
+      <LiveArtistPicker
+        suggestions={[{ artist: "Selected Artist", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null, djName: null }]}
+        loading={false}
+        seeds={[]}
+        onAddSeed={onAddSeed}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Choose Selected Artist" }));
 
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(["Selected Artist"]);
-    });
+    expect(onAddSeed).toHaveBeenCalledWith("Selected Artist");
   });
 
-  it("restores server-truth selection when a taste-seed write fails", async () => {
-    mockDial([], [{
-      artist: "Unpersisted Artist",
-      stationSlug: "wfmu",
-      stationName: "WFMU",
-      trackTitle: null,
-      showName: null,
-    }]);
-    mutateAsync.mockRejectedValueOnce(new Error("write failed"));
-
-    render(<DialView />);
-    fireEvent.click(screen.getByRole("button", { name: "Choose Unpersisted Artist" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Choose Unpersisted Artist" })).toBeTruthy();
-    });
+  it("reflects an already-selected artist as pressed and non-choosable", () => {
+    render(
+      <LiveArtistPicker
+        suggestions={[{ artist: "Chosen Artist", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null, djName: null }]}
+        loading={false}
+        seeds={["Chosen Artist"]}
+        onAddSeed={vi.fn()}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Selected Chosen Artist" });
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Choose Chosen Artist" })).toBeNull();
   });
 
-  it("keeps multiple quick live choices when each write resolves in order", async () => {
-    mockDial([], [
-      { artist: "First Artist", stationSlug: "one", stationName: "One FM", trackTitle: null, showName: null },
-      { artist: "Second Artist", stationSlug: "two", stationName: "Two FM", trackTitle: null, showName: null },
-    ]);
-    mutateAsync
-      .mockImplementationOnce(async (artists: string[]) => ({ artists }))
-      .mockImplementationOnce(async (artists: string[]) => ({ artists }));
-
-    render(<DialView />);
+  it("routes each live choice through onAddSeed independently", () => {
+    const onAddSeed = vi.fn();
+    render(
+      <LiveArtistPicker
+        suggestions={[
+          { artist: "First Artist", stationSlug: "one", stationName: "One FM", trackTitle: null, showName: null, djName: null },
+          { artist: "Second Artist", stationSlug: "two", stationName: "Two FM", trackTitle: null, showName: null, djName: null },
+        ]}
+        loading={false}
+        seeds={[]}
+        onAddSeed={onAddSeed}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Choose First Artist" }));
     fireEvent.click(screen.getByRole("button", { name: "Choose Second Artist" }));
 
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenNthCalledWith(1, ["First Artist"]);
-      expect(mutateAsync).toHaveBeenNthCalledWith(2, ["First Artist", "Second Artist"]);
-    });
-  });
-
-  it("preserves loaded seeds when adding an artist from the live picker", async () => {
-    mockDial([], [{
-      artist: "New Artist",
-      stationSlug: "wfmu",
-      stationName: "WFMU",
-      trackTitle: null,
-      showName: null,
-    }]);
-    tasteSeeds.mockReturnValue({ data: ["Existing Artist"] });
-    render(<DialView />);
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Artist name" }), {
-      target: { value: "New Artist" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(["Existing Artist", "New Artist"]);
-    });
+    expect(onAddSeed).toHaveBeenNthCalledWith(1, "First Artist");
+    expect(onAddSeed).toHaveBeenNthCalledWith(2, "Second Artist");
   });
 
   it("shows the fallback state when live data has no usable artist", () => {
-    mockDial([], []);
-    render(<DialView />);
+    render(
+      <LiveArtistPicker
+        suggestions={[]}
+        loading={false}
+        seeds={[]}
+        onAddSeed={vi.fn()}
+      />,
+    );
 
     expect(screen.getByText("No artist names are available right now. You can add one below.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Choose/ })).toBeNull();
@@ -578,13 +566,15 @@ describe("no-library onboarding live picker", () => {
       <LiveArtistPicker
         suggestions={suggestions}
         loading={false}
-        seeds={Array.from({ length: 10 }, (_, i) => `Seed ${i + 1}`)}
+        seeds={Array.from({ length: 50 }, (_, i) => `Seed ${i + 1}`)}
         onAddSeed={vi.fn()}
       />,
     );
 
     expect(screen.getAllByRole("button", { name: /Choose Artist/ })).toHaveLength(12);
-    expect(screen.getByRole("status").textContent).toContain("Ten artists selected");
+    expect(screen.getByRole("status").textContent).toContain(
+      "Seed limit reached — remove one below to choose another.",
+    );
     expect((screen.getByRole("button", { name: "Choose Artist 1" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

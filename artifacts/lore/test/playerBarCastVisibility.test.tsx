@@ -88,7 +88,7 @@ describe("PlayerBar cast button visibility", () => {
     const spotify = makeSpotify({ connected: false });
     renderBar(spotify);
     expect(screen.queryByTestId("device-picker-button")).toBeNull();
-    const btn = screen.getByTestId("cast-connect-button");
+    const btn = screen.getByLabelText("Connect Spotify");
     fireEvent.click(btn);
     expect(spotify.connect).toHaveBeenCalled();
   });
@@ -96,7 +96,7 @@ describe("PlayerBar cast button visibility", () => {
   it("shows nothing when Spotify isn't configured at all", () => {
     renderBar(makeSpotify({ configured: false, connected: false }));
     expect(screen.queryByTestId("device-picker-button")).toBeNull();
-    expect(screen.queryByTestId("cast-connect-button")).toBeNull();
+    expect(screen.queryByLabelText("Connect Spotify")).toBeNull();
   });
 });
 

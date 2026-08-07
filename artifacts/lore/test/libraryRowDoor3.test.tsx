@@ -46,6 +46,11 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   });
 });
 
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal);
+});
+
 // ---------------------------------------------------------------------------
 // Imports (must follow vi.mock calls)
 // ---------------------------------------------------------------------------

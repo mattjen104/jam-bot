@@ -11,6 +11,7 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // Module mocks — must precede imports of the subjects.
@@ -147,7 +148,14 @@ function mockDialData(stations: DialStation[]) {
 }
 
 function renderDial() {
-  return render(<DialView />);
+  // DialView consumes react-query hooks directly, so it must render inside a
+  // QueryClientProvider.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <DialView />
+    </QueryClientProvider>,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +172,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
-  it("includes title and artist in the leading sentence (r=5: DJ, no crossings)", () => {
+  it("credits the DJ and current artist on the show (r=5: DJ, no crossings)", () => {
     const track = makeSpin({ title: "Gravity Falls", artist: "Pixies" });
     const show = makeShow({
       djName: "DJ Tester",
@@ -177,13 +185,15 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     mockDialData([station]);
     renderDial();
 
+    // Song titles are never shown — the sentence credits DJ + artist + show.
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("DJ Tester is playing Gravity Falls by Pixies");
-    expect(document.querySelector(".fdrow__context")?.textContent).toBe("Morning Show · Test Radio");
+    expect(sentence).toBe("DJ Tester selected Pixies on Morning Show");
+    // The track title must not leak into the row.
+    expect(sentence).not.toContain("Gravity Falls");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });
 
-  it("uses a track-led sentence when no DJ is attached", () => {
+  it("uses an artist-led sentence when no DJ is attached", () => {
     const track = makeSpin({ title: "Dark Star", artist: "Grateful Dead" });
     const show0 = makeShow({
       djName: null,
@@ -197,8 +207,8 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     renderDial();
 
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("Grateful Dead is playing Dark Star");
-    expect(document.querySelector(".fdrow__context")?.textContent).toBe("Morning Show · Test Radio");
+    expect(sentence).toBe("Grateful Dead on Morning Show now");
+    expect(sentence).not.toContain("Dark Star");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });
 
@@ -280,11 +290,13 @@ describe("FrontDoorRow — 'Unknown' text suppression", () => {
 // 3. OfflineRow — showName and track-title rendering
 // ---------------------------------------------------------------------------
 
-describe("OfflineRow — show-name and track-title rendering", () => {
-  // OfflineRow appears in the "Recently aired" section, which requires
-  // isLive=false on the station.
+describe("Offline stations — not rendered as front-door rows", () => {
+  // The dial front door only surfaces live stations. Offline (isLive=false)
+  // stations no longer produce any FrontDoorRow — the former "Recently aired"
+  // section was removed — so their show name and track titles never leak into
+  // the front door.
 
-  it("shows the showName label when showName is a real value", () => {
+  it("renders no front-door row for an offline station with a named show", () => {
     const spin = makeSpin({ title: "Blue in Green", artist: "Miles Davis" });
     const show = makeShow({
       showName: "Late Night Jazz",
@@ -298,52 +310,13 @@ describe("OfflineRow — show-name and track-title rendering", () => {
 
     const { container } = renderDial();
 
-    // Show name appears inside the tier-3 destination label (e.g. "Late Night Jazz · Test Radio")
-    const t3El = container.querySelector(".fdrow__t3");
-    expect(t3El).not.toBeNull();
-    expect(t3El!.textContent).toContain("Late Night Jazz");
+    // No station row at all for an offline station.
+    expect(container.querySelectorAll(".fdrow").length).toBe(0);
+    // The show name never appears in the front door.
+    expect(container.textContent).not.toContain("Late Night Jazz");
   });
 
-  it("does NOT show the showName label when showName is 'Unknown show'", () => {
-    const spin = makeSpin({ title: "Blue in Green", artist: "Miles Davis" });
-    const show = makeShow({
-      showName: "Unknown show",
-      djName: null,
-      state: "past",
-      spins: [spin],
-      currentTrack: null,
-    });
-    const station = makeStation({ isLive: false, shows: [show], crossings: 0 });
-    mockDialData([station]);
-
-    const { container } = renderDial();
-
-    // "Unknown show" must not appear at all
-    expect(container.textContent).not.toMatch(/Unknown show/i);
-  });
-
-  it("does NOT show the showName label when showName is null", () => {
-    const spin = makeSpin({ title: "Autumn Leaves", artist: "Bill Evans" });
-    const show = makeShow({
-      showName: "Unnamed Session",  // We'll override to null via cast
-      djName: null,
-      state: "past",
-      spins: [spin],
-      currentTrack: null,
-    });
-    // Force showName to null
-    (show as unknown as Record<string, unknown>).showName = null as unknown as string;
-    const station = makeStation({ isLive: false, shows: [show], crossings: 0 });
-    mockDialData([station]);
-
-    const { container } = renderDial();
-
-    // No showName label rendered — only station name + track title
-    const offlineInfo = container.querySelector(".dial-stn-now");
-    expect(offlineInfo).toBeNull();
-  });
-
-  it("renders track title WITHOUT artist in the offline track line", () => {
+  it("does not leak an offline station's track title or artist into the front door", () => {
     const spin = makeSpin({ title: "So What", artist: "Miles Davis" });
     const show = makeShow({
       showName: "Jazz at Midnight",
@@ -357,17 +330,12 @@ describe("OfflineRow — show-name and track-title rendering", () => {
 
     const { container } = renderDial();
 
-    // Tier-1 reason element holds the bare track title when there are no crossings
-    const trackEl = container.querySelector(".fdrow__t1");
-    expect(trackEl).not.toBeNull();
-    const trackText = trackEl!.textContent ?? "";
-    expect(trackText).toContain("So What");
-    // No artist name or em-dash in the reason element
-    expect(trackText).not.toContain("Miles Davis");
-    expect(trackText).not.toMatch(/[—–]/);
+    expect(container.querySelectorAll(".fdrow").length).toBe(0);
+    expect(container.textContent).not.toContain("So What");
+    expect(container.textContent).not.toContain("Miles Davis");
   });
 
-  it("renders track title WITHOUT em-dash artist for 'Unknown show' variant", () => {
+  it("does not surface an 'Unknown show' offline station in the front door", () => {
     const spin = makeSpin({ title: "Kind of Blue", artist: "Miles Davis" });
     const show = makeShow({
       showName: "unknown show",
@@ -381,12 +349,8 @@ describe("OfflineRow — show-name and track-title rendering", () => {
 
     const { container } = renderDial();
 
-    // Tier-1 reason element holds the bare track title when there are no crossings
-    const trackEl = container.querySelector(".fdrow__t1");
-    expect(trackEl).not.toBeNull();
-    const trackText = trackEl!.textContent ?? "";
-    expect(trackText).toContain("Kind of Blue");
-    expect(trackText).not.toContain("Miles Davis");
-    expect(trackText).not.toMatch(/[—–]/);
+    expect(container.querySelectorAll(".fdrow").length).toBe(0);
+    expect(container.textContent).not.toMatch(/unknown show/i);
+    expect(container.textContent).not.toContain("Kind of Blue");
   });
 });

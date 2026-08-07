@@ -235,12 +235,23 @@ function renderDial() {
   );
 }
 
+// Run navigation moved from the (now-hidden) DialTimeTravelStrip onto the
+// hero-art time chevrons. The button semantics are the same — ‹ steps back in
+// time, › steps forward toward the live edge (disabled at the live edge) — only
+// the aria-labels changed.
 function getNextBtn() {
-  return screen.getByRole("button", { name: "Next run" });
+  return screen.getByRole("button", { name: "Forward in time — next run" });
 }
 
 function getPrevBtn() {
-  return screen.getByRole("button", { name: "Previous run" });
+  return screen.getByRole("button", { name: "Back in time — previous run" });
+}
+
+// The "where in time" label. In live mode nothing is shown (the topbar moon is
+// the only time indicator); once stepped back, .dial-hero__timelabel carries
+// "<station> · <date>".
+function getTimeLabel() {
+  return document.querySelector(".dial-hero__timelabel");
 }
 
 // ---------------------------------------------------------------------------
@@ -272,15 +283,19 @@ describe("(a) strip renders with → disabled in live mode", () => {
     expect(getPrevBtn().hasAttribute("disabled")).toBe(false);
   });
 
-  it("the strip shows the moon (labelled 'Today') in live mode — no day text", () => {
+  it("shows no where-in-time label in live mode; the topbar moon is the indicator", () => {
     mockDialDataSettled();
     renderDial();
 
-    const ttLabel = document.querySelector(".dial-timetravel__label");
-    expect(ttLabel?.getAttribute("aria-label")).toBe("Today");
-    // Day text is gone — the moon glyph is the time indicator now.
+    // At the live edge there is no hero time label — the topbar moon glyph is
+    // the only time indicator, and it is decorative (aria-hidden).
+    expect(getTimeLabel()).toBeNull();
     expect(screen.queryByText("Today")).toBeNull();
-    expect(ttLabel?.querySelector("svg.moon-glyph")).toBeTruthy();
+
+    const topbarMoon = document.querySelector(".dial-topbar__moon-tr");
+    expect(topbarMoon).toBeTruthy();
+    expect(topbarMoon?.getAttribute("aria-hidden")).toBe("true");
+    expect(topbarMoon?.querySelector("svg.moon-glyph")).toBeTruthy();
   });
 });
 
@@ -310,7 +325,7 @@ describe("(b) stepping ← shows most recent crossing run", () => {
     expect(nextBtn.hasAttribute("disabled")).toBe(false);
   });
 
-  it("strip label updates to show station + dj + date of landed run", () => {
+  it("hero time label appears with station + date once stepped back", () => {
     mockDialDataSettled();
     renderDial();
 
@@ -318,19 +333,20 @@ describe("(b) stepping ← shows most recent crossing run", () => {
       fireEvent.click(getPrevBtn());
     });
 
-    // The DialTimeTravelStrip label span contains station + DJ as text;
-    // the date is carried by the moon glyph (phase of the scrubbed day)
-    // and by the full title/aria-label.
-    const ttLabel = document.querySelector(".dial-timetravel__label");
+    // Once stepped back from the live edge, the hero time label shows the
+    // landed run's station name and day (station · <date>). The DJ name is no
+    // longer part of this compact indicator.
+    const ttLabel = getTimeLabel();
+    expect(ttLabel).toBeTruthy();
     expect(ttLabel?.textContent).toContain("KEXP");
-    expect(ttLabel?.textContent).toContain("DJ Alex");
-    // Full old label (incl. date) preserved for hover + assistive tech
-    expect(ttLabel?.getAttribute("aria-label")).toMatch(/^KEXP · DJ Alex · /);
-    expect(ttLabel?.getAttribute("title")).toBe(ttLabel?.getAttribute("aria-label"));
-    // Moon glyph present and decorative (label carries the semantics)
-    const moon = ttLabel?.querySelector("svg.moon-glyph");
+    // runDate("2026-08-05") renders as a short UTC date (e.g. "Aug 5, 2026").
+    expect(ttLabel?.textContent).toMatch(/2026/);
+
+    // The topbar moon now tracks the scrubbed day and stays decorative.
+    const topbarMoon = document.querySelector(".dial-topbar__moon-tr");
+    const moon = topbarMoon?.querySelector("svg.moon-glyph");
     expect(moon).toBeTruthy();
-    expect(moon?.getAttribute("aria-hidden")).toBe("true");
+    expect(topbarMoon?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("live Zone 1 crossing rows (.fdrow) are absent after stepping back into past-scan", () => {
@@ -374,8 +390,8 @@ describe("(c) stepping → from the most recent run returns to live mode", () =>
       fireEvent.click(getNextBtn());
     });
 
-    // Back to live mode — label carries the "Today" aria-label, moon shown
-    expect(document.querySelector(".dial-timetravel__label")?.getAttribute("aria-label")).toBe("Today");
+    // Back to live mode — the hero time label is gone again and → re-disables.
+    expect(getTimeLabel()).toBeNull();
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });
@@ -387,8 +403,10 @@ describe("(d) 'Top sets' toggle is hidden for now (machinery kept for later)", (
     renderDial();
 
     expect(screen.queryByRole("button", { name: "⭐ Top sets" })).toBeNull();
-    // Strip still shows the live label (moon with "Today" aria-label)
-    expect(document.querySelector(".dial-timetravel__label")?.getAttribute("aria-label")).toBe("Today");
+    // Live edge: no hero time label, and the run-nav chevrons are present.
+    expect(getTimeLabel()).toBeNull();
+    expect(getPrevBtn()).toBeTruthy();
+    expect(getNextBtn()).toBeTruthy();
   });
 });
 
@@ -416,31 +434,21 @@ describe("(e) clicking a run row navigates to /archive/station-runs/{runId}", ()
   });
 });
 
-describe("(r) dial range pills widen the coarse scan window", () => {
-  it("renders 2d / 1w / 1m pills with 2d active by default, and requests the wider window on click", () => {
+describe("(r) coarse scan window defaults to 2 days", () => {
+  it("fetches the recent runs with the default 2-day window", () => {
+    // The range pills (2d/1w/1m) were removed from the dial flow — time travel
+    // now lives on the hero art (chevrons + swipe). The default coarse-scan
+    // window is still 2 days, driven by useMyOverlapRunsRecent({ days: 2 }).
     mockDialDataSettled();
     renderDial();
 
-    const pill2d = screen.getByRole("button", { name: "Scan back 2 days" });
-    const pill1w = screen.getByRole("button", { name: "Scan back 7 days" });
-    const pill1m = screen.getByRole("button", { name: "Scan back 30 days" });
-    expect(pill2d.getAttribute("aria-pressed")).toBe("true");
-    expect(pill1w.getAttribute("aria-pressed")).toBe("false");
-    expect(pill1m.getAttribute("aria-pressed")).toBe("false");
+    // No range pill UI is present in the flow anymore.
+    expect(screen.queryByRole("button", { name: "Scan back 2 days" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Scan back 7 days" })).toBeNull();
 
-    // Default fetch asks for the 2-day window
+    // Default fetch asks for the 2-day window.
     const recentMock = useMyOverlapRunsRecent as ReturnType<typeof vi.fn>;
     expect(recentMock.mock.calls.some((c) => c[0]?.days === 2)).toBe(true);
-
-    act(() => {
-      fireEvent.click(pill1w);
-    });
-
-    // Re-render fetches the 7-day window and the pill becomes active
-    expect(recentMock.mock.calls.some((c) => c[0]?.days === 7)).toBe(true);
-    expect(
-      screen.getByRole("button", { name: "Scan back 7 days" }).getAttribute("aria-pressed"),
-    ).toBe("true");
   });
 });
 
@@ -458,8 +466,9 @@ describe("(f) empty recent-runs: ← keeps the view at live edge", () => {
       fireEvent.click(getPrevBtn());
     });
 
-    // Stays at live edge — no coarse candidates to navigate to
-    expect(document.querySelector(".dial-timetravel__label")?.getAttribute("aria-label")).toBe("Today");
+    // Stays at live edge — no coarse candidates to navigate to. No hero time
+    // label is shown, and → remains disabled.
+    expect(getTimeLabel()).toBeNull();
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });

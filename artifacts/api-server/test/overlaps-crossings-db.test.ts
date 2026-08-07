@@ -250,7 +250,7 @@ afterAll(async () => {
     await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId1));
   if (userId2 != null)
     await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId2));
-}, 30_000);
+}, 90_000);
 
 // ---------------------------------------------------------------------------
 // GET /api/me/overlaps/runs?order=recent

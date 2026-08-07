@@ -7,6 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 
@@ -60,12 +61,17 @@ const todayDow = DOW[new Date().getDay()];
 
 function renderSchedule() {
   const { hook } = memoryLocation({ path: "/schedule", static: true });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <Router hook={hook}>
-      <PlayerProvider>
-        <ScheduleCalendar />
-      </PlayerProvider>
-    </Router>,
+    <QueryClientProvider client={queryClient}>
+      <Router hook={hook}>
+        <PlayerProvider>
+          <ScheduleCalendar />
+        </PlayerProvider>
+      </Router>
+    </QueryClientProvider>,
   );
 }
 

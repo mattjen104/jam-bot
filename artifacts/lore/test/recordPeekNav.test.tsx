@@ -27,6 +27,8 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
     getRecordingAlbumTracks: mockAlbumTracks,
     getPickerRun: mockPickerRun,
     useGetPickersDial: () => ({ data: { items: [] } }),
+    useGetStationNowPlaying: () => ({ data: undefined, isLoading: false }),
+    getGetStationNowPlayingQueryKey: (slug: string) => ["station-now-playing", slug],
     useGetRecordingKnowledge: mockUseGetRecordingKnowledge,
     getGetRecordingKnowledgeQueryKey: (mbid: string) => ["recording-knowledge", mbid],
   };

@@ -34,6 +34,10 @@ args = "server-tests"
 task = "workflow.run"
 args = "server-db-tests"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "lore-tests"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -66,6 +70,17 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "flock /tmp/api-server-vitest.lock pnpm --filter @workspace/api-server exec vitest run --config vitest.db.config.ts"
+
+[[workflows.workflow]]
+name = "lore-tests"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "flock /tmp/lore-vitest.lock pnpm --filter @workspace/lore exec vitest run"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"

@@ -1,19 +1,18 @@
 // @vitest-environment jsdom
 /**
- * Regression tests: the three dial front-door zone headings must appear in
- * canonical order and Zone 3 must not render FrontDoorRow children while
- * crossingsLoading=true.
+ * Regression tests for the crossings-loading window and Zone 3 DJ-band split.
  *
- * Task #831 locked the load order by rendering all three ZoneLabel headings
- * eagerly when !isCoreLoading && crossingsLoading. These tests pin that
- * contract so a future refactor cannot silently cause Zone 3 to jump above
- * Zones 1 or 2 during the crossings-loading window.
+ * During crossingsLoading=true the dial suppresses all real station rows and
+ * renders only the Zone 1 loading placeholder (Zone1Placeholder). No
+ * FrontDoorRow (.fdrow) elements — and in particular no Zone 3 "also on air"
+ * rows — may appear until crossing scores resolve, so Zone 3 can never jump
+ * above the (not-yet-computed) crossing rows.
  *
  * Covers:
- *  1. All three ZoneLabel headings appear when crossingsLoading=true.
- *  2. They appear in canonical order: Zone 1 → Zone 2 → Zone 3.
- *  3. No FrontDoorRow (.fdrow) elements exist while crossingsLoading=true,
- *     i.e. Zone 3 has no station rows until scores are ready.
+ *  1. The Zone 1 loading placeholder appears when crossingsLoading=true.
+ *  2. No FrontDoorRow (.fdrow) elements exist while crossingsLoading=true.
+ *  3. Once crossings resolve with an empty station list, no rows render.
+ *  4. Zone 3 DJ band split (djBand / restBand ordering + "DJs on air" label).
  */
 
 import React from "react";
@@ -124,12 +123,6 @@ import type { DialStation, DialShow } from "../src/hooks/useDialData";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const ZONE_LABELS = [
-  "On air, with a reason",
-  "Missed while you were away",
-  "Also on air",
-] as const;
-
 function mockDialDataLoading() {
   (useDialData as ReturnType<typeof vi.fn>).mockReturnValue({
     stations: [],
@@ -156,10 +149,6 @@ function mockDialDataLoaded() {
   });
 }
 
-function getZoneLabelElements() {
-  return document.querySelectorAll(".fdzone-lbl");
-}
-
 function renderDial() {
   return render(<DialView />);
 }
@@ -183,41 +172,22 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Dial front-door zone order — crossingsLoading=true", () => {
-  it("renders all three ZoneLabel headings while crossings are loading", () => {
+  it("renders the Zone 1 loading placeholder while crossings are loading", () => {
     mockDialDataLoading();
     renderDial();
     // The skeleton gate uses a 150 ms delay (useDelayedBoolean) so that fast
     // loads never flash shimmer rows. Advance past the threshold to let the
-    // zone headings appear.
+    // placeholder appear.
     act(() => { vi.advanceTimersByTime(150); });
 
-    for (const label of ZONE_LABELS) {
-      expect(
-        screen.getByText(label, { selector: ".fdzone-lbl__text" }),
-        `Expected ZoneLabel "${label}" to be present`,
-      ).toBeTruthy();
-    }
+    // With hasLibrary=true the placeholder shows the "finding stations" status.
+    expect(
+      screen.getByText("Finding which stations are playing your music…"),
+    ).toBeTruthy();
+    expect(document.querySelector(".z1-placeholder--loading")).toBeTruthy();
   });
 
-  it("renders the three zone headings in canonical order (Zone 1 → Zone 2 → Zone 3)", () => {
-    mockDialDataLoading();
-    renderDial();
-    act(() => { vi.advanceTimersByTime(150); });
-
-    const labelEls = Array.from(getZoneLabelElements());
-    // Filter to just the three front-door zone labels (exclude any schedule labels)
-    const zoneTextEls = labelEls
-      .map((el) => el.querySelector(".fdzone-lbl__text")?.textContent ?? "")
-      .filter((text) => (ZONE_LABELS as readonly string[]).includes(text));
-
-    expect(zoneTextEls).toEqual([
-      "On air, with a reason",
-      "Missed while you were away",
-      "Also on air",
-    ]);
-  });
-
-  it("does not render any FrontDoorRow (.fdrow) elements while crossingsLoading=true", () => {
+  it("does not render any FrontDoorRow (.fdrow) elements while crossingsLoading=true (before the skeleton gate)", () => {
     mockDialDataLoading();
     renderDial();
 
@@ -225,35 +195,26 @@ describe("Dial front-door zone order — crossingsLoading=true", () => {
     expect(rows.length).toBe(0);
   });
 
-  it("Zone 3 heading appears after Zone 1 and Zone 2 in the DOM while loading", () => {
+  it("does not render any real FrontDoorRow (.fdrow) elements once the skeleton gate opens", () => {
     mockDialDataLoading();
     renderDial();
     act(() => { vi.advanceTimersByTime(150); });
 
-    const zone1El = screen.getByText("On air, with a reason", {
-      selector: ".fdzone-lbl__text",
-    });
-    const zone2El = screen.getByText("Missed while you were away", {
-      selector: ".fdzone-lbl__text",
-    });
-    const zone3El = screen.getByText("Also on air", {
-      selector: ".fdzone-lbl__text",
-    });
+    // The placeholder renders shimmer skeletons (.fdrow-skeleton), never real
+    // station rows (.fdrow), so Zone 3 can never surface before scores resolve.
+    const rows = document.querySelectorAll(".fdrow");
+    expect(rows.length).toBe(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
+  });
 
-    // Use DOM position comparison: Node.DOCUMENT_POSITION_FOLLOWING means
-    // the argument comes AFTER `this` in document order.
+  it("does not surface any Zone 3 'DJs on air' band while crossings are loading", () => {
+    mockDialDataLoading();
+    renderDial();
+    act(() => { vi.advanceTimersByTime(150); });
+
     expect(
-      zone1El.compareDocumentPosition(zone3El) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      zone2El.compareDocumentPosition(zone3El) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      zone1El.compareDocumentPosition(zone2El) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+      screen.queryByText("DJs on air", { selector: ".fdzone-lbl__text" }),
+    ).toBeNull();
   });
 });
 
@@ -433,7 +394,11 @@ describe("Zone 3 DJ band split", () => {
     expect(rows[0].textContent).toContain("DJ Picker");
   });
 
-  it("does not place an artist-valued DJ in the 'DJs on air' band", () => {
+  it("does not credit an artist-valued DJ name as a selector", () => {
+    // A djName that collides with the currently-playing artist must be
+    // suppressed (eligibleDjName rejects it), so the row never presents the
+    // artist as a DJ. The station still surfaces as an also-on-air row and the
+    // artist appears in the sentence, but no DJ-credit sentence is produced.
     const artistCollision = makeAttributedZone3Station("artist-meta", "The Flaming Lips");
     artistCollision.shows[0]!.currentTrack = {
       mbid: null, artistMbid: null, title: "Do You Realize??", artist: "the flaming lips",
@@ -444,8 +409,11 @@ describe("Zone 3 DJ band split", () => {
 
     render(<DialView />);
 
-    expect(screen.queryByText("DJs on air", { selector: ".fdzone-lbl__text" })).toBeNull();
     expect(document.querySelectorAll(".fdrow")).toHaveLength(1);
-    expect(document.querySelector(".fdrow")?.textContent?.toLowerCase()).toContain("the flaming lips is playing");
+    const row = document.querySelector(".fdrow")!;
+    // The artist name is shown in the sentence …
+    expect(row.textContent?.toLowerCase()).toContain("the flaming lips");
+    // … but never as a DJ credit (no fdrow__dj node carrying the name).
+    expect(row.querySelector(".fdrow__dj")).toBeNull();
   });
 });
