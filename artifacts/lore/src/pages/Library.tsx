@@ -35,7 +35,6 @@ import {
   type LibraryItem,
   type SyncJobStatus,
 } from "../lib/meHooks";
-import { SeedInput, SeedBar } from "../components/SeedInput";
 import { ApiError } from "@workspace/api-client-react";
 import { KeepButton } from "../components/KeepButton";
 import { LibraryRow } from "../components/LibraryRow";
@@ -1588,39 +1587,6 @@ export default function Library() {
 
         {/* ── Your Week ── */}
         <YourWeekCard />
-
-        {/* ── Seed bar — always visible so returning users can tune crossings at any time ── */}
-        <div
-          style={{
-            padding: "10px 15px",
-            borderBottom: "1px solid hsl(var(--border) / 0.5)",
-          }}
-          data-testid="library-seed-section"
-        >
-          {visibleSeeds.length > 0 ? (
-            <SeedBar
-              seeds={visibleSeeds}
-              onAddSeed={addSeed}
-              onRemoveSeed={removeSeed}
-            />
-          ) : (
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: 6 }}
-              data-testid="library-seed-prompt"
-            >
-              <span
-                style={{
-                  fontFamily: "var(--app-font-mono)",
-                  fontSize: 12,
-                  color: "hsl(var(--faint))",
-                }}
-              >
-                Add an artist or song
-              </span>
-              <SeedInput seeds={visibleSeeds} onAdd={addSeed} />
-            </div>
-          )}
-        </div>
 
         {/* ── Live strip (stub — wired when /me/library/live endpoint ships) ── */}
         {/* TODO: replace false with liveItems.length > 0 */}

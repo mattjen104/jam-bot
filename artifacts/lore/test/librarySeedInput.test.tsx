@@ -1,19 +1,20 @@
 // @vitest-environment jsdom
 /**
- * Regression guard for the Library seed-input type-to-add flow.
+ * Regression guard for the Library artist-seed experience.
  *
- * After Task #1189 extracted SeedInput/SeedBar into a shared component and
- * Task #1204 wired that component into the Library's empty-state onboarding
- * section, this test confirms the Library's path works end-to-end:
+ * After the top add-artist banner was removed from the Library page, this
+ * test confirms:
+ *   - The top `library-seed-section` banner is NOT rendered.
+ *   - The "Add music" button (library-import-open) remains as the primary
+ *     entry point for the artist-seed / import flow via the modal.
  *
- *   type artist name → submit → chip appears → remove chip → chip disappears
- *
- * Any missed context dependency (hook wiring, provider, prop threading) in the
- * shared component's new consumer would break one of these steps.
+ * The underlying seed hooks, mutation logic, and ManualImportModal behavior
+ * are exercised by their own suites; this test focuses only on what the
+ * Library page itself renders.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   });
 });
 
-// Stub heavy sub-components not relevant to the seed-input path.
+// Stub heavy sub-components not relevant to this test.
 vi.mock("../src/components/SearchOverlay", () => ({ SearchOverlay: () => null }));
 vi.mock("../src/components/ManualImportModal", () => ({ ManualImportModal: () => null }));
 vi.mock("../src/components/YourWeekCard", () => ({ YourWeekCard: () => null }));
@@ -110,81 +111,31 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Library SeedInput — type-to-add full cycle", () => {
-  it("adds a typed artist name as a chip and removes it on the × button", async () => {
+describe("Library top add-artist banner", () => {
+  it("does not render the top seed section banner", () => {
     renderLibrary();
 
-    // The seed input renders in the onboarding section (empty library, no seeds).
-    const input = screen.getByRole("textbox", { name: "Artist name" });
-    fireEvent.change(input, { target: { value: "Radiohead" } });
+    // The top seed section must be absent — it was the topmost add-artist CTA.
+    expect(
+      document.querySelector("[data-testid='library-seed-section']"),
+    ).toBeNull();
 
-    // Click Add — triggers optimistic update synchronously.
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    // The mutation is called with the new seed list.
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(["Radiohead"]);
-    });
-
-    // The chip appears inside SeedBar once visibleSeeds.length > 0.
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Remove Radiohead" })).toBeTruthy();
-    });
-
-    // Click the × remove button on the chip.
-    fireEvent.click(screen.getByRole("button", { name: "Remove Radiohead" }));
-
-    // The mutation is called with the empty list.
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith([]);
-    });
-
-    // The chip is gone.
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Remove Radiohead" })).toBeNull();
-    });
+    // Neither the seed prompt nor any artist-name textbox should appear at the
+    // top level of the Library page.
+    expect(
+      document.querySelector("[data-testid='library-seed-prompt']"),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("textbox", { name: "Artist name" }),
+    ).toBeNull();
   });
 
-  it("submits via Enter keypress as well as the Add button", async () => {
+  it("still renders the Add music entry point so users can reach the import flow", () => {
     renderLibrary();
 
-    const input = screen.getByRole("textbox", { name: "Artist name" });
-    fireEvent.change(input, { target: { value: "Arcade Fire" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(["Arcade Fire"]);
-    });
-
-    // Chip appears after Enter submission.
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Remove Arcade Fire" })).toBeTruthy();
-    });
-  });
-
-  it("clears the text field immediately after submission", async () => {
-    renderLibrary();
-
-    const input = screen.getByRole("textbox", { name: "Artist name" }) as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "LCD Soundsystem" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    // SeedInput calls setValue("") synchronously on submit.
-    expect(input.value).toBe("");
-  });
-
-  it("rolls back the optimistic chip when the mutation fails", async () => {
-    mutateAsync.mockRejectedValueOnce(new Error("network error"));
-    renderLibrary();
-
-    const input = screen.getByRole("textbox", { name: "Artist name" });
-    fireEvent.change(input, { target: { value: "Portishead" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    // After the rejection, optimisticSeeds resets to null → falls back to
-    // seedArtists (empty []) → the chip must disappear.
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Remove Portishead" })).toBeNull();
-    });
+    // The hero-area "Add music" button must remain as the surviving entry point.
+    expect(
+      screen.getByTestId("library-import-open"),
+    ).toBeTruthy();
   });
 });
