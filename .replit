@@ -42,6 +42,10 @@ args = "lore-tests"
 task = "workflow.run"
 args = "tone-e2e"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "lore-e2e-suite"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -93,6 +97,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "flock /tmp/lore-e2e.lock pnpm --filter @workspace/lore run test:e2e:tone-gate"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "lore-e2e-suite"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "flock /tmp/lore-e2e.lock pnpm --filter @workspace/lore run test:e2e:suite-gate"
 
 [workflows.workflow.metadata]
 isValidation = true

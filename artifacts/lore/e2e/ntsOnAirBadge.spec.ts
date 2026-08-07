@@ -1,3 +1,5 @@
+// GATE-EXCLUDED: clicks station-<slug> cards from StationList, which is no longer mounted (front door is the dial hero).
+// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
 import { test, expect } from "@playwright/test";
 
 /**

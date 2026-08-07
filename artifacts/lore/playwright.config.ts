@@ -65,11 +65,16 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         // Use the system-installed Chromium in the Replit/NixOS environment.
         // Set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH to override (e.g. for CI).
-        ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
-          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
-          : process.env.NIX_CHROMIUM_PATH
-            ? { executablePath: process.env.NIX_CHROMIUM_PATH }
-            : {}),
+        // NOTE: executablePath is only honored inside launchOptions —
+        // putting it directly under `use` is silently ignored and Playwright
+        // falls back to (absent) downloaded browsers.
+        launchOptions: {
+          ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+            ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+            : process.env.NIX_CHROMIUM_PATH
+              ? { executablePath: process.env.NIX_CHROMIUM_PATH }
+              : {}),
+        },
       },
     },
   ],

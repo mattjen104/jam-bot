@@ -1,3 +1,5 @@
+// GATE-EXCLUDED: depends on live spin data for pinned MBID/picker anchors that have drifted out of the dev DB (spin-replay-0 no longer renders); live-data flaky.
+// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
 /**

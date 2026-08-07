@@ -1,3 +1,5 @@
+// GATE-EXCLUDED: targets library-sync / library-sync-receipt / library-sync-button testids removed in the Library dial-style redesign.
+// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
 import { test, expect } from "@playwright/test";
 
 /**

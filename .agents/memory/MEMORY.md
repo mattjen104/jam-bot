@@ -96,4 +96,6 @@
 - [Tier-1 prefetch loop & interstitial gating](tier1-prefetch-loop.md) — zero-link items need a fetched-set or prefetch loops when queue-run is deferred; interstitial must gate spotifyQueueRun too.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
 - [Crossing-tone e2e merge gate](tone-e2e-gate.md) — `tone-e2e` validation runs the autoplay-policy Playwright spec; fails loudly when Chromium or the lore dev server is missing, so restart the lore workflow first.
+- [Playwright executablePath placement](playwright-executablepath-launchoptions.md) — executablePath is only honored inside use.launchOptions; directly under `use` it's silently ignored and Playwright hunts for downloaded browsers.
+- [Lore e2e suite gate exclusions](lore-e2e-suite-gate.md) — `lore-e2e-suite` gate runs only route-intercepted specs; six specs excluded as stale (dead testids: library-prompt, StationList, RecordPeekNav, sync-receipt) or live-data flaky (fallbackNotice).
 - [lore-tests merge gate](lore-tests-gate.md) — lore vitest suite gates merges via flock-wrapped validation; copy/grammar changes must update tests or the suite rots.

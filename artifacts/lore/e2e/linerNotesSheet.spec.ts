@@ -1,3 +1,5 @@
+// GATE-EXCLUDED: tests RecordPeekNav, which is currently hidden (not rendered) in App.tsx.
+// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
 import { test, expect } from "@playwright/test";
 
 /**

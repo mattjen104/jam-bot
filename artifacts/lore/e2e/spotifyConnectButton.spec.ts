@@ -1,3 +1,5 @@
+// GATE-EXCLUDED: targets data-testid="library-prompt", a banner that no longer exists (connect surface moved to the Library page).
+// See e2e/run-e2e-suite-gate.sh for the merge-gate spec list.
 import { test, expect } from "@playwright/test";
 
 /**
