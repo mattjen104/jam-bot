@@ -83,6 +83,25 @@ function extractSpotifyDeepLink(links: RecordingLink[]): string | null {
   }
   return null;
 }
+/**
+ * Display label for the failing playback service in the past-run-failed
+ * banner. Falls back to a generic phrase when the service is unknown.
+ */
+function serviceDisplayLabel(
+  svc: "youtube" | "apple-music" | "bandcamp" | null,
+): string {
+  switch (svc) {
+    case "youtube":
+      return "YouTube";
+    case "apple-music":
+      return "Apple Music";
+    case "bandcamp":
+      return "Bandcamp";
+    default:
+      return "the connected service";
+  }
+}
+
 import { useSpotifyDriver } from "./useSpotifyDriver";
 import { useYouTubeDriver } from "./useYouTubeDriver";
 import { useAppleMusicDriver } from "./useAppleMusicDriver";
@@ -114,6 +133,18 @@ export interface RideItem {
   attribution: RideAttribution | null;
   /** Spin duration in seconds, from the broadcast record. Used by Tier-4 cue sheet. */
   spinDurationSeconds?: number | null;
+}
+
+/**
+ * Structured reason for a past-mode replay hard stop: which track failed and
+ * which service couldn't load it. `service` is a display label ("Spotify",
+ * "YouTube", …) or "the connected service" when unknown.
+ */
+export interface PastRunFailure {
+  mbid: string;
+  title: string;
+  artist: string;
+  service: string;
 }
 
 export type RideStatus =
@@ -416,6 +447,14 @@ export interface RideApi {
   pastRunFailed: boolean;
 
   /**
+   * Which track (and which service) stopped the replay — set alongside
+   * `pastRunFailed` so the Dial can name the culprit instead of showing a
+   * generic message. Null when no failure is active or when the failing
+   * track could not be identified.
+   */
+  pastRunFailure: PastRunFailure | null;
+
+  /**
    * After a `pastRunFailed` hard stop: retry the Tier-1 bulk Spotify
    * queue-run.  Explicit listener action — never fired automatically.
    */
@@ -643,6 +682,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [pastModeTierLabel, setPastModeTierLabel] = useState<string | null>(null);
   const [cueSheetVisible, setCueSheetVisible] = useState(false);
   const [pastRunFailed, setPastRunFailed] = useState(false);
+  const [pastRunFailure, setPastRunFailure] = useState<PastRunFailure | null>(
+    null,
+  );
   // One-shot flag: true once the Tier-1 uris-array queue call has fired for
   // the current ride. Reset in stop() and startReplay(). Stored as a ref so
   // the effect can read/write it without triggering extra re-renders.
@@ -808,6 +850,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setPastModeTierLabel(null);
     setCueSheetVisible(false);
     setPastRunFailed(false);
+    setPastRunFailure(null);
     tier1RunQueuedRef.current = false;
     tier1FetchingRef.current = new Set();
     tier1FetchedRef.current = new Set();
@@ -914,6 +957,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setPastModeTierLabel(null);
       setCueSheetVisible(false);
       setPastRunFailed(false);
+      setPastRunFailure(null);
       tier1RunQueuedRef.current = false;
       tier1FetchingRef.current = new Set();
     tier1FetchedRef.current = new Set();
@@ -1038,6 +1082,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       tierRefinedRef.current = false;
       tier23LinkFetchingRef.current = new Set();
       setPastRunFailed(false);
+      setPastRunFailure(null);
       setCueSheetVisible(false);
       // Compute playback tier for past-orientation rides from the connected services.
       if (newOrientation === "past") {
@@ -1504,6 +1549,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    */
   const retryPastRun = useCallback(() => {
     setPastRunFailed(false);
+    setPastRunFailure(null);
     tier1RunQueuedRef.current = false;
     setStatus("loading");
   }, []);
@@ -1516,6 +1562,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    */
   const continuePastRunWithCueSheet = useCallback(() => {
     setPastRunFailed(false);
+    setPastRunFailure(null);
     // Keep tier1RunQueuedRef.current = true — Tier 1 must not re-fire.
     const tier = selectPastModeTier({
       spotify: { connected: false, premium: false, hasActiveDevice: false },
@@ -2459,6 +2506,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         effectiveFallbackUsed
       ) {
         setPastRunFailed(true);
+        const failedItem = queue.find((q) => q.mbid === targetMbid);
+        setPastRunFailure(
+          failedItem
+            ? {
+                mbid: failedItem.mbid,
+                title: failedItem.title,
+                artist: failedItem.artist,
+                service: serviceDisplayLabel(preferredService),
+              }
+            : null,
+        );
         setStatus("error");
         return undefined;
       }
@@ -2687,6 +2745,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // A queue item has no Spotify URI even after link prefetch — hard stop.
         tier1RunQueuedRef.current = true; // prevent re-fire
         setPastRunFailed(true);
+        setPastRunFailure({
+          mbid: item.mbid,
+          title: item.title,
+          artist: item.artist,
+          service: "Spotify",
+        });
         setStatus("error");
         return;
       }
@@ -2703,6 +2767,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // cannot re-fire and the per-track driver cannot silently resume.
       // Surface a hard stop: no silent downgrade to a lower tier.
       setPastRunFailed(true);
+      const cur = queue[index];
+      setPastRunFailure(
+        cur
+          ? {
+              mbid: cur.mbid,
+              title: cur.title,
+              artist: cur.artist,
+              service: "Spotify",
+            }
+          : null,
+      );
       setStatus("error");
     });
   }, [
@@ -2987,6 +3062,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             ? { artist: queue[index + 1]!.artist, title: queue[index + 1]!.title }
             : null,
         pastRunFailed,
+        pastRunFailure,
         retryPastRun,
         continuePastRunWithCueSheet,
       },
@@ -3056,6 +3132,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       pastModeTierLabel,
       cueSheetVisible,
       pastRunFailed,
+      pastRunFailure,
       retryPastRun,
       continuePastRunWithCueSheet,
       spotify,

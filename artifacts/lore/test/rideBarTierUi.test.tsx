@@ -91,6 +91,7 @@ function makeRide(overrides: Partial<RideApi> = {}): RideApi {
     cueSheetVisible: false,
     cueSheetNext: null,
     pastRunFailed: false,
+    pastRunFailure: null,
     ...overrides,
   };
 }
@@ -190,5 +191,36 @@ describe("RideBar past-mode tier UI", () => {
     );
     const el = screen.getByTestId("past-run-failed");
     expect(el.textContent).toContain("Playback stopped");
+  });
+
+  it("names the failing track and service when pastRunFailure is set", () => {
+    render(
+      <RideBar
+        ride={makeRide({
+          pastRunFailed: true,
+          pastRunFailure: {
+            mbid: "mbid-2",
+            title: "Dreams",
+            artist: "Fleetwood Mac",
+            service: "Spotify",
+          },
+        })}
+        spotify={spotify}
+      />,
+    );
+    const el = screen.getByTestId("past-run-failed");
+    expect(el.textContent).toContain(
+      "Playback stopped — 'Dreams' by Fleetwood Mac couldn't be loaded from Spotify.",
+    );
+  });
+
+  it("falls back to the generic stopped copy when pastRunFailure is null", () => {
+    render(
+      <RideBar ride={makeRide({ pastRunFailed: true })} spotify={spotify} />,
+    );
+    const el = screen.getByTestId("past-run-failed");
+    expect(el.textContent).toContain(
+      "a track in this run couldn't be loaded from the connected service",
+    );
   });
 });

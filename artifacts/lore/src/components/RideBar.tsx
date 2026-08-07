@@ -627,8 +627,9 @@ export function RideBar({
         >
           <StopCircle className="h-3.5 w-3.5 shrink-0" />
           <span className="flex-1">
-            Playback stopped — a track in this run couldn't be loaded from the
-            connected service.
+            {ride.pastRunFailure
+              ? `Playback stopped — '${ride.pastRunFailure.title}' by ${ride.pastRunFailure.artist} couldn't be loaded from ${ride.pastRunFailure.service}.`
+              : "Playback stopped — a track in this run couldn't be loaded from the connected service."}
           </span>
           <button
             type="button"
