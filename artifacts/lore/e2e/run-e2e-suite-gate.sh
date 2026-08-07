@@ -55,21 +55,60 @@ if [[ ! -x "$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH" ]]; then
 fi
 echo "Using Chromium: $PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"
 
-# --- 2. Verify the lore dev server is up ------------------------------------
+# --- 2. Verify the lore dev server, or fall back to a self-started one ------
+# If the running dev server (workflow 'artifacts/lore: web') is reachable we
+# use it. Otherwise this gate stays self-contained: Playwright's webServer
+# option starts a dedicated vite instance on a free ephemeral port (which does
+# not collide with the workflow's PORT). Real errors (Chromium missing, spec
+# failure, vite failing to boot) still fail loudly.
 BASE_URL="${PLAYWRIGHT_BASE_URL:-http://localhost:80}"
 APP_URL="${BASE_URL%/}/lore/"
 
-code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL" || echo 000)"
-if [[ "$code" != "200" ]]; then
-  echo "FAIL: lore dev server not reachable ($APP_URL -> HTTP $code)." >&2
-  echo "Start the lore dev server (workflow 'artifacts/lore: web') before running this gate." >&2
-  exit 1
-fi
-echo "Dev server OK at $APP_URL"
+url_ok() {
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" || echo 000)"
+  [[ "$code" == "200" ]]
+}
+
+free_port() {
+  # Ask the kernel for a free ephemeral port (collision-safe across
+  # parallel gate runs, unlike a fixed dedicated port).
+  node -e 'const s=require("net").createServer();s.listen(0,()=>{console.log(s.address().port);s.close()})'
+}
+
+RUN_SPECS=(
+  e2e/importPickerEntryPoints.spec.ts
+  e2e/spotifyConnectCallback.spec.ts
+  e2e/librarySyncLifecycle.spec.ts
+  e2e/ntsOnAirBadge.spec.ts
+)
 
 # --- 3. Run the reliable specs ------------------------------------------------
-exec pnpm exec playwright test --config playwright.config.ts \
-  e2e/importPickerEntryPoints.spec.ts \
-  e2e/spotifyConnectCallback.spec.ts \
-  e2e/librarySyncLifecycle.spec.ts \
-  e2e/ntsOnAirBadge.spec.ts
+if url_ok "$APP_URL"; then
+  echo "Dev server OK at $APP_URL"
+  exec pnpm exec playwright test --config playwright.config.ts "${RUN_SPECS[@]}"
+fi
+
+echo "Dev server not reachable at $APP_URL; starting a dedicated one."
+# Ephemeral-port allocation has a tiny bind race with other processes, so
+# retry with a fresh port if vite reports the port already in use. Any other
+# failure (Chromium missing, spec failure, vite boot error) fails immediately.
+for attempt in 1 2 3; do
+  PLAYWRIGHT_WEB_SERVER_PORT="${SUITE_GATE_PORT:-$(free_port)}"
+  export PLAYWRIGHT_WEB_SERVER_PORT
+  echo "Attempt $attempt: dedicated dev server on port $PLAYWRIGHT_WEB_SERVER_PORT"
+  out_file="$(mktemp)"
+  if pnpm exec playwright test --config playwright.config.ts "${RUN_SPECS[@]}" 2>&1 | tee "$out_file"; then
+    rm -f "$out_file"
+    exit 0
+  fi
+  if grep -q "is already used" "$out_file" && [[ -z "${SUITE_GATE_PORT:-}" ]]; then
+    rm -f "$out_file"
+    echo "Port $PLAYWRIGHT_WEB_SERVER_PORT was taken; retrying on a fresh port." >&2
+    continue
+  fi
+  rm -f "$out_file"
+  exit 1
+done
+echo "FAIL: could not find a free port for the dedicated dev server after 3 attempts." >&2
+exit 1
