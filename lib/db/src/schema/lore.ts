@@ -2773,12 +2773,10 @@ export const embedResolutionQueueTable = pgTable(
     lockedAt: timestamp("locked_at"),
     lastError: text("last_error"),
     /** Optional facts used only for aggregate coverage metrics. */
-    /**
-     * Normalised aggregate dimensions. Empty values represent unknown, avoiding
-     * PostgreSQL nullable-unique semantics splitting the same bucket.
-     */
-    stationId: integer("station_id").notNull().default(0),
-    genreCluster: text("genre_cluster").notNull().default("unknown"),
+    stationId: integer("station_id").references(() => stationsTable.id, {
+      onDelete: "set null",
+    }),
+    genreCluster: text("genre_cluster"),
     requestedAt: timestamp("requested_at").defaultNow().notNull(),
     expiresAt: timestamp("expires_at"),
     metricRecordedAt: timestamp("metric_recorded_at"),
