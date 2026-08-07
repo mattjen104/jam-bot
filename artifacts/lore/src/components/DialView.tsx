@@ -7,7 +7,7 @@
  * chrome above the scroll body.
  */
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { Download, Play, Search, X } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
@@ -266,6 +266,222 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
 interface QueueArtist {
   name: string;
   inLibrary: boolean;
+}
+
+/** A complete broadcast run retained by the set-panel tab model. */
+export interface SetPanelSet {
+  id: string;
+  stationSlug: string;
+  stationName: string;
+  startedAt: string;
+  showName: string | null;
+  /** Individual eligible DJ identities — scope matching is by membership so a
+   * co-hosted set surfaces under EACH host's drill, never only under the
+   * joined display label. */
+  djNames: string[];
+  artists: QueueArtist[];
+  spins: DialSpin[];
+  progress: number;
+}
+
+export type SetPanelScope =
+  | { kind: "set"; setId: string }
+  | { kind: "dj"; value: string }
+  | { kind: "show"; value: string }
+  | { kind: "station"; value: string };
+
+export interface SetPanelTab {
+  id: string;
+  scope: SetPanelScope;
+}
+
+export function setPanelScopeId(scope: SetPanelScope): string {
+  return `${scope.kind}:${scope.kind === "set" ? scope.setId : scope.value}`;
+}
+
+/**
+ * The synthetic replay tab may only take focus when the panel is empty:
+ * playback started from a selected set/scope keeps that tab visible while the
+ * replay tab updates in the background.
+ */
+export function shouldActivateReplayTab(activeTabId: string | null): boolean {
+  return activeTabId === null;
+}
+
+/**
+ * Scope resolution is always in units of FULL sets: a DJ/show/station scope
+ * returns every complete matching set (chronological), never a crossing
+ * excerpt. Crossing artists stay highlighted white via each set's own
+ * inLibrary flags inside SetQueueList.
+ */
+export function scopedSets(scope: SetPanelScope, allSets: SetPanelSet[]): SetPanelSet[] {
+  const matches = scope.kind === "set"
+    ? allSets.filter((set) => set.id === scope.setId)
+    : scope.kind === "dj"
+      ? allSets.filter((set) => set.djNames.includes(scope.value))
+      : scope.kind === "show"
+        ? allSets.filter((set) => set.showName === scope.value)
+        : allSets.filter((set) => set.stationSlug === scope.value);
+  return [...matches].sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
+}
+
+export function setPanelTabLabel(tab: SetPanelTab, sets: SetPanelSet[]): string {
+  if (tab.scope.kind === "dj") return tab.scope.value;
+  if (tab.scope.kind === "show") return tab.scope.value;
+  if (tab.scope.kind === "station") {
+    const slug = tab.scope.value;
+    const set = sets.find((candidate) => candidate.stationSlug === slug);
+    return set?.stationName ?? slug;
+  }
+  const setId = tab.scope.setId;
+  const set = sets.find((candidate) => candidate.id === setId);
+  return set ? `${fmtHM(set.startedAt)} · ${set.stationName}` : "Set";
+}
+
+/** Streaming services a displayed setlist can export to. Qobuz has no
+ * playlist-write connector, so every service exports as ordered per-track
+ * deep links into that service's own search — honest about matching rather
+ * than pretending a remote playlist was created. */
+export const SET_EXPORT_SERVICES = ["Spotify", "Apple Music", "Tidal", "Deezer", "YouTube", "Qobuz"] as const;
+export type SetExportService = (typeof SET_EXPORT_SERVICES)[number];
+
+const EXPORT_URL_BUILDERS: Record<SetExportService, (q: string) => string> = {
+  Spotify: (q) => `https://open.spotify.com/search/${encodeURIComponent(q)}`,
+  "Apple Music": (q) => `https://music.apple.com/search?term=${encodeURIComponent(q)}`,
+  Tidal: (q) => `https://listen.tidal.com/search?q=${encodeURIComponent(q)}`,
+  Deezer: (q) => `https://www.deezer.com/search/${encodeURIComponent(q)}`,
+  YouTube: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+  Qobuz: (q) => `https://www.qobuz.com/search?q=${encodeURIComponent(q)}`,
+};
+
+export interface SetExportResult {
+  entries: { label: string; url: string }[];
+  /** Tracks that couldn't be matched (missing artist or title) — degrade
+   * gracefully by counting them instead of exporting broken links. */
+  skipped: number;
+}
+
+export function buildSetExport(sets: SetPanelSet[], service: SetExportService): SetExportResult {
+  const entries: SetExportResult["entries"] = [];
+  let skipped = 0;
+  for (const set of sets) {
+    for (const spin of set.spins) {
+      const artist = spin.artist?.trim();
+      const title = spin.title?.trim();
+      if (!artist || !title) { skipped += 1; continue; }
+      entries.push({ label: `${artist} — ${title}`, url: EXPORT_URL_BUILDERS[service](`${artist} ${title}`) });
+    }
+  }
+  return { entries, skipped };
+}
+
+/**
+ * Tabbed set browser — fully controlled by the parent so that front-door row
+ * clicks, replay updates, and provenance drills all share one tab model.
+ * Each tab header card leads with the most specific provenance (DJ, then
+ * show), while the station link is anchored last on every card.
+ */
+export function TabbedSetPanel({
+  tabs,
+  activeId,
+  allSets,
+  seedsLower,
+  onSelect,
+  onClose,
+  onScope,
+  onAdd,
+  onRemove,
+  onPlay,
+}: {
+  tabs: SetPanelTab[];
+  activeId: string | null;
+  allSets: SetPanelSet[];
+  seedsLower: Set<string>;
+  onSelect: (id: string) => void;
+  onClose: (id: string) => void;
+  onScope: (scope: SetPanelScope) => void;
+  onAdd: (name: string) => void;
+  onRemove: (name: string) => void;
+  onPlay: (sets: SetPanelSet[], label: string) => void;
+}) {
+  const [service, setService] = useState<SetExportService>("Spotify");
+  const [exportOpen, setExportOpen] = useState(false);
+  const active = tabs.find((tab) => tab.id === activeId) ?? null;
+  const displayed = active ? scopedSets(active.scope, allSets) : [];
+  const exported = exportOpen && active ? buildSetExport(displayed, service) : null;
+
+  return (
+    <>
+      {tabs.length > 0 && (
+        <div className="set-tabs" role="tablist" aria-label="Open sets">
+          {tabs.map((tab) => (
+            <div key={tab.id} className={`set-tabs__tab${tab.id === activeId ? " set-tabs__tab--active" : ""}`}>
+              <button type="button" role="tab" aria-selected={tab.id === activeId} onClick={() => onSelect(tab.id)}>
+                {setPanelTabLabel(tab, allSets)}
+              </button>
+              <button type="button" className="set-tabs__close" aria-label={`Close ${setPanelTabLabel(tab, allSets)}`} onClick={() => onClose(tab.id)}><X /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      {active && (
+        <div className="set-panel__actions">
+          <button
+            type="button"
+            className="set-panel__action"
+            disabled={!displayed.some((set) => set.spins.some((spin) => spin.mbid))}
+            onClick={() => onPlay(displayed, setPanelTabLabel(active, allSets))}
+          >
+            <Play /> Play set{displayed.length > 1 ? "s" : ""}
+          </button>
+          <label className="set-panel__service">
+            <span className="sr-only">Export service</span>
+            <select aria-label="Export service" value={service} onChange={(e) => { setService(e.target.value as SetExportService); setExportOpen(false); }}>
+              {SET_EXPORT_SERVICES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="set-panel__action"
+            disabled={!displayed.some((set) => set.spins.length)}
+            onClick={() => setExportOpen((open) => !open)}
+          >
+            <Download /> Export
+          </button>
+        </div>
+      )}
+      {exported && (
+        <div className="set-panel__export" aria-label={`Export to ${service}`}>
+          {exported.entries.map((entry, i) => (
+            <a key={`${entry.url}:${i}`} href={entry.url} target="_blank" rel="noreferrer">{entry.label}</a>
+          ))}
+          {exported.skipped > 0 && (
+            <p className="set-panel__export-skips">{exported.skipped} track{exported.skipped > 1 ? "s" : ""} couldn't be matched and {exported.skipped > 1 ? "were" : "was"} skipped.</p>
+          )}
+        </div>
+      )}
+      {active && displayed.length === 0 && <p className="dial-hero__setpanel-empty">No complete sets are available for this attribution yet.</p>}
+      {displayed.length > 0 && (
+        <div className="set-panel__sets">
+          {displayed.map((set) => (
+            <article className="set-panel__card" key={set.id}>
+              <header className="set-panel__provenance">
+                <time>{runDate(set.startedAt)} · {fmtHM(set.startedAt)}</time>
+                <div className="set-panel__cascade">
+                  {set.djNames.map((dj) => (
+                    <button key={dj} type="button" onClick={() => onScope({ kind: "dj", value: dj })}>{dj}</button>
+                  ))}
+                  {set.showName && <button type="button" onClick={() => onScope({ kind: "show", value: set.showName! })}>{set.showName}</button>}
+                </div>
+                <button type="button" className="set-panel__station" onClick={() => onScope({ kind: "station", value: set.stationSlug })}>{set.stationName}</button>
+              </header>
+              <SetQueueList artists={set.artists} seedsLower={seedsLower} onAdd={onAdd} onRemove={onRemove} progress={set.progress} />
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -2035,46 +2251,161 @@ export function DialView() {
   // ── Player queue panel ──────────────────────────────────────────────────
   // This is deliberately player-context state, not an expandable row. It lets
   // live broadcasts and fixed replays share the same set-list surface.
-  const [setPanel, setSetPanel] = useState<{
-    slug: string;
-    stationName: string;
-    startedAt: string;
-    artists: QueueArtist[];
-    progress: number;
-  } | null>(null);
+  const [setTabs, setSetTabs] = useState<SetPanelTab[]>([]);
+  const [activeSetTabId, setActiveSetTabId] = useState<string | null>(null);
+  // Sets opened explicitly (front-door click, replay updates). Kept separate
+  // from the derived broadcast sets so listedArtists fallbacks and replay
+  // synthetic sets survive live-data refreshes.
+  const [openedSets, setOpenedSets] = useState<Record<string, SetPanelSet>>({});
+
+  // Every complete broadcast run currently known to the dial — the corpus a
+  // DJ/show/station drill scopes over, always in units of whole sets.
+  const broadcastSets = useMemo<SetPanelSet[]>(() => {
+    const sets: SetPanelSet[] = [];
+    for (const ds of stations) {
+      for (const show of ds.shows) {
+        if (show.state === "future" || show.spins.length === 0) continue;
+        const artists = show.spins
+          .map((spin) => ({ name: spin.artist, inLibrary: spin.isLibraryHit || spin.isArtistHit }))
+          .filter((artist) => artist.name.trim());
+        if (artists.length === 0) continue;
+        const currentIndex = show.currentTrack
+          ? Math.max(0, show.spins.findIndex((spin) => spin.playedAt === show.currentTrack?.playedAt))
+          : show.spins.length - 1;
+        const djNames = eligibleDjNames(dialShowAsAttribution(show));
+        sets.push({
+          id: `${ds.station.slug}:${show.startedAt}`,
+          stationSlug: ds.station.slug,
+          stationName: ds.station.name,
+          startedAt: show.startedAt,
+          showName: usableShowName(show),
+          djNames,
+          artists,
+          spins: show.spins,
+          progress: show.state === "live" && artists.length > 0
+            ? Math.min(1, (currentIndex + 1) / artists.length)
+            : 1,
+        });
+      }
+    }
+    return sets;
+  }, [stations]);
+
+  const allSets = useMemo<SetPanelSet[]>(() => {
+    const merged = new Map<string, SetPanelSet>();
+    for (const set of broadcastSets) merged.set(set.id, set);
+    for (const set of Object.values(openedSets)) merged.set(set.id, set);
+    return [...merged.values()];
+  }, [broadcastSets, openedSets]);
+
+  /** Append-or-focus a tab. `activate=false` lets background updates (replay
+   * index ticks) refresh a tab without yanking focus from the one the
+   * listener is reading. */
+  const openSetTab = useCallback((scope: SetPanelScope, activate = true) => {
+    const id = setPanelScopeId(scope);
+    setSetTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, scope }]);
+    if (activate) setActiveSetTabId(id);
+  }, []);
+  const closeSetTab = useCallback((id: string) => {
+    setSetTabs((current) => {
+      const index = current.findIndex((tab) => tab.id === id);
+      const next = current.filter((tab) => tab.id !== id);
+      setActiveSetTabId((activeNow) => activeNow === id ? (next[Math.max(0, index - 1)]?.id ?? null) : activeNow);
+      return next;
+    });
+  }, []);
+
   const openLiveQueue = useCallback((row: { ds: DialStation; show: DialShow | null }, listedArtists?: PopularCrossingArtist[] | null) => {
     const spins = row.show?.spins ?? [];
     const spinArtists = spins.map((spin) => ({
       name: spin.artist,
       inLibrary: spin.isLibraryHit || spin.isArtistHit,
     })).filter((artist) => artist.name.trim());
-    const artists = listedArtists?.length
-      ? listedArtists.map((artist) => ({ name: artist.name, inLibrary: artist.inLibrary }))
-      : spinArtists;
+    const artists = spinArtists.length > 0
+      ? spinArtists
+      : (listedArtists ?? []).map((artist) => ({ name: artist.name, inLibrary: artist.inLibrary }));
     const currentIndex = Math.max(0, spins.findIndex((spin) =>
       spin.playedAt === row.show?.currentTrack?.playedAt,
     ));
-    setSetPanel({
-      slug: row.ds.station.slug,
-      stationName: row.ds.station.name,
-      startedAt: row.show?.startedAt ?? new Date().toISOString(),
-      artists,
-      progress: artists.length > 0
-        ? Math.min(1, (currentIndex + 1) / artists.length)
-        : 0,
-    });
-  }, []);
+    const startedAt = row.show?.startedAt ?? new Date().toISOString();
+    const id = `${row.ds.station.slug}:${startedAt}`;
+    const djNames = row.show ? eligibleDjNames(dialShowAsAttribution(row.show)) : [];
+    setOpenedSets((current) => ({
+      ...current,
+      [id]: {
+        id,
+        stationSlug: row.ds.station.slug,
+        stationName: row.ds.station.name,
+        startedAt,
+        showName: usableShowName(row.show),
+        djNames,
+        artists,
+        spins,
+        progress: artists.length > 0
+          ? Math.min(1, (currentIndex + 1) / artists.length)
+          : 0,
+      },
+    }));
+    openSetTab({ kind: "set", setId: id });
+  }, [openSetTab]);
 
   useEffect(() => {
     if (!ride.active || ride.queue.length === 0) return;
-    setSetPanel({
-      slug: "replay",
-      stationName: ride.replayLabel ?? "Replay",
-      startedAt: currentRun?.day ? `${currentRun.day}T00:00:00Z` : new Date().toISOString(),
-      artists: ride.queue.map((item) => ({ name: item.artist, inLibrary: false })),
-      progress: (ride.index + 1) / ride.queue.length,
+    const id = "replay";
+    setOpenedSets((current) => ({
+      ...current,
+      [id]: {
+        id,
+        stationSlug: "replay",
+        stationName: ride.replayLabel ?? "Replay",
+        startedAt: currentRun?.day ? `${currentRun.day}T00:00:00Z` : new Date().toISOString(),
+        showName: null,
+        djNames: [],
+        artists: ride.queue.map((item) => ({ name: item.artist, inLibrary: false })),
+        spins: ride.queue.map((item) => ({
+          mbid: item.mbid,
+          artistMbid: null,
+          title: item.title,
+          artist: item.artist,
+          playedAt: "",
+          isLibraryHit: false,
+          isArtistHit: false,
+          isFirstSpin: false,
+        })),
+        progress: (ride.index + 1) / ride.queue.length,
+      },
+    }));
+    // Replay synchronization is background-only whenever the listener already
+    // has a tab in focus: playback started FROM the set panel (or anywhere
+    // else) must never yank the selected set/scope out from under them. The
+    // replay tab only takes focus when nothing is open at all.
+    openSetTab({ kind: "set", setId: id }, shouldActivateReplayTab(activeSetTabId));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ride.active, ride.queue, ride.index, ride.replayLabel, currentRun?.day, openSetTab]);
+
+  /** Plays a displayed setlist as an ordered queue through the agnostic
+   * player — same seed pattern as every other startReplay call-site, so
+   * service preference/fallback behavior is untouched. */
+  const playSetlist = useCallback((sets: SetPanelSet[], label: string) => {
+    const seeds: RideSeed[] = sets.flatMap((set) => set.spins)
+      .filter((spin): spin is DialSpin & { mbid: string } => spin.mbid !== null)
+      .map((spin) => ({
+        mbid: spin.mbid,
+        title: spin.title,
+        artist: spin.artist,
+        artworkUrl: null,
+        links: [],
+        spinDurationSeconds: null,
+      }));
+    if (seeds.length === 0) return;
+    ride.startReplay(seeds, label, {
+      timeOrientation: "past",
+      startIndex: 0,
+      context: "dial-set-panel",
     });
-  }, [ride.active, ride.queue, ride.index, ride.replayLabel, currentRun?.day]);
+  }, [ride]);
+
+  const activeSetTab = setTabs.find((tab) => tab.id === activeSetTabId) ?? null;
 
   // ── Fine-landing effect — fire startPastReplay(fineIdx) on crossing step ──
   // Fires when the user steps to a specific crossing (swipe or row click).
@@ -2365,12 +2696,23 @@ export function DialView() {
                 <div className="dial-hero__setpanel-head">
                   <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
                   <span className="dial-hero__setpanel-title">
-                    {setPanel ? `${fmtHM(setPanel.startedAt)} · ${setPanel.stationName}` : "Choose a live set"}
+                    {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
                   </span>
                   <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
                 </div>
-                {setPanel ? (
-                  <SetQueueList artists={setPanel.artists} seedsLower={seedsLower} onAdd={addSeed} onRemove={removeSeed} progress={setPanel.progress} />
+                {setTabs.length > 0 ? (
+                  <TabbedSetPanel
+                    tabs={setTabs}
+                    activeId={activeSetTabId}
+                    allSets={allSets}
+                    seedsLower={seedsLower}
+                    onSelect={setActiveSetTabId}
+                    onClose={closeSetTab}
+                    onScope={openSetTab}
+                    onAdd={addSeed}
+                    onRemove={removeSeed}
+                    onPlay={playSetlist}
+                  />
                 ) : (
                   <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
                 )}

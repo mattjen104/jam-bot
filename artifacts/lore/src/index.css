@@ -6025,3 +6025,154 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   padding-top: 10px;
   padding-bottom: 14px;
 }
+
+/* ── Tabbed set panel — provenance browsing & export (task: set-panel tabs) ── */
+.set-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+.set-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 999px;
+  padding: 1px 4px 1px 10px;
+  background: hsl(var(--muted) / 0.35);
+}
+.set-tabs__tab--active {
+  border-color: hsl(var(--foreground) / 0.6);
+  background: hsl(var(--muted) / 0.7);
+}
+.set-tabs__tab > button[role="tab"] {
+  appearance: none;
+  background: none;
+  border: none;
+  color: hsl(var(--foreground) / 0.8);
+  cursor: pointer;
+  font-size: 13px !important;
+  white-space: nowrap;
+  padding: 2px 0;
+}
+.set-tabs__tab--active > button[role="tab"] { color: #fff; }
+.set-tabs__close {
+  appearance: none;
+  background: none;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+}
+.set-tabs__close svg { width: 12px; height: 12px; }
+.set-tabs__close:hover { color: #fff; }
+
+.set-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 6px;
+  flex-wrap: wrap;
+}
+.set-panel__action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 6px;
+  background: none;
+  color: hsl(var(--foreground) / 0.85);
+  cursor: pointer;
+  font-size: 13px !important;
+  padding: 3px 9px;
+}
+.set-panel__action svg { width: 13px; height: 13px; }
+.set-panel__action:hover:not(:disabled) { color: #fff; border-color: hsl(var(--foreground) / 0.5); }
+.set-panel__action:disabled { opacity: .35; cursor: default; }
+.set-panel__service select {
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--foreground) / 0.85);
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 6px;
+  font-size: 13px !important;
+  padding: 3px 6px;
+}
+.set-panel__export {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  max-height: 40%;
+  overflow-y: auto;
+}
+.set-panel__export a {
+  color: hsl(var(--foreground) / 0.8);
+  font-size: 13px !important;
+  text-decoration: underline dotted;
+}
+.set-panel__export a:hover { color: #fff; }
+.set-panel__export-skips {
+  margin: 2px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px !important;
+}
+
+/* Multi-set scopes read chronologically; each card leads with the most
+   specific provenance while the station link anchors last on every card. */
+.set-panel__sets { display: flex; flex-direction: column; gap: 10px; }
+.set-panel__card { border-top: 1px solid hsl(var(--border) / 0.4); padding-top: 6px; }
+.set-panel__card:first-child { border-top: none; padding-top: 0; }
+.set-panel__provenance {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.set-panel__provenance time {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px !important;
+  white-space: nowrap;
+}
+.set-panel__cascade { display: inline-flex; gap: 8px; }
+.set-panel__cascade button,
+.set-panel__station {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 13px !important;
+  text-decoration: underline dotted;
+  white-space: nowrap;
+}
+.set-panel__cascade button:hover,
+.set-panel__station:hover { color: #fff; }
+.set-panel__station { margin-left: auto; color: hsl(var(--muted-foreground)); }
+
+/* Small screens: only a few items fit — sets become a horizontal, snap-scrolled
+   row so listeners page left/right through time, and the tab strip already
+   scrolls horizontally for the same reason. */
+@media (orientation: portrait), (max-width: 720px) {
+  .set-panel__sets {
+    flex-direction: row;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 12px;
+  }
+  .set-panel__card {
+    flex: 0 0 86%;
+    scroll-snap-align: start;
+    border-top: none;
+    border-left: 1px solid hsl(var(--border) / 0.4);
+    padding: 0 0 0 10px;
+  }
+  .set-panel__card:first-child { border-left: none; padding-left: 0; }
+}
