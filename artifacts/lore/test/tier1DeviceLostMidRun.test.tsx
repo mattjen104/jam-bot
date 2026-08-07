@@ -364,6 +364,13 @@ describe("Tier 1: 409 no-active-device from spotifyQueueRun", () => {
     expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(1);
     expect(latest!.ride.pastRunFailed).toBe(true);
     expect(latest!.ride.status).toBe("error");
+    // The failure names the current item at rejection time — track "aaa".
+    expect(latest!.ride.pastRunFailure).toEqual({
+      mbid: "aaa",
+      title: "Track aaa",
+      artist: "Artist",
+      service: "Spotify",
+    });
   });
 
   it("never re-fires the queue-run after the 409 — even as timers and index change", async () => {
@@ -453,6 +460,7 @@ describe("Tier 1: recovery after pastRunFailed", () => {
 
     expect(mockSpotifyQueueRun).toHaveBeenCalledTimes(2);
     expect(latest!.ride.pastRunFailed).toBe(false);
+    expect(latest!.ride.pastRunFailure).toBeNull();
     expect(latest!.ride.status).not.toBe("error");
     expect(latest!.ride.pastModeTier).toBe(1);
     expect(latest!.ride.active).toBe(true);
@@ -484,6 +492,7 @@ describe("Tier 1: recovery after pastRunFailed", () => {
     await flush();
 
     expect(latest!.ride.pastRunFailed).toBe(false);
+    expect(latest!.ride.pastRunFailure).toBeNull();
     // No guided options mocked → re-selection without Spotify lands on Tier 4.
     expect(latest!.ride.pastModeTier).toBe(4);
     expect(latest!.ride.active).toBe(true);

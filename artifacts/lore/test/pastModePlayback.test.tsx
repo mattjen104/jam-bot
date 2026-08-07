@@ -466,6 +466,14 @@ describe("Past-mode Tier 1 (Spotify Connect)", () => {
     // pastRunFailed is set; ride surfaces a clear stopped state.
     expect(latest!.ride.pastRunFailed).toBe(true);
     expect(latest!.ride.status).toBe("error");
+    // The failure names the exact offending item — the seed with no Spotify
+    // URI ("bbb"), NOT the current item ("aaa").
+    expect(latest!.ride.pastRunFailure).toEqual({
+      mbid: "bbb",
+      title: "Track bbb",
+      artist: "Artist",
+      service: "Spotify",
+    });
   });
 
   it("does NOT call spotifyQueueRun multiple times when index advances", async () => {
@@ -656,6 +664,109 @@ describe("Past-mode mid-run failure", () => {
 
     expect(latest!.ride.pastRunFailed).toBe(true);
     expect(latest!.ride.status).toBe("error");
+    // The failure names the CURRENT item at the time the queue-run rejected.
+    expect(latest!.ride.pastRunFailure).toEqual({
+      mbid: "aaa",
+      title: "Track aaa",
+      artist: "Artist",
+      service: "Spotify",
+    });
+  });
+
+  it("queue-run rejection names the current item, not the first item, when the run starts mid-queue", async () => {
+    spotifyState.connected = true;
+    spotifyState.premium = true;
+    spotifyState.hasActiveDevice = true;
+
+    mockSpotifyQueueRun.mockRejectedValue(new Error("no_active_device"));
+
+    renderPlayer();
+    await flush();
+
+    act(() => {
+      latest!.ride.startReplay(
+        [makeSpotifySeed("aaa"), makeSpotifySeed("bbb"), makeSpotifySeed("ccc")],
+        "Test Run",
+        { timeOrientation: "past", startIndex: 1 },
+      );
+    });
+    await flush();
+    await act(async () => { await vi.runAllTimersAsync(); });
+
+    expect(latest!.ride.pastRunFailed).toBe(true);
+    // Current item is index 1 ("bbb") — the banner must not blame "aaa".
+    expect(latest!.ride.pastRunFailure).toEqual({
+      mbid: "bbb",
+      title: "Track bbb",
+      artist: "Artist",
+      service: "Spotify",
+    });
+  });
+
+  it("pastRunFailure clears when a NEW ride starts after a failure", async () => {
+    spotifyState.connected = true;
+    spotifyState.premium = true;
+    spotifyState.hasActiveDevice = true;
+
+    mockSpotifyQueueRun.mockRejectedValueOnce(new Error("no_active_device"));
+
+    renderPlayer();
+    await flush();
+
+    act(() => {
+      latest!.ride.startReplay(
+        [makeSpotifySeed("aaa")],
+        "Test Run",
+        { timeOrientation: "past" },
+      );
+    });
+    await flush();
+    await act(async () => { await vi.runAllTimersAsync(); });
+
+    expect(latest!.ride.pastRunFailed).toBe(true);
+    expect(latest!.ride.pastRunFailure).not.toBeNull();
+
+    // Start a fresh replay — the stale failure must not leak into the new ride.
+    mockSpotifyQueueRun.mockResolvedValue({ queued: 1 });
+    act(() => {
+      latest!.ride.startReplay(
+        [makeSpotifySeed("zzz")],
+        "Second Run",
+        { timeOrientation: "past" },
+      );
+    });
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await flush();
+
+    expect(latest!.ride.pastRunFailed).toBe(false);
+    expect(latest!.ride.pastRunFailure).toBeNull();
+  });
+
+  it("pastRunFailure clears on stop()", async () => {
+    spotifyState.connected = true;
+    spotifyState.premium = true;
+    spotifyState.hasActiveDevice = true;
+
+    mockSpotifyQueueRun.mockRejectedValue(new Error("no_active_device"));
+
+    renderPlayer();
+    await flush();
+
+    act(() => {
+      latest!.ride.startReplay(
+        [makeSpotifySeed("aaa")],
+        "Test Run",
+        { timeOrientation: "past" },
+      );
+    });
+    await flush();
+    await act(async () => { await vi.runAllTimersAsync(); });
+    expect(latest!.ride.pastRunFailure).not.toBeNull();
+
+    act(() => { latest!.ride.stop(); });
+    await flush();
+
+    expect(latest!.ride.pastRunFailure).toBeNull();
   });
 });
 
