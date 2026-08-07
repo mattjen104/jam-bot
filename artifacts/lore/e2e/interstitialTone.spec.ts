@@ -25,11 +25,13 @@ import { test, expect } from "@playwright/test";
  *    Chrome policy sticky activation suffices, so this only bites in the
  *    strict-policy + slow-device-check corner.
  *
- * Decision: keep the fresh Audio() + fail-open dismiss. The tone sounds in
- * the realistic path; the only silent-skip corner (strict policy AND a >5s
- * device check) is already handled gracefully by the fail-open, and routing
- * the tone through the ride-shared audio element would risk src races with
- * ride playback for marginal gain.
+ * Decision: PlayerProvider now pre-unlocks a *dedicated* tone element (muted
+ * play()+pause()) inside the crossing gesture handler and the interstitial
+ * effect reuses it, so the tone still sounds even when the device check runs
+ * past the ~5s transient-activation window. The fail-open dismiss is kept as
+ * the last-resort backstop (missing codec, exotic policies). The boundary
+ * test below pins the fix: a fresh Audio() is still blocked >5s after the
+ * gesture, while the pre-unlocked element plays.
  *
  * Three harness confounds had to be neutralised (each silently makes autoplay
  * always-allowed and would turn the positive test into a tautology):
@@ -74,19 +76,50 @@ type ToneAttempt = {
 declare global {
   interface Window {
     __toneControl?: Promise<ToneAttempt>;
-    __armToneAttempt?: (delayMs: number) => void;
+    __armToneAttempt?: (delayMs: number, useUnlocked?: boolean) => void;
     __toneAttempt?: ToneAttempt | null;
   }
 }
 
-/** Install the deferred fresh-Audio() attempt helper as a page script. */
+/** Install the deferred tone-attempt helper as a page script.
+ *
+ * Two modes:
+ *  - fresh (default): create `new Audio()` at attempt time — the pre-fix
+ *    pattern, blocked once transient activation expires.
+ *  - unlocked: a click handler pre-unlocks a dedicated element (muted
+ *    play()+pause()) — exactly what PlayerProvider's
+ *    `unlockInterstitialTone` does — and the attempt reuses it.
+ */
 async function installAttemptHelper(page: import("@playwright/test").Page) {
   await page.addInitScript((tonePath: string) => {
     window.__toneAttempt = null;
-    window.__armToneAttempt = (delayMs: number) => {
+    let unlockedTone: HTMLAudioElement | null = null;
+    // Mirror of PlayerProvider.unlockInterstitialTone: runs inside the real
+    // click gesture handler.
+    document.addEventListener(
+      "click",
+      () => {
+        const tone = new Audio(tonePath);
+        tone.muted = true;
+        const p = tone.play();
+        if (p && typeof p.then === "function") {
+          p.then(() => {
+            tone.pause();
+            try { tone.currentTime = 0; } catch { /* not seekable yet */ }
+            tone.muted = false;
+          }).catch(() => { tone.muted = false; });
+        }
+        unlockedTone = tone;
+      },
+      { once: true },
+    );
+    window.__armToneAttempt = (delayMs: number, useUnlocked?: boolean) => {
       setTimeout(async () => {
         const hadStickyActivation = navigator.userActivation?.hasBeenActive ?? false;
-        const tone = new Audio(tonePath);
+        const tone =
+          useUnlocked && unlockedTone ? unlockedTone : new Audio(tonePath);
+        tone.muted = false;
+        try { tone.currentTime = 0; } catch { /* not seekable yet */ }
         const ended = new Promise<boolean>((resolve) => {
           tone.addEventListener("ended", () => resolve(true));
           // Asset is 1.2s; if `ended` never fires something is wrong.
@@ -211,5 +244,30 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
     expect(result.hadStickyActivation).toBe(true);
     expect(result.played).toBe(false);
     expect(result.errorName).toBe("NotAllowedError");
+  });
+
+  test("boundary fix: a tone element pre-unlocked in the gesture handler still plays >5s later", async ({
+    browser,
+  }) => {
+    // The fix for the corner above: PlayerProvider pre-unlocks a dedicated
+    // tone element (muted play()+pause()) inside the crossing gesture and
+    // reuses it in the interstitial effect. This reproduces that pattern and
+    // proves the tone now sounds even when the device check outlives the
+    // ~5s transient-activation window.
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await installAttemptHelper(page);
+    await page.goto("/lore/");
+    await page.click("body"); // click handler pre-unlocks the element
+    await page.evaluate(() => window.__armToneAttempt!(6000, true));
+    await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
+      timeout: 20_000,
+    });
+    const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
+    await context.close();
+    expect(result.hadStickyActivation).toBe(true);
+    expect(result.played).toBe(true);
+    expect(result.progressed).toBe(true);
+    expect(result.endedFired).toBe(true);
   });
 });

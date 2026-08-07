@@ -11,4 +11,6 @@ Testing whether `audio.play()` is allowed under real autoplay policy in Playwrig
 
 **Findings (Chromium 138, `--autoplay-policy=user-gesture-required`):** transient activation (~5s window) governs a fresh `Audio()`; sticky activation alone is not honoured under the strict flag (it IS under default Chrome policy). An element pre-unlocked (play+pause) inside the gesture handler still plays after the window expires.
 
+**Applied fix:** the crossing tone is now pre-unlocked (muted play+pause on a dedicated element) inside the gesture handler and the interstitial effect reuses that element, so the tone survives a >5s device check under the strict flag. Fresh-Audio fallback + fail-open dismiss remain the backstop.
+
 **How to apply:** see `artifacts/lore/e2e/interstitialTone.spec.ts` — always include a no-gesture control test that must be blocked, or the positive result proves nothing.

@@ -733,6 +733,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // After the check runs once this session, no further prompts are shown.
   const deviceContinuityCheckedRef = useRef(false);
 
+  // Dedicated interstitial-tone audio element, pre-unlocked inside the user
+  // gesture that triggers the crossing (muted play()+pause()). Under the
+  // strictest autoplay policy (--autoplay-policy=user-gesture-required) a
+  // *fresh* Audio() created more than ~5s after the gesture is blocked
+  // (transient activation expires; sticky activation is not honoured), so if
+  // the device check runs long the tone would silently skip. An element that
+  // has already had play() succeed inside the gesture handler keeps its
+  // playback permission and still sounds after the window expires.
+  const interstitialToneRef = useRef<HTMLAudioElement | null>(null);
+  /** Unlock the tone element during the crossing gesture. Fail-open: any
+   *  refusal here just means the playback effect falls back to a fresh
+   *  Audio() (the pre-fix behaviour). */
+  const unlockInterstitialTone = useCallback(() => {
+    try {
+      const tone = new Audio(interstitialToneUrl);
+      tone.muted = true;
+      const rewind = () => {
+        tone.pause();
+        try { tone.currentTime = 0; } catch { /* not yet seekable — fine */ }
+        tone.muted = false;
+      };
+      const p = tone.play();
+      if (p && typeof p.then === "function") {
+        p.then(rewind).catch(() => { tone.muted = false; });
+      } else {
+        rewind();
+      }
+      interstitialToneRef.current = tone;
+    } catch {
+      interstitialToneRef.current = null;
+    }
+  }, []);
+
   // Per-service prefetch trackers (keyed by service string: "preview", "spotify", etc.)
   // Updated as materialization observations arrive; mutated via ref (no re-render needed).
   const prefetchTrackersRef = useRef<Map<string, ServicePrefetchTracker>>(new Map());
@@ -890,6 +923,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // until interstitialArmed clears (see tone-playback effect below, which
         // plays the Lore-authored interstitial tone and then dismisses).
         setInterstitialArmed(true);
+        // Unlock the tone element while we still hold the user gesture — if
+        // the device check below runs past the transient-activation window
+        // (~5s), a fresh Audio() would be blocked but this one still plays.
+        unlockInterstitialTone();
         // Device continuity: on the first live→past crossing this session, fetch
         // the device list, find the currently-active output, compare it to the
         // pinned Connect device. If they differ, set deviceMismatch so the UI
@@ -1037,6 +1074,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // until interstitialArmed clears (see tone-playback effect below, which
         // plays the Lore-authored interstitial tone and then dismisses).
         setInterstitialArmed(true);
+        // Unlock the tone element while we still hold the user gesture — see
+        // the identical call in start() for the autoplay-policy rationale.
+        unlockInterstitialTone();
         // Device continuity: fetch devices, find the active output, compare to
         // the pinned device. If mismatch, set deviceMismatch so the UI shows a
         // confirmation gate before replay audio begins. The fetch must complete
@@ -1604,7 +1644,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       done = true;
       setInterstitialArmed(false);
     };
-    const tone = new Audio(interstitialToneUrl);
+    // Reuse the element pre-unlocked during the crossing gesture (it keeps
+    // its playback permission even after the transient-activation window
+    // expires); fall back to a fresh Audio() when none was unlocked.
+    const unlocked = interstitialToneRef.current;
+    interstitialToneRef.current = null;
+    const tone = unlocked ?? new Audio(interstitialToneUrl);
+    tone.muted = false;
+    try { tone.currentTime = 0; } catch { /* not seekable yet — plays from 0 */ }
     tone.addEventListener("ended", dismiss);
     try {
       // Playback refused (autoplay policy, unsupported environment) — dismiss
