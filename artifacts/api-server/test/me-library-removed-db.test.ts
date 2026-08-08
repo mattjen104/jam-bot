@@ -19,6 +19,7 @@ import {
   buildLibraryHitContext,
   _testOnly_clearLibraryHitCache,
 } from "../src/lore/library-hits.js";
+import { loadActiveLibraryItems } from "../src/lore/library-sync.js";
 
 /**
  * Integration tests for the library active/removed state:
@@ -285,6 +286,83 @@ describe("POST /api/me/library/removal", () => {
       .where(and(eq(libraryItemsTable.userId, userId!), eq(libraryItemsTable.mbid, MBID_KEEP)));
     expect(rowAfterKeep!.removedAt).toBeNull();
   });
+
+  it("excludes removed rows from the Spotify sync selection; restore brings them back", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    // Deselect the keep row, then the sync worker's selection must not
+    // contain it — removed tracks are never synced back to Spotify.
+    await postRemoval({ mbid: MBID_KEEP, removed: true });
+    const removedItems = await loadActiveLibraryItems(userId!);
+    expect(removedItems.some((item) => item.mbid === MBID_KEEP)).toBe(false);
+    expect(removedItems.some((item) => item.mbid === MBID_OTHER)).toBe(true);
+    // Restore → eligible for sync again.
+    await postRemoval({ mbid: MBID_KEEP, removed: false });
+    const restoredItems = await loadActiveLibraryItems(userId!);
+    expect(restoredItems.some((item) => item.mbid === MBID_KEEP)).toBe(true);
+  }, 120_000);
+
+  it("excludes removed rows from avatar candidates and from active-library eligibility", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    // Give the removable recording artwork so it is an avatar candidate,
+    // and strip artwork from the other row so eligibility hinges on it.
+    await db.execute(
+      sql`UPDATE recordings SET artwork_url = 'https://example.com/librm-art.jpg' WHERE mbid = ${MBID_KEEP}`,
+    );
+    await db.execute(sql`UPDATE recordings SET artwork_url = NULL WHERE mbid = ${MBID_OTHER}`);
+
+    const active = await api("/api/me/avatar");
+    expect(active.status).toBe(200);
+    expect(
+      (active.body.candidates as { recordingMbid: string }[]).some((c) => c.recordingMbid === MBID_KEEP),
+    ).toBe(true);
+
+    await postRemoval({ mbid: MBID_KEEP, removed: true });
+    const afterRemoval = await api("/api/me/avatar");
+    expect(afterRemoval.status).toBe(200);
+    // Removed rows are neither avatar candidates nor evidence of an active
+    // library (no manufactured identity from deselected tracks).
+    expect(
+      (afterRemoval.body.candidates as { recordingMbid: string }[]).some((c) => c.recordingMbid === MBID_KEEP),
+    ).toBe(false);
+
+    await postRemoval({ mbid: MBID_KEEP, removed: false });
+    const restored = await api("/api/me/avatar");
+    expect(
+      (restored.body.candidates as { recordingMbid: string }[]).some((c) => c.recordingMbid === MBID_KEEP),
+    ).toBe(true);
+  }, 120_000);
+
+  it("excludes removed rows from keep/status, and legacy unkeep soft-removes (timeline preserved)", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    // Active row reports kept.
+    const before = await api(`/api/me/keep/status?mbids=${MBID_KEEP},${MBID_OTHER}`);
+    expect(before.body.kept).toContain(MBID_KEEP);
+
+    // Deselect → no longer "kept" in the player, but the row still exists.
+    await postRemoval({ mbid: MBID_KEEP, removed: true });
+    const during = await api(`/api/me/keep/status?mbids=${MBID_KEEP},${MBID_OTHER}`);
+    expect(during.body.kept).not.toContain(MBID_KEEP);
+    expect(during.body.kept).toContain(MBID_OTHER);
+
+    await postRemoval({ mbid: MBID_KEEP, removed: false });
+
+    // Legacy unkeep must soft-remove: row survives with removedAt set.
+    const del = await fetch(`${baseUrl}/api/me/keep/${MBID_OTHER}`, {
+      method: "DELETE",
+      headers: { cookie: `lore_sid=${SID}` },
+    });
+    expect(del.status).toBe(204);
+    const [row] = await db
+      .select({ removedAt: libraryItemsTable.removedAt })
+      .from(libraryItemsTable)
+      .where(and(eq(libraryItemsTable.userId, userId!), eq(libraryItemsTable.mbid, MBID_OTHER)));
+    expect(row).toBeDefined();
+    expect(row!.removedAt).not.toBeNull();
+    const after = await api(`/api/me/keep/status?mbids=${MBID_KEEP},${MBID_OTHER}`);
+    expect(after.body.kept).not.toContain(MBID_OTHER);
+    // Restore for later tests.
+    await postRemoval({ mbid: MBID_OTHER, removed: false });
+  }, 120_000);
 
   it("removes and restores soft rows via spotifyId, excluding soft-artist matching", async () => {
     if (!dbAvailable) return;

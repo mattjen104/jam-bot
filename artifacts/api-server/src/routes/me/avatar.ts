@@ -6,7 +6,7 @@
  * here so an arbitrary URL can never become a listener identity.
  */
 import { Router, type IRouter } from "express";
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   db,
   libraryItemsTable,
@@ -93,6 +93,7 @@ async function getCandidates(userId: number): Promise<AlbumAvatarCandidate[]> {
     .innerJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
     .where(and(
       eq(libraryItemsTable.userId, userId),
+      isNull(libraryItemsTable.removedAt),
       isNotNull(recordingsTable.artworkUrl),
       sql`COALESCE(${libraryItemsTable.provenance}->>'service', '') <> 'matt-starter'`,
     ))
@@ -110,6 +111,7 @@ async function getCandidates(userId: number): Promise<AlbumAvatarCandidate[]> {
     .innerJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
     .where(and(
       eq(libraryItemsTable.userId, userId),
+      isNull(libraryItemsTable.removedAt),
       isNotNull(recordingsTable.artworkUrl),
       sql`${libraryItemsTable.provenance}->>'service' = 'matt-starter'`,
     ))
@@ -126,7 +128,8 @@ async function getCandidates(userId: number): Promise<AlbumAvatarCandidate[]> {
   const [seededOrLibrary] = await db
     .select({ n: sql<number>`count(*)` })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, userId));
+    // Removed-only rows are not an active library.
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
   if (Number(seededOrLibrary?.n ?? 0) === 0) return [];
 
   const catalogueRows = await db

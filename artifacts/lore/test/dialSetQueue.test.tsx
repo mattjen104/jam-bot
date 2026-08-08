@@ -80,7 +80,7 @@ function SyncHarness({ slug, artists, initialProgress, liveRows }: HarnessProps)
 afterEach(() => cleanup());
 
 describe("Dial set queue", () => {
-  it("keeps spin order, renders completed artists white, and toggles seeded artists", () => {
+  it("keeps spin order, renders yours white, and adds/removes via explicit affordances", () => {
     const onAdd = vi.fn();
     const onRemove = vi.fn();
     render(
@@ -99,14 +99,25 @@ describe("Dial set queue", () => {
 
     const names = [...document.querySelectorAll(".set-queue__artist")].map((node) => node.textContent);
     expect(names).toEqual(["First Artist", "Second Artist", "Third Artist"]);
-    expect(screen.getByRole("button", { name: /add first artist/i }).className).toContain("set-queue__artist--add");
-    expect(screen.getByRole("button", { name: /add first artist/i }).className).toContain("dial-artist--add");
-    expect(screen.getByRole("button", { name: /second artist is in your library/i }).className).toContain("set-queue__artist--library");
-    expect(screen.getByRole("button", { name: /second artist is in your library/i }).className).toContain("dial-artist--complete");
-    expect(screen.getByRole("button", { name: /remove third artist/i }).className).toContain("set-queue__artist--library");
-    expect(screen.getByRole("button", { name: /remove third artist/i }).className).toContain("dial-artist--complete");
+    // New link semantics: names never add — add/seed is an explicit `+`
+    // button beside the name; seeded names get an explicit `×` remove.
+    const addPlus = screen.getByRole("button", { name: /add first artist/i });
+    expect(addPlus.className).toContain("dial-addplus");
+    expect(addPlus.textContent).toBe("+");
+    // Non-yours name is plain gray text with no dotted-underline add class.
+    const firstName = [...document.querySelectorAll(".set-queue__artist")][0]!;
+    expect(firstName.tagName).not.toBe("BUTTON");
+    expect(firstName.className).toContain("set-queue__artist--other");
+    expect(firstName.className).not.toContain("dial-artist--add");
+    // Yours (library and seeded) render white with the library treatment.
+    const second = [...document.querySelectorAll(".set-queue__artist")][1]!;
+    expect(second.className).toContain("set-queue__artist--library");
+    expect(second.className).toContain("dial-artist--complete");
+    const third = [...document.querySelectorAll(".set-queue__artist")][2]!;
+    expect(third.className).toContain("set-queue__artist--library");
+    expect(third.className).toContain("dial-artist--complete");
 
-    fireEvent.click(screen.getByRole("button", { name: /add first artist/i }));
+    fireEvent.click(addPlus);
     fireEvent.click(screen.getByRole("button", { name: /remove third artist/i }));
     expect(onAdd).toHaveBeenCalledWith("First Artist");
     expect(onRemove).toHaveBeenCalledWith("Third Artist");

@@ -1,332 +1,419 @@
 /**
- * ContextRail — sticky bottom strip on deep views (station / show / DJ).
+ * ContextRail — the tuned-context navigation surface.
  *
- * Renders horizontally scrollable chips grouped by entity type. Tapping a
- * station chip navigates laterally; library chip goes to /library; artist /
- * album chips show a toast (future entity pages).
+ * Renders in the Dial's context region (replacing the old chip-based rail):
+ *   1. the current summary sentence (grammar module — artists/DJs linkable),
+ *   2. structural attribution (show · station) below the sentence,
+ *   3. the active LENS for the top context frame.
+ *
+ * Destinations are reached through the sentence: links inside it push lens
+ * frames in place (dotted underline = navigate). Each lens is a COMPACT
+ * PREVIEW with an explicit "Open" action to the canonical route — never a
+ * duplicated mini-page.
+ *
+ * Playback is never touched here: pushing/popping lenses only mutates the
+ * context stack. Nothing in this module talks to the player, and the rail
+ * renders below the summary so it never obscures album art.
  */
-import { useLocation } from "wouter";
-import type { ReactNode } from "react";
-import type { DialStation, DialShow } from "../hooks/useDialData";
+import { useMemo, type ReactNode } from "react";
+import { Link } from "wouter";
+import { useSearchArtistRuns, getSearchArtistRunsQueryKey } from "@workspace/api-client-react";
+import type { ContextDescriptor, ContextFrame } from "../dial/dialContext";
+import {
+  radioSummarySentence,
+  artistNode,
+  djNode,
+  type GrammarLinks,
+} from "../dial/grammar";
+import type { DialStation, DialShow, DialSpin, DialDisplayMode } from "../hooks/useDialData";
 
-interface ContextRailProps {
-  level: "station" | "show" | "dj";
-  station: DialStation | null;
-  show: DialShow | null;
-  djName: string | null;
-  allStations: DialStation[];
-  onStationClick: (slug: string) => void;
-  onDjClick: (name: string) => void;
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Structural subset of DialView's SetPanelSet — kept local to avoid an
+ * import cycle (DialView imports this module). */
+export interface RailSet {
+  id: string;
+  /** Archive run id when known — canonical route source for the set lens. */
+  runId: number | string | null;
+  stationSlug: string;
+  stationName: string;
+  startedAt: string;
+  ianaTimezone: string | null;
+  showName: string | null;
+  djNames: string[];
+  artists: { name: string; inLibrary: boolean }[];
+  spins: DialSpin[];
 }
 
-function Chip({
-  label,
-  variant,
-  onClick,
-}: {
-  label: string;
-  variant?: "lib" | "sel" | "live" | "new" | "default";
-  onClick: () => void;
+export interface ContextRailProps {
+  ctx: ContextDescriptor;
+  /** The tuned station's dial row, when loaded. */
+  row: { ds: DialStation; show: DialShow | null } | null;
+  /** Every broadcast set currently known to the dial (whole sets). */
+  sets: RailSet[];
+  /** Lower-cased artist names seeded this session. */
+  seedsLower: Set<string>;
+  onAddSeed: (name: string) => void;
+  /** Push a lens frame onto the context stack (never touches playback). */
+  onPush: (frame: ContextFrame) => void;
+  displayMode?: DialDisplayMode;
+}
+
+/** Encode an artist frame id: MBID when known, else a name-keyed id. */
+export function artistFrameId(name: string, mbid: string | null): string {
+  return mbid ?? `name:${name}`;
+}
+
+/** Decode the artist name/mbid pair back out of a frame. */
+export function decodeArtistFrame(frame: ContextFrame): { name: string | null; mbid: string | null } {
+  if (frame.id.startsWith("name:")) return { name: frame.label ?? frame.id.slice(5), mbid: null };
+  return { name: frame.label ?? null, mbid: frame.id };
+}
+
+function fmtDay(iso: string, timeZone?: string | null): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      ...(timeZone ? { timeZone } : {}),
+    }).format(d);
+  } catch {
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(d);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lens chrome
+// ---------------------------------------------------------------------------
+
+function Lens({ title, openHref, openLabel, children }: {
+  title: string;
+  openHref: string | null;
+  openLabel?: string;
+  children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      className={`ctx-chip ctx-chip--${variant ?? "default"}`}
-      onClick={onClick}
-    >
-      {label}
+    <section className="crail-lens" aria-label={title}>
+      <header className="crail-lens__head">
+        <span className="crail-lens__title">{title}</span>
+        {openHref && (
+          <Link href={openHref} className="crail-lens__open">
+            {openLabel ?? "Open"} →
+          </Link>
+        )}
+      </header>
+      <div className="crail-lens__body">{children}</div>
+    </section>
+  );
+}
+
+/** Compact set row used by station/show/DJ lenses. */
+function SetRow({ set, onOpenSet }: { set: RailSet; onOpenSet: (set: RailSet) => void }) {
+  const names = set.artists.slice(0, 3).map((a) => a.name).join(" · ");
+  return (
+    <button type="button" className="crail-setrow gram-link--nav" onClick={() => onOpenSet(set)}>
+      <span className="crail-setrow__when">{fmtDay(set.startedAt, set.ianaTimezone)}</span>
+      {set.showName && <span className="crail-setrow__show">{set.showName}</span>}
+      <span className="crail-setrow__names">{names}{set.artists.length > 3 ? " …" : ""}</span>
     </button>
   );
 }
 
-function Sep() {
-  return <span className="ctx-sep" aria-hidden="true" />;
-}
+// ---------------------------------------------------------------------------
+// Lenses
+// ---------------------------------------------------------------------------
 
-function Group({ label, children }: { label: string; children: ReactNode }) {
+function StationLens({ row, sets, links, onOpenSet }: {
+  row: { ds: DialStation; show: DialShow | null } | null;
+  sets: RailSet[];
+  links: GrammarLinks;
+  onOpenSet: (set: RailSet) => void;
+}) {
+  const slug = row?.ds.station.slug ?? sets[0]?.stationSlug ?? null;
+  const recentSpins = (row?.show?.spins ?? []).slice(-6).reverse();
   return (
-    <div className="ctx-grp">
-      <span className="ctx-grp-lbl">{label}</span>
-      {children}
-    </div>
+    <Lens
+      title="Station"
+      openHref={slug ? `/archive/stations/${slug}` : null}
+      openLabel="Open archive"
+    >
+      {recentSpins.length > 0 ? (
+        <ul className="crail-list">
+          {recentSpins.map((spin, i) => (
+            <li key={`${spin.playedAt}-${i}`} className="crail-list__item">
+              {artistNode(spin.artist, links, i)}
+            </li>
+          ))}
+        </ul>
+      ) : sets.length > 0 ? (
+        <ul className="crail-list">
+          {sets.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+        </ul>
+      ) : (
+        <p className="crail-empty">No recent spins visible yet.</p>
+      )}
+    </Lens>
   );
 }
 
-export function ContextRail({
-  level,
-  station,
-  show,
-  djName,
-  allStations,
-  onStationClick,
-  onDjClick,
-}: ContextRailProps) {
-  const [, setLocation] = useLocation();
+function ShowLens({ frame, sets, links, stationSlug, onOpenSet }: {
+  frame: ContextFrame;
+  sets: RailSet[];
+  links: GrammarLinks;
+  stationSlug: string | null;
+  onOpenSet: (set: RailSet) => void;
+}) {
+  const showName = frame.label ?? frame.id;
+  const matching = sets.filter((set) => set.showName === showName);
+  const djNames = [...new Set(matching.flatMap((set) => set.djNames))];
+  return (
+    <Lens title="Show" openHref={stationSlug ? `/archive/stations/${stationSlug}` : null} openLabel="Open archive">
+      <p className="crail-lens__lede">{showName}{djNames.length > 0 && <> — {djNames.map((dj, i) => <span key={dj}>{i > 0 && ", "}{djNode(dj, links)}</span>)}</>}</p>
+      {matching.length > 0 ? (
+        <ul className="crail-list">
+          {matching.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+        </ul>
+      ) : (
+        <p className="crail-empty">No archived sets loaded for this show yet.</p>
+      )}
+    </Lens>
+  );
+}
 
-  function showToast(msg: string) {
-    // Simple ephemeral toast using existing Toaster infrastructure
-    const el = document.createElement("div");
-    el.style.cssText = `position:fixed;bottom:140px;left:50%;transform:translateX(-50%);
-      background:var(--raised,#202020);border:1px solid var(--rule-strong,#444444);border-radius:3px;
-      font-family:var(--app-font-display,'Archivo Narrow',sans-serif);font-size:10px;text-transform:uppercase;
-      letter-spacing:.07em;color:var(--ink-2,#b2b2b2);padding:9px 16px;white-space:nowrap;z-index:9999;
-      pointer-events:none`;
-    el.textContent = msg;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 2200);
-  }
+function DjLens({ frame, sets, onOpenSet }: {
+  frame: ContextFrame;
+  sets: RailSet[];
+  onOpenSet: (set: RailSet) => void;
+}) {
+  const name = frame.label ?? frame.id;
+  const matching = sets.filter((set) => set.djNames.includes(name));
+  return (
+    <Lens title="Selector" openHref={`/dj/${encodeURIComponent(name)}`}>
+      <p className="crail-lens__lede">{name}</p>
+      {matching.length > 0 ? (
+        <ul className="crail-list">
+          {matching.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+        </ul>
+      ) : (
+        <p className="crail-empty">No sets by {name} loaded yet.</p>
+      )}
+    </Lens>
+  );
+}
 
-  const parts: ReactNode[] = [];
+function SetLens({ frame, sets, links }: {
+  frame: ContextFrame;
+  sets: RailSet[];
+  links: GrammarLinks;
+}) {
+  // The canonical route comes from the SELECTED set's own run id — never the
+  // currently-tuned show, which may be a different run entirely.
+  const set = sets.find((candidate) => candidate.id === frame.id) ?? null;
+  const openHref = set?.runId != null
+    ? `/archive/station-runs/${set.runId}`
+    : set ? `/archive/stations/${set.stationSlug}` : null;
+  const artists = set?.artists ?? [];
+  return (
+    <Lens title="Set" openHref={openHref}>
+      {artists.length > 0 ? (
+        <ol className="crail-list crail-list--ordered">
+          {artists.map((artist, i) => (
+            <li key={`${artist.name}-${i}`} className="crail-list__item">
+              {artistNode(artist.name, links, i)}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="crail-empty">This set's tracklist isn't visible yet.</p>
+      )}
+    </Lens>
+  );
+}
 
-  if (level === "show" && show) {
-    // Collect artist → artistMbid (preferred) or recording mbid (fallback) for navigation
-    const artistNavMbid = new Map<string, { artistMbid: string | null; recordingMbid: string | null }>();
-    for (const sp of show.spins) {
-      if (!artistNavMbid.has(sp.artist)) {
-        artistNavMbid.set(sp.artist, { artistMbid: sp.artistMbid ?? null, recordingMbid: sp.mbid ?? null });
+function ArtistLens({ frame, sets, rowSpins, links, onOpenSet }: {
+  frame: ContextFrame;
+  sets: RailSet[];
+  rowSpins: readonly { artist: string; artistMbid?: string | null }[];
+  links: GrammarLinks;
+  onOpenSet: (set: RailSet) => void;
+}) {
+  const decoded = decodeArtistFrame(frame);
+  const mbid = decoded.mbid;
+  // Frame labels are not serialized into the URL, so an MBID-backed artist
+  // frame restored from a refresh/shared link arrives with no name. Recover
+  // it from everything the dial has already loaded — the lens must stay
+  // fully functional (search, fallback list, add affordance) after restore.
+  const name = useMemo(() => {
+    if (decoded.name) return decoded.name;
+    if (!mbid) return null;
+    for (const spin of rowSpins) {
+      if (spin.artistMbid === mbid) return spin.artist;
+    }
+    for (const set of sets) {
+      for (const spin of set.spins) {
+        if (spin.artistMbid === mbid) return spin.artist;
       }
     }
-    const yourArtists = [...new Set(show.spins.filter((s) => s.isLibraryHit).map((s) => s.artist))].slice(0, 4);
-    const newArtists = [...new Set(show.spins.filter((s) => !s.isLibraryHit).map((s) => s.artist))]
-      .filter((a) => !yourArtists.includes(a))
-      .slice(0, 2);
-
-    function artistClickHandler(name: string) {
-      const nav = artistNavMbid.get(name);
-      if (nav?.artistMbid) return () => setLocation(`/artist/${nav.artistMbid}`);
-      if (nav?.recordingMbid) return () => setLocation(`/song/${nav.recordingMbid}`);
-      return () => showToast("No page available yet");
-    }
-
-    if (yourArtists.length > 0 || newArtists.length > 0) {
-      parts.push(
-        <Group key="artists" label="Artists">
-          {yourArtists.map((a) => (
-            <Chip key={a} label={a} variant="lib" onClick={artistClickHandler(a)} />
-          ))}
-          {newArtists.map((a) => (
-            <Chip key={a} label={a} variant="new" onClick={artistClickHandler(a)} />
-          ))}
-        </Group>,
-      );
-    }
-
-    // Albums — deduplicated album info if available
-    const albumsFromSpins: string[] = [];
-    parts.push(<Sep key="sep1" />);
-    if (albumsFromSpins.length > 0) {
-      parts.push(
-        <Group key="albums" label="Albums">
-          {albumsFromSpins.slice(0, 3).map((al) => (
-            <Chip key={al} label={al} onClick={() => showToast("Album pages coming soon")} />
-          ))}
-        </Group>,
-      );
-      parts.push(<Sep key="sep2" />);
-    }
-
-    const isPicker = show.isPickerShow;
-    parts.push(
-      <Group key="selector" label="Selector">
-        {show.djName ? (
-          <Chip
-            label={show.djName}
-            variant={isPicker ? "sel" : "default"}
-            onClick={() => onDjClick(show.djName!)}
-          />
-        ) : null}
-      </Group>,
-    );
-
-    if (station) {
-      parts.push(<Sep key="sep3" />);
-      parts.push(
-        <Group key="station" label="Station">
-          <Chip
-            label={station.station.name}
-            variant="live"
-            onClick={() => onStationClick(station.station.slug)}
-          />
-        </Group>,
-      );
-    }
-
-    if (show.crossings > 0) {
-      parts.push(<Sep key="sep4" />);
-      parts.push(
-        <Group key="library" label="Library">
-          <Chip
-            label={`◆ ${show.crossings} yours`}
-            variant="lib"
-            onClick={() => setLocation("/library")}
-          />
-        </Group>,
-      );
-    }
-  }
-
-  if (level === "station" && station) {
-    const pastShows = station.shows.filter((s) => s.state !== "future");
-    const djNames = [...new Set(pastShows.map((s) => s.djName).filter(Boolean) as string[])];
-    const selectors = djNames.filter((d) => pastShows.some((s) => s.djName === d && s.isPickerShow));
-    const others = djNames.filter((d) => !selectors.includes(d)).slice(0, 2);
-    // Build artist → artistMbid map from all past spins
-    const stationArtistNav = new Map<string, { artistMbid: string | null; recordingMbid: string | null }>();
-    for (const sp of pastShows.flatMap((s) => s.spins)) {
-      if (!stationArtistNav.has(sp.artist)) {
-        stationArtistNav.set(sp.artist, { artistMbid: sp.artistMbid ?? null, recordingMbid: sp.mbid ?? null });
-      }
-    }
-    const yourArtists = [
-      ...new Set(pastShows.flatMap((s) => s.spins.filter((sp) => sp.isLibraryHit).map((sp) => sp.artist))),
-    ].slice(0, 4);
-    const totalCross = station.crossings;
-
-    function stationArtistClick(name: string) {
-      const nav = stationArtistNav.get(name);
-      if (nav?.artistMbid) return () => setLocation(`/artist/${nav.artistMbid}`);
-      if (nav?.recordingMbid) return () => setLocation(`/song/${nav.recordingMbid}`);
-      return () => showToast("No page available yet");
-    }
-
-    if (selectors.length > 0) {
-      parts.push(
-        <Group key="selectors" label="Selectors">
-          {selectors.map((d) => (
-            <Chip key={d} label={d} variant="sel" onClick={() => onDjClick(d)} />
-          ))}
-        </Group>,
-      );
-      if (others.length > 0) {
-        parts.push(<Sep key="sep1" />);
-        parts.push(
-          <Group key="djs" label="DJs">
-            {others.map((d) => (
-              <Chip key={d} label={d} onClick={() => onDjClick(d)} />
-            ))}
-          </Group>,
-        );
-      }
-    } else if (djNames.length > 0) {
-      parts.push(
-        <Group key="djs" label="DJs">
-          {djNames.slice(0, 3).map((d) => (
-            <Chip key={d} label={d} onClick={() => onDjClick(d)} />
-          ))}
-        </Group>,
-      );
-    }
-
-    if (yourArtists.length > 0) {
-      parts.push(<Sep key="sep2" />);
-      parts.push(
-        <Group key="artists" label="Your artists">
-          {yourArtists.map((a) => (
-            <Chip key={a} label={a} variant="lib" onClick={stationArtistClick(a)} />
-          ))}
-        </Group>,
-      );
-    }
-
-    if (totalCross > 0) {
-      parts.push(<Sep key="sep3" />);
-      parts.push(
-        <Group key="library" label="Library">
-          <Chip
-            label={`◆ ${totalCross} heard here`}
-            variant="lib"
-            onClick={() => setLocation("/library")}
-          />
-        </Group>,
-      );
-    }
-  }
-
-  if (level === "dj" && djName) {
-    const djShows = allStations
-      .flatMap((ds) => ds.shows.map((sh) => ({ show: sh, station: ds })))
-      .filter(({ show }) => show.djName === djName && show.state !== "future");
-
-    const stationNames = [...new Set(djShows.map((x) => x.station.station.name))];
-    // Build artist → artistMbid map from all DJ spins
-    const djArtistNav = new Map<string, { artistMbid: string | null; recordingMbid: string | null }>();
-    for (const sp of djShows.flatMap(({ show }) => show.spins)) {
-      if (!djArtistNav.has(sp.artist)) {
-        djArtistNav.set(sp.artist, { artistMbid: sp.artistMbid ?? null, recordingMbid: sp.mbid ?? null });
-      }
-    }
-    const yourArtists = [
-      ...new Set(djShows.flatMap(({ show }) => show.spins.filter((sp) => sp.isLibraryHit).map((sp) => sp.artist))),
-    ].slice(0, 4);
-    const newArtists = [
-      ...new Set(djShows.flatMap(({ show }) => show.spins.filter((sp) => !sp.isLibraryHit).map((sp) => sp.artist))),
-    ]
-      .filter((a) => !yourArtists.includes(a))
-      .slice(0, 2);
-    const totalCross = djShows.reduce((sum, { show }) => sum + show.crossings, 0);
-
-    function djArtistClick(name: string) {
-      const nav = djArtistNav.get(name);
-      if (nav?.artistMbid) return () => setLocation(`/artist/${nav.artistMbid}`);
-      if (nav?.recordingMbid) return () => setLocation(`/song/${nav.recordingMbid}`);
-      return () => showToast("No page available yet");
-    }
-
-    parts.push(
-      <Group key="stations" label="Stations">
-        {stationNames.map((n) => {
-          const ds = allStations.find((s) => s.station.name === n);
-          return (
-            <Chip
-              key={n}
-              label={n}
-              variant="live"
-              onClick={() => ds && onStationClick(ds.station.slug)}
-            />
-          );
-        })}
-      </Group>,
-    );
-
-    if (yourArtists.length > 0) {
-      parts.push(<Sep key="sep1" />);
-      parts.push(
-        <Group key="artists" label="Your artists">
-          {yourArtists.map((a) => (
-            <Chip key={a} label={a} variant="lib" onClick={djArtistClick(a)} />
-          ))}
-        </Group>,
-      );
-    }
-    if (newArtists.length > 0) {
-      parts.push(<Sep key="sep2" />);
-      parts.push(
-        <Group key="new" label="New to you">
-          {newArtists.map((a) => (
-            <Chip key={a} label={a} variant="new" onClick={djArtistClick(a)} />
-          ))}
-        </Group>,
-      );
-    }
-    if (totalCross > 0) {
-      parts.push(<Sep key="sep3" />);
-      parts.push(
-        <Group key="library" label="Library">
-          <Chip
-            label={`◆ ${totalCross} crossings`}
-            variant="lib"
-            onClick={() => setLocation("/library")}
-          />
-        </Group>,
-      );
-    }
-  }
-
-  if (parts.length === 0) return null;
+    return null;
+  }, [decoded.name, mbid, sets, rowSpins]);
+  const enabled = !!name && name.length >= 2;
+  // "Sets containing this artist" — the archive artist-runs endpoint groups
+  // matching spins into whole runs. Cheap (bounded, indexed) and already
+  // exists; when it fails or is empty we degrade to already-loaded dial sets.
+  const { data, isLoading, isError } = useSearchArtistRuns(
+    { q: name ?? "" },
+    { query: { queryKey: getSearchArtistRunsQueryKey({ q: name ?? "" }), enabled, staleTime: 5 * 60_000, retry: 1 } },
+  );
+  const loadedMatches = useMemo(() => name ? sets.filter((set) =>
+    set.spins.some((spin) => spin.artist.toLowerCase().includes(name.toLowerCase())),
+  ) : [], [sets, name]);
+  const stationRuns = data?.stationRuns ?? [];
+  const yours = name ? (links.isYours?.(name) ?? false) : false;
 
   return (
-    <div className="ctx-rail">
-      <div className="ctx-rail-inner">{parts}</div>
+    <Lens title="Artist" openHref={mbid ? `/artist/${mbid}` : null}>
+      <p className="crail-lens__lede">
+        {name ?? "Artist"}
+        {name && !yours && links.onAddArtist && (
+          <button
+            type="button"
+            className="gram__add dial-addplus"
+            aria-label={`Add ${name} to your artists`}
+            onClick={() => links.onAddArtist!(name)}
+          >+</button>
+        )}
+        {yours && <span className="crail-yours-mark"> — in your artists</span>}
+      </p>
+      <div className="crail-lens__sub">Sets containing this artist</div>
+      {enabled && isLoading && loadedMatches.length === 0 ? (
+        <p className="crail-empty">Searching the archive…</p>
+      ) : stationRuns.length > 0 ? (
+        <ul className="crail-list">
+          {stationRuns.slice(0, 4).map((hit) => (
+            <li key={hit.run.runId}>
+              <Link href={`/archive/station-runs/${hit.run.runId}`} className="crail-setrow gram-link--nav">
+                <span className="crail-setrow__when">{hit.run.date}</span>
+                <span className="crail-setrow__show">{hit.station.name}</span>
+                {hit.run.show?.name && <span className="crail-setrow__names">{hit.run.show.name}</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : loadedMatches.length > 0 ? (
+        <ul className="crail-list">
+          {loadedMatches.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+        </ul>
+      ) : (
+        <p className="crail-empty">
+          {isError
+            ? "Archive search is unavailable right now — showing nothing rather than guessing."
+            : "No archived sets found for this artist yet."}
+        </p>
+      )}
+    </Lens>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The rail
+// ---------------------------------------------------------------------------
+
+export function ContextRail({
+  ctx,
+  row,
+  sets,
+  seedsLower,
+  onAddSeed,
+  onPush,
+  displayMode = "personal",
+}: ContextRailProps) {
+  const stationSlug = ctx.stack[0]?.kind === "station" ? ctx.stack[0].id : null;
+  const stationSets = useMemo(
+    () => sets.filter((set) => stationSlug == null || set.stationSlug === stationSlug),
+    [sets, stationSlug],
+  );
+
+  // Guarded push — re-pushing the frame that is already on top is a no-op so
+  // repeated sentence taps don't grow the stack.
+  const push = (frame: ContextFrame) => {
+    const top = ctx.stack[ctx.stack.length - 1];
+    if (top && top.kind === frame.kind && top.id === frame.id) return;
+    onPush(frame);
+  };
+
+  // Artist name → MBID from everything the dial has loaded.
+  const artistMbids = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const set of sets) {
+      for (const spin of set.spins) {
+        if (spin.artistMbid && !map.has(spin.artist.toLowerCase())) {
+          map.set(spin.artist.toLowerCase(), spin.artistMbid);
+        }
+      }
+    }
+    for (const spin of row?.show?.spins ?? []) {
+      if (spin.artistMbid && !map.has(spin.artist.toLowerCase())) {
+        map.set(spin.artist.toLowerCase(), spin.artistMbid);
+      }
+    }
+    return map;
+  }, [sets, row]);
+
+  const isYours = (name: string): boolean => {
+    const key = name.trim().toLowerCase();
+    if (seedsLower.has(key)) return true;
+    const spins = [...(row?.show?.spins ?? []), ...sets.flatMap((set) => set.spins)];
+    return spins.some((spin) => spin.artist.toLowerCase() === key && (spin.isLibraryHit || spin.isArtistHit));
+  };
+
+  const links: GrammarLinks = {
+    onArtist: (name) => push({
+      kind: "artist",
+      id: artistFrameId(name, artistMbids.get(name.trim().toLowerCase()) ?? null),
+      label: name,
+    }),
+    onDj: (name) => push({ kind: "dj", id: name, label: name }),
+    isYours,
+    onAddArtist: onAddSeed,
+  };
+
+  const summary = radioSummarySentence({
+    stationName: row?.ds.station.name ?? ctx.stack[0]?.label ?? "",
+    show: row?.show ?? null,
+    displayMode,
+    links,
+    attributionHandlers: {
+      onShow: (showName) => push({ kind: "show", id: showName, label: showName }),
+      // The station is the root frame: tapping it pops nothing and pushes
+      // nothing new — the station lens is the default. Provide no handler.
+    },
+  });
+
+  const openSetFromRow = (set: RailSet) => push({ kind: "set", id: set.id, label: set.showName ?? set.stationName });
+
+  const top = ctx.stack[ctx.stack.length - 1] ?? null;
+  let lens: ReactNode = null;
+  if (!top || top.kind === "station") {
+    lens = <StationLens row={row} sets={stationSets} links={links} onOpenSet={openSetFromRow} />;
+  } else if (top.kind === "show") {
+    lens = <ShowLens frame={top} sets={sets} links={links} stationSlug={stationSlug} onOpenSet={openSetFromRow} />;
+  } else if (top.kind === "dj") {
+    lens = <DjLens frame={top} sets={sets} onOpenSet={openSetFromRow} />;
+  } else if (top.kind === "set") {
+    lens = <SetLens frame={top} sets={sets} links={links} />;
+  } else if (top.kind === "artist") {
+    lens = <ArtistLens frame={top} sets={sets} rowSpins={row?.show?.spins ?? []} links={links} onOpenSet={openSetFromRow} />;
+  }
+
+  return (
+    <div className="crail">
+      <p className="crail__sentence">{summary.sentence}</p>
+      {summary.attribution && <p className="crail__attribution">{summary.attribution}</p>}
+      {lens}
     </div>
   );
 }

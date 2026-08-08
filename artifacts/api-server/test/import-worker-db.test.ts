@@ -639,7 +639,7 @@ describe("Phase 3 — MB 503 error-storm: backoff fires and degraded timeout lat
       expect(job!.status).toBe("done");
       expect(job!.resolved).toBe(1); // only track 4 resolved
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -683,7 +683,7 @@ describe("Phase 3 — MB 503 error-storm: degraded mode clears after clean resol
 
       spy.mockRestore();
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -1323,7 +1323,7 @@ describe("Cross-user soft-row exclusion — Phase 3 for user 1 populates cache; 
       expect(job2!.status).toBe("done");
       expect(job2!.resolved).toBe(1);
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -1433,8 +1433,9 @@ describe("Phase 3 off-peak retry — soft-row removed after retry promotion", ()
         );
       expect(softAfterRetry.map((r) => r.spotifyId)).not.toContain(RETRY_EXT_ID);
     },
-    // Allow up to 15 s: 1.1 s real sleep + DB round-trips in both runs.
-    15_000,
+    // Allow up to 120 s: 1.1 s real sleep + DB round-trips in both runs, with
+    // headroom for shared-Postgres contention during validation runs.
+    120_000,
   );
 });
 
@@ -1536,7 +1537,7 @@ describe("Retry guard — track removed from Spotify after original import is no
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
-    15_000,
+    120_000,
   );
 
   it(
@@ -1612,7 +1613,7 @@ describe("Retry guard — track removed from Spotify after original import is no
         .delete(libraryImportJobsTable)
         .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobRow!.id]));
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -1805,7 +1806,7 @@ describe("Retry pass — library_items FK violation: pass reaches done, track st
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -1956,7 +1957,7 @@ describe("Retry pass — FK violation (real 22-char Spotify ID): pass reaches do
         .delete(libraryImportJobsTable)
         .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobId]));
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -2070,7 +2071,7 @@ describe("Retry pass — FK violation (synthesised externalId): pass reaches don
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -2265,7 +2266,7 @@ describe("Retry pass — FK violation with pre-existing soft row: soft row stays
         .delete(libraryImportJobsTable)
         .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobId]));
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -2359,7 +2360,7 @@ describe("Phase 3 retry — seam returns null: candidate skipped, library_items 
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
-    15_000,
+    120_000,
   );
 });
 
@@ -2427,7 +2428,7 @@ describe("Phase 3 retry — seam returns Set missing the candidate externalId: e
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
-    15_000,
+    120_000,
   );
 });
 

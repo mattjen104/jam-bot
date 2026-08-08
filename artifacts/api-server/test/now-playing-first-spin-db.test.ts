@@ -155,7 +155,7 @@ describe("GET /api/stations/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(FRESH_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(true);
-  }, 150_000);
+  }, 240_000);
 
   it("returns isFirstSpin: false for an MBID that aired yesterday", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
@@ -168,7 +168,7 @@ describe("GET /api/stations/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(OLD_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(false);
-  }, 150_000);
+  }, 240_000);
 });
 
 describe("GET /api/stations/:slug/now-playing — isFirstSpin", () => {

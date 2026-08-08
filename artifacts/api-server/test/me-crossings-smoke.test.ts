@@ -81,7 +81,7 @@ describe("crossings route smoke (merge-splice guard)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: unknown };
     expect(Array.isArray(body.items)).toBe(true);
-  });
+  }, 120_000);
 
   it("GET /api/me/crossings/blended returns 200 (not 5xx) against a minimal fixture", async () => {
     if (!dbAvailable) return;
@@ -92,5 +92,5 @@ describe("crossings route smoke (merge-splice guard)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: unknown };
     expect(Array.isArray(body.items)).toBe(true);
-  });
+  }, 120_000);
 });

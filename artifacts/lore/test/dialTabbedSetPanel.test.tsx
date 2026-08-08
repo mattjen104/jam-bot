@@ -184,9 +184,12 @@ describe("Tabbed set panel", () => {
     expect(within(cards[1] as HTMLElement).getByText("Neko Case")).toBeTruthy();
     const thirdNames = [...cards[2].querySelectorAll(".set-queue__artist")].map((n) => n.textContent);
     expect(thirdNames).toEqual(["Fleetwood Mac", "New Band"]); // full setlist, not a crossing excerpt
-    // crossing artists rendered with the white/library treatment
-    expect(within(cards[2] as HTMLElement).getByRole("button", { name: /fleetwood mac is in your library/i }).className)
-      .toContain("set-queue__artist--library");
+    // crossing artists rendered with the white/library treatment (yours =
+    // white, no underline — no longer an add/remove button)
+    const fleetwood = [...cards[2].querySelectorAll(".set-queue__artist")]
+      .find((n) => n.textContent === "Fleetwood Mac")!;
+    expect(fleetwood.className).toContain("set-queue__artist--library");
+    expect(fleetwood.getAttribute("aria-label")).toMatch(/is in your library/i);
   });
 
   it("plays the displayed setlist through the agnostic player", () => {

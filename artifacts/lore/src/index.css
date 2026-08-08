@@ -6516,3 +6516,61 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .dial-context-region__summary { margin-top: 2px; }
 .dial-context-region__offline { color: hsl(var(--muted-foreground)); padding: 8px 0; }
 .dial-context-region__rail { min-height: 40px; }
+
+/* ── Grammar link semantics (context rail + dial sentences) ──────────────────
+   dotted underline = navigate (opens a lens); explicit `+` = add/seed;
+   bright white, no underline = already yours (seeded/kept). */
+.gram-link--nav {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-align: left;
+}
+.gram-link--nav:hover { color: hsl(var(--foreground) / .85); }
+.gram__artist, .gram__dj { color: hsl(var(--foreground) / .82); font-weight: 600; }
+.gram--yours { color: #fff; text-decoration: none; }
+.gram__artist-wrap { white-space: nowrap; }
+.dial-addplus,
+.gram__add {
+  border: 1px solid hsl(var(--foreground) / .35);
+  background: transparent;
+  color: hsl(var(--foreground) / .7);
+  border-radius: 3px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 4px;
+  margin-left: 4px;
+  cursor: pointer;
+  vertical-align: 2px;
+  text-decoration: none;
+}
+.dial-addplus:hover { color: #fff; border-color: hsl(var(--foreground) / .7); }
+.gram__attribution { color: hsl(var(--foreground) / .55); }
+.gram__attr-sep { opacity: .6; }
+.fdrow__artist--other, .set-queue__artist--other { color: hsl(var(--foreground) / .6); text-decoration: none; }
+
+/* ── Context rail (tuned surface) ──────────────────────────────────────────── */
+.crail { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 0; }
+.crail__sentence { margin: 0; font-family: var(--app-font-display); line-height: 1.4; }
+.crail__attribution { margin: 0; font-size: 12px; }
+.crail-lens { border-top: 1px solid var(--rule-strong, #444); padding-top: 8px; }
+.crail-lens__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.crail-lens__title { text-transform: uppercase; letter-spacing: .08em; font-size: 10px; color: hsl(var(--foreground) / .5); }
+.crail-lens__open { color: hsl(var(--foreground) / .75); text-decoration: underline dotted; text-underline-offset: 3px; white-space: nowrap; }
+.crail-lens__lede { margin: 4px 0; }
+.crail-lens__sub { margin-top: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: hsl(var(--foreground) / .5); }
+.crail-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.crail-list--ordered { counter-reset: crail; }
+.crail-list--ordered > li::before { counter-increment: crail; content: counter(crail) "  "; color: hsl(var(--foreground) / .4); }
+.crail-setrow { display: flex; gap: 8px; align-items: baseline; min-width: 0; max-width: 100%; }
+.crail-setrow__when { color: hsl(var(--foreground) / .5); white-space: nowrap; }
+.crail-setrow__show { color: hsl(var(--foreground) / .8); }
+.crail-setrow__names { color: hsl(var(--foreground) / .6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crail-empty { margin: 4px 0 0; color: hsl(var(--foreground) / .5); font-style: italic; }
+.crail-yours-mark { color: hsl(var(--foreground) / .6); font-size: 12px; }

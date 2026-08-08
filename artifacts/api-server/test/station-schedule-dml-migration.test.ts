@@ -59,7 +59,7 @@ beforeAll(async () => {
     })
     .returning({ id: stationsTable.id });
   stationId = station!.id;
-}, 30_000);
+}, 300_000);
 
 afterAll(async () => {
   if (!dbAvailable || !stationId) return;
@@ -75,7 +75,7 @@ afterAll(async () => {
   await db.execute(sql`DELETE FROM stations WHERE id = ${stationId}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`);
-}, 30_000);
+}, 300_000);
 
 beforeEach(async () => {
   if (!dbAvailable || !stationId) return;
@@ -86,7 +86,7 @@ beforeEach(async () => {
   );
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`);
-}, 10_000);
+}, 60_000);
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

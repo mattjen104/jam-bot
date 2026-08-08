@@ -97,9 +97,9 @@
 - [Lore brutalist typography block](lore-brutalist-typography.md) — `body *` !important uniform font-size at end of index.css overrides all per-rule sizes; resize type by editing that block only.
 - [Playwright autoplay testing](playwright-autoplay-testing.md) — 3 defaults silently allow autoplay (default policy flag, --mute-audio, evaluate's userGesture); a no-gesture control test is mandatory.
 - [Tier-1 prefetch loop & interstitial gating](tier1-prefetch-loop.md) — zero-link items need a fetched-set or prefetch loops when queue-run is deferred; interstitial must gate spotifyQueueRun too.
-- [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
 - [Crossing-tone e2e merge gate](tone-e2e-gate.md) — `tone-e2e` validation runs the autoplay-policy Playwright spec; fails loudly when Chromium or the lore dev server is missing, so restart the lore workflow first.
 - [Playwright executablePath placement](playwright-executablepath-launchoptions.md) — executablePath is only honored inside use.launchOptions; directly under `use` it's silently ignored and Playwright hunts for downloaded browsers.
 - [Lore e2e suite gate](lore-e2e-suite-gate.md) — 4 route-intercepted specs gate merges (incl. revived sync + dial on-air); fixture pitfalls: zod-required fields, `?**` glob for query-string POSTs; fallbackNotice still excluded.
-- [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).
+- [Dial context rail & sentence grammar](dial-context-rail-grammar.md) — grammar module owns link policy: dotted=navigate, `+`=add, white=yours; no song titles; ContextRail path must stay alive (mocked widely).
 - [lore-tests merge gate](lore-tests-gate.md) — lore vitest suite gates merges via flock-wrapped validation; copy/grammar changes must update tests or the suite rots.
+- [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).

@@ -260,17 +260,22 @@ export function PopCrossingLine({ artists, seedsLower, onAdd }: {
   const visible = expanded ? set : set.slice(0, SETLIST_VISIBLE);
   const hidden = set.length - visible.length;
 
+  // Link semantics: dotted underline is RESERVED for navigation. Add/seed is
+  // an explicit small `+` affordance next to the name — the name itself never
+  // adds. Yours (library/seeded) stays bright white with no underline.
   const span = (a: PopularCrossingArtist) =>
       inLib(a) ? (
       <b key={a.name} className="fdrow__artist fdrow__artist--lib dial-artist--complete">{a.name}</b>
     ) : (
-      <button
-        key={a.name}
-        type="button"
-        className="fdrow__artist fdrow__artist--add dial-artist--add"
-        aria-label={`Add ${a.name} to your artists`}
-        onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
-      >{a.name}</button>
+      <span key={a.name} className="fdrow__artist-wrap">
+        <span className="fdrow__artist fdrow__artist--other">{a.name}</span>
+        <button
+          type="button"
+          className="fdrow__addplus dial-addplus"
+          aria-label={`Add ${a.name} to your artists`}
+          onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
+        >+</button>
+      </span>
     );
   const nodes: ReactNode[] = [];
   visible.forEach((a, i) => {
@@ -390,6 +395,9 @@ export function useLivePanelSync(
 /** A complete broadcast run retained by the set-panel tab model. */
 export interface SetPanelSet {
   id: string;
+  /** Archive run id when known — the set's canonical /archive/station-runs
+   * route is built from THIS, never from the currently-tuned show. */
+  runId: number | string | null;
   stationSlug: string;
   stationName: string;
   startedAt: string;
@@ -624,24 +632,35 @@ export function SetQueueList({ artists, seedsLower, onAdd, onRemove, progress }:
       <div className="set-queue__progress" style={{ width: `${completed}%` }} aria-hidden="true" />
       <div className="set-queue__artists">
         {artists.map((artist, index) => {
+          // Link semantics: the name itself never adds — add/seed is the
+          // explicit `+` affordance; seeded names carry an explicit remove
+          // (×). Yours (library/seeded) renders white with no underline.
           const key = artist.name.trim().toLowerCase();
           const seeded = seedsLower.has(key);
           const inLibrary = artist.inLibrary || seeded;
-          const canToggle = !artist.inLibrary || seeded;
           return (
-            <button
-              key={`${key}-${index}`}
-              type="button"
-              className={`set-queue__artist ${inLibrary ? "set-queue__artist--library dial-artist--complete" : "set-queue__artist--add dial-artist--add"}`}
-              aria-label={canToggle
-                ? `${inLibrary ? "Remove" : "Add"} ${artist.name} ${inLibrary ? "from" : "to"} your artists`
-                : `${artist.name} is in your library`}
-              onClick={canToggle ? (e) => {
-                e.stopPropagation();
-                if (inLibrary) onRemove(artist.name);
-                else onAdd(artist.name);
-              } : undefined}
-            >{artist.name}</button>
+            <span key={`${key}-${index}`} className="set-queue__artist-wrap">
+              <span
+                className={`set-queue__artist ${inLibrary ? "set-queue__artist--library dial-artist--complete" : "set-queue__artist--other"}`}
+                aria-label={inLibrary ? `${artist.name} is in your library` : undefined}
+              >{artist.name}</span>
+              {!inLibrary && (
+                <button
+                  type="button"
+                  className="set-queue__addplus dial-addplus"
+                  aria-label={`Add ${artist.name} to your artists`}
+                  onClick={(e) => { e.stopPropagation(); onAdd(artist.name); }}
+                >+</button>
+              )}
+              {seeded && (
+                <button
+                  type="button"
+                  className="set-queue__removeseed dial-addplus"
+                  aria-label={`Remove ${artist.name} from your artists`}
+                  onClick={(e) => { e.stopPropagation(); onRemove(artist.name); }}
+                >×</button>
+              )}
+            </span>
           );
         })}
       </div>
@@ -2681,6 +2700,7 @@ export function DialView() {
         const djNames = eligibleDjNames(dialShowAsAttribution(show));
         sets.push({
           id: `${ds.station.slug}:${show.startedAt}`,
+          runId: show.runId ?? null,
           stationSlug: ds.station.slug,
           stationName: ds.station.name,
           startedAt: show.startedAt,
@@ -2746,6 +2766,7 @@ export function DialView() {
       ...current,
       [id]: {
         id,
+        runId: row.show?.runId ?? null,
         stationSlug: row.ds.station.slug,
         stationName: row.ds.station.name,
         startedAt,
@@ -2769,6 +2790,7 @@ export function DialView() {
       ...current,
       [id]: {
         id,
+        runId: null,
         stationSlug: "replay",
         stationName: ride.replayLabel ?? "Replay",
         startedAt: currentRun?.day ? `${currentRun.day}T00:00:00Z` : new Date().toISOString(),
@@ -3043,8 +3065,15 @@ export function DialView() {
         <p className="dial-context-region__offline">{ctxStationName}</p>
       ) : null}
     >
-      {/* Rail content lands in the next task — this space is reserved. */}
-      <div className="dial-context-region__placeholder" aria-hidden="true" />
+      <ContextRail
+        ctx={surface.ctx}
+        row={ctxRow}
+        sets={allSets}
+        seedsLower={seedsLower}
+        onAddSeed={addSeed}
+        onPush={surface.push}
+        displayMode={crossingSourceMode}
+      />
     </DialContextRegion>
   );
 
@@ -3645,15 +3674,6 @@ export function DialView() {
               dialStation={currentStation}
               onShowClick={(show) => goShow(show, currentStation)}
             />
-            <ContextRail
-              level="station"
-              station={currentStation}
-              show={null}
-              djName={null}
-              allStations={stations}
-              onStationClick={goStation}
-              onDjClick={goDj}
-            />
           </>
         )}
 
@@ -3666,15 +3686,6 @@ export function DialView() {
               allStationsData={stations}
               onDjClick={goDj}
             />
-            <ContextRail
-              level="show"
-              station={currentStation}
-              show={currentShow}
-              djName={currentShow.djName}
-              allStations={stations}
-              onStationClick={goStation}
-              onDjClick={goDj}
-            />
           </>
         )}
 
@@ -3685,15 +3696,6 @@ export function DialView() {
               djName={currentDjName}
               allStations={stations}
               onShowClick={(show, station) => goShow(show, station)}
-            />
-            <ContextRail
-              level="dj"
-              station={currentStation}
-              show={null}
-              djName={currentDjName}
-              allStations={stations}
-              onStationClick={goStation}
-              onDjClick={goDj}
             />
           </>
         )}

@@ -239,7 +239,7 @@ router.post(
       const [spinLibCount] = await db
         .select({ n: sql<number>`count(*)::int` })
         .from(libraryItemsTable)
-        .where(eq(libraryItemsTable.userId, user.id));
+        .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
       const [spinPendingCount] = await db
         .select({ n: sql<number>`count(*)::int` })
         .from(pendingKeepsTable)
@@ -400,7 +400,7 @@ router.post(
     const [libCount] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(libraryItemsTable)
-      .where(eq(libraryItemsTable.userId, user.id));
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
     const [pendingCount] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(pendingKeepsTable)
@@ -508,8 +508,10 @@ router.get(
 );
 
 /**
- * DELETE /api/me/keep/:mbid — remove a recording from library_items only.
- * Never touches the streaming service library.
+ * DELETE /api/me/keep/:mbid — legacy unkeep. Soft-removes the row (sets
+ * removed_at) so the library timeline is preserved, matching the
+ * removal/restore contract of POST /api/me/library/removal. Never touches
+ * the streaming service library.
  */
 router.delete(
   "/me/keep/:mbid",
@@ -519,7 +521,8 @@ router.delete(
     if (!mbid) return res.status(400).json({ error: "mbid is required" });
 
     await db
-      .delete(libraryItemsTable)
+      .update(libraryItemsTable)
+      .set({ removedAt: new Date() })
       .where(
         and(
           eq(libraryItemsTable.userId, user.id),
@@ -562,6 +565,9 @@ router.get(
         and(
           eq(libraryItemsTable.userId, user.id),
           inArray(libraryItemsTable.mbid, mbids),
+          // Removed (deselected) rows are not "kept" — the player must not
+          // label them as in the library.
+          isNull(libraryItemsTable.removedAt),
         ),
       );
 

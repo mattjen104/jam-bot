@@ -17,7 +17,7 @@
 
 import { db, librarySyncJobsTable, libraryItemsTable, recordingsTable, serviceConnectionsTable } from "@workspace/db";
 import type { SyncReceipt, SyncReceiptUnavailableItem, SyncReceiptSearchItem } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { decryptToken, encryptToken } from "./tokenCrypto.js";
 import { refreshServiceToken } from "./serviceConnector.js";
 import { extractSpotifyTrackId } from "./spotifyConnect.js";
@@ -190,6 +190,25 @@ async function getFreshUserToken(
 // Main worker
 // ---------------------------------------------------------------------------
 
+/**
+ * The library rows eligible for outward sync. Removed (deselected) tracks are
+ * excluded from every taste surface — they must never be synced back to
+ * Spotify. Exported so the exclusion is directly testable.
+ */
+export async function loadActiveLibraryItems(userId: number) {
+  return db
+    .select({
+      mbid: libraryItemsTable.mbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      isrc: recordingsTable.isrc,
+      links: recordingsTable.links,
+    })
+    .from(libraryItemsTable)
+    .innerJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
+}
+
 export async function runSyncWorker(
   jobId: number,
   userId: number,
@@ -236,18 +255,8 @@ export async function runSyncWorker(
     let token = tokenResult.token;
     let currentConn = tokenResult.conn;
 
-    // ── Load the full library ────────────────────────────────────────────────
-    const items = await db
-      .select({
-        mbid: libraryItemsTable.mbid,
-        title: recordingsTable.title,
-        artist: recordingsTable.artist,
-        isrc: recordingsTable.isrc,
-        links: recordingsTable.links,
-      })
-      .from(libraryItemsTable)
-      .innerJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
-      .where(eq(libraryItemsTable.userId, userId));
+    // ── Load the full library (active rows only — removed tracks never sync) ─
+    const items = await loadActiveLibraryItems(userId);
 
     const total = items.length;
     await stamp({ total, phase: "matching" });

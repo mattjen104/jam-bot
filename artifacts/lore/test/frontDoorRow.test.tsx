@@ -287,7 +287,7 @@ describe("narrow-screen byline readability", () => {
     expect(artistBolds[0].textContent).toBe("The Flaming Lips");
   });
 
-  it("marks addable popular-crossing artists consistently", () => {
+  it("adds popular-crossing artists via the explicit + affordance (name never adds)", () => {
     const onAdd = vi.fn();
     const popLine = <PopCrossingLine
       artists={[{ name: "Artist 1", inLibrary: false } as PopularCrossingArtist]}
@@ -305,9 +305,15 @@ describe("narrow-screen byline readability", () => {
         popLine={popLine}
       />,
     );
+    // New link semantics: dotted underline is reserved for navigation. The
+    // add/seed action is an explicit small `+` button beside the name.
     const addable = screen.getByRole("button", { name: /add artist 1/i });
-    expect(addable.className).toContain("fdrow__artist--add");
-    expect(addable.className).toContain("dial-artist--add");
+    expect(addable.className).toContain("dial-addplus");
+    expect(addable.textContent).toBe("+");
+    // The name itself is plain text, not an add button.
+    const name = document.querySelector(".fdrow__artist--other");
+    expect(name?.textContent).toBe("Artist 1");
+    expect(name?.tagName).not.toBe("BUTTON");
     fireEvent.click(addable);
     expect(onAdd).toHaveBeenCalledWith("Artist 1");
   });
