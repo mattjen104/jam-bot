@@ -5938,6 +5938,15 @@ body * {
   padding: 8px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Smooth opacity transition guards against the one-frame glitch that occurs
+     when the fixed panel jumps between side and below positions. The panel
+     fades out before data-queue-layout changes and fades back in after the
+     new position is committed, so no intermediate paint is ever visible. */
+  transition: opacity 120ms ease;
+}
+.dial-hero__setpanel--flipping {
+  opacity: 0;
+  pointer-events: none;
 }
 .dial-hero__setpanel-head {
   display: flex;

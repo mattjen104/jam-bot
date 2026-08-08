@@ -2091,18 +2091,78 @@ export function DialView() {
           shellHeight: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--shell-h")) || 0,
         }),
   );
+  /** Briefly true while the layout is being flipped — fades the panel out
+   * before the attribute changes so there is never a frame where the panel
+   * straddles both the old and new positions. */
+  const [layoutFlipping, setLayoutFlipping] = useState(false);
+  const heroQueueLayoutRef = useRef(heroQueueLayout);
+  useEffect(() => { heroQueueLayoutRef.current = heroQueueLayout; }, [heroQueueLayout]);
+  /** Version token — incremented on every new flip attempt so that stale
+   * fade-timer callbacks abort before applying a superseded layout target. */
+  const flipVersionRef = useRef(0);
+  /** Handle for the in-flight fade-out delay timer so rapid resizes can
+   * cancel it before the wrong layout is committed. */
+  const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(() => {
+    /** Must match the CSS transition duration on .dial-hero__setpanel. */
+    const FADE_MS = 120;
+
     const updateLayout = () => {
       const shellHeight = Number.parseFloat(
         getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
       ) || 0;
-      setHeroQueueLayout(chooseDialHeroQueueLayout({
+      const newLayout = chooseDialHeroQueueLayout({
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
         shellHeight,
-      }));
+      });
+
+      if (newLayout === heroQueueLayoutRef.current) {
+        // Target already matches — cancel any in-flight flip and restore
+        // visibility in case a previous flip was superseded mid-fade.
+        flipVersionRef.current++;
+        if (flipTimerRef.current !== null) {
+          clearTimeout(flipTimerRef.current);
+          flipTimerRef.current = null;
+        }
+        setLayoutFlipping(false);
+        return;
+      }
+
+      // Cancel any in-flight flip and start a fresh sequence.
+      const version = ++flipVersionRef.current;
+      if (flipTimerRef.current !== null) {
+        clearTimeout(flipTimerRef.current);
+        flipTimerRef.current = null;
+      }
+
+      // Honour reduced-motion: skip the fade and flip the layout immediately.
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        setLayoutFlipping(false);
+        setHeroQueueLayout(newLayout);
+        return;
+      }
+
+      // Phase 1: fade the panel out so the intermediate position is invisible.
+      setLayoutFlipping(true);
+
+      // Phase 2: once the CSS opacity transition has completed (timer aligned
+      // to the transition duration) apply the new layout.  Using a timer
+      // rather than transitionend makes the sequence reliable even when the
+      // element is off-screen or the transition is overridden.
+      flipTimerRef.current = setTimeout(() => {
+        flipTimerRef.current = null;
+        if (flipVersionRef.current !== version) return; // Superseded by a newer resize.
+        setHeroQueueLayout(newLayout);
+        // Phase 3: one rAF after the new layout commits, fade back in.
+        requestAnimationFrame(() => {
+          if (flipVersionRef.current !== version) return; // Superseded.
+          setLayoutFlipping(false);
+        });
+      }, FADE_MS);
     };
+
     updateLayout();
     window.addEventListener("resize", updateLayout);
     const root = document.querySelector(".dial-root");
@@ -2111,6 +2171,12 @@ export function DialView() {
       : null;
     observer?.observe(root!);
     return () => {
+      // Cancel any in-flight flip so stale callbacks don't fire after unmount.
+      flipVersionRef.current++;
+      if (flipTimerRef.current !== null) {
+        clearTimeout(flipTimerRef.current);
+        flipTimerRef.current = null;
+      }
       window.removeEventListener("resize", updateLayout);
       observer?.disconnect();
     };
@@ -3112,7 +3178,7 @@ export function DialView() {
           </div>
           {!tunedArtistsOpen && (
             /* Queue is a sibling of the art, never an overlay inside it. */
-            <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+            <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
               <div className="dial-hero__setpanel-head">
                 <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
                 <span className="dial-hero__setpanel-title">
