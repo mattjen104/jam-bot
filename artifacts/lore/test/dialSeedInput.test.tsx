@@ -306,7 +306,7 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
     });
   });
 
-  it("sorts artists alphabetically and restores the live sidebar when closed", async () => {
+  it("sorts artists alphabetically and restores the live sidebar when closed", () => {
     tasteSeeds.mockReturnValue({ data: ["zola jesus", "Arcade Fire", "Beach House"] });
     mockDial();
     render(<DialView />);
@@ -322,11 +322,7 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close tuned artists" }));
     expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
     expect(screen.getByText("Choose a live set")).toBeTruthy();
-    // closeTunedArtists defers focus via requestAnimationFrame, so we must
-    // wait for the RAF callback to run before asserting the active element.
-    await waitFor(() => {
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open tuned artists" }));
-    });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open tuned artists" }));
   });
 });
 
