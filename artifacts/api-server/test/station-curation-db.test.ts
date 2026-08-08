@@ -3,7 +3,8 @@
  *
  * Covers:
  *   1. crossing_eligible flag — FIP sub-channels seeded with false, main + electro true
- *   2. Seed idempotence — re-seeding does not flip crossingEligible back to true
+ *   2. Seed idempotence — re-seeding does not clobber manual crossingEligible overrides
+ *      (crossingEligible is excluded from onConflictDoUpdate; only written on INSERT)
  *   3. Crossing-surface exclusion — crossingEligible=false station absent from
  *      crossing queries but history (spins) preserved in DB
  *   4. 7-day station-silence health endpoint — correct classification of
@@ -92,7 +93,7 @@ describe("FIP seed — crossing_eligible values", () => {
   it("re-seeding does not flip crossingEligible=false back to true for sub-channels", async (ctx) => {
     skip(ctx);
     await seedStations();
-    await seedStations(); // second pass — onConflictDoUpdate must preserve the flag
+    await seedStations(); // second pass — crossingEligible excluded from UPDATE set, value preserved
     const rows = await db
       .select({ slug: stationsTable.slug, crossingEligible: stationsTable.crossingEligible })
       .from(stationsTable)
@@ -103,6 +104,35 @@ describe("FIP seed — crossing_eligible values", () => {
       );
     for (const row of rows) {
       expect(row.crossingEligible).toBe(false);
+    }
+  });
+
+  it("re-seeding does NOT clobber a manually-set crossingEligible=false override on a normally-true station", async (ctx) => {
+    skip(ctx);
+    // Ensure the station exists in the DB first.
+    await seedStations();
+
+    // Simulate an operator manually demoting a station that the seed marks as eligible.
+    await db
+      .update(stationsTable)
+      .set({ crossingEligible: false })
+      .where(eq(stationsTable.slug, "kexp"));
+
+    try {
+      // Re-seed — must NOT restore crossingEligible to true.
+      await seedStations();
+      const [row] = await db
+        .select({ crossingEligible: stationsTable.crossingEligible })
+        .from(stationsTable)
+        .where(eq(stationsTable.slug, "kexp"))
+        .limit(1);
+      expect(row?.crossingEligible).toBe(false);
+    } finally {
+      // Restore to the seed default so other tests are not affected.
+      await db
+        .update(stationsTable)
+        .set({ crossingEligible: true })
+        .where(eq(stationsTable.slug, "kexp"));
     }
   });
 });

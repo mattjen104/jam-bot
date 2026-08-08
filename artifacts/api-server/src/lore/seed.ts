@@ -1927,10 +1927,14 @@ export async function seedStations(): Promise<void> {
           nowPlayingSource: s.nowPlayingSource ?? null,
           nowPlayingConfig: s.nowPlayingConfig ?? null,
           stationClass: s.stationClass ?? "curated",
-          // Propagate the crossing-eligible flag so sub-channel demotions
-          // applied in the seed take effect on restart without a manual DB edit.
-          // Defaults to true when the seed row omits it (most stations).
-          crossingEligible: s.crossingEligible ?? true,
+          // crossingEligible is intentionally omitted from the UPDATE set.
+          // The seed only writes it on INSERT (DB default = true). Once a
+          // station exists, operators can flip crossing_eligible in the DB
+          // (e.g. to demote a FIP sub-channel or restore a hidden station)
+          // without the change being silently clobbered on the next restart.
+          // To push a seed-defined value to an already-existing station, run
+          // the reset_crossing_eligible.sql admin script or apply a migration.
+          //
           // COALESCE: update with the newly inferred value only when non-null,
           // otherwise keep whatever is already stored (preserves manual corrections
           // and avoids clobbering with null for US stations that lack a city).
