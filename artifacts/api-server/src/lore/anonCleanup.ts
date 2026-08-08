@@ -90,6 +90,21 @@ export async function runAnonCleanup(): Promise<number> {
         SELECT 1 FROM library_sync_jobs
         WHERE user_id = lore_users.id
       )
+      -- Guard: no song_bottles row (non-cascading FK)
+      AND NOT EXISTS (
+        SELECT 1 FROM song_bottles
+        WHERE user_id = lore_users.id
+      )
+      -- Guard: no replay_materialization_jobs row (non-cascading FK)
+      AND NOT EXISTS (
+        SELECT 1 FROM replay_materialization_jobs
+        WHERE user_id = lore_users.id
+      )
+      -- Guard: no replay_resolution_jobs row (non-cascading FK)
+      AND NOT EXISTS (
+        SELECT 1 FROM replay_resolution_jobs
+        WHERE user_id = lore_users.id
+      )
       -- Condition 3: idle for ≥ 90 days (NULL = never touched after provisioning)
       AND (
         last_seen_at IS NULL

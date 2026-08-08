@@ -14,6 +14,8 @@
 #   - ntsOnAirBadge.spec.ts            (dial front-door on-air show + DJ attribution)
 #   - fallbackNotice.spec.ts           (archive-run fallback notice; all API routes
 #                                       intercepted with fixtures)
+#   - dialHeroQueueGeometry.spec.ts    (populated hero set queue stays beside/below
+#                                       the album art at short/tall/portrait viewports)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -78,6 +80,7 @@ RUN_SPECS=(
   e2e/librarySyncLifecycle.spec.ts
   e2e/ntsOnAirBadge.spec.ts
   e2e/fallbackNotice.spec.ts
+  e2e/dialHeroQueueGeometry.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------

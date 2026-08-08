@@ -111,7 +111,10 @@ async function installAttemptHelper(page: import("@playwright/test").Page) {
         }
         unlockedTone = tone;
       },
-      { once: true },
+      // Capture phase: app components may stopPropagation() on bubbled
+      // clicks (the unlock in PlayerProvider runs inside its own handler,
+      // so the harness must not depend on bubbling reaching document).
+      { once: true, capture: true },
     );
     window.__armToneAttempt = (delayMs: number, useUnlocked?: boolean) => {
       setTimeout(async () => {
