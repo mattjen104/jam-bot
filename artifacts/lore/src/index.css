@@ -5946,6 +5946,25 @@ body * {
   gap: 8px;
   margin-bottom: 4px;
 }
+.dial-hero__setpanel-tune {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-family: var(--app-font-mono);
+  font-size: 11px !important;
+  letter-spacing: .05em;
+  padding: 2px 4px;
+  text-transform: uppercase;
+}
+.dial-hero__setpanel-tune:hover,
+.dial-hero__setpanel-tune[aria-pressed="true"] { color: #fff; }
+.dial-hero__setpanel-tune:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .dial-hero__setpanel-title {
   flex: 1;
   text-align: center;
@@ -6280,12 +6299,12 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
    scan surface. Keep its summaries and controls compact without changing the
    type direction used elsewhere in the app. */
 .dial-root--front .fdrow__t1 {
-  font-size: 17px !important;
+  font-size: 16px !important;
   line-height: 1.3;
 }
 .dial-root--front .fdrow__live-secondary,
 .dial-root--front .fdrow__ov-caption {
-  font-size: 13px !important;
+  font-size: 12px !important;
   line-height: 1.35;
 }
 .dial-root--front .fdrow__t3,
@@ -6306,8 +6325,8 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   letter-spacing: 0.05em;
 }
 .dial-root--front .fdrow {
-  padding-top: 10px;
-  padding-bottom: 14px;
+  padding-top: 8px;
+  padding-bottom: 11px;
 }
 
 /* ── Tabbed set panel — provenance browsing & export (task: set-panel tabs) ── */

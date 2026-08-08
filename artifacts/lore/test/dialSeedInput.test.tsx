@@ -180,10 +180,10 @@ function mockDial() {
 }
 
 function openTunedArtists() {
-  const wordmark = screen.getByRole("button", { name: "Lore — tuned artists" });
-  expect(wordmark.getAttribute("aria-pressed")).toBe("false");
-  fireEvent.click(wordmark);
-  expect(wordmark.getAttribute("aria-pressed")).toBe("true");
+  const tune = screen.getByRole("button", { name: "Open tuned artists" });
+  expect(tune.getAttribute("aria-pressed")).toBe("false");
+  fireEvent.click(tune);
+  expect(tune.getAttribute("aria-pressed")).toBe("true");
   return screen.getByRole("textbox", { name: "Artist name" });
 }
 
@@ -311,16 +311,18 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
     mockDial();
     render(<DialView />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Lore — tuned artists" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open tuned artists" }));
     expect(screen.getByRole("heading", { name: "Tuned artists" })).toBeTruthy();
-    expect(screen.queryByText("Choose a live set")).toBeNull();
+    // The queue remains mounted so its compact Tune trigger is available for
+    // a predictable close/focus return, even while the art surface is swapped.
+    expect(screen.getByText("Choose a live set")).toBeTruthy();
     expect([...document.querySelectorAll(".dial-hero__tuned-item > span")].map((node) => node.textContent))
       .toEqual(["Arcade Fire", "Beach House", "zola jesus"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Close tuned artists" }));
     expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
     expect(screen.getByText("Choose a live set")).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Lore — tuned artists" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open tuned artists" }));
   });
 });
 

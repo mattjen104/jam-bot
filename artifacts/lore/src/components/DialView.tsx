@@ -19,7 +19,6 @@ import { SeedInput } from "./SeedInput";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
-import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { useSocialMode, setSocialEnabled } from "../lib/social";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
@@ -1845,7 +1844,7 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const wordmarkRef = useRef<HTMLButtonElement>(null);
+  const tunedArtistsTriggerRef = useRef<HTMLButtonElement>(null);
   const [tunedArtistsOpen, setTunedArtistsOpen] = useState(false);
   const { enabled: socialEnabled } = useSocialMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
@@ -1953,7 +1952,9 @@ export function DialView() {
 
   const closeTunedArtists = useCallback(() => {
     setTunedArtistsOpen(false);
-    wordmarkRef.current?.focus();
+    // The compact trigger lives in the queue header, which remains mounted
+    // while the tuned-artists surface is open.
+    tunedArtistsTriggerRef.current?.focus();
   }, []);
 
   // Popular crossings — Also-On-Air sentences + sort order.
@@ -2951,38 +2952,10 @@ export function DialView() {
 
   // --- topbar ---
   function renderTopbar() {
-    if (level === "all") {
-      const isPlaying = radio.status === "playing";
-      return (
-        <div className="dial-topbar dial-topbar--all">
-          {/* Wordmark — plain "Lore" text, left-justified like the list.
-              The moon moved down to the time-travel strip, where its phase
-              tracks the scrubbed date. (Solo/LP toggle machinery kept.) */}
-          <button
-            ref={wordmarkRef}
-            type="button"
-            className={`dial-topbar__wordmark${tunedArtistsOpen ? " dial-topbar__wordmark--active" : ""}`}
-            aria-label="Lore — tuned artists"
-            aria-pressed={tunedArtistsOpen}
-            onClick={() => setTunedArtistsOpen((open) => !open)}
-          >
-            <span className="dial-topbar__letter" aria-hidden="true">Lore</span>
-          </button>
-
-          {/* Moon phase — top right; tracks the scrubbed date in past mode. */}
-          <span className="dial-topbar__moon-tr" aria-hidden="true">
-            <MoonPhaseGlyph
-              size={26}
-              date={pastScan.currentRun && !pastScan.isAtLiveEdge
-                ? new Date(`${pastScan.currentRun.day}T12:00:00`)
-                : new Date()}
-            />
-          </span>
-
-          {/* Global search hidden — SearchOverlay machinery kept for later. */}
-        </div>
-      );
-    }
+    // The front door intentionally starts with the art/interface itself. The
+    // Lore wordmark and moon used to consume a full row without adding
+    // navigational value; drill-down levels retain their breadcrumb topbar.
+    if (level === "all") return null;
     if (level === "station" && currentStation) {
       return (
         <div className="dial-topbar">
@@ -3181,11 +3154,11 @@ export function DialView() {
         />
       )}
 
-      {/* Topbar + avatar album hero — the art IS the front-door content:
+      {/* Avatar album hero — the art IS the front-door content:
           full-width square in portrait, full-height left panel in landscape
-          (see .dial-hero__art CSS). No section heading — the sort is already
-          opinionated, and time-travel/scrub covers what Recent did. Tapping
-          the art (or the moon) opens the fullscreen overlay. */}
+          (see .dial-hero__art CSS). The front door has no branding strip:
+          the sort and time-travel controls carry the interface. Tapping the
+          art opens the fullscreen overlay. */}
       {level === "all" ? (
         <div className="dial-hero" data-queue-layout={heroQueueLayout}>
           {renderTopbar()}
@@ -3217,14 +3190,23 @@ export function DialView() {
               </>
             )}
           </div>
-          {!tunedArtistsOpen && (
-            /* Queue is a sibling of the art, never an overlay inside it. */
-            <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          {/* Queue is a sibling of the art, never an overlay inside it. It
+              remains mounted in tuned-artists mode so the Tune trigger can
+              close that surface and restore focus. */}
+          <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
               <div className="dial-hero__setpanel-head">
                 <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
                 <span className="dial-hero__setpanel-title">
                   {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
                 </span>
+                <button
+                  ref={tunedArtistsTriggerRef}
+                  type="button"
+                  className="dial-hero__setpanel-tune"
+                  aria-label={tunedArtistsOpen ? "Return to radio queue" : "Open tuned artists"}
+                  aria-pressed={tunedArtistsOpen}
+                  onClick={() => setTunedArtistsOpen((open) => !open)}
+                >Tune</button>
                 <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
               </div>
               {setTabs.length > 0 ? (
@@ -3243,8 +3225,7 @@ export function DialView() {
               ) : (
                 <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
               )}
-            </div>
-          )}
+          </div>
           {/* Sort toggle moved into the time-travel (filter) strip.
               ＋ Artists button hidden — addArtistsOpen machinery kept. */}
           {zone1Settled && addArtistsOpen && (
