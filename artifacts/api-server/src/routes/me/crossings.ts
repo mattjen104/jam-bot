@@ -475,8 +475,9 @@ const recomputeInFlight = new Map<number, Promise<void>>();
  * Trigger a background personal-crossings recompute for a user.
  * Safe to call from a request handler with `void` — errors are caught.
  * Concurrent calls for the same user reuse the in-flight promise.
+ * Exported so the boot warm job can schedule stale-cache recomputes.
  */
-function schedulePersonalCrossingsRecompute(userId: number): void {
+export function schedulePersonalCrossingsRecompute(userId: number): void {
   if (recomputeInFlight.has(userId)) return;
   const p = (async () => {
     try {

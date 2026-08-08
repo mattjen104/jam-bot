@@ -60,6 +60,7 @@ import {
 } from "../hooks/useDialData";
 import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
 import { ListenerAvatarStack } from "./ListenerAvatarStack";
+import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
 /**
  * Returns a version of `value` that only flips to `true` after it has been
  * `true` continuously for `delayMs` milliseconds.  Flipping back to `false`
@@ -1954,7 +1955,7 @@ export function DialView() {
     setTunedArtistsOpen(false);
     // The compact trigger lives in the queue header, which remains mounted
     // while the tuned-artists surface is open.
-    tunedArtistsTriggerRef.current?.focus();
+    requestAnimationFrame(() => tunedArtistsTriggerRef.current?.focus());
   }, []);
 
   // Popular crossings — Also-On-Air sentences + sort order.
@@ -2952,10 +2953,21 @@ export function DialView() {
 
   // --- topbar ---
   function renderTopbar() {
-    // The front door intentionally starts with the art/interface itself. The
-    // Lore wordmark and moon used to consume a full row without adding
-    // navigational value; drill-down levels retain their breadcrumb topbar.
-    if (level === "all") return null;
+    // The front door renders a minimal topbar that hosts the decorative moon
+    // glyph (phase tracks the scrubbed day in past mode, today in live mode).
+    // Drill-down levels show their full breadcrumb topbar.
+    if (level === "all") {
+      const moonDate = pastScan.currentRun?.day
+        ? new Date(pastScan.currentRun.day)
+        : undefined;
+      return (
+        <div className="dial-topbar dial-topbar--all">
+          <div className="dial-topbar__moon-tr" aria-hidden="true">
+            <MoonPhaseGlyph date={moonDate} />
+          </div>
+        </div>
+      );
+    }
     if (level === "station" && currentStation) {
       return (
         <div className="dial-topbar">
