@@ -210,73 +210,7 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
       })();
     }, TONE_PATH);
     await page.goto("/lore/");
-    const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
-    await context.close();
-    // No gesture ever happened — activation must be absent and play() blocked.
-    expect(result.hadStickyActivation).toBe(false);
-    expect(result.played).toBe(false);
-    expect(result.errorName).toBe("NotAllowedError");
-  });
-
-  // QUARANTINED (env, not product): under the current system Chromium (138)
-  // in this audio-device-less container, play() on the reused pre-unlocked
-  // element after a >5s no-activation gap either never settles or resolves
-  // with a frozen media clock (currentTime stays 0, `ended` never fires).
-  // Verified pre-existing on a clean tree across ~8 consecutive runs, with
-  // and without a dummy PulseAudio null sink. The control + strict-boundary
-  // tests keep gating. Follow-up #1607 owns re-verification on real Chrome.
-  test.fixme("boundary fix: a tone element pre-unlocked in the gesture handler still plays >5s later", async ({
-    browser,
-  }) => {
-    // The fix for the corner above: PlayerProvider pre-unlocks a dedicated
-    // tone element (muted play()+pause()) inside the crossing gesture and
-    // reuses it in the interstitial effect. This reproduces that pattern and
-    // proves the tone now sounds even when the device check outlives the
-    // ~5s transient-activation window.
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await installAttemptHelper(page);
-    await page.goto("/lore/");
-    await page.click("body"); // click handler pre-unlocks the element
-    await page.evaluate(() => window.__armToneAttempt!(6000, true));
-    await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
-      // Budget: arm delay (up to 6s) + 10s progression poll + 15s ended cap.
-      timeout: 45_000,
-    });
-    const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
-    await context.close();
-    // No gesture ever happened — activation must be absent and play() blocked.
-    expect(result.hadStickyActivation).toBe(false);
-    expect(result.played).toBe(false);
-    expect(result.errorName).toBe("NotAllowedError");
-  });
-
-  // QUARANTINED (env, not product): under the current system Chromium (138)
-  // in this audio-device-less container, play() on the reused pre-unlocked
-  // element after a >5s no-activation gap either never settles or resolves
-  // with a frozen media clock (currentTime stays 0, `ended` never fires).
-  // Verified pre-existing on a clean tree across ~8 consecutive runs, with
-  // and without a dummy PulseAudio null sink. The control + strict-boundary
-  // tests keep gating. Follow-up #1607 owns re-verification on real Chrome.
-  test.fixme("boundary fix: a tone element pre-unlocked in the gesture handler still plays >5s later", async ({
-    browser,
-  }) => {
-    // The fix for the corner above: PlayerProvider pre-unlocks a dedicated
-    // tone element (muted play()+pause()) inside the crossing gesture and
-    // reuses it in the interstitial effect. This reproduces that pattern and
-    // proves the tone now sounds even when the device check outlives the
-    // ~5s transient-activation window.
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await installAttemptHelper(page);
-    await page.goto("/lore/");
-    await page.click("body"); // click handler pre-unlocks the element
-    await page.evaluate(() => window.__armToneAttempt!(6000, true));
-    await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
-      // Budget: arm delay (up to 6s) + 10s progression poll + 15s ended cap.
-      timeout: 45_000,
-    });
-    const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
+    const result = (await page.evaluate(() => window.__toneControl!)) as ToneAttempt;
     await context.close();
     // No gesture ever happened — activation must be absent and play() blocked.
     expect(result.hadStickyActivation).toBe(false);
