@@ -335,15 +335,27 @@ describe("(b) stepping ← shows most recent crossing run", () => {
     mockDialDataSettled();
     renderDial();
 
+    // Capture the live-edge moon shadow path (computed from today's date).
+    const liveMoonSvg = document.querySelector(".dial-topbar__moon-tr svg.moon-glyph");
+    expect(liveMoonSvg).toBeTruthy();
+    // Record the shadow path (may be null at full moon — that is fine).
+    const liveShadow = liveMoonSvg?.querySelector("path")?.getAttribute("d") ?? "__none__";
+
     act(() => {
       fireEvent.click(getPrevBtn());
     });
 
-    // The topbar moon tracks the scrubbed day and stays decorative.
+    // The topbar moon must still exist and remain purely decorative.
     const topbarMoon = document.querySelector(".dial-topbar__moon-tr");
-    const moon = topbarMoon?.querySelector("svg.moon-glyph");
-    expect(moon).toBeTruthy();
     expect(topbarMoon?.getAttribute("aria-hidden")).toBe("true");
+    const scrubbedMoonSvg = topbarMoon?.querySelector("svg.moon-glyph");
+    expect(scrubbedMoonSvg).toBeTruthy();
+
+    // The shadow path must reflect the scrubbed run's day ("2026-08-05"),
+    // not today's date — confirming the `date` prop was forwarded correctly.
+    // The run date and today are ≥1 day apart so the shadow geometry must differ.
+    const scrubbedShadow = scrubbedMoonSvg?.querySelector("path")?.getAttribute("d") ?? "__none__";
+    expect(scrubbedShadow).not.toBe(liveShadow);
   });
 
   it("live Zone 1 crossing rows (.fdrow) are absent after stepping back into past-scan", () => {

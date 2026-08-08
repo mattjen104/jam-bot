@@ -42,6 +42,7 @@ import { DialContextRegion } from "../dial/DialContextRegion";
 import { contextStationSlug } from "../dial/dialContext";
 import { heroArtCandidates } from "../lib/artRes";
 import { runDate, clockTime } from "../lib/format";
+import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,7 +61,6 @@ import {
 } from "../hooks/useDialData";
 import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
 import { ListenerAvatarStack } from "./ListenerAvatarStack";
-import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
 /**
  * Returns a version of `value` that only flips to `true` after it has been
  * `true` continuously for `delayMs` milliseconds.  Flipping back to `false`
@@ -1954,8 +1954,8 @@ export function DialView() {
   const closeTunedArtists = useCallback(() => {
     setTunedArtistsOpen(false);
     // The compact trigger lives in the queue header, which remains mounted
-    // while the tuned-artists surface is open.
-    requestAnimationFrame(() => tunedArtistsTriggerRef.current?.focus());
+    // while the tuned-artists surface is open — no rAF needed.
+    tunedArtistsTriggerRef.current?.focus();
   }, []);
 
   // Popular crossings — Also-On-Air sentences + sort order.
@@ -2953,13 +2953,16 @@ export function DialView() {
 
   // --- topbar ---
   function renderTopbar() {
-    // The front door renders a minimal topbar that hosts the decorative moon
-    // glyph (phase tracks the scrubbed day in past mode, today in live mode).
-    // Drill-down levels show their full breadcrumb topbar.
+    // The front door renders a minimal topbar that carries only the moon phase
+    // glyph (decorative, aria-hidden).  Drill-down levels show a breadcrumb
+    // topbar.  The moon is aria-hidden because it conveys no actionable info.
     if (level === "all") {
-      const moonDate = pastScan.currentRun?.day
-        ? new Date(pastScan.currentRun.day)
-        : undefined;
+      // When time-travelling, the moon tracks the scrubbed run's date so it
+      // reflects the night the listener is looking back at, not today.
+      const moonDate =
+        !pastScan.isAtLiveEdge && pastScan.currentRun?.day
+          ? new Date(pastScan.currentRun.day)
+          : undefined;
       return (
         <div className="dial-topbar dial-topbar--all">
           <div className="dial-topbar__moon-tr" aria-hidden="true">
