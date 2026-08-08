@@ -29,6 +29,11 @@ export async function setup(): Promise<void> {
     );
     await applySpotifyLibraryItemsMigration();
 
+    const { applyLibraryRemovedMigration } = await import(
+      "../src/lore/library-removed-migration.js"
+    );
+    await applyLibraryRemovedMigration();
+
     const { applyAttendanceMigration } = await import(
       "../src/lore/attendance-migration.js"
     );

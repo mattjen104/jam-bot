@@ -249,7 +249,7 @@ router.get("/me/crossings", h(async (req, res) => {
   const userLibMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   // Subquery: release-group MBIDs represented in the user's library (album widening).
   const userLibRgs = db
@@ -259,7 +259,7 @@ router.get("/me/crossings", h(async (req, res) => {
       libraryItemsTable,
       eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid),
     )
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   // Subquery: artist MBIDs whose recordings are in the user's library.
   const userLibArtists = db
@@ -269,6 +269,7 @@ router.get("/me/crossings", h(async (req, res) => {
     .where(
       and(
         eq(libraryItemsTable.userId, user.id),
+        isNull(libraryItemsTable.removedAt),
         isNotNull(recordingsTable.artistMbid),
       ),
     );
@@ -308,6 +309,7 @@ router.get("/me/crossings", h(async (req, res) => {
       and(
         eq(spotifyLibraryItemsTable.userId, user.id),
         isNull(spotifyLibraryItemsTable.mbid),
+        isNull(spotifyLibraryItemsTable.removedAt),
         ne(spotifyLibraryItemsTable.artist, ""),
       ),
     );
@@ -349,6 +351,7 @@ router.get("/me/crossings", h(async (req, res) => {
   const relevantMbids = sql`(
     select ${libraryItemsTable.mbid} from ${libraryItemsTable}
       where ${libraryItemsTable.userId} = ${user.id}
+        and ${libraryItemsTable.removedAt} is null
     union
     select ${recordingReleaseGroupsTable.recordingMbid} from ${recordingReleaseGroupsTable}
       where ${recordingReleaseGroupsTable.isPrimary} = true
@@ -611,18 +614,19 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
   const activeLibraryMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(sql`${libraryItemsTable.userId} in (${activeUsers})`);
+    .where(and(sql`${libraryItemsTable.userId} in (${activeUsers})`, isNull(libraryItemsTable.removedAt)));
   const activeLibraryRgs = db
     .select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
     .from(recordingReleaseGroupsTable)
     .innerJoin(libraryItemsTable, eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid))
-    .where(sql`${libraryItemsTable.userId} in (${activeUsers})`);
+    .where(and(sql`${libraryItemsTable.userId} in (${activeUsers})`, isNull(libraryItemsTable.removedAt)));
   const activeLibraryArtists = db
     .select({ artistMbid: recordingsTable.artistMbid })
     .from(recordingsTable)
     .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
     .where(and(
       sql`${libraryItemsTable.userId} in (${activeUsers})`,
+      isNull(libraryItemsTable.removedAt),
       isNotNull(recordingsTable.artistMbid),
     ));
   const activeSoftArtists = db
@@ -631,6 +635,7 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
     .where(and(
       sql`${spotifyLibraryItemsTable.userId} in (${activeUsers})`,
       isNull(spotifyLibraryItemsTable.mbid),
+      isNull(spotifyLibraryItemsTable.removedAt),
       ne(spotifyLibraryItemsTable.artist, ""),
     ));
   const activeSeedArtists = db
@@ -704,6 +709,7 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
   const blendedRelevantMbids = sql`(
     select ${libraryItemsTable.mbid} from ${libraryItemsTable}
       where ${libraryItemsTable.userId} in (${activeUsers})
+        and ${libraryItemsTable.removedAt} is null
     union
     select ${recordingReleaseGroupsTable.recordingMbid} from ${recordingReleaseGroupsTable}
       where ${recordingReleaseGroupsTable.isPrimary} = true

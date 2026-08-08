@@ -27,7 +27,7 @@ import {
   userSourceAffinityTable,
   type LoreUser,
 } from "@workspace/db";
-import { eq, and, isNotNull, inArray, sql, gt, notExists } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, inArray, sql, gt, notExists } from "drizzle-orm";
 import { selectorClaimsTable } from "@workspace/db";
 import {
   fetchStationsByTag,
@@ -129,7 +129,7 @@ export async function computeUserSourceAffinity(
   const userLibMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, userId));
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
 
   // Tier-2: in-Lore behavioral items (kept or ridden tracks).
   const userBehaviorMbids = db
@@ -138,6 +138,7 @@ export async function computeUserSourceAffinity(
     .where(
       and(
         eq(libraryItemsTable.userId, userId),
+        isNull(libraryItemsTable.removedAt),
         sql`${libraryItemsTable.provenance}->>'kind' IN ('keep', 'ride')`,
       ),
     );
@@ -260,7 +261,7 @@ async function hasLibrary(userId: number): Promise<boolean> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, userId));
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
   return (row?.n ?? 0) > 0;
 }
 

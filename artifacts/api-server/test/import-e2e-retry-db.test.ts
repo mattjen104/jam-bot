@@ -693,6 +693,19 @@ describe("end-to-end: import worker seeds soft row, retry pass promotes it", () 
         .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, TITLE)));
       expect(cacheAfterImport.length).toBe(0);
 
+      // The listener deselects the unresolved soft row BEFORE it resolves —
+      // the promotion must carry removed_at to the resolved library row so a
+      // removed track is never silently reactivated by the retry pass.
+      await db
+        .update(spotifyLibraryItemsTable)
+        .set({ removedAt: new Date() })
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
+          ),
+        );
+
       // ── Step 2: retry pass — MB now succeeds, promoting the soft row. ─────
 
       mockResolveByText.mockClear();
@@ -721,9 +734,10 @@ describe("end-to-end: import worker seeds soft row, retry pass promotes it", () 
         );
       expect(softAfterRetry.length).toBe(0);
 
-      // The track must now be in library_items.
+      // The track must now be in library_items — still flagged removed,
+      // because the listener deselected it while it was a soft row.
       const libAfterRetry = await db
-        .select({ mbid: libraryItemsTable.mbid })
+        .select({ mbid: libraryItemsTable.mbid, removedAt: libraryItemsTable.removedAt })
         .from(libraryItemsTable)
         .where(
           and(
@@ -733,6 +747,7 @@ describe("end-to-end: import worker seeds soft row, retry pass promotes it", () 
         );
       expect(libAfterRetry.length).toBe(1);
       expect(libAfterRetry[0]!.mbid).toBe(MBID);
+      expect(libAfterRetry[0]!.removedAt).not.toBeNull();
 
       // A positive resolution-cache entry must have been written.
       const cacheAfterRetry = await db

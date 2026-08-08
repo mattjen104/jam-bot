@@ -9,7 +9,7 @@ import {
   stationsTable,
   showsTable,
 } from "@workspace/db";
-import { eq, and, ne, isNotNull, inArray, asc, sql } from "drizzle-orm";
+import { eq, and, ne, isNotNull, isNull, inArray, asc, sql } from "drizzle-orm";
 import { spinDayExpr } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { pickerNotOptedOut, validScheduleShowAttribution } from "../lore/shared.js";
@@ -240,7 +240,7 @@ router.get("/me/overlaps/pickers", h(async (req, res) => {
   const userLib = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   const sharedExpr = sql<number>`count(distinct ${picksTable.mbid})::int`;
 
@@ -302,7 +302,7 @@ router.get("/me/overlaps/selectors", h(async (req, res) => {
   const userLib = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   const sharedExpr = sql<number>`count(distinct ${picksTable.mbid})::int`;
 
@@ -380,7 +380,7 @@ router.get("/me/pickers/overlap", h(async (req, res) => {
   const userLibMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   // Subquery: release-group MBIDs for the user's library (album widening).
   const userLibRgs = db
@@ -390,7 +390,7 @@ router.get("/me/pickers/overlap", h(async (req, res) => {
       libraryItemsTable,
       eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid),
     )
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   // Library-hit predicate (mirroring crossings.ts): exact MBID OR same primary RG.
   const libHit = sql`(
@@ -448,7 +448,7 @@ router.get("/me/overlaps/stations", h(async (req, res) => {
   const userLib = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   const sharedExpr = sql<number>`count(distinct ${spinsTable.mbid})::int`;
 
@@ -532,7 +532,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
   const userMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   const baseWhere = and(isNotNull(spinsTable.mbid), eq(stationsTable.hidden, false));
   const rangedWhere = daysParam
@@ -668,7 +668,7 @@ router.get("/me/overlaps/runs/:runId/crossings", h(async (req, res) => {
   const userMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   const showCondition = anchor.showId == null
     ? sql`${spinsTable.showId} IS NULL`
@@ -799,7 +799,7 @@ router.get("/me/overlaps/spine", h(async (req, res) => {
   const userMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, user.id));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
   const timeFilter = and(
     isNotNull(spinsTable.mbid),

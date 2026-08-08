@@ -2926,6 +2926,21 @@ export interface MattStarterLibraryResult {
   error?: string;
 }
 
+export interface LibraryRemovalRequest {
+  /** MusicBrainz recording ID of a resolved library row. */
+  mbid?: string;
+  /** Spotify track ID of an unresolved soft row. */
+  spotifyId?: string;
+  /** true to deselect the track, false to restore it. */
+  removed: boolean;
+}
+
+export interface LibraryRemovalResult {
+  removed: boolean;
+  /** ISO timestamp when the track was removed; null when active. */
+  removedAt?: string | null;
+}
+
 export type AlbumAvatarCandidateSource =
   (typeof AlbumAvatarCandidateSource)[keyof typeof AlbumAvatarCandidateSource];
 

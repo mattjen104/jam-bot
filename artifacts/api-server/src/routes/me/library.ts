@@ -2441,13 +2441,49 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
             })
             .onConflictDoNothing();
 
+          // Preserve removal state across promotion: if the listener already
+          // deselected the soft row, the resolved row must arrive removed too
+          // (soft-remove survives resolution; nothing silently reactivates).
+          let softRemovedAt: Date | null = null;
+          if (candidate.service === "spotify") {
+            const isRealSpotifyId = /^[A-Za-z0-9]{22}$/.test(t.externalId);
+            const softMatchCond = isRealSpotifyId
+              ? eq(spotifyLibraryItemsTable.spotifyId, t.externalId)
+              : (t.isrc
+                  ? or(
+                      eq(spotifyLibraryItemsTable.isrc, t.isrc),
+                      and(
+                        isNull(spotifyLibraryItemsTable.isrc),
+                        eq(spotifyLibraryItemsTable.artist, t.artist),
+                        eq(spotifyLibraryItemsTable.title, t.title),
+                      ),
+                    )
+                  : and(
+                      eq(spotifyLibraryItemsTable.artist, t.artist),
+                      eq(spotifyLibraryItemsTable.title, t.title),
+                    ));
+            const [softRow] = await db
+              .select({ removedAt: spotifyLibraryItemsTable.removedAt })
+              .from(spotifyLibraryItemsTable)
+              .where(and(eq(spotifyLibraryItemsTable.userId, candidate.userId), softMatchCond))
+              .limit(1)
+              .catch(() => []);
+            softRemovedAt = softRow?.removedAt ?? null;
+          }
+
           // FK guard: recordings row may disappear between the insert above and
           // the library_items insert (same race as the main Phase 3 worker).
           let libItemInserted = false;
           try {
             await db
               .insert(libraryItemsTable)
-              .values({ userId: candidate.userId, mbid, provenance, addedAt: new Date() })
+              .values({
+                userId: candidate.userId,
+                mbid,
+                provenance,
+                addedAt: new Date(),
+                ...(softRemovedAt ? { removedAt: softRemovedAt } : {}),
+              })
               .onConflictDoNothing();
             libItemInserted = true;
           } catch (insertErr) {
@@ -2632,6 +2668,64 @@ export function startPhase3RetryScheduler(): void {
  * (unresolved soft rows) so the listener sees their whole Spotify library,
  * not just the ~55 % that resolved to MusicBrainz.
  */
+/**
+ * POST /api/me/library/removal — deselect (remove) or restore a library row.
+ *
+ * Nothing is ever deleted: removal only stamps `removed_at`, the row stays in
+ * the Library timeline (grayed) and is excluded from crossings / library-hit
+ * computations. Restore clears the stamp. Identified by `mbid` (resolved rows)
+ * or `spotifyId` (unresolved soft rows).
+ *
+ * ⚠ This endpoint NEVER calls Spotify — deselecting in Lore must not unsave
+ * the track from the listener's Spotify library.
+ */
+router.post("/me/library/removal", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const body = req.body ?? {};
+  const mbid = typeof body.mbid === "string" ? body.mbid.trim() : "";
+  const spotifyId = typeof body.spotifyId === "string" ? body.spotifyId.trim() : "";
+  const removed = body.removed;
+  if (typeof removed !== "boolean") {
+    return res.status(400).json({ error: "removed (boolean) is required" });
+  }
+  if (!mbid && !spotifyId) {
+    return res.status(400).json({ error: "mbid or spotifyId is required" });
+  }
+
+  const removedAt = removed ? new Date() : null;
+  let updated: { removedAt: Date | null }[] = [];
+  if (mbid) {
+    updated = await db
+      .update(libraryItemsTable)
+      .set({ removedAt })
+      .where(and(eq(libraryItemsTable.userId, user.id), eq(libraryItemsTable.mbid, mbid)))
+      .returning({ removedAt: libraryItemsTable.removedAt });
+  } else {
+    updated = await db
+      .update(spotifyLibraryItemsTable)
+      .set({ removedAt })
+      .where(and(
+        eq(spotifyLibraryItemsTable.userId, user.id),
+        eq(spotifyLibraryItemsTable.spotifyId, spotifyId),
+      ))
+      .returning({ removedAt: spotifyLibraryItemsTable.removedAt });
+  }
+  if (updated.length === 0) {
+    return res.status(404).json({ error: "No matching library row" });
+  }
+
+  // Bust taste-derived caches so the dial reflects the change without a
+  // server restart — same pattern as the taste-seeds PUT.
+  bustCrossingsCache(user.id);
+  bustLibraryHitCache(user.id);
+  bustPickerOverlapCache(user.id);
+
+  return res.json({
+    removed: updated[0]!.removedAt != null,
+    removedAt: updated[0]!.removedAt?.toISOString() ?? null,
+  });
+}));
+
 router.get("/me/library", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const cursor =
@@ -2798,7 +2892,7 @@ router.get("/me/library", h(async (req, res) => {
   }
 
   type ResolvedRow = {
-    mbid: string; provenance: LibraryItemProvenance; addedAt: Date;
+    mbid: string; provenance: LibraryItemProvenance; addedAt: Date; removedAt: Date | null;
     title: string | null; artist: string | null; artworkUrl: string | null;
     links: Array<{ url: string }> | null; sortKey: string; albumTitle: string | null;
   };
@@ -2808,6 +2902,7 @@ router.get("/me/library", h(async (req, res) => {
       mbid: libraryItemsTable.mbid,
       provenance: libraryItemsTable.provenance,
       addedAt: libraryItemsTable.addedAt,
+      removedAt: libraryItemsTable.removedAt,
       title: recordingsTable.title,
       artist: recordingsTable.artist,
       artworkUrl: recordingsTable.artworkUrl,
@@ -2850,13 +2945,14 @@ router.get("/me/library", h(async (req, res) => {
 
   void legacyNameCursor;
 
-  type SoftRow = { spotifyId: string; addedAt: Date; title: string; artist: string; artworkUrl: string | null; albumName: string | null; sortKey: string };
+  type SoftRow = { spotifyId: string; addedAt: Date; removedAt: Date | null; title: string; artist: string; artworkUrl: string | null; albumName: string | null; sortKey: string };
   let softRows: SoftRow[] = [];
   if (includeSoft) {
     softRows = await db
       .select({
         spotifyId: spotifyLibraryItemsTable.spotifyId,
         addedAt: spotifyLibraryItemsTable.addedAt,
+        removedAt: spotifyLibraryItemsTable.removedAt,
         title: spotifyLibraryItemsTable.title,
         artist: spotifyLibraryItemsTable.artist,
         artworkUrl: spotifyLibraryItemsTable.artworkUrl,
@@ -2882,6 +2978,7 @@ router.get("/me/library", h(async (req, res) => {
       spotifyId: null as string | null,
       provenance: r.provenance,
       addedAt: r.addedAt,
+      removedAt: r.removedAt,
       title: r.title,
       artist: r.artist,
       artworkUrl: r.artworkUrl,
@@ -2895,6 +2992,7 @@ router.get("/me/library", h(async (req, res) => {
       spotifyId: s.spotifyId,
       provenance: softProvenance,
       addedAt: s.addedAt,
+      removedAt: s.removedAt,
       title: s.title,
       artist: s.artist,
       artworkUrl: s.artworkUrl,
@@ -2941,6 +3039,9 @@ router.get("/me/library", h(async (req, res) => {
         : null,
       ...(r.soft ? { soft: true, spotifyId: r.spotifyId } : {}),
       ...(r.mbid && fuzzyMbidSet.has(r.mbid) ? { fuzzyMatch: true } : {}),
+      ...(r.removedAt != null
+        ? { removed: true, removedAt: r.removedAt.toISOString() }
+        : {}),
     })),
     nextCursor,
     ...(total !== undefined ? { total } : {}),
@@ -2961,7 +3062,11 @@ router.get("/me/library/mbids", h(async (req, res) => {
   const rows = await db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid)));
+    .where(and(
+      eq(libraryItemsTable.userId, user.id),
+      isNotNull(libraryItemsTable.mbid),
+      isNull(libraryItemsTable.removedAt),
+    ));
 
   const mbids = rows.map((r) => r.mbid).filter((m): m is string => !!m);
 
@@ -2989,6 +3094,7 @@ router.get("/me/library/mbids", h(async (req, res) => {
         and(
           eq(spotifyLibraryItemsTable.userId, user.id),
           isNull(spotifyLibraryItemsTable.mbid),
+          isNull(spotifyLibraryItemsTable.removedAt),
         ),
       );
     softArtists = softRows.map((r) => r.artist).filter(Boolean);

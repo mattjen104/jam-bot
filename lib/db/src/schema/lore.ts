@@ -1207,6 +1207,13 @@ export const libraryItemsTable = pgTable(
      */
     spinId: integer("spin_id").references(() => spinsTable.id),
     addedAt: timestamp("added_at").defaultNow().notNull(),
+    /**
+     * Non-null when the listener has "deselected" this track. The row is
+     * never deleted — it stays visible in the Library timeline (grayed) but
+     * is excluded from crossings / library-hit / taste computations.
+     * Null = active. Never propagated to Spotify (no unsave).
+     */
+    removedAt: timestamp("removed_at"),
   },
   (t) => [
     uniqueIndex("library_items_user_mbid_idx").on(t.userId, t.mbid),
@@ -2131,6 +2138,12 @@ export const spotifyLibraryItemsTable = pgTable(
      * be cleaned up.  Null = still unresolved.
      */
     mbid: text("mbid").references(() => recordingsTable.mbid),
+    /**
+     * Non-null when the listener has "deselected" this soft row. Mirrors
+     * library_items.removed_at: row stays listed but is excluded from
+     * soft-artist crossings / library-hit matching. Null = active.
+     */
+    removedAt: timestamp("removed_at"),
   },
   (t) => [
     uniqueIndex("spotify_library_items_user_spotify_idx").on(

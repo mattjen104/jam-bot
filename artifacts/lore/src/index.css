@@ -4019,6 +4019,13 @@
 .lrow--soft   { opacity: 0.82; border-left-color: hsl(var(--muted-foreground) / 0.25); }
 .lrow--soft .lrow__art--soft { cursor: default; }
 .lrow--soft .lrow__tr--soft  { color: inherit; cursor: default; }
+/* Removed rows: deselected tracks stay in the timeline but are grayed and
+   clearly labeled — nothing ever leaves the Library. */
+.lrow--removed {
+  opacity: 0.45;
+  filter: grayscale(1);
+  border-left-color: transparent;
+}
 .lrow--onair  {
   border-left-color: hsl(var(--live));
   background: hsl(var(--live) / 0.04);

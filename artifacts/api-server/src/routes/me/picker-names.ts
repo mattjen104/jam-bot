@@ -20,7 +20,7 @@ import {
   pickersTable,
   tasteSeedsTable,
 } from "@workspace/db";
-import { eq, and, ne, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, ne, isNotNull, isNull, inArray } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
 import { pickerNotOptedOut } from "../lore/shared.js";
 import { type AuthedRequest } from "./auth.js";
@@ -52,7 +52,7 @@ router.get("/me/picker-names", h(async (req, res) => {
     db
       .select({ mbid: libraryItemsTable.mbid })
       .from(libraryItemsTable)
-      .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid)))
+      .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid), isNull(libraryItemsTable.removedAt)))
       .limit(1),
     db
       .select({ id: tasteSeedsTable.id })
@@ -73,7 +73,7 @@ router.get("/me/picker-names", h(async (req, res) => {
   const userLibSubq = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid)));
+    .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid), isNull(libraryItemsTable.removedAt)));
 
   // Join picks → pickers, keeping only non-DJ, active, not-opted-out pickers
   // whose picks overlap the user's library.

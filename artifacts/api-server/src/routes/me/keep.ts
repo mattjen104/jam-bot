@@ -221,7 +221,8 @@ router.post(
           })
           .onConflictDoUpdate({
             target: [libraryItemsTable.userId, libraryItemsTable.mbid],
-            set: { provenance, spinId: spin.id, addedAt: new Date() },
+            // Explicit keep restores a previously removed row (removedAt: null).
+            set: { provenance, spinId: spin.id, addedAt: new Date(), removedAt: null },
           });
         promotedAt = new Date();
       }
@@ -326,6 +327,8 @@ router.post(
         set: {
           provenance,
           addedAt: new Date(),
+          // Explicit keep restores a previously removed row.
+          removedAt: null,
           ...(keepSpinId != null ? { spinId: keepSpinId } : {}),
         },
       });

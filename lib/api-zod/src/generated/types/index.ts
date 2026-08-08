@@ -104,6 +104,8 @@ export * from "./labelSeedRequest";
 export * from "./libraryCoverageAlbum";
 export * from "./libraryCoverageList";
 export * from "./libraryCoverageResponse";
+export * from "./libraryRemovalRequest";
+export * from "./libraryRemovalResult";
 export * from "./listAllDraftClaimsParams";
 export * from "./listAllDraftClaimsStatus";
 export * from "./listGeniusDraftsParams";

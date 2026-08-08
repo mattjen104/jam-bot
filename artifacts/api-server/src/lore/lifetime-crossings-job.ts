@@ -36,7 +36,7 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
   const userLibMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(eq(libraryItemsTable.userId, userId));
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
 
   // Subquery: release-group MBIDs represented in the user's library.
   const userLibRgs = db
@@ -46,7 +46,7 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
       libraryItemsTable,
       eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid),
     )
-    .where(eq(libraryItemsTable.userId, userId));
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
 
   // Subquery: artist MBIDs whose recordings are in the user's library.
   const userLibArtists = db
@@ -56,6 +56,7 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
     .where(
       and(
         eq(libraryItemsTable.userId, userId),
+        isNull(libraryItemsTable.removedAt),
         isNotNull(recordingsTable.artistMbid),
       ),
     );
@@ -68,6 +69,7 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
       and(
         eq(spotifyLibraryItemsTable.userId, userId),
         isNull(spotifyLibraryItemsTable.mbid),
+        isNull(spotifyLibraryItemsTable.removedAt),
         ne(spotifyLibraryItemsTable.artist, ""),
       ),
     );

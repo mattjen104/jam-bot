@@ -2919,6 +2919,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MattStarterLibraryResult"
+  /me/library/removal:
+    post:
+      operationId: setLibraryItemRemoved
+      tags: [me]
+      summary: Deselect (remove) or restore a library track
+      description: >
+        Marks a library row as removed or restores it to active. Nothing is
+        ever deleted — removed rows stay in the Library timeline (grayed) but
+        are excluded from crossings and library-hit computations. This never
+        propagates to Spotify (no unsave). Identify the row by `mbid`
+        (resolved keeps/imports) or `spotifyId` (unresolved soft rows).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryRemovalRequest"
+      responses:
+        "200":
+          description: Updated removal state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryRemovalResult"
+        "400":
+          description: Neither mbid nor spotifyId supplied
+        "404":
+          description: No matching library row for this user
   /me/weekly-recap:
     get:
       operationId: getMyWeeklyRecap
@@ -7170,6 +7198,29 @@ components:
         error:
           type: string
       required: [available, addedCount, totalCount]
+    LibraryRemovalRequest:
+      type: object
+      properties:
+        mbid:
+          type: string
+          description: MusicBrainz recording ID of a resolved library row.
+        spotifyId:
+          type: string
+          description: Spotify track ID of an unresolved soft row.
+        removed:
+          type: boolean
+          description: true to deselect the track, false to restore it.
+      required: [removed]
+    LibraryRemovalResult:
+      type: object
+      properties:
+        removed:
+          type: boolean
+        removedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp when the track was removed; null when active.
+      required: [removed]
     AlbumAvatarCandidate:
       type: object
       properties:

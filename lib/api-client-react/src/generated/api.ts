@@ -57,6 +57,8 @@ import type {
   IngestResult,
   LabelSeedRequest,
   LibraryCoverageResponse,
+  LibraryRemovalRequest,
+  LibraryRemovalResult,
   ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
   ListPickersParams,
@@ -8358,6 +8360,94 @@ export const useCopyMattStarterLibrary = <
   TContext
 > => {
   return useMutation(getCopyMattStarterLibraryMutationOptions(options));
+};
+
+/**
+ * Marks a library row as removed or restores it to active. Nothing is ever deleted — removed rows stay in the Library timeline (grayed) but are excluded from crossings and library-hit computations. This never propagates to Spotify (no unsave). Identify the row by `mbid` (resolved keeps/imports) or `spotifyId` (unresolved soft rows).
+
+ * @summary Deselect (remove) or restore a library track
+ */
+export const getSetLibraryItemRemovedUrl = () => {
+  return `/api/me/library/removal`;
+};
+
+export const setLibraryItemRemoved = async (
+  libraryRemovalRequest: LibraryRemovalRequest,
+  options?: RequestInit,
+): Promise<LibraryRemovalResult> => {
+  return customFetch<LibraryRemovalResult>(getSetLibraryItemRemovedUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(libraryRemovalRequest),
+  });
+};
+
+export const getSetLibraryItemRemovedMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setLibraryItemRemoved>>,
+    TError,
+    { data: BodyType<LibraryRemovalRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setLibraryItemRemoved>>,
+  TError,
+  { data: BodyType<LibraryRemovalRequest> },
+  TContext
+> => {
+  const mutationKey = ["setLibraryItemRemoved"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setLibraryItemRemoved>>,
+    { data: BodyType<LibraryRemovalRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setLibraryItemRemoved(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetLibraryItemRemovedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setLibraryItemRemoved>>
+>;
+export type SetLibraryItemRemovedMutationBody = BodyType<LibraryRemovalRequest>;
+export type SetLibraryItemRemovedMutationError = ErrorType<void>;
+
+/**
+ * @summary Deselect (remove) or restore a library track
+ */
+export const useSetLibraryItemRemoved = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setLibraryItemRemoved>>,
+    TError,
+    { data: BodyType<LibraryRemovalRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setLibraryItemRemoved>>,
+  TError,
+  { data: BodyType<LibraryRemovalRequest> },
+  TContext
+> => {
+  return useMutation(getSetLibraryItemRemovedMutationOptions(options));
 };
 
 /**

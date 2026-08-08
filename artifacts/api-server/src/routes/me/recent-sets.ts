@@ -197,7 +197,7 @@ router.get("/me/recent-sets", h(async (req, res) => {
       .selectDistinct({ akey: sql<string>`lower(trim(${recordingsTable.artist}))` })
       .from(libraryItemsTable)
       .innerJoin(recordingsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
-      .where(eq(libraryItemsTable.userId, user.id)),
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt))),
     db
       .selectDistinct({ akey: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))` })
       .from(spotifyLibraryItemsTable)
@@ -205,6 +205,7 @@ router.get("/me/recent-sets", h(async (req, res) => {
         and(
           eq(spotifyLibraryItemsTable.userId, user.id),
           isNull(spotifyLibraryItemsTable.mbid),
+          isNull(spotifyLibraryItemsTable.removedAt),
           ne(spotifyLibraryItemsTable.artist, ""),
         ),
       ),

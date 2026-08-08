@@ -150,7 +150,7 @@ router.get("/me/popular-crossings", h(async (req, res) => {
       .selectDistinct({ akey: sql<string>`lower(trim(${recordingsTable.artist}))` })
       .from(libraryItemsTable)
       .innerJoin(recordingsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
-      .where(eq(libraryItemsTable.userId, user.id)),
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt))),
     // Unresolved Spotify soft-artist rows.
     db
       .selectDistinct({ akey: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))` })
@@ -158,6 +158,7 @@ router.get("/me/popular-crossings", h(async (req, res) => {
       .where(and(
         eq(spotifyLibraryItemsTable.userId, user.id),
         isNull(spotifyLibraryItemsTable.mbid),
+        isNull(spotifyLibraryItemsTable.removedAt),
         ne(spotifyLibraryItemsTable.artist, ""),
       )),
     // Taste seeds (the "+" button writes here).

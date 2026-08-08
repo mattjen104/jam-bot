@@ -15,7 +15,7 @@ import {
   pickersTable,
   scrapedShowsTable,
 } from "@workspace/db";
-import { eq, and, desc, asc, sql, inArray, isNotNull, gte } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, isNotNull, isNull, gte } from "drizzle-orm";
 import { getUserFromSession } from "../lore/userSession.js";
 import { toStation, isPickerOptedOut, validScheduleShowAttribution } from "./lore/shared.js";
 import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
@@ -98,7 +98,7 @@ router.get("/player/onair", h(async (req, res) => {
     const userLib = db
       .select({ mbid: libraryItemsTable.mbid })
       .from(libraryItemsTable)
-      .where(eq(libraryItemsTable.userId, user.id));
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
     const rows = await db
       .select({
         stationId: spinsTable.stationId,
@@ -255,6 +255,7 @@ router.get("/player/run/:slug", h(async (req, res) => {
       .where(
         and(
           eq(libraryItemsTable.userId, user.id),
+          isNull(libraryItemsTable.removedAt),
           inArray(libraryItemsTable.mbid, resolvedMbids),
         ),
       );
@@ -287,7 +288,7 @@ router.get("/player/run/:slug", h(async (req, res) => {
     const userLib = db
       .select({ mbid: libraryItemsTable.mbid })
       .from(libraryItemsTable)
-      .where(eq(libraryItemsTable.userId, user.id));
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
 
     const [shared] = await db
       .select({ n: sql<number>`count(distinct ${spinsTable.mbid})::int` })
@@ -506,6 +507,7 @@ router.get("/player/lore-counts", h(async (req, res) => {
           .where(
             and(
               eq(libraryItemsTable.userId, user.id),
+              isNull(libraryItemsTable.removedAt),
               inArray(libraryItemsTable.mbid, mbids),
             ),
           )

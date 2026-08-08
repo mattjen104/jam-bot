@@ -4604,6 +4604,33 @@ export const CopyMattStarterLibraryResponse = zod.object({
 });
 
 /**
+ * Marks a library row as removed or restores it to active. Nothing is ever deleted — removed rows stay in the Library timeline (grayed) but are excluded from crossings and library-hit computations. This never propagates to Spotify (no unsave). Identify the row by `mbid` (resolved keeps/imports) or `spotifyId` (unresolved soft rows).
+
+ * @summary Deselect (remove) or restore a library track
+ */
+export const SetLibraryItemRemovedBody = zod.object({
+  mbid: zod
+    .string()
+    .optional()
+    .describe("MusicBrainz recording ID of a resolved library row."),
+  spotifyId: zod
+    .string()
+    .optional()
+    .describe("Spotify track ID of an unresolved soft row."),
+  removed: zod
+    .boolean()
+    .describe("true to deselect the track, false to restore it."),
+});
+
+export const SetLibraryItemRemovedResponse = zod.object({
+  removed: zod.boolean(),
+  removedAt: zod
+    .string()
+    .nullish()
+    .describe("ISO timestamp when the track was removed; null when active."),
+});
+
+/**
  * Returns a deterministic, counts-only reflection of confirmed radio attendance for the most recent completed UTC Sunday-to-Saturday week. The date-derived availability remains discoverable on a later visit without outbound notifications or a third-party account. An optional Sunday weekStart may revisit an older completed week.
 
  * @summary Read the latest completed Your Week On Air recap

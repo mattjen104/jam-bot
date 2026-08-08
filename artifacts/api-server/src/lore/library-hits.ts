@@ -105,7 +105,7 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
     db
       .select({ mbid: libraryItemsTable.mbid })
       .from(libraryItemsTable)
-      .where(eq(libraryItemsTable.userId, userId)),
+      .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt))),
 
     // 2. Primary release-group MBIDs for library recordings (album widening)
     db
@@ -118,6 +118,7 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
       .where(
         and(
           eq(libraryItemsTable.userId, userId),
+          isNull(libraryItemsTable.removedAt),
           eq(recordingReleaseGroupsTable.isPrimary, true),
         ),
       ),
@@ -130,6 +131,7 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
       .where(
         and(
           eq(libraryItemsTable.userId, userId),
+          isNull(libraryItemsTable.removedAt),
           isNotNull(recordingsTable.artistMbid),
         ),
       ),
@@ -144,6 +146,7 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
         and(
           eq(spotifyLibraryItemsTable.userId, userId),
           isNull(spotifyLibraryItemsTable.mbid),
+          isNull(spotifyLibraryItemsTable.removedAt),
           ne(spotifyLibraryItemsTable.artist, ""),
         ),
       )

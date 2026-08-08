@@ -64,6 +64,14 @@ export interface LibraryItem {
    * users can verify the result.
    */
   fuzzyMatch?: boolean;
+  /**
+   * True when the listener has deselected this track. It stays in the
+   * timeline (gray, labeled removed) but is excluded from crossings and
+   * library-hit computations. Never propagated to Spotify.
+   */
+  removed?: boolean;
+  /** ISO timestamp of the deselect, when removed is true. */
+  removedAt?: string | null;
 }
 
 export interface AlbumAvatarCandidate {
@@ -837,6 +845,43 @@ export function useMyImportStats() {
       }),
     staleTime: 30_000,
     retry: false,
+  });
+}
+
+/**
+ * Deselect (remove) or restore a library track.
+ *
+ * Removal never deletes anything — the row stays in the timeline, grayed —
+ * and it NEVER calls Spotify's unsave/remove APIs. Identify the row by mbid
+ * (resolved rows) or spotifyId (unresolved soft rows).
+ */
+export function useSetLibraryRemoved() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ mbid, spotifyId, removed }: { mbid?: string | null; spotifyId?: string | null; removed: boolean }) =>
+      apiFetch<{ removed: boolean; removedAt: string | null }>("/api/me/library/removal", {
+        method: "POST",
+        body: JSON.stringify({
+          ...(mbid ? { mbid } : {}),
+          ...(spotifyId ? { spotifyId } : {}),
+          removed,
+        }),
+      }),
+    onSuccess: (_data, { removed }) => {
+      const today = new Date().toISOString().slice(0, 10);
+      // Prefix match: covers both the single-page and infinite library queries.
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
+      void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_MBIDS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_DIAL_CROSSINGS_KEY(today) });
+      void queryClient.invalidateQueries({ queryKey: getListStationsNowPlayingQueryKey() });
+      // Removal changes taste membership everywhere it is derived from.
+      void queryClient.invalidateQueries({ queryKey: ME_PICKER_NAMES_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_PICKER_OVERLAP_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["me", "overlaps"] });
+      // Web-player chip counts include keptSince, which reflects removal.
+      void queryClient.invalidateQueries({ queryKey: ["wp", "lore-counts"] });
+      toast({ title: removed ? "Removed from your active library" : "Restored to your active library" });
+    },
   });
 }
 

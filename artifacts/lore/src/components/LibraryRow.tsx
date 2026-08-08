@@ -4,7 +4,7 @@ import type { LibraryItem } from "../lib/meHooks";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks, spotifyPlay } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
-import { useMyAlbumAvatar, useSetAlbumAvatar } from "../lib/meHooks";
+import { useMyAlbumAvatar, useSetAlbumAvatar, useSetLibraryRemoved } from "../lib/meHooks";
 import { AlbumShelf } from "./AlbumShelf";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { RUMOURS, onArtError } from "../lib/rumours";
@@ -225,6 +225,16 @@ export function LibraryRow({
   const setAvatar = useSetAlbumAvatar();
   const isCurrentAvatar = item.mbid != null && avatar?.current?.recordingMbid === item.mbid;
   const canMakeAvatar = item.mbid != null && avatar?.candidates.some((candidate) => candidate.recordingMbid === item.mbid);
+  const isRemoved = item.removed === true;
+  const setRemoved = useSetLibraryRemoved();
+
+  const toggleRemoved = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (setRemoved.isPending) return;
+    // Deselect/restore only touches Lore's own state — never Spotify.
+    setRemoved.mutate({ mbid: item.mbid, spotifyId: item.spotifyId, removed: !isRemoved });
+  };
 
   const makeAvatar = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -241,6 +251,7 @@ export function LibraryRow({
 
   const rowClass = [
     "lrow",
+    isRemoved ? "lrow--removed" : "",
     isSoft ? "lrow--soft" : isOnAir ? "lrow--onair" : hasProvenance ? "lrow--kept" : "",
     isOpen ? "lrow--open" : "",
     isShelfOpen ? "lrow--shelf-open" : "",
@@ -289,12 +300,38 @@ export function LibraryRow({
             fuzzy match
           </p>
         )}
+        {isRemoved && (
+          <p className="lrow__badge" data-testid="library-removed-badge" title="Deselected — still in your timeline, excluded from crossings">
+            removed
+          </p>
+        )}
         {isOnAir && <p className="lrow__badge">● on air</p>}
         {isCurrentAvatar && <p className="lrow__badge" data-testid="library-current-avatar">anonymous listener cover</p>}
       </div>
 
-      {/* Right rail — soft rows have no playback door (no MBID to queue) */}
-      {!isSoft && (
+      {/* Right rail — soft rows have no playback door (no MBID to queue),
+          but every row gets the deselect/restore toggle. */}
+      <div className="lrow__rail">
+        <button
+          type="button"
+          onClick={toggleRemoved}
+          disabled={setRemoved.isPending}
+          title={isRemoved ? "Restore to active library" : "Remove from active library (stays in your timeline; never unsaves on Spotify)"}
+          aria-label={isRemoved ? `Restore ${title}` : `Remove ${title}`}
+          style={{
+            border: "none",
+            background: "none",
+            color: "hsl(var(--faint))",
+            fontSize: 13,
+            padding: "4px",
+            cursor: "pointer",
+          }}
+          data-testid={isRemoved ? "library-restore" : "library-remove"}
+        >
+          {isRemoved ? "↺" : "−"}
+        </button>
+      </div>
+      {!isSoft && !isRemoved && (
         <div className="lrow__rail">
           {canMakeAvatar && (
             <button
