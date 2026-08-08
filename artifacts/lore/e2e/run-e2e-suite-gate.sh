@@ -16,6 +16,8 @@
 #                                       intercepted with fixtures)
 #   - dialHeroQueueGeometry.spec.ts    (populated hero set queue stays beside/below
 #                                       the album art at short/tall/portrait viewports)
+#   - cornerNavTappability.spec.ts     (corner nav links visible + clickable above the
+#                                       player dock at 360×640 portrait and 640×360 landscape)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -81,6 +83,7 @@ RUN_SPECS=(
   e2e/ntsOnAirBadge.spec.ts
   e2e/fallbackNotice.spec.ts
   e2e/dialHeroQueueGeometry.spec.ts
+  e2e/cornerNavTappability.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
