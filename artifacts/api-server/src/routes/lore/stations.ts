@@ -59,6 +59,42 @@ import { eligibleDjName } from "@workspace/lore-attribution";
 
 const router: IRouter = Router();
 
+// ---------------------------------------------------------------------------
+// Now-playing base query cache (30 seconds, user-independent)
+//
+// The GET /api/stations/now-playing handler runs three DB queries:
+//   1. selectDistinctOn across the full spins table — the heaviest query.
+//   2. Batch "seen before" check per resolved MBID.
+//   3. Batch release-group lookup per MBID.
+//
+// These three queries are identical for all users. The per-user parts
+// (library hit flags via buildLibraryHitContext) are applied on top of the
+// cached rows. A 30-second TTL means the cache is always refreshed well
+// within the ICY/Spinitron poller cadence, so the dial shows current tracks.
+//
+// Date-filtered requests (ghost-dial) are never cached — they are rare and
+// date-specific so sharing would require a per-date key.
+// ---------------------------------------------------------------------------
+
+const NP_BASE_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type NpBaseCache = {
+  builtAt: number;
+  stations: { id: number; slug: string }[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rows: any[];
+  seenBefore: Set<string>;
+  rgMap: Map<string, string>;
+};
+
+let npBaseCache: NpBaseCache | null = null;
+
+/** Invalidate the now-playing base cache — called by the SSE push path when a new spin lands. */
+export function invalidateNowPlayingBaseCache(): void {
+  npBaseCache = null;
+}
+
 // Rate limit for client-reported now-playing: this is the only write path on
 // an otherwise read-only public router, so it needs its own abuse guard.
 // 20 req/min per IP comfortably covers one browser polling several Icecast
@@ -126,88 +162,109 @@ router.get("/stations/now-playing", h(async (req, res) => {
 
   // Soft auth: enrich with library hit flags when the listener has a session;
   // unauthenticated requests receive isLibraryHit=false, isArtistHit=false.
-  const user = await getUserFromSession(req).catch(() => null);
+  // buildLibraryHitContext is itself cached per-user (5-min TTL in library-hits.ts).
+  const [user] = await Promise.all([
+    getUserFromSession(req).catch(() => null),
+  ]);
   const hitCtx = user
     ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
     : EMPTY_HIT_CONTEXT;
 
-  const stations = await db
-    .select({ id: stationsTable.id, slug: stationsTable.slug })
-    .from(stationsTable)
-    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
-    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
+  // ── Base query cache (user-independent, 30-second TTL) ───────────────────
+  // Date-filtered (ghost-dial) requests always bypass the cache: they are
+  // date-specific and infrequent, so sharing is not worth the complexity.
+  let base: NpBaseCache | null = null;
+  if (!dateFilter && npBaseCache && Date.now() - npBaseCache.builtAt < NP_BASE_CACHE_TTL_MS) {
+    base = npBaseCache;
+  }
 
-  const rows = await db
-    .selectDistinctOn([spinsTable.stationId], {
-      spinId: spinsTable.id,
-      stationId: spinsTable.stationId,
-      stationName: stationsTable.name,
-      rawArtist: spinsTable.rawArtist,
-      rawTitle: spinsTable.rawTitle,
-      source: spinsTable.source,
-      confidence: spinsTable.confidence,
-      playedAt: spinsTable.playedAt,
-      mbid: recordingsTable.mbid,
-      title: recordingsTable.title,
-      artist: recordingsTable.artist,
-      artistMbid: recordingsTable.artistMbid,
-      artworkUrl: recordingsTable.artworkUrl,
-      links: recordingsTable.links,
-      genres: recordingsTable.genres,
-      showName: showsTable.name,
-      showDj: showsTable.djName,
-    })
-    .from(spinsTable)
-    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(
-      showsTable,
-      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
-    )
-    .where(
-      dateFilter
-        ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
-        : isNotNull(spinsTable.stationId),
-    )
-    .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
+  if (base === null) {
+    const stations = await db
+      .select({ id: stationsTable.id, slug: stationsTable.slug })
+      .from(stationsTable)
+      .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
+      .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
-  // Batch-check which resolved MBIDs have been seen in the archive before today.
-  // A track is "first in archive" only when it has never been logged on any prior day.
-  const nowPlayingMbids = new Set<string>();
-  for (const row of rows) { if (row.mbid) nowPlayingMbids.add(row.mbid); }
+    const rows = await db
+      .selectDistinctOn([spinsTable.stationId], {
+        spinId: spinsTable.id,
+        stationId: spinsTable.stationId,
+        stationName: stationsTable.name,
+        rawArtist: spinsTable.rawArtist,
+        rawTitle: spinsTable.rawTitle,
+        source: spinsTable.source,
+        confidence: spinsTable.confidence,
+        playedAt: spinsTable.playedAt,
+        mbid: recordingsTable.mbid,
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artistMbid: recordingsTable.artistMbid,
+        artworkUrl: recordingsTable.artworkUrl,
+        links: recordingsTable.links,
+        genres: recordingsTable.genres,
+        showName: showsTable.name,
+        showDj: showsTable.djName,
+      })
+      .from(spinsTable)
+      .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+      .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+      .leftJoin(
+        showsTable,
+        and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+      )
+      .where(
+        dateFilter
+          ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
+          : isNotNull(spinsTable.stationId),
+      )
+      .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 
-  // Batch-fetch the primary release-group MBID for each now-playing spin so we
-  // can do album-level library widening without joining the RG table in the
-  // selectDistinctOn query (which would complicate the DISTINCT ON semantics).
-  const rgMap = new Map<string, string>(); // recording MBID → release-group MBID
-  const [seenRows, rgRows] = await Promise.all([
-    nowPlayingMbids.size > 0
-      ? db.execute<{ mbid: string }>(sql`
-          SELECT DISTINCT mbid FROM spins
-          WHERE mbid = ANY(ARRAY[${sql.join([...nowPlayingMbids].map((m) => sql`${m}`), sql`, `)}]::text[])
-            AND played_at::date < CURRENT_DATE
-        `)
-      : Promise.resolve({ rows: [] as { mbid: string }[] }),
-    nowPlayingMbids.size > 0
-      ? db
-          .select({
-            recordingMbid: recordingReleaseGroupsTable.recordingMbid,
-            releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
-          })
-          .from(recordingReleaseGroupsTable)
-          .where(
-            and(
-              inArray(recordingReleaseGroupsTable.recordingMbid, [...nowPlayingMbids]),
-              eq(recordingReleaseGroupsTable.isPrimary, true),
-            ),
-          )
-      : Promise.resolve([] as { recordingMbid: string; releaseGroupMbid: string }[]),
-  ]);
+    // Batch-check which resolved MBIDs have been seen in the archive before today.
+    // A track is "first in archive" only when it has never been logged on any prior day.
+    const nowPlayingMbids = new Set<string>();
+    for (const row of rows) { if (row.mbid) nowPlayingMbids.add(row.mbid); }
 
-  const seenBefore = new Set<string>();
-  for (const r of seenRows.rows) seenBefore.add(r.mbid);
-  for (const r of rgRows) rgMap.set(r.recordingMbid, r.releaseGroupMbid);
+    // Batch-fetch the primary release-group MBID for each now-playing spin so we
+    // can do album-level library widening without joining the RG table in the
+    // selectDistinctOn query (which would complicate the DISTINCT ON semantics).
+    const rgMap = new Map<string, string>(); // recording MBID → release-group MBID
+    const [seenRows, rgRows] = await Promise.all([
+      nowPlayingMbids.size > 0
+        ? db.execute<{ mbid: string }>(sql`
+            SELECT DISTINCT mbid FROM spins
+            WHERE mbid = ANY(ARRAY[${sql.join([...nowPlayingMbids].map((m) => sql`${m}`), sql`, `)}]::text[])
+              AND played_at::date < CURRENT_DATE
+          `)
+        : Promise.resolve({ rows: [] as { mbid: string }[] }),
+      nowPlayingMbids.size > 0
+        ? db
+            .select({
+              recordingMbid: recordingReleaseGroupsTable.recordingMbid,
+              releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+            })
+            .from(recordingReleaseGroupsTable)
+            .where(
+              and(
+                inArray(recordingReleaseGroupsTable.recordingMbid, [...nowPlayingMbids]),
+                eq(recordingReleaseGroupsTable.isPrimary, true),
+              ),
+            )
+        : Promise.resolve([] as { recordingMbid: string; releaseGroupMbid: string }[]),
+    ]);
 
+    const seenBefore = new Set<string>();
+    for (const r of seenRows.rows) seenBefore.add(r.mbid);
+    for (const r of rgRows) rgMap.set(r.recordingMbid, r.releaseGroupMbid);
+
+    base = { builtAt: Date.now(), stations, rows, seenBefore, rgMap };
+    // Only cache non-date-filtered results (date-filtered are ghost-dial — rare,
+    // date-specific, and should not pollute the live cache).
+    if (!dateFilter) {
+      npBaseCache = base;
+    }
+  }
+
+  const { stations, rows, seenBefore, rgMap } = base;
   const byStation = new Map(rows.map((r) => [r.stationId, r]));
   const items = stations.map((s) => {
     const row = byStation.get(s.id);

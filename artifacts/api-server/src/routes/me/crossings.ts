@@ -177,6 +177,27 @@ async function readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
 }
 
 /**
+ * Read from the Postgres L2 cache regardless of freshness.
+ * Returns `{ data, isStale }` when a row exists, null when no row exists.
+ * Used by the SWR path to serve stale data immediately.
+ */
+async function readL2CacheAny(userId: number): Promise<{ data: CrossingsRow[]; isStale: boolean } | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(crossingsCacheTable)
+      .where(eq(crossingsCacheTable.userId, userId))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0]!;
+    const isStale = Date.now() - row.builtAt.getTime() >= CROSSINGS_CACHE_TTL_MS;
+    return { data: row.data, isStale };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Persist a fresh result to the Postgres L2 cache (upsert).
  * Fire-and-forget — errors are logged but never surface to the caller.
  */
@@ -195,49 +216,17 @@ async function writeL2Cache(userId: number, data: CrossingsRow[], builtAt: Date)
 }
 
 // ---------------------------------------------------------------------------
-// Personal crossings endpoint
+// Personal crossings — extracted compute logic
 // ---------------------------------------------------------------------------
 
 /**
- * GET /api/me/crossings?date=YYYY-MM-DD — rolling 24-hour station crossing
- * scores computed server-side.
+ * Run the two heavy aggregate queries that produce personal crossing scores.
+ * Pure computation — reads from DB, no cache reads or writes.
  *
- * Returns { items: { stationSlug, crossings, artistCrossings }[] } for
- * stations that have ≥ 1 crossing of either type in the past 24 hours.
- * Only non-hidden stations are included.
- *
- * Crossings   = spins whose exact MBID *or* any track from the same primary
- *               release group is in the user's library_items.
- * ArtistCrossings = spins by library artists (artistMbid or soft name-based
- *               fallback) where the exact track/album is NOT in the library.
- *
- * The `date` param is accepted for client-side cache-key alignment but the
- * server always computes a true rolling NOW() − 24 h window.
- *
- * Lifetime counts (lifetimeCrossings, lifetimeArtistCrossings) come from the
- * pre-built `lifetime_crossings_cache` table maintained by the background job
- * in `lore/lifetime-crossings-job.ts`.  They are never computed inline here.
+ * Extracted so it can be called by the SWR background recompute path without
+ * going through the HTTP layer.
  */
-router.get("/me/crossings", h(async (req, res) => {
-  const user = (req as AuthedRequest).loreUser;
-
-  // ── L1: in-process Map ────────────────────────────────────────────────────
-  const cached = crossingsCache.get(user.id);
-  if (cached && Date.now() - cached.builtAt < CROSSINGS_CACHE_TTL_MS) {
-    return res.json({ items: cached.data });
-  }
-
-  // ── L2: Postgres persistent cache ─────────────────────────────────────────
-  const l2data = await readL2Cache(user.id);
-  if (l2data !== null) {
-    // Repopulate L1 so subsequent same-instance requests skip Postgres entirely.
-    crossingsCache.set(user.id, { builtAt: Date.now(), data: l2data });
-    return res.json({ items: l2data });
-  }
-
-  console.log(`[crossings] full compute for user=${user.id}`);
-
-  // ── Full compute ──────────────────────────────────────────────────────────
+export async function computePersonalCrossings(userId: number): Promise<CrossingsRow[]> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   // The bounded query only needs to cover the longest rolling window
   // (30 days for monthCrossings).  Lifetime counts come from the pre-built
@@ -249,7 +238,7 @@ router.get("/me/crossings", h(async (req, res) => {
   const userLibMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
-    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
 
   // Subquery: release-group MBIDs represented in the user's library (album widening).
   const userLibRgs = db
@@ -259,7 +248,7 @@ router.get("/me/crossings", h(async (req, res) => {
       libraryItemsTable,
       eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid),
     )
-    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
 
   // Subquery: artist MBIDs whose recordings are in the user's library.
   const userLibArtists = db
@@ -268,7 +257,7 @@ router.get("/me/crossings", h(async (req, res) => {
     .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
     .where(
       and(
-        eq(libraryItemsTable.userId, user.id),
+        eq(libraryItemsTable.userId, userId),
         isNull(libraryItemsTable.removedAt),
         isNotNull(recordingsTable.artistMbid),
       ),
@@ -307,7 +296,7 @@ router.get("/me/crossings", h(async (req, res) => {
     .from(spotifyLibraryItemsTable)
     .where(
       and(
-        eq(spotifyLibraryItemsTable.userId, user.id),
+        eq(spotifyLibraryItemsTable.userId, userId),
         isNull(spotifyLibraryItemsTable.mbid),
         isNull(spotifyLibraryItemsTable.removedAt),
         ne(spotifyLibraryItemsTable.artist, ""),
@@ -320,7 +309,7 @@ router.get("/me/crossings", h(async (req, res) => {
   const userSeedArtists = db
     .selectDistinct({ artistLower: sql<string>`lower(trim(${tasteSeedsTable.artistName}))` })
     .from(tasteSeedsTable)
-    .where(eq(tasteSeedsTable.userId, user.id));
+    .where(eq(tasteSeedsTable.userId, userId));
 
   // Artist match: MBID-based lookup + soft name fallback (Spotify imports and
   // taste seeds share the same matching path).
@@ -334,7 +323,7 @@ router.get("/me/crossings", h(async (req, res) => {
   )`;
 
   // ── Windowed predicates ───────────────────────────────────────────────────
-  // NOTE: this route must reference ONLY its own local cutoffs (`cutoff`,
+  // NOTE: this function must reference ONLY its own local cutoffs (`cutoff`,
   // `weekCutoff`, `monthCutoff`).  Merges have twice spliced the blended
   // handler's names (spinCutoff/blendedWeekCutoff) in here, which throws a
   // ReferenceError on every request → 503 → empty dial.
@@ -350,7 +339,7 @@ router.get("/me/crossings", h(async (req, res) => {
   // library item, and any recording by a library artist (MBID or soft-name).
   const relevantMbids = sql`(
     select ${libraryItemsTable.mbid} from ${libraryItemsTable}
-      where ${libraryItemsTable.userId} = ${user.id}
+      where ${libraryItemsTable.userId} = ${userId}
         and ${libraryItemsTable.removedAt} is null
     union
     select ${recordingReleaseGroupsTable.recordingMbid} from ${recordingReleaseGroupsTable}
@@ -446,7 +435,7 @@ router.get("/me/crossings", h(async (req, res) => {
   const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
   const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
 
-  const items: CrossingsRow[] = [...allSlugs].map((slug) => {
+  return [...allSlugs].map((slug) => {
     const r = rollingMap.get(slug);
     const l = lifetimeMap.get(slug);
     return {
@@ -461,7 +450,116 @@ router.get("/me/crossings", h(async (req, res) => {
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
     };
   });
+}
 
+/**
+ * Write freshly-computed personal crossings to both cache layers.
+ * Exported so the SWR background path and tests can call it directly.
+ */
+export async function cachePersonalCrossings(userId: number, items: CrossingsRow[]): Promise<void> {
+  const builtAt = new Date();
+  crossingsCache.set(userId, { builtAt: builtAt.getTime(), data: items });
+  const l2Write = writeL2Cache(userId, items, builtAt);
+  l2WriteInFlight.set(userId, l2Write);
+  await l2Write;
+}
+
+/**
+ * In-flight background recompute promises — keyed by user ID.
+ * Prevents stacking multiple concurrent recomputes for the same user
+ * when the SWR path serves stale data to several rapid requests.
+ */
+const recomputeInFlight = new Map<number, Promise<void>>();
+
+/**
+ * Trigger a background personal-crossings recompute for a user.
+ * Safe to call from a request handler with `void` — errors are caught.
+ * Concurrent calls for the same user reuse the in-flight promise.
+ */
+function schedulePersonalCrossingsRecompute(userId: number): void {
+  if (recomputeInFlight.has(userId)) return;
+  const p = (async () => {
+    try {
+      console.log(`[crossings] background recompute for user=${userId} (SWR)`);
+      const items = await computePersonalCrossings(userId);
+      await cachePersonalCrossings(userId, items);
+    } catch (err) {
+      console.error(`[crossings] background recompute failed for user=${userId}`, err);
+    } finally {
+      recomputeInFlight.delete(userId);
+    }
+  })();
+  recomputeInFlight.set(userId, p);
+}
+
+// ---------------------------------------------------------------------------
+// Personal crossings endpoint
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/me/crossings?date=YYYY-MM-DD — rolling 24-hour station crossing
+ * scores computed server-side.
+ *
+ * Returns { items: { stationSlug, crossings, artistCrossings }[] } for
+ * stations that have ≥ 1 crossing of either type in the past 24 hours.
+ * Only non-hidden stations are included.
+ *
+ * Crossings   = spins whose exact MBID *or* any track from the same primary
+ *               release group is in the user's library_items.
+ * ArtistCrossings = spins by library artists (artistMbid or soft name-based
+ *               fallback) where the exact track/album is NOT in the library.
+ *
+ * The `date` param is accepted for client-side cache-key alignment but the
+ * server always computes a true rolling NOW() − 24 h window.
+ *
+ * Lifetime counts (lifetimeCrossings, lifetimeArtistCrossings) come from the
+ * pre-built `lifetime_crossings_cache` table maintained by the background job
+ * in `lore/lifetime-crossings-job.ts`.  They are never computed inline here.
+ *
+ * Cache strategy (fastest-first):
+ *   L1 fresh  → return immediately (in-process Map, zero latency)
+ *   L1 stale  → fall through (builtAt check failed)
+ *   L2 fresh  → return immediately, repopulate L1
+ *   L2 stale  → SWR: return stale data immediately, recompute in background
+ *   No cache  → full inline compute (cold start, no prior history)
+ */
+router.get("/me/crossings", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  // ── L1: in-process Map ────────────────────────────────────────────────────
+  const cached = crossingsCache.get(user.id);
+  if (cached && Date.now() - cached.builtAt < CROSSINGS_CACHE_TTL_MS) {
+    return res.json({ items: cached.data });
+  }
+
+  // ── L2: Postgres persistent cache (SWR) ───────────────────────────────────
+  // Read regardless of staleness. Fresh → serve + repopulate L1.
+  // Stale → serve immediately (< 2 s) + recompute in background so the
+  // NEXT request gets fresh data. This eliminates the 8–17 s cold-start
+  // penalty after a server restart longer than the 30-min TTL.
+  const l2result = await readL2CacheAny(user.id);
+  if (l2result !== null) {
+    if (!l2result.isStale) {
+      // Fresh: normal path — repopulate L1 so subsequent requests skip PG.
+      crossingsCache.set(user.id, { builtAt: Date.now(), data: l2result.data });
+    } else {
+      // Stale: serve the cached value now; kick off background recompute.
+      // Set L1 with a timestamp near the TTL boundary so:
+      //   - The current request is served immediately.
+      //   - The next request (after recompute finishes) sees the fresh L1 entry
+      //     written by cachePersonalCrossings via schedulePersonalCrossingsRecompute.
+      crossingsCache.set(user.id, {
+        builtAt: Date.now() - CROSSINGS_CACHE_TTL_MS + 5_000, // expires in ~5s
+        data: l2result.data,
+      });
+      schedulePersonalCrossingsRecompute(user.id);
+    }
+    return res.json({ items: l2result.data });
+  }
+
+  // ── Full inline compute (no L2 row exists) ────────────────────────────────
+  console.log(`[crossings] full compute for user=${user.id}`);
+  const items = await computePersonalCrossings(user.id);
   const builtAt = new Date();
   crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
   const l2Write = writeL2Cache(user.id, items, builtAt);
