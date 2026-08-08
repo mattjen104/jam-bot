@@ -294,6 +294,36 @@ async function assertLandscapeGeometry(page: Page) {
   await assertQueueScrollsAndFullscreenWorks(page);
 }
 
+/** Inline of the waitForFunction predicate used after a resize — waits for
+ * data-queue-layout to reach whatever the pure helper would choose at the
+ * current CSS viewport. */
+async function waitForLayoutSettle(page: Page) {
+  await page.waitForFunction(
+    () => {
+      const hero = document.querySelector(".dial-hero");
+      if (!hero) return false;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const shellH =
+        Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
+        ) || 0;
+      const queueWidth = Math.min(360, vw * 0.3);
+      const queueHeight = 220;
+      const dialColumnWidth =
+        vw >= 1100 ? Math.min(540, Math.max(380, vw * 0.32)) : 300;
+      const availableHeight = Math.max(0, vh - shellH);
+      const artRegionWidth = Math.max(0, vw - dialColumnWidth);
+      const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
+      const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
+      const expected = sideSquare >= belowSquare ? "side" : "below";
+      return hero.getAttribute("data-queue-layout") === expected;
+    },
+    undefined,
+    { timeout: 5_000 },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -318,21 +348,8 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
     await installDialRoutes(page);
     await openPopulatedQueue(page);
 
-      const g = await readGeometry(pageHi);
+    const g = await readGeometry(page);
 
-    const initial = await page.evaluate(() =>
-      document.querySelector(".dial-hero")?.getAttribute("data-queue-layout"),
-    );
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
     expect(g.panelInsideArtwrap).toBe(false);
     expect(g.sameParent).toBe(true);
 
@@ -350,10 +367,7 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
   });
 
   test("browser zoom — layout stays valid when device pixel ratio changes (DPR 1→2)", async ({ browser }) => {
-    // ── Phase 1: DPR=1 reference at the borderline viewport, then mid-session ──
-    // "zoom in" by halving the CSS viewport.  Browser zoom changes
-    // window.innerWidth/innerHeight (they shrink as the zoom level rises), so
-    // setViewportSize is the correct way to simulate this in Playwright.
+    // ── Phase 1: DPR=1 reference at the borderline viewport ──────────────────
     // 1280×620 → zoom 2× → CSS viewport 640×310.  The ResizeObserver must
     // recompute data-queue-layout without producing an overlap.
     const ctxLo = await browser.newContext({
@@ -365,135 +379,11 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
     await openPopulatedQueue(pageLo);
 
     {
-      const g = await readGeometry(pageHi);
-
-    const initial = await page.evaluate(() =>
-      document.querySelector(".dial-hero")?.getAttribute("data-queue-layout"),
-    );
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
+      const g = await readGeometry(pageLo);
       expect(g.panelInsideArtwrap).toBe(false);
       expect(g.sameParent).toBe(true);
-      // CSS pixels are identical to Phase 1's baseline — DPR must not skew
-      // the JS pixel arithmetic that drives chooseDialHeroQueueLayout.
       const exp = expectedLayout(g.vw, g.vh, g.shellH);
       expect(g.layout).toBe(exp);
-      expect(intersects(g.artBox, g.panelBox)).toBe(false);
-      if (exp === "side") {
-        expect(g.panelBox.x).toBeGreaterThanOrEqual(g.artBox.x + g.artBox.width - 1);
-      } else {
-        expect(g.panelBox.y).toBeGreaterThanOrEqual(g.artBox.y + g.artBox.height - 1);
-      }
-    }
-
-    await ctxHi.close();
-  });
-
-  test("live resize — queue relocates across the side/below boundary without overlapping art", async ({ page }) => {
-    // 1280×620 → side layout (short desktop: sideSquare > belowSquare).
-    await page.setViewportSize({ width: 1280, height: 620 });
-    await installDialRoutes(page);
-    await openPopulatedQueue(page);
-
-    // Verify the initial "side" geometry.
-    await assertLandscapeGeometry(page);
-
-    // ── Step 1: grow tall → crosses into "below" ────────────────────────────
-    await page.setViewportSize({ width: 1280, height: 1024 });
-
-    // Wait for the resize listener / ResizeObserver to propagate the new
-    // layout decision into data-queue-layout.  The inline formula mirrors
-    // chooseDialHeroQueueLayout so the e2e gate catches any drift.
-    await page.waitForFunction(
-      () => {
-        const hero = document.querySelector(".dial-hero");
-
-        const panel = document.querySelector(".dial-hero__setpanel");
-
-      const obs = new MutationObserver(() => {
-        const isFlipping = panel.classList.contains("dial-hero__setpanel--flipping");
-        const layout = hero.getAttribute("data-queue-layout") ?? "";
-        // Record: panel was invisible while the OLD layout was still in place.
-        if (isFlipping && layout === "side") {
-          rec.wasFlippingWithOldLayout = true;
-        }
-        // Done: flipping has ended, layout has changed, and we witnessed the fade.
-        if (!isFlipping && layout !== "side" && rec.wasFlippingWithOldLayout) {
-          rec.finalLayout = layout;
-          rec.done = true;
-          obs.disconnect();
-        }
-      });
-
-        const panel = document.querySelector(".dial-hero__setpanel");
-
-      const obs = new MutationObserver(() => {
-        const isFlipping = panel.classList.contains("dial-hero__setpanel--flipping");
-        const layout = hero.getAttribute("data-queue-layout") ?? "";
-        // Record: panel was invisible while the OLD layout was still in place.
-        if (isFlipping && layout === "side") {
-          rec.wasFlippingWithOldLayout = true;
-        }
-        // Done: flipping has ended, layout has changed, and we witnessed the fade.
-        if (!isFlipping && layout !== "side" && rec.wasFlippingWithOldLayout) {
-          rec.finalLayout = layout;
-          rec.done = true;
-          obs.disconnect();
-        }
-      });
-        if (!hero) return false;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        const shellH =
-          Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
-          ) || 0;
-        const queueWidth = Math.min(360, vw * 0.3);
-        const queueHeight = 220;
-        const dialColumnWidth =
-          vw >= 1100 ? Math.min(540, Math.max(380, vw * 0.32)) : 300;
-        const availableHeight = Math.max(0, vh - shellH);
-        const artRegionWidth = Math.max(0, vw - dialColumnWidth);
-        const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
-        const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
-        const expected = sideSquare >= belowSquare ? "side" : "below";
-        return hero.getAttribute("data-queue-layout") === expected;
-      },
-      undefined,
-      { timeout: 5_000 },
-    );
-
-    {
-      const g = await readGeometry(pageHi);
-
-    const initial = await page.evaluate(() =>
-      document.querySelector(".dial-hero")?.getAttribute("data-queue-layout"),
-    );
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
-      expect(g.panelInsideArtwrap).toBe(false);
-      expect(g.sameParent).toBe(true);
-      // CSS pixels are identical to Phase 1's baseline — DPR must not skew
-      // the JS pixel arithmetic that drives chooseDialHeroQueueLayout.
-      const exp = expectedLayout(g.vw, g.vh, g.shellH);
-      expect(g.layout).toBe(exp);
-      // No overlap after the mid-session zoom change.
       expect(intersects(g.artBox, g.panelBox)).toBe(false);
       if (exp === "side") {
         expect(g.panelBox.x).toBeGreaterThanOrEqual(g.artBox.x + g.artBox.width - 1);
@@ -519,20 +409,6 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
 
     {
       const g = await readGeometry(pageHi);
-
-    const initial = await page.evaluate(() =>
-      document.querySelector(".dial-hero")?.getAttribute("data-queue-layout"),
-    );
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
-
-    const rec = await page.evaluate(() => (window as any).__flipRecord as {
-      wasFlippingWithOldLayout: boolean;
-      finalLayout: string;
-    });
       expect(g.panelInsideArtwrap).toBe(false);
       expect(g.sameParent).toBe(true);
       // CSS pixels are identical to Phase 1's baseline — DPR must not skew
@@ -565,64 +441,7 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
     // Wait for the resize listener / ResizeObserver to propagate the new
     // layout decision into data-queue-layout.  The inline formula mirrors
     // chooseDialHeroQueueLayout so the e2e gate catches any drift.
-    await page.waitForFunction(
-      () => {
-        const hero = document.querySelector(".dial-hero");
-
-        const panel = document.querySelector(".dial-hero__setpanel");
-
-      const obs = new MutationObserver(() => {
-        const isFlipping = panel.classList.contains("dial-hero__setpanel--flipping");
-        const layout = hero.getAttribute("data-queue-layout") ?? "";
-        // Record: panel was invisible while the OLD layout was still in place.
-        if (isFlipping && layout === "side") {
-          rec.wasFlippingWithOldLayout = true;
-        }
-        // Done: flipping has ended, layout has changed, and we witnessed the fade.
-        if (!isFlipping && layout !== "side" && rec.wasFlippingWithOldLayout) {
-          rec.finalLayout = layout;
-          rec.done = true;
-          obs.disconnect();
-        }
-      });
-
-        const panel = document.querySelector(".dial-hero__setpanel");
-
-      const obs = new MutationObserver(() => {
-        const isFlipping = panel.classList.contains("dial-hero__setpanel--flipping");
-        const layout = hero.getAttribute("data-queue-layout") ?? "";
-        // Record: panel was invisible while the OLD layout was still in place.
-        if (isFlipping && layout === "side") {
-          rec.wasFlippingWithOldLayout = true;
-        }
-        // Done: flipping has ended, layout has changed, and we witnessed the fade.
-        if (!isFlipping && layout !== "side" && rec.wasFlippingWithOldLayout) {
-          rec.finalLayout = layout;
-          rec.done = true;
-          obs.disconnect();
-        }
-      });
-        if (!hero) return false;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        const shellH =
-          Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
-          ) || 0;
-        const queueWidth = Math.min(360, vw * 0.3);
-        const queueHeight = 220;
-        const dialColumnWidth =
-          vw >= 1100 ? Math.min(540, Math.max(380, vw * 0.32)) : 300;
-        const availableHeight = Math.max(0, vh - shellH);
-        const artRegionWidth = Math.max(0, vw - dialColumnWidth);
-        const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
-        const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
-        const expected = sideSquare >= belowSquare ? "side" : "below";
-        return hero.getAttribute("data-queue-layout") === expected;
-      },
-      undefined,
-      { timeout: 5_000 },
-    );
+    await waitForLayoutSettle(page);
 
     // Geometry must still be valid after the flip.
     const gTall = await readGeometry(page);
@@ -640,64 +459,7 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
     // ── Step 2: shrink back to short → crosses back to "side" ───────────────
     await page.setViewportSize({ width: 1280, height: 620 });
 
-    await page.waitForFunction(
-      () => {
-        const hero = document.querySelector(".dial-hero");
-
-        const panel = document.querySelector(".dial-hero__setpanel");
-
-      const obs = new MutationObserver(() => {
-        const isFlipping = panel.classList.contains("dial-hero__setpanel--flipping");
-        const layout = hero.getAttribute("data-queue-layout") ?? "";
-        // Record: panel was invisible while the OLD layout was still in place.
-        if (isFlipping && layout === "side") {
-          rec.wasFlippingWithOldLayout = true;
-        }
-        // Done: flipping has ended, layout has changed, and we witnessed the fade.
-        if (!isFlipping && layout !== "side" && rec.wasFlippingWithOldLayout) {
-          rec.finalLayout = layout;
-          rec.done = true;
-          obs.disconnect();
-        }
-      });
-
-        const panel = document.querySelector(".dial-hero__setpanel");
-
-      const obs = new MutationObserver(() => {
-        const isFlipping = panel.classList.contains("dial-hero__setpanel--flipping");
-        const layout = hero.getAttribute("data-queue-layout") ?? "";
-        // Record: panel was invisible while the OLD layout was still in place.
-        if (isFlipping && layout === "side") {
-          rec.wasFlippingWithOldLayout = true;
-        }
-        // Done: flipping has ended, layout has changed, and we witnessed the fade.
-        if (!isFlipping && layout !== "side" && rec.wasFlippingWithOldLayout) {
-          rec.finalLayout = layout;
-          rec.done = true;
-          obs.disconnect();
-        }
-      });
-        if (!hero) return false;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        const shellH =
-          Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
-          ) || 0;
-        const queueWidth = Math.min(360, vw * 0.3);
-        const queueHeight = 220;
-        const dialColumnWidth =
-          vw >= 1100 ? Math.min(540, Math.max(380, vw * 0.32)) : 300;
-        const availableHeight = Math.max(0, vh - shellH);
-        const artRegionWidth = Math.max(0, vw - dialColumnWidth);
-        const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
-        const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
-        const expected = sideSquare >= belowSquare ? "side" : "below";
-        return hero.getAttribute("data-queue-layout") === expected;
-      },
-      undefined,
-      { timeout: 5_000 },
-    );
+    await waitForLayoutSettle(page);
 
     const gShort = await readGeometry(page);
     expect(gShort.panelInsideArtwrap).toBe(false);
@@ -709,6 +471,128 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
       expect(gShort.panelBox.x).toBeGreaterThanOrEqual(gShort.artBox.x + gShort.artBox.width - 1);
     } else {
       expect(gShort.panelBox.y).toBeGreaterThanOrEqual(gShort.artBox.y + gShort.artBox.height - 1);
+    }
+  });
+
+  /**
+   * Verifies that the opacity guard (dial-hero__setpanel--flipping class) is
+   * applied DURING the layout transition — not only before or after it.
+   *
+   * The implementation in DialView.tsx runs a three-phase sequence:
+   *   Phase 1 — setLayoutFlipping(true)  → CSS class applied, panel fades out.
+   *   Phase 2 — (120 ms later) setHeroQueueLayout(newLayout) → attribute flips.
+   *   Phase 3 — (next rAF) setLayoutFlipping(false) → panel fades back in.
+   *
+   * This test installs a MutationObserver in the page BEFORE triggering a
+   * resize that crosses the side→below boundary.  The observer records whether
+   * the flipping class was present on the panel while data-queue-layout still
+   * held the OLD value — confirming Phase 1 fired before Phase 2.
+   *
+   * The test fails if the guard class is removed from DialView.tsx (no Phase 1
+   * means the observer never records wasFlippingWithOldLayout=true, so the
+   * waitForFunction times out and the final assertion fails).
+   */
+  test("panel fade fires during layout flip — flipping class present while old layout is still set", async ({ browser }) => {
+    // Use a fresh browser context so we can set the viewport precisely.
+    // 1280×620 produces "side" layout; growing to 1280×1024 crosses into "below".
+    const ctx = await browser.newContext({
+      viewport: { width: 1280, height: 620 },
+    });
+    const page = await ctx.newPage();
+
+    try {
+      await installDialRoutes(page);
+      await openPopulatedQueue(page);
+
+      // Confirm the initial layout is "side" before installing the observer.
+      const initialLayout = await page.evaluate(() =>
+        document.querySelector(".dial-hero")?.getAttribute("data-queue-layout"),
+      );
+      expect(initialLayout).toBe("side");
+
+      // Install a MutationObserver BEFORE the resize so it can capture the
+      // intermediate state where the flipping class is present but
+      // data-queue-layout has not yet changed to the new value.
+      //
+      // The observer watches both the panel's class attribute and the hero's
+      // data-queue-layout attribute.  It records:
+      //   wasFlippingWithOldLayout: true when --flipping is present AND the
+      //     layout attribute still holds "side" (the OLD value).
+      //   done: true once the fade has ended and the new layout is committed.
+      await page.evaluate(() => {
+        const hero = document.querySelector(".dial-hero");
+        const panel = document.querySelector(".dial-hero__setpanel");
+        if (!hero || !panel) throw new Error("hero or panel missing before resize");
+
+        const rec: {
+          wasFlippingWithOldLayout: boolean;
+          finalLayout: string;
+          done: boolean;
+        } = { wasFlippingWithOldLayout: false, finalLayout: "", done: false };
+        (window as any).__flipRecord = rec;
+
+        const obs = new MutationObserver(() => {
+          const isFlipping = panel.classList.contains("dial-hero__setpanel--flipping");
+          const layout = hero.getAttribute("data-queue-layout") ?? "";
+
+          // Record: panel was invisible while the OLD layout was still in place.
+          if (isFlipping && layout === "side") {
+            rec.wasFlippingWithOldLayout = true;
+          }
+
+          // Done: flipping has ended, layout has changed, and we witnessed the fade.
+          if (!isFlipping && layout !== "side" && rec.wasFlippingWithOldLayout) {
+            rec.finalLayout = layout;
+            rec.done = true;
+            obs.disconnect();
+          }
+        });
+
+        // Watch both the panel class and the hero layout attribute.
+        obs.observe(hero, { attributes: true, attributeFilter: ["data-queue-layout"] });
+        obs.observe(panel, { attributes: true, attributeFilter: ["class"] });
+      });
+
+      // Trigger the layout flip: grow tall so the helper picks "below".
+      await page.setViewportSize({ width: 1280, height: 1024 });
+
+      // Wait for the complete flip sequence to finish.  The timeout is generous
+      // (5 s) since we only need Phase 1 + FADE_MS (120 ms) + Phase 3 (one rAF)
+      // to complete; the resize itself is near-instant.
+      await page.waitForFunction(
+        () => (window as any).__flipRecord?.done === true,
+        undefined,
+        { timeout: 5_000 },
+      );
+
+      // Read back the observation record.
+      const rec = await page.evaluate(
+        () =>
+          (window as any).__flipRecord as {
+            wasFlippingWithOldLayout: boolean;
+            finalLayout: string;
+          },
+      );
+
+      // The critical assertion: the flipping class was present WHILE the old
+      // layout was still set.  If the guard class is removed from DialView.tsx
+      // this assertion fails because wasFlippingWithOldLayout stays false and
+      // the waitForFunction above times out.
+      expect(rec.wasFlippingWithOldLayout).toBe(true);
+
+      // Sanity-check: the flip landed on the expected new layout.
+      expect(rec.finalLayout).toBe("below");
+
+      // Final geometry is still valid after the flip.
+      await waitForLayoutSettle(page);
+      const g = await readGeometry(page);
+      expect(g.panelInsideArtwrap).toBe(false);
+      expect(g.sameParent).toBe(true);
+      expect(g.layout).toBe("below");
+      expect(intersects(g.artBox, g.panelBox)).toBe(false);
+      expect(g.panelBox.y).toBeGreaterThanOrEqual(g.artBox.y + g.artBox.height - 1);
+    } finally {
+      await ctx.close();
     }
   });
 });
