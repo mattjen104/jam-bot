@@ -441,7 +441,10 @@ describe("heartbeat → counts — dwell gate", () => {
 
       // MBID_SHORT: durationMs = 60 000 ms.
       // Gate = LEAST(60 × 0.5, 60) = LEAST(30, 60) = 30 s.
-      // Window = 25 s; spin started 25 s ago → overlap = 25 s.
+      // The spin ends entirely in the past (started 85 s ago, ends 25 s ago)
+      // and the window opens 50 s ago, so overlap = 25 s regardless of how
+      // much wall time elapses between setup and the second heartbeat —
+      // anchoring on `now` made this flake under CI contention.
       // 25 < 30 → below gate → not counted.
       await db.insert(spinsTable).values({
         stationId: stationId!,
@@ -449,7 +452,7 @@ describe("heartbeat → counts — dwell gate", () => {
         confidence: "text",
         rawTitle: "t",
         rawArtist: "a",
-        playedAt: new Date(now.getTime() - 25_000),
+        playedAt: new Date(now.getTime() - 85_000),
       });
 
       const hb1 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_GATE);
@@ -458,7 +461,7 @@ describe("heartbeat → counts — dwell gate", () => {
 
       await db
         .update(listenSessionsTable)
-        .set({ lastHeartbeatAt: new Date(now.getTime() - 25_000) })
+        .set({ lastHeartbeatAt: new Date(now.getTime() - 50_000) })
         .where(eq(listenSessionsTable.id, sessionId));
 
       await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_GATE);

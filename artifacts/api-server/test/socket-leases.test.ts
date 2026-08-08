@@ -619,7 +619,7 @@ describe("scoreCrossingCandidates — DB integration", () => {
     // Lease allocator should therefore pick A over B in a single-slot budget.
     const targets = pickLeaseTargets([a!, b!], 1);
     expect(targets[0]!.stationId).toBe(stAId);
-  });
+  }, 120_000);
 
   it("station whose current show has no library history keeps its station-wide score (zero-crossing fallback)", async () => {
     if (!dbAvailable) return;

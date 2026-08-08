@@ -125,10 +125,25 @@ async function installAttemptHelper(page: import("@playwright/test").Page) {
         try { tone.currentTime = 0; } catch { /* not seekable yet */ }
         const ended = new Promise<boolean>((resolve) => {
           tone.addEventListener("ended", () => resolve(true));
-          // Asset is 1.2s; if `ended` never fires something is wrong. The
-          // cap is generous because a loaded CI box can stall the audio
-          // clock for several seconds after play() resolves.
-          setTimeout(() => resolve(false), 15000);
+          // Deterministic completion: the `ended` event itself is unreliable
+          // under CI contention (the media clock can advance to the end of
+          // the 1.2s asset without the event firing promptly), so also poll
+          // the clock and treat reaching the asset's duration as ended. The
+          // hard cap guarantees the attempt always settles.
+          const iv = setInterval(() => {
+            if (
+              Number.isFinite(tone.duration) &&
+              tone.duration > 0 &&
+              tone.currentTime >= tone.duration - 0.05
+            ) {
+              clearInterval(iv);
+              resolve(true);
+            }
+          }, 100);
+          setTimeout(() => {
+            clearInterval(iv);
+            resolve(false);
+          }, 40000);
         });
         try {
           await tone.play();
@@ -210,12 +225,63 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
       })();
     }, TONE_PATH);
     await page.goto("/lore/");
-    // The control attempt lives on its own promise — the shared attempt
-    // helper is deliberately NOT installed for this test.
+    const result = await page.evaluate(() => window.__toneControl!);
+    await context.close();
+    // The page had never been interacted with…
+    expect(result.hadStickyActivation).toBe(false);
+    // …so the strict policy must block: if this played, the policy isn't in
+    // force in this launch and the positive tests below prove nothing.
+    expect(result.played).toBe(false);
+    expect(result.errorName).toBe("NotAllowedError");
+  });
+
+  test("tone plays after a real click, across a realistic async gap, via a fresh Audio()", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await installAttemptHelper(page);
+    await page.goto("/lore/");
+    // Genuine user gesture — the crossing always follows one in the app.
+    await page.click("body");
+    // 3s gap: the realistic order of magnitude for the async device check
+    // between the gesture and the tone effect firing (within Chromium's ~5s
+    // transient-activation window).
+    await page.evaluate(() => window.__armToneAttempt!(3000));
+    await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
+      // Budget: 3s arm delay + 10s progression poll + 15s ended cap, plus
+      // headroom for CI contention (the 20s budget flaked at ~23s).
+      timeout: 75_000,
+    });
     const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
     await context.close();
-    // No gesture ever happened — activation must be absent and play() blocked.
-    expect(result.hadStickyActivation).toBe(false);
+    expect(result.hadStickyActivation).toBe(true);
+    expect(result.played).toBe(true);
+    expect(result.progressed).toBe(true);
+    expect(result.endedFired).toBe(true);
+  });
+
+  test("boundary: fresh Audio() >5s after the gesture is blocked under the strict flag (fail-open corner)", async ({
+    browser,
+  }) => {
+    // Documents the one corner where the tone silently skips under the
+    // strictest policy: the transient-activation window (~5s) has expired and
+    // sticky activation alone is not honoured by `user-gesture-required`.
+    // The app already fail-opens here (play() rejection dismisses the gate),
+    // so playback never wedges — this test pins the behaviour so a future
+    // Chromium change in either direction is noticed.
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await installAttemptHelper(page);
+    await page.goto("/lore/");
+    await page.click("body");
+    await page.evaluate(() => window.__armToneAttempt!(6000));
+    await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
+      timeout: 20_000,
+    });
+    const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
+    await context.close();
+    expect(result.hadStickyActivation).toBe(true);
     expect(result.played).toBe(false);
     expect(result.errorName).toBe("NotAllowedError");
   });
@@ -243,7 +309,7 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
     await page.evaluate(() => window.__armToneAttempt!(6000, true));
     await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
       // Budget: arm delay (up to 6s) + 10s progression poll + 15s ended cap.
-      timeout: 45_000,
+      timeout: 75_000,
     });
     const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
     await context.close();

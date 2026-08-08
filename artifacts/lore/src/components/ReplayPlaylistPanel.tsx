@@ -12,8 +12,18 @@ import {
  * The playlist action belongs to every canonical station replay surface, not
  * just the shareable /replay/:id page. The API still owns the immutable
  * manifest and rejects non-canonical ids.
+ *
+ * `embedded` renders the same controls without the standalone section chrome
+ * so the replay export cascade can present connected services as its first,
+ * primary tier instead of a parallel panel.
  */
-export function ReplayPlaylistPanel({ replayId }: { replayId: number }) {
+export function ReplayPlaylistPanel({
+  replayId,
+  embedded = false,
+}: {
+  replayId: number;
+  embedded?: boolean;
+}) {
   const { data: targetData } = useReplayPlaylistTargets(replayId);
   const [selectedService, setSelectedService] = useState<ReplayPlaylistTarget["service"] | null>(null);
   const [jobId, setJobId] = useState<number | null>(null);
@@ -47,16 +57,21 @@ export function ReplayPlaylistPanel({ replayId }: { replayId: number }) {
     }
   }
 
+  const Wrapper: "section" | "div" = embedded ? "div" : "section";
   return (
-    <section
-      aria-label="Make a playlist"
-      className="mb-6 rounded-xl border border-primary/30 bg-primary/5 p-4"
+    <Wrapper
+      aria-label={embedded ? undefined : "Make a playlist"}
+      className={
+        embedded
+          ? undefined
+          : "mb-6 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      }
       data-testid="replay-playlist"
     >
       <div className="flex items-start gap-3">
         <Music2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
-          <h2 className="font-serif text-xl font-normal text-foreground">
+          <h2 className={embedded ? "font-serif text-lg font-normal text-foreground" : "font-serif text-xl font-normal text-foreground"}>
             Keep this broadcast in a playlist
           </h2>
           <p className="mt-1 text-base leading-relaxed text-muted-foreground">
@@ -152,6 +167,6 @@ export function ReplayPlaylistPanel({ replayId }: { replayId: number }) {
           ) : null}
         </div>
       </div>
-    </section>
+    </Wrapper>
   );
 }

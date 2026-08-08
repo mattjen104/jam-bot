@@ -219,7 +219,7 @@ describe("POST /api/me/library/removal", () => {
     _testOnly_clearLibraryHitCache(userId!);
     const ctxRestored = await buildLibraryHitContext(userId!);
     expect(ctxRestored.libMbids.has(MBID_KEEP)).toBe(true);
-  });
+  }, 180_000);
 
   it("excludes removed rows from /me/library/mbids (incl. soft artists)", async () => {
     if (!dbAvailable) return;

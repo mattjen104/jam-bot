@@ -450,21 +450,15 @@ afterAll(async () => {
     }
   }
 
-  // Spins + stations
-  if (stationId != null) {
-    await db.delete(spinsTable).where(eq(spinsTable.stationId, stationId));
-    await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
-    await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
-  }
-  if (stationSortAId != null) {
-    await db.delete(spinsTable).where(eq(spinsTable.stationId, stationSortAId));
-    await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationSortAId}`);
-    await db.delete(stationsTable).where(eq(stationsTable.id, stationSortAId));
-  }
-  if (stationSortBId != null) {
-    await db.delete(spinsTable).where(eq(spinsTable.stationId, stationSortBId));
-    await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationSortBId}`);
-    await db.delete(stationsTable).where(eq(stationsTable.id, stationSortBId));
+  // Spins + stations. segue_edges rows are derived from spins by background
+  // segue computation and hold an FK to stations with no cascade, so they must
+  // be cleared before the station row or the delete fails with 23503.
+  for (const sid of [stationId, stationSortAId, stationSortBId]) {
+    if (sid == null) continue;
+    await db.execute(sql`DELETE FROM segue_edges WHERE station_id = ${sid}`);
+    await db.delete(spinsTable).where(eq(spinsTable.stationId, sid));
+    await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${sid}`);
+    await db.delete(stationsTable).where(eq(stationsTable.id, sid));
   }
 
   // Release-group bridge rows + recordings (cascade deletes rrg rows automatically,

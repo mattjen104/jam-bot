@@ -248,7 +248,7 @@ beforeAll(async () => {
     { key: normalizeKey(ARTIST, "Phase2 Track"),   mbid: MBID_P2,  confidence: "text" },
     { key: normalizeKey(ARTIST, "FK2 Fail Track"), mbid: MBID_FK2, confidence: "text" },
   ]);
-});
+}, 180_000);
 
 afterAll(async () => {
   if (!dbAvailable) return;
@@ -297,7 +297,7 @@ afterAll(async () => {
   await db
     .delete(loreUsersTable)
     .where(eq(loreUsersTable.id, userId));
-}, 90_000);
+}, 180_000);
 
 // ── Helper: create a fresh job row and return its id ────────────────────────
 

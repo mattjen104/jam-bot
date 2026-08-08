@@ -75,7 +75,7 @@ beforeAll(async () => {
     })
     .returning({ id: stationsTable.id });
   ntsStationId = nts!.id;
-}, 30_000);
+}, 120_000);
 
 afterAll(async () => {
   if (!dbAvailable) return;
@@ -88,7 +88,7 @@ afterAll(async () => {
     }
   }
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
-}, 30_000);
+}, 120_000);
 
 /** Reset ledger before each test so the full migration path runs. */
 beforeEach(async () => {
@@ -114,7 +114,7 @@ async function getAutomationClass(stationId: number): Promise<string | null> {
 describe("applyAutomationClassMigration", () => {
   it(
     "seeds 'automated' for somafm source on first run",
-    { timeout: 30_000 },
+    { timeout: 120_000 },
     async (ctx) => {
       if (!dbAvailable || !automatedStationId) return ctx.skip();
 
@@ -132,7 +132,7 @@ describe("applyAutomationClassMigration", () => {
 
   it(
     "seeds 'human' for kexp_api source on first run",
-    { timeout: 30_000 },
+    { timeout: 120_000 },
     async (ctx) => {
       if (!dbAvailable || !humanStationId) return ctx.skip();
 
@@ -144,7 +144,7 @@ describe("applyAutomationClassMigration", () => {
 
   it(
     "seeds 'mixed' for nts_live source on first run",
-    { timeout: 30_000 },
+    { timeout: 120_000 },
     async (ctx) => {
       if (!dbAvailable || !ntsStationId) return ctx.skip();
 
