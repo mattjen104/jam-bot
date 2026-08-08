@@ -91,7 +91,7 @@
 - [Test-suite migration DDL deadlocks](test-migration-deadlocks.md) — migrations run once in globalSetup only; mid-suite constraint-swap DDL deadlocks parallel workers; advisory-lock the migration for concurrent boots.
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
-- [Crossings route merge-splice](crossings-route-merge-splice.md) — twin handlers in me/crossings.ts get merge-spliced repeatedly; typecheck both handlers after merges; CrossingsRow shared from lib/db.
+- [Merge-splice duplication](crossings-route-merge-splice.md) — twin route handlers AND e2e test blocks get duplicated/triplicated by merges (duplicate Playwright titles fail the gate); grep for duplicate titles after merges.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
 - [Lore test provider drift](lore-test-provider-drift.md) — new react-query hooks in shared components break provider-less tests; fix via meHooks/api-client barrel mocks, not QueryClientProvider wrapping.
 - [Lore brutalist typography block](lore-brutalist-typography.md) — `body *` !important uniform font-size at end of index.css overrides all per-rule sizes; resize type by editing that block only.

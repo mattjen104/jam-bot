@@ -4075,13 +4075,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Library byline links follow the shared grammar: dotted underline = navigate. */
 .lrow__by-name {
   font-style: normal;
   font-weight: 400;
   color: hsl(var(--foreground));
-  text-decoration: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
-.lrow__by-name:hover { color: hsl(var(--library)); }
+.lrow__by-name:hover { color: #fff; }
 .lrow__by-stn {
   font-family: var(--app-font-display);
   font-style: normal;
@@ -4090,10 +4092,11 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--muted-foreground) / 0.6);
-  text-decoration: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
   vertical-align: middle;
 }
-.lrow__by-stn:hover { color: hsl(var(--library)); }
+.lrow__by-stn:hover { color: #fff; }
 .lrow__by--import {
   font-family: var(--app-font-mono);
   font-style: normal;
@@ -6532,7 +6535,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-align: left;
 }
 .gram-link--nav:hover { color: hsl(var(--foreground) / .85); }
-.gram__artist, .gram__dj { color: hsl(var(--foreground) / .82); font-weight: 600; }
+/* No-bold policy: names read brighter than the sentence, never heavier. */
+.gram__artist, .gram__dj { color: hsl(var(--foreground) / .82); font-weight: 400; }
 .gram--yours { color: #fff; text-decoration: none; }
 .gram__artist-wrap { white-space: nowrap; }
 .dial-addplus,
@@ -6572,5 +6576,19 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .crail-setrow__when { color: hsl(var(--foreground) / .5); white-space: nowrap; }
 .crail-setrow__show { color: hsl(var(--foreground) / .8); }
 .crail-setrow__names { color: hsl(var(--foreground) / .6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.crail-empty { margin: 4px 0 0; color: hsl(var(--foreground) / .5); font-style: italic; }
+.crail-empty { margin: 4px 0 0; color: hsl(var(--foreground) / .5); font-style: normal; }
 .crail-yours-mark { color: hsl(var(--foreground) / .6); font-size: 12px; }
+
+/* ── Mobile density: drilled objects, lenses, library rows ────────────────
+   Compact vertical rhythm at phone widths — no wasted chrome, no horizontal
+   scroll at 360px. Scoped to the drilled/list surfaces only; the front-door
+   hero layout rules above stay untouched. */
+@media (max-width: 480px) {
+  .lrow { padding: 8px 12px; gap: 9px; }
+  .lrow__by { margin-top: 2px; }
+  .lrow__badge { margin-top: 2px; }
+  .crail { padding: 8px 10px; gap: 6px; }
+  .crail-lens { padding-top: 6px; }
+  .dial-crumbs { padding: 4px 0 6px; }
+  .dial-context-region__offline { padding: 6px 0; }
+}

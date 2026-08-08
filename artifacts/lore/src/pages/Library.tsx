@@ -496,7 +496,9 @@ function artGradient(a: string, b: string): string {
   let x = 0;
   for (const c of a + b) x = ((x * 31 + c.charCodeAt(0)) >>> 0);
   const h = x % 360;
-  return `linear-gradient(150deg,hsl(${h},22%,20%),hsl(${(h + 42) % 360},28%,32%))`;
+  // Three-tone rule: album art is the only saturated element — the fallback
+  // gradient stays grayscale, varying only in lightness per title/artist hash.
+  return `linear-gradient(150deg,hsl(0,0%,${14 + (h % 8)}%),hsl(0,0%,${24 + ((h >> 3) % 10)}%))`;
 }
 
 // ---------------------------------------------------------------------------
