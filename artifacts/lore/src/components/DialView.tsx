@@ -2103,6 +2103,9 @@ export function DialView() {
   /** Handle for the in-flight fade-out delay timer so rapid resizes can
    * cancel it before the wrong layout is committed. */
   const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Handle for the in-flight rAF (Phase 3 fade-in) so rapid resizes can
+   * cancel it before the wrong flip-clear fires. */
+  const flipRafRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     /** Must match the CSS transition duration on .dial-hero__setpanel. */
@@ -2130,11 +2133,15 @@ export function DialView() {
         return;
       }
 
-      // Cancel any in-flight flip and start a fresh sequence.
+      // Cancel any in-flight flip (timer + rAF) and start a fresh sequence.
       const version = ++flipVersionRef.current;
       if (flipTimerRef.current !== null) {
         clearTimeout(flipTimerRef.current);
         flipTimerRef.current = null;
+      }
+      if (flipRafRef.current !== null) {
+        cancelAnimationFrame(flipRafRef.current);
+        flipRafRef.current = null;
       }
 
       // Honour reduced-motion: skip the fade and flip the layout immediately.
@@ -2156,7 +2163,8 @@ export function DialView() {
         if (flipVersionRef.current !== version) return; // Superseded by a newer resize.
         setHeroQueueLayout(newLayout);
         // Phase 3: one rAF after the new layout commits, fade back in.
-        requestAnimationFrame(() => {
+        flipRafRef.current = requestAnimationFrame(() => {
+          flipRafRef.current = null;
           if (flipVersionRef.current !== version) return; // Superseded.
           setLayoutFlipping(false);
         });
@@ -2176,6 +2184,10 @@ export function DialView() {
       if (flipTimerRef.current !== null) {
         clearTimeout(flipTimerRef.current);
         flipTimerRef.current = null;
+      }
+      if (flipRafRef.current !== null) {
+        cancelAnimationFrame(flipRafRef.current);
+        flipRafRef.current = null;
       }
       window.removeEventListener("resize", updateLayout);
       observer?.disconnect();

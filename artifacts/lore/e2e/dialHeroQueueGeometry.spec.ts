@@ -348,8 +348,7 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
     await installDialRoutes(page);
     await openPopulatedQueue(page);
 
-    const g = await readGeometry(page);
-
+      const g = await readGeometry(page);
     expect(g.panelInsideArtwrap).toBe(false);
     expect(g.sameParent).toBe(true);
 
@@ -367,7 +366,10 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
   });
 
   test("browser zoom — layout stays valid when device pixel ratio changes (DPR 1→2)", async ({ browser }) => {
-    // ── Phase 1: DPR=1 reference at the borderline viewport ──────────────────
+    // ── Phase 1: DPR=1 reference at the borderline viewport, then mid-session ──
+    // "zoom in" by halving the CSS viewport.  Browser zoom changes
+    // window.innerWidth/innerHeight (they shrink as the zoom level rises), so
+    // setViewportSize is the correct way to simulate this in Playwright.
     // 1280×620 → zoom 2× → CSS viewport 640×310.  The ResizeObserver must
     // recompute data-queue-layout without producing an overlap.
     const ctxLo = await browser.newContext({
@@ -382,6 +384,8 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
       const g = await readGeometry(pageLo);
       expect(g.panelInsideArtwrap).toBe(false);
       expect(g.sameParent).toBe(true);
+      // CSS pixels are identical to Phase 1's baseline — DPR must not skew
+      // the JS pixel arithmetic that drives chooseDialHeroQueueLayout.
       const exp = expectedLayout(g.vw, g.vh, g.shellH);
       expect(g.layout).toBe(exp);
       expect(intersects(g.artBox, g.panelBox)).toBe(false);
@@ -524,11 +528,10 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
         const panel = document.querySelector(".dial-hero__setpanel");
         if (!hero || !panel) throw new Error("hero or panel missing before resize");
 
-        const rec: {
-          wasFlippingWithOldLayout: boolean;
-          finalLayout: string;
-          done: boolean;
-        } = { wasFlippingWithOldLayout: false, finalLayout: "", done: false };
+        const rec: { wasFlippingWithOldLayout: boolean; finalLayout: string; done?: boolean } = {
+          wasFlippingWithOldLayout: false,
+          finalLayout: "",
+        };
         (window as any).__flipRecord = rec;
 
         const obs = new MutationObserver(() => {
