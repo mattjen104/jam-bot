@@ -500,6 +500,53 @@ function artGradient(a: string, b: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Lens model — the Library is one chronological timeline (imports at import
+// date, keeps at keep date) with lenses layered on top instead of source tabs.
+// ---------------------------------------------------------------------------
+
+/** "" = the default mixed chronological timeline. */
+export type Lens = "" | "recent" | "albums" | "artists" | "lore" | "matching" | "critic";
+
+/** Parse the ?lens= URL param; unrecognised values fall back to the timeline. */
+export function parseLens(search: string): Lens {
+  const v = new URLSearchParams(search).get("lens");
+  if (v === "recent" || v === "albums" || v === "artists" || v === "lore" || v === "matching" || v === "critic") {
+    return v;
+  }
+  return "";
+}
+
+/** Server-side source scope per lens (undefined = full mixed feed). */
+export const LENS_SOURCE: Record<Lens, "keep" | "soft" | "critic" | "lore" | undefined> = {
+  "": undefined,
+  recent: "keep",
+  albums: undefined,
+  artists: undefined,
+  // Scoped server-side (keeps with radio provenance) so pagination and the
+  // page-1 total reflect exactly the From Lore feed — client filtering over
+  // the generic keep feed can strand matching rows behind an empty page 1.
+  lore: "lore",
+  matching: "soft",
+  critic: "critic",
+};
+
+/** True when a keep row carries radio provenance (picker or station). */
+export function hasRadioProvenance(item: LibraryItem): boolean {
+  return (
+    item.provenance.kind === "keep" &&
+    (item.provenance.pickerHandle != null ||
+      item.provenance.pickerName != null ||
+      item.provenance.stationSlug != null ||
+      item.provenance.stationName != null)
+  );
+}
+
+// Note: the mixed timeline needs no client-side merge — the server already
+// stores at most one resolved row per track (unique user+mbid) and derives
+// the dual-source "kept + also imported" flag from import traces, so rows
+// arrive deduplicated with `dualSource` set where applicable.
+
+// ---------------------------------------------------------------------------
 // Grouped-view helpers
 // ---------------------------------------------------------------------------
 
@@ -934,21 +981,23 @@ export default function Library() {
     });
   }, [setAlbumAvatar]);
 
-  // Source filter — persisted in URL as ?source=keep|import|soft|critic
-  const sourceFilter = useMemo((): "" | "keep" | "import" | "soft" | "critic" => {
-    const v = new URLSearchParams(search).get("source");
-    if (v === "keep" || v === "import" || v === "soft" || v === "critic") return v;
-    return "";
-  }, [search]);
+  // Lens — persisted in URL as ?lens=recent|albums|artists|lore|matching|critic
+  // (absent = the mixed chronological timeline).
+  const lens = useMemo((): Lens => parseLens(search), [search]);
 
-  const setSourceFilter = (src: "" | "keep" | "import" | "soft" | "critic") => {
+  const setLens = (next: Lens) => {
     const p = new URLSearchParams(search);
-    if (src) p.set("source", src);
-    else p.delete("source");
+    if (next) p.set("lens", next);
+    else p.delete("lens");
     const qs = p.toString();
     // strip the path portion (e.g. /library) and just update search
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
+
+  // Server-side source scope for the active lens. The timeline and the
+  // grouped lenses read the full mixed feed; keep-lenses scope to keeps and
+  // Needs-matching scopes to unresolved soft rows.
+  const sourceFilter = LENS_SOURCE[lens];
 
   // Sort — persisted in URL as ?sort=artist|title (default = "added", omitted from URL)
   const sortFilter = useMemo((): "added" | "artist" | "title" => {
@@ -965,20 +1014,9 @@ export default function Library() {
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
-  // View mode — persisted in URL as ?view=album|artist (default = "track", omitted from URL)
-  const viewMode = useMemo((): "track" | "album" | "artist" => {
-    const v = new URLSearchParams(search).get("view");
-    if (v === "album" || v === "artist") return v;
-    return "track";
-  }, [search]);
-
-  const setViewMode = (mode: "track" | "album" | "artist") => {
-    const p = new URLSearchParams(search);
-    if (mode !== "track") p.set("view", mode);
-    else p.delete("view");
-    const qs = p.toString();
-    setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
-  };
+  // View mode is derived from the lens — Albums/Artists are grouped lenses.
+  const viewMode: "track" | "album" | "artist" =
+    lens === "albums" ? "album" : lens === "artists" ? "artist" : "track";
 
   // appConfig retained for other consumers in this file
   useAppConfig();
@@ -1016,6 +1054,9 @@ export default function Library() {
     // Subsequent pages omit it; we keep the first-page value for display.
     hasNextPage,
   } = useMyLibraryInfinite({ source: sourceFilter || undefined, sort: sortFilter }, 50);
+  // Every lens is fully server-scoped (including From Lore via source=lore),
+  // so rows arrive deduplicated, dual-source-labeled, and pre-filtered —
+  // pagination and totals always describe exactly the visible feed.
   const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
   useEffect(() => {
     const latest = keptItems.find((item) => item.mbid && item.recording);
@@ -1354,7 +1395,7 @@ export default function Library() {
         <span className="dial-topbar__title dial-topbar__title--active">Library</span>
         {(libraryTotal ?? keptItems.length) > 0 && (
           <span className="dial-topbar__sort-chip">
-            {sourceFilter === "keep" ? "📻" : sourceFilter === "import" ? "🎵" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
+            {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
             {(libraryTotal ?? keptItems.length).toLocaleString()}
           </span>
         )}
@@ -1514,9 +1555,9 @@ export default function Library() {
             {keepCount > 0 && (
               <button
                 type="button"
-                className={`lib-hero__stat${sourceFilter === "keep" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                className={`lib-hero__stat${lens === "recent" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
                 style={{ cursor: "pointer", border: "none" }}
-                onClick={() => setSourceFilter(sourceFilter === "keep" ? "" : "keep")}
+                onClick={() => setLens(lens === "recent" ? "" : "recent")}
                 title="Filter to tracks saved from radio"
               >
                 <b>{keepCount}</b> kept from radio
@@ -1546,9 +1587,9 @@ export default function Library() {
               return showSoftBtn && sourceFilter !== "keep" ? (
                 <button
                   type="button"
-                  className={`lib-hero__stat${sourceFilter === "soft" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                  className={`lib-hero__stat${lens === "matching" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
                   style={{ cursor: "pointer", border: "none" }}
-                  onClick={() => setSourceFilter(sourceFilter === "soft" ? "" : "soft")}
+                  onClick={() => setLens(lens === "matching" ? "" : "matching")}
                   title="Filter to tracks Spotify has but MusicBrainz doesn't"
                 >
                   {softLabel} not in MusicBrainz
@@ -1558,9 +1599,9 @@ export default function Library() {
             {criticCount > 0 && (
               <button
                 type="button"
-                className={`lib-hero__stat${sourceFilter === "critic" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                className={`lib-hero__stat${lens === "critic" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
                 style={{ cursor: "pointer", border: "none" }}
-                onClick={() => setSourceFilter(sourceFilter === "critic" ? "" : "critic")}
+                onClick={() => setLens(lens === "critic" ? "" : "critic")}
                 title="Filter to tracks from critically listed albums"
               >
                 <b>{criticCount}</b> critics' pick{criticCount === 1 ? "" : "s"}
@@ -1680,31 +1721,34 @@ export default function Library() {
           </div>
         )}
 
-        {/* ── Source filter pills ── */}
+        {/* ── Lenses ── */}
         <div
           style={{
             display: "flex",
             gap: 6,
             padding: "10px 15px",
             borderBottom: "1px solid hsl(var(--border) / 0.5)",
+            flexWrap: "wrap",
           }}
-          data-testid="library-source-filter"
+          data-testid="library-lenses"
         >
           {(
             [
-              { value: "" as const, label: "All" },
-              { value: "keep" as const, label: "Saved from radio" },
-              { value: "import" as const, label: "Imported" },
-              { value: "soft" as const, label: "Not in MusicBrainz" },
+              { value: "" as const, label: "Timeline" },
+              { value: "recent" as const, label: "Recent keeps" },
+              { value: "albums" as const, label: "Albums" },
+              { value: "artists" as const, label: "Artists" },
+              { value: "lore" as const, label: "From Lore" },
+              { value: "matching" as const, label: "Needs matching" },
               ...(criticsCovItems.length > 0
                 ? [{ value: "critic" as const, label: "Critics' picks" }]
                 : []),
             ] as const
           ).map(({ value, label }) => (
             <button
-              key={value || "all"}
+              key={value || "timeline"}
               type="button"
-              onClick={() => setSourceFilter(value)}
+              onClick={() => setLens(value)}
               style={{
                 fontFamily: "var(--app-font-display)",
                 fontSize: 10,
@@ -1713,19 +1757,19 @@ export default function Library() {
                 letterSpacing: "0.07em",
                 padding: "4px 10px",
                 borderRadius: 3,
-                border: sourceFilter === value
+                border: lens === value
                   ? "1px solid hsl(var(--library))"
                   : "1px solid hsl(var(--border))",
-                background: sourceFilter === value
+                background: lens === value
                   ? "hsl(var(--library) / 0.12)"
                   : "transparent",
-                color: sourceFilter === value
+                color: lens === value
                   ? "hsl(var(--library))"
                   : "hsl(var(--dim))",
                 cursor: "pointer",
                 transition: "color 0.15s, border-color 0.15s, background 0.15s",
               }}
-              data-testid={`library-filter-${value || "all"}`}
+              data-testid={`library-lens-${value || "timeline"}`}
             >
               {label}
             </button>
@@ -1796,71 +1840,8 @@ export default function Library() {
                   {label}
                 </button>
               ))}
-              {/* Divider */}
-              <span
-                style={{
-                  width: 1,
-                  height: 12,
-                  background: "hsl(var(--border))",
-                  marginLeft: 2,
-                  marginRight: 2,
-                  alignSelf: "center",
-                }}
-                aria-hidden="true"
-              />
             </>
           )}
-
-          {/* View mode toggle */}
-          <span
-            style={{
-              fontFamily: "var(--app-font-display)",
-              fontSize: 10,
-              fontWeight: 400,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-              color: "hsl(var(--dim))",
-              marginRight: 2,
-            }}
-          >
-            View
-          </span>
-          {(
-            [
-              { value: "track" as const, label: "By track" },
-              { value: "album" as const, label: "By album" },
-              { value: "artist" as const, label: "By artist" },
-            ] as const
-          ).map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setViewMode(value)}
-              style={{
-                fontFamily: "var(--app-font-display)",
-                fontSize: 10,
-                fontWeight: 400,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                padding: "4px 10px",
-                borderRadius: 3,
-                border: viewMode === value
-                  ? "1px solid hsl(var(--library))"
-                  : "1px solid hsl(var(--border))",
-                background: viewMode === value
-                  ? "hsl(var(--library) / 0.12)"
-                  : "transparent",
-                color: viewMode === value
-                  ? "hsl(var(--library))"
-                  : "hsl(var(--dim))",
-                cursor: "pointer",
-                transition: "color 0.15s, border-color 0.15s, background 0.15s",
-              }}
-              data-testid={`library-view-${value}`}
-            >
-              {label}
-            </button>
-          ))}
         </div>
 
         {/* ── Inline group filter (album / artist views) ── */}
@@ -1917,15 +1898,19 @@ export default function Library() {
         {/* ── Kept tracks ── */}
         <TierHd
           label={
-            sourceFilter === "keep"
-              ? "Saved from radio"
-              : sourceFilter === "import"
-              ? "Imported"
-              : sourceFilter === "soft"
-              ? "Not in MusicBrainz"
-              : sourceFilter === "critic"
+            lens === "recent"
+              ? "Recent keeps"
+              : lens === "lore"
+              ? "From Lore"
+              : lens === "matching"
+              ? "Needs matching"
+              : lens === "critic"
               ? "Critics' picks"
-              : "Kept"
+              : lens === "albums"
+              ? "Albums"
+              : lens === "artists"
+              ? "Artists"
+              : "Timeline"
           }
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
           hint={
@@ -2111,7 +2096,7 @@ export default function Library() {
           </>
         ) : isEmpty ? (
           <div style={{ padding: "28px 15px", textAlign: "center" }}>
-            {sourceFilter ? (
+            {lens ? (
               <>
                 <div
                   style={{
@@ -2121,17 +2106,17 @@ export default function Library() {
                     marginBottom: 12,
                   }}
                 >
-                  {sourceFilter === "keep"
-                    ? "Nothing saved from radio yet."
-                    : sourceFilter === "import"
-                    ? "No imported tracks yet."
-                    : sourceFilter === "soft"
+                  {lens === "recent" || lens === "lore"
+                    ? "Nothing kept from Lore yet."
+                    : lens === "matching"
                     ? "No unresolved tracks — everything matched MusicBrainz."
+                    : lens === "albums" || lens === "artists"
+                    ? "Nothing in your library yet."
                     : "None of your kept tracks are from critically listed albums yet."}
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSourceFilter("")}
+                  onClick={() => setLens("")}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",

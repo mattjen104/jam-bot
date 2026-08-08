@@ -125,8 +125,10 @@ async function installAttemptHelper(page: import("@playwright/test").Page) {
         try { tone.currentTime = 0; } catch { /* not seekable yet */ }
         const ended = new Promise<boolean>((resolve) => {
           tone.addEventListener("ended", () => resolve(true));
-          // Asset is 1.2s; if `ended` never fires something is wrong.
-          setTimeout(() => resolve(false), 5000);
+          // Asset is 1.2s; if `ended` never fires something is wrong. The
+          // cap is generous because a loaded CI box can stall the audio
+          // clock for several seconds after play() resolves.
+          setTimeout(() => resolve(false), 15000);
         });
         try {
           await tone.play();
@@ -140,8 +142,22 @@ async function installAttemptHelper(page: import("@playwright/test").Page) {
           };
           return;
         }
-        await new Promise((r) => setTimeout(r, 300));
-        const progressed = tone.currentTime > 0;
+        // Poll for clock progression instead of a one-shot check: under CI
+        // load the audio pipeline can take seconds to actually start after
+        // play() resolves. The assertion stays the same — the clock must
+        // genuinely advance — only the deadline is tolerant.
+        const progressed = await new Promise<boolean>((resolve) => {
+          const t0 = Date.now();
+          const iv = setInterval(() => {
+            if (tone.currentTime > 0) {
+              clearInterval(iv);
+              resolve(true);
+            } else if (Date.now() - t0 > 10000) {
+              clearInterval(iv);
+              resolve(false);
+            }
+          }, 50);
+        });
         const endedFired = await ended;
         window.__toneAttempt = {
           played: true,
@@ -154,6 +170,10 @@ async function installAttemptHelper(page: import("@playwright/test").Page) {
     };
   }, TONE_PATH);
 }
+
+// The tolerant playback budgets above (arm delay + 10s progression poll +
+// 15s ended cap) can exceed Playwright's default 30s test timeout.
+test.describe.configure({ timeout: 90_000 });
 
 test.describe("crossing interstitial tone vs autoplay policy", () => {
   test("control: play() is blocked without any user gesture", async ({ browser }) => {
@@ -214,7 +234,8 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
     // transient-activation window).
     await page.evaluate(() => window.__armToneAttempt!(3000));
     await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
-      timeout: 20_000,
+      // Budget: arm delay (up to 6s) + 10s progression poll + 15s ended cap.
+      timeout: 45_000,
     });
     const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
     await context.close();
@@ -240,7 +261,8 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
     await page.click("body");
     await page.evaluate(() => window.__armToneAttempt!(6000));
     await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
-      timeout: 20_000,
+      // Budget: arm delay (up to 6s) + 10s progression poll + 15s ended cap.
+      timeout: 45_000,
     });
     const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
     await context.close();
@@ -264,7 +286,8 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
     await page.click("body"); // click handler pre-unlocks the element
     await page.evaluate(() => window.__armToneAttempt!(6000, true));
     await page.waitForFunction(() => window.__toneAttempt !== null, undefined, {
-      timeout: 20_000,
+      // Budget: arm delay (up to 6s) + 10s progression poll + 15s ended cap.
+      timeout: 45_000,
     });
     const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
     await context.close();

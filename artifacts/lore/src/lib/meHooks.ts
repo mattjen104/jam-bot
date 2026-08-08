@@ -72,6 +72,12 @@ export interface LibraryItem {
   removed?: boolean;
   /** ISO timestamp of the deselect, when removed is true. */
   removedAt?: string | null;
+  /**
+   * Server-derived flag: the track is both kept from Lore and imported
+   * (the keep upsert overwrote the provenance, but an import trace exists
+   * for the same recording). Rendered as a dual source label.
+   */
+  dualSource?: boolean;
 }
 
 export interface AlbumAvatarCandidate {
@@ -798,8 +804,11 @@ export interface LibraryQueryOptions {
   q?: string;
   /** "added" (default, newest first) | "artist" | "title" (A→Z). */
   sort?: "added" | "artist" | "title";
-  /** Filter by provenance kind: "keep" | "import" | "soft" | "critic". */
-  source?: "keep" | "import" | "soft" | "critic" | "";
+  /**
+   * Filter by provenance kind: "keep" | "import" | "soft" | "critic", or
+   * "lore" (keeps with radio provenance — the From Lore lens feed).
+   */
+  source?: "keep" | "import" | "soft" | "critic" | "lore" | "";
 }
 
 export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50) {

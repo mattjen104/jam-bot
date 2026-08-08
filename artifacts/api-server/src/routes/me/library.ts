@@ -2742,10 +2742,12 @@ router.get("/me/library", h(async (req, res) => {
     sortRaw === "artist" || sortRaw === "title" ? sortRaw : "added";
   const sourceRaw =
     typeof req.query["source"] === "string" ? req.query["source"] : "";
-  const source: "keep" | "import" | "soft" | "critic" | null =
-    sourceRaw === "keep" || sourceRaw === "import" || sourceRaw === "soft" || sourceRaw === "critic" ? sourceRaw : null;
+  const source: "keep" | "import" | "soft" | "critic" | "lore" | null =
+    sourceRaw === "keep" || sourceRaw === "import" || sourceRaw === "soft" || sourceRaw === "critic" || sourceRaw === "lore"
+      ? sourceRaw
+      : null;
 
-  const includeSoft = source !== "keep" && source !== "critic";
+  const includeSoft = source !== "keep" && source !== "critic" && source !== "lore";
   const includeResolved = source !== "soft";
 
   // ── Resolved rows conditions ─────────────────────────────────────────────
@@ -2757,9 +2759,24 @@ router.get("/me/library", h(async (req, res) => {
       sql`(${recordingsTable.title} ILIKE ${pattern} OR ${recordingsTable.artist} ILIKE ${pattern})`,
     );
   }
-  if (source && source !== "critic") {
+  if (source === "keep" || source === "import" || source === "soft") {
     conditions.push(
       sql`${libraryItemsTable.provenance}->>'kind' = ${source}`,
+    );
+  }
+  if (source === "lore") {
+    // "From Lore" lens: keeps that carry radio provenance (kept off a picker
+    // or station spin). Scoped server-side so pagination and the page-1
+    // total reflect exactly this feed — a client-side filter over the
+    // generic keep feed can render an empty first page with no scroll
+    // sentinel and strand later matching rows.
+    conditions.push(
+      sql`(${libraryItemsTable.provenance}->>'kind' = 'keep' AND (
+        ${libraryItemsTable.provenance}->>'pickerHandle' IS NOT NULL OR
+        ${libraryItemsTable.provenance}->>'pickerName' IS NOT NULL OR
+        ${libraryItemsTable.provenance}->>'stationSlug' IS NOT NULL OR
+        ${libraryItemsTable.provenance}->>'stationName' IS NOT NULL
+      ))`,
     );
   }
   if (source === "critic") {
@@ -2865,8 +2882,26 @@ router.get("/me/library", h(async (req, res) => {
   let legacyNameCursor = false;
   if (cursor) {
     if (sort === "added") {
-      conditions.push(sql`${libraryItemsTable.addedAt} < ${cursor}::timestamptz`);
-      softConds.push(sql`${spotifyLibraryItemsTable.addedAt} < ${cursor}::timestamptz`);
+      // Deterministic keyset cursor: "<addedAt ISO>\u001f<mbid|spotifyId>".
+      // The unique secondary key prevents rows sharing an addedAt timestamp
+      // from being skipped between pages. Legacy plain-ISO cursors (no
+      // separator) fall back to the old timestamp-only strict-< behavior.
+      const sep = cursor.lastIndexOf(LIB_CURSOR_SEP);
+      if (sep >= 0) {
+        const tsPart = cursor.slice(0, sep);
+        const keyPart = cursor.slice(sep + 1);
+        // DESC keyset: (addedAt, key) < (ts, key) under (addedAt DESC, key DESC).
+        // Keys compare bytewise (COLLATE "C") so SQL agrees with the JS merge.
+        conditions.push(
+          sql`(${libraryItemsTable.addedAt}, ${libraryItemsTable.mbid} COLLATE "C") < (${tsPart}::timestamptz, ${keyPart})`,
+        );
+        softConds.push(
+          sql`(${spotifyLibraryItemsTable.addedAt}, ${spotifyLibraryItemsTable.spotifyId} COLLATE "C") < (${tsPart}::timestamptz, ${keyPart})`,
+        );
+      } else {
+        conditions.push(sql`${libraryItemsTable.addedAt} < ${cursor}::timestamptz`);
+        softConds.push(sql`${spotifyLibraryItemsTable.addedAt} < ${cursor}::timestamptz`);
+      }
     } else {
       const sep = cursor.lastIndexOf(LIB_CURSOR_SEP);
       if (sep < 0) {
@@ -2919,10 +2954,43 @@ router.get("/me/library", h(async (req, res) => {
     .where(and(...conditions))
     .orderBy(
       ...(sort === "added"
-        ? [desc(libraryItemsTable.addedAt)]
+        ? [desc(libraryItemsTable.addedAt), desc(sql`${libraryItemsTable.mbid} COLLATE "C"`)]
         : [asc(sortKeyExpr), asc(libraryItemsTable.addedAt)]),
     )
     .limit(limit + 1);
+
+  // Dual-source flag: an explicit keep of a track that was also imported
+  // overwrites the row's provenance to "keep" (keep upsert), so the import
+  // side is recovered from the import traces — a promoted Spotify library
+  // row or a resolved import item for the same recording. The timeline
+  // renders such rows with a dual "kept + imported" label.
+  const dualSourceMbidSet = new Set<string>();
+  {
+    const keepMbids = resolvedRows
+      .filter((r) => (r.provenance as LibraryItemProvenance).kind === "keep")
+      .map((r) => r.mbid);
+    if (keepMbids.length > 0) {
+      const [spotifyTraces, importTraces] = await Promise.all([
+        db
+          .select({ mbid: spotifyLibraryItemsTable.mbid })
+          .from(spotifyLibraryItemsTable)
+          .where(and(
+            eq(spotifyLibraryItemsTable.userId, user.id),
+            inArray(spotifyLibraryItemsTable.mbid, keepMbids),
+          )),
+        db
+          .select({ mbid: importItemsTable.recordingMbid })
+          .from(importItemsTable)
+          .where(and(
+            eq(importItemsTable.userId, user.id),
+            inArray(importItemsTable.recordingMbid, keepMbids),
+          )),
+      ]);
+      for (const r of [...spotifyTraces, ...importTraces]) {
+        if (r.mbid) dualSourceMbidSet.add(r.mbid);
+      }
+    }
+  }
 
   // Fuzzy-match flag: find which MBIDs on this page were resolved via
   // MusicBrainz scored text search (tier = "text") so the UI can badge them.
@@ -2963,7 +3031,7 @@ router.get("/me/library", h(async (req, res) => {
       .where(and(...softConds))
       .orderBy(
         ...(sort === "added"
-          ? [desc(spotifyLibraryItemsTable.addedAt)]
+          ? [desc(spotifyLibraryItemsTable.addedAt), desc(sql`${spotifyLibraryItemsTable.spotifyId} COLLATE "C"`)]
           : [asc(softSortKeyExpr), asc(spotifyLibraryItemsTable.addedAt)]),
       )
       .limit(limit + 1);
@@ -3003,7 +3071,16 @@ router.get("/me/library", h(async (req, res) => {
   ];
 
   if (sort === "added") {
-    unified.sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
+    // Same total order as the per-table queries: addedAt DESC, then the
+    // unique row key DESC — keeps the keyset cursor deterministic on ties.
+    unified.sort((a, b) => {
+      const t = b.addedAt.getTime() - a.addedAt.getTime();
+      if (t !== 0) return t;
+      const ka = a.mbid ?? a.spotifyId ?? "";
+      const kb = b.mbid ?? b.spotifyId ?? "";
+      // Bytewise (code-unit) compare to match the SQL COLLATE "C" tie-break.
+      return ka < kb ? 1 : ka > kb ? -1 : 0;
+    });
   } else {
     unified.sort(
       (a, b) =>
@@ -3019,7 +3096,7 @@ router.get("/me/library", h(async (req, res) => {
   const nextCursor = !hasMore || !last
     ? null
     : sort === "added"
-      ? last.addedAt.toISOString()
+      ? `${last.addedAt.toISOString()}${LIB_CURSOR_SEP}${last.mbid ?? last.spotifyId ?? ""}`
       : `${last.sortKey}${LIB_CURSOR_SEP}${last.addedAt.toISOString()}`;
 
   return res.json({
@@ -3039,6 +3116,7 @@ router.get("/me/library", h(async (req, res) => {
         : null,
       ...(r.soft ? { soft: true, spotifyId: r.spotifyId } : {}),
       ...(r.mbid && fuzzyMbidSet.has(r.mbid) ? { fuzzyMatch: true } : {}),
+      ...(r.mbid && dualSourceMbidSet.has(r.mbid) ? { dualSource: true } : {}),
       ...(r.removedAt != null
         ? { removed: true, removedAt: r.removedAt.toISOString() }
         : {}),

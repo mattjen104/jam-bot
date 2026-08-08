@@ -24,8 +24,27 @@ interface LibraryRowProps {
   onShelfToggle?: () => void;
 }
 
-/** §7 byline ladder: picked-by+station → picked-by → heard-on → service import → null */
-function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolean }) {
+/**
+ * §7 byline ladder, extended with explicit source labels for the timeline:
+ * every row names its source — "Kept from Lore" (with picked-by/heard-on
+ * provenance when known), "Imported", both when the track is dual-source,
+ * and "Unresolved · needs matching" for soft rows. Library sentences may
+ * include provenance, unlike radio sentences.
+ */
+function Byline({
+  prov,
+  soft,
+  dualSource,
+}: {
+  prov: LibraryItem["provenance"];
+  soft?: boolean;
+  dualSource?: boolean;
+}) {
+  /** "· also imported" suffix for tracks that are both imported and kept. */
+  const dualSuffix = dualSource ? (
+    <span className="lrow__by-phrase" data-testid="library-dual-source"> · also imported</span>
+  ) : null;
+
   if (prov.kind === "keep") {
     const pickerName = prov.pickerName ?? prov.pickerHandle ?? null;
     const stationName = prov.stationName ?? prov.stationSlug ?? null;
@@ -33,7 +52,7 @@ function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolea
     if (pickerName) {
       return (
         <p className="lrow__by">
-          <span className="lrow__by-phrase">picked by </span>
+          <span className="lrow__by-phrase">Kept from Lore — picked by </span>
           {prov.pickerHandle ? (
             <Link href={`/archive/selectors/${prov.pickerHandle}`} className="lrow__by-name">
               {pickerName}
@@ -49,13 +68,14 @@ function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolea
               </Link>
             </>
           )}
+          {dualSuffix}
         </p>
       );
     }
     if (stationName) {
       return (
         <p className="lrow__by">
-          <span className="lrow__by-phrase">heard on </span>
+          <span className="lrow__by-phrase">Kept from Lore — heard on </span>
           {prov.stationSlug ? (
             <Link href={`/archive/stations/${prov.stationSlug}`} className="lrow__by-name">
               {stationName}
@@ -63,9 +83,17 @@ function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolea
           ) : (
             <span className="lrow__by-name">{stationName}</span>
           )}
+          {dualSuffix}
         </p>
       );
     }
+    // Keep with no radio provenance — still label the source explicitly.
+    return (
+      <p className="lrow__by">
+        <span className="lrow__by-phrase">Kept from Lore</span>
+        {dualSuffix}
+      </p>
+    );
   }
   if (prov.kind === "import" && prov.service) {
     return (
@@ -73,12 +101,15 @@ function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolea
         {soft ? (
           <>
             <span style={{ opacity: 0.5, fontSize: "0.85em", marginRight: 3 }}>𝗦</span>
-            from Spotify · unmatched
+            Unresolved · needs matching
           </>
         ) : prov.service === "matt-starter" ? (
           <>from Matt's starter library</>
         ) : (
-          <>imported from {prov.service}</>
+          <>Imported from {prov.service}</>
+        )}
+        {!soft && dualSource && (
+          <span data-testid="library-dual-source"> · also kept from Lore</span>
         )}
       </p>
     );
@@ -294,7 +325,7 @@ export function LibraryRow({
           <span className="lrow__tr lrow__tr--soft">{title}</span>
         )}
         {artist && <p className="lrow__ar">{artist}</p>}
-        <Byline prov={prov} soft={isSoft} />
+        <Byline prov={prov} soft={isSoft} dualSource={item.dualSource} />
         {item.fuzzyMatch && (
           <p className="lrow__badge lrow__badge--fuzzy" title="Matched by MusicBrainz text search — verify if unexpected">
             fuzzy match

@@ -1,22 +1,25 @@
 // @vitest-environment jsdom
 /**
- * Tests for the source-filter pills and sort controls in Library.tsx.
+ * Tests for the lens navigation and sort controls in Library.tsx.
  *
- * Source filter — URL persistence contract:
- *   - Selecting "Saved from radio" pushes ?source=keep to the URL.
- *   - Selecting "Imported" pushes ?source=import to the URL.
- *   - Selecting "All" removes the source param from the URL.
- *   - Mounting with ?source=import pre-selects the Imported pill.
- *   - Mounting with ?source=keep pre-selects the Saved-from-radio pill.
- *   - Empty state with an active filter shows "Show all" instead of "Open the dial".
- *   - Empty state with no filter shows "Open the dial".
+ * Lens model — URL persistence contract:
+ *   - The Library header renders the five lenses (plus the default Timeline).
+ *   - Selecting "Recent keeps" pushes ?lens=recent to the URL.
+ *   - Selecting "Needs matching" pushes ?lens=matching to the URL.
+ *   - Selecting "Timeline" removes the lens param from the URL.
+ *   - Mounting with ?lens=recent scopes the query to source=keep.
+ *   - Mounting with ?lens=lore scopes the query to source=lore (server-side
+ *     radio-provenance filter, so pagination/totals match the visible feed).
+ *   - Mounting with ?lens=matching scopes the query to source=soft.
+ *   - Mounting with ?lens=albums / ?lens=artists keeps the full mixed feed.
+ *   - An unrecognised lens value is ignored (treated as Timeline).
+ *   - Empty state with an active lens shows "Show all" instead of "Open the dial".
  *
- * Sort controls — URL persistence contract:
+ * Sort controls — URL persistence contract (unchanged by the lens reframe):
  *   - Selecting "Artist" sort pushes ?sort=artist to the URL.
  *   - Selecting "Title" sort pushes ?sort=title to the URL.
  *   - Selecting the default "Added" sort removes the sort param from the URL.
- *   - Mounting with ?sort=artist pre-selects the Artist sort button.
- *   - Mounting with ?sort=title pre-selects the Title sort button.
+ *   - Mounting with ?sort=artist/?sort=title pre-selects that sort.
  *   - An unrecognised sort value is ignored (treated as "Added").
  */
 
@@ -142,7 +145,7 @@ async function renderLibrary() {
   );
 }
 
-// Stable default stubs (no active filter, empty library, no jobs)
+// Stable default stubs (no active lens, empty library, no jobs)
 const PREFS_LEDGER_ON = { data: { ledgerEnabled: true } };
 const NO_CONNECTIONS = { data: null, isLoading: false };
 const LIBRARY_EMPTY = {
@@ -158,9 +161,7 @@ const NO_ALBUMS = { data: undefined };
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  // Reset setLocation capture
   mockSetLocation.mockReset();
-  // Default: no search params, at /library
   mockUseSearch.mockReturnValue("");
   mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
   mockUseMyPreferences.mockReturnValue(PREFS_LEDGER_ON);
@@ -177,94 +178,114 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Pill rendering
+// Lens rendering
 // ---------------------------------------------------------------------------
 
-describe("Source filter pills are always rendered", () => {
-  it("renders All, Saved from radio, and Imported pills", async () => {
+describe("Lens tabs are always rendered", () => {
+  it("renders Timeline plus the five lenses", async () => {
     await renderLibrary();
-    expect(screen.getByTestId("library-filter-all")).toBeTruthy();
-    expect(screen.getByTestId("library-filter-keep")).toBeTruthy();
-    expect(screen.getByTestId("library-filter-import")).toBeTruthy();
+    expect(screen.getByTestId("library-lens-timeline")).toBeTruthy();
+    expect(screen.getByTestId("library-lens-recent")).toBeTruthy();
+    expect(screen.getByTestId("library-lens-albums")).toBeTruthy();
+    expect(screen.getByTestId("library-lens-artists")).toBeTruthy();
+    expect(screen.getByTestId("library-lens-lore")).toBeTruthy();
+    expect(screen.getByTestId("library-lens-matching")).toBeTruthy();
   });
 });
 
 // ---------------------------------------------------------------------------
-// URL writes — selecting a pill updates the URL
+// URL writes — selecting a lens updates the URL
 // ---------------------------------------------------------------------------
 
-describe("Selecting a filter pill updates the URL", () => {
-  it("clicking 'Saved from radio' calls setLocation with ?source=keep", async () => {
+describe("Selecting a lens updates the URL", () => {
+  it("clicking 'Recent keeps' calls setLocation with ?lens=recent", async () => {
     await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-filter-keep"));
+    fireEvent.click(screen.getByTestId("library-lens-recent"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
     const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("source=keep");
+    expect(url).toContain("lens=recent");
   });
 
-  it("clicking 'Imported' calls setLocation with ?source=import", async () => {
+  it("clicking 'Needs matching' calls setLocation with ?lens=matching", async () => {
     await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-filter-import"));
+    fireEvent.click(screen.getByTestId("library-lens-matching"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
     const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("source=import");
+    expect(url).toContain("lens=matching");
   });
 
-  it("clicking 'All' calls setLocation WITHOUT a source param", async () => {
-    // Start with an active filter so clicking All is meaningful
-    mockUseSearch.mockReturnValue("source=keep");
+  it("clicking 'From Lore' calls setLocation with ?lens=lore", async () => {
     await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-filter-all"));
+    fireEvent.click(screen.getByTestId("library-lens-lore"));
+    const [url] = mockSetLocation.mock.calls[0] as [string];
+    expect(url).toContain("lens=lore");
+  });
+
+  it("clicking 'Timeline' calls setLocation WITHOUT a lens param", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
+    await renderLibrary();
+    fireEvent.click(screen.getByTestId("library-lens-timeline"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
     const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).not.toContain("source=");
+    expect(url).not.toContain("lens=");
   });
 
-  it("'All' navigates to the bare path when the only param was source", async () => {
-    mockUseSearch.mockReturnValue("source=import");
+  it("'Timeline' navigates to the bare path when the only param was lens", async () => {
+    mockUseSearch.mockReturnValue("lens=albums");
     await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-filter-all"));
+    fireEvent.click(screen.getByTestId("library-lens-timeline"));
     const [url] = mockSetLocation.mock.calls[0] as [string];
-    // Should be just the path with no query string
     expect(url).toBe("/library");
   });
 });
 
 // ---------------------------------------------------------------------------
-// URL reads — mounting with a pre-set param pre-selects the right pill
+// URL reads — mounting with a pre-set lens scopes the query correctly
 // ---------------------------------------------------------------------------
 
-describe("Pre-selecting filter from URL on load", () => {
-  it("?source=import pre-selects the Imported pill (active border/color styles)", async () => {
-    mockUseSearch.mockReturnValue("source=import");
-    await renderLibrary();
-    // The active pill is styled via inline style; we check the label is visible
-    // and that the hook received the correct source param.
-    // Confirm useMyLibraryInfinite was called with source: "import"
-    const calls = mockUseMyLibraryInfinite.mock.calls;
-    const lastCall = calls[calls.length - 1] as [{ source?: string }];
-    expect(lastCall[0].source).toBe("import");
-  });
-
-  it("?source=keep pre-selects the Saved-from-radio pill", async () => {
-    mockUseSearch.mockReturnValue("source=keep");
+describe("Pre-selecting lens from URL on load", () => {
+  it("?lens=recent scopes the library query to source=keep", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
     expect(lastCall[0].source).toBe("keep");
   });
 
-  it("no source param passes undefined/empty to useMyLibraryInfinite", async () => {
+  it("?lens=lore scopes the library query to source=lore", async () => {
+    mockUseSearch.mockReturnValue("lens=lore");
+    await renderLibrary();
+    const calls = mockUseMyLibraryInfinite.mock.calls;
+    const lastCall = calls[calls.length - 1] as [{ source?: string }];
+    expect(lastCall[0].source).toBe("lore");
+  });
+
+  it("?lens=matching scopes the library query to source=soft", async () => {
+    mockUseSearch.mockReturnValue("lens=matching");
+    await renderLibrary();
+    const calls = mockUseMyLibraryInfinite.mock.calls;
+    const lastCall = calls[calls.length - 1] as [{ source?: string }];
+    expect(lastCall[0].source).toBe("soft");
+  });
+
+  it("?lens=albums keeps the full mixed feed (no source scope)", async () => {
+    mockUseSearch.mockReturnValue("lens=albums");
+    await renderLibrary();
+    const calls = mockUseMyLibraryInfinite.mock.calls;
+    const lastCall = calls[calls.length - 1] as [{ source?: string }];
+    expect(lastCall[0].source).toBeFalsy();
+  });
+
+  it("no lens param keeps the full mixed feed", async () => {
     mockUseSearch.mockReturnValue("");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
-    // source should be undefined (or falsy) when no param present
     expect(lastCall[0].source).toBeFalsy();
   });
 
-  it("an unrecognised source value is ignored (treated as All)", async () => {
-    mockUseSearch.mockReturnValue("source=random");
+  it("an unrecognised lens value is ignored (treated as Timeline)", async () => {
+    mockUseSearch.mockReturnValue("lens=random");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
@@ -276,35 +297,35 @@ describe("Pre-selecting filter from URL on load", () => {
 // Empty state CTA — "Show all" vs "Open the dial"
 // ---------------------------------------------------------------------------
 
-describe("Empty state CTA with and without active filter", () => {
-  it("shows 'Open the dial' when library is empty and no filter is active", async () => {
+describe("Empty state CTA with and without active lens", () => {
+  it("shows 'Open the dial' when library is empty and no lens is active", async () => {
     mockUseSearch.mockReturnValue("");
     await renderLibrary();
     expect(screen.getByText(/open the dial/i)).toBeTruthy();
     expect(screen.queryByText(/show all/i)).toBeNull();
   });
 
-  it("shows 'Show all' instead of 'Open the dial' when source=keep and library is empty", async () => {
-    mockUseSearch.mockReturnValue("source=keep");
+  it("shows 'Show all' instead of 'Open the dial' when lens=recent and library is empty", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
     expect(screen.getByText(/show all/i)).toBeTruthy();
     expect(screen.queryByText(/open the dial/i)).toBeNull();
   });
 
-  it("shows 'Show all' instead of 'Open the dial' when source=import and library is empty", async () => {
-    mockUseSearch.mockReturnValue("source=import");
+  it("shows 'Show all' instead of 'Open the dial' when lens=matching and library is empty", async () => {
+    mockUseSearch.mockReturnValue("lens=matching");
     await renderLibrary();
     expect(screen.getByText(/show all/i)).toBeTruthy();
     expect(screen.queryByText(/open the dial/i)).toBeNull();
   });
 
-  it("'Show all' button clears the source filter from the URL", async () => {
-    mockUseSearch.mockReturnValue("source=keep");
+  it("'Show all' button clears the lens from the URL", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
     fireEvent.click(screen.getByText(/show all/i));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
     const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).not.toContain("source=");
+    expect(url).not.toContain("lens=");
   });
 });
 
@@ -318,6 +339,12 @@ describe("Sort controls are always rendered", () => {
     expect(screen.getByTestId("library-sort-added")).toBeTruthy();
     expect(screen.getByTestId("library-sort-artist")).toBeTruthy();
     expect(screen.getByTestId("library-sort-title")).toBeTruthy();
+  });
+
+  it("hides sort buttons in the grouped Albums lens", async () => {
+    mockUseSearch.mockReturnValue("lens=albums");
+    await renderLibrary();
+    expect(screen.queryByTestId("library-sort-added")).toBeNull();
   });
 });
 
@@ -343,7 +370,6 @@ describe("Selecting a sort button updates the URL", () => {
   });
 
   it("clicking 'Added' (default) calls setLocation WITHOUT a sort param", async () => {
-    // Start with an active sort so clicking Added is meaningful
     mockUseSearch.mockReturnValue("sort=artist");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-sort-added"));
@@ -360,12 +386,12 @@ describe("Selecting a sort button updates the URL", () => {
     expect(url).toBe("/library");
   });
 
-  it("preserves existing source param when changing sort", async () => {
-    mockUseSearch.mockReturnValue("source=keep");
+  it("preserves existing lens param when changing sort", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-sort-artist"));
     const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("source=keep");
+    expect(url).toContain("lens=recent");
     expect(url).toContain("sort=artist");
   });
 });
