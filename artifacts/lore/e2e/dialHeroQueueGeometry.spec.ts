@@ -335,6 +335,111 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
     await assertQueueScrollsAndFullscreenWorks(page);
   });
 
+  test("browser zoom — layout stays valid when device pixel ratio changes (DPR 1→2)", async ({ browser }) => {
+    // ── Phase 1: DPR=1 reference at the borderline viewport, then mid-session ──
+    // "zoom in" by halving the CSS viewport.  Browser zoom changes
+    // window.innerWidth/innerHeight (they shrink as the zoom level rises), so
+    // setViewportSize is the correct way to simulate this in Playwright.
+    // 1280×620 → zoom 2× → CSS viewport 640×310.  The ResizeObserver must
+    // recompute data-queue-layout without producing an overlap.
+    const ctxLo = await browser.newContext({
+      deviceScaleFactor: 1,
+      viewport: { width: 1280, height: 620 },
+    });
+    const pageLo = await ctxLo.newPage();
+    await installDialRoutes(pageLo);
+    await openPopulatedQueue(pageLo);
+
+    {
+      const g = await readGeometry(pageLo);
+      expect(g.panelInsideArtwrap).toBe(false);
+      expect(g.sameParent).toBe(true);
+      const exp = expectedLayout(g.vw, g.vh, g.shellH);
+      expect(g.layout).toBe(exp);
+      expect(intersects(g.artBox, g.panelBox)).toBe(false);
+      if (exp === "side") {
+        expect(g.panelBox.x).toBeGreaterThanOrEqual(g.artBox.x + g.artBox.width - 1);
+      } else {
+        expect(g.panelBox.y).toBeGreaterThanOrEqual(g.artBox.y + g.artBox.height - 1);
+      }
+    }
+
+    // Mid-session zoom-in: CSS viewport halves (same physical display, 2× browser zoom).
+    await pageLo.setViewportSize({ width: 640, height: 310 });
+
+    await pageLo.waitForFunction(
+      () => {
+        const hero = document.querySelector(".dial-hero");
+        if (!hero) return false;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const shellH =
+          Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
+          ) || 0;
+        const queueWidth = Math.min(360, vw * 0.3);
+        const queueHeight = 220;
+        const dialColumnWidth = vw >= 1100 ? Math.min(540, Math.max(380, vw * 0.32)) : 300;
+        const availableHeight = Math.max(0, vh - shellH);
+        const artRegionWidth = Math.max(0, vw - dialColumnWidth);
+        const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
+        const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
+        const expected = sideSquare >= belowSquare ? "side" : "below";
+        return hero.getAttribute("data-queue-layout") === expected;
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
+
+    {
+      const g = await readGeometry(pageLo);
+      expect(g.panelInsideArtwrap).toBe(false);
+      expect(g.sameParent).toBe(true);
+      const exp = expectedLayout(g.vw, g.vh, g.shellH);
+      expect(g.layout).toBe(exp);
+      // No overlap after the mid-session zoom change.
+      expect(intersects(g.artBox, g.panelBox)).toBe(false);
+      if (exp === "side") {
+        expect(g.panelBox.x).toBeGreaterThanOrEqual(g.artBox.x + g.artBox.width - 1);
+      } else {
+        expect(g.panelBox.y).toBeGreaterThanOrEqual(g.artBox.y + g.artBox.height - 1);
+      }
+    }
+
+    await ctxLo.close();
+
+    // ── Phase 2: --force-device-scale-factor=2, same 1280×620 CSS viewport ──
+    // On a Retina / HiDPI display (or with the --force-device-scale-factor
+    // flag), window.devicePixelRatio doubles but window.innerWidth/innerHeight
+    // stay in CSS pixels.  The layout helper reads CSS pixels, so the decision
+    // must be identical to Phase 1's initial state and no overlap must appear.
+    const ctxHi = await browser.newContext({
+      deviceScaleFactor: 2,
+      viewport: { width: 1280, height: 620 },
+    });
+    const pageHi = await ctxHi.newPage();
+    await installDialRoutes(pageHi);
+    await openPopulatedQueue(pageHi);
+
+    {
+      const g = await readGeometry(pageHi);
+      expect(g.panelInsideArtwrap).toBe(false);
+      expect(g.sameParent).toBe(true);
+      // CSS pixels are identical to Phase 1's baseline — DPR must not skew
+      // the JS pixel arithmetic that drives chooseDialHeroQueueLayout.
+      const exp = expectedLayout(g.vw, g.vh, g.shellH);
+      expect(g.layout).toBe(exp);
+      expect(intersects(g.artBox, g.panelBox)).toBe(false);
+      if (exp === "side") {
+        expect(g.panelBox.x).toBeGreaterThanOrEqual(g.artBox.x + g.artBox.width - 1);
+      } else {
+        expect(g.panelBox.y).toBeGreaterThanOrEqual(g.artBox.y + g.artBox.height - 1);
+      }
+    }
+
+    await ctxHi.close();
+  });
+
   test("live resize — queue relocates across the side/below boundary without overlapping art", async ({ page }) => {
     // 1280×620 → side layout (short desktop: sideSquare > belowSquare).
     await page.setViewportSize({ width: 1280, height: 620 });
