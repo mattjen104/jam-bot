@@ -26,10 +26,8 @@ type Section = "radio" | "selectors" | "library";
 const HOLD_MS = 480;
 
 function sectionFor(location: string): Section {
-  if (location === "/selectors" || location.startsWith("/selectors/") ||
-      location.startsWith("/archive/selectors") ||
-      location.startsWith("/archive/selector-runs") ||
-      location.startsWith("/archive/picker")) return "selectors";
+  // Two global destinations: Lore ("radio" section key) and My Library.
+  // Selector/archive/DJ pages are part of the Lore listening surface.
   if (location === "/library" || location.startsWith("/library/") ||
       location === "/journal" || location.startsWith("/journal/") ||
       location === "/following" || location.startsWith("/following/")) return "library";
@@ -309,11 +307,11 @@ export function RecordPeekNav() {
   return (
     <>
       <nav className="record-peek-nav" aria-label="Primary">
-        {(["radio", "selectors", "library"] as Section[]).map((section) => {
+        {(["radio", "library"] as Section[]).map((section) => {
           const active = activeSection === section;
           // artFor always returns a string (falls back to RUMOURS), so no null check needed.
           const artwork = artFor(section, memory, liveNpArtworkUrl, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt);
-          const label = section === "radio" ? "Radio" : section === "selectors" ? "Selectors" : "Library";
+          const label = section === "radio" ? "Lore" : "My Library";
           return (
             <button
               key={section}
@@ -322,7 +320,7 @@ export function RecordPeekNav() {
               data-section={section}
               aria-current={active ? "page" : undefined}
               aria-label={label}
-              onClick={() => setLocation(section === "radio" ? "/" : `/${section}`)}
+              onClick={() => setLocation(section === "radio" ? "/" : "/library")}
               onPointerDown={(event) => {
                 if (event.pointerType !== "mouse" || event.button === 0) {
                   beginHold(section, event.clientX, event.clientY);

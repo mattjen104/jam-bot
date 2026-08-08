@@ -71,20 +71,29 @@ describe("RecordPeekNav", () => {
   });
   afterEach(cleanup);
 
+  it("renders exactly the two global sections — no Selectors tab", () => {
+    render(<RecordPeekNav />);
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    const tabs = Array.from(nav.querySelectorAll("button"));
+    expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual(["Lore", "My Library"]);
+    expect(screen.queryByRole("button", { name: "Selectors" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Radio" })).toBeNull();
+  });
+
   it("keeps a normal click as navigation and opens a keyboard peek separately", () => {
     render(<RecordPeekNav />);
-    fireEvent.click(screen.getByRole("button", { name: "Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "My Library" }));
     expect(setLocation).toHaveBeenCalledWith("/library");
     expect(mockStartReplay).not.toHaveBeenCalled();
 
-    fireEvent.keyDown(screen.getByRole("button", { name: "Library" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "My Library" }), { key: "Enter" });
     expect(screen.queryByRole("button", { name: /Open album/i })).toBeNull();
   });
 
   it("cancels a moving long press instead of revealing an action", () => {
     vi.useFakeTimers();
     render(<RecordPeekNav />);
-    const tab = screen.getByRole("button", { name: "Radio" });
+    const tab = screen.getByRole("button", { name: "Lore" });
     fireEvent.pointerDown(tab, { pointerType: "touch", clientX: 0, clientY: 0 });
     fireEvent.pointerMove(tab, { pointerType: "touch", clientX: 30, clientY: 0 });
     vi.advanceTimersByTime(600);
@@ -97,21 +106,19 @@ describe("RecordPeekNav", () => {
       radio: { kind: "radio", station: { id: 7, slug: "night-fm", name: "Night FM", streamUrl: "https://stream.example/live", streamFormat: "mp3", logoUrl: null } },
     });
     render(<RecordPeekNav />);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Radio" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Lore" }), { key: "Enter" });
     fireEvent.click(await screen.findByRole("button", { name: "Resume live" }));
     expect(mockResume).toHaveBeenCalledWith(expect.objectContaining({ slug: "night-fm" }));
   });
 
-  it("restores a selector queue at its saved position", async () => {
+  it("tolerates a persisted selectors slot without resurfacing it as a section", () => {
     stored({ selectors: { kind: "selectors", label: "Documented Run", queue: [seed(), seed("track-2")], orientation: "past", index: 1 } });
     render(<RecordPeekNav />);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Selectors" }), { key: "Enter" });
-    fireEvent.click(await screen.findByRole("button", { name: "Resume Ghost Radio" }));
-    expect(mockStartReplay).toHaveBeenCalledWith(
-      [seed(), seed("track-2")],
-      "Documented Run",
-      expect.objectContaining({ timeOrientation: "past", startIndex: 0 }),
-    );
+    // Legacy selectors resume data must not crash the nav or bring back a tab.
+    expect(screen.queryByRole("button", { name: "Selectors" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Lore" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "My Library" })).toBeTruthy();
+    expect(mockStartReplay).not.toHaveBeenCalled();
   });
 
   it("renders album art as a plain span while the knowledge query is still loading", async () => {
@@ -124,7 +131,7 @@ describe("RecordPeekNav", () => {
       },
     });
     render(<RecordPeekNav />);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Radio" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Lore" }), { key: "Enter" });
 
     // Peek section should be visible
     await screen.findByRole("region", { name: /radio resume/i });
@@ -156,7 +163,7 @@ describe("RecordPeekNav", () => {
       },
     });
     render(<RecordPeekNav />);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Radio" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Lore" }), { key: "Enter" });
 
     // Art must be an accessible button once knowledge has loaded
     const artBtn = await screen.findByRole("button", { name: "Open liner notes" });
@@ -180,7 +187,7 @@ describe("RecordPeekNav", () => {
       ],
     });
     render(<RecordPeekNav />);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Library" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "My Library" }), { key: "Enter" });
     fireEvent.click(await screen.findByRole("button", { name: "Open album" }));
     await waitFor(() => expect(mockStartReplay).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ mbid: "album-track-1" })]),

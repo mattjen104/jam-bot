@@ -273,9 +273,8 @@ describe("(a) queue panel renders with → disabled in live mode", () => {
     renderDial();
 
     expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Radio" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Selectors" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Library" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Lore" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "My Library" })).toBeNull();
   });
 
   it("the Next run arrow is disabled and aria-disabled when at live edge", () => {
