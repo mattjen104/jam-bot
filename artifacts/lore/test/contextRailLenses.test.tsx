@@ -322,6 +322,51 @@ describe("ContextRail", () => {
     expect(document.querySelector(".crail-lens")!.textContent).toContain("Morning Becomes Eclectic");
   });
 
+  it("renders nothing at all when everything would be placeholder (quiet front door)", () => {
+    // No show, no spins, no sets → the rail must not emit the bare "On air."
+    // sentence or the empty "No recent spins visible yet." station lens.
+    const props = baseProps();
+    const row = makeRow();
+    (row as { show: DialShow | null }).show = null;
+    const { container } = render(
+      <ContextRail ctx={ctxWith([{ kind: "station", id: "kcrw", label: "KCRW" }])} {...props} row={row} sets={[]} />,
+    );
+    expect(container.firstChild).toBeNull();
+    expect(container.textContent).toBe("");
+  });
+
+  it("suppresses the bare sentence but keeps a real station lens", () => {
+    // Spins exist (station lens has content) but the sentence would be the
+    // bare "On air." with no usable show name → lens only, no filler text.
+    const props = baseProps();
+    const row = makeRow();
+    row.show = makeShow({
+      showName: null,
+      djName: null,
+      currentTrack: null,
+      crossings: 0,
+      artistCrossings: 0,
+      topArtists: [],
+    });
+    render(<ContextRail ctx={ctxWith([{ kind: "station", id: "kcrw", label: "KCRW" }])} {...props} row={row} />);
+    expect(document.querySelector(".crail__sentence")).toBeNull();
+    expect(document.querySelector(".crail__attribution")).toBeNull();
+    expect(document.querySelector(".crail-lens")).toBeTruthy();
+    expect(screen.queryByText(/no recent spins visible yet/i)).toBeNull();
+  });
+
+  it("hides the empty station lens while keeping a real sentence", () => {
+    // Sentence has real content (live artist) but no spins/sets → the lens
+    // and its "No recent spins visible yet." filler must not render.
+    const props = baseProps();
+    const row = makeRow();
+    row.show = makeShow({ spins: [], crossings: 0, topArtists: [] });
+    render(<ContextRail ctx={ctxWith([{ kind: "station", id: "kcrw", label: "KCRW" }])} {...props} row={row} sets={[]} />);
+    expect(document.querySelector(".crail__sentence")?.textContent).toContain("Broadcast");
+    expect(document.querySelector(".crail-lens")).toBeNull();
+    expect(screen.queryByText(/no recent spins visible yet/i)).toBeNull();
+  });
+
   it("never touches playback: interactions only push frames", () => {
     // The rail receives no player handles at all — its only outward channels
     // are onPush and onAddSeed. Clicking through sentence links must call

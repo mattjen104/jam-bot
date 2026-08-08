@@ -490,8 +490,10 @@ describe("(c) stepping → from the most recent run returns to live mode", () =>
       fireEvent.click(getNextBtn());
     });
 
-    // Back to live mode — the queue prompt returns and → re-disables.
-    expect(getTimeLabel()?.textContent).toContain("Choose a live set");
+    // Back to live mode — with no set tab open the quiet head shows no
+    // "Choose a live set" prompt (front-door filler removed) and → re-disables.
+    expect(getTimeLabel()).toBeNull();
+    expect(document.querySelector(".dial-hero__setpanel-head--quiet")).toBeTruthy();
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });
@@ -615,8 +617,10 @@ describe("(f) empty recent-runs: ← keeps the view at live edge", () => {
       fireEvent.click(getPrevBtn());
     });
 
-    // Stays at live edge — no coarse candidates to navigate to.
-    expect(getTimeLabel()?.textContent).toContain("Choose a live set");
+    // Stays at live edge — no coarse candidates to navigate to; the quiet
+    // head renders no placeholder title.
+    expect(getTimeLabel()).toBeNull();
+    expect(document.querySelector(".dial-hero__setpanel-head--quiet")).toBeTruthy();
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });

@@ -22,6 +22,13 @@ export interface DialContextRegionProps {
   onReturnToLive?: () => void;
   /** The current summary sentence / tuned panel for the root frame. */
   summary?: ReactNode;
+  /**
+   * Quiet mode — everything the breadcrumb + rail would show is placeholder
+   * (see railHasRealContent). The breadcrumb strip collapses to a single
+   * minimal back affordance and the rail's reserved space is released; the
+   * summary (the now-playing row) still renders.
+   */
+  quiet?: boolean;
   /** Subpanel content — the rail. Placeholder until the rail task lands. */
   children?: ReactNode;
 }
@@ -33,19 +40,31 @@ export function DialContextRegion({
   onDial,
   onReturnToLive,
   summary,
+  quiet = false,
   children,
 }: DialContextRegionProps) {
   return (
     <section className="dial-context-region" aria-label="Tuned context" data-context-source={ctx.source}>
-      <ContextBreadcrumb
-        ctx={ctx}
-        frameLabel={frameLabel}
-        onBack={onBack}
-        onDial={onDial}
-        onReturnToLive={onReturnToLive}
-      />
+      {quiet ? (
+        <button
+          type="button"
+          className="dial-crumbs__back dial-crumbs__back--solo"
+          onClick={onBack}
+          aria-label="Back to the dial"
+        >
+          ↑ Back
+        </button>
+      ) : (
+        <ContextBreadcrumb
+          ctx={ctx}
+          frameLabel={frameLabel}
+          onBack={onBack}
+          onDial={onDial}
+          onReturnToLive={onReturnToLive}
+        />
+      )}
       {summary != null && <div className="dial-context-region__summary">{summary}</div>}
-      <div className="dial-context-region__rail">
+      <div className={`dial-context-region__rail${quiet ? " dial-context-region__rail--quiet" : ""}`}>
         {children}
       </div>
     </section>

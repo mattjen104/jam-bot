@@ -5803,6 +5803,13 @@ body * {
   font-family: var(--app-font-display);
   font-size: 14px;
 }
+/* Quiet head (no set tab open): no title, no placeholder — the chevrons and
+   Tune close ranks on the right and the head gives back its bottom margin. */
+.dial-hero__setpanel-head--quiet {
+  justify-content: flex-end;
+  margin-bottom: 0;
+  opacity: .75;
+}
 
 /* ── Tuned artists mode — the wordmark swaps the entire hero/sidebar surface
    for this management panel. It deliberately occupies the same square as the
@@ -6331,6 +6338,20 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .dial-context-region__summary { margin-top: 2px; }
 .dial-context-region__offline { color: hsl(var(--muted-foreground)); padding: 8px 0; }
 .dial-context-region__rail { min-height: 40px; }
+/* Quiet tuned front door: the rail is empty by construction — release its
+   reserved space so art, dial rows, and corner links close ranks. */
+.dial-context-region__rail--quiet { min-height: 0; }
+/* The minimal back affordance that stands in for the collapsed breadcrumb. */
+.dial-crumbs__back--solo {
+  display: block;
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 4px 0 6px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+.dial-crumbs__back--solo:hover { color: hsl(var(--foreground)); }
 
 /* ── Grammar link semantics (context rail + dial sentences) ──────────────────
    dotted underline = navigate (opens a lens); explicit `+` = add/seed;

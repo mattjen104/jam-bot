@@ -277,9 +277,11 @@ describe("Zone 2 ghost rows", () => {
     expect(document.querySelector(".dial-context-region")).toBeTruthy();
     expect(document.querySelector(".ghost-row")).toBeNull();
     expect(ctxParam()).toBe("station:chirp");
-    // Breadcrumb shows the ghost station's name.
-    expect(screen.getByRole("navigation", { name: /breadcrumb/i }).textContent)
-      .toContain("Ghost chirp");
+    // A ghost has no dial row/show/sets yet — everything the breadcrumb +
+    // rail would show is placeholder, so the region goes QUIET: no crumb
+    // strip, just the minimal back affordance.
+    expect(document.querySelector(".dial-crumbs")).toBeNull();
+    expect(screen.getByRole("button", { name: /back to the dial/i })).toBeTruthy();
   });
 });
 

@@ -40,6 +40,7 @@ import {
 import { proxyArtUrl } from "../lib/proxyArt";
 import { useDialSurface } from "../dial/useDialSurface";
 import { DialContextRegion } from "../dial/DialContextRegion";
+import { railHasRealContent } from "../dial/railContent";
 import { contextStationSlug } from "../dial/dialContext";
 import { heroArtCandidates } from "../lib/artRes";
 import { runDate, clockTime } from "../lib/format";
@@ -3023,9 +3024,19 @@ export function DialView() {
   const ctxStationName = ctxRow?.ds.station.name
     ?? stations.find((ds) => ds.station.slug === ctxSlug)?.station.name
     ?? null;
+  // Quiet tuned front door: when the breadcrumb + summary sentence + rail
+  // would all be placeholder filler, the region collapses to art + dial +
+  // a minimal back affordance (railHasRealContent owns the rules).
+  const ctxQuiet = inContext && !!surface.ctx && !railHasRealContent({
+    ctx: surface.ctx,
+    row: ctxRow,
+    sets: allSets,
+    displayMode: crossingSourceMode,
+  });
   const contextRegionJsx = inContext && surface.ctx && (
     <DialContextRegion
       ctx={surface.ctx}
+      quiet={ctxQuiet}
       frameLabel={(frame) =>
         frame.kind === "station" && frame.id === ctxSlug
           ? (ctxStationName ?? frame.label ?? frame.id)
@@ -3209,11 +3220,17 @@ export function DialView() {
               remains mounted in tuned-artists mode so the Tune trigger can
               close that surface and restore focus. */}
           <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-              <div className="dial-hero__setpanel-head">
+              {/* Quiet front door: with no set tab open the header carries no
+                  real content — drop the "Choose a live set" title and the
+                  placeholder sentence, keeping only the compact time-travel
+                  chevrons and the Tune trigger reachable. */}
+              <div className={`dial-hero__setpanel-head${setTabs.length === 0 ? " dial-hero__setpanel-head--quiet" : ""}`}>
                 <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
-                <span className="dial-hero__setpanel-title">
-                  {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
-                </span>
+                {setTabs.length > 0 && (
+                  <span className="dial-hero__setpanel-title">
+                    {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
+                  </span>
+                )}
                 <button
                   ref={tunedArtistsTriggerRef}
                   type="button"
@@ -3237,9 +3254,7 @@ export function DialView() {
                   onRemove={removeSeed}
                   onPlay={playSetlist}
                 />
-              ) : (
-                <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
-              )}
+              ) : null}
           </div>
           {/* Sort toggle moved into the time-travel (filter) strip.
               ＋ Artists button hidden — addArtistsOpen machinery kept. */}

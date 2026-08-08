@@ -104,4 +104,5 @@
 - [lore-tests merge gate](lore-tests-gate.md) — lore vitest suite gates merges via flock-wrapped validation; copy/grammar changes must update tests or the suite rots.
 - [Imported portable sets](imported-sets-pattern.md) — XSPF/JSPF uploads: no-FK isolation from spins, claimed MBIDs only honored if already local (else file could plant spine rows), DTD regex-reject before parse.
 - [api-server vitest contention flakes](api-server-vitest-contention.md) — full-suite DB-test flakes under the running dev server: retry failing files in isolation; stop the API Server workflow before validation.
+- [Pre-existing red lore tests](lore-preexisting-red-tests.md) — stash-compare failures against master before blaming your diff; several dial/topbar tests are red on master.
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).

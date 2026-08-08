@@ -23,6 +23,7 @@ import {
   radioSummarySentence,
   artistNode,
   djNode,
+  usableShowName,
   type GrammarLinks,
 } from "../dial/grammar";
 import type { DialStation, DialShow, DialSpin, DialDisplayMode } from "../hooks/useDialData";
@@ -135,6 +136,9 @@ function StationLens({ row, sets, links, onOpenSet }: {
 }) {
   const slug = row?.ds.station.slug ?? sets[0]?.stationSlug ?? null;
   const recentSpins = (row?.show?.spins ?? []).slice(-6).reverse();
+  // Nothing to preview → render no lens at all. The tuned front door shows
+  // filler chrome ("No recent spins visible yet.") to nobody's benefit.
+  if (recentSpins.length === 0 && sets.length === 0) return null;
   return (
     <Lens
       title="Station"
@@ -396,9 +400,18 @@ export function ContextRail({
   const openSetFromRow = (set: RailSet) => push({ kind: "set", id: set.id, label: set.showName ?? set.stationName });
 
   const top = ctx.stack[ctx.stack.length - 1] ?? null;
+  // Quiet-front-door rules: a bare "On air." sentence with no usable show
+  // name is placeholder filler, and the default station lens is empty when
+  // there are neither recent spins nor loaded sets. Suppress both rather
+  // than rendering intermediate text between the art and the corner links.
+  const sentenceIsBare = summary.artistsShown.length === 0 && summary.djShown == null;
+  const hideSummary = sentenceIsBare && !usableShowName(row?.show ?? null);
+  const stationLensEmpty = (row?.show?.spins.length ?? 0) === 0 && stationSets.length === 0;
   let lens: ReactNode = null;
   if (!top || top.kind === "station") {
-    lens = <StationLens row={row} sets={stationSets} links={links} onOpenSet={openSetFromRow} />;
+    lens = stationLensEmpty
+      ? null
+      : <StationLens row={row} sets={stationSets} links={links} onOpenSet={openSetFromRow} />;
   } else if (top.kind === "show") {
     lens = <ShowLens frame={top} sets={sets} links={links} stationSlug={stationSlug} onOpenSet={openSetFromRow} />;
   } else if (top.kind === "dj") {
@@ -409,10 +422,13 @@ export function ContextRail({
     lens = <ArtistLens frame={top} sets={sets} rowSpins={row?.show?.spins ?? []} links={links} onOpenSet={openSetFromRow} />;
   }
 
+  // All placeholder → render nothing: no empty container, no leftover rule.
+  if (hideSummary && lens == null) return null;
+
   return (
     <div className="crail">
-      <p className="crail__sentence">{summary.sentence}</p>
-      {summary.attribution && <p className="crail__attribution">{summary.attribution}</p>}
+      {!hideSummary && <p className="crail__sentence">{summary.sentence}</p>}
+      {!hideSummary && summary.attribution && <p className="crail__attribution">{summary.attribution}</p>}
       {lens}
     </div>
   );

@@ -315,13 +315,15 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
     expect(screen.getByRole("heading", { name: "Tuned artists" })).toBeTruthy();
     // The queue remains mounted so its compact Tune trigger is available for
     // a predictable close/focus return, even while the art surface is swapped.
-    expect(screen.getByText("Choose a live set")).toBeTruthy();
+    // (Quiet head: no "Choose a live set" filler title when no tab is open.)
+    expect(document.querySelector(".dial-hero__setpanel-head")).toBeTruthy();
+    expect(screen.queryByText("Choose a live set")).toBeNull();
     expect([...document.querySelectorAll(".dial-hero__tuned-item > span")].map((node) => node.textContent))
       .toEqual(["Arcade Fire", "Beach House", "zola jesus"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Close tuned artists" }));
     expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
-    expect(screen.getByText("Choose a live set")).toBeTruthy();
+    expect(document.querySelector(".dial-hero__setpanel-head")).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open tuned artists" }));
   });
 });
