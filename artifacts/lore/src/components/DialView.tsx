@@ -3322,7 +3322,7 @@ export function DialView() {
                 and its context-sensitive placeholder.  Zones 2/3 and "Recently
                 aired" are intentionally suppressed until Zone 1 has settled so
                 they never appear above the live crossing rows. */}
-            {!isCoreLoading && showSkeleton && (
+            {!isCoreLoading && showSkeleton && !inContext && (
               <>
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
@@ -3342,7 +3342,11 @@ export function DialView() {
             {/* ── Primary tab: "On the Air × Your Music Library" ─────────────────
                 Contains Zone 1 crossing rows + Zone 2 ghost stations as a
                 subsection below. */}
-            {zone1Settled && (
+            {/* Tuned context must never wait on the crossings query: the
+                summary sentence and rail render as soon as the context is
+                open (they degrade gracefully while data loads), so the gate
+                opens early in context mode. */}
+            {(zone1Settled || inContext) && (
               <>
                 {/* Context mode: the former list space belongs to the context
                     region. Zone 2/3 discovery bands are hidden below. */}

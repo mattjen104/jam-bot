@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 type Section = "lore" | "library";
 
@@ -13,34 +13,30 @@ export function sectionFor(location: string): Section {
 }
 
 /**
- * Slim text-only section nav — LORE / MY LIBRARY.
- * The record-sleeve bottom nav (RecordPeekNav) is hidden for now; these
- * buttons live in the size-reactive space around the maximized album art
- * (overlaid across the top of the art on the front door, a top bar on
- * other sections).
+ * Bottom-corner section nav — [lore] pinned bottom-left, [my library] pinned
+ * bottom-right on every Lore route including the front door. The links are
+ * plain text hyperlinks (square brackets included) layered above the page
+ * content and directly above the bottom shell, so they never collide with
+ * the player dock or the maximized hero art.
  */
-export function SlimSectionNav({ overlay = false }: { overlay?: boolean }) {
-  const [location, setLocation] = useLocation();
+export function SlimSectionNav() {
+  const [location] = useLocation();
   const activeSection = sectionFor(location);
   return (
-    <nav
-      className={`slim-nav${overlay ? " slim-nav--overlay" : ""}`}
-      aria-label="Primary"
-    >
+    <nav className="corner-nav" aria-label="Primary">
       {(["lore", "library"] as Section[]).map((section) => {
         const active = activeSection === section;
-        const label = section === "lore" ? "Lore" : "My Library";
+        const label = section === "lore" ? "[lore]" : "[my library]";
         return (
-          <button
+          <Link
             key={section}
-            type="button"
-            className={`slim-nav__btn${active ? " slim-nav__btn--active" : ""}`}
+            href={section === "lore" ? "/" : "/library"}
+            className={`corner-nav__link corner-nav__link--${section === "lore" ? "left" : "right"}${active ? " corner-nav__link--active" : ""}`}
             data-section={section}
             aria-current={active ? "page" : undefined}
-            onClick={() => setLocation(section === "lore" ? "/" : "/library")}
           >
             {label}
-          </button>
+          </Link>
         );
       })}
     </nav>

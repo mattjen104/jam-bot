@@ -86,9 +86,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
       )}
 
       {/* ── Main content — pad for bottom shell (optional player dock) ── */}
-      {/* Section nav: on the front door it overlays the album art (DialView);
-          on every other section it renders as a slim top bar here. */}
-      {!isHome && <SlimSectionNav />}
+      {/* Section nav: [lore] / [my library] corner hyperlinks, pinned to the
+          bottom corners on every Lore route including the front door. */}
+      <SlimSectionNav />
       <div className={isHome ? "" : "content-pad-shell"}>{children}</div>
     </>
   );

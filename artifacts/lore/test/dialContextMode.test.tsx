@@ -176,7 +176,7 @@ function mockGhosts(ghosts: GhostStation[]) {
   (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: ghosts });
 }
 
-function mockDialData(stations: DialStation[]) {
+function mockDialData(stations: DialStation[], overrides: Record<string, unknown> = {}) {
   (useDialData as ReturnType<typeof vi.fn>).mockReturnValue({
     stations,
     isLoading: false,
@@ -186,6 +186,7 @@ function mockDialData(stations: DialStation[]) {
     hasLibrary: true,
     overlapByPickerId: new Map<number, number>(),
     pickerNameToId: new Map<string, number>(),
+    ...overrides,
   });
 }
 
@@ -362,6 +363,20 @@ describe("URL restore", () => {
     expect(radioMock.preview).not.toHaveBeenCalled();
     // ctx param survives (kept in sync via replace).
     expect(ctxParam()).toBe("station:kexp");
+  });
+
+  it("renders the context region (and rail) while the crossings query is still loading", () => {
+    // The tuned context must never wait on crossing scores: with the
+    // crossings query in flight (zone1Settled false), a ctx-param restore
+    // still mounts the region and the summary rail.
+    window.history.replaceState(null, "", "/?ctx=station:kexp");
+    mockDialData([makeZone1Station("kexp")], { crossingsLoading: true });
+    renderDial();
+
+    expect(document.querySelector(".dial-context-region")).toBeTruthy();
+    expect(screen.getByTestId("context-rail")).toBeTruthy();
+    // The loading placeholder never sits above the tuned context.
+    expect(document.querySelector(".z1-placeholder")).toBeNull();
   });
 
   it("restores a station that is not currently on air (offline label fallback)", () => {

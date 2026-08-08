@@ -1477,52 +1477,40 @@
   cursor: pointer;
 }
 
-/* ── Slim section nav — LORE / MY LIBRARY text buttons.
-   The front door intentionally has no section-nav chrome; the bar variant
-   remains available as a top strip on the other sections. ── */
-.slim-nav {
+/* ── Corner section nav — [lore] / [my library] text hyperlinks pinned to
+   the bottom corners on every Lore route, front door included. The links
+   sit directly above the measured bottom shell (player dock), so they never
+   collide with dock controls, and above the fixed landscape hero art. ── */
+.corner-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--shell-h, 0px) + 8px);
+  z-index: 30;
   display: flex;
-  align-items: stretch;
+  justify-content: space-between;
+  padding: 0 14px;
+  pointer-events: none; /* the links re-enable — the bar itself never blocks */
   user-select: none;
   -webkit-user-select: none;
 }
-.slim-nav__btn {
-  appearance: none;
-  flex: 1;
-  min-width: 0;
-  padding: 8px 0 7px;
-  border: 0;
-  background: transparent;
-  color: hsl(var(--faint));
-  cursor: pointer;
+.corner-nav__link {
+  pointer-events: auto;
   font-family: var(--app-font-mono);
-  font-size: 14px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  text-align: center;
-  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  letter-spacing: .08em;
+  color: hsl(var(--faint));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  transition: color .2s ease, border-color .2s ease;
+  transition: color .2s ease;
 }
-.slim-nav__btn:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
-.slim-nav__btn--active[data-section="lore"]      { color: hsl(var(--accent));      border-bottom-color: hsl(var(--accent)); }
-.slim-nav__btn--active[data-section="library"]   { color: hsl(var(--library));     border-bottom-color: hsl(var(--library)); }
-/* Bar variant (non-home sections): opaque row under the top edge */
-.slim-nav:not(.slim-nav--overlay) {
-  background: hsl(var(--background));
-  border-bottom: 1px solid hsl(var(--border) / 0.4);
-}
-/* Overlay variant retained for callers that need nav over an image. */
-.slim-nav--overlay {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 2;
-  background: linear-gradient(to bottom, rgb(9 9 9 / 0.62), rgb(9 9 9 / 0));
-  padding-bottom: 10px;
-}
-.slim-nav--overlay .slim-nav__btn { color: rgb(251 251 251 / 0.72); text-shadow: 0 1px 2px rgb(0 0 0 / 0.5); }
-.slim-nav--overlay .slim-nav__btn--active[data-section="lore"] { color: hsl(var(--accent)); }
+.corner-nav__link:hover { color: hsl(var(--dim)); }
+.corner-nav__link:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+.corner-nav__link--active[data-section="lore"]    { color: hsl(var(--accent)); }
+.corner-nav__link--active[data-section="library"] { color: hsl(var(--library)); }
 .dial-hero__art:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: -2px;

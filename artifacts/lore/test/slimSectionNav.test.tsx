@@ -1,14 +1,19 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 const { setLocation, mockLocation } = vi.hoisted(() => ({
   setLocation: vi.fn(),
   mockLocation: { value: "/" },
 }));
 
-vi.mock("wouter", () => ({ useLocation: () => [mockLocation.value, setLocation] }));
+vi.mock("wouter", () => ({
+  useLocation: () => [mockLocation.value, setLocation],
+  Link: ({ children, href, ...rest }: { children: React.ReactNode; href: string } & Record<string, unknown>) => (
+    <a href={href} {...rest}>{children}</a>
+  ),
+}));
 
 import { SlimSectionNav, sectionFor } from "../src/components/SlimSectionNav";
 
@@ -36,35 +41,56 @@ describe("sectionFor — two-section model", () => {
   });
 });
 
-describe("SlimSectionNav", () => {
+describe("SlimSectionNav — bottom-corner hyperlinks", () => {
   afterEach(() => {
     cleanup();
     setLocation.mockClear();
     mockLocation.value = "/";
   });
 
-  it("renders exactly two items — Lore and My Library — and no Selectors", () => {
+  it("renders exactly two bracketed hyperlinks — [lore] and [my library]", () => {
     render(<SlimSectionNav />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    const buttons = Array.from(nav.querySelectorAll("button"));
-    expect(buttons.map((b) => b.textContent)).toEqual(["Lore", "My Library"]);
-    expect(screen.queryByRole("button", { name: "Selectors" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Radio" })).toBeNull();
+    const links = Array.from(nav.querySelectorAll("a"));
+    expect(links.map((a) => a.textContent)).toEqual(["[lore]", "[my library]"]);
+    // No button-styled nav items remain.
+    expect(nav.querySelectorAll("button").length).toBe(0);
   });
 
-  it("navigates Lore to the front door and My Library to the library", () => {
+  it("links [lore] to the front door and [my library] to the library", () => {
     render(<SlimSectionNav />);
-    fireEvent.click(screen.getByRole("button", { name: "Lore" }));
-    expect(setLocation).toHaveBeenCalledWith("/");
-    fireEvent.click(screen.getByRole("button", { name: "My Library" }));
-    expect(setLocation).toHaveBeenCalledWith("/library");
+    expect(screen.getByRole("link", { name: "[lore]" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "[my library]" }).getAttribute("href")).toBe("/library");
   });
 
-  it("highlights Lore while on a selector archive page", () => {
+  it("pins [lore] to the left corner and [my library] to the right corner", () => {
+    render(<SlimSectionNav />);
+    expect(screen.getByRole("link", { name: "[lore]" }).className).toContain("corner-nav__link--left");
+    expect(screen.getByRole("link", { name: "[my library]" }).className).toContain("corner-nav__link--right");
+  });
+
+  it("marks [lore] active on the front door", () => {
+    mockLocation.value = "/";
+    render(<SlimSectionNav />);
+    const lore = screen.getByRole("link", { name: "[lore]" });
+    expect(lore.getAttribute("aria-current")).toBe("page");
+    expect(lore.className).toContain("corner-nav__link--active");
+    expect(screen.getByRole("link", { name: "[my library]" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("marks [my library] active across the library family of routes", () => {
+    for (const path of ["/library", "/journal", "/following"]) {
+      mockLocation.value = path;
+      render(<SlimSectionNav />);
+      expect(screen.getByRole("link", { name: "[my library]" }).getAttribute("aria-current")).toBe("page");
+      expect(screen.getByRole("link", { name: "[lore]" }).getAttribute("aria-current")).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("keeps [lore] active while on a selector archive page", () => {
     mockLocation.value = "/archive/selectors/night-shift";
     render(<SlimSectionNav />);
-    const lore = screen.getByRole("button", { name: "Lore" });
-    expect(lore.getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("button", { name: "My Library" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "[lore]" }).getAttribute("aria-current")).toBe("page");
   });
 });
