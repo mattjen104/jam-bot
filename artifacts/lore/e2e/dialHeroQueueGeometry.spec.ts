@@ -334,4 +334,98 @@ test.describe("Dial hero queue geometry with a populated crossing", () => {
     expect(g.panelScrollable).toBe(true);
     await assertQueueScrollsAndFullscreenWorks(page);
   });
+
+  test("live resize — queue relocates across the side/below boundary without overlapping art", async ({ page }) => {
+    // 1280×620 → side layout (short desktop: sideSquare > belowSquare).
+    await page.setViewportSize({ width: 1280, height: 620 });
+    await installDialRoutes(page);
+    await openPopulatedQueue(page);
+
+    // Verify the initial "side" geometry.
+    await assertLandscapeGeometry(page);
+
+    // ── Step 1: grow tall → crosses into "below" ────────────────────────────
+    await page.setViewportSize({ width: 1280, height: 1024 });
+
+    // Wait for the resize listener / ResizeObserver to propagate the new
+    // layout decision into data-queue-layout.  The inline formula mirrors
+    // chooseDialHeroQueueLayout so the e2e gate catches any drift.
+    await page.waitForFunction(
+      () => {
+        const hero = document.querySelector(".dial-hero");
+        if (!hero) return false;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const shellH =
+          Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
+          ) || 0;
+        const queueWidth = Math.min(360, vw * 0.3);
+        const queueHeight = 220;
+        const dialColumnWidth =
+          vw >= 1100 ? Math.min(540, Math.max(380, vw * 0.32)) : 300;
+        const availableHeight = Math.max(0, vh - shellH);
+        const artRegionWidth = Math.max(0, vw - dialColumnWidth);
+        const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
+        const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
+        const expected = sideSquare >= belowSquare ? "side" : "below";
+        return hero.getAttribute("data-queue-layout") === expected;
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
+
+    // Geometry must still be valid after the flip.
+    const gTall = await readGeometry(page);
+    expect(gTall.panelInsideArtwrap).toBe(false);
+    expect(gTall.sameParent).toBe(true);
+    const expectedTall = expectedLayout(gTall.vw, gTall.vh, gTall.shellH);
+    expect(gTall.layout).toBe(expectedTall);
+    expect(intersects(gTall.artBox, gTall.panelBox)).toBe(false);
+    if (expectedTall === "side") {
+      expect(gTall.panelBox.x).toBeGreaterThanOrEqual(gTall.artBox.x + gTall.artBox.width - 1);
+    } else {
+      expect(gTall.panelBox.y).toBeGreaterThanOrEqual(gTall.artBox.y + gTall.artBox.height - 1);
+    }
+
+    // ── Step 2: shrink back to short → crosses back to "side" ───────────────
+    await page.setViewportSize({ width: 1280, height: 620 });
+
+    await page.waitForFunction(
+      () => {
+        const hero = document.querySelector(".dial-hero");
+        if (!hero) return false;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const shellH =
+          Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
+          ) || 0;
+        const queueWidth = Math.min(360, vw * 0.3);
+        const queueHeight = 220;
+        const dialColumnWidth =
+          vw >= 1100 ? Math.min(540, Math.max(380, vw * 0.32)) : 300;
+        const availableHeight = Math.max(0, vh - shellH);
+        const artRegionWidth = Math.max(0, vw - dialColumnWidth);
+        const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
+        const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
+        const expected = sideSquare >= belowSquare ? "side" : "below";
+        return hero.getAttribute("data-queue-layout") === expected;
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
+
+    const gShort = await readGeometry(page);
+    expect(gShort.panelInsideArtwrap).toBe(false);
+    expect(gShort.sameParent).toBe(true);
+    const expectedShort = expectedLayout(gShort.vw, gShort.vh, gShort.shellH);
+    expect(gShort.layout).toBe(expectedShort);
+    expect(intersects(gShort.artBox, gShort.panelBox)).toBe(false);
+    if (expectedShort === "side") {
+      expect(gShort.panelBox.x).toBeGreaterThanOrEqual(gShort.artBox.x + gShort.artBox.width - 1);
+    } else {
+      expect(gShort.panelBox.y).toBeGreaterThanOrEqual(gShort.artBox.y + gShort.artBox.height - 1);
+    }
+  });
 });
