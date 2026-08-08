@@ -2,7 +2,12 @@
 import React, { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { SetQueueList, useLivePanelSync, computeLivePanel } from "../src/components/DialView";
+import {
+  SetQueueList,
+  chooseDialHeroQueueLayout,
+  useLivePanelSync,
+  computeLivePanel,
+} from "../src/components/DialView";
 
 // ── Minimal data factories ───────────────────────────────────────────────────
 
@@ -95,8 +100,11 @@ describe("Dial set queue", () => {
     const names = [...document.querySelectorAll(".set-queue__artist")].map((node) => node.textContent);
     expect(names).toEqual(["First Artist", "Second Artist", "Third Artist"]);
     expect(screen.getByRole("button", { name: /add first artist/i }).className).toContain("set-queue__artist--add");
+    expect(screen.getByRole("button", { name: /add first artist/i }).className).toContain("dial-artist--add");
     expect(screen.getByRole("button", { name: /second artist is in your library/i }).className).toContain("set-queue__artist--library");
+    expect(screen.getByRole("button", { name: /second artist is in your library/i }).className).toContain("dial-artist--complete");
     expect(screen.getByRole("button", { name: /remove third artist/i }).className).toContain("set-queue__artist--library");
+    expect(screen.getByRole("button", { name: /remove third artist/i }).className).toContain("dial-artist--complete");
 
     fireEvent.click(screen.getByRole("button", { name: /add first artist/i }));
     fireEvent.click(screen.getByRole("button", { name: /remove third artist/i }));
@@ -185,5 +193,62 @@ describe("Dial set queue", () => {
     // Progress retains the last computed value (100%) — no crash, no blank panel.
     expect(document.querySelector(".set-queue__progress")?.getAttribute("style"))
       .toContain("width: 100");
+  });
+});
+
+describe("Dial hero queue layout", () => {
+  it("uses the side queue only when it preserves the larger album square", () => {
+    expect(chooseDialHeroQueueLayout({
+      viewportWidth: 1440,
+      viewportHeight: 900,
+      shellHeight: 80,
+      dialColumnWidth: 440,
+    })).toBe("side");
+
+    expect(chooseDialHeroQueueLayout({
+      viewportWidth: 800,
+      viewportHeight: 900,
+      shellHeight: 80,
+      dialColumnWidth: 300,
+    })).toBe("below");
+  });
+
+  it("matches the side queue's responsive min(360px, 30vw) width at medium landscape sizes", () => {
+    // CSS uses --hero-queue-w: min(360px, 30vw). At 1000px, that is 300px:
+    // side art is min(570, 1000 - 300 - 300) = 400px; below art is
+    // min(700, 570 - 220) = 350px, so side must win.
+    expect(chooseDialHeroQueueLayout({
+      viewportWidth: 1000,
+      viewportHeight: 570,
+      shellHeight: 0,
+      dialColumnWidth: 300,
+    })).toBe("side");
+
+    // At narrower landscape widths the responsive 30vw queue cap still wins
+    // over below mode when it leaves the larger album square.
+    expect(chooseDialHeroQueueLayout({
+      viewportWidth: 800,
+      viewportHeight: 450,
+      shellHeight: 0,
+      dialColumnWidth: 300,
+    })).toBe("side");
+  });
+
+  it("accounts for measured shell height rather than assuming viewport height is free", () => {
+    // With no shell height, the tall viewport makes below-mode the bigger square.
+    expect(chooseDialHeroQueueLayout({
+      viewportWidth: 1000,
+      viewportHeight: 700,
+      shellHeight: 0,
+      dialColumnWidth: 300,
+    })).toBe("below");
+    // A large shell-h (e.g. a fixed player bar) eats into available height, shrinking
+    // the below-square more than the side-square — the function flips to side.
+    expect(chooseDialHeroQueueLayout({
+      viewportWidth: 1000,
+      viewportHeight: 700,
+      shellHeight: 300,
+      dialColumnWidth: 300,
+    })).toBe("side");
   });
 });

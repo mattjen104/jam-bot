@@ -5186,7 +5186,9 @@
    names carry a dotted underline and are themselves the click-to-add target. */
 .fdrow__pop-sentence { color: hsl(var(--foreground) / 0.85); }
 .fdrow__t1 .fdrow__artist--lib { color: #fff; }
-/* Gray, addable artist name — dotted underline is the only affordance. */
+/* Gray, addable artist name — dotted underline is the only affordance.
+   Specificity matches .fdrow__t1 .fdrow__artist (0,2,0) and appears later,
+   so it wins: addable names get muted gray + dotted underline, not bright white. */
 .fdrow__t1 .fdrow__artist--add {
   appearance: none;
   background: none;
@@ -5194,15 +5196,15 @@
   padding: 0;
   margin: 0;
   font: inherit;
-  color: inherit;
   font-weight: 400;
-  cursor: pointer;
-  text-decoration: underline dotted;
-  text-underline-offset: 2px;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  /* Override the base .fdrow__t1 .fdrow__artist { color: #fff } rule */
+  color: hsl(var(--foreground) / .52);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
-.fdrow__t1 .fdrow__artist--add:hover { color: #fff; }
 /* ── Also-On-Air right-edge scrubber ─────────────────────────────────────
    One tick per station in the current sort order; tick length tracks the
    popular-crossing weight (the lime gradient IS the sort), canary ticks
@@ -5918,28 +5920,18 @@ body * {
   box-shadow: -3px 0 0 -1px hsl(0 0% 30%);
 }
 
-/* ── Hero art sidebar — persistent player queue panel ──
-   NOTE: no position rule here — the base .dial-hero__artwrap is already
-   relative, and the landscape media block sets it fixed; re-declaring
-   relative this late in the file silently breaks the desktop layout. */
-/* Persistent player queue — bottom quarter of the sidebar. */
+/* ── Hero art queue — a sibling region, never an artwork overlay ───────────
+   The art wrapper's base positioning is intentional. Landscape rules pin it;
+   do not reset it to relative in this late scoped block. */
 .dial-hero__setpanel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 25%;
+  position: relative;
   min-height: 96px;
   z-index: 7;
-  /* Fully opaque: underlying dial-row text must never show through the open
-     panel (header through pill grid). Blur is a backstop for any subpixel
-     seams at the panel edges. */
   background: hsl(var(--background));
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   border-top: 1px solid hsl(var(--border) / 0.6);
   padding: 8px 12px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .dial-hero__setpanel-head {
   display: flex;
@@ -6142,18 +6134,102 @@ body * {
   line-height: 1.35;
   text-align: left;
 }
-.set-queue__artist--add {
+.dial-artist--add {
   color: hsl(var(--foreground) / .52);
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
-.set-queue__artist--add:hover { color: #fff; }
-.set-queue__artist--library {
+.dial-artist--complete {
   color: #fff;
-  text-decoration: underline solid #fff;
-  text-underline-offset: 3px;
+  text-decoration: none;
   cursor: pointer;
+}
+.dial-artist--add:hover { color: hsl(var(--foreground) / .78); }
+.dial-artist--add:focus-visible,
+.dial-artist--complete:focus-visible {
+  outline: 2px solid hsl(var(--foreground) / .8);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.dial-artist--add:disabled,
+.dial-artist--complete:disabled { cursor: default; opacity: .55; }
+
+/* Surface-specific state classes remain as semantic hooks. Shared markers
+   above own the common visual treatment across the sentence and queue. */
+.set-queue__artist--add,
+.set-queue__artist--library,
+.fdrow__artist--add,
+.fdrow__artist--lib {
+  text-decoration-color: currentColor;
+}
+
+@media (orientation: landscape) {
+  :root {
+    --hero-queue-w: min(360px, 30vw);
+    --hero-queue-h: 220px;
+  }
+  /* Side mode reserves a dedicated column: the queue never covers art. */
+  .dial-hero[data-queue-layout="side"] {
+    --hero-art-size: min(
+      calc(100dvh - var(--shell-h, 0px)),
+      calc(100vw - 300px - var(--hero-queue-w))
+    );
+  }
+  .dial-hero[data-queue-layout="side"] .dial-hero__artwrap {
+    width: var(--hero-art-size);
+  }
+  .dial-hero[data-queue-layout="side"] .dial-hero__setpanel {
+    position: fixed;
+    left: var(--hero-art-size);
+    top: 0;
+    width: var(--hero-queue-w);
+    height: var(--hero-art-size);
+    max-height: var(--hero-art-size);
+    border-top: none;
+    border-left: 1px solid hsl(var(--border) / .6);
+  }
+  .dial-root--front:has(.dial-hero[data-queue-layout="side"]) {
+    padding-left: calc(var(--hero-art-size) + var(--hero-queue-w));
+  }
+
+  /* Below mode reserves a scrollable band beneath the cover. The pure layout
+     helper compares this square against side mode before selecting a marker. */
+  .dial-hero[data-queue-layout="below"] {
+    --hero-art-size: min(
+      calc(100dvh - var(--shell-h, 0px) - var(--hero-queue-h)),
+      calc(100vw - 300px)
+    );
+  }
+  .dial-hero[data-queue-layout="below"] .dial-hero__artwrap {
+    width: var(--hero-art-size);
+  }
+  .dial-hero[data-queue-layout="below"] .dial-hero__setpanel {
+    position: fixed;
+    left: 0;
+    top: var(--hero-art-size);
+    width: var(--hero-art-size);
+    height: var(--hero-queue-h);
+    max-height: var(--hero-queue-h);
+  }
+}
+
+@media (orientation: landscape) and (min-width: 1100px) {
+  .dial-hero[data-queue-layout="side"] {
+    --hero-art-size: min(
+      calc(100dvh - var(--shell-h, 0px)),
+      calc(100vw - var(--dial-col-w) - var(--hero-queue-w))
+    );
+  }
+  .dial-hero[data-queue-layout="below"] {
+    --hero-art-size: min(
+      calc(100dvh - var(--shell-h, 0px) - var(--hero-queue-h)),
+      calc(100vw - var(--dial-col-w))
+    );
+  }
+  .dial-root--front:has(.dial-hero[data-queue-layout="below"]) {
+    padding-left: var(--hero-art-size);
+  }
 }
 /* Moon phase — top right of the front-door topbar */
 .dial-topbar--all .dial-topbar__moon-tr {
@@ -6180,6 +6256,10 @@ body * {
     /* No longer at the physical top — safe-area padding not needed. */
     padding-top: 6px;
     padding-bottom: 4px;
+  }
+  .dial-hero__setpanel {
+    order: 3;
+    max-height: min(36dvh, 280px);
   }
 }
 

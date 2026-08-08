@@ -197,6 +197,40 @@ function liveSentence(
 /** Cap on setlist names shown before the "N more" expand affordance. */
 const SETLIST_VISIBLE = 8;
 
+export type DialHeroQueueLayout = "side" | "below";
+
+/**
+ * Pick the arrangement that leaves the largest square for the album art.
+ *
+ * The art region is the part of a landscape viewport reserved for the hero;
+ * the dial column is not allowed to shrink below its readable width.  The
+ * queue dimensions are conservative estimates used only for choosing a mode;
+ * the queue itself remains independently scrollable in either arrangement.
+ */
+export function chooseDialHeroQueueLayout({
+  viewportWidth,
+  viewportHeight,
+  shellHeight,
+  queueWidth = Math.min(360, viewportWidth * 0.3),
+  queueHeight = 220,
+  dialColumnWidth = viewportWidth >= 1100
+    ? Math.min(540, Math.max(380, viewportWidth * 0.32))
+    : 300,
+}: {
+  viewportWidth: number;
+  viewportHeight: number;
+  shellHeight: number;
+  queueWidth?: number;
+  queueHeight?: number;
+  dialColumnWidth?: number;
+}): DialHeroQueueLayout {
+  const availableHeight = Math.max(0, viewportHeight - shellHeight);
+  const artRegionWidth = Math.max(0, viewportWidth - dialColumnWidth);
+  const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
+  const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
+  return sideSquare >= belowSquare ? "side" : "below";
+}
+
 /**
  * Full in-order setlist for Also-On-Air rows: every artist in the station's
  * recent set, in spin order. Two-tone scheme: bright white = in your library
@@ -208,7 +242,7 @@ const SETLIST_VISIBLE = 8;
  * vanish under the click.
  * Long sets collapse behind an "N more" toggle to keep the dial legible.
  */
-function PopCrossingLine({ artists, seedsLower, onAdd }: {
+export function PopCrossingLine({ artists, seedsLower, onAdd }: {
   artists: PopularCrossingArtist[];
   seedsLower: Set<string>;
   onAdd: (name: string) => void;
@@ -224,13 +258,13 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
   const hidden = set.length - visible.length;
 
   const span = (a: PopularCrossingArtist) =>
-    inLib(a) ? (
-      <b key={a.name} className="fdrow__artist fdrow__artist--lib">{a.name}</b>
+      inLib(a) ? (
+      <b key={a.name} className="fdrow__artist fdrow__artist--lib dial-artist--complete">{a.name}</b>
     ) : (
       <button
         key={a.name}
         type="button"
-        className="fdrow__artist fdrow__artist--add"
+        className="fdrow__artist fdrow__artist--add dial-artist--add"
         aria-label={`Add ${a.name} to your artists`}
         onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
       >{a.name}</button>
@@ -248,7 +282,7 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
         <button
           type="button"
           className="fdrow__setmore"
-          aria-expanded={false}
+          aria-expanded={expanded}
           onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
         >{`${hidden} more`}</button>
       )}
@@ -595,7 +629,7 @@ export function SetQueueList({ artists, seedsLower, onAdd, onRemove, progress }:
             <button
               key={`${key}-${index}`}
               type="button"
-              className={`set-queue__artist${inLibrary ? " set-queue__artist--library" : " set-queue__artist--add"}`}
+              className={`set-queue__artist ${inLibrary ? "set-queue__artist--library dial-artist--complete" : "set-queue__artist--add dial-artist--add"}`}
               aria-label={canToggle
                 ? `${inLibrary ? "Remove" : "Add"} ${artist.name} ${inLibrary ? "from" : "to"} your artists`
                 : `${artist.name} is in your library`}
@@ -2045,6 +2079,39 @@ export function DialView() {
   // Whichever control opened the overlay (moon or hero art) gets focus back.
   const artOpenerRef = useRef<HTMLElement | null>(null);
   const [albumArtOpen, setAlbumArtOpen] = useState(false);
+  const [heroQueueLayout, setHeroQueueLayout] = useState<DialHeroQueueLayout>(() =>
+    typeof window === "undefined"
+      ? "side"
+      : chooseDialHeroQueueLayout({
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          shellHeight: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--shell-h")) || 0,
+        }),
+  );
+
+  useLayoutEffect(() => {
+    const updateLayout = () => {
+      const shellHeight = Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
+      ) || 0;
+      setHeroQueueLayout(chooseDialHeroQueueLayout({
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        shellHeight,
+      }));
+    };
+    updateLayout();
+    window.addEventListener("resize", updateLayout);
+    const root = document.querySelector(".dial-root");
+    const observer = root && typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(updateLayout)
+      : null;
+    observer?.observe(root!);
+    return () => {
+      window.removeEventListener("resize", updateLayout);
+      observer?.disconnect();
+    };
+  }, []);
   useEffect(() => {
     if (!albumArtOpen) return;
     // Move focus into the overlay so keyboard users can reach the close button.
@@ -2886,7 +2953,7 @@ export function DialView() {
           opinionated, and time-travel/scrub covers what Recent did. Tapping
           the art (or the moon) opens the fullscreen overlay. */}
       {level === "all" ? (
-        <div className="dial-hero">
+        <div className="dial-hero" data-queue-layout={heroQueueLayout}>
           {renderTopbar()}
           <div className={`dial-hero__artwrap${tunedArtistsOpen ? " dial-hero__artwrap--tuned" : ""}`}>
             {tunedArtistsOpen ? (
@@ -2913,35 +2980,37 @@ export function DialView() {
                     }
                   }}
                 />
-                {/* Queue panel owns time navigation as well as the selected set. */}
-                <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                    <div className="dial-hero__setpanel-head">
-                      <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
-                      <span className="dial-hero__setpanel-title">
-                        {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
-                      </span>
-                      <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
-                    </div>
-                    {setTabs.length > 0 ? (
-                      <TabbedSetPanel
-                        tabs={setTabs}
-                        activeId={activeSetTabId}
-                        allSets={allSets}
-                        seedsLower={seedsLower}
-                        onSelect={setActiveSetTabId}
-                        onClose={closeSetTab}
-                        onScope={openSetTab}
-                        onAdd={addSeed}
-                        onRemove={removeSeed}
-                        onPlay={playSetlist}
-                      />
-                    ) : (
-                      <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
-                    )}
-                </div>
               </>
             )}
           </div>
+          {!tunedArtistsOpen && (
+            /* Queue is a sibling of the art, never an overlay inside it. */
+            <div className="dial-hero__setpanel" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              <div className="dial-hero__setpanel-head">
+                <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
+                <span className="dial-hero__setpanel-title">
+                  {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
+                </span>
+                <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
+              </div>
+              {setTabs.length > 0 ? (
+                <TabbedSetPanel
+                  tabs={setTabs}
+                  activeId={activeSetTabId}
+                  allSets={allSets}
+                  seedsLower={seedsLower}
+                  onSelect={setActiveSetTabId}
+                  onClose={closeSetTab}
+                  onScope={openSetTab}
+                  onAdd={addSeed}
+                  onRemove={removeSeed}
+                  onPlay={playSetlist}
+                />
+              ) : (
+                <p className="dial-hero__setpanel-empty">Choose a crossing to see its full set.</p>
+              )}
+            </div>
+          )}
           {/* Sort toggle moved into the time-travel (filter) strip.
               ＋ Artists button hidden — addArtistsOpen machinery kept. */}
           {zone1Settled && addArtistsOpen && (

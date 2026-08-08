@@ -25,8 +25,8 @@ vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
   });
 });
 
-import { FrontDoorRow } from "../src/components/DialView";
-import type { DialStation, DialShow, DialSpin } from "../src/hooks/useDialData";
+import { FrontDoorRow, PopCrossingLine } from "../src/components/DialView";
+import type { DialStation, DialShow, DialSpin, PopularCrossingArtist } from "../src/hooks/useDialData";
 
 function makeStation(overrides: Partial<DialStation["station"]> = {}): DialStation["station"] {
   return {
@@ -76,6 +76,13 @@ function leadingSentence(container: HTMLElement) {
   const sentence = container.querySelector(".fdrow__t1");
   expect(sentence).not.toBeNull();
   return sentence!;
+}
+
+function popularArtists(n: number) {
+  return Array.from({ length: n }, (_, index) => ({
+    name: `Artist ${index + 1}`,
+    inLibrary: false,
+  }));
 }
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -278,6 +285,63 @@ describe("narrow-screen byline readability", () => {
     const artistBolds = container.querySelectorAll(".fdrow__t1 b.fdrow__artist");
     expect(artistBolds.length).toBeGreaterThanOrEqual(1);
     expect(artistBolds[0].textContent).toBe("The Flaming Lips");
+  });
+
+  it("marks addable popular-crossing artists consistently", () => {
+    const onAdd = vi.fn();
+    const popLine = <PopCrossingLine
+      artists={[{ name: "Artist 1", inLibrary: false } as PopularCrossingArtist]}
+      seedsLower={new Set()}
+      onAdd={onAdd}
+    />;
+    render(
+      <FrontDoorRow
+        ds={makeDialStation()}
+        show={makeShow()}
+        ov={0}
+        isActive={false}
+        isSampling={false}
+        onTuneIn={vi.fn()}
+        popLine={popLine}
+      />,
+    );
+    const addable = screen.getByRole("button", { name: /add artist 1/i });
+    expect(addable.className).toContain("fdrow__artist--add");
+    expect(addable.className).toContain("dial-artist--add");
+    fireEvent.click(addable);
+    expect(onAdd).toHaveBeenCalledWith("Artist 1");
+  });
+
+  it("exposes the active current-set expansion state", () => {
+    const { container } = render(
+      <FrontDoorRow
+        ds={makeDialStation()}
+        show={makeShow({
+          crossings: 1,
+          topArtists: ["Artist 1"],
+          currentTrack: null,
+        })}
+        ov={0}
+        isActive={false}
+        isSampling={false}
+        onTuneIn={vi.fn()}
+        setArtists={popularArtists(10).map((artist) => ({
+          ...artist,
+          popular: false,
+          debut: false,
+          heard: false,
+        }))}
+        seedsLower={new Set()}
+        onAddArtist={vi.fn()}
+      />,
+    );
+
+    const more = screen.getByRole("button", { name: /this set/i });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(more);
+    expect(screen.getByRole("button", { name: /this set/i }).getAttribute("aria-expanded")).toBe("true");
+
+    expect(document.querySelector(".fdrow__also-block")?.textContent).toContain("Artist 10");
   });
 
   it("renders the reason sentence with overflow-wrap support for long unbroken artist names", () => {
