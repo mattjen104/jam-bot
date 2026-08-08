@@ -84,6 +84,7 @@ RUN_SPECS=(
   e2e/fallbackNotice.spec.ts
   e2e/dialHeroQueueGeometry.spec.ts
   e2e/cornerNavTappability.spec.ts
+  e2e/mobileFrontDoor.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------

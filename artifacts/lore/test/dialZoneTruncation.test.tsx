@@ -520,3 +520,55 @@ describe("Zone 3 restBand — pinned stations float above non-pinned (Fix 3)", (
     expect(rows[1].textContent).toContain("lo");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Front-door topbar absence (task: mobile five-row fit)
+// ---------------------------------------------------------------------------
+
+describe("Front-door topbar chrome", () => {
+  it("renders no dial-topbar--all element at the all level", () => {
+    const stations = Array.from({ length: 5 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    // The front door intentionally omits the topbar (renderTopbar returns null
+    // for level === "all"). No .dial-topbar--all element must appear.
+    expect(document.querySelector(".dial-topbar--all")).toBeNull();
+    // And no wordmark or moon chrome inside the dial root.
+    expect(document.querySelector(".dial-topbar__wordmark")).toBeNull();
+    expect(document.querySelector(".dial-topbar__moon-btn")).toBeNull();
+  });
+
+  it("still renders five fdrow elements in the front-door layout", () => {
+    const stations = Array.from({ length: 8 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    // All 8 Zone-1 rows are visible (no truncation at this count).
+    // The important thing: rows exist and there is no topbar consuming space.
+    expect(document.querySelectorAll(".fdrow").length).toBe(8);
+    expect(document.querySelector(".dial-topbar--all")).toBeNull();
+  });
+
+  it("each fdrow carries role=button and tabIndex=0 for keyboard access", () => {
+    const stations = Array.from({ length: 5 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    const rows = document.querySelectorAll<HTMLElement>(".fdrow");
+    expect(rows.length).toBeGreaterThanOrEqual(5);
+    for (const row of rows) {
+      expect(row.getAttribute("role")).toBe("button");
+      expect(row.getAttribute("tabindex")).toBe("0");
+    }
+  });
+});

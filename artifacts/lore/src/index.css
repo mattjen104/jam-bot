@@ -1338,104 +1338,7 @@
   flex-shrink: 0;
 }
 
-/* "All" level topbar — 3-col grid: [logo 1fr] [search auto] [pill 1fr]
-   Equal outer columns keep the LORE wordmark symmetrically balanced;
-   the search sits in a naturally-sized center column and never stretches. */
-.dial-topbar--all {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  grid-template-rows: auto;
-  overflow: hidden;
-  position: relative; /* anchor for bg-wash and avatar-fade */
-  /* Extend into the safe area on phones with a notch/dynamic island so the
-     album art bg-wash reaches the physical top edge of the screen.
-     Compact: the logo row should take minimal vertical space. */
-  padding-top: max(4px, env(safe-area-inset-top, 0px));
-  padding-bottom: 2px;
-}
-
-/* Absolutely-positioned decorations span all columns so they don't
-   consume a grid slot and push the real content out of column order. */
-.dial-topbar--all .dial-topbar__bg-wash,
-.dial-topbar--all .dial-topbar__avatar-fade {
-  grid-column: 1 / -1;
-  grid-row: 1;
-}
-
-/* Wordmark — left column. Dotted underline reads as a clickable link. */
-.dial-topbar--all .dial-topbar__wordmark {
-  grid-column: 1;
-  grid-row: 1;
-  justify-self: start;
-  align-self: center;
-  text-decoration: underline dotted;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 5px;
-}
-
-/* Search — center column, minimized pill, centered until clicked */
-.dial-topbar--all .dial-topbar__search-btn {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: center;
-  justify-self: center;
-}
-
-/* Solo/LP pill — right column, pinned to the right edge */
-.dial-topbar--all .social-mode-bar--topbar {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
-  align-self: center;
-}
-
-/* ── New topbar controls (paste box, ticker) ── */
-
-/* ── Right-side album art wash — fills most of the bar, fades toward the logo ── */
-.dial-topbar__bg-wash {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  /* Stretch toward the LORE wordmark; clipped by overflow:hidden on parent */
-  width: 90%;
-  background-size: cover;
-  background-position: right center;
-  opacity: 0.32;
-  pointer-events: none;
-  z-index: 0;
-  /* Fade: transparent at the far left (near the logo), opaque by ~35% across
-     the element so the art fills most of the bar while melting near the wordmark */
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000000 35%);
-  mask-image: linear-gradient(to right, transparent 0%, #000000 35%);
-}
-
-/* ── Album avatar that dissolves into the Lore wordmark ── */
-.dial-topbar__avatar-fade {
-  display: block;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  overflow: hidden;
-  /* Overlap the right edge into the wordmark so the fade reads as "behind" it */
-  margin-right: -18px;
-  /* Gradient mask: solid on the left, fades to transparent by the time it
-     reaches the Lore text so the wordmark stays fully legible */
-  -webkit-mask-image: linear-gradient(to right, #000000 0%, #000000 35%, transparent 100%);
-  mask-image: linear-gradient(to right, #000000 0%, #000000 35%, transparent 100%);
-  pointer-events: none;
-  z-index: 1;
-  position: relative;
-  /* Softer overall so it reads as "behind" the wordmark */
-  opacity: 0.55;
-}
-.dial-topbar__avatar-fade img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-/* Wordmark sits on top of the fading avatar — "L O R E" spaced caps */
+/* Wordmark — "L O R E" spaced caps, used on Library and Selectors pages */
 .dial-topbar__wordmark {
   position: relative;
   z-index: 2;
@@ -1515,11 +1418,6 @@
   outline: 2px solid hsl(var(--primary));
   outline-offset: -2px;
 }
-/* Topbar inside the hero stays transparent */
-.dial-hero .dial-topbar--all {
-  overflow: visible;
-  background: transparent;
-}
 /* Slim utility row under the art strip: sort toggle + add-artists.
    Opaque + raised so the clipped album art doesn't bleed through. */
 .dial-hero__toolbar {
@@ -1594,33 +1492,9 @@
   }
 }
 
-/* Unstyled button wrapper so the moon glyph is tappable without changing
-   the wordmark's appearance */
-.dial-topbar__moon-btn {
-  appearance: none;
-  border: none;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-  color: inherit;
-  font: inherit;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.dial-topbar__moon-btn:disabled { cursor: default; }
-.dial-topbar__moon-btn:focus-visible {
-  outline: 1px solid hsl(var(--primary));
-  outline-offset: 2px;
-  border-radius: 3px;
-}
-
-/* ── Fullscreen album-art overlay (moon toggle) ──
-   Effect: the moon fades the entire page to opacity 0, leaving only the
-   album art (the same image already loaded behind the LORE logo) scaled
-   horizontally to the window width, centered vertically. The moon stays
-   visible in its topbar spot as the toggle — no close button. */
+/* ── Fullscreen album-art overlay ──
+   Tapping the album art opens a full-bleed overlay of the same image.
+   A close button (✕) dismisses it. */
 .dial-root > * {
   transition: opacity 0.3s ease;
 }
@@ -1635,19 +1509,13 @@
   position: relative;
   z-index: 10000;
 }
-/* Inside the hero, fade everything except the moon glyph: the in-flow art
-   (revealing the overlay's fullscreen copy), the toolbar, the LORE letters,
-   search, and pill. */
+/* Fade the hero art wrap and toolbar when the fullscreen overlay is open. */
 .dial-hero__artwrap,
-.dial-hero__toolbar,
-.dial-topbar--all > *,
-.dial-topbar__letter {
+.dial-hero__toolbar {
   transition: opacity 0.3s ease;
 }
 .dial-root--art-open .dial-hero__artwrap,
-.dial-root--art-open .dial-hero__toolbar,
-.dial-root--art-open .dial-topbar--all > *:not(.dial-topbar__wordmark),
-.dial-root--art-open .dial-topbar__letter {
+.dial-root--art-open .dial-hero__toolbar {
   opacity: 0;
   pointer-events: none;
 }
@@ -1701,61 +1569,7 @@
   outline-offset: 2px;
 }
 
-/* Moon split toggle — the moon glyph doubles as the Solo / Listening Party
-   control: left half = Solo, right half = Listening Party. Two invisible
-   half-buttons overlay the glyph; the glyph tints accent in party mode. */
-.dial-topbar__moon-split {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-.dial-topbar__moon-split--party .dial-topbar__moon-prefix {
-  color: hsl(var(--accent));
-}
-.dial-topbar__moon-half {
-  appearance: none;
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 50%;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.dial-topbar__moon-half--left { left: 0; }
-.dial-topbar__moon-half--right { right: 0; }
-.dial-topbar__moon-half:focus-visible {
-  outline: 1px solid hsl(var(--primary));
-  outline-offset: 1px;
-  border-radius: 2px;
-}
-
-/* Moon-phase glyph that sits to the left of the LORE wordmark */
-.dial-topbar__moon-prefix {
-  display: inline-flex;
-  align-items: center;
-  /* small gap between moon and the L */
-  margin-right: 0.18em;
-}
-/* Size the SVG to match the font's cap-height (≈0.72em) */
-.dial-topbar__moon-prefix svg.moon-glyph {
-  width: 0.72em;
-  height: 0.72em;
-  /* sink the circle to sit on the cap baseline rather than the full em-box */
-  vertical-align: -0.1em;
-}
-
-/* Wordmark letters — Signifier (Klim) Regular, logo only */
-.dial-topbar__letter {
-  font-family: var(--lore-font-wordmark);
-  font-weight: 400;
-  font-size: 0.9em;
-  line-height: 1;
-  text-transform: none;
-  letter-spacing: 0.04em;
-}
+/* Wordmark used in Library / Selectors pages — typography only. */
 
 /* ── Moon SVG internals ── */
 .moon-glyph {
@@ -5880,10 +5694,6 @@ body * {
 .slim-nav__btn {
   font-size: 17px !important;
 }
-/* Grayscale brand: wordmark in the dial-sentence gray, left-justified. */
-.dial-topbar__letter {
-  color: hsl(var(--foreground) / 0.85);
-}
 /* Wordmark (all pages) + its dotted underline match the same gray. */
 .dial-topbar__wordmark {
   color: hsl(var(--foreground) / 0.85);
@@ -6256,35 +6066,30 @@ body * {
     padding-left: var(--hero-art-size);
   }
 }
-/* Moon phase — top right of the front-door topbar */
-.dial-topbar--all .dial-topbar__moon-tr {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
-  align-self: center;
-  z-index: 2;
-  display: inline-flex;
-  padding-right: 4px;
-  color: #fff;
-}
 
-/* ── Mobile portrait front door: album art at the very top of the screen;
-   the Lore wordmark + moon bar moves below the album cover. ── */
+/* ── Mobile portrait front door: album art stacked above the set queue. ── */
 @media (orientation: portrait) {
   .dial-hero {
     display: flex;
     flex-direction: column;
   }
   .dial-hero__artwrap { order: 1; }
-  .dial-hero .dial-topbar--all {
-    order: 2;
-    /* No longer at the physical top — safe-area padding not needed. */
-    padding-top: 6px;
-    padding-bottom: 4px;
-  }
   .dial-hero__setpanel {
     order: 3;
     max-height: min(36dvh, 280px);
+  }
+}
+
+/* ── Portrait front-door art height budget for phones ─────────────────────
+   At full-width 1:1 the art consumes the entire short dimension of an
+   iPhone SE (375×667), leaving no room for five crossing rows.  Cap the
+   art wrap height so the rows remain visible without scrolling.
+   35 dvh ≈ 233 px on a 667 px phone; 295 px on an 844 px phone.
+   Landscape and tablets (>600 px wide) are unaffected. ── */
+@media (orientation: portrait) and (max-width: 600px) {
+  .dial-root--front .dial-hero__artwrap {
+    max-height: min(100vw, 35dvh);
+    overflow: hidden;
   }
 }
 
