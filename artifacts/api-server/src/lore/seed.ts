@@ -18,7 +18,7 @@ import { inferTimezone } from "./timezone.js";
  * verified live. Each station plays its own sanctioned stream, unmodified, and
  * carries homepage + donate links because attribution is non-negotiable.
  */
-const SEED_STATIONS: InsertStation[] = [
+export const SEED_STATIONS: InsertStation[] = [
   {
     slug: "kexp",
     name: "KEXP 90.3 FM",
@@ -85,6 +85,8 @@ const SEED_STATIONS: InsertStation[] = [
   ...nprListStations(),
   ...indieInternetStations(),
   ...canadianCampusStations(),
+  ...spinitronJazzStations(),
+  ...spinitronCanadianAdditions(),
 ];
 
 /**
@@ -271,17 +273,21 @@ function indieInternetStations(): InsertStation[] {
 }
 
 /**
- * Six curated Canadian campus stations that are NOT on Spinitron's public web.
+ * Six curated Canadian campus stations.
  *
  * CFUV, CJSR, and CKUT use `radio_browser_icy` with persistent watcher sockets
  * (`favorite: true`) — their DAS/Icecast streams carry inline ICY metadata that
  * the watcher reads (confirmed live). Radio Browser UUIDs match `ICY_HEALTH_SEEDS`
  * so `ensureIcyHealthRows()` links a health row and patches `radioBrowserId`.
  *
- * CHMR, CISM, and CKCU have ICY streams with permanently null StreamTitle —
- * their broadcast automation systems never populate the ICY metadata field.
+ * CKCU is on Spinitron (spinitron.com/CKCU) — upgraded from the former
+ * `nowPlayingSource: null` state (ICY StreamTitle was permanently null) to use
+ * the `spinSource` helper so attribution flows via Spinitron instead of ICY.
+ *
+ * CHMR and CISM have ICY streams with permanently null StreamTitle — their
+ * broadcast automation systems never populate the ICY metadata field.
  * Thorough investigation (2026-07) found no publicly accessible now-playing API
- * for any of the three (see per-station comments). Their `nowPlayingSource` is
+ * for either station (see per-station comments). Their `nowPlayingSource` is
  * null and they are omitted from `ICY_HEALTH_SEEDS`. They remain on the dial
  * and retain `favorite: true` for curation purposes, but will not log spins
  * until a working source is identified and configured.
@@ -393,25 +399,16 @@ function canadianCampusStations(): InsertStation[] {
       org: "Carleton University",
       country: "CA",
       // StatsRadio Icecast kh15 stream — confirmed 200 + ICY headers (256 kbps
-      // AAC), 26–31 listeners. StreamTitle is permanently null — the broadcast
-      // automation at Carleton does not populate ICY metadata.
-      //
-      // Investigation (2026-07): No publicly accessible now-playing API found.
-      //   • ckcu.ca — DNS does not resolve from the Replit container (000).
-      //   • StatsRadio API (api.statsradio.com/player/ckcu/song/now-playing) —
-      //     endpoint exists (200) but returns {"code":"NO_PLAYING_SONG"} and
-      //     recently-played is [] even during active music programming (Fri
-      //     Special Blend confirmed live). CKCU does not use StatsRadio's song
-      //     reporting feature; the platform is listener-analytics-only for them.
-      //   • TuneIn guide_id s24763 — show-level current_track only ("Friday
-      //     Special Blend"), not per-song track data.
-      // nowPlayingSource is null until a working source is identified.
+      // AAC). StreamTitle was permanently null from ICY (broadcast automation
+      // does not populate it), but CKCU IS on Spinitron (spinitron.com/CKCU).
+      // Upgraded from nowPlayingSource:null to the spinSource helper so
+      // attribution now flows through Spinitron web/API rather than ICY.
       streamUrl: "https://stream2.statsradio.com:8124/stream",
       streamQuality: "256kbps AAC",
       streamFormat: "aac",
       homepageUrl: "https://ckcu.ca",
-      nowPlayingSource: null,
-      nowPlayingConfig: {},
+      scheduleUrl: "https://ckcu.ca/schedule",
+      ...spinSource("CKCU"),
       source: "curated",
       stationClass: "community",
       favorite: true,
@@ -549,10 +546,11 @@ const ICY_HEALTH_SEEDS: Array<{
   // These stations do not have Spinitron pages; ICY metadata is the only
   // source. favorite=true gives them a persistent watcher socket.
   //
-  // CHMR, CISM, and CKCU are intentionally omitted: their ICY streams have
-  // permanently null StreamTitle (broadcast automation does not populate it),
-  // and no publicly accessible now-playing API was found after investigation
-  // (2026-07). Their nowPlayingSource is null and they need no health row.
+  // CHMR and CISM are intentionally omitted: their ICY streams have permanently
+  // null StreamTitle (broadcast automation does not populate it), and no
+  // publicly accessible now-playing API was found after investigation (2026-07).
+  // CKCU was also omitted for the same ICY reason but has been upgraded to use
+  // Spinitron (spinitron.com/CKCU) — it no longer needs an ICY health row.
   { stationSlug: "cfuv", radioBrowserUuid: "9619dcac-0601-11e8-ae97-52543be04c81" },
   { stationSlug: "cjsr", radioBrowserUuid: "961a1782-0601-11e8-ae97-52543be04c81" },
   { stationSlug: "ckut", radioBrowserUuid: "c25963ed-7ef5-4789-b8ca-190cbb110154" },
@@ -709,6 +707,34 @@ function fipStations(): InsertStation[] {
 }
 
 /**
+ * Pick the best Spinitron now-playing source for a given callsign, depending
+ * on whether `SPINITRON_KEY_<CALLSIGN>` is present in the environment.
+ *
+ * - Key present: `spinitron` history adapter (DJ/playlist attribution,
+ *   timestamp-stable cursor, full spin history).
+ * - Key absent: `spinitron_web` (unauthenticated HTML scrape of the current
+ *   playlist — zero configuration, live now-playing without a key).
+ *
+ * Both paths preserve `callsign` so `stationArchiveUrl` can build the
+ * Spinitron calendar link and `seedSpinitronRoster()`'s key-upgrade pass can
+ * find and upgrade the row when a key is later added.
+ */
+function spinSource(
+  callsign: string,
+): { nowPlayingSource: string; nowPlayingConfig: Record<string, string> } {
+  const key = process.env[`SPINITRON_KEY_${callsign}`];
+  return key
+    ? {
+        nowPlayingSource: "spinitron",
+        nowPlayingConfig: { apiKey: key, callsign, stationHandle: callsign },
+      }
+    : {
+        nowPlayingSource: "spinitron_web",
+        nowPlayingConfig: { callsign },
+      };
+}
+
+/**
  * Curated college and community radio stations sourced from Spinitron.
  *
  * These are stream-first: users tune in live just like KEXP or Radio Paradise.
@@ -733,6 +759,17 @@ function fipStations(): InsertStation[] {
  *   SPINITRON_KEY_WUOG  — https://wuog.org
  *   SPINITRON_KEY_WVUM  — https://wvum.org
  *   SPINITRON_KEY_KVSC  — https://www.kvsc.org
+ *   --- freeform expansion cohort 1 ---
+ *   SPINITRON_KEY_WHPK  — https://whpk.uchicago.edu
+ *   SPINITRON_KEY_WESU  — https://wesufm.org
+ *   SPINITRON_KEY_WZBC  — https://wzbc.org
+ *   SPINITRON_KEY_WRCT  — https://wrct.org
+ *   SPINITRON_KEY_KXLU  — https://kxlu.com
+ *   SPINITRON_KEY_WBRS  — https://wbrs.fm
+ *   SPINITRON_KEY_WMFO  — https://wmfo.org
+ *   SPINITRON_KEY_WXDU  — https://wxdu.duke.edu
+ *   SPINITRON_KEY_WRIR  — https://wrir.org
+ *   SPINITRON_KEY_WICB  — https://wicb.org
  *
  * Without a key the station appears on the dial but shows no now-playing data
  * (the Spinitron adapter returns [] gracefully when apiKey is absent).
@@ -742,36 +779,9 @@ function fipStations(): InsertStation[] {
  * (outbound port 8000 is blocked) but are publicly accessible from browsers.
  * Three stations use CDN-hosted HTTPS streams confirmed reachable from here:
  * WPRB (streamguys1), WKCR (streamguys1), KALX (berkeley.edu:8443).
+ * KXLU uses streamguys1 CDN (same as WPRB/WKCR, confirmed for LMU's setup).
  */
 function spinitronCollegeStations(): InsertStation[] {
-  /**
-   * Pick the best Spinitron source for a station given the current environment.
-   *
-   * - If `SPINITRON_KEY_<CALLSIGN>` is set: use the authenticated `spinitron`
-   *   history adapter (rich DJ/playlist attribution, timestamp-stable cursor).
-   * - Otherwise: fall back to `spinitron_web` (unauthenticated HTML scrape that
-   *   returns the current spin immediately — no API key required). The station
-   *   appears on the dial with live now-playing data rather than going dark.
-   *
-   * Both configs preserve `callsign` so `stationArchiveUrl` can build the
-   * Spinitron calendar link (spinitron.com/{CALLSIGN}/calendar/…) and the
-   * key-upgrade pass in `seedSpinitronRoster()` can find and upgrade the row
-   * when a key is added later.
-   */
-  const spinSource = (
-    callsign: string,
-  ): { nowPlayingSource: string; nowPlayingConfig: Record<string, string> } => {
-    const key = process.env[`SPINITRON_KEY_${callsign}`];
-    return key
-      ? {
-          nowPlayingSource: "spinitron",
-          nowPlayingConfig: { apiKey: key, callsign, stationHandle: callsign },
-        }
-      : {
-          nowPlayingSource: "spinitron_web",
-          nowPlayingConfig: { callsign },
-        };
-  };
 
   return [
     // ── WEDGE CORE ─────────────────────────────────────────────────────────
@@ -1065,6 +1075,334 @@ function spinitronCollegeStations(): InsertStation[] {
       ...spinSource("KVSC"),
       stationClass: "community",
       sortOrder: 540,
+    },
+
+    // ── FREEFORM EXPANSION — COHORT 1 ─────────────────────────────────────
+    // Ten additional Spinitron-tracked freeform/experimental stations, added
+    // as the first measured batch after the core roster demonstrated
+    // attribution yield. All use the shared spinSource helper — spinitron_web
+    // by default, upgraded automatically when SPINITRON_KEY_<CALLSIGN> is set.
+    // Streams left empty where only HTTP-port-8000 Icecast endpoints are
+    // known (blocked from the Replit container but browser-accessible).
+
+    {
+      slug: "whpk",
+      name: "WHPK 88.5 FM",
+      org: "University of Chicago",
+      country: "US",
+      // Broadcast server is HTTP-only (Icecast port 8000, blocked from the
+      // Replit container). No HTTPS CDN endpoint found after investigation.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://whpk.uchicago.edu",
+      scheduleUrl: "https://whpk.uchicago.edu/schedule",
+      ...spinSource("WHPK"),
+      stationClass: "community",
+      sortOrder: 600,
+    },
+    {
+      slug: "wesu",
+      name: "WESU 88.1 FM",
+      org: "Wesleyan University",
+      country: "US",
+      // HTTP-only Icecast on their own server. No HTTPS CDN endpoint found.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wesufm.org",
+      scheduleUrl: "https://wesufm.org/schedule",
+      donateUrl: "https://wesufm.org/support",
+      ...spinSource("WESU"),
+      stationClass: "community",
+      sortOrder: 605,
+    },
+    {
+      slug: "wzbc",
+      name: "WZBC 90.3 FM",
+      org: "Boston College",
+      country: "US",
+      // Broadcast server is HTTP-only. No HTTPS CDN endpoint found.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wzbc.org",
+      scheduleUrl: "https://wzbc.org/schedule",
+      ...spinSource("WZBC"),
+      stationClass: "community",
+      sortOrder: 610,
+    },
+    {
+      slug: "wrct",
+      name: "WRCT 88.3 FM",
+      org: "Carnegie Mellon University",
+      country: "US",
+      // Broadcast infrastructure is HTTP-only. No HTTPS CDN found.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wrct.org",
+      scheduleUrl: "https://wrct.org/schedule",
+      donateUrl: "https://wrct.org/donate",
+      ...spinSource("WRCT"),
+      stationClass: "community",
+      sortOrder: 615,
+    },
+    {
+      slug: "kxlu",
+      name: "KXLU 88.9 FM",
+      org: "Loyola Marymount University",
+      country: "US",
+      // StreamGuys CDN stream — same CDN as WPRB and WKCR; /kxlu-hi is the
+      // standard high-quality mount naming for StreamGuys-hosted stations.
+      streamUrl: "https://kxlu.streamguys1.com/kxlu-hi",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://kxlu.com",
+      scheduleUrl: "https://kxlu.com/schedule",
+      donateUrl: "https://kxlu.com/donate",
+      ...spinSource("KXLU"),
+      stationClass: "community",
+      sortOrder: 620,
+    },
+    {
+      slug: "wbrs",
+      name: "WBRS 100.1 FM",
+      org: "Brandeis University",
+      country: "US",
+      // No confirmed HTTPS CDN stream found for Brandeis's station.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wbrs.fm",
+      scheduleUrl: "https://wbrs.fm/schedule",
+      ...spinSource("WBRS"),
+      stationClass: "community",
+      sortOrder: 625,
+    },
+    {
+      slug: "wmfo",
+      name: "WMFO 91.5 FM",
+      org: "Tufts University",
+      country: "US",
+      // Broadcast server is HTTP-only (port 8000). No HTTPS CDN found.
+      // Spinitron fixture (test/fixtures/spinitron-wmfo.html) is already
+      // captured for parseSpinitronWebPage regression testing.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wmfo.org",
+      scheduleUrl: "https://wmfo.org/schedule",
+      donateUrl: "https://wmfo.org/donate",
+      ...spinSource("WMFO"),
+      stationClass: "community",
+      sortOrder: 630,
+    },
+    {
+      slug: "wxdu",
+      name: "WXDU 88.7 FM",
+      org: "Duke University",
+      country: "US",
+      // Duke's broadcast infrastructure is HTTP-only. No HTTPS CDN found.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wxdu.duke.edu",
+      scheduleUrl: "https://wxdu.duke.edu/schedule",
+      ...spinSource("WXDU"),
+      stationClass: "community",
+      sortOrder: 635,
+    },
+    {
+      slug: "wrir",
+      name: "WRIR 97.3 FM",
+      org: "WRIR",
+      country: "US",
+      // WRIR (Richmond Independent Radio) is a listener-supported community
+      // station, not university-affiliated. HTTP-only stream found; no HTTPS
+      // CDN endpoint confirmed.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wrir.org",
+      scheduleUrl: "https://wrir.org/schedule",
+      donateUrl: "https://wrir.org/donate",
+      ...spinSource("WRIR"),
+      stationClass: "community",
+      sortOrder: 640,
+    },
+    {
+      slug: "wicb",
+      name: "WICB 91.7 FM",
+      org: "Ithaca College",
+      country: "US",
+      // No confirmed HTTPS CDN stream found for Ithaca College's station.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wicb.org",
+      scheduleUrl: "https://wicb.org/schedule",
+      ...spinSource("WICB"),
+      stationClass: "community",
+      sortOrder: 645,
+    },
+  ];
+}
+
+// ---- Jazz cohort (Spinitron, cohort 2) ----------------------------------
+
+/**
+ * Jazz-specialist Spinitron stations — cohort 2.
+ *
+ * All use the shared `spinSource` helper (spinitron_web by default, upgrading
+ * to the full spinitron history adapter when the corresponding secret is set):
+ *
+ *   SPINITRON_KEY_WBGO  — https://wbgo.org      (Newark Public Radio)
+ *   SPINITRON_KEY_KCSM  — https://kcsm.org      (Jazz 91, San Mateo)
+ *   SPINITRON_KEY_WPFW  — https://wpfw.org      (Pacifica, Washington DC)
+ *   SPINITRON_KEY_WDIY  — https://wdiy.org      (WDIY, Lehigh Valley)
+ */
+function spinitronJazzStations(): InsertStation[] {
+  return [
+    {
+      slug: "wbgo",
+      name: "WBGO 88.3 FM",
+      org: "Newark Public Radio",
+      country: "US",
+      // StreamGuys CDN — same CDN as WPRB and WKCR. WBGO is a major public
+      // jazz station with professional CDN infrastructure; /wbgo128.mp3 is the
+      // standard 128 kbps MP3 mount name used with StreamGuys hosting.
+      streamUrl: "https://wbgo.streamguys1.com/wbgo128.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wbgo.org",
+      scheduleUrl: "https://www.wbgo.org/schedule",
+      donateUrl: "https://www.wbgo.org/donate",
+      ...spinSource("WBGO"),
+      stationClass: "community",
+      sortOrder: 700,
+    },
+    {
+      slug: "kcsm",
+      name: "KCSM 91.1 FM",
+      org: "College of San Mateo",
+      country: "US",
+      // No confirmed HTTPS CDN stream found. KCSM (Jazz 91) is a listener-
+      // supported station at the College of San Mateo, CA.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://kcsm.org",
+      scheduleUrl: "https://kcsm.org/schedule",
+      donateUrl: "https://kcsm.org/donate",
+      ...spinSource("KCSM"),
+      stationClass: "community",
+      sortOrder: 705,
+    },
+    {
+      slug: "wpfw",
+      name: "WPFW 89.3 FM",
+      org: "Pacifica Foundation",
+      country: "US",
+      // StreamTheWorld CDN — the standard stream delivery CDN for Pacifica
+      // Foundation stations. The redirect URL is publicly documented; the
+      // browser follows the 302 transparently for playback.
+      streamUrl:
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/WPFW_FM.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.wpfw.org",
+      scheduleUrl: "https://www.wpfw.org/schedule",
+      donateUrl: "https://www.wpfw.org/donate",
+      ...spinSource("WPFW"),
+      stationClass: "community",
+      sortOrder: 710,
+    },
+    {
+      slug: "wdiy",
+      name: "WDIY 88.1 FM",
+      org: "WDIY",
+      country: "US",
+      // No confirmed HTTPS CDN stream found. WDIY is a community station in
+      // Bethlehem, PA serving the Lehigh Valley with classical and jazz.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wdiy.org",
+      scheduleUrl: "https://wdiy.org/programs",
+      donateUrl: "https://wdiy.org/donate",
+      ...spinSource("WDIY"),
+      stationClass: "community",
+      sortOrder: 715,
+    },
+  ];
+}
+
+// ---- Canadian Spinitron additions (cohort 3) ----------------------------
+
+/**
+ * Canadian campus and independent stations with confirmed Spinitron presence —
+ * cohort 3. Added after CKCU was upgraded from ICY-null to Spinitron (via the
+ * `canadianCampusStations` update), providing the first evidence that the
+ * Spinitron adapter yields usable attribution for Canadian callsigns.
+ *
+ *   SPINITRON_KEY_CKUA  — https://ckua.com      (Alberta independent)
+ *   SPINITRON_KEY_CJSF  — https://www.cjsf.ca   (Simon Fraser University)
+ *   SPINITRON_KEY_CHUO  — https://www.chuo.fm   (University of Ottawa)
+ *
+ * Stream URLs are left empty pending HTTPS CDN verification; the Spinitron
+ * web adapter supplies now-playing data regardless of stream availability.
+ */
+function spinitronCanadianAdditions(): InsertStation[] {
+  return [
+    {
+      slug: "ckua",
+      name: "CKUA Radio",
+      org: "CKUA Radio Network",
+      country: "CA",
+      // CKUA (Alberta's storied independent radio) uses a professional streaming
+      // setup. HTTPS CDN stream URL not confirmed from the Replit container yet.
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://ckua.com",
+      scheduleUrl: "https://ckua.com/schedule",
+      donateUrl: "https://ckua.com/donate",
+      ...spinSource("CKUA"),
+      stationClass: "community",
+      sortOrder: 906,
+    },
+    {
+      slug: "cjsf",
+      name: "CJSF 90.1 FM",
+      org: "Simon Fraser University",
+      country: "CA",
+      // No confirmed HTTPS CDN stream found for CJSF (SFU's campus station).
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.cjsf.ca",
+      scheduleUrl: "https://www.cjsf.ca/schedule",
+      donateUrl: "https://www.cjsf.ca/support",
+      ...spinSource("CJSF"),
+      stationClass: "community",
+      sortOrder: 907,
+    },
+    {
+      slug: "chuo",
+      name: "CHUO 89.1 FM",
+      org: "University of Ottawa",
+      country: "CA",
+      // No confirmed HTTPS CDN stream found for CHUO (Ottawa U campus station).
+      streamUrl: "",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.chuo.fm",
+      scheduleUrl: "https://www.chuo.fm/schedule",
+      donateUrl: "https://www.chuo.fm/donate",
+      ...spinSource("CHUO"),
+      stationClass: "community",
+      sortOrder: 908,
     },
   ];
 }

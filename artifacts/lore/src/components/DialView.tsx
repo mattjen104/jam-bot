@@ -20,6 +20,7 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { RUMOURS, onArtError } from "../lib/rumours";
+import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
 import { useSocialMode, setSocialEnabled } from "../lib/social";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import {
@@ -2952,10 +2953,24 @@ export function DialView() {
 
   // --- topbar ---
   function renderTopbar() {
-    // The front door intentionally starts with the art/interface itself. The
-    // Lore wordmark and moon used to consume a full row without adding
-    // navigational value; drill-down levels retain their breadcrumb topbar.
-    if (level === "all") return null;
+    // The front door renders a minimal topbar that carries only the moon phase
+    // glyph (decorative, aria-hidden). Drill-down levels show a breadcrumb
+    // topbar. The moon is aria-hidden because it conveys no actionable info.
+    if (level === "all") {
+      // When time-travelling, the moon tracks the scrubbed run's date so it
+      // reflects the night the listener is looking back at, not today.
+      const moonDate =
+        !pastScan.isAtLiveEdge && pastScan.currentRun?.day
+          ? new Date(pastScan.currentRun.day)
+          : undefined;
+      return (
+        <div className="dial-topbar dial-topbar--all">
+          <div className="dial-topbar__moon-tr" aria-hidden="true">
+            <MoonPhaseGlyph date={moonDate} />
+          </div>
+        </div>
+      );
+    }
     if (level === "station" && currentStation) {
       return (
         <div className="dial-topbar">

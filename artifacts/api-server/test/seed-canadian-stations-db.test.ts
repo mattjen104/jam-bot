@@ -8,20 +8,22 @@ import {
 import { seedStations, ensureIcyHealthRows } from "../src/lore/seed.js";
 
 /**
- * Integration test: six curated Canadian campus stations that were previously
- * configured as `spinitron_web` with callsign-based URLs that return 404.
+ * Integration test: six curated Canadian campus stations.
  *
  * Verifies that after `seedStations()` (the same call boot makes):
  *  - all six stations exist with source="curated"
  *  - CFUV, CJSR, and CKUT have nowPlayingSource="radio_browser_icy" (confirmed
  *    ICY metadata streams)
- *  - CHMR, CISM, and CKCU have nowPlayingSource=null — no publicly accessible
+ *  - CKCU has nowPlayingSource="spinitron_web" or "spinitron" — upgraded from
+ *    null since CKCU is on Spinitron (spinitron.com/CKCU); ICY StreamTitle was
+ *    permanently null so Spinitron is the working source
+ *  - CHMR and CISM have nowPlayingSource=null — no publicly accessible
  *    now-playing API was found; their automation systems never populate ICY
  *    StreamTitle, so radio_browser_icy would never produce spins
  *  - each station has the correct verified streamUrl
  *  - CFUV, CJSR, CKUT have active radio_browser_stations health rows linked
- *    back to them; CHMR/CISM/CKCU are omitted from ICY_HEALTH_SEEDS and have
- *    no health row
+ *    back to them; CHMR/CISM are omitted from ICY_HEALTH_SEEDS and have no
+ *    health row; CKCU uses Spinitron and also needs no ICY health row
  *  - re-running the seed is idempotent (no duplicate health rows for CFUV/CJSR/CKUT)
  *
  * Runs against the real DB — same canonical data boot uses. Self-skips without
@@ -34,13 +36,19 @@ const SLUGS = ["cfuv", "chmr", "cism", "cjsr", "ckcu", "ckut"] as const;
 const ICY_SLUGS = ["cfuv", "cjsr", "ckut"] as const;
 
 /**
- * Stations whose automation systems never populate ICY StreamTitle.
- * nowPlayingSource is null until a working source is identified.
+ * Stations whose automation systems never populate ICY StreamTitle and for
+ * which no publicly accessible now-playing API was found (2026-07).
  *  - CHMR: Centova Cast at 192.99.14.49 requires auth; no public API found.
  *  - CISM: ustream.ca Icecast (port 8000 required); admin panel auth-gated.
- *  - CKCU: StatsRadio API returns NO_PLAYING_SONG; not using song reporting.
  */
-const NO_NP_SLUGS = ["chmr", "cism", "ckcu"] as const;
+const NO_NP_SLUGS = ["chmr", "cism"] as const;
+
+/**
+ * Stations upgraded to Spinitron after ICY investigation showed null StreamTitle.
+ *  - CKCU: confirmed on spinitron.com/CKCU; now uses spinSource (spinitron_web
+ *    by default, upgrades to spinitron when SPINITRON_KEY_CKCU is set).
+ */
+const SPINITRON_SLUGS = ["ckcu"] as const;
 
 const EXPECTED_STREAM_URLS: Record<string, string> = {
   cfuv: "http://ais-sa1.streamon.fm/7132_64k.aac",
@@ -81,10 +89,14 @@ describe("Canadian campus station seed enrollment", () => {
       expect(row.active).toBe(true);
 
       if ((ICY_SLUGS as readonly string[]).includes(row.slug)) {
-        // These three have confirmed ICY metadata streams.
+        // CFUV, CJSR, CKUT have confirmed ICY metadata streams.
         expect(row.nowPlayingSource).toBe("radio_browser_icy");
+      } else if ((SPINITRON_SLUGS as readonly string[]).includes(row.slug)) {
+        // CKCU is on Spinitron — nowPlayingSource is spinitron_web (or spinitron
+        // when SPINITRON_KEY_CKCU is set).
+        expect(["spinitron_web", "spinitron"]).toContain(row.nowPlayingSource);
       } else {
-        // CHMR, CISM, CKCU — nowPlayingSource=null until a working API is found.
+        // CHMR, CISM — nowPlayingSource=null until a working API is found.
         expect(row.nowPlayingSource).toBeNull();
       }
     }
@@ -120,16 +132,17 @@ describe("Canadian campus station seed enrollment", () => {
         const config = row.nowPlayingConfig as Record<string, unknown>;
         expect(config?.streamUrl).toBe(expected);
       }
-      // CHMR/CISM/CKCU have nowPlayingConfig={} (empty) — no ICY config needed
-      // since nowPlayingSource is null and no adapter is running for them.
+      // CHMR/CISM have nowPlayingConfig={} (empty) — nowPlayingSource is null.
+      // CKCU nowPlayingConfig carries { callsign: "CKCU" } from spinSource.
     }
   });
 
   it("gives CFUV, CJSR, and CKUT active, linked health rows with integer radioBrowserIds", async () => {
     if (!dbAvailable) return;
     // Only ICY stations are enrolled in ICY_HEALTH_SEEDS.
-    // CHMR, CISM, and CKCU are intentionally omitted because their ICY streams
-    // never populate StreamTitle — health rows would produce no spins.
+    // CHMR and CISM are intentionally omitted because their ICY streams never
+    // populate StreamTitle. CKCU was also omitted for the same reason but has
+    // since been upgraded to Spinitron — it uses spinSource, not ICY health rows.
     const rows = await db
       .select()
       .from(stationsTable)
@@ -158,7 +171,7 @@ describe("Canadian campus station seed enrollment", () => {
   it("is idempotent — re-running ensureIcyHealthRows creates no duplicate health rows for ICY stations", async () => {
     if (!dbAvailable) return;
     // Only CFUV, CJSR, and CKUT are enrolled in ICY_HEALTH_SEEDS.
-    // CHMR/CISM/CKCU are omitted (nowPlayingSource=null, no ICY metadata).
+    // CHMR/CISM are omitted (nowPlayingSource=null). CKCU uses Spinitron now.
     const uuids = [
       "9619dcac-0601-11e8-ae97-52543be04c81", // cfuv
       "961a1782-0601-11e8-ae97-52543be04c81", // cjsr
