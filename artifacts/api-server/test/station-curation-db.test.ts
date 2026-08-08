@@ -25,10 +25,17 @@ import {
   spinsTable,
   showsTable,
   radioBrowserStationsTable,
+  loreUsersTable,
+  libraryItemsTable,
+  recordingsTable,
 } from "@workspace/db";
 import { applyStationDiscoveryMigration } from "../src/lore/station-migration.js";
 import { seedStations } from "../src/lore/seed.js";
 import { purgeNonQualifyingStations } from "../src/lore/radio-browser.js";
+import {
+  computePersonalCrossings,
+  _testOnly_clearCrossingsCache,
+} from "../src/routes/me/crossings.js";
 
 const run = randomUUID().slice(0, 8);
 let dbAvailable = false;
@@ -456,5 +463,116 @@ describe("purgeNonQualifyingStations — FK-safe removal in documented order", (
       .from(radioBrowserStationsTable)
       .where(eq(radioBrowserStationsTable.stationId, purgeStationId!));
     expect(rbRows).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. crossingEligible=false — spins still accumulate in crossing scores
+// ---------------------------------------------------------------------------
+
+describe("crossingEligible=false — spins accumulate in computePersonalCrossings", () => {
+  const testMbid = `test-ce-mbid-${run}`;
+  const ceStationSlug = `test-fip-ce-${run}`;
+  let ceStationId: number | undefined;
+  let ceUserId: number | undefined;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+
+    // Insert a recording so that library_items and spins can reference it.
+    await db
+      .insert(recordingsTable)
+      .values({
+        mbid: testMbid,
+        title: "CE False Test Track",
+        artist: "CE False Test Artist",
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+
+    // Create a lore_user to own the library item.
+    const [userRow] = await db
+      .insert(loreUsersTable)
+      .values({ deviceKey: `test-device-ce-${run}` })
+      .returning({ id: loreUsersTable.id });
+    ceUserId = userRow!.id;
+
+    // Add the recording to the user's library (exact MBID match path).
+    await db.insert(libraryItemsTable).values({
+      userId: ceUserId!,
+      mbid: testMbid,
+      provenance: { kind: "keep" as const },
+    });
+
+    // Insert a crossingEligible=false station — not hidden, so spins are
+    // still joined by the crossings query (which only filters hidden=false).
+    const [stRow] = await db
+      .insert(stationsTable)
+      .values({
+        slug: ceStationSlug,
+        name: `FIP CE False ${run}`,
+        streamUrl: "https://example.invalid/ce-false",
+        stationClass: "curated",
+        nowPlayingSource: "fip",
+        crossingEligible: false,
+        active: true,
+        hidden: false,
+      })
+      .returning({ id: stationsTable.id });
+    ceStationId = stRow!.id;
+
+    // Insert a resolved spin (mbid set) within the 24-hour crossing window.
+    await db.insert(spinsTable).values({
+      stationId: ceStationId!,
+      mbid: testMbid,
+      confidence: "recording_id" as const,
+      rawArtist: "CE False Test Artist",
+      rawTitle: "CE False Test Track",
+      playedAt: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    // FK-safe cleanup: spins → library_items → stations → lore_users → recordings.
+    if (ceStationId) {
+      await db.delete(spinsTable).where(eq(spinsTable.stationId, ceStationId));
+      await db.delete(stationsTable).where(eq(stationsTable.id, ceStationId));
+    }
+    if (ceUserId) {
+      await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, ceUserId));
+      await db.delete(loreUsersTable).where(eq(loreUsersTable.id, ceUserId));
+    }
+    await db.delete(recordingsTable).where(eq(recordingsTable.mbid, testMbid));
+  });
+
+  it("crossingEligible=false station is absent from the crossing-eligible station list", async (ctx) => {
+    skip(ctx);
+    // Mirrors the filter used by GET /api/stations (crossingEligible=true).
+    const rows = await db
+      .select({ slug: stationsTable.slug })
+      .from(stationsTable)
+      .where(
+        sql`active = true AND hidden = false AND crossing_eligible = true AND slug = ${ceStationSlug}`,
+      );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("spin against crossingEligible=false station IS counted by computePersonalCrossings", async (ctx) => {
+    skip(ctx);
+    if (!ceUserId) return ctx.skip();
+
+    // Ensure no stale cache from a previous run taints the result.
+    await _testOnly_clearCrossingsCache(ceUserId);
+
+    const crossings = await computePersonalCrossings(ceUserId);
+
+    // The station's slug must appear in the results with at least one crossing.
+    const entry = crossings.find((r) => r.stationSlug === ceStationSlug);
+    expect(entry).toBeDefined();
+    // crossings covers the 24 h window; the spin was 1 hour ago so it counts.
+    expect(
+      (entry?.crossings ?? 0) + (entry?.lifetimeCrossings ?? 0),
+    ).toBeGreaterThan(0);
   });
 });
