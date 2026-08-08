@@ -10,7 +10,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { Download, Play, Search, X } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
-import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
+import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
@@ -38,6 +38,9 @@ import {
   type SetDaypart,
 } from "./dialViewHelpers";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { useDialSurface } from "../dial/useDialSurface";
+import { DialContextRegion } from "../dial/DialContextRegion";
+import { contextStationSlug } from "../dial/dialContext";
 import { heroArtCandidates } from "../lib/artRes";
 import { runDate, clockTime } from "../lib/format";
 
@@ -2504,6 +2507,66 @@ export function DialView() {
     startPastReplay(0);
   }, [currentRunIdForEffect, fineIdxForEffect, fineCrossings.length, startPastReplay]);
 
+  // ── Two-mode surface state machine (dial ↔ context) ─────────────────────
+  // The surface owns mode explicitly — no component may infer it from
+  // playback state. Context is a serializable stack encoded in the URL.
+  const surface = useDialSurface();
+
+  // URL restore of a past temporal position: once the run list is available,
+  // land the past-scan on the encoded run WITHOUT starting playback (the
+  // coarse-land ref is pre-seeded so the replay auto-start effect skips it).
+  const pendingRestoreRun = useRef<number | null>(
+    surface.restored && surface.ctx?.temporal.kind === "past" ? surface.ctx.temporal.runId : null,
+  );
+  useEffect(() => {
+    const runId = pendingRestoreRun.current;
+    if (runId == null || recentRuns.length === 0) return;
+    pendingRestoreRun.current = null;
+    const idx = recentRuns.findIndex((run) => run.runId === runId);
+    if (idx >= 0) {
+      coarseLandRunRef.current = runId; // suppress replay auto-start on restore
+      pastScan.jumpToRunByIndex(idx);
+    }
+  }, [recentRuns, pastScan]);
+
+  // Keep the temporal modifier on the station frame in sync with the scrub
+  // position. Scrub moves update the ctx URL via replace (never push) —
+  // that's owned by useDialSurface. Guarded while a URL restore is pending
+  // so the encoded past position isn't clobbered with "live".
+  useEffect(() => {
+    if (surface.mode !== "context") return;
+    if (pendingRestoreRun.current != null) return;
+    surface.temporal(
+      pastScan.isAtLiveEdge || !pastScan.currentRun
+        ? { kind: "live" }
+        : { kind: "past", runId: pastScan.currentRun.runId },
+    );
+  }, [surface, pastScan.isAtLiveEdge, pastScan.currentRun]);
+
+  // Deliberate tune commit — the ONLY entry into context mode from the list.
+  // First click on a station row (or a scan landing) tunes and plays;
+  // picking a different station is a deliberate reset of stack + temporal.
+  const commitTune = useCallback((slug: string, label?: string) => {
+    surface.tune(slug, label);
+    pastScan.reset(); // tune / station change resets the temporal modifier
+  }, [surface, pastScan]);
+
+  // Zone-2 ghost stations arrive as GhostStation (a spin-evidence shape), not
+  // a full Station record; adapt the playable fields so a ghost-row click can
+  // tune through the same commit-and-play path as Zone 1/3 rows.
+  const ghostToStation = useCallback((g: GhostStation): Station => ({
+    id: g.stationId,
+    slug: g.slug,
+    name: g.name,
+    streamUrl: g.streamUrl,
+    streamFormat: g.streamFormat,
+    mode: g.mode,
+    attribution: g.attribution,
+    mayHaveAds: false,
+    votes: 0,
+    clickcount: 0,
+  } as Station), []);
+
   const handleTtModeChange = useCallback((m: TtMode) => {
     setTtMode(m);
     pastScan.reset(); // clear past-scan on any mode change
@@ -2758,11 +2821,24 @@ export function DialView() {
     const idx = scan.samplingIdx;
     if (idx != null && withReason[idx]) {
       scan.land();
-      void radio.toggle(withReason[idx].ds.station);
+      const station = withReason[idx].ds.station;
+      // A scan landing counts as the committing click — enter context mode.
+      commitTune(station.slug, station.name);
+      void radio.toggle(station);
     } else {
       scan.land();
     }
-  }, [scan, withReason, radio]);
+  }, [scan, withReason, radio, commitTune]);
+
+  // Shared tune handler for Zone-2 ghost rows (no qualifying replay run):
+  // like any station row, the first click commits to context mode and plays.
+  const tuneGhost = useCallback((g: GhostStation) => {
+    scan.stop();
+    commitTune(g.slug, g.name);
+    if (radio.station?.slug !== g.slug || radio.status !== "playing") {
+      void radio.toggle(ghostToStation(g));
+    }
+  }, [scan, commitTune, radio, ghostToStation]);
 
   // --- topbar helpers ---
 
@@ -2849,6 +2925,51 @@ export function DialView() {
   // determine if Radio tab is active
   const isRadioActive = location === "/" || location === "" || location.startsWith("/?");
 
+  // ── Context mode: the former station-list area becomes the context region.
+  // Mode comes from the surface state machine, never from playback state.
+  const inContext = surface.mode === "context";
+  const ctxSlug = contextStationSlug(surface.state);
+  const ctxRow = ctxSlug ? withReason.find((row) => row.ds.station.slug === ctxSlug)
+    ?? sortedRows.find((row) => row.ds.station.slug === ctxSlug)
+    ?? null : null;
+  const ctxStationName = ctxRow?.ds.station.name
+    ?? stations.find((ds) => ds.station.slug === ctxSlug)?.station.name
+    ?? null;
+  const contextRegionJsx = inContext && surface.ctx && (
+    <DialContextRegion
+      ctx={surface.ctx}
+      frameLabel={(frame) =>
+        frame.kind === "station" && frame.id === ctxSlug
+          ? (ctxStationName ?? frame.label ?? frame.id)
+          : undefined}
+      onBack={surface.back}
+      onDial={() => {
+        // Return to station selection WITHOUT stopping audio — the player is
+        // never touched here. Leaving context resets the temporal modifier.
+        surface.dial();
+        pastScan.reset();
+      }}
+      onReturnToLive={pastScan.reset}
+      summary={ctxRow ? (
+        <FrontDoorRow
+          ds={ctxRow.ds}
+          show={ctxRow.show}
+          ov={ctxRow.ds.lifetimeCrossings}
+          isActive={ctxRow.ds.station.slug === radio.station?.slug}
+          isSampling={false}
+          onTuneIn={() => { /* already tuned — navigation never retunes */ }}
+          displayMode={crossingSourceMode}
+          artworkUrl={activeArtworkUrl}
+        />
+      ) : ctxStationName ? (
+        <p className="dial-context-region__offline">{ctxStationName}</p>
+      ) : null}
+    >
+      {/* Rail content lands in the next task — this space is reserved. */}
+      <div className="dial-context-region__placeholder" aria-hidden="true" />
+    </DialContextRegion>
+  );
+
   // ── Also-on-air section (former tab, now folded into ON AIR × YOUR ARTISTS).
   // Band order follows the triangle: ▲ renders DJ band then rest band below the
   // crossing rows; ▼ renders rest band (rarest-first) then DJ band above them.
@@ -2867,7 +2988,10 @@ export function DialView() {
           onTuneIn={() => {
             scan.stop();
             openLiveQueue(row);
-            void radio.toggle(row.ds.station);
+            commitTune(row.ds.station.slug, row.ds.station.name);
+            if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
+              void radio.toggle(row.ds.station);
+            }
           }}
           displayMode={crossingSourceMode}
           presence={presenceMap.get(row.ds.station.id)}
@@ -2894,7 +3018,10 @@ export function DialView() {
           onTuneIn={() => {
             scan.stop();
             openLiveQueue(row);
-            void radio.toggle(row.ds.station);
+            commitTune(row.ds.station.slug, row.ds.station.name);
+            if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
+              void radio.toggle(row.ds.station);
+            }
           }}
             displayMode={crossingSourceMode}
             presence={presenceMap.get(row.ds.station.id)}
@@ -3110,8 +3237,12 @@ export function DialView() {
                 subsection below. */}
             {zone1Settled && (
               <>
+                {/* Context mode: the former list space belongs to the context
+                    region. Zone 2/3 discovery bands are hidden below. */}
+                {contextRegionJsx}
+
                 {/* PopScrubber only in live mode (day/top have no live sort). */}
-                {effectiveTtMode === "live" && scrubItems.length > 6 && (
+                {!inContext && effectiveTtMode === "live" && scrubItems.length > 6 && (
                   <PopScrubber items={scrubItems} onScrub={handleScrub} />
                 )}
 
@@ -3229,9 +3360,9 @@ export function DialView() {
                 {effectiveTtMode === "live" && (
                   <>
                     {/* Flipped sort (▼): the also-on-air bands (deep cuts) lead. */}
-                    {!popSortDesc && alsoSection}
+                    {!inContext && !popSortDesc && alsoSection}
                     {/* Zone 1: crossing rows */}
-                    {withReason.length > 0 && (
+                    {!inContext && withReason.length > 0 && (
                       <>
                         <>
                             {/* All live crossing rows are visible by default. */}
@@ -3248,7 +3379,10 @@ export function DialView() {
                                       onTuneIn={() => {
                                         scan.stop();
                                         openLiveQueue(row, popMap.get(row.ds.station.slug));
-                                        void radio.toggle(row.ds.station);
+                                        commitTune(row.ds.station.slug, row.ds.station.name);
+                                        if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
+                                          void radio.toggle(row.ds.station);
+                                        }
                                       }}
                                       displayMode={crossingSourceMode}
                                       presence={presenceMap.get(row.ds.station.id)}
@@ -3268,7 +3402,7 @@ export function DialView() {
                         Suppressed while liveLoading is true: crossings depend on the
                         live-station list, so until that poll completes sortedRows is
                         empty and withReason is vacuously 0 even if crossings exist. */}
-                    {withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
+                    {!inContext && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
                       <div className="z1-placeholder z1-placeholder--no-cross">
                         <div className="z1-placeholder__body">
                           <p className="z1-placeholder__pitch">
@@ -3280,7 +3414,7 @@ export function DialView() {
 
                     {/* No crossing rows, no library or seeds — full onboarding placeholder.
                         The prominent CTA lives inside Zone1Placeholder for this state. */}
-                    {withReason.length === 0 &&
+                    {!inContext && withReason.length === 0 &&
                       !hasLibrary &&
                       !hasSeeds &&
                       visibleSeeds.length === 0 &&
@@ -3300,8 +3434,9 @@ export function DialView() {
 
                     {/* Zone 2: Ghost stations — subsection within the primary tab.
                         Rendered after Zone 1 content as "Missed while you were away".
-                        Shown in live mode and day mode, hidden in top sets mode. */}
-                    {ghost.length > 0 && (
+                        Shown in live mode and day mode, hidden in top sets mode
+                        and in context mode (Zone 2/3 hide once tuned). */}
+                    {!inContext && ghost.length > 0 && (
                       <>
                         <div className="fdzone-lbl-row">
                           {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
@@ -3322,7 +3457,7 @@ export function DialView() {
                                   key={g.slug}
                                   station={g}
                                   isActive={g.slug === radio.station?.slug}
-                                  onTuneIn={() => goStation(g.slug)}
+                                  onTuneIn={() => tuneGhost(g)}
                                 />
                               ))}
                             </div>
@@ -3351,12 +3486,12 @@ export function DialView() {
                     )}
 
                     {/* Default sort (▲): also-on-air bands trail the crossing rows. */}
-                    {popSortDesc && alsoSection}
+                    {!inContext && popSortDesc && alsoSection}
                   </>
                 )}
 
                 {/* ── Past mode: Zone 2 ghost rows (Zone 3 suppressed) ────── */}
-                {effectiveTtMode === "past" && ghost.length > 0 && (
+                {!inContext && effectiveTtMode === "past" && ghost.length > 0 && (
                   <>
                     <div className="fdzone-lbl-row">
                       {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
@@ -3377,7 +3512,7 @@ export function DialView() {
                             key={g.slug}
                             station={g}
                             isActive={g.slug === radio.station?.slug}
-                            onTuneIn={() => goStation(g.slug)}
+                            onTuneIn={() => tuneGhost(g)}
                           />
                         ))}
                       </div>

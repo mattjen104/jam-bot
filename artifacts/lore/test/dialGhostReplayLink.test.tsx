@@ -178,6 +178,9 @@ afterEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   mockNavigate.mockClear();
+  // A ghost-row tune now enters context mode and writes ?ctx= via
+  // history.replaceState — reset the URL so later tests start in dial mode.
+  window.history.replaceState(null, "", "/");
 });
 
 // ---------------------------------------------------------------------------
@@ -262,7 +265,7 @@ describe("GhostRow — runId present: navigate to /replay/{runId}", () => {
 });
 
 describe("GhostRow — runId null: call goStation, no replay affordance", () => {
-  it("clicking a ghost row with runId null calls goStation (stays in DialView), not navigate", () => {
+  it("clicking a ghost row with runId null tunes into context mode (stays in DialView), not navigate", () => {
     mockEmptyDialData();
     mockGhosts([makeGhostNoRun("kcrw")]);
 
@@ -273,12 +276,14 @@ describe("GhostRow — runId null: call goStation, no replay affordance", () => 
     act(() => { fireEvent.click(ghostRows[0]!); });
 
     // mockNavigate (wouter setLocation) should NOT have been called with a
-    // /replay path. DialView's internal goStation updates React state without
-    // calling setLocation, so mockNavigate stays uncalled.
+    // /replay path. A runId-null ghost row is a station-selection row: the
+    // click commits to context mode in place (no route change).
     const replayCalls = mockNavigate.mock.calls.filter(([path]: [string]) =>
       typeof path === "string" && path.startsWith("/replay/"),
     );
     expect(replayCalls).toHaveLength(0);
+    expect(document.querySelector(".dial-context-region")).toBeTruthy();
+    expect(new URLSearchParams(window.location.search).get("ctx")).toBe("station:kcrw");
   });
 
   it("copy for runId null does not contain 'played' or relative time", () => {

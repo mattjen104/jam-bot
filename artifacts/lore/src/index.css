@@ -6453,3 +6453,50 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   }
   .set-panel__card:first-child { border-left: none; padding-left: 0; }
 }
+
+/* ── Dial context surface (mode: context) ─────────────────────────────────
+   The former station-list area once tuned: breadcrumb + summary + rail space.
+   The breadcrumb echoes .dial-topbar__crumb styling. */
+.dial-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding: 6px 0 8px;
+}
+.dial-crumbs__root { color: hsl(var(--muted-foreground)); text-transform: uppercase; letter-spacing: 0.07em; }
+.dial-crumbs__sep { color: hsl(var(--muted-foreground) / 0.6); }
+.dial-crumbs__item { display: inline-flex; align-items: center; gap: 6px; }
+.dial-crumbs__crumb {
+  background: none;
+  border: none;
+  padding: 0;
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+}
+button.dial-crumbs__crumb { cursor: pointer; }
+button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
+.dial-crumbs__crumb--current { color: hsl(var(--foreground)); }
+.dial-crumbs__past-marker {
+  background: none;
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  padding: 1px 6px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.dial-crumbs__past-marker:hover { color: hsl(var(--foreground)); }
+.dial-crumbs__back {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+.dial-crumbs__back:hover { color: hsl(var(--foreground)); }
+.dial-context-region__summary { margin-top: 2px; }
+.dial-context-region__offline { color: hsl(var(--muted-foreground)); padding: 8px 0; }
+.dial-context-region__rail { min-height: 40px; }
