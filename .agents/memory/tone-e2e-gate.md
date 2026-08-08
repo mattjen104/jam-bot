@@ -14,3 +14,5 @@ The interstitialTone Playwright spec runs as validation step `tone-e2e` via `e2e
 
 ## Quarantined boundary test
 The "pre-unlocked tone element still plays >5s later" test is `test.fixme`: containerized Chromium without an audio device cannot advance the media clock for a reused element played after a long no-activation gap. **How to apply:** when the tone gate fails, check whether it's this quarantined pattern or clock-stall slowness before debugging product code; deadlines in the spec are deliberately generous because the env audio clock stalls under load.
+
+**Merge-splice hazard:** interstitialTone.spec.ts gets merge-spliced (duplicate test titles, control test body swapped to read __toneAttempt instead of __toneControl). Playwright fails loudly on duplicate titles; restore from git history (canonical shape: control + positive fresh-Audio + boundary fail-open + quarantined fixme boundary-fix).

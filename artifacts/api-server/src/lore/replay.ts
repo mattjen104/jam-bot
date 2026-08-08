@@ -2,6 +2,7 @@ import {
   db,
   pickersTable,
   recordingsTable,
+  recordingReleaseGroupsTable,
   showsTable,
   spinsTable,
   stationsTable,
@@ -139,6 +140,19 @@ export interface ReplayManifest {
     rawTitle: string;
     confidence: string;
     recording: ReturnType<typeof toArchiveRecording>;
+    /**
+     * Already-stored interoperable recording facts (never fetched at read
+     * time). Null when the slot is unresolved; individual facts are null when
+     * enrichment has not stored them — exports omit them rather than
+     * fabricating empty values.
+     */
+    recordingFacts: {
+      artistMbid: string | null;
+      isrc: string | null;
+      durationMs: number | null;
+      /** Primary (canonical studio album) release group, when cached locally. */
+      releaseGroup: { mbid: string; title: string | null } | null;
+    } | null;
     guidedLinks: Array<{
       service: string;
       externalId: string | null;
@@ -217,6 +231,9 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
       mbid: recordingsTable.mbid,
       recTitle: recordingsTable.title,
       recArtist: recordingsTable.artist,
+      artistMbid: recordingsTable.artistMbid,
+      isrc: recordingsTable.isrc,
+      durationMs: recordingsTable.durationMs,
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
       showName: showsTable.name,
@@ -279,6 +296,33 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
         deadLink: map.deadLink,
       });
       guidedLinksByMbid.set(map.recordingMbid, links);
+    }
+  }
+
+  // Primary release-group facts are read from the local cache only — export
+  // paths must never trigger a MusicBrainz request. Absence is normal.
+  const primaryReleaseGroupByMbid = new Map<string, { mbid: string; title: string | null }>();
+  if (mbids.length) {
+    const rgRows = await db
+      .select({
+        recordingMbid: recordingReleaseGroupsTable.recordingMbid,
+        releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+        title: recordingReleaseGroupsTable.title,
+      })
+      .from(recordingReleaseGroupsTable)
+      .where(
+        and(
+          inArray(recordingReleaseGroupsTable.recordingMbid, mbids),
+          eq(recordingReleaseGroupsTable.isPrimary, true),
+        ),
+      );
+    for (const row of rgRows) {
+      if (!primaryReleaseGroupByMbid.has(row.recordingMbid)) {
+        primaryReleaseGroupByMbid.set(row.recordingMbid, {
+          mbid: row.releaseGroupMbid,
+          title: row.title ?? null,
+        });
+      }
     }
   }
 
@@ -345,6 +389,14 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
       rawTitle: row.rawTitle ?? "",
       confidence: row.confidence,
       recording: toArchiveRecording(row),
+      recordingFacts: row.mbid
+        ? {
+            artistMbid: row.artistMbid ?? null,
+            isrc: row.isrc ?? null,
+            durationMs: row.durationMs ?? null,
+            releaseGroup: primaryReleaseGroupByMbid.get(row.mbid) ?? null,
+          }
+        : null,
       guidedLinks: row.mbid ? guidedLinksByMbid.get(row.mbid) ?? [] : [],
       embedFacts: row.mbid ? embedFactsByMbid.get(row.mbid) ?? [] : [],
     })),

@@ -213,7 +213,10 @@ describe("GET /api/replay/:id", () => {
     );
     expect(jspfResponse.headers.get("x-content-type-options")).toBe("nosniff");
     const jspf = (await jspfResponse.json()) as {
-      playlist: { track: Array<{ title: string; identifier?: string[] }> };
+      playlist: {
+        track: Array<{ title: string; identifier?: string[] }>;
+        meta: Array<{ rel: string; content: string }>;
+      };
     };
     expect(jspf.playlist.track).toHaveLength(2);
     expect(jspf.playlist.track.map((track) => track.title)).toEqual([
@@ -244,9 +247,21 @@ describe("GET /api/replay/:id", () => {
     expect(csvResponse.status).toBe(200);
     expect(csvResponse.headers.get("content-type")).toContain("text/csv");
     const csv = await csvResponse.text();
-    expect(csv.split("\r\n")).toHaveLength(4);
+    expect(csv.split("\r\n")).toHaveLength(7);
     expect(csv).toContain(String(anchorId));
     expect(csv).toContain("Unresolved Replay Track");
+    // Metadata comment records lead the file without touching the data schema.
+    expect(csv.split("\r\n")[0]).toBe("# generator: Lore Ghost Replay");
+    expect(csv).toMatch(/# tracks-sha256: [0-9a-f]{64}/);
+    // Interoperable columns are appended after the original schema.
+    expect(csv.split("\r\n")[3]).toBe(
+      "position,spin_id,played_at,raw_artist,raw_title,mbid,artist,title,coverage_status,confidence,source,citation,artist_mbid,isrc,duration_ms,album_mbid,album_title",
+    );
+    // Playlist-level integrity metadata rides along in both playlist formats.
+    expect(jspf.playlist.meta).toContainEqual(
+      expect.objectContaining({ rel: "lore:tracks-sha256" }),
+    );
+    expect(xspf).toContain('meta rel="https://lore.radio/ghost-replay/tracks-sha256"');
 
     expect(
       (await fetch(`${baseUrl}/api/replay/${anchorId}/export?format=txt`)).status,

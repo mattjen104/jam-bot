@@ -1,4 +1,37 @@
+import { createHash } from "node:crypto";
 import type { ReplayManifest } from "./replay.js";
+
+export const REPLAY_EXPORT_GENERATOR = "Lore Ghost Replay";
+
+/**
+ * Canonical ordered-track checksum: sha256 hex over one JSON line per track,
+ * in broadcast order, each line being the array
+ * `[position, spinId, playedAt, rawArtist, rawTitle, recordingMbid|null]`
+ * joined by "\n". Deterministic for a given manifest — export time, coverage
+ * counts, and service links are deliberately excluded so re-exports of the
+ * same run verify identically. This is an integrity marker, not
+ * authentication.
+ */
+export function replayTracksChecksum(model: ReplayExportModel): string {
+  const canonical = model.entries
+    .map((entry) =>
+      JSON.stringify([
+        entry.position,
+        entry.spinId,
+        entry.playedAt,
+        entry.rawArtist,
+        entry.rawTitle,
+        entry.recording?.mbid ?? null,
+      ]),
+    )
+    .join("\n");
+  return createHash("sha256").update(canonical, "utf8").digest("hex");
+}
+
+export interface ReplayExportOptions {
+  /** Factual export timestamp (ISO 8601). Defaults to now. */
+  exportedAt?: string;
+}
 
 export const REPLAY_EXPORT_FORMATS = ["jspf", "xspf", "m3u8", "csv"] as const;
 export type ReplayExportFormat = (typeof REPLAY_EXPORT_FORMATS)[number];
@@ -142,8 +175,36 @@ function receiptMeta(entry: ReplayExportEntry): Record<string, string> {
   };
 }
 
+/**
+ * Interoperable identifier/timing facts for one entry. Every value is omitted
+ * (never emitted empty or zero) when the underlying fact is not stored.
+ */
+function interopFacts(entry: ReplayExportEntry): Record<string, string> {
+  const facts = entry.recordingFacts;
+  return {
+    ...(entry.recording ? { recording_mbid: entry.recording.mbid } : {}),
+    ...(facts?.artistMbid ? { artist_mbid: facts.artistMbid } : {}),
+    ...(facts?.isrc ? { isrc: facts.isrc } : {}),
+    ...(facts?.durationMs != null && facts.durationMs > 0
+      ? { duration_ms: String(facts.durationMs) }
+      : {}),
+    ...(facts?.releaseGroup ? { album_mbid: facts.releaseGroup.mbid } : {}),
+    ...(facts?.releaseGroup?.title ? { album_title: facts.releaseGroup.title } : {}),
+  };
+}
+
+function entryDurationMs(entry: ReplayExportEntry): number | null {
+  const duration = entry.recordingFacts?.durationMs;
+  return duration != null && duration > 0 ? duration : null;
+}
+
+function entryAlbumTitle(entry: ReplayExportEntry): string | null {
+  return entry.recordingFacts?.releaseGroup?.title ?? null;
+}
+
 /** JSPF is the canonical JSON interchange format. Every broadcast slot stays. */
-export function buildJspf(model: ReplayExportModel): string {
+export function buildJspf(model: ReplayExportModel, options: ReplayExportOptions = {}): string {
+  const exportedAt = options.exportedAt ?? new Date().toISOString();
   const payload = {
     playlist: {
       title: `${model.station.name} · ${
@@ -152,7 +213,11 @@ export function buildJspf(model: ReplayExportModel): string {
       creator: "Lore Ghost Replay",
       annotation:
         "Ordered reconstruction of a public broadcast; unresolved moments are intentionally preserved.",
+      date: exportedAt,
       meta: [
+        { rel: "lore:generator", content: REPLAY_EXPORT_GENERATOR },
+        { rel: "lore:exported-at", content: exportedAt },
+        { rel: "lore:tracks-sha256", content: replayTracksChecksum(model) },
         { rel: "lore:replay-id", content: String(model.replayId) },
         { rel: "lore:station", content: model.station.slug },
         { rel: "lore:date", content: model.bounds.date },
@@ -162,10 +227,14 @@ export function buildJspf(model: ReplayExportModel): string {
       ],
       track: model.entries.map((entry) => {
         const identifier = mbidUrl(entry);
-        const meta = receiptMeta(entry);
+        const meta = { ...receiptMeta(entry), ...interopFacts(entry) };
+        const duration = entryDurationMs(entry);
+        const album = entryAlbumTitle(entry);
         return {
           title: entryTitle(entry),
           creator: entryArtist(entry),
+          ...(album ? { album } : {}),
+          ...(duration != null ? { duration } : {}),
           ...(identifier ? { identifier: [identifier] } : {}),
           meta: Object.entries(meta).map(([rel, content]) => ({ rel: `lore:${rel}`, content })),
         };
@@ -176,24 +245,33 @@ export function buildJspf(model: ReplayExportModel): string {
 }
 
 function xspfExtension(entry: ReplayExportEntry): string {
-  return Object.entries(receiptMeta(entry))
+  return Object.entries({ ...receiptMeta(entry), ...interopFacts(entry) })
     .map(([key, value]) => `<lore:${key}>${xmlEscape(value)}</lore:${key}>`)
     .join("");
 }
 
 /** XSPF keeps unresolved slots as tracks, omitting only unknown locations. */
-export function buildXspf(model: ReplayExportModel): string {
+export function buildXspf(model: ReplayExportModel, options: ReplayExportOptions = {}): string {
+  const exportedAt = options.exportedAt ?? new Date().toISOString();
   const tracks = model.entries
     .map((entry) => {
       const locations = entry.serviceUrls
         .map((url) => `<location>${xmlEscape(url)}</location>`)
         .join("");
       const identifier = mbidUrl(entry);
+      const artistMbid = entry.recordingFacts?.artistMbid;
+      const album = entryAlbumTitle(entry);
+      const duration = entryDurationMs(entry);
       return [
         "    <track>",
         `      <title>${xmlEscape(entryTitle(entry))}</title>`,
         `      <creator>${xmlEscape(entryArtist(entry))}</creator>`,
+        album ? `      <album>${xmlEscape(album)}</album>` : "",
+        duration != null ? `      <duration>${duration}</duration>` : "",
         identifier ? `      <identifier>${xmlEscape(identifier)}</identifier>` : "",
+        artistMbid
+          ? `      <identifier>${xmlEscape(`https://musicbrainz.org/artist/${encodeURIComponent(artistMbid)}`)}</identifier>`
+          : "",
         locations,
         `      <extension application="https://lore.radio/ghost-replay">${xspfExtension(entry)}</extension>`,
         "    </track>",
@@ -203,10 +281,23 @@ export function buildXspf(model: ReplayExportModel): string {
     })
     .join("\n");
 
+  const playlistMeta = [
+    ["generator", REPLAY_EXPORT_GENERATOR],
+    ["exported-at", exportedAt],
+    ["tracks-sha256", replayTracksChecksum(model)],
+    ["replay-id", String(model.replayId)],
+  ] as const;
+
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<playlist version="1" xmlns="http://xspf.org/ns/0/" xmlns:lore="https://lore.radio/ghost-replay">',
     `  <title>${xmlEscape(model.station.name)} · ${xmlEscape(model.bounds.date)}</title>`,
+    `  <creator>${xmlEscape(REPLAY_EXPORT_GENERATOR)}</creator>`,
+    `  <date>${xmlEscape(exportedAt)}</date>`,
+    ...playlistMeta.map(
+      ([rel, content]) =>
+        `  <meta rel="${xmlEscape(`https://lore.radio/ghost-replay/${rel}`)}">${xmlEscape(content)}</meta>`,
+    ),
     "  <trackList>",
     tracks,
     "  </trackList>",
@@ -236,11 +327,21 @@ export function buildM3u8(model: ReplayExportModel): string {
 }
 
 /** CSV is the lossless receipt view, including every resolved and unresolved slot. */
-export function buildReplayCsv(model: ReplayExportModel): string {
+export function buildReplayCsv(model: ReplayExportModel, options: ReplayExportOptions = {}): string {
+  const exportedAt = options.exportedAt ?? new Date().toISOString();
+  // New interoperable columns are appended only — every pre-existing column
+  // keeps its position so downstream consumers of the old schema still parse.
+  // Generator/export-time/checksum metadata rides as leading `#`-comment
+  // records (a common CSV convention) so the data header/row schema is
+  // untouched; the checksum matches lore:tracks-sha256 in JSPF/XSPF.
   const lines = [
-    "position,spin_id,played_at,raw_artist,raw_title,mbid,artist,title,coverage_status,confidence,source,citation",
+    `# generator: ${REPLAY_EXPORT_GENERATOR}`,
+    `# exported-at: ${exportedAt}`,
+    `# tracks-sha256: ${replayTracksChecksum(model)}`,
+    "position,spin_id,played_at,raw_artist,raw_title,mbid,artist,title,coverage_status,confidence,source,citation,artist_mbid,isrc,duration_ms,album_mbid,album_title",
   ];
   for (const entry of model.entries) {
+    const facts = entry.recordingFacts;
     lines.push(
       [
         entry.position,
@@ -255,6 +356,11 @@ export function buildReplayCsv(model: ReplayExportModel): string {
         entry.confidence,
         entry.source ?? "",
         entry.citation ?? "",
+        facts?.artistMbid ?? "",
+        facts?.isrc ?? "",
+        entryDurationMs(entry) ?? "",
+        facts?.releaseGroup?.mbid ?? "",
+        facts?.releaseGroup?.title ?? "",
       ]
         .map(csvField)
         .join(","),
@@ -266,15 +372,16 @@ export function buildReplayCsv(model: ReplayExportModel): string {
 export function buildReplayExport(
   format: ReplayExportFormat,
   model: ReplayExportModel,
+  options: ReplayExportOptions = {},
 ): string {
   switch (format) {
     case "jspf":
-      return buildJspf(model);
+      return buildJspf(model, options);
     case "xspf":
-      return buildXspf(model);
+      return buildXspf(model, options);
     case "m3u8":
       return buildM3u8(model);
     case "csv":
-      return buildReplayCsv(model);
+      return buildReplayCsv(model, options);
   }
 }
