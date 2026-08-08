@@ -9,6 +9,7 @@ import artRouter from "./art.js";
 import meRouter from "./me/index.js";
 import playerRouter from "./player.js";
 import bottlesRouter from "./lore/bottles.js";
+import importedSetsRouter from "./lore/imported-sets.js";
 
 const router: IRouter = Router();
 
@@ -24,6 +25,8 @@ router.use(spotifyRouter);
 // Art proxy must be before loreRouter (same catch-all caveat as bottles)
 router.use(artRouter);
 router.use(bottlesRouter);
+// Imported sets must also precede loreRouter (same catch-all caveat).
+router.use(importedSetsRouter);
 router.use(loreRouter);
 
 export default router;

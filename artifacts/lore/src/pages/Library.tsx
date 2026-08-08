@@ -2469,6 +2469,14 @@ export default function Library() {
                 {fmt === "m3u8" ? "M3U8" : fmt.toUpperCase()}
               </a>
             ))}
+            <Link
+              href="/sets"
+              className="dial-ctabtn"
+              style={{ textDecoration: "none" }}
+              data-testid="library-imported-sets-link"
+            >
+              Imported Sets
+            </Link>
           </div>
           <div
             style={{ marginTop: 12, borderTop: "1px solid hsl(var(--border) / 0.5)", paddingTop: 10 }}

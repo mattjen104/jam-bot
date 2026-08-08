@@ -80,7 +80,9 @@ import {
 import { startSessionExpiryWorker } from "./routes/me/attendance.js";
 import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
 import { applyReplayResolutionMigration } from "./lore/replay-resolution-migration.js";
+import { applyImportedSetsMigration } from "./lore/imported-sets-migration.js";
 import { resumeReplayResolutionJobs } from "./lore/replay-resolution.js";
+import { resumePendingImportedSets } from "./lore/imported-sets.js";
 import { resumeReplayMaterializationJobs } from "./lore/replay-materialization.js";
 import {
   resumeEmbedResolutionJobs,
@@ -150,6 +152,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyLoreSettingsMigration", applyLoreSettingsMigration);
     await runMigration("applyGeniusFragmentPointerMigration", applyGeniusFragmentPointerMigration);
     await runMigration("applyReplayResolutionMigration", applyReplayResolutionMigration);
+    await runMigration("applyImportedSetsMigration", applyImportedSetsMigration);
     await runMigration("applySupportHoldsMigration", applySupportHoldsMigration);
     await runMigration("applySocialPresenceMigration", applySocialPresenceMigration);
     await runMigration("applyShowDjNamesMigration", applyShowDjNamesMigration);
@@ -233,6 +236,7 @@ async function bootLore(): Promise<void> {
     startArtPrewarm();
     startPhase3RetryScheduler();
     await resumeReplayResolutionJobs();
+    await resumePendingImportedSets();
     await resumeReplayMaterializationJobs();
     await resumeEmbedResolutionJobs();
     startEmbedResolutionWorker();

@@ -210,7 +210,9 @@ test.describe("crossing interstitial tone vs autoplay policy", () => {
       })();
     }, TONE_PATH);
     await page.goto("/lore/");
-    const result = (await page.evaluate(() => window.__toneControl!)) as ToneAttempt;
+    // The control attempt lives on its own promise — the shared attempt
+    // helper is deliberately NOT installed for this test.
+    const result = (await page.evaluate(() => window.__toneAttempt!)) as ToneAttempt;
     await context.close();
     // No gesture ever happened — activation must be absent and play() blocked.
     expect(result.hadStickyActivation).toBe(false);

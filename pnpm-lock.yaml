@@ -202,6 +202,9 @@ importers:
       express-rate-limit:
         specifier: ^8.5.2
         version: 8.5.2(express@5.2.1)
+      fast-xml-parser:
+        specifier: ^5.10.1
+        version: 5.10.1
       google-auth-library:
         specifier: ^11.0.0
         version: 11.0.0

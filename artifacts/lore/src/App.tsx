@@ -19,6 +19,7 @@ import Journal from "@/pages/Journal";
 import WeeklyRecap from "@/pages/WeeklyRecap";
 import Following from "@/pages/Following";
 import Library from "@/pages/Library";
+import ImportedSets from "@/pages/ImportedSets";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
 import AdminSelectors from "@/pages/AdminSelectors";
@@ -105,6 +106,9 @@ function Router() {
         <Route path="/weekly-recap" component={WeeklyRecap} />
         <Route path="/following" component={Following} />
         <Route path="/library" component={Library} />
+        {/* Imported portable sets (XSPF/JSPF uploads) — personal material,
+            structurally separate from the radio archive. */}
+        <Route path="/sets" component={ImportedSets} />
         {/* Redirect any deep-linked /taste-map URLs to home */}
         <Route path="/taste-map">
           {() => <Redirect to="/" />}

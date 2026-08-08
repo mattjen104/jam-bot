@@ -5,6 +5,114 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ImportedSetUploadRequest {
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  filename: string;
+  /**
+   * Raw XSPF/JSPF file text (max 1 MB).
+   * @minLength 1
+   */
+  content: string;
+}
+
+export type ImportedSetRecordingLinksItemKind =
+  (typeof ImportedSetRecordingLinksItemKind)[keyof typeof ImportedSetRecordingLinksItemKind];
+
+export const ImportedSetRecordingLinksItemKind = {
+  exact: "exact",
+  search: "search",
+} as const;
+
+export type ImportedSetRecordingLinksItem = {
+  name: string;
+  url: string;
+  kind: ImportedSetRecordingLinksItemKind;
+};
+
+export interface ImportedSetRecording {
+  mbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  links: ImportedSetRecordingLinksItem[];
+}
+
+export type ImportedSetEntryResolutionStatus =
+  (typeof ImportedSetEntryResolutionStatus)[keyof typeof ImportedSetEntryResolutionStatus];
+
+export const ImportedSetEntryResolutionStatus = {
+  pending: "pending",
+  resolved: "resolved",
+  unresolved: "unresolved",
+} as const;
+
+export type ImportedSetEntryResolutionBasis =
+  | (typeof ImportedSetEntryResolutionBasis)[keyof typeof ImportedSetEntryResolutionBasis]
+  | null;
+
+export const ImportedSetEntryResolutionBasis = {
+  lore_mbid: "lore_mbid",
+  mbid: "mbid",
+  isrc: "isrc",
+  text: "text",
+  spotify: "spotify",
+} as const;
+
+/**
+ * One ordered slot of an imported set. resolutionBasis records exactly which identifier resolved the entry so a title match never looks as certain as an MBID match; unresolved slots stay visible with a reason.
+
+ */
+export interface ImportedSetEntry {
+  position: number;
+  title: string | null;
+  creator: string | null;
+  album: string | null;
+  durationMs: number | null;
+  claimedIsrc: string | null;
+  resolutionStatus: ImportedSetEntryResolutionStatus;
+  resolutionBasis: ImportedSetEntryResolutionBasis;
+  unresolvedReason: string | null;
+  recording: ImportedSetRecording | null;
+}
+
+export type ImportedSetFormat =
+  (typeof ImportedSetFormat)[keyof typeof ImportedSetFormat];
+
+export const ImportedSetFormat = {
+  xspf: "xspf",
+  jspf: "jspf",
+} as const;
+
+export type ImportedSetStatus =
+  (typeof ImportedSetStatus)[keyof typeof ImportedSetStatus];
+
+export const ImportedSetStatus = {
+  resolving: "resolving",
+  done: "done",
+} as const;
+
+export interface ImportedSet {
+  id: number;
+  name: string;
+  sourceFilename: string;
+  /** Fixed imported-only citation, "IMPORTED · <name>". */
+  citation: string;
+  format: ImportedSetFormat;
+  trackCount: number;
+  resolvedCount: number;
+  unresolvedCount: number;
+  status: ImportedSetStatus;
+  createdAt: string;
+  entries?: ImportedSetEntry[];
+}
+
+export interface ImportedSetList {
+  sets: ImportedSet[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -3388,6 +3496,10 @@ export type GetMyOverlapSpineParams = {
    * End of the window (exclusive), ISO 8601.  Required with explicit range mode.
    */
   to?: string;
+};
+
+export type ResumeImportedSetResolution202 = {
+  started: boolean;
 };
 
 export type GetStationSocialPresenceParams = {

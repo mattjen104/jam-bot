@@ -54,6 +54,9 @@ import type {
   HealthStatus,
   IcecastReport,
   IcecastReportResult,
+  ImportedSet,
+  ImportedSetList,
+  ImportedSetUploadRequest,
   IngestResult,
   LabelSeedRequest,
   LibraryCoverageResponse,
@@ -99,6 +102,7 @@ import type {
   ReplayResolutionJob,
   ResolveSongParams,
   ResolvedSong,
+  ResumeImportedSetResolution202,
   RunCrossingMomentsResponse,
   RymListRequest,
   ScrapedStationList,
@@ -9250,6 +9254,427 @@ export function useGetMyGhostMissed<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Accepts one bounded XSPF (XML) or JSPF (JSON) playlist file — Lore- authored or third-party — as raw text. Limits (1 MB, 500 tracks) and XML safety checks (no DTDs/entities) apply before full processing. Progressive resolution starts immediately; poll the set for per-entry states. Imported sets never create radio spins or affect radio-derived analytics, and provenance claims inside the file are never trusted.
+
+ * @summary Upload an XSPF or JSPF playlist as an imported personal set
+ */
+export const getCreateImportedSetUrl = () => {
+  return `/api/me/imported-sets`;
+};
+
+export const createImportedSet = async (
+  importedSetUploadRequest: ImportedSetUploadRequest,
+  options?: RequestInit,
+): Promise<ImportedSet> => {
+  return customFetch<ImportedSet>(getCreateImportedSetUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(importedSetUploadRequest),
+  });
+};
+
+export const getCreateImportedSetMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createImportedSet>>,
+    TError,
+    { data: BodyType<ImportedSetUploadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createImportedSet>>,
+  TError,
+  { data: BodyType<ImportedSetUploadRequest> },
+  TContext
+> => {
+  const mutationKey = ["createImportedSet"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createImportedSet>>,
+    { data: BodyType<ImportedSetUploadRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createImportedSet(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateImportedSetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createImportedSet>>
+>;
+export type CreateImportedSetMutationBody = BodyType<ImportedSetUploadRequest>;
+export type CreateImportedSetMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Upload an XSPF or JSPF playlist as an imported personal set
+ */
+export const useCreateImportedSet = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createImportedSet>>,
+    TError,
+    { data: BodyType<ImportedSetUploadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createImportedSet>>,
+  TError,
+  { data: BodyType<ImportedSetUploadRequest> },
+  TContext
+> => {
+  return useMutation(getCreateImportedSetMutationOptions(options));
+};
+
+/**
+ * @summary List the listener's imported sets (newest first)
+ */
+export const getListImportedSetsUrl = () => {
+  return `/api/me/imported-sets`;
+};
+
+export const listImportedSets = async (
+  options?: RequestInit,
+): Promise<ImportedSetList> => {
+  return customFetch<ImportedSetList>(getListImportedSetsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListImportedSetsQueryKey = () => {
+  return [`/api/me/imported-sets`] as const;
+};
+
+export const getListImportedSetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listImportedSets>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listImportedSets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListImportedSetsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listImportedSets>>
+  > = ({ signal }) => listImportedSets({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listImportedSets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListImportedSetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listImportedSets>>
+>;
+export type ListImportedSetsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary List the listener's imported sets (newest first)
+ */
+
+export function useListImportedSets<
+  TData = Awaited<ReturnType<typeof listImportedSets>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listImportedSets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListImportedSetsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Read one imported set with per-entry resolution states
+ */
+export const getGetImportedSetUrl = (id: number) => {
+  return `/api/me/imported-sets/${id}`;
+};
+
+export const getImportedSet = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ImportedSet> => {
+  return customFetch<ImportedSet>(getGetImportedSetUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetImportedSetQueryKey = (id: number) => {
+  return [`/api/me/imported-sets/${id}`] as const;
+};
+
+export const getGetImportedSetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getImportedSet>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getImportedSet>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetImportedSetQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getImportedSet>>> = ({
+    signal,
+  }) => getImportedSet(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getImportedSet>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetImportedSetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getImportedSet>>
+>;
+export type GetImportedSetQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Read one imported set with per-entry resolution states
+ */
+
+export function useGetImportedSet<
+  TData = Awaited<ReturnType<typeof getImportedSet>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getImportedSet>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetImportedSetQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete an imported set and its entries
+ */
+export const getDeleteImportedSetUrl = (id: number) => {
+  return `/api/me/imported-sets/${id}`;
+};
+
+export const deleteImportedSet = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteImportedSetUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteImportedSetMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteImportedSet>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteImportedSet>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteImportedSet"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteImportedSet>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteImportedSet(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteImportedSetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteImportedSet>>
+>;
+
+export type DeleteImportedSetMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Delete an imported set and its entries
+ */
+export const useDeleteImportedSet = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteImportedSet>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteImportedSet>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteImportedSetMutationOptions(options));
+};
+
+/**
+ * @summary Resume progressive resolution of pending entries
+ */
+export const getResumeImportedSetResolutionUrl = (id: number) => {
+  return `/api/me/imported-sets/${id}/resolve`;
+};
+
+export const resumeImportedSetResolution = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ResumeImportedSetResolution202> => {
+  return customFetch<ResumeImportedSetResolution202>(
+    getResumeImportedSetResolutionUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getResumeImportedSetResolutionMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resumeImportedSetResolution>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resumeImportedSetResolution>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["resumeImportedSetResolution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resumeImportedSetResolution>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return resumeImportedSetResolution(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResumeImportedSetResolutionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resumeImportedSetResolution>>
+>;
+
+export type ResumeImportedSetResolutionMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Resume progressive resolution of pending entries
+ */
+export const useResumeImportedSetResolution = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resumeImportedSetResolution>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resumeImportedSetResolution>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getResumeImportedSetResolutionMutationOptions(options));
+};
 
 /**
  * @summary Read privacy-preserving anonymous listener presence

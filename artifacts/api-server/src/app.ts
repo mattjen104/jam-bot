@@ -19,11 +19,16 @@ app.use(cookieParser());
 const defaultJson = express.json();
 const importFileJson = express.json({ limit: "25mb" });
 const imageJson = express.json({ limit: "12mb" });
+// Portable-set uploads (XSPF/JSPF) cap at 1 MB of file content; 2 MB of JSON
+// envelope leaves room for escaping. The route re-checks the 1 MB file limit.
+const importedSetJson = express.json({ limit: "2mb" });
 app.use((req, res, next) =>
   req.path === "/api/me/library/import/file"
     ? importFileJson(req, res, next)
     : req.path === "/api/me/library/extract-images"
       ? imageJson(req, res, next)
+    : req.path === "/api/me/imported-sets" && req.method === "POST"
+      ? importedSetJson(req, res, next)
     : defaultJson(req, res, next),
 );
 app.use(express.urlencoded({ extended: true }));

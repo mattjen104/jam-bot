@@ -2947,6 +2947,91 @@ export const replayResolutionJobsTable = pgTable(
 );
 
 /**
+ * A listener-imported portable set (XSPF/JSPF upload). Deliberately isolated
+ * from witnessed radio history: no foreign key or write path touches `spins`,
+ * shows, or any radio-derived analytics. Sets are user-owned personal
+ * material and always carry an explicit `IMPORTED · <name>` citation.
+ */
+export const importedSetsTable = pgTable(
+  "imported_sets",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    /** Display name: the playlist title from the file, else the filename. */
+    name: text("name").notNull(),
+    /** Original upload filename, preserved for the citation receipt. */
+    sourceFilename: text("source_filename").notNull(),
+    /** Interchange format the file parsed as: "xspf" | "jspf". */
+    format: text("format").notNull(),
+    /** Total ordered slots parsed from the file (≤ 500). */
+    trackCount: integer("track_count").notNull(),
+    /** Entries resolved to a recording so far (progressive). */
+    resolvedCount: integer("resolved_count").notNull().default(0),
+    /** Entries that finished resolution without a match. */
+    unresolvedCount: integer("unresolved_count").notNull().default(0),
+    /** "resolving" while entries are pending, "done" when all are terminal. */
+    status: text("status").notNull().default("resolving"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [index("imported_sets_user_idx").on(t.userId)],
+);
+
+export type ImportedSet = typeof importedSetsTable.$inferSelect;
+export type InsertImportedSet = typeof importedSetsTable.$inferInsert;
+
+/**
+ * One ordered slot of an imported set. Parser facts (title/creator/album/
+ * duration/claimed identifiers) are preserved verbatim; resolution is
+ * progressive and honest — `resolutionBasis` records exactly which identifier
+ * won ("lore_mbid" | "mbid" | "isrc" | "text" | "spotify"), and unresolved
+ * slots stay visible with a reason instead of disappearing.
+ *
+ * `resolvedMbid` is intentionally a bare text column (no FK): imported
+ * material must never gain a structural path into the radio spine tables.
+ */
+export const importedSetEntriesTable = pgTable(
+  "imported_set_entries",
+  {
+    id: serial("id").primaryKey(),
+    setId: integer("set_id")
+      .notNull()
+      .references(() => importedSetsTable.id, { onDelete: "cascade" }),
+    /** 0-based position in the file's original order. */
+    position: integer("position").notNull(),
+    title: text("title"),
+    creator: text("creator"),
+    album: text("album"),
+    durationMs: integer("duration_ms"),
+    /** Recording MBID claimed by the file (never trusted blindly). */
+    claimedMbid: text("claimed_mbid"),
+    /** True when the claimed MBID came from Lore extension metadata. */
+    claimedMbidFromLore: boolean("claimed_mbid_from_lore").notNull().default(false),
+    /** ISRC claimed by the file, when present. */
+    claimedIsrc: text("claimed_isrc"),
+    /** "pending" | "resolved" | "unresolved". */
+    resolutionStatus: text("resolution_status").notNull().default("pending"),
+    /** Which identifier actually resolved this entry. Null until resolved. */
+    resolutionBasis: text("resolution_basis"),
+    /** The recording this entry resolved to. Plain text — deliberately no FK. */
+    resolvedMbid: text("resolved_mbid"),
+    /** Honest reason a slot stayed unresolved, e.g. "no_match" | "no_identifiers". */
+    unresolvedReason: text("unresolved_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("imported_set_entries_set_position_uq").on(t.setId, t.position),
+    index("imported_set_entries_set_idx").on(t.setId),
+  ],
+);
+
+export type ImportedSetEntry = typeof importedSetEntriesTable.$inferSelect;
+export type InsertImportedSetEntry = typeof importedSetEntriesTable.$inferInsert;
+
+/**
  * Operator-level feature flags and settings that can be changed at runtime
  * without a server restart.  Each row is a single named boolean flag.
  * The primary key is the flag name so upserts are idempotent.

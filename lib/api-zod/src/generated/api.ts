@@ -5054,6 +5054,151 @@ export const GetMyGhostMissedResponse = zod.object({
 });
 
 /**
+ * Accepts one bounded XSPF (XML) or JSPF (JSON) playlist file — Lore- authored or third-party — as raw text. Limits (1 MB, 500 tracks) and XML safety checks (no DTDs/entities) apply before full processing. Progressive resolution starts immediately; poll the set for per-entry states. Imported sets never create radio spins or affect radio-derived analytics, and provenance claims inside the file are never trusted.
+
+ * @summary Upload an XSPF or JSPF playlist as an imported personal set
+ */
+export const createImportedSetBodyFilenameMax = 256;
+
+export const CreateImportedSetBody = zod.object({
+  filename: zod.string().min(1).max(createImportedSetBodyFilenameMax),
+  content: zod.string().min(1).describe("Raw XSPF\/JSPF file text (max 1 MB)."),
+});
+
+/**
+ * @summary List the listener's imported sets (newest first)
+ */
+export const ListImportedSetsResponse = zod.object({
+  sets: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      sourceFilename: zod.string(),
+      citation: zod
+        .string()
+        .describe('Fixed imported-only citation, \"IMPORTED · <name>\".'),
+      format: zod.enum(["xspf", "jspf"]),
+      trackCount: zod.number(),
+      resolvedCount: zod.number(),
+      unresolvedCount: zod.number(),
+      status: zod.enum(["resolving", "done"]),
+      createdAt: zod.string(),
+      entries: zod
+        .array(
+          zod
+            .object({
+              position: zod.number(),
+              title: zod.string().nullable(),
+              creator: zod.string().nullable(),
+              album: zod.string().nullable(),
+              durationMs: zod.number().nullable(),
+              claimedIsrc: zod.string().nullable(),
+              resolutionStatus: zod.enum(["pending", "resolved", "unresolved"]),
+              resolutionBasis: zod
+                .enum(["lore_mbid", "mbid", "isrc", "text", "spotify"])
+                .nullable(),
+              unresolvedReason: zod.string().nullable(),
+              recording: zod
+                .object({
+                  mbid: zod.string(),
+                  title: zod.string(),
+                  artist: zod.string(),
+                  artworkUrl: zod.string().nullable(),
+                  links: zod.array(
+                    zod.object({
+                      name: zod.string(),
+                      url: zod.string(),
+                      kind: zod.enum(["exact", "search"]),
+                    }),
+                  ),
+                })
+                .nullable(),
+            })
+            .describe(
+              "One ordered slot of an imported set. resolutionBasis records exactly which identifier resolved the entry so a title match never looks as certain as an MBID match; unresolved slots stay visible with a reason.\n",
+            ),
+        )
+        .optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Read one imported set with per-entry resolution states
+ */
+
+export const GetImportedSetParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const GetImportedSetResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  sourceFilename: zod.string(),
+  citation: zod
+    .string()
+    .describe('Fixed imported-only citation, \"IMPORTED · <name>\".'),
+  format: zod.enum(["xspf", "jspf"]),
+  trackCount: zod.number(),
+  resolvedCount: zod.number(),
+  unresolvedCount: zod.number(),
+  status: zod.enum(["resolving", "done"]),
+  createdAt: zod.string(),
+  entries: zod
+    .array(
+      zod
+        .object({
+          position: zod.number(),
+          title: zod.string().nullable(),
+          creator: zod.string().nullable(),
+          album: zod.string().nullable(),
+          durationMs: zod.number().nullable(),
+          claimedIsrc: zod.string().nullable(),
+          resolutionStatus: zod.enum(["pending", "resolved", "unresolved"]),
+          resolutionBasis: zod
+            .enum(["lore_mbid", "mbid", "isrc", "text", "spotify"])
+            .nullable(),
+          unresolvedReason: zod.string().nullable(),
+          recording: zod
+            .object({
+              mbid: zod.string(),
+              title: zod.string(),
+              artist: zod.string(),
+              artworkUrl: zod.string().nullable(),
+              links: zod.array(
+                zod.object({
+                  name: zod.string(),
+                  url: zod.string(),
+                  kind: zod.enum(["exact", "search"]),
+                }),
+              ),
+            })
+            .nullable(),
+        })
+        .describe(
+          "One ordered slot of an imported set. resolutionBasis records exactly which identifier resolved the entry so a title match never looks as certain as an MBID match; unresolved slots stay visible with a reason.\n",
+        ),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Delete an imported set and its entries
+ */
+
+export const DeleteImportedSetParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+/**
+ * @summary Resume progressive resolution of pending entries
+ */
+
+export const ResumeImportedSetResolutionParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+/**
  * @summary Read privacy-preserving anonymous listener presence
  */
 export const GetStationSocialPresenceQueryParams = zod.object({

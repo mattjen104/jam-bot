@@ -5,6 +5,7 @@ type Section = "lore" | "library";
 export function sectionFor(location: string): Section {
   if (location === "/library" || location.startsWith("/library/") ||
       location === "/journal" || location.startsWith("/journal/") ||
+      location === "/sets" || location.startsWith("/sets/") ||
       location === "/following" || location.startsWith("/following/")) return "library";
   // Everything else — including selector/archive/DJ pages — is part of the
   // Lore listening surface.

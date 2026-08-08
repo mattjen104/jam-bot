@@ -102,4 +102,5 @@
 - [Lore e2e suite gate](lore-e2e-suite-gate.md) — 4 route-intercepted specs gate merges (incl. revived sync + dial on-air); fixture pitfalls: zod-required fields, `?**` glob for query-string POSTs; fallbackNotice still excluded.
 - [Dial context rail & sentence grammar](dial-context-rail-grammar.md) — grammar module owns link policy: dotted=navigate, `+`=add, white=yours; no song titles; ContextRail path must stay alive (mocked widely).
 - [lore-tests merge gate](lore-tests-gate.md) — lore vitest suite gates merges via flock-wrapped validation; copy/grammar changes must update tests or the suite rots.
+- [Imported portable sets](imported-sets-pattern.md) — XSPF/JSPF uploads: no-FK isolation from spins, claimed MBIDs only honored if already local (else file could plant spine rows), DTD regex-reject before parse.
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).

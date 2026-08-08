@@ -3227,6 +3227,158 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GhostMissedResponse"
+  /me/imported-sets:
+    post:
+      operationId: createImportedSet
+      tags: [me]
+      summary: Upload an XSPF or JSPF playlist as an imported personal set
+      description: >
+        Accepts one bounded XSPF (XML) or JSPF (JSON) playlist file — Lore-
+        authored or third-party — as raw text. Limits (1 MB, 500 tracks) and
+        XML safety checks (no DTDs/entities) apply before full processing.
+        Progressive resolution starts immediately; poll the set for per-entry
+        states. Imported sets never create radio spins or affect radio-derived
+        analytics, and provenance claims inside the file are never trusted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportedSetUploadRequest"
+      responses:
+        "201":
+          description: The stored set with entries in file order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportedSet"
+        "400":
+          description: Malformed, hostile, or over-track-limit file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Listener session required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: File exceeds the 1 MB import limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    get:
+      operationId: listImportedSets
+      tags: [me]
+      summary: List the listener's imported sets (newest first)
+      responses:
+        "200":
+          description: Imported set summaries without entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportedSetList"
+        "401":
+          description: Listener session required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /me/imported-sets/{id}:
+    get:
+      operationId: getImportedSet
+      tags: [me]
+      summary: Read one imported set with per-entry resolution states
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: The set with entries in original file order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportedSet"
+        "401":
+          description: Listener session required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Set not found or not owned by this listener
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteImportedSet
+      tags: [me]
+      summary: Delete an imported set and its entries
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Listener session required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Set not found or not owned by this listener
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /me/imported-sets/{id}/resolve:
+    post:
+      operationId: resumeImportedSetResolution
+      tags: [me]
+      summary: Resume progressive resolution of pending entries
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "202":
+          description: Resolution restarted for pending entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  started:
+                    type: boolean
+                required: [started]
+        "401":
+          description: Listener session required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Set not found or not owned by this listener
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/social/presence:
     get:
       operationId: getStationSocialPresence
@@ -3248,6 +3400,142 @@ paths:
                 $ref: "#/components/schemas/StationSocialPresenceResponse"
 components:
   schemas:
+    ImportedSetUploadRequest:
+      type: object
+      properties:
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 256
+        content:
+          type: string
+          minLength: 1
+          description: Raw XSPF/JSPF file text (max 1 MB).
+      required: [filename, content]
+    ImportedSetRecording:
+      type: object
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        artworkUrl:
+          type: string
+          nullable: true
+        links:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              url:
+                type: string
+              kind:
+                type: string
+                enum: [exact, search]
+            required: [name, url, kind]
+      required: [mbid, title, artist, artworkUrl, links]
+    ImportedSetEntry:
+      type: object
+      description: >
+        One ordered slot of an imported set. resolutionBasis records exactly
+        which identifier resolved the entry so a title match never looks as
+        certain as an MBID match; unresolved slots stay visible with a reason.
+      properties:
+        position:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        creator:
+          type: string
+          nullable: true
+        album:
+          type: string
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        claimedIsrc:
+          type: string
+          nullable: true
+        resolutionStatus:
+          type: string
+          enum: [pending, resolved, unresolved]
+        resolutionBasis:
+          type: string
+          enum: [lore_mbid, mbid, isrc, text, spotify]
+          nullable: true
+        unresolvedReason:
+          type: string
+          nullable: true
+        recording:
+          allOf:
+            - $ref: "#/components/schemas/ImportedSetRecording"
+          nullable: true
+      required:
+        - position
+        - title
+        - creator
+        - album
+        - durationMs
+        - claimedIsrc
+        - resolutionStatus
+        - resolutionBasis
+        - unresolvedReason
+        - recording
+    ImportedSet:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sourceFilename:
+          type: string
+        citation:
+          type: string
+          description: Fixed imported-only citation, "IMPORTED · <name>".
+        format:
+          type: string
+          enum: [xspf, jspf]
+        trackCount:
+          type: integer
+        resolvedCount:
+          type: integer
+        unresolvedCount:
+          type: integer
+        status:
+          type: string
+          enum: [resolving, done]
+        createdAt:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportedSetEntry"
+      required:
+        - id
+        - name
+        - sourceFilename
+        - citation
+        - format
+        - trackCount
+        - resolvedCount
+        - unresolvedCount
+        - status
+        - createdAt
+    ImportedSetList:
+      type: object
+      properties:
+        sets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportedSet"
+      required: [sets]
     HealthStatus:
       type: object
       properties:
