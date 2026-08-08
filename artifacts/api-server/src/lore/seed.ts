@@ -672,6 +672,26 @@ function ntsliveStations(): InsertStation[] {
  * Metal polls — the stream still plays, metadata flows when available.
  */
 function fipStations(): InsertStation[] {
+  /**
+   * Crossing-surface eligibility for FIP channels.
+   *
+   * Evidence: FIP Main is Radio France's flagship cross-genre stream and the
+   * primary discovery channel. FIP Electro is the wedge sub-channel with the
+   * highest yield of catalogue-resolution MBIDs in the electronica/IDM space
+   * that other curated sources cover least (confirmed via livemeta API probes).
+   * The remaining sub-channels (Rock, Jazz, Groove, World, Reggae, Metal)
+   * continue ingesting spins for history and crossing-computation purposes but
+   * are excluded from the listener-facing dial so they do not dilute the 8
+   * crossing slots FIP would otherwise occupy — reduced to 2 visible slots.
+   *
+   * "crossingEligible: false" stations:
+   *   - remain active (polled normally, ingest continues)
+   *   - are excluded from GET /api/stations and now-playing pulse
+   *   - retain full spin history and MBID-resolution data
+   *   - can be promoted back by flipping the flag in the DB or seed
+   */
+  const CROSSING_ELIGIBLE_SLUGS = new Set(["fip-main", "fip-electro"]);
+
   const stations: Array<{
     slug: string;
     name: string;
@@ -702,6 +722,7 @@ function fipStations(): InsertStation[] {
     nowPlayingSource: "fip",
     nowPlayingConfig: { stationId },
     stationClass: "curated",
+    crossingEligible: CROSSING_ELIGIBLE_SLUGS.has(slug),
     sortOrder,
   }));
 }
@@ -1906,6 +1927,10 @@ export async function seedStations(): Promise<void> {
           nowPlayingSource: s.nowPlayingSource ?? null,
           nowPlayingConfig: s.nowPlayingConfig ?? null,
           stationClass: s.stationClass ?? "curated",
+          // Propagate the crossing-eligible flag so sub-channel demotions
+          // applied in the seed take effect on restart without a manual DB edit.
+          // Defaults to true when the seed row omits it (most stations).
+          crossingEligible: s.crossingEligible ?? true,
           // COALESCE: update with the newly inferred value only when non-null,
           // otherwise keep whatever is already stored (preserves manual corrections
           // and avoids clobbering with null for US stations that lack a city).

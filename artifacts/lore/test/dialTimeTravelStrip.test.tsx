@@ -290,7 +290,7 @@ describe("(a) queue panel renders with → disabled in live mode", () => {
     expect(getPrevBtn().hasAttribute("disabled")).toBe(false);
   });
 
-  it("shows no where-in-time label in live mode; the topbar moon is the indicator", () => {
+  it("shows no where-in-time label in live mode; the front door has no topbar breadcrumbs", () => {
     mockDialDataSettled();
     renderDial();
 
@@ -298,10 +298,10 @@ describe("(a) queue panel renders with → disabled in live mode", () => {
     expect(getTimeLabel()?.textContent).toContain("Choose a live set");
     expect(screen.queryByText("Today")).toBeNull();
 
-    const topbarMoon = document.querySelector(".dial-topbar__moon-tr");
-    expect(topbarMoon).toBeTruthy();
-    expect(topbarMoon?.getAttribute("aria-hidden")).toBe("true");
-    expect(topbarMoon?.querySelector("svg.moon-glyph")).toBeTruthy();
+    // The front door intentionally dropped the topbar row (wordmark + moon)
+    // because it consumed a full row without adding navigational value.
+    // Drill-down levels (station / show / dj) retain their breadcrumb topbar.
+    expect(document.querySelector(".dial-topbar__moon-tr")).toBeNull();
   });
 });
 
@@ -331,31 +331,31 @@ describe("(b) stepping ← shows most recent crossing run", () => {
     expect(nextBtn.hasAttribute("disabled")).toBe(false);
   });
 
-  it("topbar moon tracks the scrubbed day once stepped back", () => {
+  it("stepping back reveals the run row and re-enables ← when more runs remain", () => {
+    // The front-door dropped the topbar moon row so date-tracking via the moon
+    // glyph no longer applies. This test verifies the behavioral outcome of
+    // pressing ← instead: the run data becomes visible and the → button
+    // re-enables — confirming pastScan advanced one step correctly.
     mockDialDataSettled();
     renderDial();
 
-    // Capture the live-edge moon shadow path (computed from today's date).
-    const liveMoonSvg = document.querySelector(".dial-topbar__moon-tr svg.moon-glyph");
-    expect(liveMoonSvg).toBeTruthy();
-    // Record the shadow path (may be null at full moon — that is fine).
-    const liveShadow = liveMoonSvg?.querySelector("path")?.getAttribute("d") ?? "__none__";
+    // Confirm we start at live edge (→ disabled).
+    expect(getNextBtn().hasAttribute("disabled")).toBe(true);
 
     act(() => {
       fireEvent.click(getPrevBtn());
     });
 
-    // The topbar moon must still exist and remain purely decorative.
-    const topbarMoon = document.querySelector(".dial-topbar__moon-tr");
-    expect(topbarMoon?.getAttribute("aria-hidden")).toBe("true");
-    const scrubbedMoonSvg = topbarMoon?.querySelector("svg.moon-glyph");
-    expect(scrubbedMoonSvg).toBeTruthy();
+    // After one step back the run row appears.
+    const runRow = document.querySelector('[data-run-id="101"]');
+    expect(runRow).toBeTruthy();
 
-    // The shadow path must reflect the scrubbed run's day ("2026-08-05"),
-    // not today's date — confirming the `date` prop was forwarded correctly.
-    // The run date and today are ≥1 day apart so the shadow geometry must differ.
-    const scrubbedShadow = scrubbedMoonSvg?.querySelector("path")?.getAttribute("d") ?? "__none__";
-    expect(scrubbedShadow).not.toBe(liveShadow);
+    // → re-enables because we are no longer at the live edge.
+    expect(getNextBtn().hasAttribute("disabled")).toBe(false);
+
+    // No topbar moon element exists on the front door (intentionally removed;
+    // see renderTopbar() comment in DialView.tsx).
+    expect(document.querySelector(".dial-topbar__moon-tr")).toBeNull();
   });
 
   it("live Zone 1 crossing rows (.fdrow) are absent after stepping back into past-scan", () => {

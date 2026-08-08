@@ -19,6 +19,13 @@ export async function setup(): Promise<void> {
   process.env.MUSICBRAINZ_CONTACT ??= "test@example.com";
 
   try {
+    // Ensures crossing_eligible column exists — required by any test that
+    // inserts into stationsTable after the schema added this column.
+    const { applyStationDiscoveryMigration } = await import(
+      "../src/lore/station-migration.js"
+    );
+    await applyStationDiscoveryMigration();
+
     const { applySelectorClaimsMigration } = await import(
       "../src/lore/selector-claims-migration.js"
     );

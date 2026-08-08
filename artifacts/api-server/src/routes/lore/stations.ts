@@ -118,8 +118,11 @@ const fingerprintLimiter = rateLimit({
 });
 
 // GET /api/stations
-// Only active=true stations are returned — longtail candidates (active=false)
-// are health-gated and must not appear in the public directory.
+// Only active=true, non-hidden, crossing-eligible stations are returned.
+// Longtail candidates (active=false) are health-gated and must not appear in
+// the public directory. crossingEligible=false stations (e.g. FIP sub-channels)
+// continue to ingest and accumulate history but are excluded from the crossing
+// surface so they do not dilute the dial.
 // `upcomingShowCount` is a denormalized column written by the schedule scraper
 // in the same transaction as each scraped_shows replace, so no second query
 // is needed here. LEFT JOINs station_quality to include qualityTier so the
@@ -135,7 +138,11 @@ router.get("/stations", h(async (_req, res) => {
       stationQualityTable,
       eq(stationQualityTable.stationId, stationsTable.id),
     )
-    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
+    .where(and(
+      eq(stationsTable.active, true),
+      eq(stationsTable.hidden, false),
+      eq(stationsTable.crossingEligible, true),
+    ))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   const now = new Date();
@@ -182,7 +189,11 @@ router.get("/stations/now-playing", h(async (req, res) => {
     const stations = await db
       .select({ id: stationsTable.id, slug: stationsTable.slug })
       .from(stationsTable)
-      .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
+      .where(and(
+        eq(stationsTable.active, true),
+        eq(stationsTable.hidden, false),
+        eq(stationsTable.crossingEligible, true),
+      ))
       .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
     const rows = await db
@@ -392,7 +403,11 @@ router.get("/stations/at/:date/now-playing", h(async (req, res) => {
   const stations = await db
     .select({ id: stationsTable.id, slug: stationsTable.slug })
     .from(stationsTable)
-    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
+    .where(and(
+      eq(stationsTable.active, true),
+      eq(stationsTable.hidden, false),
+      eq(stationsTable.crossingEligible, true),
+    ))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   const rows = await db

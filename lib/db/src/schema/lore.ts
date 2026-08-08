@@ -190,6 +190,20 @@ export const stationsTable = pgTable("stations", {
    */
   hidden: boolean("hidden").notNull().default(false),
   /**
+   * Whether this station appears in the listener-facing crossing surface
+   * (station list and now-playing dial). When false the station continues to
+   * ingest spins (history grows, crossing data accumulates) but is excluded
+   * from GET /api/stations and the now-playing pulse, so it does not occupy
+   * a crossing slot. Default is true.
+   *
+   * Distinct from `hidden` (which also stops polling entirely) and `active`
+   * (health-driven). Use this for sub-channels and algorithmic feeds that
+   * produce valuable history but should not compete for crossing real estate:
+   * e.g. FIP thematic sub-channels where only the primary + one wedge channel
+   * should surface on the dial.
+   */
+  crossingEligible: boolean("crossing_eligible").notNull().default(true),
+  /**
    * How this station entered the directory: "curated" = hand-curated flagship
    * seed, "radio_browser" = auto-discovered via radio-browser.info.
    */
