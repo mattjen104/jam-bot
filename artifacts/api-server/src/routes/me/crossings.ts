@@ -592,7 +592,7 @@ router.get("/me/crossings", h(async (req, res) => {
   // front door render immediately for first-time visitors. The empty result is
   // cached like any other, and library imports / taste-seed PUTs already call
   // bustCrossingsCache(), so real data replaces it as soon as taste exists.
-  const [hasLib, hasSeeds] = await Promise.all([
+  const [hasLib, hasSeeds, hasSoft] = await Promise.all([
     db
       .select({ id: libraryItemsTable.id })
       .from(libraryItemsTable)
@@ -603,8 +603,16 @@ router.get("/me/crossings", h(async (req, res) => {
       .from(tasteSeedsTable)
       .where(eq(tasteSeedsTable.userId, user.id))
       .limit(1),
+    // Unresolved Spotify imports feed the soft-artist name-match path, so a
+    // soft-only user is NOT empty-taste — skipping this check caches [] and
+    // blanks the dial for users whose import hasn't resolved MBIDs yet.
+    db
+      .select({ id: spotifyLibraryItemsTable.id })
+      .from(spotifyLibraryItemsTable)
+      .where(and(eq(spotifyLibraryItemsTable.userId, user.id), isNull(spotifyLibraryItemsTable.removedAt)))
+      .limit(1),
   ]);
-  if (hasLib.length === 0 && hasSeeds.length === 0) {
+  if (hasLib.length === 0 && hasSeeds.length === 0 && hasSoft.length === 0) {
     const items: CrossingsRow[] = [];
   const builtAt = new Date();
     crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });

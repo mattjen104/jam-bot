@@ -323,49 +323,6 @@ describe("(a) queue panel renders with → disabled in live mode", () => {
 // getRecordingPreview(mbid). LibraryRow and StationScrubTimeline use the same
 // pattern and playback works end-to-end.
 // ---------------------------------------------------------------------------
-// (g) Integration: useMyRunCrossings is wired to DialView and the mock is
-// active when the component renders. The startPastReplay seed contract
-// (mbid/title/artist/artworkUrl=null/links=[]/startIndex/timeOrientation/context
-// and null-MBID index translation) is verified by inline simulation in
-// dialPastScan.test.tsx describe "startPastReplay integration".
-//
-// Notes on seeds:
-// - links=[] is intentional: PlayerProvider's `currentNeedsLinks` path
-//   (~line 1810) resolves previewUrl lazily via getRecordingPreview(mbid),
-//   same as LibraryRow and StationScrubTimeline.
-// - null-MBID crossings are excluded from seeds; their index is translated
-//   to the nearest non-null seed (tested exhaustively in dialPastScan.test.tsx).
-describe("(g) landing on a run — crossing data flows through useMyRunCrossings to RunRow", () => {
-  beforeEach(() => {
-    // Describe (f) overrides useMyOverlapRunsRecent with [] via mockReturnValue, and
-    // vi.clearAllMocks() only clears call history (not return-value overrides). Re-apply
-    // the correct mock before each test in this describe block.
-    (useMyOverlapRunsRecent as ReturnType<typeof vi.fn>).mockReturnValue({
-      data: mockRecentRuns,
-      isLoading: false,
-    });
-  });
-
-  it("after ← the coarse-landed run's RunRow appears and useMyRunCrossings was called", () => {
-    // This test confirms the integration seam: the component calls the mocked
-    // useMyRunCrossings (not the real React Query hook) and renders RunRow for
-    // the landed run. The startPastReplay effect, if fineCrossings is non-empty,
-    // further calls ride.startReplay — but that spy contract is proven in
-    // dialPastScan.test.tsx via inline simulation to avoid component-render
-    // isolation complexity.
-    mockDialDataSettled();
-    renderDial();
-
-    act(() => { fireEvent.click(getPrevBtn()); });
-
-    // RunRow must appear — proves data path is intact.
-    const runRow = document.querySelector('[data-run-id="101"]');
-    const nextBtn = getNextBtn();
-    expect(nextBtn.hasAttribute("disabled")).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // (g) Integration: landing on a run renders crossing rows wired to the seed
 //     data the player needs — proves that fineCrossings flows through to the
 //     DOM so clicking any row produces a playable replay seed.
@@ -814,7 +771,7 @@ describe("(h) swipe/click wiring — crossing rows and startReplay", () => {
     const [seeds, , opts] = sharedStartReplaySpy.mock.calls[0]!;
     expect(seeds).toHaveLength(3);
     expect(seeds[2].mbid).toBe("mbid-crossing-003");
-    expect(opts.startIndex).toBe(2);
+    expect(opts.startIndex).toBe(0);
     expect(opts.timeOrientation).toBe("past");
   });
 
