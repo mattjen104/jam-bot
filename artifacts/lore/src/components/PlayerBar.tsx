@@ -38,6 +38,8 @@ interface PlayerBarProps {
   onScanToggle?: () => void;
   scanDir?: 1 | -1;
   onScanDirToggle?: () => void;
+  /** Tap-to-expand: fired when the bar surface (not a control) is tapped. */
+  onExpand?: () => void;
 }
 
 export function PlayerBar({
@@ -60,6 +62,7 @@ export function PlayerBar({
   onScanToggle,
   scanDir = 1,
   onScanDirToggle,
+  onExpand,
 }: PlayerBarProps) {
   const isCasting = casting === "casting";
   const isPlaying = isCasting ? !castPaused : status === "playing";
@@ -97,7 +100,22 @@ export function PlayerBar({
   return (
     <div className="player-bar-block" data-testid="player-bar">
       {/* ── Controls row ─────────────────────────────────────────────── */}
-      <div className="player-bar-row">
+      {/* Tapping anywhere on the row EXCEPT a control (button/input/link)
+          expands the full now-playing sheet on mobile. Controls keep working
+          without expanding — the closest() guard swallows nothing. */}
+      <div
+        className="player-bar-row"
+        data-testid="player-bar-surface"
+        onClick={
+          onExpand
+            ? (e) => {
+                const el = e.target as HTMLElement;
+                if (el.closest("button, input, a, [role='slider']")) return;
+                onExpand();
+              }
+            : undefined
+        }
+      >
         {/* EQ animation bars */}
         <span className="player-bar-eq" aria-hidden="true">
           {[0, 1, 2, 3].map((i) => (

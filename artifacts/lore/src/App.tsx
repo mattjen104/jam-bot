@@ -38,6 +38,7 @@ import { PlayerDock } from "./components/PlayerDock";
 import { SocialModeBar } from "./components/SocialModeBar";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
+import { SlimSectionNav } from "./components/SlimSectionNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
 
@@ -191,6 +192,10 @@ function BottomShell() {
       <div className="bottom-shell">
         <div className="bottom-shell__strip" aria-hidden="true" />
         <PlayerDock />
+        {/* Spotify-style mobile nav row — [lore] / [my library] at the very
+            bottom of the screen, below the mini player. CSS shows this only
+            at phone widths; desktop keeps the corner-link treatment. */}
+        <SlimSectionNav variant="bottom" />
         {/* RecordPeekNav (record-sleeve tabs) hidden for now — section nav
             moved into the page space as SlimSectionNav (AppLayout/DialView). */}
       </div>

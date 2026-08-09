@@ -1,17 +1,28 @@
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import {
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { PlayerBar } from "./PlayerBar";
+import { PlayerSheet } from "./PlayerSheet";
 import { RideBar } from "./RideBar";
+
+/** Matches the shell's phone-width CSS convention (one-line dock breakpoint). */
+const MOBILE_SHELL_QUERY = "(orientation: portrait), (max-width: 720px)";
 
 /**
  * The single bottom dock. A ride takes over audio while active (so it wins the
  * dock); otherwise the live-radio bar shows when a station is loaded.
+ *
+ * On phones the live-radio bar is a tappable mini player: tapping its surface
+ * (not a control) expands the full now-playing sheet (PlayerSheet).
  */
 export function PlayerDock() {
   const { radio, ride, spotify, scan } = usePlayer();
+  const [expanded, setExpanded] = useState(false);
+  const [location] = useLocation();
 
   const stationSlug = radio.station?.slug ?? "";
   const { data: npData } = useGetStationNowPlaying(stationSlug, {
@@ -22,6 +33,16 @@ export function PlayerDock() {
       staleTime: 15_000,
     },
   });
+
+  // Collapse when the station goes away, a ride takes over, or the listener
+  // navigates (e.g. taps a song/artist link inside the sheet).
+  const hasStation = !!radio.station;
+  useEffect(() => {
+    if (!hasStation || ride.active) setExpanded(false);
+  }, [hasStation, ride.active]);
+  useEffect(() => {
+    setExpanded(false);
+  }, [location]);
 
   const notice = spotify.notice ? (
     <div
@@ -52,25 +73,45 @@ export function PlayerDock() {
   }
   if (radio.station) {
     return (
-      <PlayerBar
-        station={radio.station}
-        status={radio.status}
-        volume={radio.volume}
-        error={radio.error}
-        casting={radio.casting}
-        castFallbackReason={radio.castFallbackReason}
-        castPaused={radio.castPaused}
-        onCastRetry={radio.castRetry}
-        onToggle={radio.toggle}
-        onStop={radio.stop}
-        onVolume={radio.setVolume}
-        nowPlaying={npData?.nowPlaying}
-        spotify={spotify}
-        scanActive={scan.active}
-        onScanToggle={scan.toggle}
-        scanDir={scan.dir}
-        onScanDirToggle={scan.toggleDir}
-      />
+      <>
+        <PlayerBar
+          station={radio.station}
+          status={radio.status}
+          volume={radio.volume}
+          error={radio.error}
+          casting={radio.casting}
+          castFallbackReason={radio.castFallbackReason}
+          castPaused={radio.castPaused}
+          onCastRetry={radio.castRetry}
+          onToggle={radio.toggle}
+          onStop={radio.stop}
+          onVolume={radio.setVolume}
+          nowPlaying={npData?.nowPlaying}
+          spotify={spotify}
+          scanActive={scan.active}
+          onScanToggle={scan.toggle}
+          scanDir={scan.dir}
+          onScanDirToggle={scan.toggleDir}
+          onExpand={() => {
+            // Expand only at phone widths — desktop keeps the plain dock.
+            if (window.matchMedia(MOBILE_SHELL_QUERY).matches) setExpanded(true);
+          }}
+        />
+        {expanded && (
+          <PlayerSheet
+            station={radio.station}
+            nowPlayingData={npData}
+            status={radio.status}
+            volume={radio.volume}
+            onToggle={radio.toggle}
+            onStop={radio.stop}
+            onVolume={radio.setVolume}
+            scanActive={scan.active}
+            onScanToggle={scan.toggle}
+            onCollapse={() => setExpanded(false)}
+          />
+        )}
+      </>
     );
   }
   return null;
