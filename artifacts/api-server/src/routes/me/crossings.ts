@@ -472,6 +472,24 @@ export async function cachePersonalCrossings(userId: number, items: CrossingsRow
 const recomputeInFlight = new Map<number, Promise<void>>();
 
 /**
+ * Timestamp of the most recent FAILED background recompute, per user.
+ * Set when a recompute throws; cleared on the next successful compute.
+ * Lets the endpoint answer `failed: true` (instead of a false settled-empty
+ * or an eternal `computing: true`) when the cold compute crashed. The
+ * single-flight entry is always cleared in `finally`, so a later poll
+ * re-schedules the compute and can recover.
+ */
+const recomputeFailedAt = new Map<number, number>();
+
+/** Test seam: force the next background recompute(s) to fail. */
+let computeOverride: ((userId: number) => Promise<CrossingsRow[]>) | null = null;
+export function _testOnly_setComputeOverride(
+  fn: ((userId: number) => Promise<CrossingsRow[]>) | null,
+): void {
+  computeOverride = fn;
+}
+
+/**
  * Trigger a background personal-crossings recompute for a user.
  * Safe to call from a request handler with `void` — errors are caught.
  * Concurrent calls for the same user reuse the in-flight promise.
@@ -482,9 +500,11 @@ export function schedulePersonalCrossingsRecompute(userId: number): void {
   const p = (async () => {
     try {
       console.log(`[crossings] background recompute for user=${userId} (SWR)`);
-      const items = await computePersonalCrossings(userId);
+      const items = await (computeOverride ?? computePersonalCrossings)(userId);
       await cachePersonalCrossings(userId, items);
+      recomputeFailedAt.delete(userId);
     } catch (err) {
+      recomputeFailedAt.set(userId, Date.now());
       console.error(`[crossings] background recompute failed for user=${userId}`, err);
     } finally {
       recomputeInFlight.delete(userId);
@@ -615,7 +635,21 @@ router.get("/me/crossings", h(async (req, res) => {
   ]);
   if (winner === "done") {
     const fresh = crossingsCache.get(user.id);
-    return res.json({ items: fresh?.data ?? [] });
+    if (fresh) return res.json({ items: fresh.data });
+    // The compute finished without producing a cache entry — it crashed.
+    // Answer `failed: true` (NOT a settled empty result, which would render a
+    // false "none of your artists played", and NOT `computing: true`, which
+    // would leave the client polling forever). The single-flight entry was
+    // cleared in `finally`, so the client's next poll retries the compute.
+    return res.json({ items: [], computing: false, failed: true });
+  }
+  // Timed out waiting. If the PREVIOUS compute attempt crashed (recorded in
+  // recomputeFailedAt, cleared only after a successful cache write), report
+  // failed:true instead of computing:true — otherwise a slow, repeatedly-
+  // crashing compute keeps every poll in an eternal computing state. A retry
+  // compute is already in flight (scheduled above), so recovery still happens.
+  if (recomputeFailedAt.has(user.id)) {
+    return res.json({ items: [], computing: false, failed: true });
   }
   return res.json({ items: [], computing: true });
 }));

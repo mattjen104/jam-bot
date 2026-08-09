@@ -24,6 +24,7 @@ import {
   _testOnly_clearBlendedCrossingsL2Cache,
   _testOnly_getBlendedCrossingsCache,
   _testOnly_setColdComputeDeadline,
+  _testOnly_setComputeOverride,
   SOCIAL_PRESENCE_TTL_MS,
 } from "../src/routes/me/crossings.js";
 
@@ -1193,6 +1194,108 @@ describe("GET /api/me/crossings — bounded cold compute", () => {
       // SID_RG owns a library crossing fixture, so real rows must appear.
       expect(items!.length).toBeGreaterThan(0);
     } finally {
+      restore();
+    }
+  }, TEST_TIMEOUT);
+});
+
+// ── Stuck-compute guard (false "nothing played" prevention) ──────────────────
+//
+// A crashed cold compute must never produce a settled-empty response (the
+// client would render a false "none of your artists played") nor an eternal
+// `computing: true`. The endpoint answers `failed: true`, and — because the
+// single-flight entry is cleared on failure — a later poll retries the
+// compute and serves real rows once it succeeds.
+describe("GET /api/me/crossings — failed compute recovery", () => {
+  it("reports failed:true when the compute crashes, then serves real items after a successful retry", async () => {
+    if (!dbAvailable) return;
+
+    try {
+      await _testOnly_clearCrossingsCache(userRgId!);
+      _testOnly_setComputeOverride(async () => {
+        throw new Error("boom (injected test failure)");
+      });
+
+      const first = await get("/api/me/crossings", SID_RG);
+      expect(first.status).toBe(200);
+      expect(first.body.failed).toBe(true);
+      expect(first.body.computing).not.toBe(true);
+      expect(first.body.items).toEqual([]);
+
+      // Recovery: remove the injected failure — the next request re-schedules
+      // the compute (single-flight entry was cleared) and real rows appear.
+      _testOnly_setComputeOverride(null);
+      let items: Array<{ stationSlug: string }> | null = null;
+      for (let i = 0; i < 60; i++) {
+        const poll = await get("/api/me/crossings", SID_RG);
+        expect(poll.status).toBe(200);
+        if (!poll.body.computing && !poll.body.failed) {
+          items = poll.body.items;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      expect(items).not.toBeNull();
+      expect(items!.length).toBeGreaterThan(0);
+    } finally {
+      _testOnly_setComputeOverride(null);
+    }
+  }, TEST_TIMEOUT);
+
+  it("reports failed:true on a later poll when a slow compute outlives the deadline then crashes", async () => {
+    if (!dbAvailable) return;
+
+    // Deadline 0: every request times out waiting on the compute, so the
+    // first response can only say computing:true — the crash hasn't happened
+    // yet. Once the slow compute rejects, subsequent polls must surface
+    // failed:true rather than an eternal computing state.
+    const restore = _testOnly_setColdComputeDeadline(0);
+    try {
+      await _testOnly_clearCrossingsCache(userRgId!);
+      _testOnly_setComputeOverride(async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        throw new Error("slow boom (injected test failure)");
+      });
+
+      const first = await get("/api/me/crossings", SID_RG);
+      expect(first.status).toBe(200);
+      expect(first.body.computing).toBe(true);
+      expect(first.body.failed).not.toBe(true);
+
+      // Wait for the in-flight compute to crash, then poll: the recorded
+      // failure must surface as failed:true even though each new poll
+      // re-schedules a (still-crashing) retry compute.
+      await new Promise((r) => setTimeout(r, 600));
+      let sawFailed = false;
+      for (let i = 0; i < 20; i++) {
+        const poll = await get("/api/me/crossings", SID_RG);
+        expect(poll.status).toBe(200);
+        if (poll.body.failed === true) {
+          expect(poll.body.computing).not.toBe(true);
+          sawFailed = true;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      expect(sawFailed).toBe(true);
+
+      // Recovery: real compute succeeds → the failure flag clears and items
+      // appear on a later poll.
+      _testOnly_setComputeOverride(null);
+      let items: Array<{ stationSlug: string }> | null = null;
+      for (let i = 0; i < 60; i++) {
+        const poll = await get("/api/me/crossings", SID_RG);
+        expect(poll.status).toBe(200);
+        if (!poll.body.computing && !poll.body.failed) {
+          items = poll.body.items;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      expect(items).not.toBeNull();
+      expect(items!.length).toBeGreaterThan(0);
+    } finally {
+      _testOnly_setComputeOverride(null);
       restore();
     }
   }, TEST_TIMEOUT);

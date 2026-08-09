@@ -513,6 +513,43 @@ interface SseSpinEntry {
 export const CROSSINGS_SETTLE_DEADLINE_MS = 25_000;
 
 /**
+ * How long a `computing: true` state may persist before the dial gives up and
+ * shows a terminal "couldn't check right now" message. Well past the skeleton
+ * deadline: this bounds the honest "still finding matches" degraded state.
+ */
+export const CROSSINGS_STALL_DEADLINE_MS = 120_000;
+
+/**
+ * Provenance of the current crossings result — what the dial may honestly say.
+ *  - "loading":   pending, within the skeleton deadline (show skeleton)
+ *  - "computing": pending past the skeleton deadline, server still computing
+ *                 (show "still finding matches", never the empty nudge)
+ *  - "stalled":   computing has persisted past CROSSINGS_STALL_DEADLINE_MS
+ *  - "failed":    the server reported a crashed compute, or the query errored
+ *  - "settled":   the server returned a genuine, non-computing result — the
+ *                 ONLY phase in which the definitive empty state may render
+ */
+export type CrossingsPhase = "loading" | "computing" | "stalled" | "failed" | "settled";
+
+/**
+ * Pure derivation of the crossings result phase — exported for tests.
+ * `withinSkeleton` / `withinStall` are the two bounded-pending signals
+ * (`useBoundedPending` over the skeleton and stall deadlines respectively).
+ */
+export function deriveCrossingsPhase(args: {
+  queryError: boolean;
+  serverFailed: boolean;
+  pending: boolean;
+  withinSkeleton: boolean;
+  withinStall: boolean;
+}): CrossingsPhase {
+  if (args.queryError || args.serverFailed) return "failed";
+  if (!args.pending) return "settled";
+  if (args.withinSkeleton) return "loading";
+  return args.withinStall ? "computing" : "stalled";
+}
+
+/**
  * Returns `pending`, except that once it has been continuously true for
  * `deadlineMs` it flips to false and stays false until `pending` clears.
  *
@@ -556,6 +593,11 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   pickerNameToId: Map<string, number>;
   crossingSourceMode: DialDisplayMode;
   crossingError: boolean;
+  /**
+   * Provenance of the crossings result actually driving Zone 1. The definitive
+   * "none of your artists played" empty state may only render when "settled".
+   */
+  crossingsPhase: CrossingsPhase;
   /** True when the station-list request has failed (network error or non-2xx response). */
   stationsError: boolean;
   /** Re-request the station list without navigating away. */
@@ -679,10 +721,27 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   // still running); the hook polls fast in that state, and we keep the Zone 1
   // skeleton up — but only up to a bounded deadline, so the dial can never be
   // held on a skeleton indefinitely by a stuck compute.
-  const { data: crossingsResult, isLoading: crossingsQueryLoading } = useMyDialCrossings(today);
+  const {
+    data: crossingsResult,
+    isLoading: crossingsQueryLoading,
+    isError: crossingsQueryError,
+  } = useMyDialCrossings(today);
   const serverCrossings = crossingsResult?.items;
   const crossingsPending = crossingsQueryLoading || crossingsResult?.computing === true;
   const crossingsLoading = useBoundedPending(crossingsPending, CROSSINGS_SETTLE_DEADLINE_MS);
+  // Second, much longer bound on the same pending signal: past it, a still-
+  // computing server is treated as stalled and the dial shows terminal
+  // "couldn't check" copy instead of "still finding matches" forever.
+  const withinStallBound = useBoundedPending(crossingsPending, CROSSINGS_STALL_DEADLINE_MS);
+  // Result provenance: the definitive Zone 1 empty state may only render in
+  // the "settled" phase — a genuine non-computing, non-failed server result.
+  const crossingsPhase = deriveCrossingsPhase({
+    queryError: crossingsQueryError,
+    serverFailed: crossingsResult?.failed === true,
+    pending: crossingsPending,
+    withinSkeleton: crossingsLoading,
+    withinStall: withinStallBound,
+  });
   const {
     data: blendedCrossings,
     isLoading: blendedLoading,
@@ -696,6 +755,16 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     displayMode === "blended" && blendedCrossings == null ? "personal" : displayMode;
   const selectedCrossingsLoading =
     displayMode === "blended" ? blendedCrossings == null && !blendedError : crossingsLoading;
+  // In blended mode a loaded blend is settled; on blend error we fall back to
+  // the personal crossings, so their phase governs what Zone 1 may claim.
+  const selectedCrossingsPhase: CrossingsPhase =
+    displayMode === "blended"
+      ? blendedCrossings != null
+        ? "settled"
+        : blendedError
+          ? crossingsPhase
+          : "loading"
+      : crossingsPhase;
 
   const serverCrossingsBySlug = useMemo(() => {
     const m = new Map<string, { crossings: number; artistCrossings: number; weekCrossings: number; weekArtistCrossings: number; monthCrossings: number; monthArtistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number; topArtistNames: string[] }>();
@@ -1057,6 +1126,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     pickerNameToId,
     crossingSourceMode,
     crossingError: displayMode === "blended" && blendedError && blendedCrossings == null,
+    crossingsPhase: selectedCrossingsPhase,
     stationsError,
     refetchStations: () => { void refetchStations(); },
   };

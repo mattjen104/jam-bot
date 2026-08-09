@@ -199,6 +199,7 @@ function baseDialData(overrides: Record<string, unknown> = {}) {
     pickerNameToId: new Map<string, number>(),
     crossingSourceMode: "personal",
     crossingError: null,
+    crossingsPhase: "settled",
     ...overrides,
   };
 }
@@ -310,6 +311,64 @@ describe("Zone 1 nudge — absent in non-nudge states", () => {
     renderDial();
 
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+  });
+});
+
+describe("Zone 1 nudge — result provenance (computing / failed / stalled)", () => {
+  const COMPUTING_TEXT = "Still finding matches for your artists";
+  const ERROR_TEXT = "We couldn't check your artist matches right now";
+
+  it("shows in-progress copy, not the nudge, when the 25s bound expired but the server is still computing", () => {
+    // crossingsLoading=false models the expired bounded-pending deadline;
+    // crossingsPhase="computing" models the latest response still saying so.
+    mockDialData({ crossingsLoading: false, crossingsPhase: "computing", stations: [] });
+    renderDial();
+
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+    expect(screen.getByText(COMPUTING_TEXT, { exact: false })).toBeTruthy();
+  });
+
+  it("shows terminal 'couldn't check' copy when the compute failed", () => {
+    mockDialData({ crossingsLoading: false, crossingsPhase: "failed", stations: [] });
+    renderDial();
+
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+    expect(screen.getByText(ERROR_TEXT, { exact: false })).toBeTruthy();
+  });
+
+  it("shows terminal 'couldn't check' copy when computing has stalled past the hard bound", () => {
+    mockDialData({ crossingsLoading: false, crossingsPhase: "stalled", stations: [] });
+    renderDial();
+
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+    expect(screen.getByText(ERROR_TEXT, { exact: false })).toBeTruthy();
+  });
+
+  it("replaces the in-progress copy with crossing rows when the compute lands", () => {
+    mockDialData({ crossingsLoading: false, crossingsPhase: "computing", stations: [] });
+    const { rerender } = renderDial();
+    expect(screen.getByText(COMPUTING_TEXT, { exact: false })).toBeTruthy();
+
+    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
+      baseDialData({ crossingsPhase: "settled", stations: [makeCrossingStation("kexp")] }),
+    );
+    act(() => { rerender(<DialView />); });
+
+    expect(screen.queryByText(COMPUTING_TEXT, { exact: false })).toBeNull();
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+  });
+
+  it("shows the nudge only once a settled empty result arrives after computing", () => {
+    mockDialData({ crossingsLoading: false, crossingsPhase: "computing", stations: [] });
+    const { rerender } = renderDial();
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+
+    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
+      baseDialData({ crossingsPhase: "settled", stations: [] }),
+    );
+    act(() => { rerender(<DialView />); });
+
+    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
   });
 });
 

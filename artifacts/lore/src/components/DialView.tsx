@@ -1881,9 +1881,13 @@ export function DialView() {
     pickerNameToId,
     crossingSourceMode,
     crossingError,
+    crossingsPhase,
     stationsError,
     refetchStations,
   } = useDialData(displayMode);
+  // Defensive default keeps older mocks (which don't provide the phase) on the
+  // legacy behavior; the real hook always supplies it.
+  const cxPhase = crossingsPhase ?? "settled";
 
   useEffect(() => {
     const send = () => {
@@ -3544,11 +3548,36 @@ export function DialView() {
                         Suppressed while liveLoading is true: crossings depend on the
                         live-station list, so until that poll completes sortedRows is
                         empty and withReason is vacuously 0 even if crossings exist. */}
-                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
+                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "settled" && (
                       <div className="z1-placeholder z1-placeholder--no-cross">
                         <div className="z1-placeholder__body">
                           <p className="z1-placeholder__pitch">
                             None of your artists have played on a live station today. Tune into a station or check back later.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Skeleton deadline expired but the server is still computing —
+                        honest in-progress copy instead of the false negative above.
+                        The 4s repoll keeps running; rows replace this when they land. */}
+                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "computing" && (
+                      <div className="z1-placeholder z1-placeholder--computing">
+                        <div className="z1-placeholder__body">
+                          <p className="z1-placeholder__pitch">
+                            Still finding matches for your artists — this can take a moment on a fresh start.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Compute failed or stalled far past reasonable bounds —
+                        honest terminal copy; background retries continue. */}
+                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (cxPhase === "failed" || cxPhase === "stalled") && (
+                      <div className="z1-placeholder z1-placeholder--cross-error">
+                        <div className="z1-placeholder__body">
+                          <p className="z1-placeholder__pitch">
+                            We couldn't check your artist matches right now. We'll keep trying — check back in a moment.
                           </p>
                         </div>
                       </div>

@@ -635,20 +635,36 @@ export interface DialCrossingsResult {
   items: DialCrossing[];
   /** True while a cold-cache server compute is still running in the background. */
   computing: boolean;
+  /**
+   * True when the server's background compute crashed. Distinct from an
+   * empty settled result — the client must show "couldn't check" copy, not
+   * "none of your artists played". A later refetch retries the compute.
+   */
+  failed: boolean;
 }
 
 export function useMyDialCrossings(date: string) {
   return useQuery<DialCrossingsResult>({
     queryKey: ME_DIAL_CROSSINGS_KEY(date),
     queryFn: () =>
-      fetchOrNull<{ items: DialCrossing[]; computing?: boolean }>(
+      fetchOrNull<{ items: DialCrossing[]; computing?: boolean; failed?: boolean }>(
         `/api/me/crossings?date=${encodeURIComponent(date)}`,
-      ).then((d) => ({ items: d?.items ?? [], computing: d?.computing === true })),
+      ).then((d) => ({
+        items: d?.items ?? [],
+        computing: d?.computing === true,
+        failed: d?.failed === true,
+      })),
     staleTime: 2 * 60_000,
     // While the server reports a cold compute in progress, poll fast so
     // personalized rows fill in the moment the background compute lands.
+    // After a reported compute failure, retry on a middling cadence — each
+    // request re-schedules the compute server-side, so recovery is possible.
     refetchInterval: (query) =>
-      query.state.data?.computing ? 4_000 : 2 * 60_000,
+      query.state.data?.computing
+        ? 4_000
+        : query.state.data?.failed
+          ? 30_000
+          : 2 * 60_000,
     retry: false,
   });
 }
