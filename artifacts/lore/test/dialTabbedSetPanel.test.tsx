@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import {
+  CONTEXT_TAB_ID,
   TabbedSetPanel,
   shouldActivateReplayTab,
   buildSetExport,
@@ -253,6 +254,109 @@ describe("Tabbed set panel", () => {
     expect(links[0].getAttribute("href")).toBe("https://www.qobuz.com/search?q=Broadcast%20Come%20On%20Let's%20Go");
     // the artist-less spin degrades gracefully into a skip note
     expect(document.querySelector(".set-panel__export-skips")?.textContent).toContain("1 track");
+  });
+});
+
+/** Harness mirroring DialView's context-tab wiring: entering context mode
+ * opens/focuses the tab; closing the tab "exits context" (here: removes it and
+ * records the exit), matching DialView's surface.dial() intercept. */
+function ContextHarness({ onExitContext = vi.fn() }: { onExitContext?: () => void }) {
+  const [tabs, setTabs] = useState<SetPanelTab[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const open = (scope: SetPanelScope) => {
+    const id = setPanelScopeId(scope);
+    setTabs((cur) => cur.some((t) => t.id === id) ? cur : [...cur, { id, scope }]);
+    setActiveId(id);
+  };
+  const enterContext = () => {
+    setTabs((cur) => cur.some((t) => t.id === CONTEXT_TAB_ID)
+      ? cur
+      : [{ id: CONTEXT_TAB_ID, scope: { kind: "context", value: "kexp" } }, ...cur]);
+    setActiveId(CONTEXT_TAB_ID);
+  };
+  const close = (id: string) => {
+    if (id === CONTEXT_TAB_ID) {
+      onExitContext();
+      // DialView removes the tab via the context-mode effect; mirror that.
+      setTabs((cur) => {
+        const idx = cur.findIndex((t) => t.id === id);
+        const next = cur.filter((t) => t.id !== id);
+        setActiveId((a) => a === id ? (next[Math.max(0, idx - 1)]?.id ?? null) : a);
+        return next;
+      });
+      return;
+    }
+    setTabs((cur) => {
+      const idx = cur.findIndex((t) => t.id === id);
+      const next = cur.filter((t) => t.id !== id);
+      setActiveId((a) => a === id ? (next[Math.max(0, idx - 1)]?.id ?? null) : a);
+      return next;
+    });
+  };
+  return (
+    <div>
+      <button type="button" onClick={enterContext}>tune-in</button>
+      <button type="button" onClick={() => open({ kind: "set", setId: SETS[0].id })}>open-first</button>
+      <TabbedSetPanel
+        tabs={tabs}
+        activeId={activeId}
+        allSets={SETS}
+        seedsLower={new Set()}
+        onSelect={setActiveId}
+        onClose={close}
+        onScope={open}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onPlay={vi.fn()}
+        contextLabel="KEXP"
+        contextBody={<div data-testid="context-body">breadcrumb + summary + rail</div>}
+      />
+    </div>
+  );
+}
+
+describe("station-context tab", () => {
+  it("opens the context tab on tune-in, renders its body, and coexists with set tabs", () => {
+    render(<ContextHarness />);
+    fireEvent.click(screen.getByText("tune-in"));
+
+    // One context tab, focused, labelled with the station name.
+    const tabsAfterTune = screen.getAllByRole("tab");
+    expect(tabsAfterTune).toHaveLength(1);
+    expect(tabsAfterTune[0].textContent).toBe("KEXP");
+    expect(tabsAfterTune[0].getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("context-body")).toBeTruthy();
+    // Context body shows INSTEAD of set affordances — no actions, no cards.
+    expect(document.querySelector(".set-panel__actions")).toBeNull();
+    expect(document.querySelector(".set-panel__card")).toBeNull();
+
+    // A set tab opens alongside and takes focus like any tab switch.
+    fireEvent.click(screen.getByText("open-first"));
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(2);
+    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByTestId("context-body")).toBeNull();
+    expect(document.querySelectorAll(".set-panel__card").length).toBeGreaterThan(0);
+
+    // Switching back to the context tab restores its body.
+    fireEvent.click(tabs[0]);
+    expect(screen.getByTestId("context-body")).toBeTruthy();
+    expect(document.querySelector(".set-panel__card")).toBeNull();
+  });
+
+  it("closing the context tab exits context and focuses a neighboring set tab", () => {
+    const onExitContext = vi.fn();
+    render(<ContextHarness onExitContext={onExitContext} />);
+    fireEvent.click(screen.getByText("tune-in"));
+    fireEvent.click(screen.getByText("open-first"));
+    fireEvent.click(screen.getAllByRole("tab")[0]); // focus context
+
+    fireEvent.click(screen.getByRole("button", { name: /close KEXP/i }));
+    expect(onExitContext).toHaveBeenCalledTimes(1);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByTestId("context-body")).toBeNull();
   });
 });
 

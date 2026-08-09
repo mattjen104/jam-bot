@@ -211,8 +211,13 @@ async function openPopulatedQueue(page: Page) {
   const row = page.getByRole("button", { name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`) });
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
-  // Clicking tunes in AND opens the set tab — the queue populates with the
-  // full spin-derived artist list.
+  // Clicking tunes in AND opens the set tab. In the landscape (sidebar)
+  // layout tuning also opens/focuses the station-CONTEXT tab, so the queue
+  // tab (labelled "HH:MM · Station") must be focused explicitly; in portrait
+  // the set tab is already active and this click is a no-op focus.
+  const queueTab = page.getByRole("tab", { name: /·/ });
+  await expect(queueTab.first()).toBeVisible({ timeout: 15_000 });
+  await queueTab.first().click();
   await expect(page.locator(".set-queue__artist").first()).toBeVisible({ timeout: 15_000 });
   expect(await page.locator(".set-queue__artist").count()).toBe(SPIN_COUNT);
 }

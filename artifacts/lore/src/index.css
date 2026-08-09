@@ -6238,6 +6238,16 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
 }
 .set-tabs__close svg { width: 12px; height: 12px; }
 .set-tabs__close:hover { color: #fff; }
+/* Station-context tab — same chip anatomy, slight accent so the tuned
+   context is distinguishable from set/scope tabs at a glance. */
+.set-tabs__tab--context {
+  border-style: dashed;
+}
+/* Context tab body — the relocated tuned region inside the sidebar. The
+   DialContextRegion carries its own internal spacing; here we only keep it
+   clear of the tab strip. */
+.set-panel__context { padding-top: 2px; }
+.set-panel__context .dial-context-region__rail { min-height: 0; }
 
 .set-panel__actions {
   display: flex;

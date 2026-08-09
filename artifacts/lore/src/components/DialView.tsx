@@ -421,14 +421,22 @@ export type SetPanelScope =
   | { kind: "set"; setId: string }
   | { kind: "dj"; value: string }
   | { kind: "show"; value: string }
-  | { kind: "station"; value: string };
+  | { kind: "station"; value: string }
+  /** The tuned station context rendered AS a tab (sidebar layout only).
+   * `value` is the station slug. There is at most one context tab; its id is
+   * always CONTEXT_TAB_ID so re-tuning retargets the same tab. */
+  | { kind: "context"; value: string };
 
 export interface SetPanelTab {
   id: string;
   scope: SetPanelScope;
 }
 
+/** Fixed id for the single station-context tab. */
+export const CONTEXT_TAB_ID = "context";
+
 export function setPanelScopeId(scope: SetPanelScope): string {
+  if (scope.kind === "context") return CONTEXT_TAB_ID;
   return `${scope.kind}:${scope.kind === "set" ? scope.setId : scope.value}`;
 }
 
@@ -448,6 +456,9 @@ export function shouldActivateReplayTab(activeTabId: string | null): boolean {
  * inLibrary flags inside SetQueueList.
  */
 export function scopedSets(scope: SetPanelScope, allSets: SetPanelSet[]): SetPanelSet[] {
+  // The context tab renders its own body (breadcrumb + summary + rail), never
+  // a set list — it scopes over nothing.
+  if (scope.kind === "context") return [];
   const matches = scope.kind === "set"
     ? allSets.filter((set) => set.id === scope.setId)
     : scope.kind === "dj"
@@ -458,7 +469,14 @@ export function scopedSets(scope: SetPanelScope, allSets: SetPanelSet[]): SetPan
   return [...matches].sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
 }
 
-export function setPanelTabLabel(tab: SetPanelTab, sets: SetPanelSet[]): string {
+export function setPanelTabLabel(tab: SetPanelTab, sets: SetPanelSet[], contextLabel?: string | null): string {
+  if (tab.scope.kind === "context") {
+    // Prefer the caller-resolved station name; fall back to any loaded set's
+    // station name for the slug, then the slug itself.
+    return contextLabel
+      ?? sets.find((candidate) => candidate.stationSlug === (tab.scope as { value: string }).value)?.stationName
+      ?? tab.scope.value;
+  }
   if (tab.scope.kind === "dj") return tab.scope.value;
   if (tab.scope.kind === "show") return tab.scope.value;
   if (tab.scope.kind === "station") {
@@ -525,6 +543,8 @@ export function TabbedSetPanel({
   onAdd,
   onRemove,
   onPlay,
+  contextLabel,
+  contextBody,
 }: {
   tabs: SetPanelTab[];
   activeId: string | null;
@@ -536,13 +556,21 @@ export function TabbedSetPanel({
   onAdd: (name: string) => void;
   onRemove: (name: string) => void;
   onPlay: (sets: SetPanelSet[], label: string) => void;
+  /** Display label for the station-context tab (resolved station name). */
+  contextLabel?: string | null;
+  /** Body of the station-context tab — breadcrumb + summary + rail. */
+  contextBody?: ReactNode;
 }) {
   const [service, setService] = useState<SetExportService>("Spotify");
   const [exportOpen, setExportOpen] = useState(false);
   // Phone widths collapse the Play/service/Export row behind this one quiet
   // control (CSS-gated — desktop always shows the row and hides the toggle).
   const [actionsOpen, setActionsOpen] = useState(false);
-  const active = tabs.find((tab) => tab.id === activeId) ?? null;
+  const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
+  // The context tab renders its own body; every set-oriented affordance
+  // (actions, export, cards) treats it as "no set tab active".
+  const isContextActive = activeTab?.scope.kind === "context";
+  const active = isContextActive ? null : activeTab;
   const displayed = active ? scopedSets(active.scope, allSets) : [];
   const exported = exportOpen && active ? buildSetExport(displayed, service) : null;
 
@@ -551,14 +579,17 @@ export function TabbedSetPanel({
       {tabs.length > 0 && (
         <div className="set-tabs" role="tablist" aria-label="Open sets">
           {tabs.map((tab) => (
-            <div key={tab.id} className={`set-tabs__tab${tab.id === activeId ? " set-tabs__tab--active" : ""}`}>
+            <div key={tab.id} className={`set-tabs__tab${tab.id === activeId ? " set-tabs__tab--active" : ""}${tab.scope.kind === "context" ? " set-tabs__tab--context" : ""}`}>
               <button type="button" role="tab" aria-selected={tab.id === activeId} onClick={() => onSelect(tab.id)}>
-                {setPanelTabLabel(tab, allSets)}
+                {setPanelTabLabel(tab, allSets, contextLabel)}
               </button>
-              <button type="button" className="set-tabs__close" aria-label={`Close ${setPanelTabLabel(tab, allSets)}`} onClick={() => onClose(tab.id)}><X /></button>
+              <button type="button" className="set-tabs__close" aria-label={`Close ${setPanelTabLabel(tab, allSets, contextLabel)}`} onClick={() => onClose(tab.id)}><X /></button>
             </div>
           ))}
         </div>
+      )}
+      {isContextActive && contextBody != null && (
+        <div className="set-panel__context">{contextBody}</div>
       )}
       {active && (
         <button
@@ -2776,6 +2807,24 @@ export function DialView() {
     });
   }, []);
 
+  // ── Sidebar layout gate for the context tab ─────────────────────────────
+  // The station context relocates into the set-panel sidebar ONLY in the
+  // landscape (sidebar) layout; portrait keeps the quiet tuned view with the
+  // context region stacked in the scroll body (mobile shell unchanged).
+  // (jsdom lacks matchMedia — treat it as portrait/stacked, the old layout.)
+  const [sidebarLayout, setSidebarLayout] = useState<boolean>(() =>
+    typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(orientation: landscape)").matches,
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(orientation: landscape)");
+    const onChange = () => setSidebarLayout(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   const openLiveQueue = useCallback((row: { ds: DialStation; show: DialShow | null }, listedArtists?: PopularCrossingArtist[] | null) => {
     const spins = row.show?.spins ?? [];
     const spinArtists = spins.map((spin) => ({
@@ -3046,13 +3095,14 @@ export function DialView() {
     sets: allSets,
     displayMode: crossingSourceMode,
   });
-  // Consolidated tuned view: while a set panel is open, the context region
-  // drops its rail (station lens + artist chips) — those duplicate what the
-  // queue already shows, so a tuned desktop shows ONE sidebar (the set panel)
-  // plus a slim breadcrumb + now-playing row instead of three columns. The
-  // summary row stays: it is the tuned identity and the re-tune affordance.
+  // Consolidated tuned view (portrait / stacked layout only): while a set
+  // panel is open, the in-body context region drops its rail (station lens +
+  // artist chips) — those duplicate what the queue already shows. The summary
+  // row stays: it is the tuned identity and the re-tune affordance.
+  // In the sidebar layout the context lives in its OWN tab, so when that tab
+  // is focused the queue is not visible and the rail always renders.
   const contextConsolidated = inContext && setPanelOpen;
-  const contextRegionJsx = inContext && surface.ctx && (
+  const renderContextRegion = (withRail: boolean) => inContext && surface.ctx && (
     <DialContextRegion
       ctx={surface.ctx}
       quiet={ctxQuiet}
@@ -3083,7 +3133,7 @@ export function DialView() {
         <p className="dial-context-region__offline">{ctxStationName}</p>
       ) : null}
     >
-      {contextConsolidated ? null : (
+      {withRail ? (
         <ContextRail
           ctx={surface.ctx}
           row={ctxRow}
@@ -3093,9 +3143,55 @@ export function DialView() {
           onPush={surface.push}
           displayMode={crossingSourceMode}
         />
-      )}
+      ) : null}
     </DialContextRegion>
   );
+  // Sidebar layout: the context relocates into the set-panel sidebar as a
+  // tab; the scroll body renders no standalone context region.
+  const contextInSidebar = sidebarLayout;
+  const contextRegionJsx = contextInSidebar ? null : renderContextRegion(!contextConsolidated);
+  const contextTabBody = contextInSidebar ? renderContextRegion(true) : null;
+
+  // Entering context mode opens/focuses the context tab in the sidebar;
+  // leaving context (↑ Back at root, Dial crumb, station change reset)
+  // removes it. Portrait never manages a context tab.
+  useEffect(() => {
+    if (!contextInSidebar || (inContext && !ctxSlug)) return;
+    if (inContext && ctxSlug) {
+      setSetTabs((current) => {
+        const tab: SetPanelTab = { id: CONTEXT_TAB_ID, scope: { kind: "context", value: ctxSlug } };
+        const existing = current.find((t) => t.id === CONTEXT_TAB_ID);
+        if (existing) {
+          return existing.scope.kind === "context" && existing.scope.value === ctxSlug
+            ? current
+            : current.map((t) => t.id === CONTEXT_TAB_ID ? tab : t);
+        }
+        return [tab, ...current];
+      });
+      setActiveSetTabId(CONTEXT_TAB_ID);
+    } else {
+      setSetTabs((current) => {
+        const index = current.findIndex((t) => t.id === CONTEXT_TAB_ID);
+        if (index < 0) return current;
+        const next = current.filter((t) => t.id !== CONTEXT_TAB_ID);
+        setActiveSetTabId((activeNow) => activeNow === CONTEXT_TAB_ID
+          ? (next[Math.max(0, index - 1)]?.id ?? null)
+          : activeNow);
+        return next;
+      });
+    }
+  }, [contextInSidebar, inContext, ctxSlug]);
+
+  // Closing the context tab exits context mode — same as ↑ Back reaching the
+  // dial. The tab itself is removed by the effect above once mode flips.
+  const closePanelTab = useCallback((id: string) => {
+    if (id === CONTEXT_TAB_ID) {
+      surface.dial();
+      pastScan.reset();
+      return;
+    }
+    closeSetTab(id);
+  }, [surface, pastScan, closeSetTab]);
 
   // ── Also-on-air section (former tab, now folded into ON AIR × YOUR ARTISTS).
   // Band order follows the triangle: ▲ renders DJ band then rest band below the
@@ -3253,7 +3349,7 @@ export function DialView() {
                 <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
                 {setTabs.length > 0 && (
                   <span className="dial-hero__setpanel-title">
-                    {activeSetTab ? setPanelTabLabel(activeSetTab, allSets) : "Choose a live set"}
+                    {activeSetTab ? setPanelTabLabel(activeSetTab, allSets, ctxStationName) : "Choose a live set"}
                   </span>
                 )}
                 <button
@@ -3273,11 +3369,13 @@ export function DialView() {
                   allSets={allSets}
                   seedsLower={seedsLower}
                   onSelect={setActiveSetTabId}
-                  onClose={closeSetTab}
+                  onClose={closePanelTab}
                   onScope={openSetTab}
                   onAdd={addSeed}
                   onRemove={removeSeed}
                   onPlay={playSetlist}
+                  contextLabel={ctxStationName}
+                  contextBody={contextTabBody}
                 />
               ) : null}
           </div>
