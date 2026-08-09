@@ -52,13 +52,18 @@
   background: hsl(var(--primary));
   transform-origin: bottom;
 }
-/* Station name + status */
+/* Station name + status — one quiet line at ALL widths (station · track).
+   The stacked ticker strip below the bar is hidden everywhere; the expanded
+   player sheet is where full track detail lives. */
 .player-bar-info {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .player-bar-station {
   font-family: var(--app-font-display);
@@ -68,6 +73,21 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0;
+  max-width: 45%;
+}
+/* Status (buffering / cast / error) must never be squeezed out by long
+   metadata: it keeps its width, the track metadata truncates first. */
+.player-bar-status { flex-shrink: 0; }
+.player-bar-mobiletrack {
+  display: inline-block;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
 }
 .player-bar-status {
   font-family: var(--app-font-mono);
@@ -137,9 +157,12 @@
   background: hsl(var(--accent) / 0.08);
 }
 
-/* ── Ticker strip ─────────────────────────────────────────────────────────── */
+/* ── Ticker strip ───────────────────────────────────────────────────────────
+   Hidden at all widths: the collapsed dock is a single line everywhere
+   (station · track); track detail lives in the expanded player. The rules
+   below are kept for any surface that re-enables the ticker explicitly. */
 .player-ticker {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 8px;
   padding: 0 14px 10px;
@@ -6367,6 +6390,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .dial-context-region__summary { margin-top: 2px; }
 .dial-context-region__offline { color: hsl(var(--muted-foreground)); padding: 8px 0; }
 .dial-context-region__rail { min-height: 40px; }
+/* Consolidated tuned view: with the rail suppressed (set panel open) the
+   region is just the small breadcrumb strip — release the reserved space. */
+.dial-context-region__rail:empty { min-height: 0; }
 /* Quiet tuned front door: the rail is empty by construction — release its
    reserved space so art, dial rows, and corner links close ranks. */
 .dial-context-region__rail--quiet { min-height: 0; }
@@ -6460,7 +6486,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    ticker; phone widths collapse to one-line rows and a one-line dock. */
 .set-queue__title { display: none; }
 .set-panel__actions-toggle { display: none; }
-.player-bar-mobiletrack { display: none; }
 
 @media (orientation: portrait), (max-width: 720px) {
   /* One-line played rows: artist — title, truncated, quiet + at line end. */
@@ -6517,26 +6542,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .set-panel__actions-toggle:hover { color: hsl(var(--foreground)); }
 
-  /* One-line player dock: station · track, pause and close only. */
-  .player-ticker { display: none; }
-  .player-bar-info {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 6px;
-    overflow: hidden;
-    white-space: nowrap;
-  }
-  .player-bar-station { flex-shrink: 0; }
-  .player-bar-mobiletrack {
-    display: inline-block;
-    min-width: 0;
-    flex: 0 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: hsl(var(--muted-foreground));
-    font-size: 12px !important;
-  }
+  /* One-line dock rules are now global (see base .player-bar-info /
+     .player-bar-mobiletrack / .player-ticker); phone widths additionally
+     drop the scan/direction controls below. */
+  .player-bar-mobiletrack { font-size: 12px !important; }
   .player-bar-block [data-testid="player-scan"],
   .player-bar-block .player-bar-btn--ghost {
     display: none;

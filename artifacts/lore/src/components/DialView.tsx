@@ -3042,6 +3042,12 @@ export function DialView() {
     sets: allSets,
     displayMode: crossingSourceMode,
   });
+  // Consolidated tuned view: while a set panel is open, the context region
+  // drops its rail (station lens + artist chips) — those duplicate what the
+  // queue already shows, so a tuned desktop shows ONE sidebar (the set panel)
+  // plus a slim breadcrumb + now-playing row instead of three columns. The
+  // summary row stays: it is the tuned identity and the re-tune affordance.
+  const contextConsolidated = inContext && setPanelOpen;
   const contextRegionJsx = inContext && surface.ctx && (
     <DialContextRegion
       ctx={surface.ctx}
@@ -3073,15 +3079,17 @@ export function DialView() {
         <p className="dial-context-region__offline">{ctxStationName}</p>
       ) : null}
     >
-      <ContextRail
-        ctx={surface.ctx}
-        row={ctxRow}
-        sets={allSets}
-        seedsLower={seedsLower}
-        onAddSeed={addSeed}
-        onPush={surface.push}
-        displayMode={crossingSourceMode}
-      />
+      {contextConsolidated ? null : (
+        <ContextRail
+          ctx={surface.ctx}
+          row={ctxRow}
+          sets={allSets}
+          seedsLower={seedsLower}
+          onAddSeed={addSeed}
+          onPush={surface.push}
+          displayMode={crossingSourceMode}
+        />
+      )}
     </DialContextRegion>
   );
 
