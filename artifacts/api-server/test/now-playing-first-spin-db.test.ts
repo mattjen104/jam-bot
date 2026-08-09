@@ -10,6 +10,13 @@ import {
   stationQualityTable,
 } from "@workspace/db";
 import app from "../src/app.js";
+import { _testOnly_setNpColdFillWaitMs } from "../src/routes/lore/stations.js";
+
+// Under full-suite DB contention the cold base fill can outlive the short
+// production deadline, which would make the endpoint return a stations-only
+// partial (nowPlaying: null) instead of the seeded spins. Pin a generous
+// wait for the whole file so these assertions always see the full payload.
+const restoreNpColdFillWait = _testOnly_setNpColdFillWaitMs(120_000);
 
 /**
  * Integration tests for the ✦ first-in-archive (`isFirstSpin`) flag on the
@@ -121,6 +128,7 @@ beforeAll(async () => {
 }, 90_000);
 
 afterAll(async () => {
+  restoreNpColdFillWait();
   server?.close();
   if (!dbAvailable) return;
   if (stationIdA || stationIdB) {

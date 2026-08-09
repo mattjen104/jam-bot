@@ -479,6 +479,13 @@ export async function purgeNonQualifyingStations(): Promise<number> {
     DELETE FROM station_quality
     WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
   `));
+  // segue_edges also references stations without CASCADE (listKey-scoped
+  // adjacency built by the segue job) — a purged station that ever appeared
+  // in a segue would otherwise abort the purge with a 23503.
+  await db.execute(sql.raw(`
+    DELETE FROM segue_edges
+    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+  `));
   const result = await db.execute(sql.raw(`
     DELETE FROM stations
     WHERE ${whereClause}

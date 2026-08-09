@@ -78,6 +78,7 @@ import {
   applyUrlArtistRepair,
 } from "./lore/artist-metadata-cleanup.js";
 import { startSessionExpiryWorker } from "./routes/me/attendance.js";
+import { prewarmNowPlayingBaseCache } from "./routes/lore/stations.js";
 import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
 import { applyReplayResolutionMigration } from "./lore/replay-resolution-migration.js";
 import { applyImportedSetsMigration } from "./lore/imported-sets-migration.js";
@@ -120,6 +121,11 @@ app.listen(port, () => {
  */
 async function bootLore(): Promise<void> {
   try {
+    // Kick off the now-playing base fill immediately so the first dial
+    // visitor after a restart doesn't pay the ~9s cold scan. Fire-and-forget;
+    // it only reads long-existing tables so it can run ahead of the
+    // ledger-gated migrations below.
+    prewarmNowPlayingBaseCache();
     await markOrphanedImportJobsAsError();
     await markOrphanedSyncJobsAsError();
     wireSongEnrichment();

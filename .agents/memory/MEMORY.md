@@ -107,4 +107,6 @@
 - [Imported portable sets](imported-sets-pattern.md) — XSPF/JSPF uploads: no-FK isolation from spins, claimed MBIDs only honored if already local (else file could plant spine rows), DTD regex-reject before parse.
 - [api-server vitest contention flakes](api-server-vitest-contention.md) — full-suite DB-test flakes under the running dev server: retry failing files in isolation; stop the API Server workflow before validation.
 - [Pre-existing red lore tests](lore-preexisting-red-tests.md) — stash-compare failures against master before blaming your diff; several dial/topbar tests are red on master.
+- [Now-playing cold-start partial](np-cold-start-partial.md) — boot prewarm + single-flight fill + stations snapshot; boot DB contention makes even trivial SELECTs take seconds, so partials must avoid the pool.
+- [Merge-splice can truncate whole handler tails](crossings-route-merge-splice.md) — /me/crossings once lost its closing braces on master (typecheck red for everyone); brace-balance the file and reconstruct from the last balanced revision + tests.
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).

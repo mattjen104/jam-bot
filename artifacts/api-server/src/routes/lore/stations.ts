@@ -105,6 +105,219 @@ export function invalidateNowPlayingBaseCache(): void {
   npDateCache.clear();
 }
 
+// ---------------------------------------------------------------------------
+// Single-flight base fill.
+//
+// The cold fill (selectDistinctOn across the full spins table) takes several
+// seconds right after a server restart. Two problems fall out of that:
+//   1. Every concurrent cold request used to run its own copy of the heavy
+//      scan — an in-flight map dedupes them onto one promise per cache key.
+//   2. The first dial visitor used to stare at "Loading stations…" for the
+//      full fill duration — the handler now waits only briefly for a cold
+//      fill and otherwise returns a stations-only partial response while the
+//      fill completes in the background (the client's normal 5s poll picks up
+//      the full payload on its next tick). prewarmNowPlayingBaseCache() also
+//      kicks the fill off at boot so most restarts never surface a partial.
+// ---------------------------------------------------------------------------
+
+const npFillInFlight = new Map<string, Promise<NpBaseCache>>();
+
+// Stations-only snapshot published by the shared stations stage as soon as
+// its (cheap) query returns — i.e. seconds before the heavy spins scan
+// finishes. Used by the cold-start partial response so it doesn't have to run
+// its own stations query against a DB pool saturated by boot work.
+let npStationsSnapshot: { id: number; slug: string }[] | null = null;
+
+// Single-flight for the stations stage itself: the boot prewarm, concurrent
+// cold fills, and the partial-response fallback all join ONE stations query
+// instead of racing their own copies against a contended pool. On failure the
+// promise clears so the next caller retries; the error propagates to whoever
+// awaited it (a failed partial request returns 500 rather than a silent []).
+let npStationsInFlight: Promise<{ id: number; slug: string }[]> | null = null;
+
+function fetchNpStations(): Promise<{ id: number; slug: string }[]> {
+  if (npStationsInFlight) return npStationsInFlight;
+  const p = db
+    .select({ id: stationsTable.id, slug: stationsTable.slug })
+    .from(stationsTable)
+    .where(and(
+      eq(stationsTable.active, true),
+      eq(stationsTable.hidden, false),
+      eq(stationsTable.crossingEligible, true),
+    ))
+    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name))
+    .then((stations) => {
+      npStationsSnapshot = stations;
+      return stations;
+    })
+    .finally(() => { npStationsInFlight = null; });
+  npStationsInFlight = p;
+  return p;
+}
+
+// Counts buildNpBase executions — exposed for tests to assert single-flight.
+let npBuildCount = 0;
+
+/** Tests only: number of times the heavy base fill has actually run. */
+export function _testOnly_getNpBuildCount(): number {
+  return npBuildCount;
+}
+
+/** Tests only: drop every now-playing cache layer (base, per-date, stations snapshot). */
+export function _testOnly_resetNpCaches(): void {
+  npBaseCache = null;
+  npDateCache.clear();
+  npStationsSnapshot = null;
+}
+
+/** Tests only: mark the live base cache as expired (keeps its data for SWR checks). */
+export function _testOnly_expireNpBaseCache(): void {
+  if (npBaseCache) npBaseCache.builtAt = 0;
+}
+
+/** How long a cold live request waits for the base fill before serving a stations-only partial. */
+const NP_COLD_FILL_WAIT_MS = 1500;
+let npColdFillWaitMs = NP_COLD_FILL_WAIT_MS;
+
+/** Override the cold-fill wait (ms) — tests only. Returns a restore fn so
+ *  nested overrides compose (same pattern as _testOnly_setColdComputeDeadline). */
+export function _testOnly_setNpColdFillWaitMs(ms: number): () => void {
+  const prev = npColdFillWaitMs;
+  npColdFillWaitMs = ms;
+  return () => { npColdFillWaitMs = prev; };
+}
+
+async function buildNpBase(dateFilter: string | null): Promise<NpBaseCache> {
+  npBuildCount++;
+  const stations = await fetchNpStations();
+
+  const rows = await db
+    .selectDistinctOn([spinsTable.stationId], {
+      spinId: spinsTable.id,
+      stationId: spinsTable.stationId,
+      stationName: stationsTable.name,
+      rawArtist: spinsTable.rawArtist,
+      rawTitle: spinsTable.rawTitle,
+      source: spinsTable.source,
+      confidence: spinsTable.confidence,
+      playedAt: spinsTable.playedAt,
+      mbid: recordingsTable.mbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      artistMbid: recordingsTable.artistMbid,
+      artworkUrl: recordingsTable.artworkUrl,
+      links: recordingsTable.links,
+      genres: recordingsTable.genres,
+      showName: showsTable.name,
+      showDj: showsTable.djName,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
+    .where(
+      dateFilter
+        ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
+        : isNotNull(spinsTable.stationId),
+    )
+    .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
+
+  // Batch-check which resolved MBIDs have been seen in the archive before today.
+  // A track is "first in archive" only when it has never been logged on any prior day.
+  const nowPlayingMbids = new Set<string>();
+  for (const row of rows) { if (row.mbid) nowPlayingMbids.add(row.mbid); }
+
+  // Batch-fetch the primary release-group MBID for each now-playing spin so we
+  // can do album-level library widening without joining the RG table in the
+  // selectDistinctOn query (which would complicate the DISTINCT ON semantics).
+  const rgMap = new Map<string, string>(); // recording MBID → release-group MBID
+  const [seenRows, rgRows] = await Promise.all([
+    nowPlayingMbids.size > 0
+      ? db.execute<{ mbid: string }>(sql`
+          SELECT DISTINCT mbid FROM spins
+          WHERE mbid = ANY(ARRAY[${sql.join([...nowPlayingMbids].map((m) => sql`${m}`), sql`, `)}]::text[])
+            AND played_at::date < CURRENT_DATE
+        `)
+      : Promise.resolve({ rows: [] as { mbid: string }[] }),
+    nowPlayingMbids.size > 0
+      ? db
+          .select({
+            recordingMbid: recordingReleaseGroupsTable.recordingMbid,
+            releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+          })
+          .from(recordingReleaseGroupsTable)
+          .where(
+            and(
+              inArray(recordingReleaseGroupsTable.recordingMbid, [...nowPlayingMbids]),
+              eq(recordingReleaseGroupsTable.isPrimary, true),
+            ),
+          )
+      : Promise.resolve([] as { recordingMbid: string; releaseGroupMbid: string }[]),
+  ]);
+
+  const seenBefore = new Set<string>();
+  for (const r of seenRows.rows) seenBefore.add(r.mbid);
+  for (const r of rgRows) rgMap.set(r.recordingMbid, r.releaseGroupMbid);
+
+  const base: NpBaseCache = { builtAt: Date.now(), stations, rows, seenBefore, rgMap };
+  if (!dateFilter) {
+    npBaseCache = base;
+  } else {
+    // Per-date cache with a small LRU-ish cap: evict expired entries first,
+    // then the oldest, so the map stays bounded during long date sweeps.
+    if (npDateCache.size >= NP_DATE_CACHE_MAX_ENTRIES) {
+      let oldestKey: string | null = null;
+      let oldestBuiltAt = Infinity;
+      for (const [key, entry] of npDateCache) {
+        if (Date.now() - entry.builtAt >= NP_BASE_CACHE_TTL_MS) {
+          npDateCache.delete(key);
+          continue;
+        }
+        if (entry.builtAt < oldestBuiltAt) {
+          oldestBuiltAt = entry.builtAt;
+          oldestKey = key;
+        }
+      }
+      if (npDateCache.size >= NP_DATE_CACHE_MAX_ENTRIES && oldestKey) {
+        npDateCache.delete(oldestKey);
+      }
+    }
+    npDateCache.set(dateFilter, base);
+  }
+  return base;
+}
+
+/** Start (or join) the base fill for a cache key. Single-flight per key. */
+function fillNpBase(dateFilter: string | null): Promise<NpBaseCache> {
+  const key = dateFilter ?? "";
+  const existing = npFillInFlight.get(key);
+  if (existing) return existing;
+  const promise = buildNpBase(dateFilter).finally(() => {
+    npFillInFlight.delete(key);
+  });
+  npFillInFlight.set(key, promise);
+  return promise;
+}
+
+/**
+ * Prewarm the live (undated) now-playing base cache at boot so the first dial
+ * visitor after a server restart never pays the cold fill. Best-effort:
+ * failures log and the request path falls back to its normal cold-fill flow.
+ */
+export function prewarmNowPlayingBaseCache(): void {
+  const startedAt = Date.now();
+  fillNpBase(null)
+    .then(() => {
+      console.log(`[lore] now-playing base cache prewarmed in ${Date.now() - startedAt}ms`);
+    })
+    .catch((err) => {
+      console.error("[lore] now-playing base cache prewarm failed", err);
+    });
+}
+
 // Rate limit for client-reported now-playing: this is the only write path on
 // an otherwise read-only public router, so it needs its own abuse guard.
 // 20 req/min per IP comfortably covers one browser polling several Icecast
@@ -202,111 +415,49 @@ router.get("/stations/now-playing", h(async (req, res) => {
   }
 
   if (base === null) {
-    const stations = await db
-      .select({ id: stationsTable.id, slug: stationsTable.slug })
-      .from(stationsTable)
-      .where(and(
-        eq(stationsTable.active, true),
-        eq(stationsTable.hidden, false),
-        eq(stationsTable.crossingEligible, true),
-      ))
-      .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
+    // Single-flight: join any in-flight fill for this key instead of running
+    // a duplicate heavy scan. The fill promise writes the cache itself.
+    const fill = fillNpBase(dateFilter);
 
-    const rows = await db
-      .selectDistinctOn([spinsTable.stationId], {
-        spinId: spinsTable.id,
-        stationId: spinsTable.stationId,
-        stationName: stationsTable.name,
-        rawArtist: spinsTable.rawArtist,
-        rawTitle: spinsTable.rawTitle,
-        source: spinsTable.source,
-        confidence: spinsTable.confidence,
-        playedAt: spinsTable.playedAt,
-        mbid: recordingsTable.mbid,
-        title: recordingsTable.title,
-        artist: recordingsTable.artist,
-        artistMbid: recordingsTable.artistMbid,
-        artworkUrl: recordingsTable.artworkUrl,
-        links: recordingsTable.links,
-        genres: recordingsTable.genres,
-        showName: showsTable.name,
-        showDj: showsTable.djName,
-      })
-      .from(spinsTable)
-      .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-      .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-      .leftJoin(
-        showsTable,
-        and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
-      )
-      .where(
-        dateFilter
-          ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
-          : isNotNull(spinsTable.stationId),
-      )
-      .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
-
-    // Batch-check which resolved MBIDs have been seen in the archive before today.
-    // A track is "first in archive" only when it has never been logged on any prior day.
-    const nowPlayingMbids = new Set<string>();
-    for (const row of rows) { if (row.mbid) nowPlayingMbids.add(row.mbid); }
-
-    // Batch-fetch the primary release-group MBID for each now-playing spin so we
-    // can do album-level library widening without joining the RG table in the
-    // selectDistinctOn query (which would complicate the DISTINCT ON semantics).
-    const rgMap = new Map<string, string>(); // recording MBID → release-group MBID
-    const [seenRows, rgRows] = await Promise.all([
-      nowPlayingMbids.size > 0
-        ? db.execute<{ mbid: string }>(sql`
-            SELECT DISTINCT mbid FROM spins
-            WHERE mbid = ANY(ARRAY[${sql.join([...nowPlayingMbids].map((m) => sql`${m}`), sql`, `)}]::text[])
-              AND played_at::date < CURRENT_DATE
-          `)
-        : Promise.resolve({ rows: [] as { mbid: string }[] }),
-      nowPlayingMbids.size > 0
-        ? db
-            .select({
-              recordingMbid: recordingReleaseGroupsTable.recordingMbid,
-              releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
-            })
-            .from(recordingReleaseGroupsTable)
-            .where(
-              and(
-                inArray(recordingReleaseGroupsTable.recordingMbid, [...nowPlayingMbids]),
-                eq(recordingReleaseGroupsTable.isPrimary, true),
-              ),
-            )
-        : Promise.resolve([] as { recordingMbid: string; releaseGroupMbid: string }[]),
-    ]);
-
-    const seenBefore = new Set<string>();
-    for (const r of seenRows.rows) seenBefore.add(r.mbid);
-    for (const r of rgRows) rgMap.set(r.recordingMbid, r.releaseGroupMbid);
-
-    base = { builtAt: Date.now(), stations, rows, seenBefore, rgMap };
-    if (!dateFilter) {
-      npBaseCache = base;
-    } else {
-      // Per-date cache with a small LRU-ish cap: evict expired entries first,
-      // then the oldest, so the map stays bounded during long date sweeps.
-      if (npDateCache.size >= NP_DATE_CACHE_MAX_ENTRIES) {
-        let oldestKey: string | null = null;
-        let oldestBuiltAt = Infinity;
-        for (const [key, entry] of npDateCache) {
-          if (Date.now() - entry.builtAt >= NP_BASE_CACHE_TTL_MS) {
-            npDateCache.delete(key);
-            continue;
-          }
-          if (entry.builtAt < oldestBuiltAt) {
-            oldestBuiltAt = entry.builtAt;
-            oldestKey = key;
-          }
-        }
-        if (npDateCache.size >= NP_DATE_CACHE_MAX_ENTRIES && oldestKey) {
-          npDateCache.delete(oldestKey);
-        }
+    if (!dateFilter && npBaseCache) {
+      // Stale-while-revalidate: an expired live cache is still current within
+      // the last poll cycle or two — serve it immediately and let the
+      // background fill refresh it for the next request.
+      fill.catch(() => { /* background refresh failure; next cold request retries */ });
+      base = npBaseCache;
+    } else if (!dateFilter) {
+      // True cold start (nothing cached at all, e.g. right after a server
+      // restart before the boot prewarm finishes). Wait briefly for the fill;
+      // past the deadline, serve a stations-only partial so the dial can
+      // render its station list instead of sitting on "Loading stations…".
+      // The client's normal poll picks up the full payload on its next tick.
+      // The stations-only fallback list comes from the snapshot the shared
+      // stations stage publishes before the heavy scan; when it hasn't landed
+      // yet (request racing the very first fill), join the SAME single-flight
+      // stations query the fill is running — never issue a duplicate one.
+      const stationsOnly = npStationsSnapshot
+        ? Promise.resolve(npStationsSnapshot)
+        : fetchNpStations();
+      stationsOnly.catch(() => { /* re-thrown below if actually needed */ });
+      const winner = await Promise.race([
+        fill.then((b) => ({ kind: "base" as const, base: b })),
+        new Promise<{ kind: "timeout" }>((resolve) =>
+          setTimeout(() => resolve({ kind: "timeout" }), npColdFillWaitMs).unref?.(),
+        ),
+      ]);
+      if (winner.kind === "base") {
+        base = winner.base;
+      } else {
+        fill.catch(() => { /* logged by the request that awaits it */ });
+        const stations = await stationsOnly;
+        return res.json(ListStationsNowPlayingResponse.parse({
+          items: stations.map((s) => ({ slug: s.slug, nowPlaying: null })),
+        }));
       }
-      npDateCache.set(dateFilter, base);
+    } else {
+      // Date-filtered (ghost-dial) requests are rare and date-specific; they
+      // wait for the full fill as before.
+      base = await fill;
     }
   }
 
