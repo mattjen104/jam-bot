@@ -119,6 +119,13 @@ export function PlayerBar({
         {/* Station name + optional status */}
         <div className="player-bar-info">
           <span className="player-bar-station">{station.name}</span>
+          {/* Phone widths: one quiet line — station · current track. The
+              stacked ticker below is CSS-hidden at the same breakpoint. */}
+          {(metaArtist || metaSong) && (
+            <span className="player-bar-mobiletrack">
+              {" · "}{[metaArtist, metaSong].filter(Boolean).join(" — ")}
+            </span>
+          )}
           {statusText && (
             <span className="player-bar-status">{statusText}</span>
           )}

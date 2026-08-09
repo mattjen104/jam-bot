@@ -320,6 +320,9 @@ export function PopCrossingLine({ artists, seedsLower, onAdd }: {
 interface QueueArtist {
   name: string;
   inLibrary: boolean;
+  /** Track title for the phone-width one-line "artist — title" rendering.
+   * Optional — crossing-derived artist lists have no per-spin title. */
+  title?: string | null;
 }
 
 /**
@@ -334,7 +337,7 @@ export function computeLivePanel(
 ): { slug: string; stationName: string; startedAt: string; artists: QueueArtist[]; progress: number } {
   const spins = row.show?.spins ?? [];
   const spinArtists = spins
-    .map((spin) => ({ name: spin.artist, inLibrary: spin.isLibraryHit || spin.isArtistHit }))
+    .map((spin) => ({ name: spin.artist, inLibrary: spin.isLibraryHit || spin.isArtistHit, title: spin.title || null }))
     .filter((a) => a.name.trim());
   const artists = listedArtists?.length
     ? listedArtists.map((a) => ({ name: a.name, inLibrary: a.inLibrary }))
@@ -536,6 +539,9 @@ export function TabbedSetPanel({
 }) {
   const [service, setService] = useState<SetExportService>("Spotify");
   const [exportOpen, setExportOpen] = useState(false);
+  // Phone widths collapse the Play/service/Export row behind this one quiet
+  // control (CSS-gated — desktop always shows the row and hides the toggle).
+  const [actionsOpen, setActionsOpen] = useState(false);
   const active = tabs.find((tab) => tab.id === activeId) ?? null;
   const displayed = active ? scopedSets(active.scope, allSets) : [];
   const exported = exportOpen && active ? buildSetExport(displayed, service) : null;
@@ -555,7 +561,16 @@ export function TabbedSetPanel({
         </div>
       )}
       {active && (
-        <div className="set-panel__actions">
+        <button
+          type="button"
+          className="set-panel__actions-toggle"
+          aria-label={actionsOpen ? "Hide set actions" : "Show set actions"}
+          aria-expanded={actionsOpen}
+          onClick={() => setActionsOpen((open) => !open)}
+        >{actionsOpen ? "less" : "play · export"}</button>
+      )}
+      {active && (
+        <div className={`set-panel__actions${actionsOpen ? " set-panel__actions--open" : ""}`}>
           <button
             type="button"
             className="set-panel__action"
@@ -596,14 +611,14 @@ export function TabbedSetPanel({
           {displayed.map((set) => (
             <article className="set-panel__card" key={set.id}>
               <header className="set-panel__provenance">
-                <time>{runDate(set.startedAt)} · {fmtHM(set.startedAt)}</time>
+                {/* No date · time row — the tab chip already carries time · station. */}
                 <div className="set-panel__cascade">
                   {set.djNames.map((dj) => (
                     <button key={dj} type="button" onClick={() => onScope({ kind: "dj", value: dj })}>{dj}</button>
                   ))}
                   {set.showName && <button type="button" onClick={() => onScope({ kind: "show", value: set.showName! })}>{set.showName}</button>}
                 </div>
-                <button type="button" className="set-panel__station" onClick={() => onScope({ kind: "station", value: set.stationSlug })}>{set.stationName}</button>
+                <button type="button" className="set-panel__station fdrow__station-chip" onClick={() => onScope({ kind: "station", value: set.stationSlug })}>{set.stationName}</button>
               </header>
               <SetQueueList artists={set.artists} seedsLower={seedsLower} onAdd={onAdd} onRemove={onRemove} progress={set.progress} />
             </article>
@@ -644,6 +659,7 @@ export function SetQueueList({ artists, seedsLower, onAdd, onRemove, progress }:
                 className={`set-queue__artist ${inLibrary ? "set-queue__artist--library dial-artist--complete" : "set-queue__artist--other"}`}
                 aria-label={inLibrary ? `${artist.name} is in your library` : undefined}
               >{artist.name}</span>
+              {artist.title ? <span className="set-queue__title" aria-hidden="true"> — {artist.title}</span> : null}
               {!inLibrary && (
                 <button
                   type="button"
@@ -2700,7 +2716,7 @@ export function DialView() {
       for (const show of ds.shows) {
         if (show.state === "future" || show.spins.length === 0) continue;
         const artists = show.spins
-          .map((spin) => ({ name: spin.artist, inLibrary: spin.isLibraryHit || spin.isArtistHit }))
+          .map((spin) => ({ name: spin.artist, inLibrary: spin.isLibraryHit || spin.isArtistHit, title: spin.title || null }))
           .filter((artist) => artist.name.trim());
         if (artists.length === 0) continue;
         const currentIndex = show.currentTrack
@@ -2761,6 +2777,7 @@ export function DialView() {
     const spinArtists = spins.map((spin) => ({
       name: spin.artist,
       inLibrary: spin.isLibraryHit || spin.isArtistHit,
+      title: spin.title || null,
     })).filter((artist) => artist.name.trim());
     const artists = spinArtists.length > 0
       ? spinArtists
@@ -2806,7 +2823,7 @@ export function DialView() {
         ianaTimezone: currentRun?.station.ianaTimezone ?? null,
         showName: null,
         djNames: [],
-        artists: ride.queue.map((item) => ({ name: item.artist, inLibrary: false })),
+        artists: ride.queue.map((item) => ({ name: item.artist, inLibrary: false, title: item.title || null })),
         spins: ride.queue.map((item) => ({
           mbid: item.mbid,
           artistMbid: null,

@@ -6431,3 +6431,91 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .dial-crumbs { padding: 4px 0 6px; }
   .dial-context-region__offline { padding: 6px 0; }
 }
+
+/* ── Quiet tuned-in view on mobile (task: minimal set panel & dock) ───────
+   Desktop keeps the wrapping artist pills, full action row, and the stacked
+   ticker; phone widths collapse to one-line rows and a one-line dock. */
+.set-queue__title { display: none; }
+.set-panel__actions-toggle { display: none; }
+.player-bar-mobiletrack { display: none; }
+
+@media (orientation: portrait), (max-width: 720px) {
+  /* One-line played rows: artist — title, truncated, quiet + at line end. */
+  .set-queue__artists {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .set-queue__artist-wrap {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .set-queue__artist {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .set-queue__title {
+    display: inline-block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: hsl(var(--muted-foreground));
+    font-size: 13px !important;
+  }
+  .set-queue__addplus,
+  .set-queue__removeseed {
+    margin-left: auto;
+    padding-left: 8px;
+    opacity: 0.6;
+  }
+
+  /* Collapse Play set / service / Export behind one quiet control. */
+  .set-panel__actions { display: none; }
+  .set-panel__actions--open { display: flex; }
+  .set-panel__actions-toggle {
+    display: inline-flex;
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 2px 0 6px;
+    cursor: pointer;
+    font-family: var(--app-font-mono);
+    font-size: 11px !important;
+    letter-spacing: 0.05em;
+    color: hsl(var(--muted-foreground));
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+  .set-panel__actions-toggle:hover { color: hsl(var(--foreground)); }
+
+  /* One-line player dock: station · track, pause and close only. */
+  .player-ticker { display: none; }
+  .player-bar-info {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .player-bar-station { flex-shrink: 0; }
+  .player-bar-mobiletrack {
+    display: inline-block;
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: hsl(var(--muted-foreground));
+    font-size: 12px !important;
+  }
+  .player-bar-block [data-testid="player-scan"],
+  .player-bar-block .player-bar-btn--ghost {
+    display: none;
+  }
+}

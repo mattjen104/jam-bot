@@ -39,8 +39,8 @@ const SETS: SetPanelSet[] = [
     showName: "Drive Time",
     djNames: ["DJ Aster"],
     artists: [
-      { name: "Fleetwood Mac", inLibrary: true },
-      { name: "New Band", inLibrary: false },
+      { name: "Fleetwood Mac", inLibrary: true, title: "Dreams" },
+      { name: "New Band", inLibrary: false, title: "First Song" },
     ],
     spins: [
       makeSpin("Fleetwood Mac", "Dreams", "2026-08-07T18:05:00Z", true),
@@ -164,8 +164,28 @@ describe("Tabbed set panel", () => {
     const header = document.querySelector(".set-panel__provenance")!;
     const cascade = within(header as HTMLElement).getAllByRole("button").map((b) => b.textContent);
     expect(cascade).toEqual(["DJ Aster", "Drive Time", "KEXP"]);
+    // Station renders in the compact dial chip style, anchored last.
     expect(header.lastElementChild?.className).toContain("set-panel__station");
-    expect(header.querySelector("time")?.textContent).toMatch(/·/);
+    expect(header.lastElementChild?.className).toContain("fdrow__station-chip");
+    // The redundant date · time provenance row is gone — the tab chip
+    // already carries time · station.
+    expect(header.querySelector("time")).toBeNull();
+  });
+
+  it("carries per-track titles for the mobile one-line rows and collapses actions behind one toggle", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByText("open-first"));
+    // Each played row carries an "— title" span (CSS shows it at phone widths).
+    const titles = [...document.querySelectorAll(".set-queue__title")].map((n) => n.textContent);
+    expect(titles).toEqual([" — Dreams", " — First Song"]);
+    // One quiet toggle governs the Play/service/Export row on mobile.
+    const toggle = screen.getByRole("button", { name: /show set actions/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".set-panel__actions")?.className).toContain("set-panel__actions--open");
+    fireEvent.click(screen.getByRole("button", { name: /hide set actions/i }));
+    expect(document.querySelector(".set-panel__actions")?.className).not.toContain("--open");
   });
 
   it("drills a DJ scope to full chronological setlists with crossing artists highlighted", () => {
