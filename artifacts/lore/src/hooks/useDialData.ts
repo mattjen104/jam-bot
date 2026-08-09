@@ -505,6 +505,36 @@ interface SseSpinEntry {
   isArtistHit: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Bounded pending — a loading flag with a settle deadline
+// ---------------------------------------------------------------------------
+
+/** How long Zone 1 may stay on its skeleton while crossings are pending. */
+export const CROSSINGS_SETTLE_DEADLINE_MS = 25_000;
+
+/**
+ * Returns `pending`, except that once it has been continuously true for
+ * `deadlineMs` it flips to false and stays false until `pending` clears.
+ *
+ * Used to bound the Zone 1 crossings skeleton: a cold server compute or a
+ * stuck poll may keep the crossings query pending for a long time, and the
+ * dial must degrade to rendering whatever it has instead of holding a
+ * skeleton forever. Resets whenever `pending` goes false so a later refetch
+ * gets a fresh deadline.
+ */
+export function useBoundedPending(pending: boolean, deadlineMs: number): boolean {
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    if (!pending) {
+      setExpired(false);
+      return;
+    }
+    const id = setTimeout(() => setExpired(true), deadlineMs);
+    return () => clearTimeout(id);
+  }, [pending, deadlineMs]);
+  return pending && !expired;
+}
+
 export type DialDisplayMode = "personal" | "blended";
 export function useDialData(displayMode: DialDisplayMode = "personal"): {
   stations: DialStation[];
@@ -645,7 +675,14 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   // ── server-computed crossing scores (rolling 24h, full spin history) ────────
   // These replace the client-side crossing reduction at the station level so
   // ranking is consistent across clients and not bounded by the fetch page cap.
-  const { data: serverCrossings, isLoading: crossingsLoading } = useMyDialCrossings(today);
+  // The server may return `computing: true` on a cold cache (background compute
+  // still running); the hook polls fast in that state, and we keep the Zone 1
+  // skeleton up — but only up to a bounded deadline, so the dial can never be
+  // held on a skeleton indefinitely by a stuck compute.
+  const { data: crossingsResult, isLoading: crossingsQueryLoading } = useMyDialCrossings(today);
+  const serverCrossings = crossingsResult?.items;
+  const crossingsPending = crossingsQueryLoading || crossingsResult?.computing === true;
+  const crossingsLoading = useBoundedPending(crossingsPending, CROSSINGS_SETTLE_DEADLINE_MS);
   const {
     data: blendedCrossings,
     isLoading: blendedLoading,

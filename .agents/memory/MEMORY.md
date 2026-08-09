@@ -66,6 +66,7 @@
 - [Preferred-service fallback pattern](preferred-service-fallback.md) — altDriversAllFailed set in YouTube .catch() (not exhausted branch); retryService must call tryAltDriverRef directly, not rely on effect re-fire.
 - [MB ISRC endpoint parameter bug](mb-isrc-endpoint.md) — `/isrc/{isrc}?fmt=json` only; `inc=recordings` is invalid and silently returns null on every call.
 - [Radio front-door attribution ladder](radio-attribution-ladder.md) — sort: live crossing → named selector (lifetime ov, ovByName by djName) → unattributed (station crossings); reason() is pure, no hooks; show-level rows replace station-level rows in the live tier only; offline tier stays StationLane.
+- [Front-door progressive render & bounded crossings](front-door-progressive-render.md) — zone1Settled gates on stations only; crossings return computing:true past a 2.5s cold deadline; DB tests must pin the deadline; soft Spotify items count as taste.
 - [isCoreLoading live-gate hang](icore-loading-hang.md) — gating the offline section AND spinner on liveLoading causes blank/infinite hang; only gate spinner on stationsLoading.
 - [Import Phase 3 negative cache on MB 503](import-negative-cache-503.md) — MB 503 errors must not write negative cache; use resolveErrored flag to guard the else-if branch.
 - [Canadian campus radio ICY fix](canadian-stations-icy-fix.md) — CFUV/CHMR/CISM/CJSR/CKCU/CKUT not on Spinitron; need radio_browser_icy + favorite=true (mux reads empty status.xsl; only watcher reads inline ICY metadata).

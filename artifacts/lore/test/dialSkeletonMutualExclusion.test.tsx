@@ -1,15 +1,21 @@
 // @vitest-environment jsdom
 /**
- * Contract: skeleton rows (.fdrow-skeleton) and real zone content (.fdrow)
- * must never appear simultaneously in the Dial front door.
+ * Contract: skeleton rows (.fdrow-skeleton) and real ZONE 1 crossing rows
+ * (#zone1-rows .fdrow) must never appear simultaneously in the Dial front
+ * door — the skeleton renders IN PLACE of the Zone 1 rows.
  *
- * `crossingsLoading` gates the two render paths as strict mutual exclusions:
- *   - crossingsLoading=true  → skeleton rows present, no .fdrow elements
- *   - crossingsLoading=false → real .fdrow elements present (when data exists),
+ * Since the progressive-render change (task: fast front-door first load),
+ * Zones 2/3 and the also-on-air bands render as soon as the station list is
+ * available, even while crossing scores are still in-flight. Only Zone 1 —
+ * the personalized crossing rows — is swapped for its skeleton:
+ *   - crossingsLoading=true  → skeleton present, no #zone1-rows .fdrow rows,
+ *                              but Zone 3 station rows MAY render
+ *   - crossingsLoading=false → real Zone 1 rows present (when data exists),
  *                              no skeleton rows
  *
- * This prevents a background refetch from briefly rendering both skeleton rows
- * and real zone rows at the same time, which would produce doubled headings.
+ * This still prevents a background refetch from briefly rendering both the
+ * skeleton and real Zone 1 rows at once (doubled headings), while no longer
+ * blanking the whole dial behind the crossings query.
  */
 
 import React from "react";
@@ -245,28 +251,31 @@ describe("crossingsLoading=true — skeleton visible, real rows absent", () => {
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
-  it("renders no real Zone 1 (.fdrow) rows while crossing scores are in-flight", () => {
+  it("renders no real Zone 1 (#zone1-rows .fdrow) rows while crossing scores are in-flight", () => {
     mockDialData(true, [makeZone1Station("wfmu")]);
     render(<DialView />);
 
-    const realRows = document.querySelectorAll(".fdrow");
-    expect(realRows.length).toBe(0);
+    const zone1Rows = document.querySelectorAll("#zone1-rows .fdrow");
+    expect(zone1Rows.length).toBe(0);
   });
 
-  it("renders no real Zone 3 (.fdrow) rows while crossing scores are in-flight", () => {
+  it("progressive render: Zone 3 station rows appear while crossing scores are in-flight", () => {
     mockDialData(true, [makeZone3Station("kcrw")]);
     render(<DialView />);
 
+    // Zones 2/3 no longer wait on the crossings query — the dial renders
+    // stations-only content immediately.
     const realRows = document.querySelectorAll(".fdrow");
-    expect(realRows.length).toBe(0);
+    expect(realRows.length).toBeGreaterThan(0);
   });
 
-  it("renders no real rows even when both Zone 1 and Zone 3 stations are present", () => {
+  it("Zone 1 skeleton and Zone 3 rows coexist, but Zone 1 rows stay absent", () => {
     mockDialData(true, [makeZone1Station("wfmu"), makeZone3Station("kcrw")]);
     render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
 
-    const realRows = document.querySelectorAll(".fdrow");
-    expect(realRows.length).toBe(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll("#zone1-rows .fdrow").length).toBe(0);
   });
 });
 
@@ -401,10 +410,12 @@ describe("mutual exclusion invariant — never both at once", () => {
     act(() => { vi.advanceTimersByTime(150); });
 
     const skeletonCount = document.querySelectorAll(".fdrow-skeleton").length;
-    const realRowCount  = document.querySelectorAll(".fdrow").length;
+    // Progressive render: Zone 3 rows may be present — the exclusion contract
+    // covers Zone 1's own rows, which the skeleton stands in for.
+    const zone1RowCount = document.querySelectorAll("#zone1-rows .fdrow").length;
 
     expect(skeletonCount).toBeGreaterThan(0);
-    expect(realRowCount).toBe(0);
+    expect(zone1RowCount).toBe(0);
   });
 
   it("loaded state: fdrows > 0 AND skeletons = 0 (never coexist)", () => {
@@ -449,31 +460,32 @@ describe("Zone 2 (ghost rows) — skeleton guard during live refresh", () => {
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
   });
 
-  it("suppresses ghost rows while crossings reload, then restores them", () => {
+  it("keeps ghost rows visible while crossings reload (progressive render)", () => {
     setupZone2(false, [makeGhostStation("ghost1")]);
     const { rerender } = render(<DialView />);
     expect(document.querySelectorAll(".ghost-row").length).toBeGreaterThan(0);
 
-    // Background refresh starts — skeletons eventually replace zone content.
+    // Background refresh starts — Zone 1 swaps to its skeleton, but Zone 2
+    // ghost rows stay put: crossings only rank Zone 1.
     setupZone2(true, [makeGhostStation("ghost1")]);
     act(() => { rerender(<DialView />); });
     act(() => { vi.advanceTimersByTime(150); });
 
-    // Confirm skeleton phase is active (grace period elapsed).
+    // Skeleton phase is active (grace period elapsed) …
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
-    // No ghost rows while skeletons are shown.
-    expect(document.querySelectorAll(".ghost-row").length).toBe(0);
+    // … and ghost rows remain visible throughout.
+    expect(document.querySelectorAll(".ghost-row").length).toBeGreaterThan(0);
 
     // Refresh completes.
     setupZone2(false, [makeGhostStation("ghost1")]);
     act(() => { rerender(<DialView />); });
 
-    // Skeleton rows are gone, ghost rows are back.
+    // Skeleton rows are gone, ghost rows still present.
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
     expect(document.querySelectorAll(".ghost-row").length).toBeGreaterThan(0);
   });
 
-  it("ghost rows and skeletons never coexist across a full refresh cycle", () => {
+  it("Zone 1 rows and skeletons never coexist across a full refresh cycle", () => {
     setupZone2(false, [makeGhostStation("ghost1")]);
     const { rerender } = render(<DialView />);
 
@@ -482,8 +494,8 @@ describe("Zone 2 (ghost rows) — skeleton guard during live refresh", () => {
     act(() => { vi.advanceTimersByTime(150); });
 
     const skeletons = document.querySelectorAll(".fdrow-skeleton").length;
-    const ghosts = document.querySelectorAll(".ghost-row").length;
-    expect(skeletons === 0 || ghosts === 0).toBe(true);
+    const zone1Rows = document.querySelectorAll("#zone1-rows .fdrow").length;
+    expect(skeletons === 0 || zone1Rows === 0).toBe(true);
 
     setupZone2(false, [makeGhostStation("ghost1")]);
     act(() => { rerender(<DialView />); });
@@ -642,21 +654,22 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
   });
 
-  it("suppresses Zone 3 rows while crossings reload, then restores them", () => {
+  it("keeps Zone 3 rows visible while crossings reload (progressive render)", () => {
     setupZone3(false);
     const { rerender } = render(<DialView />);
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
 
-    // Background refresh starts.
+    // Background refresh starts — Zone 3 rows stay put; only Zone 1 swaps
+    // for its skeleton.
     setupZone3(true);
     act(() => { rerender(<DialView />); });
     act(() => { vi.advanceTimersByTime(150); });
 
-    // Skeleton phase is active — no real rows.
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
-    expect(document.querySelectorAll(".fdrow").length).toBe(0);
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll("#zone1-rows .fdrow").length).toBe(0);
 
-    // Refresh completes — real rows return, skeletons gone.
+    // Refresh completes — rows remain, skeletons gone.
     setupZone3(false);
     act(() => { rerender(<DialView />); });
 
@@ -664,7 +677,7 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
   });
 
-  it("skeletons and Zone 3 rows are mutually exclusive across the full refresh cycle", () => {
+  it("skeletons and Zone 1 rows are mutually exclusive across the full refresh cycle", () => {
     setupZone3(false);
     const { rerender } = render(<DialView />);
 
@@ -672,14 +685,15 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
 
-    // Background refresh — skeleton phase.
+    // Background refresh — skeleton phase; Zone 3 rows persist but Zone 1
+    // rows must never coexist with the skeleton.
     setupZone3(true);
     act(() => { rerender(<DialView />); });
     act(() => { vi.advanceTimersByTime(150); });
 
     const skeletonsDuringRefresh = document.querySelectorAll(".fdrow-skeleton").length;
-    const realRowsDuringRefresh  = document.querySelectorAll(".fdrow").length;
-    expect(skeletonsDuringRefresh === 0 || realRowsDuringRefresh === 0).toBe(true);
+    const zone1RowsDuringRefresh = document.querySelectorAll("#zone1-rows .fdrow").length;
+    expect(skeletonsDuringRefresh === 0 || zone1RowsDuringRefresh === 0).toBe(true);
 
     // Refresh resolves — real rows present, no skeletons.
     setupZone3(false);

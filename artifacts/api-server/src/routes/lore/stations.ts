@@ -90,9 +90,19 @@ type NpBaseCache = {
 
 let npBaseCache: NpBaseCache | null = null;
 
+// Date-filtered (ghost-dial) base results share the same 30s TTL, keyed by
+// date. The default "today" sweep position hits this map instead of re-running
+// the heavy selectDistinctOn scan on every request. Small and bounded — the
+// sweep touches a handful of dates at a time.
+const npDateCache = new Map<string, NpBaseCache>();
+const NP_DATE_CACHE_MAX_ENTRIES = 16;
+
 /** Invalidate the now-playing base cache — called by the SSE push path when a new spin lands. */
 export function invalidateNowPlayingBaseCache(): void {
   npBaseCache = null;
+  // A new spin only changes "today", but clearing the whole map is cheap and
+  // avoids timezone hair-splitting about which date string "today" is.
+  npDateCache.clear();
 }
 
 // Rate limit for client-reported now-playing: this is the only write path on
@@ -178,11 +188,17 @@ router.get("/stations/now-playing", h(async (req, res) => {
     : EMPTY_HIT_CONTEXT;
 
   // ── Base query cache (user-independent, 30-second TTL) ───────────────────
-  // Date-filtered (ghost-dial) requests always bypass the cache: they are
-  // date-specific and infrequent, so sharing is not worth the complexity.
+  // Live requests share npBaseCache; date-filtered (ghost-dial) requests share
+  // a small per-date map with the same TTL so the default "today" position
+  // doesn't re-run the heavy base scan on every request.
   let base: NpBaseCache | null = null;
   if (!dateFilter && npBaseCache && Date.now() - npBaseCache.builtAt < NP_BASE_CACHE_TTL_MS) {
     base = npBaseCache;
+  } else if (dateFilter) {
+    const dated = npDateCache.get(dateFilter);
+    if (dated && Date.now() - dated.builtAt < NP_BASE_CACHE_TTL_MS) {
+      base = dated;
+    }
   }
 
   if (base === null) {
@@ -268,10 +284,29 @@ router.get("/stations/now-playing", h(async (req, res) => {
     for (const r of rgRows) rgMap.set(r.recordingMbid, r.releaseGroupMbid);
 
     base = { builtAt: Date.now(), stations, rows, seenBefore, rgMap };
-    // Only cache non-date-filtered results (date-filtered are ghost-dial — rare,
-    // date-specific, and should not pollute the live cache).
     if (!dateFilter) {
       npBaseCache = base;
+    } else {
+      // Per-date cache with a small LRU-ish cap: evict expired entries first,
+      // then the oldest, so the map stays bounded during long date sweeps.
+      if (npDateCache.size >= NP_DATE_CACHE_MAX_ENTRIES) {
+        let oldestKey: string | null = null;
+        let oldestBuiltAt = Infinity;
+        for (const [key, entry] of npDateCache) {
+          if (Date.now() - entry.builtAt >= NP_BASE_CACHE_TTL_MS) {
+            npDateCache.delete(key);
+            continue;
+          }
+          if (entry.builtAt < oldestBuiltAt) {
+            oldestBuiltAt = entry.builtAt;
+            oldestKey = key;
+          }
+        }
+        if (npDateCache.size >= NP_DATE_CACHE_MAX_ENTRIES && oldestKey) {
+          npDateCache.delete(oldestKey);
+        }
+      }
+      npDateCache.set(dateFilter, base);
     }
   }
 

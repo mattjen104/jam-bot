@@ -2027,9 +2027,12 @@ export function DialView() {
   // 150 ms; it resets to false immediately when crossingsLoading clears so that
   // real content replaces skeletons without any extra lag.
   const showSkeleton = useDelayedBoolean(crossingsLoading, 150);
-  // Zone 1 has settled when both crossing scores and the core station pulse have
-  // resolved. At that point we know what's in Zone 1 and can show the tab strip.
-  const zone1Settled = !crossingsLoading && !isCoreLoading;
+  // The dial settles as soon as the station list arrives — crossings are
+  // progressive enhancement. While crossings are still pending, Zone 1 shows
+  // its skeleton in place of crossing rows (see the live-mode section), but
+  // Zones 2/3 and the offline section render immediately so a slow or cold
+  // crossings compute never blanks the whole front door.
+  const zone1Settled = !isCoreLoading;
   const isSpotifyConnected = useSpotifyLibraryConnected();
   const { radio, ride } = usePlayer();
   const { data: weeklyRecapData } = useMyWeeklyRecap();
@@ -3322,24 +3325,6 @@ export function DialView() {
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
-            {/* While crossing scores are in-flight, render only the Zone 1 heading
-                and its context-sensitive placeholder.  Zones 2/3 and "Recently
-                aired" are intentionally suppressed until Zone 1 has settled so
-                they never appear above the live crossing rows. */}
-            {!isCoreLoading && showSkeleton && !inContext && (
-              <>
-                <Zone1Placeholder
-                  isSpotifyConnected={isSpotifyConnected}
-                  hasLibrary={hasLibrary}
-                  hasSeeds={hasSeeds || visibleSeeds.length > 0}
-                  seeds={visibleSeeds}
-                  liveLoading={liveLoading}
-                  onAddSeed={addSeed}
-                  onRemoveSeed={removeSeed}
-                />
-              </>
-            )}
-
             {/* Tab strip now renders inside .dial-hero above the scroll body so
                 the album-art hero can bleed behind it. */}
 
@@ -3476,8 +3461,25 @@ export function DialView() {
                   <>
                     {/* Flipped sort (▼): the also-on-air bands (deep cuts) lead. */}
                     {!inContext && !popSortDesc && alsoSection}
-                    {/* Zone 1: crossing rows */}
-                    {!inContext && withReason.length > 0 && (
+                    {/* While crossing scores are pending, Zone 1 shows its
+                        context-sensitive skeleton IN PLACE of crossing rows —
+                        strict mutual exclusion with the .fdrow rows below.
+                        Zones 2/3 and the offline section render regardless. */}
+                    {!inContext && showSkeleton && (
+                      <Zone1Placeholder
+                        isSpotifyConnected={isSpotifyConnected}
+                        hasLibrary={hasLibrary}
+                        hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                        seeds={visibleSeeds}
+                        liveLoading={liveLoading}
+                        onAddSeed={addSeed}
+                        onRemoveSeed={removeSeed}
+                      />
+                    )}
+                    {/* Zone 1: crossing rows — hidden the moment crossings go
+                        pending (not just when the delayed skeleton shows) so
+                        rows never flash during the skeleton grace window. */}
+                    {!inContext && !crossingsLoading && withReason.length > 0 && (
                       <>
                         <>
                             {/* All live crossing rows are visible by default. */}
@@ -3517,7 +3519,7 @@ export function DialView() {
                         Suppressed while liveLoading is true: crossings depend on the
                         live-station list, so until that poll completes sortedRows is
                         empty and withReason is vacuously 0 even if crossings exist. */}
-                    {!inContext && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
+                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
                       <div className="z1-placeholder z1-placeholder--no-cross">
                         <div className="z1-placeholder__body">
                           <p className="z1-placeholder__pitch">
@@ -3529,7 +3531,7 @@ export function DialView() {
 
                     {/* No crossing rows, no library or seeds — full onboarding placeholder.
                         The prominent CTA lives inside Zone1Placeholder for this state. */}
-                    {!inContext && withReason.length === 0 &&
+                    {!inContext && !crossingsLoading && withReason.length === 0 &&
                       !hasLibrary &&
                       !hasSeeds &&
                       visibleSeeds.length === 0 &&

@@ -23,6 +23,7 @@ import {
   _testOnly_clearBlendedCrossingsCache,
   _testOnly_clearBlendedCrossingsL2Cache,
   _testOnly_getBlendedCrossingsCache,
+  _testOnly_setColdComputeDeadline,
   SOCIAL_PRESENCE_TTL_MS,
 } from "../src/routes/me/crossings.js";
 
@@ -49,6 +50,14 @@ import {
  */
 
 const run = randomUUID().slice(0, 8);
+
+// Most tests in this file exercise the crossings COMPUTE RESULTS and expect a
+// single request to return real items. On a production-scale test DB the
+// compute can outlive the default cold-compute deadline (which would return
+// `computing: true` instead), so pin a generous deadline for the whole file.
+// The bounded-cold-compute suite at the bottom overrides it locally.
+const restoreColdComputeDeadline = _testOnly_setColdComputeDeadline(120_000);
+afterAll(() => restoreColdComputeDeadline());
 
 // ── Session IDs (used as deviceKey / cookie) ──────────────────────────────────
 const SID_RG       = `test-cross-rg-${run}`;       // release-group widening user
@@ -1143,4 +1152,48 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     expect(SOCIAL_PRESENCE_TTL_MS).toBeGreaterThan(0);
     expect(SOCIAL_PRESENCE_TTL_MS).toBeLessThanOrEqual(5 * 60 * 1000);
   });
+});
+
+// ── Cold-compute bounding (fast front-door first load) ───────────────────────
+//
+// A cold-cache personal crossings request must never carry the full compute
+// cost inline past a short deadline. With the deadline forced to 0, even a
+// fast compute loses the race, so the endpoint must respond immediately with
+// `computing: true` and let the background compute fill the caches — which a
+// follow-up poll then observes.
+describe("GET /api/me/crossings — bounded cold compute", () => {
+  it("returns computing:true immediately when the compute outlives the deadline, then serves real items on a later poll", async () => {
+    if (!dbAvailable) return;
+
+    const restore = _testOnly_setColdComputeDeadline(0);
+    try {
+      await _testOnly_clearCrossingsCache(userRgId!);
+
+      const started = Date.now();
+      const first = await get("/api/me/crossings", SID_RG);
+      const elapsed = Date.now() - started;
+      expect(first.status).toBe(200);
+      expect(first.body.computing).toBe(true);
+      expect(first.body.items).toEqual([]);
+      // Sanity: the response must be far faster than a full cold compute.
+      expect(elapsed).toBeLessThan(10_000);
+
+      // Poll until the background compute lands in the cache.
+      let items: Array<{ stationSlug: string }> | null = null;
+      for (let i = 0; i < 60; i++) {
+        const poll = await get("/api/me/crossings", SID_RG);
+        expect(poll.status).toBe(200);
+        if (!poll.body.computing) {
+          items = poll.body.items;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      expect(items).not.toBeNull();
+      // SID_RG owns a library crossing fixture, so real rows must appear.
+      expect(items!.length).toBeGreaterThan(0);
+    } finally {
+      restore();
+    }
+  }, TEST_TIMEOUT);
 });

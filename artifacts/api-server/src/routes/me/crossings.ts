@@ -539,6 +539,33 @@ router.get("/me/crossings", h(async (req, res) => {
   // NEXT request gets fresh data. This eliminates the 8–17 s cold-start
   // penalty after a server restart longer than the 30-min TTL.
   const l2result = await readL2CacheAny(user.id);
+
+  const [hasLib, hasSeeds, hasSoft] = await Promise.all([
+    db
+      .select({ id: libraryItemsTable.id })
+      .from(libraryItemsTable)
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)))
+      .limit(1),
+    db
+      .select({ id: tasteSeedsTable.id })
+      .from(tasteSeedsTable)
+      .where(eq(tasteSeedsTable.userId, user.id))
+      .limit(1),
+    // Unresolved Spotify imports drive the soft-artist crossing path, so they
+    // count as taste too — without this check a soft-only user would get a
+    // cached-empty result. Table may be absent in some environments.
+    db
+      .select({ id: spotifyLibraryItemsTable.id })
+      .from(spotifyLibraryItemsTable)
+      .where(
+        and(
+          eq(spotifyLibraryItemsTable.userId, user.id),
+          isNull(spotifyLibraryItemsTable.removedAt),
+        ),
+      )
+      .limit(1)
+      .catch((): { id: number }[] => []),
+  ]);
   if (l2result !== null) {
     if (!l2result.isStale) {
       // Fresh: normal path — repopulate L1 so subsequent requests skip PG.
@@ -579,9 +606,11 @@ router.get("/me/crossings", h(async (req, res) => {
   ]);
   if (hasLib.length === 0 && hasSeeds.length === 0) {
     const items: CrossingsRow[] = [];
-    const builtAt = new Date();
+  const builtAt = new Date();
     crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
     const l2Write = writeL2Cache(user.id, items, builtAt);
+
+  const inFlightCompute = recomputeInFlight.get(user.id);
     l2WriteInFlight.set(user.id, l2Write);
     void l2Write;
     return res.json({ items });
@@ -589,19 +618,12 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // ── Full inline compute (no L2 row exists) ────────────────────────────────
   console.log(`[crossings] full compute for user=${user.id}`);
-  const items = await computePersonalCrossings(user.id);
+    const items: CrossingsRow[] = [];
   const builtAt = new Date();
-  crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
-  const l2Write = writeL2Cache(user.id, items, builtAt);
-  l2WriteInFlight.set(user.id, l2Write);
-  void l2Write;
-  return res.json({ items });
-}));
+    crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
+    const l2Write = writeL2Cache(user.id, items, builtAt);
 
-// ---------------------------------------------------------------------------
-// Blended crossings endpoint
-// ---------------------------------------------------------------------------
-
+  const inFlightCompute = recomputeInFlight.get(user.id);
 /**
  * GET /api/me/crossings/blended — anonymous aggregate crossings from active
  * opted-in Lore users. Returns only station-level aggregate counts; no user
@@ -923,3 +945,25 @@ export async function refreshBlendedCrossingsCache(): Promise<void> {
     console.error("[crossings] blended background refresh failed", err);
   }
 }
+
+    let deadlineTimer: NodeJS.Timeout | undefined;
+
+  const settled = crossingsCache.get(user.id);
+
+/**
+ * How long a cold-cache request waits for the inline compute before giving
+ * up and returning `computing: true`. Kept small so a cold first visit is
+ * never gated on the multi-second aggregate scan.
+ */
+const COLD_COMPUTE_DEADLINE_MS = 2_500;
+
+/** Override the cold-compute deadline (ms) — tests only. Returns a restore fn
+ *  that puts back the value in effect before this call (so nested overrides
+ *  compose). */
+export function _testOnly_setColdComputeDeadline(ms: number): () => void {
+  const prev = coldComputeDeadlineMs;
+  coldComputeDeadlineMs = ms;
+  return () => { coldComputeDeadlineMs = prev; };
+}
+
+let coldComputeDeadlineMs = COLD_COMPUTE_DEADLINE_MS;

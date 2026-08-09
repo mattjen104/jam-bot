@@ -14,7 +14,15 @@ import {
   spinsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
-import { _testOnly_clearCrossingsCache } from "../src/routes/me/crossings.js";
+import {
+  _testOnly_clearCrossingsCache,
+  _testOnly_setColdComputeDeadline,
+} from "../src/routes/me/crossings.js";
+
+// This file asserts on freshly-computed crossings results; pin a generous
+// cold-compute deadline so the endpoint never returns `computing: true` here.
+const restoreColdComputeDeadline = _testOnly_setColdComputeDeadline(120_000);
+afterAll(() => restoreColdComputeDeadline());
 import {
   buildLibraryHitContext,
   _testOnly_clearLibraryHitCache,

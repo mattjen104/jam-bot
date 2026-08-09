@@ -100,6 +100,23 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
     return cached.ctx;
   }
 
+  // In-flight dedup: on first page load, now-playing, recent-spins, and the
+  // SSE connect all request this context at once. Share one build instead of
+  // running the 5-query batch several times in parallel.
+  const inFlight = buildInFlight.get(userId);
+  if (inFlight) return inFlight;
+  const build = buildLibraryHitContextUncached(userId);
+  buildInFlight.set(userId, build);
+  try {
+    return await build;
+  } finally {
+    buildInFlight.delete(userId);
+  }
+}
+
+const buildInFlight = new Map<number, Promise<LibraryHitContext>>();
+
+async function buildLibraryHitContextUncached(userId: number): Promise<LibraryHitContext> {
   const [mbidRows, rgRows, artistRows, softRows, seedRows] = await Promise.all([
     // 1. Exact recording MBIDs in library
     db

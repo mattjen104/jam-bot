@@ -151,11 +151,30 @@ export interface OverlapRun {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Thin fetch wrapper: throws ApiError on non-ok responses. */
+/**
+ * Default request deadline. A hung fetch (server stalled mid-compute, dead
+ * proxy socket) must convert into an error the query layer can surface as a
+ * retry state — never an eternal loading gate on the front door.
+ */
+const API_FETCH_TIMEOUT_MS = 15_000;
+
+function defaultTimeoutSignal(): AbortSignal | undefined {
+  try {
+    return typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
+      ? AbortSignal.timeout(API_FETCH_TIMEOUT_MS)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Thin fetch wrapper: throws ApiError on non-ok responses.
+ *  Applies a 15s abort deadline unless the caller passes its own signal. */
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
+    signal: options?.signal ?? defaultTimeoutSignal(),
   });
   if (!res.ok) {
     let data: unknown = null;
@@ -612,15 +631,24 @@ export function useSetTasteSeeds() {
  * ME_DIAL_CROSSINGS_KEY client-side so the dial refreshes immediately after
  * a library change — no need for a short poll interval here.
  */
+export interface DialCrossingsResult {
+  items: DialCrossing[];
+  /** True while a cold-cache server compute is still running in the background. */
+  computing: boolean;
+}
+
 export function useMyDialCrossings(date: string) {
-  return useQuery({
+  return useQuery<DialCrossingsResult>({
     queryKey: ME_DIAL_CROSSINGS_KEY(date),
     queryFn: () =>
-      fetchOrNull<{ items: DialCrossing[] }>(
+      fetchOrNull<{ items: DialCrossing[]; computing?: boolean }>(
         `/api/me/crossings?date=${encodeURIComponent(date)}`,
-      ).then((d) => d?.items ?? []),
+      ).then((d) => ({ items: d?.items ?? [], computing: d?.computing === true })),
     staleTime: 2 * 60_000,
-    refetchInterval: 2 * 60_000,
+    // While the server reports a cold compute in progress, poll fast so
+    // personalized rows fill in the moment the background compute lands.
+    refetchInterval: (query) =>
+      query.state.data?.computing ? 4_000 : 2 * 60_000,
     retry: false,
   });
 }
