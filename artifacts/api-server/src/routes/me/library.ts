@@ -2594,6 +2594,10 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
     }
 
     if (retryResolved > 0) {
+      // Late resolutions just added library_items rows — evict any cached
+      // crossings (including the cached-empty first-visit result) so the
+      // dial reflects the newly-resolved tracks without a 30-min wait.
+      bustCrossingsCache(candidate.userId);
       await db
         .update(libraryImportJobsTable)
         .set({ retryAttempts: 0, retryExhausted: false })

@@ -25,6 +25,7 @@ import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest, getFreshToken } from "./auth.js";
 import { enqueueRecordingEmbeds } from "../../lore/embed-resolution.js";
 import { bandcampFridayInfo } from "../../lore/support-ladder.js";
+import { bustCrossingsCache } from "./crossings.js";
 
 const router: IRouter = Router();
 
@@ -225,6 +226,10 @@ router.post(
             set: { provenance, spinId: spin.id, addedAt: new Date(), removedAt: null },
           });
         promotedAt = new Date();
+        // A crossing-eligible library row was just created/restored — evict
+        // any cached crossings (including the cached-empty fast-path result)
+        // so the dial reflects the new taste immediately.
+        bustCrossingsCache(user.id);
       }
 
       await db
@@ -332,6 +337,10 @@ router.post(
           ...(keepSpinId != null ? { spinId: keepSpinId } : {}),
         },
       });
+
+    // Evict cached crossings (including a cached-empty first-visit result) so
+    // the next dial poll sees this keep.
+    bustCrossingsCache(user.id);
 
     // A listener explicitly kept this recording: lift it ahead of cold-tail
     // work, but do not make the Keep request wait for any provider network IO.

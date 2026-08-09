@@ -558,6 +558,35 @@ router.get("/me/crossings", h(async (req, res) => {
     return res.json({ items: l2result.data });
   }
 
+  // ── Empty-taste fast path (no L2 row exists) ──────────────────────────────
+  // A brand-new session has no library items and no taste seeds, so the heavy
+  // compute can only ever produce an empty result — but it still pays the full
+  // multi-second aggregate scan. Two cheap indexed existence checks let the
+  // front door render immediately for first-time visitors. The empty result is
+  // cached like any other, and library imports / taste-seed PUTs already call
+  // bustCrossingsCache(), so real data replaces it as soon as taste exists.
+  const [hasLib, hasSeeds] = await Promise.all([
+    db
+      .select({ id: libraryItemsTable.id })
+      .from(libraryItemsTable)
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)))
+      .limit(1),
+    db
+      .select({ id: tasteSeedsTable.id })
+      .from(tasteSeedsTable)
+      .where(eq(tasteSeedsTable.userId, user.id))
+      .limit(1),
+  ]);
+  if (hasLib.length === 0 && hasSeeds.length === 0) {
+    const items: CrossingsRow[] = [];
+    const builtAt = new Date();
+    crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
+    const l2Write = writeL2Cache(user.id, items, builtAt);
+    l2WriteInFlight.set(user.id, l2Write);
+    void l2Write;
+    return res.json({ items });
+  }
+
   // ── Full inline compute (no L2 row exists) ────────────────────────────────
   console.log(`[crossings] full compute for user=${user.id}`);
   const items = await computePersonalCrossings(user.id);
