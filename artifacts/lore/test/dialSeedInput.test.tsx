@@ -306,6 +306,21 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
     });
   });
 
+  it("keeps the set panel visible while tuned artists is open, hidden again after close", () => {
+    mockDial();
+    render(<DialView />);
+
+    // Minimal front door: panel hidden before any engagement.
+    expect(document.querySelector(".dial-hero__setpanel--hidden")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open tuned artists" }));
+    // Panel shows (its head hosts the close trigger) while the surface is open.
+    expect(document.querySelector(".dial-hero__setpanel--hidden")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close tuned artists" }));
+    expect(document.querySelector(".dial-hero__setpanel--hidden")).toBeTruthy();
+  });
+
   it("sorts artists alphabetically and restores the live sidebar when closed", () => {
     tasteSeeds.mockReturnValue({ data: ["zola jesus", "Arcade Fire", "Beach House"] });
     mockDial();
@@ -325,6 +340,39 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
     expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
     expect(document.querySelector(".dial-hero__setpanel-head")).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open tuned artists" }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Minimal default front door — the set/queue panel (head, chevrons, Tune,
+// titles) stays hidden until the listener opens a set, and the hero layout
+// reclaims the panel's strip (data-queue-layout="none") while it is hidden.
+// ---------------------------------------------------------------------------
+
+describe("Minimal default front door — set panel gating", () => {
+  it("hides the set panel and reclaims layout until a set opens; closing all tabs restores the minimal view", () => {
+    mockDial();
+    render(<DialView />);
+
+    const hero = document.querySelector(".dial-hero")!;
+    const panel = document.querySelector(".dial-hero__setpanel")!;
+
+    // First load: only art, corner links, and sentence rows — the panel is
+    // hidden and the layout reserves no strip for it.
+    expect(panel.className).toContain("dial-hero__setpanel--hidden");
+    expect(hero.getAttribute("data-queue-layout")).toBe("none");
+
+    // Clicking a crossing row opens its live set — the panel appears with a
+    // real queue layout.
+    fireEvent.click(document.querySelector(".fdrow")!);
+    expect(panel.className).not.toContain("dial-hero__setpanel--hidden");
+    expect(hero.getAttribute("data-queue-layout")).not.toBe("none");
+    expect(screen.getAllByRole("tab")).toHaveLength(1);
+
+    // Closing the last set tab returns to the minimal front door.
+    fireEvent.click(screen.getByRole("button", { name: /^close/i }));
+    expect(panel.className).toContain("dial-hero__setpanel--hidden");
+    expect(hero.getAttribute("data-queue-layout")).toBe("none");
   });
 });
 

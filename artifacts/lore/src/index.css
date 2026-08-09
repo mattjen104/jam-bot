@@ -5749,6 +5749,12 @@ body * {
   opacity: 0;
   pointer-events: none;
 }
+/* Minimal default front door: with no set tab open and the tuned-artists
+   surface closed the whole panel (head, chevrons, Tune, titles) disappears.
+   The hero carries data-queue-layout="none" in this state, so none of the
+   side/below reservations match and the base landscape sizing gives the
+   panel's strip back to the art and the sentence rows. */
+.dial-hero__setpanel--hidden { display: none; }
 .dial-hero__setpanel-head {
   display: flex;
   align-items: center;

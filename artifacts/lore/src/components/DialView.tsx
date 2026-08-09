@@ -2680,6 +2680,10 @@ export function DialView() {
   // This is deliberately player-context state, not an expandable row. It lets
   // live broadcasts and fixed replays share the same set-list surface.
   const [setTabs, setSetTabs] = useState<SetPanelTab[]>([]);
+  /** Minimal default front door: the set/queue panel only shows once the
+   * listener engages the queue (opens a set tab) or the tuned-artists surface
+   * is open (its close trigger lives in the panel head). */
+  const setPanelOpen = setTabs.length > 0 || tunedArtistsOpen;
   const [activeSetTabId, setActiveSetTabId] = useState<string | null>(null);
   // Sets opened explicitly (front-door click, replay updates). Kept separate
   // from the derived broadcast sets so listedArtists fallbacks and replay
@@ -3186,7 +3190,7 @@ export function DialView() {
           the sort and time-travel controls carry the interface. Tapping the
           art opens the fullscreen overlay. */}
       {level === "all" ? (
-        <div className="dial-hero" data-queue-layout={heroQueueLayout}>
+        <div className="dial-hero" data-queue-layout={setPanelOpen ? heroQueueLayout : "none"}>
           {renderTopbar()}
           <div className={`dial-hero__artwrap${tunedArtistsOpen ? " dial-hero__artwrap--tuned" : ""}`}>
             {tunedArtistsOpen ? (
@@ -3218,8 +3222,12 @@ export function DialView() {
           </div>
           {/* Queue is a sibling of the art, never an overlay inside it. It
               remains mounted in tuned-artists mode so the Tune trigger can
-              close that surface and restore focus. */}
-          <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              close that surface and restore focus.
+              Minimal front door: until the listener opens a set (or the
+              tuned-artists surface), the whole panel — head, chevrons, Tune,
+              titles — is display:none-hidden and the layout gives its strip
+              back to the art and sentence rows (data-queue-layout="none"). */}
+          <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}${setPanelOpen ? "" : " dial-hero__setpanel--hidden"}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
               {/* Quiet front door: with no set tab open the header carries no
                   real content — drop the "Choose a live set" title and the
                   placeholder sentence, keeping only the compact time-travel
