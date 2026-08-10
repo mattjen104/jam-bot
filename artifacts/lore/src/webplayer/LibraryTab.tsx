@@ -465,6 +465,7 @@ function PlayModeButton({
 }
 
 /* Legacy single-run list — kept for test compatibility, no longer rendered in the default UI. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function HearInRuns({
   mbid,
   onOpenRun,
@@ -785,7 +786,7 @@ export function LibraryTab({
     try {
       const limit = 100;
       let offset = 0;
-      let total: number | null = null;
+      const total: number | null = null;
       let received = 0;
       let resolved = 0;
 

@@ -16,7 +16,7 @@
  */
 
 import { db, criCandidatesTable, stationsTable } from "@workspace/db";
-import { eq, ilike, or } from "drizzle-orm";
+import { ilike } from "drizzle-orm";
 
 const CRI_BASE = "https://www.community-radio-index.com";
 const RB_API = "https://de1.api.radio-browser.info/json";
@@ -71,7 +71,7 @@ async function scrapeCriStation(slug: string): Promise<CriStationMeta | null> {
 
     // Location — "London, <a href="/stations?country=UK">UK</a>"
     // CRI renders city as plain text before a comma, country in a link
-    const locationMatch = html.match(/([A-Za-z\s\-\.]+),\s*<a[^>]*>([^<]+)<\/a>/);
+    const locationMatch = html.match(/([A-Za-z\s\-.]+),\s*<a[^>]*>([^<]+)<\/a>/);
     const city = locationMatch?.[1]?.trim() ?? null;
     const country = locationMatch?.[2]?.trim() ?? null;
 
@@ -204,7 +204,7 @@ async function main() {
   console.log(`   Found ${slugs.length} station slugs\n`);
 
   let done = 0;
-  let skipped = 0;
+  let _skipped = 0;
   let errors = 0;
 
   const tasks = slugs.map((slug) => async () => {
@@ -228,7 +228,7 @@ async function main() {
 
       // 4. Lore cross-reference
       const alreadyInLore = await isAlreadyInLore(meta.name);
-      if (alreadyInLore) skipped++;
+      if (alreadyInLore) _skipped++;
 
       // 5. Upsert into cri_candidates
       await db

@@ -38,7 +38,6 @@ import {
   type PlaybackMode,
   type PlaybackTier,
   isLiveServiceRide,
-  checkDeviceContinuity,
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
   readLastUsedService,
@@ -531,7 +530,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // --- Scan state (shared so WebPlayer and PlayerDock both see it) ---
   const { data: stationsData } = useListStations();
-  const stations: Station[] = stationsData?.stations ?? [];
+  const _stations: Station[] = stationsData?.stations ?? [];
   // On-air data supplies the resolved MBID + track info per station.
   const { data: onAirData } = useWpOnAir();
 
@@ -1143,6 +1142,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           guidedOptions: GUIDED_SERVICE_OPTIONS,
           lastUsedService: readLastUsedService(),
         });
+        // eslint-disable-next-line no-useless-assignment
         let label: string | null = null;
         if (tier === 1) {
           label = "Spotify";
@@ -1382,7 +1382,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
     }
     lastAdvanceTimeRef.current = now;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, index]);
 
   // Adaptive prefetch: pre-resolve preview URLs for upcoming items in a past-
@@ -1453,7 +1452,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           previewFetchingRef.current.delete(targetMbid);
         });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, index, queue, timeOrientation, mode]);
 
   // ---- Playback drivers ---------------------------------------------------
@@ -1507,7 +1505,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Preference order: Local file → Spotify → Apple Music → YouTube.
   // (Bandcamp and local file are wired into the cascade via effects below.)
   // `activeDriver` is the first service-level driver with `available === true`.
-  const activeDriver =
+  const _activeDriver =
     spotifyDriver.handle.available
       ? spotifyDriver.handle
       : appleMusicDriver.available
@@ -2441,6 +2439,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const es = new EventSource("/api/stations/now-playing/stream");
     es.onmessage = (msg) => {
+      // eslint-disable-next-line no-useless-assignment
       let slug: string | null = null;
       try {
         const data = JSON.parse(msg.data) as { stationSlug?: string };
@@ -2807,7 +2806,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // polls track progress — the bulk queue call front-loads all URIs so Spotify
   // advances gaplessly without per-track commands from Lore.
   // ---------------------------------------------------------------------------
-  const currentItemForTier1 = queue[index];
+  const _currentItemForTier1 = queue[index];
   useEffect(() => {
     if (!active) return;
     if (mode !== "replay") return;

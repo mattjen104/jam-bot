@@ -140,7 +140,7 @@ describe("Tabbed set panel", () => {
 
     // second set opens an additional tab instead of replacing the view
     fireEvent.click(screen.getByText("open-second"));
-    let tabList = screen.getAllByRole("tab");
+    const tabList = screen.getAllByRole("tab");
     expect(tabList).toHaveLength(2);
     expect(tabList[1].getAttribute("aria-selected")).toBe("true");
 

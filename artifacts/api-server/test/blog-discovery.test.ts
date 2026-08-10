@@ -15,11 +15,7 @@ import {
   resetCrossRefQueue,
 } from "../src/lore/blog-crossref.js";
 
-import {
-  writeHealthOk,
-  writeHealthFail,
-  MAX_FAILURES,
-} from "../src/lore/blog-poller.js";
+import {} from "../src/lore/blog-poller.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

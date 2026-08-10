@@ -4,7 +4,6 @@ import {
   extractBitrate,
   extractCodec,
   applyHealthResult,
-  runHealthSweep,
 } from "../src/lore/stream-health.js";
 import {
   recordSpinitronWebResult,

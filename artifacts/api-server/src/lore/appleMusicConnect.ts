@@ -96,6 +96,7 @@ export class AppleMusicConnector implements ServiceConnector {
     };
   }
 
+  // eslint-disable-next-line require-yield
   async *importLibrary(): AsyncIterable<never> {
     return;
   }

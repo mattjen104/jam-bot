@@ -90,7 +90,7 @@ const MBID = `st-rec-${run}`;
 let dbAvailable = false;
 let userIdBoot: number;
 let userIdHttp: number;
-let connBoot: typeof serviceConnectionsTable.$inferSelect;
+let _connBoot: typeof serviceConnectionsTable.$inferSelect;
 let server: Server | undefined;
 let baseUrl = "";
 let originalFetch: typeof globalThis.fetch;
@@ -240,7 +240,7 @@ beforeAll(async () => {
   // Seed two users: one for the boot-time test, one for the HTTP test.
   const boot = await seedUser(SID_BOOT, SP_UID_BOOT);
   userIdBoot = boot.userId;
-  connBoot = boot.conn;
+  _connBoot = boot.conn;
 
   const http = await seedUser(SID_HTTP, SP_UID_HTTP);
   userIdHttp = http.userId;

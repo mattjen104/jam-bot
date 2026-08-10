@@ -59,7 +59,7 @@ describe("isScheduleUrlPermanentlyGone", () => {
  *  suffix, 404 for everything else. Tracks calls so assertions can inspect
  *  them. */
 function makeHeadFetch(hitPath: string, origin: string) {
-  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  return vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     const ok = url === `${origin}${hitPath}`;
     return {
@@ -129,7 +129,7 @@ describe("probeScheduleUrl", () => {
   it("returns null when the 200 response redirects off-origin", async () => {
     const OTHER_ORIGIN = "http://cdn.other-host.test";
     const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+      const _url = String(input);
       // Pretend the request was redirected to a different origin.
       return {
         ok: true,
@@ -220,9 +220,9 @@ describe("probeScheduleUrl", () => {
   });
 
   it("skips a probe when fetchFn throws and tries the next one", async () => {
-    let callCount = 0;
+    let _callCount = 0;
     const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
-      callCount++;
+      _callCount++;
       const url = String(input);
       // Throw on the first probe; return 200 on the second.
       if (url.endsWith(SCHEDULE_PATH_PROBES[0]!)) throw new Error("ECONNREFUSED");

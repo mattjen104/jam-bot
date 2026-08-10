@@ -7,7 +7,7 @@
  * directly — it imports the functions it needs directly from this file.
  */
 import { type ReactNode } from "react";
-import { eligibleDjName, eligibleDjNames, type ShowAttributionLike } from "@workspace/lore-attribution";
+import { eligibleDjNames, type ShowAttributionLike } from "@workspace/lore-attribution";
 import { type DialShow, type DialDisplayMode } from "../hooks/useDialData";
 
 // ---------------------------------------------------------------------------

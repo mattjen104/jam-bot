@@ -17,7 +17,7 @@
  * - Spotify: disconnected (not Tier 1 eligible)
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, act } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 

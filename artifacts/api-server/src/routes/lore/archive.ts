@@ -5,7 +5,6 @@ import {
   GetPickerRunParams,
   GetPickerRunResponse,
   GetArchiveRecentRunsResponse,
-  GetArchiveRecentRunsQueryParams,
   GetArchiveCoverageResponse,
   GetStationRunInsightsParams,
   GetStationRunInsightsResponse,
@@ -25,7 +24,6 @@ import {
 } from "@workspace/db";
 import { eq, and, or, asc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl, supportsBackfill } from "../../lore/adapters.js";
-import { getPickerByHandle } from "../../lore/picks.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import {
   toArchiveRecording,

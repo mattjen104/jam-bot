@@ -532,7 +532,7 @@ describe("GET /api/me/library/sync/:jobId/search-matched — job isolation", () 
   it("user2 cannot access user1's job — returns 404", async () => {
     if (!dbAvailable) return;
     // jobIdIsoA is owned by user1; user2's session must get 404.
-    const qs = new URLSearchParams().toString();
+    const _qs = new URLSearchParams().toString();
     const url = `${baseUrl}/api/me/library/sync/${jobIdIsoA}/search-matched`;
     const res = await fetch(url, { headers: authHeaders2() });
     expect(res.status).toBe(404);

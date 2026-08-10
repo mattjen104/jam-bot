@@ -1747,6 +1747,7 @@ export async function fetchSpinitronDirectory(): Promise<
     // this as a fallback, not a silent degradation. Full ~300+ station import
     // requires setting SPINITRON_API_KEY.
     stations = EMBEDDED_SPINITRON_STATIONS;
+    // eslint-disable-next-line no-useless-assignment
     source = "embedded-vetted";
     console.warn(
       `[lore/spinitron] directory: live sources unavailable (API 401, HTML 404). ` +

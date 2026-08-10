@@ -5,7 +5,6 @@ import {
   db,
   scrapedShowsTable,
   stationsTable,
-  spinsTable,
   recordingsTable,
   loreUsersTable,
   libraryItemsTable,

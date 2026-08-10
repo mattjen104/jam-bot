@@ -1,8 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, recordingsTable, spinsTable, stationsTable } from "@workspace/db";
-import { eq, desc, sql, isNotNull } from "drizzle-orm";
+import { db, recordingsTable, spinsTable } from "@workspace/db";
+import { eq, desc, sql } from "drizzle-orm";
 import {
-  getTrackById,
   cataloguePort,
   spotifyAppConfigured,
 } from "../../spotify/appClient.js";

@@ -28,11 +28,9 @@ import {
   fetchRecentlyPlayed,
 } from "../../lore/spotifyConnect.js";
 import {
-  getUserFromSession,
   getOrCreateAnonymousUser,
   recoverUserByServiceId,
   SID_COOKIE,
-  SID_MAX_AGE_MS,
   cookieSidOpts,
 } from "../../lore/userSession.js";
 import { getTrackById, getAlbumTracks } from "../../spotify/appClient.js";

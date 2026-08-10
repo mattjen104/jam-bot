@@ -10,10 +10,8 @@ import {
   songExploderEpisodesTable,
   recordingReleaseGroupsTable,
   listEntriesTable,
-  listsTable,
   picksTable,
   pickersTable,
-  scrapedShowsTable,
 } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray, isNotNull, isNull, gte } from "drizzle-orm";
 import { getUserFromSession } from "../lore/userSession.js";

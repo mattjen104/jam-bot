@@ -623,6 +623,7 @@ function simulateAmEnded(opts: {
   isLiveSvcRide?: boolean;
 }): AmEndedResult {
   // Step a: setAltDriverActiveMbid(null) (mirrors line 1035)
+  // eslint-disable-next-line no-useless-assignment
   let altDriverActiveMbid: string | null = "mbid-was-active";
   altDriverActiveMbid = null;
 

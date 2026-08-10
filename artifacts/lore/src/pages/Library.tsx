@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { RUMOURS, onArtError } from "../lib/rumours";
+import { onArtError } from "../lib/rumours";
 import { Link, useLocation, useSearch } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import { useQueryClient } from "@tanstack/react-query";
@@ -36,7 +36,6 @@ import {
   type SyncJobStatus,
 } from "../lib/meHooks";
 import { ApiError } from "@workspace/api-client-react";
-import { KeepButton } from "../components/KeepButton";
 import { LibraryRow } from "../components/LibraryRow";
 import { AlbumAvatarPicker } from "../components/AlbumAvatarPicker";
 import {
@@ -1247,7 +1246,7 @@ export default function Library() {
   const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
   const visibleSeeds = optimisticSeeds ?? seedArtists;
 
-  const addSeed = useCallback((artist: string) => {
+  const _addSeed = useCallback((artist: string) => {
     const trimmed = artist.trim();
     if (!trimmed) return;
     const pending = seedWriteRef.current;
@@ -1269,7 +1268,7 @@ export default function Library() {
     void seedWriteRef.current.catch(() => undefined);
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
 
-  const removeSeed = useCallback((artist: string) => {
+  const _removeSeed = useCallback((artist: string) => {
     const pending = seedWriteRef.current;
     const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
     seedWriteRef.current = base.then(async (current) => {
@@ -1633,6 +1632,7 @@ export default function Library() {
 
         {/* ── Live strip (stub — wired when /me/library/live endpoint ships) ── */}
         {/* TODO: replace false with liveItems.length > 0 */}
+        {/* eslint-disable-next-line no-constant-binary-expression */}
         {false && (
           <a href="/library?live=1" className="lib-live" data-testid="library-live-strip">
             <span className="lib-live__dot" />

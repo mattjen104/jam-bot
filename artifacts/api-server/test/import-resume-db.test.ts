@@ -274,6 +274,7 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=spine", 
 
     // importLibrary should never be reached — configure it to fail loudly if
     // called so the assertion failure message is clear.
+    // eslint-disable-next-line require-yield
     mockImportLibrary.mockImplementation(async function* () {
       throw new Error("importLibrary must NOT be called when a complete buffer exists");
     });
@@ -318,6 +319,7 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=cache", 
 
     // importLibrary should never be reached — configure it to fail loudly if
     // called so the assertion failure message is clear.
+    // eslint-disable-next-line require-yield
     mockImportLibrary.mockImplementation(async function* () {
       throw new Error("importLibrary must NOT be called when a complete buffer exists");
     });
@@ -361,6 +363,7 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=resolve"
 
     // importLibrary should never be reached — configure it to fail loudly if
     // called so the assertion failure message is clear.
+    // eslint-disable-next-line require-yield
     mockImportLibrary.mockImplementation(async function* () {
       throw new Error("importLibrary must NOT be called when a complete buffer exists");
     });
@@ -599,6 +602,7 @@ describe("resumedFrom is written on the new job after a complete-buffer resume",
     const prevJobId = await seedPrevJob({ bufferEntries: completeBuffer, phase: "spine", status: "error" });
 
     // importLibrary must not be reached on the complete-buffer path.
+    // eslint-disable-next-line require-yield
     mockImportLibrary.mockImplementation(async function* () {
       throw new Error("importLibrary must NOT be called when a complete buffer exists");
     });

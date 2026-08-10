@@ -15,7 +15,7 @@
  * drivers are stubbed out (available: false) so they stay off the hot path.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, act } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 

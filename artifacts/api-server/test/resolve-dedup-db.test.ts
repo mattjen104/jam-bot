@@ -103,7 +103,7 @@ describe("logSpinIfChanged — near-duplicate dedup", () => {
       typeof logSpinIfChanged
     >[0];
 
-    const wrote = await logSpinIfChanged(station, {
+    const _wrote = await logSpinIfChanged(station, {
       rawArtist: ARTIST,
       rawTitle: TITLE,
     });

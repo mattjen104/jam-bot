@@ -194,7 +194,7 @@ const ARTIST = `ImportWorker ${run}`;
 let dbAvailable = false;
 let userId: number;
 let connRow: typeof serviceConnectionsTable.$inferSelect;
-let jobId: number;
+let _jobId: number;
 
 beforeAll(async () => {
   try {
@@ -306,7 +306,7 @@ async function createJob(): Promise<number> {
     .insert(libraryImportJobsTable)
     .values({ userId, service: "spotify", status: "pending", total: 0, resolved: 0, startedAt: new Date() })
     .returning({ id: libraryImportJobsTable.id });
-  jobId = j!.id;
+  _jobId = j!.id;
   return j!.id;
 }
 

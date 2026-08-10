@@ -17,7 +17,6 @@ import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
 import {
-  computeLifetimeCrossingsForUser,
   scheduleLifetimeCrossingsRefresh,
 } from "../../lore/lifetime-crossings-job.js";
 
@@ -193,7 +192,7 @@ export function _testOnly_getCrossingsCache(userId: number): { builtAt: number; 
  * Try to read a fresh entry from the Postgres L2 cache.
  * Returns the data rows on a hit, null on a miss or any read error.
  */
-async function readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
+async function _readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
   try {
     const rows = await db
       .select()

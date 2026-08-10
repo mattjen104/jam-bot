@@ -186,7 +186,7 @@ describe("buildArtistGroups", () => {
   });
 
   it("removing the only track from an artist removes that artist's group entirely", () => {
-    const t = makeItem({ mbid: "solo", artist: "Only Artist", albumTitle: "Only Album" });
+    const _t = makeItem({ mbid: "solo", artist: "Only Artist", albumTitle: "Only Album" });
     const other = makeItem({ mbid: "other", artist: "Other Artist", albumTitle: "Other" });
 
     const after = buildArtistGroups([other]);

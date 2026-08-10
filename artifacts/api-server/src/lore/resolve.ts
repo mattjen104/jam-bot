@@ -234,6 +234,7 @@ export async function resolveToMbid(
     return { mbid: cached.mbid, confidence, fromCache: !madeNetworkCall, ...base };
   }
 
+  // eslint-disable-next-line no-useless-assignment
   madeNetworkCall = true;
   const match = await resolveRecordingByText(rawArtist, rawTitle);
 

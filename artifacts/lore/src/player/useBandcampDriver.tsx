@@ -220,7 +220,6 @@ export function useBandcampDriver(): PlaybackDriverHandle {
       />,
       document.body,
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeSrc]);
 
   return useMemo<PlaybackDriverHandle>(

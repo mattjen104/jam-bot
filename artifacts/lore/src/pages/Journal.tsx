@@ -9,7 +9,6 @@ import {
 } from "../lib/local";
 import { clockTime } from "../lib/format";
 import { RUMOURS, onArtError } from "../components/../lib/rumours";
-import { KeepButton } from "../components/KeepButton";
 import {
   ArrowLeft,
   BookOpen,

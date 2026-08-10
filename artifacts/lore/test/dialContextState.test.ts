@@ -49,6 +49,7 @@ describe("dialContext transitions", () => {
   it("tuning to a different station is a deliberate reset of stack and temporal", () => {
     let s = tuneToStation("kexp");
     s = pushFrame(s, { kind: "artist", id: "mbid-1" });
+    // eslint-disable-next-line no-useless-assignment, @typescript-eslint/no-unused-vars
     s = setTemporal(s, { kind: "past", runId: 42 });
     const next = tuneToStation("wfmu");
     expect(next.ctx?.stack).toEqual([{ kind: "station", id: "wfmu" }]);

@@ -10,7 +10,6 @@ import {
   SeedLabelBody,
   IngestBlogBody,
   SeedBlogPickersBody,
-  SeedBlogPickersResponse,
   IngestDiscogsListBody,
   AddSongExploderClaimParams,
   AddSongExploderClaimBody,
@@ -59,7 +58,6 @@ import {
   stationsTable,
   recordingsTable,
   pickersTable,
-  picksTable,
   trackClaimsTable,
   geniusAnnotationDraftsTable,
   songExploderEpisodesTable,
@@ -79,7 +77,7 @@ import {
   loreSettingsTable,
 } from "@workspace/db";
 import { bustConfigCache } from "../config.js";
-import { eq, and, asc, desc, sql, count, isNull, isNotNull, gt, gte } from "drizzle-orm";
+import { eq, and, asc, desc, sql, isNull, isNotNull, gt, gte } from "drizzle-orm";
 import { runAnonCleanup } from "../../lore/anonCleanup.js";
 import { wireListExtractor } from "../../lore/list-wire.js";
 import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } from "../../lore/list-candidates.js";
@@ -101,7 +99,7 @@ import {
 } from "../../lore/picks.js";
 import { validateNtsShowAlias } from "../../lore/nts.js";
 import { seedLabelPicker } from "../../lore/label.js";
-import { ingestBlogFeed, discoverFeedUrl, extractFeedLinksFromHtml } from "../../lore/blog.js";
+import { ingestBlogFeed, discoverFeedUrl } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { addSongExploderClaim } from "../../lore/song-exploder.js";
 import { publishGeniusDraft, rejectGeniusDraft } from "../../lore/genius-annotations.js";
@@ -1296,7 +1294,7 @@ router.get("/admin/lists/:listId/entries", h(async (req, res) => {
   if (!listId) return res.status(400).json({ error: "Invalid listId" });
   const filter = String(req.query["filter"] ?? "");
 
-  let query = db
+  const query = db
     .select()
     .from(listEntriesTable)
     .where(eq(listEntriesTable.listId, listId));

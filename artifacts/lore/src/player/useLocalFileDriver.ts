@@ -203,7 +203,7 @@ async function readMbidFromFile(file: File): Promise<string | null> {
 }
 
 /** Normalize a string for fuzzy matching (lowercase, trim, collapse spaces). */
-function normalize(s: string): string {
+function _normalize(s: string): string {
   return s.toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ").trim();
 }
 

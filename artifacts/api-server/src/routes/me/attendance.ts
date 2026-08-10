@@ -6,7 +6,6 @@ import {
   attendanceRollupsTable,
   attendanceWeeklyRollupsTable,
   spinsTable,
-  stationsTable,
   recordingsTable,
 } from "@workspace/db";
 import { eq, and, isNull, lt, desc, sql } from "drizzle-orm";

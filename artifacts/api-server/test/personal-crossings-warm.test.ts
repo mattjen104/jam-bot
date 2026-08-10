@@ -39,7 +39,7 @@ vi.mock("drizzle-orm", () => ({
 // ---------------------------------------------------------------------------
 // Imports after mocks are registered
 // ---------------------------------------------------------------------------
-import { db, crossingsCacheTable } from "@workspace/db";
+import { db } from "@workspace/db";
 import { schedulePersonalCrossingsRecompute } from "../src/routes/me/crossings.js";
 
 // warmPersonalCrossingsAtBoot is the named export we test

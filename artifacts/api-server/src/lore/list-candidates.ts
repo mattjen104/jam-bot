@@ -26,12 +26,11 @@ import {
   db,
   blogListCandidatesTable,
   listsTable,
-  listEntriesTable,
   listSourcesTable,
   pickersTable,
   type BlogListCandidate,
 } from "@workspace/db";
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { asc, eq, gte, sql } from "drizzle-orm";
 import { scrapeAndPopulateList } from "./list-scraper.js";
 import { wireListExtractor } from "./list-wire.js";
 

@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import type { Request, Response } from "express";
+import type { Request } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import {
   db,

@@ -67,7 +67,7 @@ const CONFIDENCE_BADGE: Record<string, string> = {
   unresolved: "bg-destructive/15 text-destructive-foreground",
 };
 
-function fmtDate(iso: string | null | undefined): string {
+function _fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
     return new Date(iso).toLocaleDateString("en-US", {

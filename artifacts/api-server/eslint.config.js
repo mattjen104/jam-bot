@@ -11,19 +11,17 @@ export default tseslint.config(
       "no-console": "error",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none" },
       ],
       "@typescript-eslint/no-non-null-assertion": "off",
-      "prefer-const": "warn",
+      "prefer-const": "error",
       "no-empty": ["warn", { allowEmptyCatch: true }],
-      // Existing-code tolerance: warn-only on rules whose violations predate
-      // lint; fix on touch rather than in a single sweep.
-      "no-useless-escape": "warn",
-      "no-useless-assignment": "warn",
-      "require-yield": "warn",
-      "preserve-caught-error": "warn",
-      "no-control-regex": "warn",
+      "no-useless-escape": "error",
+      "no-useless-assignment": "error",
+      "require-yield": "error",
+      "preserve-caught-error": "error",
+      "no-control-regex": "error",
     },
   },
   {

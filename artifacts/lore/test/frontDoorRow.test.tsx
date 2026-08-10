@@ -319,7 +319,7 @@ describe("narrow-screen byline readability", () => {
   });
 
   it("exposes the active current-set expansion state", () => {
-    const { container } = render(
+    const { container: _container } = render(
       <FrontDoorRow
         ds={makeDialStation()}
         show={makeShow({

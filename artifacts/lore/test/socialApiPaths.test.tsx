@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React, { useEffect } from "react";
+import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

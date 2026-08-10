@@ -204,7 +204,7 @@ function makePlayerValue(scanning: boolean) {
 
 /** Renders ListeningLogger with a controllable `scanning` value.
  *  Returns `setScanning` so tests can toggle the flag mid-test. */
-async function renderLogger() {
+async function _renderLogger() {
   // Dynamic import ensures all vi.mock() factories are fully applied first.
   const { ListeningLogger } = await import(
     "../src/components/ListeningLogger"

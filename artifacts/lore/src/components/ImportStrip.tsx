@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import type { ImportJobStatus } from "../lib/meHooks";
 import { useLatestImportJob } from "../lib/meHooks";
 
@@ -63,7 +62,7 @@ function isResumed(job: ImportJobStatus): boolean {
  * pending. Completion is deliberately silent: the dial gets that room back.
  * Renders nothing otherwise.
  */
-export function ImportStrip({ onAddMore }: { onAddMore?: () => void }) {
+export function ImportStrip({ onAddMore: _onAddMore }: { onAddMore?: () => void }) {
   const { data: job } = useLatestImportJob();
 
   if (!job) return null;

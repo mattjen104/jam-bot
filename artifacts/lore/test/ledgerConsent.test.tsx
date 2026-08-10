@@ -128,7 +128,7 @@ async function renderLibrary() {
 // ---------------------------------------------------------------------------
 
 const PREFS_DISABLED = { data: { ledgerEnabled: false } };
-const PREFS_ENABLED = { data: { ledgerEnabled: true } };
+const _PREFS_ENABLED = { data: { ledgerEnabled: true } };
 const NO_CONNECTIONS = { data: null, isLoading: false };
 const LIBRARY_INFINITE_EMPTY = {
   data: undefined,

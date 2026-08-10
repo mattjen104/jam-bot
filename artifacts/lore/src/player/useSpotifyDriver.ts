@@ -86,10 +86,10 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
   const {
     active,
     playbackMode,
-    timeOrientation,
+    timeOrientation: _timeOrientation,
     currentItem,
     isLiveSvcRide,
-    queueLenRef,
+    queueLenRef: _queueLenRef,
     rideRef,
     audioRef,
     pauseRadio,

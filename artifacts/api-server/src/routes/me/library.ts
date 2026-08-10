@@ -2697,6 +2697,7 @@ router.post("/me/library/removal", h(async (req, res) => {
   }
 
   const removedAt = removed ? new Date() : null;
+  // eslint-disable-next-line no-useless-assignment
   let updated: { removedAt: Date | null }[] = [];
   if (mbid) {
     updated = await db
@@ -3167,6 +3168,7 @@ router.get("/me/library/mbids", h(async (req, res) => {
     artistMbids = artistRows.map((r) => r.artistMbid).filter((m): m is string => !!m);
   }
 
+  // eslint-disable-next-line no-useless-assignment
   let softArtists: string[] = [];
   {
     const softRows = await db

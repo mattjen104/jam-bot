@@ -81,7 +81,7 @@ export function parseSongExploderTitle(
   }
 
   // Shape 2: "Artist – Song Title" / "Artist - Song Title" (dash/em-dash).
-  const dashMatch = s.match(/^(.+?)\s+[–—\-]\s+(.+)$/);
+  const dashMatch = s.match(/^(.+?)\s+[–—-]\s+(.+)$/);
   if (dashMatch) {
     const artist = dashMatch[1]!.trim();
     const title = dashMatch[2]!.trim();

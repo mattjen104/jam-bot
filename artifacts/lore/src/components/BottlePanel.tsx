@@ -129,7 +129,7 @@ export function BottlePanel({
 }: BottlePanelProps) {
   const [open, setOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
-  const [sending, setSending] = useState(false);
+  const [sending, _setSending] = useState(false);
   const [sentConfirm, setSentConfirm] = useState(false);
   // Persists for the lifetime of this MBID session — drives the icon swap
   const [sealed, setSealed] = useState(false);

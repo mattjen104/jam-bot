@@ -160,7 +160,7 @@ interface StationLaneProps {
   isActive: boolean;
 }
 
-export function StationLane({ dialStation, isPinned, onStationClick, onShowClick, onPinToggle, onPlay, isActive }: StationLaneProps) {
+export function StationLane({ dialStation, isPinned: _isPinned, onStationClick, onShowClick, onPinToggle: _onPinToggle, onPlay, isActive }: StationLaneProps) {
   const { station, isLive, shows, crossings, artistCrossings } = dialStation;
   const rowRef = useRef<HTMLDivElement>(null);
 

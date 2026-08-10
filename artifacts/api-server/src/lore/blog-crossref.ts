@@ -1,6 +1,6 @@
 import { db, pickersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { discoverFeedUrl, extractFeedLinksFromHtml } from "./blog.js";
+import { discoverFeedUrl } from "./blog.js";
 import { slugify } from "./picks.js";
 
 /**
@@ -141,6 +141,7 @@ async function drainOne(opts: { fetchFn?: typeof fetch } = {}): Promise<void> {
 
   const fetchFn = opts.fetchFn ?? fetch;
 
+  // eslint-disable-next-line no-useless-assignment
   let html = "";
   try {
     const res = await fetchFn(postUrl, {

@@ -80,7 +80,6 @@ const router: IRouter = Router();
 
 const NP_BASE_CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type NpBaseCache = {
   builtAt: number;
   stations: { id: number; slug: string }[];

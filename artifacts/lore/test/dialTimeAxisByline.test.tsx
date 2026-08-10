@@ -20,7 +20,7 @@ import {
   crossingSentence,
   classifySetTimeContext,
 } from "../src/components/dialViewHelpers";
-import type { DialShow, DialSpin } from "../src/hooks/useDialData";
+import type { DialShow } from "../src/hooks/useDialData";
 
 // ---------------------------------------------------------------------------
 // Helpers

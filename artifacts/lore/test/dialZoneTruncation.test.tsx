@@ -19,7 +19,7 @@
 
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
@@ -118,7 +118,6 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
 
 import { useDialData, readPins } from "../src/hooks/useDialData";
 import { useMyGhostMissed } from "../src/lib/meHooks";
-import { usePlayer } from "../src/player/PlayerProvider";
 import { useFrontDoorScan } from "../src/hooks/useFrontDoorScan";
 import { DialView } from "../src/components/DialView";
 import type { DialStation, DialShow } from "../src/hooks/useDialData";

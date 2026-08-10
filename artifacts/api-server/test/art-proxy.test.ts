@@ -409,7 +409,7 @@ describe("5-hop redirect chain (exceeds limit)", () => {
 
     // Return redirects indefinitely — only 4 will ever be consumed
     fetchMock.mockImplementation((_url: string, _opts?: unknown) => {
-      const calledUrl = _url as string;
+      const _calledUrl = _url as string;
       const nextIdx = fetchMock.mock.calls.length; // 1-based after this call
       const nextUrl = `https://i.scdn.co/image/chain${nextIdx + 1}`;
       return Promise.resolve({

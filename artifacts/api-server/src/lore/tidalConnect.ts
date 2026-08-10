@@ -88,6 +88,7 @@ export class TidalConnector implements ServiceConnector {
     };
   }
 
+  // eslint-disable-next-line require-yield
   async *importLibrary(): AsyncIterable<never> {
     return;
   }

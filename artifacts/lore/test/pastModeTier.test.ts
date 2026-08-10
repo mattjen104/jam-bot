@@ -20,7 +20,6 @@ import {
   writeLastUsedService,
   LAST_USED_SERVICE_KEY,
   type PlaybackTier,
-  type PastModeTierOpts,
 } from "../src/player/playbackSession";
 import type { GuidedServiceOption } from "../src/lib/guidedReplay";
 

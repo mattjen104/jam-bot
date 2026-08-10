@@ -25,7 +25,7 @@ import {
   vi,
 } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq, sql, isNotNull } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   db,
   stationsTable,

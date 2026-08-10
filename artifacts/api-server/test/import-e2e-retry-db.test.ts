@@ -112,9 +112,9 @@ const TITLE       = `E2ETrack ${run}`;
 const MBID        = `e2e-mbid-${run}`;
 
 // Constants for the negative-cache scenario (second describe block).
-const EXTERNAL_ID_NEG = `sp-e2e-neg-${run}`;
-const ARTIST_NEG      = `E2ENegArtist ${run}`;
-const TITLE_NEG       = `E2ENegTrack ${run}`;
+const _EXTERNAL_ID_NEG = `sp-e2e-neg-${run}`;
+const _ARTIST_NEG      = `E2ENegArtist ${run}`;
+const _TITLE_NEG       = `E2ENegTrack ${run}`;
 
 // Constants for the ISRC-keyed negative-cache scenario (third describe block).
 const EXTERNAL_ID_ISRC = `sp-e2e-isrc-${run}`;

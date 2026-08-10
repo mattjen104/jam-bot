@@ -1,5 +1,5 @@
 import { db, recordingsTable, trackClaimsTable } from "@workspace/db";
-import { eq, like, and } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 
 /**
  * Wikipedia track and album article claims pipeline.

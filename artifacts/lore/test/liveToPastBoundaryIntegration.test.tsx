@@ -210,6 +210,7 @@ async function flushAll(rounds = 5, ms = 10) {
 // ---------------------------------------------------------------------------
 // Observer: captures the latest ride + spotify state for assertion
 // ---------------------------------------------------------------------------
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let latestPlayer: ReturnType<typeof usePlayer> | null = null;
 
 function StateCapture() {

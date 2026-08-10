@@ -325,6 +325,7 @@ export async function validateNtsShowAlias(
   } catch (err) {
     throw new Error(
       `Could not reach the NTS API: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
     );
   }
   if (res.status === 404) {

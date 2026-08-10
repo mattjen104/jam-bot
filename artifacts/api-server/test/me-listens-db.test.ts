@@ -21,7 +21,6 @@ import {
   recordingReleaseGroupsTable,
   libraryItemsTable,
   listensTable,
-  stationsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
 

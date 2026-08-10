@@ -1,8 +1,6 @@
 import {
   db,
   attendanceTable,
-  libraryItemsTable,
-  recordingsTable,
   spinsTable,
   stationsTable,
 } from "@workspace/db";
@@ -114,7 +112,7 @@ export function getCompletedWeekWindow(
   };
 }
 
-type StationRow = { slug: string; name: string };
+type _StationRow = { slug: string; name: string };
 type FirstHeardRow = {
   mbid: string;
   title: string;

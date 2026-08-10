@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import {
   useListPickers,

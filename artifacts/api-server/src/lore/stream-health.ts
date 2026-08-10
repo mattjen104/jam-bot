@@ -60,6 +60,7 @@ export async function probeStream(
   const timeoutMs = opts.timeoutMs ?? HEAD_TIMEOUT_MS;
 
   // ---- Step 1: HEAD -------------------------------------------------------
+  // eslint-disable-next-line no-useless-assignment
   let headFailed = false; // true when HEAD should be followed up with GET
   try {
     const res = await fetchFn(url, {

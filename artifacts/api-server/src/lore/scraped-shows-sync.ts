@@ -1,12 +1,9 @@
 import {
   db,
-  scrapedShowsTable,
   showsTable,
   pickersTable,
-  stationsTable,
-  spinsTable,
 } from "@workspace/db";
-import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { eligibleDjName } from "@workspace/lore-attribution";
 
 // ---------------------------------------------------------------------------

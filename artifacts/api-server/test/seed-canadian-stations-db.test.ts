@@ -41,7 +41,7 @@ const ICY_SLUGS = ["cfuv", "cjsr", "ckut"] as const;
  *  - CHMR: Centova Cast at 192.99.14.49 requires auth; no public API found.
  *  - CISM: ustream.ca Icecast (port 8000 required); admin panel auth-gated.
  */
-const NO_NP_SLUGS = ["chmr", "cism"] as const;
+const _NO_NP_SLUGS = ["chmr", "cism"] as const;
 
 /**
  * Stations upgraded to Spinitron after ICY investigation showed null StreamTitle.

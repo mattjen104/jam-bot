@@ -75,13 +75,14 @@ describe("isLiveToPastCrossing", () => {
     // Second crossing: past → past (two consecutive past stops)
     const secondNew = "past" satisfies TimeOrientation;
     if (isLiveToPastCrossing(prevOrientation, secondNew)) interstitialCount++;
+    // eslint-disable-next-line no-useless-assignment
     prevOrientation = secondNew;
 
     expect(interstitialCount).toBe(1);
   });
 
   it("simulates: two consecutive past stops fire zero interstitials", () => {
-    let prevOrientation: TimeOrientation | null = "past";
+    const prevOrientation: TimeOrientation | null = "past";
     let interstitialCount = 0;
 
     const secondNew = "past" satisfies TimeOrientation;

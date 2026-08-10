@@ -1,5 +1,5 @@
 import { db, recordingsTable } from "@workspace/db";
-import { and, isNull, sql, desc } from "drizzle-orm";
+import { and, isNull, sql } from "drizzle-orm";
 import { fetchGenreAndYear } from "@workspace/song-enrichment";
 
 /**

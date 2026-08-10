@@ -55,7 +55,7 @@ const LIBRARY_WITH_ITEMS = {
 };
 
 /** A completed import job — triggers the ImportStrip "done" state. */
-const DONE_IMPORT_JOB = {
+const _DONE_IMPORT_JOB = {
   jobId: 555,
   service: "spotify",
   status: "done",
@@ -83,7 +83,7 @@ async function installRoutes(
   page: Page,
   opts: {
     library?: typeof LIBRARY_EMPTY | typeof LIBRARY_WITH_ITEMS;
-    importJob?: typeof DONE_IMPORT_JOB | null;
+    importJob?: typeof _DONE_IMPORT_JOB | null;
   } = {},
 ) {
   const { library = LIBRARY_EMPTY, importJob = null } = opts;

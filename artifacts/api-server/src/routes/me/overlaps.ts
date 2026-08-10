@@ -10,7 +10,6 @@ import {
   showsTable,
 } from "@workspace/db";
 import { eq, and, ne, isNotNull, isNull, inArray, asc, sql } from "drizzle-orm";
-import { spinDayExpr } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { pickerNotOptedOut, validScheduleShowAttribution } from "../lore/shared.js";
 import { eligibleDjName } from "@workspace/lore-attribution";

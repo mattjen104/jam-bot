@@ -3,7 +3,7 @@ import {
   db,
   serviceTrackMapTable,
 } from "@workspace/db";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   GetReplayManifestParams,
   GetReplayManifestResponse,
@@ -46,7 +46,7 @@ import {
 } from "../../lore/replay-export.js";
 
 const router: IRouter = Router();
-const REPLAY_EXPORT_MAX_ENTRIES = 50_000;
+const _REPLAY_EXPORT_MAX_ENTRIES = 50_000;
 
 async function replayUserId(req: Parameters<typeof getUserFromSession>[0], res: import("express").Response): Promise<number | null> {
   const user = await getUserFromSession(req);

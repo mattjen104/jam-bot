@@ -7,41 +7,37 @@
  * chrome above the scroll body.
  */
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
-import { Download, Play, Search, X } from "lucide-react";
-import { useLocation, Link } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { Download, Play, X } from "lucide-react";
+import { useLocation } from "wouter";
+import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
-import { StationLane } from "./StationLane";
 import { ContextRail, ArtistPane, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import type { GrammarLinks } from "../dial/grammar";
 import { SearchOverlay } from "./SearchOverlay";
 import { SeedInput } from "./SeedInput";
 import { SeedSuggestions, extractArtistsFromImageFiles, imageFilesFrom } from "./SeedSuggestions";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
-import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
-import { onArtError } from "../lib/rumours";
-import { useSocialMode, setSocialEnabled } from "../lib/social";
-import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
+import { RUMOURS, onArtError } from "../lib/rumours";
+import { useSocialMode } from "../lib/social";
+import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   cleanLiveValue,
-  sameLiveValue,
   nameNodes,
-  crossingSentence,
   reason,
-  intoSet,
   usableShowName,
   buildAttributedSentence,
   dialShowAsAttribution,
   classifySetTimeContext,
-  type ReasonResult,
   type SetDaypart,
 } from "./dialViewHelpers";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { useDialSurface } from "../dial/useDialSurface";
 import { DialContextRegion } from "../dial/DialContextRegion";
 import { railHasRealContent } from "../dial/railContent";
 import { contextStationSlug } from "../dial/dialContext";
+import { heroArtCandidates } from "../lib/artRes";
 import { runDate, clockTime } from "../lib/format";
 
 // ---------------------------------------------------------------------------
@@ -59,8 +55,7 @@ import {
   type OnboardingArtistSuggestion,
   type DialDisplayMode,
 } from "../hooks/useDialData";
-import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
-import { ListenerAvatarStack } from "./ListenerAvatarStack";
+import { useStationPresence } from "../hooks/useStationPresence";
 import {
   FrontDoorRow,
   PopCrossingLine,
@@ -76,39 +71,11 @@ import {
   useSwipeHandler,
   usePastScanState,
 } from "../hooks/useDialNavigation";
-import {
-  TabbedSetPanel,
-  computeLivePanel,
-  useLivePanelSync,
-  CONTEXT_TAB_ID,
-  setPanelScopeId,
-  shouldActivateReplayTab,
-  scopedSets,
-  setPanelTabLabel,
-  SET_EXPORT_SERVICES,
-  buildSetExport,
-  type SetPanelSet,
-  type SetPanelScope,
-  type SetPanelTab,
-  type SetExportService,
-  type SetExportResult,
-} from "./dial/SetPanel";
-import { PopScrubber, RunDensitySpine, RunRow, type ScrubItem, type TtMode } from "./dial/RunDensitySpine";
-import { LiveArtistPicker } from "./dial/LiveArtistPicker";
-import { useSeedManager } from "../hooks/useSeedManager";
-import { useHeroArt } from "../hooks/useHeroArt";
 
 // Re-exports — these lived in DialView.tsx before the decomposition; external
 // imports (tests included) continue to resolve through this module.
 export { FrontDoorRow, PopCrossingLine, SetQueueList, type QueueArtist };
 export { findRunIndexByHour, useSwipeHandler, usePastScanState };
-export { TabbedSetPanel, computeLivePanel, useLivePanelSync };
-export { CONTEXT_TAB_ID, setPanelScopeId, shouldActivateReplayTab, scopedSets, setPanelTabLabel };
-export { SET_EXPORT_SERVICES, buildSetExport };
-export type { SetPanelSet, SetPanelScope, SetPanelTab, SetExportService, SetExportResult };
-export { RunDensitySpine, LiveArtistPicker };
-export type { TtMode } from "./dial/RunDensitySpine";
-export { PAST_SCAN_BIN_BASE_MS, PAST_SCAN_BIN_STEP_MS } from "./dial/RunDensitySpine";
 /**
  * Returns a version of `value` that only flips to `true` after it has been
  * `true` continuously for `delayMs` milliseconds.  Flipping back to `false`
@@ -140,7 +107,7 @@ function useDelayedBoolean(value: boolean, delayMs = 150): boolean {
   return value && delayed;
 }
 
-function todayStr() {
+function _todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -164,7 +131,7 @@ function fmtHM(iso: string, timeZone?: string | null): string {
 }
 type Level = "all" | "station" | "show" | "dj";
 /** Cap on setlist names shown before the "N more" expand affordance. */
-const SETLIST_VISIBLE = 8;
+const _SETLIST_VISIBLE = 8;
 
 export type DialHeroQueueLayout = "side" | "below";
 
@@ -198,6 +165,643 @@ export function chooseDialHeroQueueLayout({
   const sideSquare = Math.min(availableHeight, Math.max(0, artRegionWidth - queueWidth));
   const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
   return sideSquare >= belowSquare ? "side" : "below";
+}
+/**
+ * Compute the set-panel snapshot for a live station row.
+ * Pure function — exported so it can be tested independently of the component.
+ * `listedArtists` (from the crossing popMap) takes precedence over spin-derived
+ * artists when provided, matching the behaviour of `openLiveQueue`.
+ */
+export function computeLivePanel(
+  row: { ds: DialStation; show: DialShow | null },
+  listedArtists?: Array<{ name: string; inLibrary: boolean }> | null,
+): { slug: string; stationName: string; startedAt: string; artists: QueueArtist[]; progress: number } {
+  const spins = row.show?.spins ?? [];
+  const spinArtists = spins
+    .map((spin) => ({ name: spin.artist, inLibrary: spin.isLibraryHit || spin.isArtistHit, title: spin.title || null }))
+    .filter((a) => a.name.trim());
+  const artists = listedArtists?.length
+    ? listedArtists.map((a) => ({ name: a.name, inLibrary: a.inLibrary }))
+    : spinArtists;
+  const currentIndex = Math.max(0, spins.findIndex((spin) =>
+    spin.playedAt === row.show?.currentTrack?.playedAt,
+  ));
+  return {
+    slug: row.ds.station.slug,
+    stationName: row.ds.station.name,
+    startedAt: row.show?.startedAt ?? new Date().toISOString(),
+    artists,
+    progress: artists.length > 0 ? Math.min(1, (currentIndex + 1) / artists.length) : 0,
+  };
+}
+
+/**
+ * Keeps an open live-set panel's progress in sync with live now-playing data.
+ *
+ * Exported so it can be tested in isolation via a thin wrapper component.
+ *
+ * Call with the full set of live rows (`sortedRows`, not just Zone 1) so that
+ * stations that shift zones — or that were opened from Zone 3 — are covered.
+ * Replay panels (slug === "replay") are driven by the ride effect and are
+ * intentionally skipped here.
+ *
+ * The internal ref prevents `panel` from appearing in the sync-effect's dep
+ * array, which would cause a write→re-run→write loop.
+ */
+export function useLivePanelSync(
+  panel: { slug: string; artists: QueueArtist[] } | null,
+  liveRows: Array<{ ds: DialStation; show: DialShow | null }>,
+  onProgress: (progress: number) => void,
+): void {
+  // Stable refs — updated every render so the effect always sees current values
+  // without needing them as explicit deps.
+  const panelRef = useRef(panel);
+  useEffect(() => { panelRef.current = panel; }, [panel]);
+  const onProgressRef = useRef(onProgress);
+  useEffect(() => { onProgressRef.current = onProgress; }, [onProgress]);
+
+  useEffect(() => {
+    const p = panelRef.current;
+    if (!p || p.slug === "replay") return;
+    const row = liveRows.find((r) => r.ds.station.slug === p.slug);
+    if (!row) return;
+    const spins = row.show?.spins ?? [];
+    const currentIndex = Math.max(0, spins.findIndex((s) =>
+      s.playedAt === row.show?.currentTrack?.playedAt,
+    ));
+    const progress = p.artists.length > 0
+      ? Math.min(1, (currentIndex + 1) / p.artists.length)
+      : 0;
+    onProgressRef.current(progress);
+  }, [liveRows]);
+}
+
+/** A complete broadcast run retained by the set-panel tab model. */
+export interface SetPanelSet {
+  id: string;
+  /** Archive run id when known — the set's canonical /archive/station-runs
+   * route is built from THIS, never from the currently-tuned show. */
+  runId: number | string | null;
+  stationSlug: string;
+  stationName: string;
+  startedAt: string;
+  /** Station-local IANA timezone the set aired in — clock labels must render
+   * in this zone, never the listener's. */
+  ianaTimezone: string | null;
+  showName: string | null;
+  /** Individual eligible DJ identities — scope matching is by membership so a
+   * co-hosted set surfaces under EACH host's drill, never only under the
+   * joined display label. */
+  djNames: string[];
+  artists: QueueArtist[];
+  spins: DialSpin[];
+  progress: number;
+}
+
+export type SetPanelScope =
+  | { kind: "set"; setId: string }
+  | { kind: "dj"; value: string }
+  | { kind: "show"; value: string }
+  | { kind: "station"; value: string }
+  /** An artist page rendered as a tab. `value` is the stable artist
+   * identifier: the MBID when known, else `name:<name>` (same encoding as
+   * the retired artist lens frames, so serialized lens URLs map cleanly). */
+  | { kind: "artist"; value: string; label?: string }
+  /** The tuned station context rendered AS a tab (sidebar layout only).
+   * `value` is the station slug. There is at most one context tab; its id is
+   * always CONTEXT_TAB_ID so re-tuning retargets the same tab. */
+  | { kind: "context"; value: string };
+
+export interface SetPanelTab {
+  id: string;
+  scope: SetPanelScope;
+}
+
+/** Fixed id for the single station-context tab. */
+export const CONTEXT_TAB_ID = "context";
+
+export function setPanelScopeId(scope: SetPanelScope): string {
+  if (scope.kind === "context") return CONTEXT_TAB_ID;
+  return `${scope.kind}:${scope.kind === "set" ? scope.setId : scope.value}`;
+}
+
+/**
+ * The synthetic replay tab may only take focus when the panel is empty:
+ * playback started from a selected set/scope keeps that tab visible while the
+ * replay tab updates in the background.
+ */
+export function shouldActivateReplayTab(activeTabId: string | null): boolean {
+  return activeTabId === null;
+}
+
+/**
+ * Scope resolution is always in units of FULL sets: a DJ/show/station scope
+ * returns every complete matching set (chronological), never a crossing
+ * excerpt. Crossing artists stay highlighted white via each set's own
+ * inLibrary flags inside SetQueueList.
+ */
+export function scopedSets(scope: SetPanelScope, allSets: SetPanelSet[]): SetPanelSet[] {
+  // The context and artist tabs render their own bodies, never a set list —
+  // they scope over nothing.
+  if (scope.kind === "context" || scope.kind === "artist") return [];
+  const matches = scope.kind === "set"
+    ? allSets.filter((set) => set.id === scope.setId)
+    : scope.kind === "dj"
+      ? allSets.filter((set) => set.djNames.includes(scope.value))
+      : scope.kind === "show"
+        ? allSets.filter((set) => set.showName === scope.value)
+        : allSets.filter((set) => set.stationSlug === scope.value);
+  return [...matches].sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
+}
+
+export function setPanelTabLabel(tab: SetPanelTab, sets: SetPanelSet[], contextLabel?: string | null): string {
+  if (tab.scope.kind === "context") {
+    // Prefer the caller-resolved station name; fall back to any loaded set's
+    // station name for the slug, then the slug itself.
+    return contextLabel
+      ?? sets.find((candidate) => candidate.stationSlug === (tab.scope as { value: string }).value)?.stationName
+      ?? tab.scope.value;
+  }
+  if (tab.scope.kind === "dj") return tab.scope.value;
+  if (tab.scope.kind === "show") return tab.scope.value;
+  if (tab.scope.kind === "artist") {
+    if (tab.scope.label) return tab.scope.label;
+    const value = tab.scope.value;
+    if (value.startsWith("name:")) return value.slice(5);
+    // MBID identifier — recover a display name from loaded spins.
+    for (const set of sets) {
+      for (const spin of set.spins) {
+        if (spin.artistMbid === value) return spin.artist;
+      }
+    }
+    return "Artist";
+  }
+  if (tab.scope.kind === "station") {
+    const slug = tab.scope.value;
+    const set = sets.find((candidate) => candidate.stationSlug === slug);
+    return set?.stationName ?? slug;
+  }
+  const setId = tab.scope.setId;
+  const set = sets.find((candidate) => candidate.id === setId);
+  return set ? `${fmtHM(set.startedAt, set.ianaTimezone)} · ${set.stationName}` : "Set";
+}
+
+/** Streaming services a displayed setlist can export to. Qobuz has no
+ * playlist-write connector, so every service exports as ordered per-track
+ * deep links into that service's own search — honest about matching rather
+ * than pretending a remote playlist was created. */
+export const SET_EXPORT_SERVICES = ["Spotify", "Apple Music", "Tidal", "Deezer", "YouTube", "Qobuz"] as const;
+export type SetExportService = (typeof SET_EXPORT_SERVICES)[number];
+
+const EXPORT_URL_BUILDERS: Record<SetExportService, (q: string) => string> = {
+  Spotify: (q) => `https://open.spotify.com/search/${encodeURIComponent(q)}`,
+  "Apple Music": (q) => `https://music.apple.com/search?term=${encodeURIComponent(q)}`,
+  Tidal: (q) => `https://listen.tidal.com/search?q=${encodeURIComponent(q)}`,
+  Deezer: (q) => `https://www.deezer.com/search/${encodeURIComponent(q)}`,
+  YouTube: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+  Qobuz: (q) => `https://www.qobuz.com/search?q=${encodeURIComponent(q)}`,
+};
+
+export interface SetExportResult {
+  entries: { label: string; url: string }[];
+  /** Tracks that couldn't be matched (missing artist or title) — degrade
+   * gracefully by counting them instead of exporting broken links. */
+  skipped: number;
+}
+
+export function buildSetExport(sets: SetPanelSet[], service: SetExportService): SetExportResult {
+  const entries: SetExportResult["entries"] = [];
+  let skipped = 0;
+  for (const set of sets) {
+    for (const spin of set.spins) {
+      const artist = spin.artist?.trim();
+      const title = spin.title?.trim();
+      if (!artist || !title) { skipped += 1; continue; }
+      entries.push({ label: `${artist} — ${title}`, url: EXPORT_URL_BUILDERS[service](`${artist} ${title}`) });
+    }
+  }
+  return { entries, skipped };
+}
+
+/**
+ * Tabbed set browser — fully controlled by the parent so that front-door row
+ * clicks, replay updates, and provenance drills all share one tab model.
+ * Each tab header card leads with the most specific provenance (DJ, then
+ * show), while the station link is anchored last on every card.
+ */
+export function TabbedSetPanel({
+  tabs,
+  activeId,
+  allSets,
+  seedsLower,
+  onSelect,
+  onClose,
+  onScope,
+  onAdd,
+  onRemove,
+  onPlay,
+  contextLabel,
+  contextBody,
+  renderArtistBody,
+}: {
+  tabs: SetPanelTab[];
+  activeId: string | null;
+  allSets: SetPanelSet[];
+  seedsLower: Set<string>;
+  onSelect: (id: string) => void;
+  onClose: (id: string) => void;
+  onScope: (scope: SetPanelScope) => void;
+  onAdd: (name: string) => void;
+  onRemove: (name: string) => void;
+  onPlay: (sets: SetPanelSet[], label: string) => void;
+  /** Display label for the station-context tab (resolved station name). */
+  contextLabel?: string | null;
+  /** Body of the station-context tab — breadcrumb + summary + rail. */
+  contextBody?: ReactNode;
+  /** Body of an artist tab — the artist page content (runs, spins, taste
+   * control). When absent, artist tabs render nothing below the strip. */
+  renderArtistBody?: (scope: Extract<SetPanelScope, { kind: "artist" }>) => ReactNode;
+}) {
+  const [service, setService] = useState<SetExportService>("Spotify");
+  const [exportOpen, setExportOpen] = useState(false);
+  // Phone widths collapse the Play/service/Export row behind this one quiet
+  // control (CSS-gated — desktop always shows the row and hides the toggle).
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
+  // The context and artist tabs render their own bodies; every set-oriented
+  // affordance (actions, export, cards) treats them as "no set tab active".
+  const isContextActive = activeTab?.scope.kind === "context";
+  const activeArtistScope = activeTab?.scope.kind === "artist" ? activeTab.scope : null;
+  const active = isContextActive || activeArtistScope ? null : activeTab;
+  const displayed = active ? scopedSets(active.scope, allSets) : [];
+  const exported = exportOpen && active ? buildSetExport(displayed, service) : null;
+  // Artist name → MBID from every loaded set, so a queue name click opens a
+  // strongly-identified tab whenever the dial already knows the MBID.
+  const artistMbids = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const set of allSets) {
+      for (const spin of set.spins) {
+        if (spin.artistMbid && !map.has(spin.artist.toLowerCase())) {
+          map.set(spin.artist.toLowerCase(), spin.artistMbid);
+        }
+      }
+    }
+    return map;
+  }, [allSets]);
+  const openArtist = (name: string) => onScope({
+    kind: "artist",
+    value: artistFrameId(name, artistMbids.get(name.trim().toLowerCase()) ?? null),
+    label: name,
+  });
+
+  return (
+    <>
+      {tabs.length > 0 && (
+        <div className="set-tabs" role="tablist" aria-label="Open sets">
+          {tabs.map((tab) => (
+            <div key={tab.id} className={`set-tabs__tab${tab.id === activeId ? " set-tabs__tab--active" : ""}${tab.scope.kind === "context" ? " set-tabs__tab--context" : ""}`}>
+              <button type="button" role="tab" aria-selected={tab.id === activeId} onClick={() => onSelect(tab.id)}>
+                {setPanelTabLabel(tab, allSets, contextLabel)}
+              </button>
+              <button type="button" className="set-tabs__close" aria-label={`Close ${setPanelTabLabel(tab, allSets, contextLabel)}`} onClick={() => onClose(tab.id)}><X /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      {isContextActive && contextBody != null && (
+        <div className="set-panel__context">{contextBody}</div>
+      )}
+      {activeArtistScope && renderArtistBody != null && (
+        <div className="set-panel__artist">{renderArtistBody(activeArtistScope)}</div>
+      )}
+      {active && (
+        <button
+          type="button"
+          className="set-panel__actions-toggle"
+          aria-label={actionsOpen ? "Hide set actions" : "Show set actions"}
+          aria-expanded={actionsOpen}
+          onClick={() => setActionsOpen((open) => !open)}
+        >{actionsOpen ? "less" : "play · export"}</button>
+      )}
+      {active && (
+        <div className={`set-panel__actions${actionsOpen ? " set-panel__actions--open" : ""}`}>
+          <button
+            type="button"
+            className="set-panel__action"
+            disabled={!displayed.some((set) => set.spins.some((spin) => spin.mbid))}
+            onClick={() => onPlay(displayed, setPanelTabLabel(active, allSets))}
+          >
+            <Play /> Play set{displayed.length > 1 ? "s" : ""}
+          </button>
+          <label className="set-panel__service">
+            <span className="sr-only">Export service</span>
+            <select aria-label="Export service" value={service} onChange={(e) => { setService(e.target.value as SetExportService); setExportOpen(false); }}>
+              {SET_EXPORT_SERVICES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="set-panel__action"
+            disabled={!displayed.some((set) => set.spins.length)}
+            onClick={() => setExportOpen((open) => !open)}
+          >
+            <Download /> Export
+          </button>
+        </div>
+      )}
+      {exported && (
+        <div className="set-panel__export" aria-label={`Export to ${service}`}>
+          {exported.entries.map((entry, i) => (
+            <a key={`${entry.url}:${i}`} href={entry.url} target="_blank" rel="noreferrer">{entry.label}</a>
+          ))}
+          {exported.skipped > 0 && (
+            <p className="set-panel__export-skips">{exported.skipped} track{exported.skipped > 1 ? "s" : ""} couldn't be matched and {exported.skipped > 1 ? "were" : "was"} skipped.</p>
+          )}
+        </div>
+      )}
+      {active && displayed.length === 0 && <p className="dial-hero__setpanel-empty">No complete sets are available for this attribution yet.</p>}
+      {displayed.length > 0 && (
+        <div className="set-panel__sets">
+          {displayed.map((set) => (
+            <article className="set-panel__card" key={set.id}>
+              <header className="set-panel__provenance">
+                {/* No date · time row — the tab chip already carries time · station. */}
+                <div className="set-panel__cascade">
+                  {set.djNames.map((dj) => (
+                    <button key={dj} type="button" onClick={() => onScope({ kind: "dj", value: dj })}>{dj}</button>
+                  ))}
+                  {set.showName && <button type="button" onClick={() => onScope({ kind: "show", value: set.showName! })}>{set.showName}</button>}
+                </div>
+                <button type="button" className="set-panel__station fdrow__station-chip" onClick={() => onScope({ kind: "station", value: set.stationSlug })}>{set.stationName}</button>
+              </header>
+              <SetQueueList artists={set.artists} seedsLower={seedsLower} onAdd={onAdd} onRemove={onRemove} onOpenArtist={openArtist} progress={set.progress} />
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+interface ScrubItem {
+  slug: string;
+  name: string;
+  /** Popular-crossing weight (same stat as the triangle sort). */
+  score: number;
+  /** Set carries at least one new-to-Lore / new-to-you artist. */
+  hasNew: boolean;
+}
+
+/**
+ * Right-edge scrubber for the Also-On-Air list. One tick per station in the
+ * current sort order — tick length tracks the station's popular-crossing
+ * weight (so the lime gradient IS the sort, in either triangle direction),
+ * canary ticks mark sets carrying new artists. Dragging scrubs the full
+ * list; a bubble names the station under the finger.
+ */
+function PopScrubber({ items, onScrub }: {
+  items: ScrubItem[];
+  onScrub: (item: ScrubItem, index: number) => void;
+}) {
+  const railRef = useRef<HTMLDivElement | null>(null);
+  // Active selection is tracked by slug so a live-data reorder mid-drag can't
+  // silently retarget the bubble/ARIA state at a different station.
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const pointerId = useRef<number | null>(null);
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (clearTimer.current) clearTimeout(clearTimer.current); }, []);
+  const maxScore = Math.max(1, ...items.map((i) => i.score));
+  const active = activeSlug != null ? items.findIndex((i) => i.slug === activeSlug) : -1;
+
+  const select = (idx: number) => {
+    const it = items[idx];
+    if (!it) return;
+    if (clearTimer.current) { clearTimeout(clearTimer.current); clearTimer.current = null; }
+    setActiveSlug(it.slug);
+    onScrub(it, idx);
+  };
+  const pick = (clientY: number) => {
+    const el = railRef.current;
+    if (!el || items.length === 0) return;
+    const r = el.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (clientY - r.top) / r.height));
+    select(Math.min(items.length - 1, Math.floor(f * items.length)));
+  };
+  const release = () => {
+    pointerId.current = null;
+    if (clearTimer.current) clearTimeout(clearTimer.current);
+    clearTimer.current = setTimeout(() => { setActiveSlug(null); clearTimer.current = null; }, 700);
+  };
+
+  return (
+    <div
+      ref={railRef}
+      className="popscrub"
+      role="slider"
+      tabIndex={0}
+      aria-label="Scrub the station list"
+      aria-orientation="vertical"
+      aria-valuemin={0}
+      aria-valuemax={items.length - 1}
+      aria-valuenow={active >= 0 ? active : 0}
+      aria-valuetext={active >= 0 ? items[active]?.name : undefined}
+      onPointerDown={(e) => {
+        pointerId.current = e.pointerId;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        pick(e.clientY);
+      }}
+      onPointerMove={(e) => { if (pointerId.current === e.pointerId) pick(e.clientY); }}
+      onPointerUp={(e) => { if (pointerId.current === e.pointerId) release(); }}
+      onPointerCancel={(e) => { if (pointerId.current === e.pointerId) release(); }}
+      onKeyDown={(e) => {
+        const cur = active >= 0 ? active : -1;
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); select(Math.min(items.length - 1, cur + 1)); }
+        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); select(Math.max(0, cur - 1)); }
+        else if (e.key === "Home") { e.preventDefault(); select(0); }
+        else if (e.key === "End") { e.preventDefault(); select(items.length - 1); }
+      }}
+      onBlur={release}
+    >
+      {items.map((it, i) => (
+        <div
+          key={it.slug}
+          className={[
+            "popscrub__tick",
+            it.hasNew ? "popscrub__tick--new" : "",
+            i === active ? "popscrub__tick--active" : "",
+          ].filter(Boolean).join(" ")}
+          style={{ width: 4 + Math.round((it.score / maxScore) * 10) }}
+        />
+      ))}
+      {active != null && items[active] && (
+        <div
+          className="popscrub__bubble"
+          style={{ top: `${((active + 0.5) / items.length) * 100}%` }}
+        >
+          {items[active].name}
+        </div>
+      )}
+    </div>
+  );
+}
+/**
+ * A horizontal row of clickable bins, one per crossing run, ordered oldest
+ * (left) to newest (right).  Displays crossing density (owned count) as a
+ * proportional bar height so dense regions are visually prominent.
+ *
+ * Interactions:
+ * - Click a bin → onRunSelect(runIdx)
+ * - Pointer-drag along the spine → continuously calls onRunSelect as the
+ *   pointer moves, giving the "scan" feel of the coarse detent drag.
+ *
+ * Suppressed in Top Sets mode (caller controls visibility).
+ */
+export function RunDensitySpine({
+  runs,
+  activeIdx,
+  onRunSelect,
+}: {
+  runs: OverlapRun[];
+  activeIdx: number | null;
+  onRunSelect: (idx: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  /** Map a clientX pixel to the nearest run index (newest=right, oldest=left). */
+  const clientXToIdx = useCallback((clientX: number): number => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect || runs.length === 0) return 0;
+    // x=0 → oldest run (highest array index); x=1 → newest (idx 0)
+    const ratio = (clientX - rect.left) / rect.width;
+    const raw = (1 - Math.max(0, Math.min(1, ratio))) * (runs.length - 1);
+    return Math.round(raw);
+  }, [runs.length]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    isDragging.current = true;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    onRunSelect(clientXToIdx(e.clientX));
+  }, [clientXToIdx, onRunSelect]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    onRunSelect(clientXToIdx(e.clientX));
+  }, [clientXToIdx, onRunSelect]);
+
+  const handlePointerUp = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  if (runs.length === 0) return null;
+
+  const maxOwned = Math.max(...runs.map((r) => r.owned), 1);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`dial-density-spine${runs.length > 60 ? " dial-density-spine--dense" : ""}`}
+      role="slider"
+      aria-label="Crossing run navigator — drag to scan"
+      aria-valuemin={0}
+      aria-valuemax={runs.length - 1}
+      aria-valuenow={activeIdx ?? 0}
+      data-spine="true"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      {/* Display oldest → newest (runs array is newest-first, so reverse) */}
+      {[...runs].reverse().map((run, displayIdx, reversed) => {
+        const runIdx = runs.length - 1 - displayIdx; // convert back to array index
+        const isActive = runIdx === activeIdx;
+        const heightPct = Math.max(10, Math.round((run.owned / maxOwned) * 100));
+        // Mark the first run of each calendar day so wide ranges stay legible.
+        const dayStart = displayIdx > 0 && reversed[displayIdx - 1]!.day !== run.day;
+        return (
+          <button
+            key={run.runId}
+            type="button"
+            className={`dial-density-spine__bin${isActive ? " dial-density-spine__bin--active" : ""}${dayStart ? " dial-density-spine__bin--daystart" : ""}`}
+            style={{ height: `${heightPct}%` }}
+            data-run-idx={runIdx}
+            data-day={run.day}
+            aria-label={`${run.day} — ${run.owned} library tracks`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunSelect(runIdx);
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+export type TtMode = "live" | "past" | "top";
+
+// Constants for the past-scan density spine.
+// Synthetic timestamps assign each run a unique X-position (oldest run → smallest
+// timestamp) so that multiple runs on the same calendar day get distinct spine bins.
+// The spine maps hourMs back to a run index via:
+//   binIdx = round((hourMs - PAST_SCAN_BIN_BASE_MS) / PAST_SCAN_BIN_STEP_MS)
+//   runIdx = runs.length - 1 - binIdx   (reversal: pastScanBins is oldest-first)
+export const PAST_SCAN_BIN_BASE_MS = new Date("2020-01-01T00:00:00Z").getTime();
+export const PAST_SCAN_BIN_STEP_MS = 3_600_000; // 1 hour per bin slot
+
+// ---------------------------------------------------------------------------
+// RunRow — a historical crossing run row (day mode / top sets mode)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single run from /me/overlaps/runs, rendered in the style of a FrontDoorRow.
+ * Clicking navigates to /archive/station-runs/{runId} — the station-run archive
+ * page that shows the full tracklist and optionally starts a ride.
+ *
+ * NOTE: runId here is min(spin.id) for the run grouping, which is the same anchor
+ * the station-run archive uses. It is NOT a replay manifest ID; routing to
+ * /replay/{runId} would silently fail for runs without a manifest.
+ */
+function RunRow({ run, focused = false }: { run: OverlapRun; focused?: boolean }) {
+  const [, navigate] = useLocation();
+  const djName = run.show?.djName ?? null;
+  const showName = run.show?.name ?? null;
+  const time = classifySetTimeContext({
+    startedAt: new Date(run.startedAt),
+    stationIanaTimezone: run.station.ianaTimezone,
+  });
+
+  return (
+    <div
+      className={`fdrow fdrow--run${focused ? " fdrow--run-focused" : ""}`}
+      role="button"
+      tabIndex={0}
+      data-run-id={run.runId}
+      onClick={() => navigate(`/archive/station-runs/${run.runId}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(`/archive/station-runs/${run.runId}`);
+        }
+      }}
+    >
+      <div className="fdrow__run-main">
+        <span className="fdrow__station">{run.station.name}</span>
+        {djName && <b className="fdrow__dj"> · {djName}</b>}
+        {showName && !djName && (
+          <span className="fdrow__show"> · {showName}</span>
+        )}
+      </div>
+      <div className="fdrow__run-sub">
+        <span className="fdrow__owned">{run.owned} of yours</span>
+        {run.discover > 0 && (
+          <span className="fdrow__discover"> · {run.discover} new</span>
+        )}
+        <span className="fdrow__replay-badge"> · ▶ hear it</span>
+        <span className="fdrow__run-day">{time.label}</span>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +893,7 @@ function TunedArtistsPanel({
 // ---------------------------------------------------------------------------
 // Stations list view
 // ---------------------------------------------------------------------------
-function StationsListView({
+function _StationsListView({
   stations,
   onStationClick,
 }: {
@@ -345,7 +949,7 @@ function StationDetailView({
     <div className="dial-fat-list">
       {shows.map((show, i) => {
         const isLive = show.state === "live";
-        const isPast = show.state === "past";
+        const _isPast = show.state === "past";
         const isFuture = show.state === "future";
         const warm = show.crossings > 0 && !isFuture;
         const isPicker = show.isPickerShow;
@@ -708,7 +1312,7 @@ function ScanBar({
 // ---------------------------------------------------------------------------
 // Schedule view (simple list of today's shows sorted by station/time)
 // ---------------------------------------------------------------------------
-function ScheduleView({ stations }: { stations: DialStation[] }) {
+function _ScheduleView({ stations }: { stations: DialStation[] }) {
   const allShows = stations
     .flatMap((ds) => ds.shows.map((sh) => ({ show: sh, station: ds })))
     .sort((a, b) => new Date(a.show.startedAt).getTime() - new Date(b.show.startedAt).getTime());
@@ -769,7 +1373,7 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
 // Offline station row — reason-first layout matching FrontDoorRow's three-tier
 // reading order: reason / what was aired → DJ attribution → station label.
 // ---------------------------------------------------------------------------
-function OfflineRow({
+function _OfflineRow({
   dialStation,
   isActive,
   onStationClick,
@@ -896,12 +1500,12 @@ export function DialView() {
     hasLibrary,
     hasSeeds,
     liveArtistSuggestions,
-    onboardingArtists,
-    onboardingArtistsLoading,
+    onboardingArtists: _onboardingArtists,
+    onboardingArtistsLoading: _onboardingArtistsLoading,
     overlapByPickerId,
     pickerNameToId,
     crossingSourceMode,
-    crossingError,
+    crossingError: _crossingError,
     crossingsPhase,
     stationsError,
     refetchStations,
@@ -933,12 +1537,64 @@ export function DialView() {
   }, [socialEnabled]);
 
   // ── Taste seeds — zero-friction artist onboarding ───────────────────────
-  const { data: mattStarter } = useMattStarterLibrary();
+  const { data: seedArtists = [] } = useMyTasteSeeds();
+  const setSeedsMutation = useSetTasteSeeds();
+  const { data: _mattStarter } = useMattStarterLibrary();
   const mattStarterMutation = useStartMattLibrary();
-  const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
-  const startMattLibrary = useCallback(() => {
+  const seedWriteRef = useRef<Promise<string[]> | null>(null);
+  // Keep the cloud responsive while the serialized PUT queue is in flight.
+  // The server query remains the source of truth; this optimistic mirror only
+  // prevents a fast click from looking unselected until the round trip ends.
+  const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
+  const visibleSeeds = optimisticSeeds ?? seedArtists;
+  const _startMattLibrary = useCallback(() => {
     mattStarterMutation.mutate();
   }, [mattStarterMutation]);
+
+  const addSeed = useCallback((artist: string) => {
+    const trimmed = artist.trim();
+    if (!trimmed) return;
+    // Serialize rapid picker clicks. Without this, two clicks in the same
+    // render both read the old query result and the later PUT can overwrite
+    // the first selected artist.
+    const pending = seedWriteRef.current;
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
+    seedWriteRef.current = base.then(async (current) => {
+      const lower = trimmed.toLowerCase();
+      if (current.some((s) => s.toLowerCase() === lower) || current.length >= MAX_TASTE_SEEDS) return current;
+      const next = [...current, trimmed];
+      setOptimisticSeeds(next);
+      try {
+        const result = await setSeedsMutation.mutateAsync(next);
+        setOptimisticSeeds(result.artists);
+        return result.artists;
+      } catch (error) {
+        setOptimisticSeeds(null);
+        throw error;
+      }
+    });
+    void seedWriteRef.current.catch(() => undefined);
+  }, [seedArtists, setSeedsMutation, visibleSeeds]);
+
+  const removeSeed = useCallback((artist: string) => {
+    const pending = seedWriteRef.current;
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
+    seedWriteRef.current = base.then(async (current) => {
+      const lower = artist.toLowerCase();
+      const next = current.filter((s) => s.toLowerCase() !== lower);
+      if (next.length === current.length) return current;
+      setOptimisticSeeds(next);
+      try {
+        const result = await setSeedsMutation.mutateAsync(next);
+        setOptimisticSeeds(result.artists);
+        return result.artists;
+      } catch (error) {
+        setOptimisticSeeds(null);
+        throw error;
+      }
+    });
+    void seedWriteRef.current.catch(() => undefined);
+  }, [seedArtists, setSeedsMutation, visibleSeeds]);
 
   const closeTunedArtists = useCallback(() => {
     setTunedArtistsOpen(false);
@@ -983,7 +1639,7 @@ export function DialView() {
   }, [popMap]);
   // Triangle toggle: up (true) = popular-heavy sets first; down = deep-cuts
   // (rarest-artist-first) ordering. Pure client-side re-sort.
-  const [popSortDesc, setPopSortDesc] = useState(true);
+  const [popSortDesc, _setPopSortDesc] = useState(true);
   /** Signed comparison for the active sort mode; 0 when tied (fallbacks apply). */
   const popCompare = useCallback((aSlug: string, bSlug: string) => {
     if (popSortDesc) return popScore(bSlug) - popScore(aSlug);
@@ -1003,6 +1659,13 @@ export function DialView() {
     if (!artists) return false;
     return artists.some((a) => !a.inLibrary);
   }, [popMap]);
+
+  // Bridge: player-ticker artist clicks → addSeed (ticker lives in PlayerBar)
+  useEffect(() => {
+    const handler = (e: Event) => addSeed((e as CustomEvent<string>).detail);
+    window.addEventListener("lore:add-ticker-artist", handler);
+    return () => window.removeEventListener("lore:add-ticker-artist", handler);
+  }, [addSeed]);
 
   // Delay skeleton visibility so fast loads (< 150 ms) never flash shimmer rows.
   // The delayed flag only flips true after crossingsLoading has been true for
@@ -1031,7 +1694,43 @@ export function DialView() {
   const activeArtworkUrl = activeNpData?.nowPlaying?.recording?.artworkUrl
     ?? activeNpData?.nowPlaying?.artworkUrl
     ?? null;
-  const { heroArt, avatarUrl } = useHeroArt();
+  const { data: avatarData } = useMyAlbumAvatar();
+  // Rumours is the universal fallback — ensures the topbar gradient always renders
+  // even for brand-new users who haven't connected a library yet.
+  const avatarUrl = avatarData?.current?.artworkUrl ?? avatarData?.candidates?.[0]?.artworkUrl ?? RUMOURS;
+  // Pre-verified hero art. The topbar wash is a CSS background (no onError),
+  // so a dead avatar URL would silently render nothing. Start with the local
+  // RUMOURS asset (always loads), then swap to the real avatar art only once
+  // the browser has confirmed it actually loads. The fullscreen hero reuses
+  // the same resolved URL, so it's always a cached, known-good image.
+  // Dedicated hi-res pipeline for the hero cover: look the album up by
+  // artist + title on sources that serve true 1200px masters (iTunes, then
+  // Cover Art Archive by release-group), then fall back to the upscaled or
+  // original library URL, then RUMOURS. Each candidate is probed offscreen,
+  // so whichever wins is fully cached before it's ever displayed — the
+  // moon-tap hero appears instantly at full quality.
+  const avatarAlbum = avatarData?.current ?? avatarData?.candidates?.[0] ?? null;
+  const [heroArt, setHeroArt] = useState<string>(RUMOURS);
+  useEffect(() => {
+    if (!avatarAlbum || !avatarUrl || avatarUrl === RUMOURS) { setHeroArt(RUMOURS); return; }
+    let cancelled = false;
+    void heroArtCandidates(avatarAlbum).then((urls) => {
+      if (cancelled) return;
+      const candidates = urls.map((u) => proxyArtUrl(u) ?? u);
+      const tryLoad = (i: number) => {
+        if (cancelled) return;
+        if (i >= candidates.length) { setHeroArt(RUMOURS); return; }
+        const probe = new Image();
+        probe.onload = () => { if (!cancelled) setHeroArt(candidates[i]); };
+        probe.onerror = () => tryLoad(i + 1);
+        probe.src = candidates[i];
+      };
+      tryLoad(0);
+    });
+    return () => { cancelled = true; };
+    // avatarUrl is derived from avatarAlbum; keying on it keeps deps simple.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avatarAlbum?.recordingMbid, avatarUrl]);
   // "+ Artists" tab — inline add-artists input in the tab bar (replaces the
   // old bottom artist-add strip). Submits via the same custom event the
   // ticker listens to, so no shared state is needed.
@@ -1185,7 +1884,7 @@ export function DialView() {
       (artOpenerRef.current ?? moonBtnRef.current)?.focus();
     };
   }, [albumArtOpen]);
-  const hasWeeklyRecap = weeklyRecapData != null && (
+  const _hasWeeklyRecap = weeklyRecapData != null && (
     weeklyRecapData.stationsAttended.stations.length > 0 ||
     weeklyRecapData.firstEverHeards.items.length > 0 ||
     weeklyRecapData.ripenedCrossings.items.length > 0
@@ -1382,13 +2081,13 @@ export function DialView() {
   // Two-state visibility gate for the offline section:
   //   Default: only stations with any lifetime crossings or named attribution.
   //   Expanded: all offline stations (dark stations included).
-  const [showAllOffline, setShowAllOffline] = useState(false);
+  const [showAllOffline, _setShowAllOffline] = useState(false);
   const offlineWithProvenance = useMemo(() => {
     return offlineStations.filter(
       (ds) => ds.lifetimeCrossings + ds.lifetimeArtistCrossings > 0 || hasAttribution(ds),
     );
   }, [offlineStations]);
-  const visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
+  const _visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
 
   const [zone2Expanded, setZone2Expanded] = useState(false);
   const [zone3Expanded, setZone3Expanded] = useState(false);
@@ -1418,7 +2117,7 @@ export function DialView() {
 
   // Dial range — how far back the coarse scan (and its density spine) reaches.
   // 2 = today + yesterday (default), 7 = a week, 30 = a month.
-  const [ttRangeDays, setTtRangeDays] = useState<number>(2);
+  const [ttRangeDays, _setTtRangeDays] = useState<number>(2);
 
   // Fetch the recent crossing runs (reverse-chrono) — coarse scan detents.
   // Always fetched so coarse navigation is immediately available on first ← tap.
@@ -1615,7 +2314,7 @@ export function DialView() {
     clickcount: 0,
   } as Station), []);
 
-  const handleTtModeChange = useCallback((m: TtMode) => {
+  const _handleTtModeChange = useCallback((m: TtMode) => {
     setTtMode(m);
     pastScan.reset(); // clear past-scan on any mode change
   }, [pastScan]);
@@ -1896,12 +2595,12 @@ export function DialView() {
     return -1;
   }, [scan.samplingIdx, radio.station, withReason]);
 
-  const activeRow = activeIdx >= 0 ? (withReason[activeIdx] ?? null) : null;
+  const _activeRow = activeIdx >= 0 ? (withReason[activeIdx] ?? null) : null;
 
   // Top row for Listen button label (spec §10) — kept for potential reuse
-  const topRow = sortedRows[0] ?? null;
+  const _topRow = sortedRows[0] ?? null;
 
-  const handleScanLand = useCallback(() => {
+  const _handleScanLand = useCallback(() => {
     const idx = scan.samplingIdx;
     if (idx != null && withReason[idx]) {
       scan.land();
@@ -1926,7 +2625,7 @@ export function DialView() {
 
   // --- topbar helpers ---
 
-  const MATTS_LIBRARY: readonly string[] = [
+  const _MATTS_LIBRARY: readonly string[] = [
     "Cocteau Twins", "Talk Talk", "Beach House", "Grouper",
     "Tim Hecker", "Mount Eerie", "Low", "Julianna Barwick",
     "William Basinski", "Stars of the Lid", "Broadcast",
@@ -2741,9 +3440,9 @@ function Zone1Placeholder({
   hasLibrary,
   hasSeeds,
   seeds,
-  liveLoading,
+  liveLoading: _liveLoading,
   onAddSeed,
-  onRemoveSeed,
+  onRemoveSeed: _onRemoveSeed,
   liveSuggestions = [],
 }: {
   isSpotifyConnected: boolean;
@@ -2807,3 +3506,116 @@ function Zone1Placeholder({
   );
 }
 
+export function LiveArtistPicker({
+  suggestions,
+  artists,
+  loading,
+  seeds,
+  onAddSeed,
+  mattStarterAvailable = false,
+  mattStarterCopying = false,
+  mattStarterError = null,
+  onStartMattLibrary,
+}: {
+  suggestions?: LiveArtistSuggestion[];
+  /** Unified historical + live list. Optional for callers that only show live data. */
+  artists?: OnboardingArtistSuggestion[];
+  loading: boolean;
+  seeds: string[];
+  onAddSeed: (artist: string) => void;
+  mattStarterAvailable?: boolean;
+  mattStarterCopying?: boolean;
+  mattStarterError?: string | null;
+  onStartMattLibrary?: () => void;
+}) {
+  const liveSuggestions = suggestions ?? [];
+  const selected = new Set(seeds.map((seed) => liveIdentityKey(seed)));
+  const rows: OnboardingArtistSuggestion[] = artists?.length
+    ? artists
+    : liveSuggestions.map((suggestion) => ({
+        ...suggestion,
+        live: true,
+        playCount: suggestion.playCount ?? null,
+      }));
+  return (
+    <section className="live-artist-picker" aria-labelledby="live-artist-picker-label">
+      <div className="live-artist-picker__heading">
+        <span className="live-artist-picker__pip" aria-hidden="true" />
+        <div>
+          <h2 id="live-artist-picker-label">Artists to start with</h2>
+          <p>Choose one of Lore’s most-played artists, or jump into what is live now.</p>
+        </div>
+      </div>
+      {mattStarterAvailable && onStartMattLibrary && (
+        <div className="live-artist-picker__starter">
+          <button
+            type="button"
+            className="live-artist-picker__option live-artist-picker__option--starter"
+            onClick={onStartMattLibrary}
+            disabled={mattStarterCopying}
+            aria-label="Start with Matt’s library"
+          >
+            <span className="live-artist-picker__artist">Start with Matt’s library</span>
+            <span className="live-artist-picker__context">A resolved starter library, ready for Lore crossings</span>
+            <span className="live-artist-picker__action">{mattStarterCopying ? "Adding…" : "Start here"}</span>
+          </button>
+          {mattStarterError && (
+            <div className="live-artist-picker__state" role="alert">
+              {mattStarterError.includes("not available")
+                ? mattStarterError
+                : "We couldn’t add Matt’s library. Try again or choose an artist below."}
+            </div>
+          )}
+        </div>
+      )}
+      {loading && rows.length === 0 ? (
+        <div className="live-artist-picker__state" role="status">Listening for artists on air…</div>
+      ) : rows.length > 0 ? (
+        <>
+          <div className="live-artist-picker__options">
+            {rows.map((suggestion) => {
+            const isSelected = selected.has(liveIdentityKey(suggestion.artist));
+            const isAtLimit = seeds.length >= MAX_TASTE_SEEDS && !isSelected;
+            return (
+              <button
+                key={suggestion.artist.toLocaleLowerCase()}
+                type="button"
+                className={`live-artist-picker__option${isSelected ? " live-artist-picker__option--selected" : ""}${suggestion.live ? " live-artist-picker__option--live" : ""}`}
+                aria-pressed={isSelected}
+                aria-label={`${isSelected ? "Selected" : "Choose"} ${suggestion.artist}`}
+                disabled={isAtLimit}
+                onClick={() => onAddSeed(suggestion.artist)}
+              >
+                <span className="live-artist-picker__artist">{suggestion.artist}</span>
+                <span className="live-artist-picker__context">
+                  {suggestion.live
+                    ? [
+                        suggestion.djName,
+                        suggestion.showName,
+                        suggestion.stationName,
+                        "live now",
+                      ].filter(Boolean).join(" · ")
+                    : suggestion.playCount != null
+                      ? `${suggestion.playCount} plays in Lore`
+                      : "Lore history"}
+                </span>
+                <span className="live-artist-picker__action">
+                  {suggestion.live ? "live now · " : ""}
+                  {isSelected ? "Selected" : "Choose"}
+                </span>
+              </button>
+            );
+            })}
+          </div>
+          {seeds.length >= MAX_TASTE_SEEDS && (
+            <div className="live-artist-picker__limit" role="status">
+              Seed limit reached — remove one below to choose another.
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="live-artist-picker__state">No artist names are available right now. You can add one below.</div>
+      )}
+    </section>
+  );
+}

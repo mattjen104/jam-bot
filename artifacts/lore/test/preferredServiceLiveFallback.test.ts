@@ -515,6 +515,7 @@ describe("retry → driver play() is called again after preferred-service failur
     youtube: { firstReject?: boolean };
   }) {
     const altDriverFailedRef = new Set<string>();
+    // eslint-disable-next-line no-useless-assignment
     let altDriverActiveMbid: string | null = null;
     let altDriversAllFailed = false;
 

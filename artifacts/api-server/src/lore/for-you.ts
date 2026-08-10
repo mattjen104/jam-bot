@@ -372,7 +372,7 @@ export async function getForYouStations(
   );
 
   // --- Fetch all active stations (or filtered by genre) ---
-  let stationQuery = db
+  const stationQuery = db
     .select({
       id: stationsTable.id,
       slug: stationsTable.slug,

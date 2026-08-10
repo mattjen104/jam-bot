@@ -505,7 +505,7 @@ export async function scrapeStationSchedule(
     try {
       scheduleOrigin = new URL(target.scheduleUrl).origin;
     } catch {
-      scheduleOrigin = null;
+      /* origin stays null */
     }
     if (scheduleOrigin === origin) {
       // Fetch with explicit status capture so we can distinguish permanent
@@ -601,7 +601,7 @@ export async function scrapeStationSchedule(
       try {
         scheduleOrigin = new URL(scheduleLink).origin;
       } catch {
-        scheduleOrigin = null;
+        /* origin stays null */
       }
       if (scheduleOrigin === origin) {
         const linkedResult = await fetchPage(scheduleLink);

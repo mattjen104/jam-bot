@@ -138,13 +138,13 @@ export function parseTracks(text: string): Track[] {
 // ---------------------------------------------------------------------------
 
 /** A username is a single non-empty token with no whitespace. */
-function isUsername(value: string): boolean {
+function _isUsername(value: string): boolean {
   const t = value.trim();
   return t.length > 0 && !/\s/.test(t);
 }
 
 /** True when the pasted value looks like multi-line track data. */
-function isMultilineContent(value: string): boolean {
+function _isMultilineContent(value: string): boolean {
   return value.includes("\n") || value.includes("\r");
 }
 
@@ -546,7 +546,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const _handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRawInput(e.target.value);
     setError(null);
   };

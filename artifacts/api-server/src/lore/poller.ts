@@ -15,7 +15,6 @@ import {
 import {
   recordFeedFreshnessResult,
   clearFeedFreshnessState,
-  getFeedFreshnessStaleStations,
 } from "./feed-freshness-health.js";
 import {
   initHostMultiplex,

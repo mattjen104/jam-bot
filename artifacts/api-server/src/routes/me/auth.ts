@@ -6,7 +6,7 @@ import {
   keepTargetsTable,
   type LoreUser,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   getUserFromSession,
   getOrCreateAnonymousUser,

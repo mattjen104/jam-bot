@@ -6,10 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AlbumLoreSheet } from "../src/webplayer/AlbumLoreSheet";
 import {
   useWpHoldSupport,
-  useWpRecording,
   useWpSupport,
 } from "../src/webplayer/hooks";
-import { useMutationKeep, useMyConnections } from "../src/lib/meHooks";
+import { useMutationKeep } from "../src/lib/meHooks";
 
 vi.mock("../src/webplayer/hooks", async (importOriginal) => {
   const { makeWebplayerHooksMock } = await import("./helpers/webplayerHooksMock");

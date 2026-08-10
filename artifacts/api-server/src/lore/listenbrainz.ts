@@ -62,7 +62,7 @@ export async function validateListenBrainzUsername(username: string): Promise<bo
   try {
     res = await fetch(url, { headers: { "User-Agent": LB_USER_AGENT } });
   } catch (err) {
-    throw new Error(`ListenBrainz network error during username validation: ${(err as Error).message}`);
+    throw new Error(`ListenBrainz network error during username validation: ${(err as Error).message}`, { cause: err });
   }
   if (res.status === 404) return false;
   if (!res.ok) throw new Error(`ListenBrainz API returned ${res.status} during username validation`);
@@ -99,7 +99,7 @@ export async function* fetchListenBrainzLoved(
       if (!res.ok) throw new Error(`ListenBrainz API returned ${res.status}`);
       data = (await res.json()) as LbFeedbackResponse;
     } catch (err) {
-      throw new Error(`ListenBrainz fetch failed at offset=${offset}: ${(err as Error).message}`);
+      throw new Error(`ListenBrainz fetch failed at offset=${offset}: ${(err as Error).message}`, { cause: err });
     }
 
     const feedbacks = data.feedback ?? [];

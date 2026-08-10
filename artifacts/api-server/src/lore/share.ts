@@ -106,6 +106,7 @@ const REPLAY_CARD_TRACK_LIMIT = 5;
 const REPLAY_CARD_TEXT_LIMIT = 54;
 
 function boundedCardText(value: string, max = REPLAY_CARD_TEXT_LIMIT): string {
+  // eslint-disable-next-line no-control-regex
   const clean = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
   const graphemes = [...clean];
   if (graphemes.length <= max) return clean;

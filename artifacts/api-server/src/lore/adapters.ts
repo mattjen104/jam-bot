@@ -912,7 +912,7 @@ export function parseSpinitronWebPage(html: string): NowPlayingRaw | null {
     /name="twitter:title"\s+content="([^"]+)"/.exec(html)?.[1];
   if (ogTitle) {
     // Spinitron og:title format: "Artist – Song on CALLSIGN" or "Artist - Song"
-    const parts = ogTitle.split(/\s[–\-]\s/);
+    const parts = ogTitle.split(/\s[–-]\s/);
     if (parts.length >= 2) {
       const rawTitle = parts[1].replace(/\s+on\s+\w+\s*$/, "").trim();
       const rawArtist = parts[0].trim();

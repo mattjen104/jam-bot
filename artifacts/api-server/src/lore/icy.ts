@@ -233,7 +233,7 @@ function isDomainLike(s: string): boolean {
   if (URL_PROTOCOL_RE.test(t)) return true;
   // Bare hostname: only hostname-safe characters AND ends with a known TLD.
   if (!t.includes(".")) return false;
-  if (!/^[a-z0-9][a-z0-9.\-]*$/i.test(t)) return false;
+  if (!/^[a-z0-9][a-z0-9.-]*$/i.test(t)) return false;
   return DOMAIN_TLD_RE.test(t);
 }
 
@@ -591,7 +591,7 @@ export async function fetchIcyMetadata(streamUrl: string): Promise<IcyFetchResul
       let icyMetaint: number | null = null;
       let headersParsed = false;
       let headerEnd = -1;
-      let audioConsumed = 0;
+      const audioConsumed = 0;
       let full = Buffer.alloc(0);
 
       socket.on("data", (chunk: Buffer) => {

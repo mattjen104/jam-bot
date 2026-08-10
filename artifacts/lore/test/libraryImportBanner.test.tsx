@@ -16,8 +16,8 @@
  *  - Banner auto-dismisses after the 60 s setTimeout fires
  */
 import React from "react";
-import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
-import { cleanup, render, screen, act } from "@testing-library/react";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LibraryImportBanner } from "../src/pages/Library";
 import LibraryPage from "../src/pages/Library";
@@ -26,7 +26,7 @@ function makeQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
 }
 
-function renderLibraryPage() {
+function _renderLibraryPage() {
   return render(
     <QueryClientProvider client={makeQueryClient()}>
       <LibraryPage />

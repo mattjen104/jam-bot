@@ -83,6 +83,7 @@ async function insertRecording(artist: string, title: string): Promise<string> {
     artist,
     title,
     confidence: "text",
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } as Parameters<typeof db.insert>[0] extends infer T ? never : never).catch(
     // Use raw SQL to avoid TypeScript fussing about the interface
     () => undefined,

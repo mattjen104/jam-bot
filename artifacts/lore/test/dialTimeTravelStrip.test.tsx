@@ -204,7 +204,6 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
 
 import { useDialData } from "../src/hooks/useDialData";
 import { useMyOverlapRunsRecent, useMyRunCrossings } from "../src/lib/meHooks";
-import { usePlayer } from "../src/player/PlayerProvider";
 import { DialView } from "../src/components/DialView";
 
 // ---------------------------------------------------------------------------
@@ -415,7 +414,7 @@ describe("(g) landing on a run — crossing data flows through useMyRunCrossings
 
     // Baseline: in live mode, Zone 1 has no crossing rows (stations=[]), but
     // the container DOM node for zone1-rows exists.
-    const zone1Before = document.getElementById("zone1-rows");
+    const _zone1Before = document.getElementById("zone1-rows");
     // zone1-rows may or may not exist before stepping back — it's live mode.
 
     act(() => {

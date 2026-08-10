@@ -60,7 +60,7 @@ function artFor(
   return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? fallbackLibraryArt ?? RUMOURS;
 }
 
-function fallbackMark(_section: Section) {
+function _fallbackMark(_section: Section) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

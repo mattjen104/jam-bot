@@ -4,7 +4,7 @@ import type {
   NowPlaying,
   PickedLookupItem,
   RecordingAvailabilityItem,
-  ScrapedShow,
+
   Station,
   StationRecentSpin,
   StationScheduleRun,
@@ -14,7 +14,7 @@ import {
   getGetStationUpcomingScheduleQueryKey,
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
-import { BadgeCheck, BookOpen, ExternalLink, Info, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
+import { BadgeCheck, BookOpen, ExternalLink, Info, Mic, Mic2, Music2, Play, Radio, Volume2 } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
 

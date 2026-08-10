@@ -140,7 +140,7 @@ const PREFIX_RE =
 // Dash-family separators used between artist and title. Includes the tilde
 // (A Closer Listen "Artist ~ Album") and double-colon (Aquarium Drunkard
 // "Artist :: Title") house styles.
-const DASH_RE = /\s+(?:[\-–—~]|::)\s+/;
+const DASH_RE = /\s+(?:[-–—~]|::)\s+/;
 
 // Trailing review-suffix noise on the title side of a dash split — the house
 // style of Angry Metal Guy / Last Rites ("Artist – Album Review").
@@ -164,7 +164,7 @@ export function extractArtistTrack(
   tags: string[] = [],
 ): ArtistTrackGuess | null {
   const trimmed = rawTitle.trim();
-  let title = trimmed.replace(PREFIX_RE, "").trim();
+  const title = trimmed.replace(PREFIX_RE, "").trim();
   const prefixStripped = title !== trimmed;
   if (!title) return null;
 
@@ -179,7 +179,7 @@ export function extractArtistTrack(
     track = track.replace(RATING_TAIL_RE, "").trim();
     // A trailing " (…)" annotation ("(Official Video)", "(Label, 2026)") is
     // noise, not a title.
-    track = track.replace(/\s*[\(\[][^\)\]]*[\)\]]\s*$/g, "").trim();
+    track = track.replace(/\s*[([][^)\]]*[)\]]\s*$/g, "").trim();
     // "Artist – Album Review" (AMG/Last Rites house style) — the trailing
     // "Review" is editorial, not part of the work's title.
     track = track.replace(REVIEW_SUFFIX_RE, "").trim();
@@ -207,7 +207,7 @@ export function extractArtistTrack(
     if (comma) {
       const artist = comma[1]!.trim();
       let work = comma[2]!.trim();
-      work = work.replace(/\s*[\(\[][^\)\]]*[\)\]]\s*$/g, "").trim();
+      work = work.replace(/\s*[([][^)\]]*[)\]]\s*$/g, "").trim();
       // Multiple commas mean a sentence, not "Artist, Title" — skip.
       if (artist && work && !work.includes(",")) {
         return { artist, title: work };
@@ -456,7 +456,9 @@ export async function ingestBlogFeed(args: {
       description: `Championed tracks from ${args.name}.`,
     }));
 
+  // eslint-disable-next-line no-useless-assignment
   let items: BlogItem[] = [];
+  // eslint-disable-next-line no-useless-assignment
   let feedText = "";
   try {
     const res = await fetch(feedUrl, {

@@ -25,7 +25,7 @@ function isTrackShaped(
   const title = rawTitle?.trim() ?? "";
   if (artist.length < 2 || title.length < 2) return false;
   const combined = `${artist} ${title}`;
-  if (combined.length > 4 && /^[A-Z0-9\s\-\.,'"!&/()+]+$/.test(combined))
+  if (combined.length > 4 && /^[A-Z0-9\s\-.,'"!&/()+]+$/.test(combined))
     return false;
   if (detectAdSignal(rawArtist, rawTitle)) return false;
   return true;

@@ -77,14 +77,11 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
 }));
 
 import {
-  useDialData,
   extractLiveArtistSuggestions,
   mergeOnboardingArtists,
-  splitIcyCombinedField,
   type DialStation,
 } from "../src/hooks/useDialData";
 import { LiveArtistPicker } from "../src/components/DialView";
-import { ME_DIAL_CROSSINGS_KEY, ME_PICKER_NAMES_KEY } from "../src/lib/meHooks";
 
 function makeStation(overrides: Partial<DialStation> = {}): DialStation {
   return {

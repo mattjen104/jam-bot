@@ -747,7 +747,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   });
   const {
     data: blendedCrossings,
-    isLoading: blendedLoading,
+    isLoading: _blendedLoading,
     isError: blendedError,
   } = useMyBlendedCrossings(displayMode === "blended");
   const selectedCrossings: DialCrossing[] | undefined =

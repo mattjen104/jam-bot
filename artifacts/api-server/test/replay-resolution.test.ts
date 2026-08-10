@@ -133,7 +133,7 @@ describe("Ghost Replay resolution registry", () => {
 
 describe("Ghost Replay resolution negative-cache", () => {
   const ncRun = randomUUID().slice(0, 8);
-  const noLinksMbid = `test-rr-no-links-${ncRun}`;
+  const _noLinksMbid = `test-rr-no-links-${ncRun}`;
   const noVectorMbid = `test-rr-no-vector-${ncRun}`;
   const expiredMbid = `test-rr-expired-${ncRun}`;
   const networkErrorMbid = `test-rr-net-error-${ncRun}`;
@@ -277,7 +277,7 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliEmpty);
 
-    const third = await resolveRecording(networkErrorMbid, {
+    const _third = await resolveRecording(networkErrorMbid, {
       title: "Network Error Track",
       artist: "Network Error Artist",
       isrc: "USNE11223344",

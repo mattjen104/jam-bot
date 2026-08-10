@@ -2,7 +2,7 @@ import {
   db,
   libraryItemsTable,
   lifetimeCrossingsCacheTable,
-  loreUsersTable,
+
   recordingReleaseGroupsTable,
   recordingsTable,
   spinsTable,
