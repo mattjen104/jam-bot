@@ -292,6 +292,8 @@ export * from "./stationSocialPresenceResponseAvatars";
 export * from "./stationSocialPresenceResponsePresence";
 export * from "./stationSpinsBounds";
 export * from "./stationSpinsPage";
+export * from "./stationsRecentArtistsItem";
+export * from "./stationsRecentArtistsResult";
 export * from "./stationsRecentSpinsResult";
 export * from "./stationsRecentSpinsResultItemsItem";
 export * from "./stationsRollingGenresResult";

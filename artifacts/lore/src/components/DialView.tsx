@@ -17,6 +17,7 @@ import { ContextRail, ArtistPane, artistFrameId, decodeArtistFrame } from "./Con
 import type { GrammarLinks } from "../dial/grammar";
 import { SearchOverlay } from "./SearchOverlay";
 import { SeedInput } from "./SeedInput";
+import { SeedSuggestions, extractArtistsFromImageFiles, imageFilesFrom } from "./SeedSuggestions";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
@@ -1025,6 +1026,19 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
         {(rz.r === 0 || rz.r === 5) && ov > 0 && (
              <div className="fdrow__ov-caption">
             <b>{ov} artists</b> {displayMode === "blended" ? "represented here" : "you know"} play here
+          </div>
+        )}
+
+        {/* Zone 3 now-playing line: when the row has no reason sentence (dim
+            fallback tier only — never over a crossing/pop/live sentence), show
+            the station's current track so every row is informative before the
+            listener has crossings. */}
+        {displayMode !== "blended" && (rz.r === 0 || rz.r === 5) && !crossing && !usePop && !live &&
+          ds.liveTrack?.artist && (
+          <div className="fdrow__np-line">
+            <span aria-hidden="true">▶ </span>
+            <b>{ds.liveTrack.artist}</b>
+            {ds.liveTrack.title ? <> — {ds.liveTrack.title}</> : null}
           </div>
         )}
 
@@ -3502,6 +3516,16 @@ export function DialView() {
                   if (e.key === "Escape") { setAddArtistsOpen(false); setAddArtistsText(""); }
                 }}
                 onPaste={(e) => {
+                  // Screenshot paste: run the existing vision extraction and
+                  // feed the artist names through the same add path as text.
+                  const files = imageFilesFrom(e.clipboardData.files);
+                  if (files.length > 0) {
+                    e.preventDefault();
+                    void extractArtistsFromImageFiles(files)
+                      .then((artists) => { if (artists.length > 0) submitAddArtists(artists.join("\n")); })
+                      .catch(() => { /* extraction failed — leave the box as-is */ });
+                    return;
+                  }
                   const t = e.clipboardData.getData("text");
                   if (t) { e.preventDefault(); submitAddArtists(t); }
                 }}
@@ -3788,6 +3812,7 @@ export function DialView() {
                           liveLoading={liveLoading}
                           onAddSeed={addSeed}
                           onRemoveSeed={removeSeed}
+                          liveSuggestions={liveArtistSuggestions}
                         />
                       </>
                     )}
@@ -4016,6 +4041,7 @@ function Zone1Placeholder({
   liveLoading,
   onAddSeed,
   onRemoveSeed,
+  liveSuggestions = [],
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
@@ -4024,6 +4050,7 @@ function Zone1Placeholder({
   liveLoading: boolean;
   onAddSeed: (artist: string) => void;
   onRemoveSeed: (artist: string) => void;
+  liveSuggestions?: LiveArtistSuggestion[];
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -4042,7 +4069,13 @@ function Zone1Placeholder({
   if (hasSeeds) {
     return (
       <div className="z1-placeholder z1-placeholder--seeded">
-        <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="Add another artist" />
+        <SeedSuggestions
+          liveSuggestions={liveSuggestions}
+          seeds={seeds}
+          onAddSeed={onAddSeed}
+        >
+          <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="Add another artist" />
+        </SeedSuggestions>
         <div className="z1-placeholder__status">
           <span className="dial-live-skeleton__pip" />
           <span className="z1-placeholder__lbl">Finding live matches for your artists…</span>
@@ -4052,14 +4085,20 @@ function Zone1Placeholder({
     );
   }
 
-  // New user — open the import modal to seed their taste.
+  // New user — type an artist, tap a suggestion chip, or drop a screenshot.
   return (
     <div className="z1-placeholder z1-placeholder--seed">
       <div className="z1-placeholder__body">
         <p className="z1-placeholder__pitch">
           Pick the artists you love — Lore will show you when they're playing live.
         </p>
-        <SeedInput seeds={seeds} onAdd={onAddSeed} />
+        <SeedSuggestions
+          liveSuggestions={liveSuggestions}
+          seeds={seeds}
+          onAddSeed={onAddSeed}
+        >
+          <SeedInput seeds={seeds} onAdd={onAddSeed} />
+        </SeedSuggestions>
       </div>
     </div>
   );

@@ -2595,6 +2595,24 @@ export interface StationsArtistFrequencyResult {
 }
 
 /**
+ * One recently aired artist with the station of its latest spin.
+ */
+export interface StationsRecentArtistsItem {
+  artist: string;
+  artistMbid: string | null;
+  playCount: number;
+  stationSlug: string;
+  stationName: string;
+}
+
+/**
+ * Artists aired in the trailing window, newest first.
+ */
+export interface StationsRecentArtistsResult {
+  artists: StationsRecentArtistsItem[];
+}
+
+/**
  * One deduped spin chip for a station on a given day.
  */
 export interface StationRecentSpin {

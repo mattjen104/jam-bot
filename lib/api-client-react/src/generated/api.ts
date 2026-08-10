@@ -136,6 +136,7 @@ import type {
   StationSpinsPage,
   StationUpcomingSchedule,
   StationsArtistFrequencyResult,
+  StationsRecentArtistsResult,
   StationsRecentSpinsResult,
   StationsRollingGenresResult,
   StationsScheduleResult,
@@ -666,6 +667,168 @@ export function useGetStationsArtistFrequency<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetStationsArtistFrequencyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * A short, fresh onboarding list — top artists by resolved spin count across active, non-hidden stations over the trailing 7 days. Same shape as the all-time artist-frequency pool but bounded to recent airplay, so a new listener sees names that are actually in rotation.
+
+ * @summary Most-played artists across Lore stations in the last 7 days
+ */
+export const getGetStationsPopularArtistsUrl = () => {
+  return `/api/stations/popular-artists`;
+};
+
+export const getStationsPopularArtists = async (
+  options?: RequestInit,
+): Promise<StationsArtistFrequencyResult> => {
+  return customFetch<StationsArtistFrequencyResult>(
+    getGetStationsPopularArtistsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationsPopularArtistsQueryKey = () => {
+  return [`/api/stations/popular-artists`] as const;
+};
+
+export const getGetStationsPopularArtistsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationsPopularArtists>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsPopularArtists>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsPopularArtistsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsPopularArtists>>
+  > = ({ signal }) => getStationsPopularArtists({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsPopularArtists>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationsPopularArtistsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationsPopularArtists>>
+>;
+export type GetStationsPopularArtistsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Most-played artists across Lore stations in the last 7 days
+ */
+
+export function useGetStationsPopularArtists<
+  TData = Awaited<ReturnType<typeof getStationsPopularArtists>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsPopularArtists>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationsPopularArtistsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The "Playing recently" onboarding row — artists with resolved spins on active, non-hidden stations inside a rolling 4-hour window, ranked by most-recent airplay. Server-side bounded so it is immune to calendar midnight boundaries and per-station timeline caps. Each entry carries the station of the most recent spin for chip context.
+
+ * @summary Artists aired across Lore stations in the last 4 hours
+ */
+export const getGetStationsRecentArtistsUrl = () => {
+  return `/api/stations/recent-artists`;
+};
+
+export const getStationsRecentArtists = async (
+  options?: RequestInit,
+): Promise<StationsRecentArtistsResult> => {
+  return customFetch<StationsRecentArtistsResult>(
+    getGetStationsRecentArtistsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationsRecentArtistsQueryKey = () => {
+  return [`/api/stations/recent-artists`] as const;
+};
+
+export const getGetStationsRecentArtistsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationsRecentArtists>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsRecentArtists>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsRecentArtistsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsRecentArtists>>
+  > = ({ signal }) => getStationsRecentArtists({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsRecentArtists>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationsRecentArtistsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationsRecentArtists>>
+>;
+export type GetStationsRecentArtistsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Artists aired across Lore stations in the last 4 hours
+ */
+
+export function useGetStationsRecentArtists<
+  TData = Awaited<ReturnType<typeof getStationsRecentArtists>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsRecentArtists>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationsRecentArtistsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

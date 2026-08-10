@@ -168,6 +168,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationsArtistFrequencyResult"
+  /stations/popular-artists:
+    get:
+      operationId: getStationsPopularArtists
+      tags: [stations]
+      summary: Most-played artists across Lore stations in the last 7 days
+      description: >
+        A short, fresh onboarding list — top artists by resolved spin count
+        across active, non-hidden stations over the trailing 7 days. Same
+        shape as the all-time artist-frequency pool but bounded to recent
+        airplay, so a new listener sees names that are actually in rotation.
+      responses:
+        "200":
+          description: Ranked 7-day popular artist list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationsArtistFrequencyResult"
+  /stations/recent-artists:
+    get:
+      operationId: getStationsRecentArtists
+      tags: [stations]
+      summary: Artists aired across Lore stations in the last 4 hours
+      description: >
+        The "Playing recently" onboarding row — artists with resolved spins on
+        active, non-hidden stations inside a rolling 4-hour window, ranked by
+        most-recent airplay. Server-side bounded so it is immune to calendar
+        midnight boundaries and per-station timeline caps. Each entry carries
+        the station of the most recent spin for chip context.
+      responses:
+        "200":
+          description: Recently aired artist list, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationsRecentArtistsResult"
   /stations/at/{date}/now-playing:
     get:
       operationId: listStationsAtDate
@@ -6783,6 +6818,31 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StationsArtistFrequencyItem"
+      required: [artists]
+    StationsRecentArtistsItem:
+      type: object
+      description: One recently aired artist with the station of its latest spin.
+      properties:
+        artist:
+          type: string
+        artistMbid:
+          type: string
+          nullable: true
+        playCount:
+          type: integer
+        stationSlug:
+          type: string
+        stationName:
+          type: string
+      required: [artist, artistMbid, playCount, stationSlug, stationName]
+    StationsRecentArtistsResult:
+      type: object
+      description: Artists aired in the trailing window, newest first.
+      properties:
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationsRecentArtistsItem"
       required: [artists]
     StationRecentSpin:
       type: object

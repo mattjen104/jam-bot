@@ -5304,6 +5304,79 @@
 }
 .fdrow__ov-caption b { font-weight: 400; color: hsl(var(--foreground) / 0.6); font-style: normal; }
 
+/* Zone 3 now-playing line — "▶ Artist — Track" on reason-less rows */
+.fdrow__np-line {
+  font-family: var(--app-font-display);
+  font-size: 13px;
+  color: hsl(var(--muted-foreground) / 0.75);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fdrow__np-line b { font-weight: 400; color: hsl(var(--foreground) / 0.6); font-style: normal; }
+
+/* ── SeedSuggestions — onboarding quick-add chips ─────────────────────────── */
+.seed-suggest { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+.seed-suggest--dragover { outline: 1px dashed hsl(var(--primary) / 0.6); outline-offset: 6px; border-radius: 6px; }
+.seed-suggest__row { display: flex; flex-direction: column; gap: 6px; }
+.seed-suggest__row-head { display: flex; align-items: baseline; gap: 8px; }
+.seed-suggest__row-label {
+  font-family: var(--app-font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground) / 0.9);
+}
+.seed-suggest__row-hint { font-size: 12px; color: hsl(var(--muted-foreground) / 0.55); }
+.seed-suggest__row-action {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: hsl(var(--primary) / 0.85);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.seed-suggest__row-action:disabled { color: hsl(var(--muted-foreground) / 0.4); cursor: default; }
+.seed-suggest__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.seed-suggest__chip {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary) / 0.3);
+  color: hsl(var(--foreground) / 0.85);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seed-suggest__chip:hover:not(:disabled) { border-color: hsl(var(--primary) / 0.6); background: hsl(var(--secondary) / 0.5); }
+.seed-suggest__chip--selected {
+  border-color: hsl(var(--library) / 0.5);
+  color: hsl(var(--library) / 0.9);
+  background: hsl(var(--library) / 0.08);
+  cursor: default;
+}
+.seed-suggest__chip--more { border-style: dashed; color: hsl(var(--muted-foreground) / 0.7); }
+.seed-suggest__chip:disabled:not(.seed-suggest__chip--selected) { opacity: 0.45; cursor: default; }
+.seed-suggest__ocr { display: flex; flex-direction: column; gap: 8px; }
+.seed-suggest__ocr-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  align-self: flex-start;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground) / 0.8);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+.seed-suggest__ocr-btn:disabled { cursor: progress; }
+.seed-suggest__ocr-error { font-size: 13px; color: hsl(var(--destructive) / 0.9); }
+.seed-suggest__loading, .seed-suggest__limit { font-size: 13px; color: hsl(var(--muted-foreground) / 0.7); }
+
 
 
 /* ── Liner-notes card — inline strip below the active row ──────────────────── */

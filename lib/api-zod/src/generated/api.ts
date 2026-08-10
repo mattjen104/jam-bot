@@ -328,6 +328,48 @@ export const GetStationsArtistFrequencyResponse = zod
   .describe("Bounded, deterministically ranked Lore-wide artist frequencies.");
 
 /**
+ * A short, fresh onboarding list — top artists by resolved spin count across active, non-hidden stations over the trailing 7 days. Same shape as the all-time artist-frequency pool but bounded to recent airplay, so a new listener sees names that are actually in rotation.
+
+ * @summary Most-played artists across Lore stations in the last 7 days
+ */
+export const GetStationsPopularArtistsResponse = zod
+  .object({
+    artists: zod.array(
+      zod
+        .object({
+          artist: zod.string(),
+          artistMbid: zod.string().nullable(),
+          playCount: zod.number(),
+        })
+        .describe("One artist ranked by resolved Lore spin frequency."),
+    ),
+  })
+  .describe("Bounded, deterministically ranked Lore-wide artist frequencies.");
+
+/**
+ * The "Playing recently" onboarding row — artists with resolved spins on active, non-hidden stations inside a rolling 4-hour window, ranked by most-recent airplay. Server-side bounded so it is immune to calendar midnight boundaries and per-station timeline caps. Each entry carries the station of the most recent spin for chip context.
+
+ * @summary Artists aired across Lore stations in the last 4 hours
+ */
+export const GetStationsRecentArtistsResponse = zod
+  .object({
+    artists: zod.array(
+      zod
+        .object({
+          artist: zod.string(),
+          artistMbid: zod.string().nullable(),
+          playCount: zod.number(),
+          stationSlug: zod.string(),
+          stationName: zod.string(),
+        })
+        .describe(
+          "One recently aired artist with the station of its latest spin.",
+        ),
+    ),
+  })
+  .describe("Artists aired in the trailing window, newest first.");
+
+/**
  * Same as listStationsNowPlaying but for a historical calendar day. Returns the last logged spin per station on that UTC date. Powers the ghost-dial date sweep on the home page.
 
  * @summary Last spin per station for a specific calendar day (ghost dial)

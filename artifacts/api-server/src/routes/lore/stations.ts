@@ -22,6 +22,8 @@ import {
   GetStationInsightsResponse,
   GetStationsRollingGenresResponse,
   GetStationsArtistFrequencyResponse,
+  GetStationsPopularArtistsResponse,
+  GetStationsRecentArtistsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -1494,6 +1496,146 @@ router.get("/stations/artist-frequency", h(async (_req, res) => {
       playCount: Number(row.play_count),
     })),
   }));
+}));
+
+// GET /api/stations/popular-artists
+// 7-day "Popular on Lore" onboarding row: same grouping rules as
+// artist-frequency but bounded to recent airplay so new listeners see names
+// actually in rotation. Public + user-independent, so a short in-memory cache
+// keeps the grouped scan off the request hot path.
+const POPULAR_ARTIST_LIMIT = 12;
+const POPULAR_ARTISTS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+let _popularArtistsCache: {
+  builtAt: number;
+  artists: { artist: string; artistMbid: string | null; playCount: number }[];
+} | null = null;
+
+router.get("/stations/popular-artists", h(async (_req, res) => {
+  if (_popularArtistsCache && Date.now() - _popularArtistsCache.builtAt < POPULAR_ARTISTS_CACHE_TTL_MS) {
+    return res.json(GetStationsPopularArtistsResponse.parse({ artists: _popularArtistsCache.artists }));
+  }
+
+  const rows = await db.execute<{
+    artist: string;
+    artist_mbid: string | null;
+    play_count: number;
+  }>(sql`
+    WITH resolved_artists AS (
+      SELECT
+        COALESCE(
+          'mbid:' || r.artist_mbid,
+          'name:' || lower(regexp_replace(r.artist, '[^[:alnum:]]', '', 'g'))
+        ) AS artist_key,
+        r.artist,
+        r.artist_mbid
+      FROM spins sp
+      INNER JOIN stations s
+        ON s.id = sp.station_id
+       AND s.active = true
+       AND s.hidden = false
+      INNER JOIN recordings r ON r.mbid = sp.mbid
+      WHERE sp.mbid IS NOT NULL
+        AND sp.played_at >= NOW() - INTERVAL '7 days'
+        AND r.artist IS NOT NULL
+        AND length(trim(r.artist)) > 0
+    )
+    SELECT
+      min(artist)::text AS artist,
+      max(artist_mbid)::text AS artist_mbid,
+      count(*)::int AS play_count
+    FROM resolved_artists
+    GROUP BY artist_key
+    ORDER BY play_count DESC, lower(min(artist)), min(artist)
+    LIMIT ${POPULAR_ARTIST_LIMIT}
+  `);
+
+  const artists = rows.rows.map((row) => ({
+    artist: row.artist,
+    artistMbid: row.artist_mbid,
+    playCount: Number(row.play_count),
+  }));
+  _popularArtistsCache = { builtAt: Date.now(), artists };
+  return res.json(GetStationsPopularArtistsResponse.parse({ artists }));
+}));
+
+// GET /api/stations/recent-artists
+// "Playing recently" onboarding row: artists with resolved spins in a rolling
+// 4-hour window, ranked newest-first, each with the station of its latest
+// spin for chip context. Server-side bounded so it is immune to calendar
+// midnight boundaries and per-station timeline caps. Public + user-independent
+// → short in-memory cache.
+const RECENT_ARTIST_LIMIT = 24;
+const RECENT_ARTISTS_WINDOW = sql`INTERVAL '4 hours'`;
+const RECENT_ARTISTS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+let _recentArtistsCache: {
+  builtAt: number;
+  artists: {
+    artist: string;
+    artistMbid: string | null;
+    playCount: number;
+    stationSlug: string;
+    stationName: string;
+  }[];
+} | null = null;
+
+router.get("/stations/recent-artists", h(async (_req, res) => {
+  if (_recentArtistsCache && Date.now() - _recentArtistsCache.builtAt < RECENT_ARTISTS_CACHE_TTL_MS) {
+    return res.json(GetStationsRecentArtistsResponse.parse({ artists: _recentArtistsCache.artists }));
+  }
+
+  const rows = await db.execute<{
+    artist: string;
+    artist_mbid: string | null;
+    play_count: number;
+    station_slug: string;
+    station_name: string;
+  }>(sql`
+    WITH recent AS (
+      SELECT
+        COALESCE(
+          'mbid:' || r.artist_mbid,
+          'name:' || lower(regexp_replace(r.artist, '[^[:alnum:]]', '', 'g'))
+        ) AS artist_key,
+        r.artist,
+        r.artist_mbid,
+        sp.played_at,
+        s.slug AS station_slug,
+        s.name AS station_name
+      FROM spins sp
+      INNER JOIN stations s
+        ON s.id = sp.station_id
+       AND s.active = true
+       AND s.hidden = false
+      INNER JOIN recordings r ON r.mbid = sp.mbid
+      WHERE sp.mbid IS NOT NULL
+        AND sp.played_at >= NOW() - ${RECENT_ARTISTS_WINDOW}
+        AND r.artist IS NOT NULL
+        AND length(trim(r.artist)) > 0
+    )
+    SELECT
+      min(artist)::text AS artist,
+      max(artist_mbid)::text AS artist_mbid,
+      count(*)::int AS play_count,
+      (array_agg(station_slug ORDER BY played_at DESC))[1]::text AS station_slug,
+      (array_agg(station_name ORDER BY played_at DESC))[1]::text AS station_name,
+      max(played_at) AS last_played_at
+    FROM recent
+    GROUP BY artist_key
+    ORDER BY last_played_at DESC, lower(min(artist)), min(artist)
+    LIMIT ${RECENT_ARTIST_LIMIT}
+  `);
+
+  const artists = rows.rows.map((row) => ({
+    artist: row.artist,
+    artistMbid: row.artist_mbid,
+    playCount: Number(row.play_count),
+    stationSlug: row.station_slug,
+    stationName: row.station_name,
+  }));
+  _recentArtistsCache = { builtAt: Date.now(), artists };
+  return res.json(GetStationsRecentArtistsResponse.parse({ artists }));
 }));
 
 // GET /api/djs/:name
