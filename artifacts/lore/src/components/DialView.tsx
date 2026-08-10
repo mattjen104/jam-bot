@@ -63,6 +63,26 @@ import {
 } from "../hooks/useDialData";
 import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
 import { ListenerAvatarStack } from "./ListenerAvatarStack";
+import {
+  FrontDoorRow,
+  PopCrossingLine,
+  SetQueueList,
+  agoLabel,
+  type QueueArtist,
+} from "./dial/FrontDoorRow";
+import { Zone1Lane, type DialLaneRow } from "./dial/Zone1Lane";
+import { Zone2Lane } from "./dial/Zone2Lane";
+import { Zone3Lane, ZONE3_VISIBLE } from "./dial/Zone3Lane";
+import {
+  findRunIndexByHour,
+  useSwipeHandler,
+  usePastScanState,
+} from "../hooks/useDialNavigation";
+
+// Re-exports — these lived in DialView.tsx before the decomposition; external
+// imports (tests included) continue to resolve through this module.
+export { FrontDoorRow, PopCrossingLine, SetQueueList, type QueueArtist };
+export { findRunIndexByHour, useSwipeHandler, usePastScanState };
 /**
  * Returns a version of `value` that only flips to `true` after it has been
  * `true` continuously for `delayMs` milliseconds.  Flipping back to `false`
@@ -116,89 +136,7 @@ function fmtHM(iso: string, timeZone?: string | null): string {
     return fmtHM(iso);
   }
 }
-
-function agoLabel(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const m = Math.round(ms / 60_000);
-  if (m < 2) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
-
 type Level = "all" | "station" | "show" | "dj";
-/**
- * The front door is a tune-in affordance, so live context is deliberately one
- * sentence rather than a stack of independently clickable identities.  Prefer
- * the current DJ and exact now-playing values; never use a recently-ended DJ
- * as if they were currently on air.
- */
-function liveSentence(
-  stationName: string,
-  show: DialShow | null,
-): { node: ReactNode; hasTrack: boolean } | null {
-  const station = cleanLiveValue(stationName);
-  if (!station || !show) return null;
-
-  // Use eligibleDjNames so a single DJ provided only via djNames (djName=null)
-  // still gets credited, and two distinct DJs collapse to null (no credit).
-  const djList = eligibleDjNames(
-    { name: show.showName ?? "", djName: show.djName ?? undefined, djNames: show.djNames },
-    { artist: show.currentTrack?.artist, title: show.currentTrack?.title, showTitle: show.showName, stationName: station },
-  );
-  const dj = djList.length === 1 ? djList[0] : null;
-  const artist = cleanLiveValue(show?.currentTrack?.artist);
-  const usableArtist = sameLiveValue(artist, station) ? null : artist;
-
-  // Show name: suppress if it duplicates the DJ name, station, or "Continuous"
-  const rawShow = cleanLiveValue(show?.showName);
-  const showName = rawShow
-    && rawShow.toLowerCase() !== "continuous"
-    && !sameLiveValue(rawShow, dj)
-    && !sameLiveValue(rawShow, station)
-    ? rawShow : null;
-
-  // Language hierarchy — song titles are never shown; the player handles that.
-  if (dj && usableArtist && showName) {
-    return {
-      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span></>,
-      hasTrack: true,
-    };
-  }
-  if (dj && usableArtist) {
-    return {
-      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b></>,
-      hasTrack: true,
-    };
-  }
-  if (dj && showName) {
-    return {
-      node: <><b className="fdrow__dj">{dj}</b>{" · "}<span className="fdrow__show">{showName}</span></>,
-      hasTrack: false,
-    };
-  }
-  if (dj) {
-    return { node: <><b className="fdrow__dj">{dj}</b>{" is on air"}</>, hasTrack: false };
-  }
-  if (usableArtist && showName) {
-    return {
-      node: <><b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span>{" now"}</>,
-      hasTrack: true,
-    };
-  }
-  if (usableArtist) {
-    return { node: <><b className="fdrow__artist">{usableArtist}</b>{" on now"}</>, hasTrack: true };
-  }
-
-  // Without current attribution, preserve the established weak-match
-  // reason instead of manufacturing a generic sentence.
-  return null;
-}
-// ---------------------------------------------------------------------------
-// Popular-crossing sentence — Also-On-Air "onboarding crossing sort"
-// ---------------------------------------------------------------------------
-
 /** Cap on setlist names shown before the "N more" expand affordance. */
 const SETLIST_VISIBLE = 8;
 
@@ -235,98 +173,6 @@ export function chooseDialHeroQueueLayout({
   const belowSquare = Math.min(artRegionWidth, Math.max(0, availableHeight - queueHeight));
   return sideSquare >= belowSquare ? "side" : "below";
 }
-
-/**
- * Full in-order setlist for Also-On-Air rows: every artist in the station's
- * recent set, in spin order. Two-tone scheme: bright white = in your library
- * (or seeded this session); gray = everything else. Non-library names carry a
- * dotted underline and are themselves the click target to add the artist —
- * once added they flip to white and stop being clickable.
- * Library artists are excluded (they surface in ON AIR), but artists seeded
- * this session stay visible in white until the next refresh so they don't
- * vanish under the click.
- * Long sets collapse behind an "N more" toggle to keep the dial legible.
- */
-export function PopCrossingLine({ artists, seedsLower, onAdd }: {
-  artists: PopularCrossingArtist[];
-  seedsLower: Set<string>;
-  onAdd: (name: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const inLib = (a: PopularCrossingArtist) => a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
-  // Library artists (server flag from load time) are excluded — they already
-  // surface in the ON AIR section. Session-seeded artists remain (inLib()
-  // styles them orange-red without a "+").
-  const set = artists.filter((a) => !a.inLibrary);
-  if (set.length === 0) return null;
-  const visible = expanded ? set : set.slice(0, SETLIST_VISIBLE);
-  const hidden = set.length - visible.length;
-
-  // Link semantics: dotted underline is RESERVED for navigation. Add/seed is
-  // an explicit small `+` affordance next to the name — the name itself never
-  // adds. Yours (library/seeded) stays bright white with no underline.
-  const span = (a: PopularCrossingArtist) =>
-      inLib(a) ? (
-      <b key={a.name} className="fdrow__artist fdrow__artist--lib dial-artist--complete">{a.name}</b>
-    ) : (
-      <span key={a.name} className="fdrow__artist-wrap">
-        <span className="fdrow__artist fdrow__artist--other">{a.name}</span>
-        <button
-          type="button"
-          className="fdrow__addplus dial-addplus"
-          aria-label={`Add ${a.name} to your artists`}
-          onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
-        >+</button>
-      </span>
-    );
-  const nodes: ReactNode[] = [];
-  visible.forEach((a, i) => {
-    if (i > 0) nodes.push(" · ");
-    nodes.push(span(a));
-  });
-
-  return (
-    <>
-      {nodes}
-      {hidden > 0 && (
-        <button
-          type="button"
-          className="fdrow__setmore"
-          aria-expanded={expanded}
-          onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
-        >{`${hidden} more`}</button>
-      )}
-      {expanded && set.length > SETLIST_VISIBLE && (
-        <button
-          type="button"
-          className="fdrow__setmore"
-          aria-expanded={true}
-          onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
-        >less</button>
-      )}
-    </>
-  );
-}
-
-/**
- * Full setlist for the expanded "this set:" block.
- *
- * Renders artist names as a flex-wrap pill grid — every line starts at the
- * same left edge, no ragged wrap, each chip is a touch-friendly tap target.
- *
- * Two-tone rules (same as the inline sentence):
- *   - in library / seeded this session → bright white, inert.
- *   - everything else → gray with a dotted underline; clicking the name adds
- *     the artist and the chip immediately flips to white via seedsLower.
- */
-interface QueueArtist {
-  name: string;
-  inLibrary: boolean;
-  /** Track title for the phone-width one-line "artist — title" rendering.
-   * Optional — crossing-derived artist lists have no per-spin title. */
-  title?: string | null;
-}
-
 /**
  * Compute the set-panel snapshot for a live station row.
  * Pure function — exported so it can be tested independently of the component.
@@ -703,90 +549,6 @@ export function TabbedSetPanel({
     </>
   );
 }
-
-/**
- * The player queue intentionally has one renderer for broadcast and replay
- * sets. A click is a real toggle for taste seeds; hard library matches remain
- * visibly completed but are not removed from the listener's external library.
- */
-export function SetQueueList({ artists, seedsLower, onAdd, onRemove, onOpenArtist, progress }: {
-  artists: QueueArtist[];
-  seedsLower: Set<string>;
-  onAdd: (name: string) => void;
-  onRemove: (name: string) => void;
-  /** When provided, artist names become navigation targets that open the
-   * artist tab (yours or not). Add/seed stays on the explicit `+`. */
-  onOpenArtist?: (name: string) => void;
-  progress: number;
-}) {
-  const completed = Math.max(0, Math.min(100, progress * 100));
-  return (
-    <div className="set-queue" aria-label="Set queue">
-      <div className="set-queue__progress" style={{ width: `${completed}%` }} aria-hidden="true" />
-      <div className="set-queue__artists">
-        {artists.map((artist, index) => {
-          // Link semantics: the name itself never adds — add/seed is the
-          // explicit `+` affordance; seeded names carry an explicit remove
-          // (×). Yours (library/seeded) renders white with no underline.
-          const key = artist.name.trim().toLowerCase();
-          const seeded = seedsLower.has(key);
-          const inLibrary = artist.inLibrary || seeded;
-          const nameCls = `set-queue__artist ${inLibrary ? "set-queue__artist--library dial-artist--complete" : "set-queue__artist--other"}`;
-          const nameAria = inLibrary ? `${artist.name} is in your library` : undefined;
-          return (
-            <span key={`${key}-${index}`} className="set-queue__artist-wrap">
-              {/* Leading `+` — the add affordance precedes the name in setlists. */}
-              {!inLibrary && (
-                <button
-                  type="button"
-                  className="set-queue__addplus dial-addplus"
-                  aria-label={`Add ${artist.name} to your artists`}
-                  onClick={(e) => { e.stopPropagation(); onAdd(artist.name); }}
-                >+</button>
-              )}
-              {onOpenArtist ? (
-                <button
-                  type="button"
-                  className={`${nameCls} gram-link--nav`}
-                  aria-label={nameAria}
-                  onClick={(e) => { e.stopPropagation(); onOpenArtist(artist.name); }}
-                >{artist.name}</button>
-              ) : (
-                <span className={nameCls} aria-label={nameAria}>{artist.name}</span>
-              )}
-              {artist.title ? <span className="set-queue__title" aria-hidden="true"> — {artist.title}</span> : null}
-              {seeded && (
-                <button
-                  type="button"
-                  className="set-queue__removeseed dial-addplus"
-                  aria-label={`Remove ${artist.name} from your artists`}
-                  onClick={(e) => { e.stopPropagation(); onRemove(artist.name); }}
-                >×</button>
-              )}
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function AlsoSentence({ artists, seedsLower, onAdd }: {
-  artists: PopularCrossingArtist[];
-  seedsLower: Set<string>;
-  onAdd: (name: string) => void;
-}) {
-  return (
-    <SetQueueList
-      artists={artists.map((artist) => ({ name: artist.name, inLibrary: artist.inLibrary }))}
-      seedsLower={seedsLower}
-      onAdd={onAdd}
-      onRemove={() => undefined}
-      progress={0}
-    />
-  );
-}
-
 interface ScrubItem {
   slug: string;
   name: string;
@@ -888,207 +650,6 @@ function PopScrubber({ items, onScrub }: {
     </div>
   );
 }
-
-interface FrontDoorRowProps {
-  ds: DialStation;
-  show: DialShow | null;
-  ov: number;          // lifetime selector overlap (attributed) or 24h crossings (unattributed)
-  isActive: boolean;
-  isSampling: boolean;
-  onTuneIn: () => void;
-  displayMode?: DialDisplayMode;
-  presence?: StationPresence;
-  /** Artwork URL for the currently-playing track — renders a right-edge fade when active */
-  artworkUrl?: string | null;
-  /** Popular-crossing sentence (Also-On-Air): replaces the tier-1 reason line. */
-  popLine?: ReactNode | null;
-  /** When set, tags the row root so the Also-On-Air scrubber can scroll to it. */
-  scrubSlug?: string;
-  /** Full setlist for the station — powers the clickable-"and" expansion. */
-  setArtists?: PopularCrossingArtist[] | null;
-  seedsLower?: Set<string>;
-  onAddArtist?: (name: string) => void;
-  /** Opens the persistent player queue for this station's complete set. */
-  onSetExpand?: () => void;
-}
-
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand }: FrontDoorRowProps) {
-  const usableDjList = eligibleDjNames(
-    { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
-    { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
-  );
-  const usableDj = usableDjList.length === 1 ? usableDjList[0] : null;
-  const safeShow = show && usableDj !== show.djName
-    ? { ...show, djName: usableDj }
-    : show;
-  const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode, ds.topArtistNames);
-
-  // Clickable-"and" expansion: probe the sentence first to learn which artist
-  // names it already shows, derive the rest of the set (setlist order, library
-  // artists excluded), then rebuild with the toggle wired only when there is
-  // actually something to reveal. crossingSentence is pure, so the double call
-  // is cheap.
-  const [alsoExpanded, setAlsoExpanded] = useState(false);
-  const probe = crossingSentence(ds.station.name, safeShow, displayMode);
-  const remainingSet = useMemo(() => {
-    if (!probe || !setArtists || !seedsLower || !onAddArtist) return [];
-    return setArtists.filter((a) =>
-      !a.inLibrary && !probe.artistsShown.some((s) => sameLiveValue(s, a.name)));
-  // probe is rebuilt each render but its artistsShown is derived from show data
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [safeShow, displayMode, setArtists, seedsLower, onAddArtist]);
-  const crossing = remainingSet.length > 0 && seedsLower && onAddArtist
-    ? crossingSentence(ds.station.name, safeShow, displayMode, {
-        expanded: onSetExpand ? false : alsoExpanded,
-        onToggle: onSetExpand
-          ? onSetExpand
-          : () => setAlsoExpanded((v) => !v),
-        node: null, // expanded content rendered as fdrow__also-block below tier1
-      })
-    : probe;
-  // In blended mode: live sentence is a secondary attribution line shown below rz.node
-  // (the community count). It uses only public DJ/track metadata — no personal flags.
-  // In personal mode: live sentence fills in when there is no crossing sentence.
-  const live = displayMode === "blended"
-    ? liveSentence(ds.station.name, safeShow)
-    : crossing ? null : liveSentence(ds.station.name, safeShow);
-  // Tier 1 always shows the community aggregate sentence in blended mode.
-  // Popular-crossing sentence (Also-On-Air) outranks the dim fallback reason
-  // but never a personal crossing sentence — your own library evidence wins.
-  const usePop = displayMode !== "blended" && !crossing && popLine != null;
-  const tier1Cls = displayMode === "blended"
-    ? rz.cls
-    : crossing ? rz.cls : usePop ? "fdrow__pop-sentence" : live ? "fdrow__live-sentence" : rz.cls;
-  const tier1Node = displayMode === "blended"
-    ? rz.node
-    : crossing?.node ?? (usePop ? popLine : null) ?? live?.node ?? rz.node;
-  const dj = usableDj;
-  const stationLabel = cleanLiveValue(ds.station.name) ?? ds.station.name;
-
-  const currentTrack = safeShow?.currentTrack ?? null;
-
-  const rowCls = [
-    "fdrow",
-    rz.r === 1 ? "fdrow--t1" : "",
-    rz.r >= 2 && rz.r <= 4 ? "fdrow--z1" : "",
-    rz.r === 6 || rz.r === 7 ? "fdrow--hist" : "",
-    rz.r === 0 || rz.r === 5 ? "fdrow--dim" : "",
-    isSampling ? "fdrow--sampling" : "",
-    isActive ? "fdrow--playing" : "",
-  ].filter(Boolean).join(" ");
-
-  return (
-    <div
-      className={rowCls}
-      data-scrub-slug={scrubSlug}
-      role="button"
-      tabIndex={0}
-      onClick={onTuneIn}
-      onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
-    >
-      {isActive && artworkUrl && (
-        <div
-          className="fdrow__art-fade"
-          style={{ backgroundImage: `url(${proxyArtUrl(artworkUrl) ?? artworkUrl})` }}
-          aria-hidden="true"
-        />
-      )}
-      <div className="fdrow__c">
-        {/* Tier 1: reason sentence — leads at full display weight */}
-        <div className={`fdrow__t1 ${tier1Cls}`}>
-          {tier1Node}
-        </div>
-
-        {/* "this set:" expanded block — shows the full station setlist below the
-            crossing sentence when the listener clicks "this set".
-            "this set:" label on the left is the collapse trigger. */}
-        {!onSetExpand && alsoExpanded && remainingSet.length > 0 && seedsLower && onAddArtist && (
-          <div className="fdrow__also-block" onClick={(e) => e.stopPropagation()}>
-            <AlsoSentence artists={remainingSet} seedsLower={seedsLower} onAdd={onAddArtist} />
-          </div>
-        )}
-
-        {/* Blended mode secondary: live DJ/track attribution shown below the
-            community count. Uses only public DJ/track metadata, not personal
-            crossing flags, so it is safe in an anonymised aggregate context. */}
-        {displayMode === "blended" && live && (
-          <div className="fdrow__live-secondary">
-            {live.node}
-          </div>
-        )}
-
-        <span className="sr-only">{ds.station.slug}</span>
-
-        {/* Zone 3 lifetime overlap caption: shown when the reason sentence carries no
-            taste signal (r=0: no data; r=5: attributed show but no crossings yet) but
-            we do have a nonzero lifetime artist-overlap count.  Gives every row a
-            human explanation of why it surfaced instead of just a name and a number. */}
-        {(rz.r === 0 || rz.r === 5) && ov > 0 && (
-             <div className="fdrow__ov-caption">
-            <b>{ov} artists</b> {displayMode === "blended" ? "represented here" : "you know"} play here
-          </div>
-        )}
-
-        {/* Zone 3 now-playing line: when the row has no reason sentence (dim
-            fallback tier only — never over a crossing/pop/live sentence), show
-            the station's current track so every row is informative before the
-            listener has crossings. */}
-        {displayMode !== "blended" && (rz.r === 0 || rz.r === 5) && !crossing && !usePop && !live &&
-          ds.liveTrack?.artist && (
-          <div className="fdrow__np-line">
-            <span aria-hidden="true">▶ </span>
-            <b>{ds.liveTrack.artist}</b>
-            {ds.liveTrack.title ? <> — {ds.liveTrack.title}</> : null}
-          </div>
-        )}
-
-        {/* Listener avatar stack — community presence below the reason sentence.
-            Visible on every row that has active listeners, regardless of whether
-            the viewer has personal crossings. Click propagation stopped so the
-            tune-in handler doesn't fire. */}
-        {presence && presence.count > 0 && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <ListenerAvatarStack
-              avatars={presence.avatars}
-              count={presence.count}
-              isActive={isActive}
-            />
-          </div>
-        )}
-
-      </div>
-
-    </div>
-  );
-}
-
-interface GhostRowProps {
-  station: GhostStation;
-  isActive: boolean;
-  /** Called when the station has no qualifying run (runId === null). */
-  onTuneIn: () => void;
-}
-function ZoneLabel({ label, hint, accent }: {
-  label: string;
-  hint?: string;
-  accent?: "library" | "picker" | "live";
-}) {
-  return (
-    <div className="fdzone-lbl">
-      {accent && <span className={`fdzone-lbl__pip fdzone-lbl__pip--${accent}`} />}
-      <span className="fdzone-lbl__text">{label}</span>
-      {hint && <span className="fdzone-lbl__hint">{hint}</span>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// RunDensitySpine — interactive crossing-density spine for coarse run navigation
-// ---------------------------------------------------------------------------
-
 /**
  * A horizontal row of clickable bins, one per crossing run, ordered oldest
  * (left) to newest (right).  Displays crossing density (owned count) as a
@@ -1259,11 +820,6 @@ function RunRow({ run, focused = false }: { run: OverlapRun; focused?: boolean }
 // ---------------------------------------------------------------------------
 /** Max taste seeds per user — must match MAX_SEEDS in api-server taste-seeds.ts. */
 const MAX_TASTE_SEEDS = 50;
-
-const ZONE1_VISIBLE = 5;
-const ZONE2_VISIBLE = 3;
-const ZONE3_VISIBLE = 3;
-
 /** Stable, case-insensitive ordering for the listener's configured artists. */
 export function sortTasteSeeds(seeds: string[]): string[] {
   return [...seeds].sort((a, b) => {
@@ -1673,30 +1229,6 @@ function useScanState(cands: Array<{ sp: DialSpin; show: DialShow; station: Dial
   useEffect(() => { stopScan(); setSampling(null); }, [cands.length]); // eslint-disable-line
 
   return { scanning, sampling, toggle, land, stopScan };
-}
-
-/**
- * Find the index of the run in `runs` whose UTC broadcast day is nearest to
- * `hourMs` (epoch milliseconds). Returns 0 when the list is empty.
- *
- * Used by the density-spine tap/drag handlers to convert an hour position
- * into a coarse scan detent. Exported for unit testing in dialPastScan.test.tsx.
- */
-export function findRunIndexByHour(hourMs: number, runs: OverlapRun[]): number {
-  if (runs.length === 0) return 0;
-  let best = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < runs.length; i++) {
-    const run = runs[i]!;
-    // Use noon UTC for the run's day to produce a stable representative time.
-    const runDayMs = new Date(run.day + "T12:00:00Z").getTime();
-    const dist = Math.abs(runDayMs - hourMs);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = i;
-    }
-  }
-  return best;
 }
 function ScanBar({
   stations,
@@ -3314,93 +2846,38 @@ export function DialView() {
   // ── Also-on-air section (former tab, now folded into ON AIR × YOUR ARTISTS).
   // Band order follows the triangle: ▲ renders DJ band then rest band below the
   // crossing rows; ▼ renders rest band (rarest-first) then DJ band above them.
-  const djBandJsx = djBand.length > 0 && (
-    <>
-      <ZoneLabel label="DJs on air" accent="picker" />
-      {djBand.map((row) => (
-        <FrontDoorRow
-          key={row.ds.station.slug}
-          ds={row.ds}
-          show={row.show}
-          ov={pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)}
-          scrubSlug={row.ds.station.slug}
-          isActive={row.ds.station.slug === radio.station?.slug}
-          isSampling={false}
-          onTuneIn={() => {
-            scan.stop();
-            openLiveQueue(row);
-            commitTune(row.ds.station.slug, row.ds.station.name);
-            if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
-              void radio.toggle(row.ds.station);
-            }
-          }}
-          displayMode={crossingSourceMode}
-          presence={presenceMap.get(row.ds.station.id)}
-          artworkUrl={activeArtworkUrl}
-          popLine={popHasContent(row.ds.station.slug)
-            ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
-            : null}
-        />
-      ))}
-    </>
-  );
-  const restBandJsx = restBand.length > 0 && (
-    <>
-      <div id="zone3-rows">
-        {restBand.slice(0, zone3Expanded ? restBand.length : ZONE3_VISIBLE).map((row) => (
-          <FrontDoorRow
-            key={row.ds.station.slug}
-            ds={row.ds}
-            show={row.show}
-            ov={row.ds.lifetimeCrossings}
-            scrubSlug={row.ds.station.slug}
-            isActive={row.ds.station.slug === radio.station?.slug}
-            isSampling={false}
-          onTuneIn={() => {
-            scan.stop();
-            openLiveQueue(row);
-            commitTune(row.ds.station.slug, row.ds.station.name);
-            if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
-              void radio.toggle(row.ds.station);
-            }
-          }}
-            displayMode={crossingSourceMode}
-            presence={presenceMap.get(row.ds.station.id)}
-            artworkUrl={activeArtworkUrl}
-            popLine={popHasContent(row.ds.station.slug)
-              ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
-              : null}
-          />
-        ))}
-      </div>
-      {restBand.length > ZONE3_VISIBLE && (
-        <button
-          className="dial-show-more"
-          aria-expanded={zone3Expanded}
-          aria-controls="zone3-rows"
-          onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
-        >
-          {zone3Expanded ? "See less" : `See all ${restBand.length}`}
-        </button>
-      )}
-    </>
-  );
+  // Shared tune handler for both Zone 3 bands.
+  const tuneZoneRow = useCallback((row: DialLaneRow) => {
+    scan.stop();
+    openLiveQueue(row);
+    commitTune(row.ds.station.slug, row.ds.station.name);
+    if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
+      void radio.toggle(row.ds.station);
+    }
+  }, [scan, openLiveQueue, commitTune, radio]);
+  const popLineFor = useCallback((slug: string) =>
+    popHasContent(slug)
+      ? <PopCrossingLine artists={popMap.get(slug)!} seedsLower={seedsLower} onAdd={addSeed} />
+      : null,
+  [popHasContent, popMap, seedsLower, addSeed]);
   const alsoSection = alsoOnAir.length > 0 && (
-    <>
-      <div className="fdzone-lbl-row">
-        {zone3Expanded && restBand.length > ZONE3_VISIBLE && (
-          <button
-            className="dial-show-more-inline"
-            aria-expanded={true}
-            aria-controls="zone3-rows"
-            onClick={() => setZone3Expanded(false)}
-          >
-            See less
-          </button>
-        )}
-      </div>
-      {popSortDesc ? <>{djBandJsx}{restBandJsx}</> : <>{restBandJsx}{djBandJsx}</>}
-    </>
+    <Zone3Lane
+      djBand={djBand}
+      restBand={restBand}
+      popSortDesc={popSortDesc}
+      expanded={zone3Expanded}
+      activeSlug={radio.station?.slug ?? null}
+      displayMode={crossingSourceMode}
+      presenceMap={presenceMap}
+      artworkUrl={activeArtworkUrl}
+      popLineFor={popLineFor}
+      ovFor={(row, band) => band === "dj"
+        ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
+        : row.ds.lifetimeCrossings}
+      onTuneIn={tuneZoneRow}
+      onToggleExpanded={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
+      onCollapse={() => setZone3Expanded(false)}
+    />
   );
 
   return (
@@ -3735,39 +3212,27 @@ export function DialView() {
                         pending (not just when the delayed skeleton shows) so
                         rows never flash during the skeleton grace window. */}
                     {!inContext && !crossingsLoading && withReason.length > 0 && (
-                      <>
-                        <>
-                            {/* All live crossing rows are visible by default. */}
-                            <div id="zone1-rows">
-                              {zone1Display.map((row) => (
-                                  <div key={row.ds.station.slug}>
-                                    <FrontDoorRow
-                                      ds={row.ds}
-                                      show={row.show}
-                                      ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                                      scrubSlug={row.ds.station.slug}
-                                      isActive={row.ds.station.slug === radio.station?.slug}
-                                      isSampling={scan.samplingIdx != null && withReason[scan.samplingIdx]?.ds.station.slug === row.ds.station.slug}
-                                      onTuneIn={() => {
-                                        scan.stop();
-                                        openLiveQueue(row, popMap.get(row.ds.station.slug));
-                                        commitTune(row.ds.station.slug, row.ds.station.name);
-                                        if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
-                                          void radio.toggle(row.ds.station);
-                                        }
-                                      }}
-                                      displayMode={crossingSourceMode}
-                                      presence={presenceMap.get(row.ds.station.id)}
-                                      setArtists={popMap.get(row.ds.station.slug) ?? null}
-                                      seedsLower={seedsLower}
-                                      onAddArtist={addSeed}
-                                       onSetExpand={() => openLiveQueue(row, popMap.get(row.ds.station.slug))}
-                                    />
-                                  </div>
-                              ))}
-                            </div>
-                        </>
-                      </>
+                      /* All live crossing rows are visible by default. */
+                      <Zone1Lane
+                        rows={zone1Display}
+                        activeSlug={radio.station?.slug ?? null}
+                        samplingSlug={scan.samplingIdx != null ? withReason[scan.samplingIdx]?.ds.station.slug ?? null : null}
+                        displayMode={crossingSourceMode}
+                        presenceMap={presenceMap}
+                        popMap={popMap}
+                        seedsLower={seedsLower}
+                        ovFor={(row) => row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
+                        onAddArtist={addSeed}
+                        onTuneIn={(row) => {
+                          scan.stop();
+                          openLiveQueue(row, popMap.get(row.ds.station.slug));
+                          commitTune(row.ds.station.slug, row.ds.station.name);
+                          if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
+                            void radio.toggle(row.ds.station);
+                          }
+                        }}
+                        onSetExpand={(row) => openLiveQueue(row, popMap.get(row.ds.station.slug))}
+                      />
                     )}
 
                     {/* Skeleton deadline expired but the server is still computing —
@@ -3821,42 +3286,14 @@ export function DialView() {
                         Shown in live mode and day mode, hidden in top sets mode
                         and in context mode (Zone 2/3 hide once tuned). */}
                     {!inContext && ghost.length > 0 && (
-                      <>
-                        <div className="fdzone-lbl-row">
-                          {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
-                            <button
-                              className="dial-show-more-inline"
-                              aria-expanded={true}
-                              aria-controls="zone2-rows"
-                              onClick={() => setZone2Expanded(false)}
-                            >
-                              See less
-                            </button>
-                          )}
-                        </div>
-                        <>
-                          <div id="zone2-rows">
-                              {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
-                                <GhostRow
-                                  key={g.slug}
-                                  station={g}
-                                  isActive={g.slug === radio.station?.slug}
-                                  onTuneIn={() => tuneGhost(g)}
-                                />
-                              ))}
-                            </div>
-                            {ghost.length > ZONE2_VISIBLE && (
-                              <button
-                                className="dial-show-more"
-                                aria-expanded={zone2Expanded}
-                                aria-controls="zone2-rows"
-                                onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
-                              >
-                                {zone2Expanded ? "See less" : `See all ${ghost.length}`}
-                              </button>
-                            )}
-                        </>
-                      </>
+                      <Zone2Lane
+                        ghost={ghost}
+                        expanded={zone2Expanded}
+                        activeSlug={radio.station?.slug ?? null}
+                        onTuneGhost={tuneGhost}
+                        onToggleExpanded={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
+                        onCollapse={() => setZone2Expanded(false)}
+                      />
                     )}
 
                     {/* Live-zone skeleton — shown after crossings resolve but while the
@@ -3910,42 +3347,15 @@ export function DialView() {
 
                 {/* ── Past mode: Zone 2 ghost rows (Zone 3 suppressed) ────── */}
                 {!inContext && effectiveTtMode === "past" && ghost.length > 0 && (
-                  <>
-                    <div className="fdzone-lbl-row">
-                      {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
-                        <button
-                          className="dial-show-more-inline"
-                          aria-expanded={true}
-                          aria-controls="zone2-rows-day"
-                          onClick={() => setZone2Expanded(false)}
-                        >
-                          See less
-                        </button>
-                      )}
-                    </div>
-                    <>
-                      <div id="zone2-rows-day">
-                        {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
-                          <GhostRow
-                            key={g.slug}
-                            station={g}
-                            isActive={g.slug === radio.station?.slug}
-                            onTuneIn={() => tuneGhost(g)}
-                          />
-                        ))}
-                      </div>
-                      {ghost.length > ZONE2_VISIBLE && (
-                        <button
-                          className="dial-show-more"
-                          aria-expanded={zone2Expanded}
-                          aria-controls="zone2-rows-day"
-                          onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
-                        >
-                          {zone2Expanded ? "See less" : `See all ${ghost.length}`}
-                        </button>
-                      )}
-                    </>
-                  </>
+                  <Zone2Lane
+                    ghost={ghost}
+                    expanded={zone2Expanded}
+                    idSuffix="-day"
+                    activeSlug={radio.station?.slug ?? null}
+                    onTuneGhost={tuneGhost}
+                    onToggleExpanded={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
+                    onCollapse={() => setZone2Expanded(false)}
+                  />
                 )}
                 {/* Zone 3 (also-on-air) is suppressed in day and top modes */}
               </>
@@ -4215,243 +3625,4 @@ export function LiveArtistPicker({
       )}
     </section>
   );
-}
-
-function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
-  const [, navigate] = useLocation();
-  const cls = ["ghost-row", isActive ? "ghost-row--playing" : ""].filter(Boolean).join(" ");
-
-  const hasReplay = station.runId != null;
-
-  function handleClick() {
-    if (hasReplay) {
-      navigate(`/replay/${station.runId}`);
-    } else {
-      onTuneIn();
-    }
-  }
-
-  const displayName = station.showName ?? station.name;
-  const timeLabel = station.playedAt ? agoLabel(station.playedAt) : null;
-
-  return (
-    <div
-      className={cls}
-      role="button"
-      tabIndex={0}
-      onClick={handleClick}
-      onKeyDown={(e) => e.key === "Enter" && handleClick()}
-    >
-      <div className="ghost-row__c">
-        <div className="ghost-row__reason">
-          {hasReplay ? (
-            <>
-              <span className="ghost-row__show">{displayName}</span>
-              {" played "}
-              <b className="fdrow__artist">{station.artistName}</b>
-              {timeLabel && <> · <span className="ghost-row__time">{timeLabel}</span></>}
-            </>
-          ) : (
-            <b className="fdrow__artist">{station.artistName}</b>
-          )}
-        </div>
-      </div>
-      <div className="fdrow__station-label" aria-hidden="true">{station.name}</div>
-    </div>
-  );
-}
-
-/**
- * Touch-swipe handler that fires onSwipeLeft / onSwipeRight.
- *
- * Guards:
- *   - Left-edge exclusion (20 px default): touches starting within that zone
- *     are ignored — iOS Safari uses it for back-navigation.
- *   - Axis guard: swipe fires only when |dx| > |dy|, so vertical scrolling
- *     in any parent container is never hijacked.
- *   - Min distance (40 px default): micro-movements are ignored.
- *
- * Attach via `<div {...swipeHandlers}>` on the now-playing card wrapper.
- */
-export function useSwipeHandler(
-  onSwipeLeft: () => void,
-  onSwipeRight: () => void,
-  {
-    leftEdgeExcludePx = 20,
-    minDistPx = 40,
-  }: { leftEdgeExcludePx?: number; minDistPx?: number } = {},
-) {
-  const startX = useRef<number | null>(null);
-  const startY = useRef<number | null>(null);
-
-  const onTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      const touch = e.touches[0];
-      if (!touch) return;
-      if (touch.clientX < leftEdgeExcludePx) return; // iOS Safari back-nav zone
-      startX.current = touch.clientX;
-      startY.current = touch.clientY;
-    },
-    [leftEdgeExcludePx],
-  );
-
-  const onTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      if (startX.current === null || startY.current === null) return;
-      const touch = e.changedTouches[0];
-      if (!touch) {
-        startX.current = null;
-        startY.current = null;
-        return;
-      }
-      const dx = touch.clientX - startX.current;
-      const dy = touch.clientY - startY.current;
-      startX.current = null;
-      startY.current = null;
-      // Axis guard: ignore if primarily vertical or too short.
-      if (Math.abs(dx) < minDistPx || Math.abs(dy) >= Math.abs(dx)) return;
-      if (dx < 0) onSwipeLeft();
-      else onSwipeRight();
-    },
-    [minDistPx, onSwipeLeft, onSwipeRight],
-  );
-
-  return { onTouchStart, onTouchEnd };
-}
-
-/**
- * Two-level scan state for the dial's past-mode navigation.
- *
- * Coarse level: crossing runs (reverse-chronological, from useMyOverlapRunsRecent).
- *   Index 0 = most recent run, index N-1 = oldest.
- * Fine level:   crossing moments within the landed run.
- *
- * Window constants (from measured density):
- *   COARSE_WINDOW_SIZE = 60 runs — at 135 crossings/24h → ~39 runs/day for a
- *   heavy user; 60 provides ~1.5 days of comfortable coarse-detent coverage.
- *   N (fine) is bounded by the run size; typically 2–10 moments per run.
- *
- * Navigation contract:
- *   prevRun()               → older run (idx++); at live edge → idx 0
- *   nextRun()               → newer run (idx--); resists at live edge (null)
- *   jumpToRunByIndex(idx)   → absolute coarse position (spine drag)
- *   jumpToRunByHour(hourMs) → nearest run by day (spine bin tap)
- *   prevCrossing(n)         → earlier crossing (swipe right)
- *   nextCrossing(n)         → later crossing (swipe left); resists at last stop
- *   reset()                 → return to live edge, clear fine state
- *
- * State machine does NOT fork: every coarse navigation call resets fineIdx.
- */
-export function usePastScanState(coarseCands: OverlapRun[]) {
-  const [coarseIdx, setCoarseIdx] = useState<number | null>(null);
-  const [fineIdx, setFineIdx] = useState<number | null>(null);
-  const coarseCount = coarseCands.length;
-
-  // The candidate list can shrink under us (e.g. the dial range is narrowed
-  // while stepped back). Clamp the coarse position so currentRun never reads
-  // past the end of the array. Plain effect reads — no nested setters, which
-  // are unsafe under Strict/Concurrent semantics.
-  useEffect(() => {
-    if (coarseIdx !== null && coarseIdx >= coarseCount) {
-      setCoarseIdx(coarseCount > 0 ? coarseCount - 1 : null);
-      setFineIdx(null);
-    }
-  }, [coarseCount, coarseIdx]);
-
-  // Internal setter: updates coarse and resets fine whenever the index changes.
-  const setCoarseWithFineReset = useCallback(
-    (fn: (prev: number | null) => number | null) => {
-      setCoarseIdx((prev) => {
-        const next = fn(prev);
-        if (next !== prev) setFineIdx(null);
-        return next;
-      });
-    },
-    [],
-  );
-
-  /** Step to the next older run (coarseIdx++). At live edge, enters most-recent run. */
-  const prevRun = useCallback(() => {
-    setCoarseWithFineReset((i) =>
-      i === null ? (coarseCount > 0 ? 0 : null) : Math.min(i + 1, coarseCount - 1),
-    );
-  }, [coarseCount, setCoarseWithFineReset]);
-
-  /** Step to the next newer run (coarseIdx--). Resists at live edge (stays null). */
-  const nextRun = useCallback(() => {
-    setCoarseWithFineReset((i) => (i === null || i === 0 ? null : i - 1));
-  }, [setCoarseWithFineReset]);
-
-  /** Jump to an absolute coarse index — used by density-spine drag. */
-  const jumpToRunByIndex = useCallback(
-    (idx: number) => {
-      if (idx >= 0 && idx < coarseCount) {
-        setCoarseWithFineReset(() => idx);
-      }
-    },
-    [coarseCount, setCoarseWithFineReset],
-  );
-
-  /**
-   * Jump to the run nearest to `hourMs` (epoch ms) by day — used by density-
-   * spine tap. Delegates nearest-run lookup to findRunIndexByHour.
-   */
-  const jumpToRunByHour = useCallback(
-    (hourMs: number) => {
-      if (coarseCands.length === 0) return;
-      setCoarseWithFineReset(() => findRunIndexByHour(hourMs, coarseCands));
-    },
-    [coarseCands, setCoarseWithFineReset],
-  );
-
-  /** Step to the earlier crossing within the run (swipe right). */
-  const prevCrossing = useCallback((fineCount: number) => {
-    if (fineCount === 0) return;
-    setFineIdx((i) => (i === null ? fineCount - 1 : Math.max(i - 1, 0)));
-  }, []);
-
-  /**
-   * Step to the later crossing within the run (swipe left).
-   * Resists at the last fine stop — never silently advances past the run.
-   */
-  const nextCrossing = useCallback((fineCount: number) => {
-    if (fineCount === 0) return;
-    setFineIdx((i) => {
-      const cur = i ?? -1;
-      return cur >= fineCount - 1 ? Math.max(cur, 0) : cur + 1;
-    });
-  }, []);
-
-  /** Return to live edge and clear fine state. */
-  const reset = useCallback(() => {
-    setCoarseIdx(null);
-    setFineIdx(null);
-  }, []);
-
-  /**
-   * Jump directly to a fine crossing by index — used by crossing row clicks
-   * so the active class and subsequent swipes continue from the clicked position.
-   */
-  const jumpToFine = useCallback((idx: number, fineCount: number) => {
-    if (idx >= 0 && idx < fineCount) {
-      setFineIdx(idx);
-    }
-  }, []);
-
-  const currentRun = coarseIdx !== null ? (coarseCands[coarseIdx] ?? null) : null;
-
-  return {
-    coarseIdx,
-    fineIdx,
-    currentRun,
-    isAtLiveEdge: coarseIdx === null,
-    prevRun,
-    nextRun,
-    jumpToRunByIndex,
-    jumpToRunByHour,
-    jumpToFine,
-    prevCrossing,
-    nextCrossing,
-    reset,
-  };
 }
