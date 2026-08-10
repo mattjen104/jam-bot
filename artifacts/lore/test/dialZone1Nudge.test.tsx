@@ -264,6 +264,36 @@ describe("Zone 1 nudge — appears when loaded with no crossings", () => {
   });
 });
 
+describe("Zone 1 nudge — dial leads when settled empty", () => {
+  it("renders the station lanes BEFORE the nudge in DOM order", () => {
+    mockDialData({ stations: [makeNoCrossStation("kexp"), makeNoCrossStation("wfmu")] });
+    renderDial();
+
+    const nudge = screen.getByText(NUDGE_TEXT, { exact: false });
+    const stationRows = document.querySelectorAll(".fdrow");
+    expect(stationRows.length).toBeGreaterThan(0);
+    // Every station lane must precede the nudge in document order.
+    for (const row of Array.from(stationRows)) {
+      expect(
+        row.compareDocumentPosition(nudge) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+  });
+
+  it("renders the seed chips compactly inside the nudge block, not above the dial", () => {
+    mockDialData({
+      stations: [makeNoCrossStation("kexp")],
+      hasLibrary: false,
+      hasSeeds: true,
+    });
+    renderDial();
+
+    const nudge = screen.getByText(NUDGE_TEXT, { exact: false });
+    const compact = nudge.closest(".z1-placeholder--compact");
+    expect(compact).toBeTruthy();
+  });
+});
+
 describe("Zone 1 nudge — disappears when the first crossing row arrives", () => {
   it("clears the nudge as soon as withReason is non-empty", () => {
     // Start with no crossing rows → nudge visible.

@@ -111,4 +111,5 @@
 - [Now-playing cold-start partial](np-cold-start-partial.md) — boot prewarm + single-flight fill + stations snapshot; boot DB contention makes even trivial SELECTs take seconds, so partials must avoid the pool.
 - [Merge-splice can truncate whole handler tails](crossings-route-merge-splice.md) — /me/crossings once lost its closing braces on master (typecheck red for everyone); brace-balance the file and reconstruct from the last balanced revision + tests.
 - [Station context as sidebar tab](context-sidebar-tab.md) — context tab (fixed id) lives in the set-panel strip only in landscape; portrait keeps in-body region; jsdom lacks matchMedia so guard it.
+- [Crossings soft-name normalization](crossings-soft-name-normalization.md) — article/punct-tolerant seed matching is personal-compute only (blended, library-hits, lifetime-job still exact); empty results cache short (~2 min).
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).

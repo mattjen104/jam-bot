@@ -3747,20 +3747,6 @@ export function DialView() {
                       </>
                     )}
 
-                    {/* Library/seeds exist but nothing has crossed today — helpful nudge.
-                        Suppressed while liveLoading is true: crossings depend on the
-                        live-station list, so until that poll completes sortedRows is
-                        empty and withReason is vacuously 0 even if crossings exist. */}
-                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "settled" && (
-                      <div className="z1-placeholder z1-placeholder--no-cross">
-                        <div className="z1-placeholder__body">
-                          <p className="z1-placeholder__pitch">
-                            None of your artists have played on a live station today. Tune into a station or check back later.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Skeleton deadline expired but the server is still computing —
                         honest in-progress copy instead of the false negative above.
                         The 4s repoll keeps running; rows replace this when they land. */}
@@ -3861,6 +3847,40 @@ export function DialView() {
 
                     {/* Default sort (▲): also-on-air bands trail the crossing rows. */}
                     {!inContext && popSortDesc && alsoSection}
+
+                    {/* Library/seeds exist but nothing has crossed today — helpful nudge.
+                        Rendered AFTER the station lanes so the dial leads the front
+                        door instead of a full-height empty block burying it below
+                        the fold. Suppressed while liveLoading is true: crossings
+                        depend on the live-station list, so until that poll completes
+                        sortedRows is empty and withReason is vacuously 0 even if
+                        crossings exist. Only the settled phase may claim "none
+                        played" — see CrossingsPhase. */}
+                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "settled" && (
+                      <div className="z1-placeholder z1-placeholder--no-cross z1-placeholder--compact">
+                        <div className="z1-placeholder__body">
+                          <p className="z1-placeholder__pitch">
+                            None of your artists have played on a live station today. Tune into a station or check back later.
+                          </p>
+                          {visibleSeeds.length > 0 && (
+                            <div className="z1-placeholder__seedchips">
+                              {sortTasteSeeds(visibleSeeds).map((artist, index) => (
+                                <button
+                                  key={`${artist}-${index}`}
+                                  type="button"
+                                  className="z1-placeholder__seedchip"
+                                  aria-label={`Remove ${artist}`}
+                                  onClick={() => removeSeed(artist)}
+                                >
+                                  {artist} <span aria-hidden="true">×</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <SeedInput seeds={visibleSeeds} onAdd={addSeed} placeholder="Add another artist" />
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 

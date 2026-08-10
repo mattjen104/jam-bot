@@ -56,6 +56,41 @@ const router: IRouter = Router();
 // library change without needing a short poll interval.
 const CROSSINGS_CACHE_TTL_MS = 30 * 60 * 1000;
 
+// Empty results expire much sooner: an empty crossings result is usually a
+// user waiting for their first match, and a fresh qualifying spin (e.g. their
+// seed artist starts playing) must surface without waiting out the full
+// 30-minute TTL. Non-empty results keep the long TTL.
+const CROSSINGS_EMPTY_CACHE_TTL_MS_DEFAULT = 2 * 60 * 1000;
+let crossingsEmptyCacheTtlMs = CROSSINGS_EMPTY_CACHE_TTL_MS_DEFAULT;
+
+/** Test-only override for the empty-result cache TTL. Returns a restore fn. */
+export function _testOnly_setEmptyCrossingsTtl(ms: number): () => void {
+  const prev = crossingsEmptyCacheTtlMs;
+  crossingsEmptyCacheTtlMs = ms;
+  return () => { crossingsEmptyCacheTtlMs = prev; };
+}
+
+/** TTL applicable to a cached result: short for empty, long for non-empty. */
+function cacheTtlMs(data: CrossingsRow[]): number {
+  return data.length === 0 ? crossingsEmptyCacheTtlMs : CROSSINGS_CACHE_TTL_MS;
+}
+
+/**
+ * Light, symmetric artist-name normalization used for soft-name matching
+ * (taste seeds + unresolved Spotify imports): lowercase, strip ONE leading
+ * English article ("the "), then drop whitespace and punctuation ONLY, so
+ * "Clash" ↔ "The Clash" and "R.E.M." ↔ "REM" match. Letters and digits in any
+ * script are preserved (POSIX classes, not [^a-z0-9]) so non-Latin artist
+ * names — CJK, Cyrillic, Arabic, etc. — keep matching exactly as before.
+ * Applied identically to both the recordings side and the seed/soft side so
+ * matching is symmetric. `nullif(..., '')` keeps a name that normalizes to
+ * nothing (e.g. "The", "--") from becoming an empty-string wildcard that
+ * matches other blank names.
+ */
+function normArtistNameSql(col: unknown): ReturnType<typeof sql> {
+  return sql`nullif(regexp_replace(regexp_replace(lower(${col}), '^the[[:space:]]+', ''), '[[:space:][:punct:]]+', '', 'g'), '')`;
+}
+
 // Keep historical URL/domain metadata out of listener-facing crossing counts,
 // even when it predates the ingestion guard or a cleanup boot.
 const JUNK_ARTIST_SQL_RE =
@@ -142,7 +177,7 @@ export async function _testOnly_clearCrossingsCache(userId: number): Promise<voi
 /** Returns true when a fresh cache entry exists for the user — used in tests only. */
 export function _testOnly_hasCrossingsCache(userId: number): boolean {
   const entry = crossingsCache.get(userId);
-  return entry !== undefined && Date.now() - entry.builtAt < CROSSINGS_CACHE_TTL_MS;
+  return entry !== undefined && Date.now() - entry.builtAt < cacheTtlMs(entry.data);
 }
 
 /** Return the raw cached entry for a user — lets tests verify cache hits without spying on db. */
@@ -167,7 +202,7 @@ async function readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
       .limit(1);
     if (rows.length === 0) return null;
     const row = rows[0]!;
-    if (Date.now() - row.builtAt.getTime() >= CROSSINGS_CACHE_TTL_MS) return null;
+    if (Date.now() - row.builtAt.getTime() >= cacheTtlMs(row.data)) return null;
     // `data` is typed CrossingsRow[] via the schema's $type — no cast needed.
     return row.data;
   } catch {
@@ -190,7 +225,7 @@ async function readL2CacheAny(userId: number): Promise<{ data: CrossingsRow[]; i
       .limit(1);
     if (rows.length === 0) return null;
     const row = rows[0]!;
-    const isStale = Date.now() - row.builtAt.getTime() >= CROSSINGS_CACHE_TTL_MS;
+    const isStale = Date.now() - row.builtAt.getTime() >= cacheTtlMs(row.data);
     return { data: row.data, isStale };
   } catch {
     return null;
@@ -292,7 +327,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   // A SQL subquery lets the planner build a hash-table of soft artist names
   // once and probe it per recording row — effectively O(n) instead of O(n·m).
   const userSoftArtists = db
-    .selectDistinct({ artistLower: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))` })
+    .selectDistinct({ artistNorm: sql<string>`${normArtistNameSql(spotifyLibraryItemsTable.artist)}` })
     .from(spotifyLibraryItemsTable)
     .where(
       and(
@@ -307,7 +342,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   // they have connected any music service.  Treated identically to unresolved
   // Spotify soft rows — matched by lowercased artist name.
   const userSeedArtists = db
-    .selectDistinct({ artistLower: sql<string>`lower(trim(${tasteSeedsTable.artistName}))` })
+    .selectDistinct({ artistNorm: sql<string>`${normArtistNameSql(tasteSeedsTable.artistName)}` })
     .from(tasteSeedsTable)
     .where(eq(tasteSeedsTable.userId, userId));
 
@@ -317,8 +352,8 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
     ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
     and (
       ${recordingsTable.artistMbid} in (${userLibArtists})
-      or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
-      or lower(trim(${recordingsTable.artist})) in (${userSeedArtists})
+      or ${normArtistNameSql(recordingsTable.artist)} in (${userSoftArtists})
+      or ${normArtistNameSql(recordingsTable.artist)} in (${userSeedArtists})
     )
   )`;
 
@@ -350,8 +385,8 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       where ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
         and (
           ${recordingsTable.artistMbid} in (${userLibArtists})
-          or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
-          or lower(trim(${recordingsTable.artist})) in (${userSeedArtists})
+          or ${normArtistNameSql(recordingsTable.artist)} in (${userSoftArtists})
+          or ${normArtistNameSql(recordingsTable.artist)} in (${userSeedArtists})
         )
   )`;
 
@@ -549,7 +584,7 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // ── L1: in-process Map ────────────────────────────────────────────────────
   const cached = crossingsCache.get(user.id);
-  if (cached && Date.now() - cached.builtAt < CROSSINGS_CACHE_TTL_MS) {
+  if (cached && Date.now() - cached.builtAt < cacheTtlMs(cached.data)) {
     return res.json({ items: cached.data });
   }
 
@@ -570,7 +605,7 @@ router.get("/me/crossings", h(async (req, res) => {
       //   - The next request (after recompute finishes) sees the fresh L1 entry
       //     written by cachePersonalCrossings via schedulePersonalCrossingsRecompute.
       crossingsCache.set(user.id, {
-        builtAt: Date.now() - CROSSINGS_CACHE_TTL_MS + 5_000, // expires in ~5s
+        builtAt: Date.now() - cacheTtlMs(l2result.data) + 5_000, // expires in ~5s
         data: l2result.data,
       });
       schedulePersonalCrossingsRecompute(user.id);

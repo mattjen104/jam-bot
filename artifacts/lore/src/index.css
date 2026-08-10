@@ -2419,6 +2419,36 @@
   color: hsl(var(--foreground));
 }
 
+/* ── Compact settled-empty nudge (rendered below the station lanes) ── */
+.z1-placeholder--compact {
+  background: hsl(var(--card) / 0.5);
+  border-radius: 6px;
+  margin: 6px 10px;
+  padding: 12px 14px;
+}
+.z1-placeholder--compact .z1-placeholder__body {
+  gap: 10px;
+}
+.z1-placeholder__seedchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.z1-placeholder__seedchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+.z1-placeholder__seedchip:hover {
+  border-color: hsl(var(--destructive) / 0.6);
+}
+
 /* ── Seeded state (chips + skeleton) ── */
 .z1-placeholder--seeded {
   padding: 0;
