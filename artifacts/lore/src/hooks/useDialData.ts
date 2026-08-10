@@ -322,6 +322,9 @@ function normalizeLiveContext(value: string | null | undefined): string | null {
   return context && !MISSING_LIVE_ARTIST_VALUES.has(context.toLowerCase()) ? context : null;
 }
 
+/** Max taste seeds per user — must match MAX_SEEDS in api-server taste-seeds.ts. */
+export const MAX_TASTE_SEEDS = 50;
+
 export function liveIdentityKey(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFKD")
