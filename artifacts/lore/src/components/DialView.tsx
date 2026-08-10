@@ -3502,7 +3502,6 @@ export function DialView() {
               ＋ Artists button hidden — addArtistsOpen machinery kept. */}
           {zone1Settled && addArtistsOpen && (
             <div className="dial-tabs-add-row">
-              {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
               <input
                 autoFocus
                 type="text"

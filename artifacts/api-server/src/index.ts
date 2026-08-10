@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- pre-lint file: migrate logging to the structured logger on touch */
 import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
 import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones } from "./lore/seed.js";

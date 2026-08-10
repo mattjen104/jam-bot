@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- pre-lint file: migrate logging to the structured logger on touch */
 import SpotifyWebApi from "spotify-web-api-node";
 import { createSpotifyClient } from "./auth.js";
 import type {

@@ -37,6 +37,17 @@ function RunTrackList({
 }) {
   const { data, isLoading, isError } = useWpRun(slug, runId);
 
+  // Combine and sort chronologically so the list mirrors broadcast order.
+  // Computed before any early return so the lore-counts hook runs on every
+  // render (hooks must keep a stable order across loading/error states).
+  const all: WpRunSpin[] = [...(data?.fromLibrary ?? []), ...(data?.newToYou ?? [])].sort(
+    (a, b) => a.playedAt.localeCompare(b.playedAt),
+  );
+
+  // Batch lore counts for all resolved MBIDs in this run.
+  const resolvedMbids = all.map((s) => s.mbid).filter((m): m is string => m != null);
+  const { data: loreCounts } = useWpLoreCounts(resolvedMbids);
+
   if (isLoading) {
     return (
       <div
@@ -62,15 +73,6 @@ function RunTrackList({
       </p>
     );
   }
-
-  // Combine and sort chronologically so the list mirrors broadcast order.
-  const all: WpRunSpin[] = [...data.fromLibrary, ...data.newToYou].sort(
-    (a, b) => a.playedAt.localeCompare(b.playedAt),
-  );
-
-  // Batch lore counts for all resolved MBIDs in this run.
-  const resolvedMbids = all.map((s) => s.mbid).filter((m): m is string => m != null);
-  const { data: loreCounts } = useWpLoreCounts(resolvedMbids);
 
   if (all.length === 0) {
     return (

@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- pre-lint file: migrate logging to the structured logger on touch */
 import type { RequestHandler, ErrorRequestHandler } from "express";
 
 /** Wraps an async route handler; any thrown error is forwarded to next(). */

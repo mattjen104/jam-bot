@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- pre-lint file: migrate logging to the structured logger on touch */
 /**
  * Lightweight GCS helper for the art-proxy cache.
  * Stores image blobs keyed by a SHA-256 hash of the source URL.

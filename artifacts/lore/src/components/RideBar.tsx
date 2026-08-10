@@ -259,7 +259,6 @@ export function RideBar({
   spotify: SpotifyConnectApi;
 }) {
   const cur = ride.current;
-  if (!cur) return null;
 
   // Fallback toast: fire once per source downgrade (e.g. Spotify → YouTube).
   //
@@ -298,6 +297,25 @@ export function RideBar({
     }
   }, [ride.source]);
 
+  // Ranked service options for the tiered options panel. Hooks must run on
+  // every render (even when no track is riding), so these tolerate cur=null.
+  const trackHasYouTube =
+    cur?.links.some((l) => l.url.includes("youtube.com") || l.url.includes("youtu.be")) ?? false;
+  const trackHasAppleMusic =
+    cur?.links.some((l) => /apple_music|applemusic|apple music|appleMusic/i.test(l.name)) ?? false;
+  const rankedSvcs = useMemo(
+    () =>
+      rankServices({
+        appleMusicConfigured: ride.appleMusicConfigured,
+        appleMusicAuthorized: ride.appleMusicConnected,
+        trackHasYouTube,
+        trackHasAppleMusic,
+      }),
+    [ride.appleMusicConfigured, ride.appleMusicConnected, trackHasYouTube, trackHasAppleMusic],
+  );
+
+  if (!cur) return null;
+
   const isPlaying = ride.status === "playing";
   const isLoading = ride.status === "loading" || ride.seeking;
   // Any service driver (YouTube, Apple Music, or Spotify for devs) provides
@@ -314,25 +332,6 @@ export function RideBar({
     cur.links.find((l: RecordingLink) => l.kind === "exact") ??
     cur.links[0] ??
     null;
-
-  // Ranked service options for the tiered options panel.
-  const trackHasYouTube = cur.links.some((l) =>
-    l.url.includes("youtube.com") || l.url.includes("youtu.be"),
-  );
-  const trackHasAppleMusic = cur.links.some((l) =>
-    /apple_music|applemusic|apple music|appleMusic/i.test(l.name),
-  );
-  const rankedSvcs = useMemo(
-    () =>
-      rankServices({
-        appleMusicConfigured: ride.appleMusicConfigured,
-        appleMusicAuthorized: ride.appleMusicConnected,
-        trackHasYouTube,
-        trackHasAppleMusic,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ride.appleMusicConfigured, ride.appleMusicConnected, trackHasYouTube, trackHasAppleMusic],
-  );
 
   // Determine which mode / service is currently active for highlighting.
   const inServiceRide = ride.playbackMode === "resolve_to_service";
