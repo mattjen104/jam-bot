@@ -1,7 +1,12 @@
 /* ─── FirstRunSidebar — provenance-ordered station sentences ─────────────────
-   Sits inside .reading-context so --lore-font-editorial resolves to Newsreader.
-   Citation lines keep the site-wide Signifier face with uppercase tracking
-   (consistent with existing mono-label treatment throughout the app).
+   Sits inside .reading-context so --lore-font-editorial resolves to Signifier
+   (the only downloaded face; Newsreader is not loaded).
+   All text sizes come from the three tokens in tokens/typography.css:
+     --lore-size-signature  (23px) — not used here
+     --lore-size-interface  (16px) — sentence rows (the readable voice surface)
+     --lore-size-small      (12px) — all labels, citations, chips, metadata
+   Citation and label lines use --app-font-mono which now resolves to the
+   native system sans (same as all interface-layer elements).
    ──────────────────────────────────────────────────────────────────────────── */
 
 .frb {
@@ -28,20 +33,20 @@
 
 .frb__eyebrow-label {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: hsl(var(--foreground) / 0.85);
 }
 
 .frb__eyebrow-sep {
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--border) / 0.6);
 }
 
 .frb__eyebrow-hint {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: hsl(var(--muted-foreground) / 0.5);
@@ -65,11 +70,11 @@
   border-top: none;
 }
 
-/* ── Sentence line (editorial serif via .reading-context) ── */
+/* ── Sentence line — voice surface, Signifier via .reading-context ── */
 .frb__sentence {
   margin: 0;
-  font-family: var(--lore-font-editorial, var(--lore-font-body));
-  font-size: 17px;
+  font-family: var(--lore-font-editorial, var(--lore-font-signature));
+  font-size: var(--lore-size-interface);
   line-height: 1.5;
   color: hsl(var(--muted-foreground));
   font-weight: 300;
@@ -163,10 +168,10 @@
   cursor: default;
 }
 
-/* ── Citation line (Signifier in mono-label style) ── */
+/* ── Citation line — mono-label style, system sans ── */
 .frb__cite {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.14em;
   line-height: 1.3;
@@ -182,7 +187,7 @@
   border-top: 1px solid hsl(var(--border) / 0.3);
   background: transparent;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   text-align: left;
@@ -207,7 +212,7 @@
 .frb__empty-text {
   margin: 0;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--muted-foreground) / 0.4);

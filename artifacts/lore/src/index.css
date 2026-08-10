@@ -67,7 +67,7 @@
 }
 .player-bar-station {
   font-family: var(--app-font-display);
-  font-size: 15px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -87,11 +87,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: hsl(var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--lore-size-small);
 }
 .player-bar-status {
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -150,7 +150,7 @@
   border-color: hsl(var(--foreground));
 }
 .player-bar-btn--play:hover { opacity: 0.85; background: hsl(var(--foreground)); }
-.player-bar-btn--ghost { font-size: 15px; font-weight: 400; }
+.player-bar-btn--ghost { font-size: var(--lore-size-interface); font-weight: 400; }
 .player-bar-btn--scan-on {
   color: hsl(var(--accent));
   border-color: hsl(var(--accent) / 0.5);
@@ -192,7 +192,7 @@
   border: 1px solid hsl(var(--accent) / 0.35);
   border-radius: 3px;
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -213,7 +213,7 @@
 .player-ticker__empty {
   flex: 1;
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: hsl(var(--faint));
@@ -228,7 +228,7 @@
 }
 .player-ticker__meta-line {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -248,7 +248,7 @@
   border-radius: 4px;
   color: hsl(var(--faint));
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   width: 22px;
   height: 22px;
   display: flex;
@@ -289,7 +289,7 @@
   color: hsl(var(--faint));
   cursor: pointer;
   font-family: var(--app-font-mono);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   letter-spacing: .11em;
   text-transform: uppercase;
   border-radius: 4px;
@@ -382,10 +382,10 @@
   animation: record-peek-in .18s ease-out;
 }
 .record-peek__copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
-.record-peek__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-display); font-size: 15px; }
-.record-peek__copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-mono); font-size: 10px; color: hsl(var(--faint)); }
+.record-peek__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-display); font-size: var(--lore-size-interface); }
+.record-peek__copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-mono); font-size: var(--lore-size-small); color: hsl(var(--faint)); }
 .record-peek__action, .record-peek__close { border: 1px solid hsl(var(--border)); background: transparent; cursor: pointer; }
-.record-peek__action { flex-shrink: 0; padding: 7px 8px; color: hsl(var(--foreground)); font-family: var(--app-font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.record-peek__action { flex-shrink: 0; padding: 7px 8px; color: hsl(var(--foreground)); font-family: var(--app-font-mono); font-size: var(--lore-size-small); text-transform: uppercase; letter-spacing: .05em; }
 .record-peek__action:disabled { opacity: .55; cursor: wait; }
 .record-peek__close { width: 28px; height: 28px; display: grid; place-items: center; color: hsl(var(--faint)); }
 .record-peek__close svg { width: 14px; height: 14px; }
@@ -512,7 +512,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--app-font-display);
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--foreground));
 }
 .liner-sheet__header-artist {
@@ -520,7 +520,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   letter-spacing: .08em;
   color: hsl(var(--dim));
 }
@@ -555,7 +555,7 @@
 .liner-sheet__section {}
 .liner-sheet__section-label {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   letter-spacing: .15em;
   text-transform: uppercase;
   color: hsl(var(--faint));
@@ -573,13 +573,13 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: 4px;
-  font-size: 15px;
+  font-size: var(--lore-size-interface);
   line-height: 1.45;
 }
 .liner-sheet__row-label {
   flex-shrink: 0;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   letter-spacing: .05em;
   color: hsl(var(--dim));
   white-space: nowrap;
@@ -600,7 +600,7 @@
 .liner-sheet__source-chip {
   display: inline-block;
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   letter-spacing: .1em;
   text-transform: uppercase;
   color: hsl(var(--faint));
@@ -641,7 +641,7 @@
 /* Empty state */
 .liner-sheet__empty {
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   letter-spacing: .08em;
   color: hsl(var(--faint));
   text-align: center;
@@ -701,7 +701,7 @@
 }
 .liner-sheet__footer-label {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--section-accent, hsl(var(--dim)));
@@ -932,9 +932,9 @@
   --app-font-sans:    var(--lore-font-body);
   --app-font-display: var(--lore-font-display);
   --app-font-mono:    var(--lore-font-mono);
-  /* Fraunces → display role (Archivo Narrow). Headings and titles use --lore-font-display. */
+  /* Serif alias → display role (system sans). Headings and titles use --lore-font-display. */
   --app-font-serif:   var(--lore-font-display);
-  /* Newsreader → body role outside .reading-context. Scope with .reading-context for editorial. */
+  /* Reading alias → body role outside .reading-context. Scope with .reading-context for editorial (Signifier). */
   --app-font-reading: var(--lore-font-body);
   /* Label — same as display for small caps/UI chips */
   --app-font-label:   var(--lore-font-display);
@@ -1157,7 +1157,7 @@
   border: none;
   outline: none;
   font-family: var(--app-font-display);
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--foreground));
   min-width: 0;
 }
@@ -1170,7 +1170,7 @@
 }
 .srch-close {
   font-family: var(--app-font-display);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1195,7 +1195,7 @@
 .srch-filters::-webkit-scrollbar { display: none; }
 .srch-fchip {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1218,7 +1218,7 @@
 .srch-empty {
   padding: 32px 16px;
   font-family: var(--app-font-display);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--faint));
   text-align: center;
 }
@@ -1226,7 +1226,7 @@
 .srch-group { padding-bottom: 4px; }
 .srch-grp-lbl {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1248,11 +1248,11 @@
 }
 .srch-row:hover, .srch-row:focus-visible { background: hsl(var(--secondary)); }
 .srch-row--muted { opacity: 0.45; cursor: default; }
-.srch-row__icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+.srch-row__icon { font-size: var(--lore-size-interface); flex-shrink: 0; width: 20px; text-align: center; }
 .srch-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .srch-row__label {
   font-family: var(--app-font-serif);
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -1261,7 +1261,7 @@
 }
 .srch-row__sub {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--dim));
   white-space: nowrap;
   overflow: hidden;
@@ -1269,7 +1269,7 @@
 }
 .srch-row__badge {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   padding: 2px 6px;
   border-radius: 2px;
   border: 1px solid hsl(var(--border));
@@ -1288,7 +1288,7 @@
   padding: 3px 8px 3px 7px;
   border-radius: 999px;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   line-height: 1;
   border: none;
   cursor: pointer;
@@ -1342,7 +1342,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
   padding: 2px;
   margin-left: auto;
   line-height: 1;
@@ -1423,7 +1423,7 @@
 .corner-nav__link {
   pointer-events: auto;
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   letter-spacing: .08em;
   color: hsl(var(--faint));
   text-decoration: underline;
@@ -1445,7 +1445,7 @@
 .bottom-nav { display: none; }
 .bottom-nav__link {
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   letter-spacing: .08em;
   color: hsl(var(--faint));
   text-decoration: underline;
@@ -1607,7 +1607,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.98rem;
+  font-size: var(--lore-size-interface);
   line-height: 1;
 }
 .dial-art-fullscreen__close:focus-visible {
@@ -1649,7 +1649,7 @@
   border: none;
   cursor: pointer;
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1671,7 +1671,7 @@
   border: 1px solid transparent;
   border-radius: 3px;
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--foreground));
   padding: 5px 8px;
   outline: none;
@@ -1717,7 +1717,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: 3px;
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   color: hsl(var(--dim));
   padding: 3px 8px;
@@ -1751,7 +1751,7 @@
   border: none;
   outline: none;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1770,7 +1770,7 @@
   border: none;
   cursor: pointer;
   color: hsl(var(--accent) / 0.45);
-  font-size: 18px;
+  font-size: var(--lore-size-signature);
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
@@ -1789,7 +1789,7 @@
   border: none;
   cursor: pointer;
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   font-style: normal;
   color: hsl(var(--faint));
@@ -1801,7 +1801,7 @@
 .topbar-matt-btn:hover { color: hsl(var(--foreground)); }
 .dial-topbar__wordmark {
   font-family: var(--app-font-serif);
-  font-size: 22px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   letter-spacing: -0.01em;
   color: hsl(var(--foreground));
@@ -1810,7 +1810,7 @@
 }
 .dial-topbar__title {
   font-family: var(--app-font-display);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1825,7 +1825,7 @@
 }
 .dial-topbar__sort-chip {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--library));
   border: 1px solid rgba(131, 131, 131,.3);
   border-radius: 2px;
@@ -1833,7 +1833,7 @@
 }
 .dial-topbar__crumb {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1848,12 +1848,12 @@
 .dial-topbar__sep {
   color: hsl(var(--faint));
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   margin: 0 2px;
 }
 .dial-topbar__back {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1880,7 +1880,7 @@
 }
 .dial-scanbtn {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1904,7 +1904,7 @@
 }
 .dial-scantrack__name {
   font-family: var(--app-font-reading);
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
@@ -1914,7 +1914,7 @@
 .dial-scantrack__by {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -1924,7 +1924,7 @@
 .dial-scantrack__idle {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground));
 }
 .dial-scantrack__idle b {
@@ -1934,7 +1934,7 @@
 }
 .dial-landbtn {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1969,7 +1969,7 @@
 .dial-subnav::-webkit-scrollbar { display: none; }
 .dial-subnav__chip {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -2002,7 +2002,7 @@
 .dial-loading {
   padding: 24px 15px;
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2017,7 +2017,7 @@
   gap: 12px;
   padding: 24px 15px;
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2032,7 +2032,7 @@
   border-radius: 4px;
   padding: 4px 10px;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2219,7 +2219,7 @@
   cursor: pointer;
   border-radius: 5px;
   transition: background 0.1s;
-  font-size: 15px;
+  font-size: var(--lore-size-interface);
   line-height: 1.35;
   color: hsl(var(--foreground) / 0.85);
 }
@@ -2238,7 +2238,7 @@
 }
 .dial-past-crossing--active::before {
   content: "▶";
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--library));
   flex-shrink: 0;
   margin-right: 2px;
@@ -2265,7 +2265,7 @@
 }
 .dial-past-crossing__dj {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   font-family: var(--app-font-mono);
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
@@ -2291,7 +2291,7 @@
   border: none;
   border-top: 1px solid hsl(var(--border) / 0.4);
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2310,7 +2310,7 @@
   gap: 8px;
   padding: 14px 15px;
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2384,7 +2384,7 @@
   gap: 8px;
   padding: 14px 15px 10px;
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2410,7 +2410,7 @@
 }
 .z1-placeholder__pitch {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--lore-size-interface);
   line-height: 1.55;
   color: hsl(var(--muted-foreground));
 }
@@ -2475,7 +2475,7 @@
 }
 .z1-placeholder__manual-label {
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: hsl(var(--faint));
@@ -2505,14 +2505,14 @@
 .live-artist-picker h2 {
   margin: 0;
   font-family: var(--app-font-display);
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
   line-height: 1.15;
   font-weight: 400;
   color: hsl(var(--foreground));
 }
 .live-artist-picker__heading p {
   margin: 3px 0 0;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   line-height: 1.4;
   color: hsl(var(--muted-foreground));
 }
@@ -2569,7 +2569,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--app-font-display);
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
 }
@@ -2579,14 +2579,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.75);
 }
 .live-artist-picker__action {
   grid-area: action;
   margin-top: 3px;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--live));
@@ -2597,7 +2597,7 @@
 .live-artist-picker__limit {
   margin-top: 1px;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   letter-spacing: 0.04em;
   color: hsl(var(--library));
 }
@@ -2605,7 +2605,7 @@
   padding: 9px 10px;
   border: 1px dashed hsl(var(--border));
   border-radius: 5px;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   line-height: 1.4;
   color: hsl(var(--muted-foreground));
 }
@@ -2638,7 +2638,7 @@
   border: 1px solid hsl(var(--border) / 0.6);
   border-radius: 6px;
   color: hsl(var(--foreground));
-  font-size: 15px;
+  font-size: var(--lore-size-interface);
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s;
@@ -2654,7 +2654,7 @@
   border: 1px solid hsl(var(--library) / 0.35);
   border-radius: 6px;
   color: hsl(var(--library));
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   cursor: pointer;
   white-space: nowrap;
@@ -2675,7 +2675,7 @@
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 20px;
   color: hsl(var(--muted-foreground));
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
@@ -2695,12 +2695,12 @@
   border: 1px solid hsl(var(--library) / 0.3);
   border-radius: 20px;
   color: hsl(var(--library));
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   white-space: nowrap;
 }
 .seed-chip--sm {
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   padding: 3px 7px 3px 9px;
 }
 .seed-chip__remove {
@@ -2713,7 +2713,7 @@
   border: none;
   border-radius: 50%;
   color: hsl(var(--library) / 0.7);
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   line-height: 1;
   cursor: pointer;
   padding: 0;
@@ -2736,7 +2736,7 @@
 }
 .seed-bar__label {
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--library) / 0.6);
@@ -2754,7 +2754,7 @@
 .seed-bar .seed-input-row { gap: 4px; }
 .seed-bar .seed-input {
   height: 26px;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   padding: 0 8px;
   min-width: 80px;
   max-width: 120px;
@@ -2762,10 +2762,10 @@
 .seed-bar .seed-add-btn {
   height: 26px;
   padding: 0 8px;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
 }
 .seed-bar__upgrade {
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.7);
   text-decoration: none;
   white-space: nowrap;
@@ -2786,7 +2786,7 @@
   border: none;
   cursor: pointer;
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.6);
   padding: 3px 15px 4px;
   text-align: right;
@@ -2804,7 +2804,7 @@
 }
 .dial-tier-hd__label {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -2837,7 +2837,7 @@
 }
 .dial-lane__name {
   font-family: var(--app-font-display);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -2847,7 +2847,7 @@
 .dial-lane__name--tuned { color: hsl(var(--live)); }
 .dial-lane__cross {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   letter-spacing: 0.02em;
   color: hsl(var(--dim));
@@ -2872,7 +2872,7 @@
   border-color: hsl(var(--border));
 }
 .dial-lane__play {
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   border: 1px solid hsl(var(--card-border));
   background: none;
@@ -2892,7 +2892,7 @@
 
 .dial-lane__pin {
   margin-left: 4px;
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   border: none;
   background: none;
@@ -2930,7 +2930,7 @@
   top: 6px;
   left: 4px;
   font-family: var(--app-font-mono);
-  font-size: 8px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--live));
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -2982,7 +2982,7 @@
 /* block internals */
 .dial-blk__kind {
   font-family: var(--app-font-display);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -2996,7 +2996,7 @@
 .dial-blk__pickerbadge { color: hsl(var(--selector-dj)); }
 .dial-blk__show {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -3009,7 +3009,7 @@
 .dial-blk__dj {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--dim));
   line-height: 1.2;
   white-space: nowrap;
@@ -3018,7 +3018,7 @@
 }
 .dial-blk__now {
   font-family: var(--app-font-reading);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   line-height: 1.25;
   color: hsl(var(--foreground));
@@ -3032,7 +3032,7 @@
 .dial-blk__now-ar {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--live));
   line-height: 1.2;
   white-space: nowrap;
@@ -3041,7 +3041,7 @@
 }
 .dial-blk__artists {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--library));
   margin-top: 4px;
   white-space: nowrap;
@@ -3059,13 +3059,13 @@
 }
 .dial-blk__time {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   white-space: nowrap;
 }
 .dial-blk__ride {
   font-family: var(--app-font-display);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3100,13 +3100,13 @@
 }
 .dial-fatblk__show {
   font-family: var(--app-font-reading);
-  font-size: 20px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   line-height: 1.15;
 }
 .dial-fatblk__when {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   margin-left: auto;
   flex-shrink: 0;
@@ -3114,7 +3114,7 @@
 .dial-fatblk__dj {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground));
   margin-top: 3px;
 }
@@ -3126,7 +3126,7 @@
 .dial-fatblk__pickerbadge {
   font-family: var(--app-font-display);
   font-style: normal;
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -3149,14 +3149,14 @@
 .dial-fbar__hit { background: hsl(var(--library)) !important; opacity: 1 !important; }
 .dial-fatblk__cross {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--library));
   margin-top: 7px;
 }
 .dial-fatblk__cross--zero { color: hsl(var(--faint)); }
 .dial-fatblk__peek {
   font-family: var(--app-font-reading);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--dim));
   margin-top: 6px;
   line-height: 1.45;
@@ -3170,14 +3170,14 @@
 }
 .dial-djhd__name {
   font-family: var(--app-font-reading);
-  font-size: 28px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   line-height: 1.05;
 }
 .dial-djhd__sub {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 15px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground));
   margin-top: 4px;
 }
@@ -3189,7 +3189,7 @@
 }
 .dial-djhd__stat {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -3197,7 +3197,7 @@
 .dial-djhd__stat b {
   display: block;
   font-family: var(--app-font-reading);
-  font-size: 23px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   color: hsl(var(--foreground));
   text-transform: none;
@@ -3207,7 +3207,7 @@
 .dial-djhd__stat--warm b { color: hsl(var(--library)); }
 .dial-pickerbadge {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -3221,7 +3221,7 @@
 }
 .dial-dj-chip {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3240,7 +3240,7 @@
   gap: 9px;
   padding: 13px 15px 7px;
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.13em;
@@ -3253,7 +3253,7 @@
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--faint));
 }
 
@@ -3279,7 +3279,7 @@
 .dial-trow--hit::before { background: hsl(var(--library)); }
 .dial-trow__time {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   width: 38px;
   flex-shrink: 0;
@@ -3288,18 +3288,18 @@
 .dial-trow__content { flex: 1; min-width: 0; }
 .dial-trow__title {
   font-family: var(--app-font-reading);
-  font-size: 18px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   line-height: 1.2;
 }
 .dial-trow__artist {
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--dim));
   margin-top: 2px;
 }
 .dial-trow__badge {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.13em;
@@ -3337,7 +3337,7 @@
 .dial-stn-info { flex: 1; min-width: 0; }
 .dial-stn-name {
   font-family: var(--app-font-display);
-  font-size: 15px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3346,7 +3346,7 @@
 .dial-stn-now {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground));
   margin-top: 2px;
   white-space: nowrap;
@@ -3358,7 +3358,7 @@
 /* Track sub-line — bare title fact, no artist appended */
 .dial-stn-track {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   margin-top: 2px;
   white-space: nowrap;
@@ -3370,12 +3370,12 @@
 
 .dial-stn-cross {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   text-align: right;
   flex-shrink: 0;
 }
 .dial-stn-cross__num { color: hsl(var(--library)); display: block; }
-.dial-stn-cross__lbl { color: hsl(var(--faint)); font-size: 9px; }
+.dial-stn-cross__lbl { color: hsl(var(--faint)); font-size: var(--lore-size-small); }
 .dial-stn-cross--zero .dial-stn-cross__num { color: hsl(var(--faint)); }
 
 /* ── Schedule view ── */
@@ -3394,7 +3394,7 @@
 .dial-sch-row--future { opacity: 0.55; border-style: dashed; }
 .dial-sch-time {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   width: 40px;
   flex-shrink: 0;
@@ -3404,21 +3404,21 @@
 .dial-sch-info { flex: 1; min-width: 0; }
 .dial-sch-show {
   font-family: var(--app-font-reading);
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   line-height: 1.2;
 }
 .dial-sch-dj {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground));
   margin-top: 2px;
 }
 .dial-sch-dj b { font-style: normal; font-weight: 400; color: hsl(var(--dim)); }
 .dial-sch-stn {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -3428,7 +3428,7 @@
 .dial-sch-badge {
   flex-shrink: 0;
   font-family: var(--app-font-display);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -3469,7 +3469,7 @@
 }
 .ctx-grp-lbl {
   font-family: var(--app-font-display);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -3485,7 +3485,7 @@
 }
 .ctx-chip {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0.01em;
@@ -3528,7 +3528,7 @@
 .sel-row--warm { background: hsl(var(--selector-show) / 0.05); }
 
 .sel-row__pip {
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--selector-dj));
   flex-shrink: 0;
   margin-top: 5px;
@@ -3542,7 +3542,7 @@
 .sel-row__body { flex: 1; min-width: 0; }
 .sel-row__kind {
   font-family: var(--app-font-display);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -3553,7 +3553,7 @@
 .sel-row__kind--live { color: hsl(var(--live)); }
 .sel-row__name {
   font-family: var(--app-font-serif);
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -3563,7 +3563,7 @@
 }
 .sel-row__meta {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--dim));
   margin-top: 3px;
   white-space: nowrap;
@@ -3572,7 +3572,7 @@
 }
 .sel-row__artists {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--library));
   margin-top: 2px;
   white-space: nowrap;
@@ -3591,16 +3591,16 @@
 .sel-row__match { text-align: right; min-width: 30px; }
 .sel-row__match-num {
   font-family: var(--app-font-serif);
-  font-size: 21px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   color: hsl(var(--selector-dj));
   line-height: 1;
   display: block;
 }
-.sel-row__match-num--zero { color: hsl(var(--faint)); font-size: 15px; }
+.sel-row__match-num--zero { color: hsl(var(--faint)); font-size: var(--lore-size-interface); }
 .sel-row__match-lbl {
   font-family: var(--app-font-display);
-  font-size: 8px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--faint));
@@ -3610,7 +3610,7 @@
 
 .sel-row__follow {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -3633,7 +3633,7 @@
 }
 
 .sel-row__play {
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   border: 1px solid hsl(var(--card-border));
   background: none;
@@ -3671,7 +3671,7 @@
 .lib-ol-row__body { flex: 1; min-width: 0; }
 .lib-ol-row__name {
   font-family: var(--app-font-serif);
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -3680,7 +3680,7 @@
 }
 .lib-ol-row__sub {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--dim));
   margin-top: 2px;
   white-space: nowrap;
@@ -3689,7 +3689,7 @@
 }
 .lib-ol-row__count {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -3709,7 +3709,7 @@
 }
 .dial-ctabar__label {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -3723,7 +3723,7 @@
 
 .dial-ctabtn {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -3753,7 +3753,7 @@
 /* Ghost CTA — compact secondary link, always visible below Zone 1 rows */
 .dial-ctabtn--ghost {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   letter-spacing: 0.05em;
   background: transparent;
@@ -3777,7 +3777,7 @@
 }
 .lib-hero__kicker {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -3786,7 +3786,7 @@
 }
 .lib-hero__headline {
   font-family: var(--app-font-reading);
-  font-size: 21px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
@@ -3799,7 +3799,7 @@
 }
 .lib-hero__stat {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3814,7 +3814,7 @@
   cursor: default;
 }
 .lib-hero__stat b {
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   font-family: var(--app-font-mono);
   font-weight: 400;
   color: hsl(var(--foreground));
@@ -3863,7 +3863,7 @@
 .lib-live__text {
   flex: 1;
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -3872,7 +3872,7 @@
 .lib-live__text b { color: hsl(var(--foreground)); font-style: normal; }
 .lib-live__go {
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--live) / 0.65);
   flex-shrink: 0;
 }
@@ -3923,7 +3923,7 @@
 .lrow__tr {
   display: block;
   font-family: var(--app-font-reading);
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
@@ -3935,7 +3935,7 @@
 .lrow__tr:hover { color: hsl(var(--library)); }
 .lrow__ar {
   font-family: var(--app-font-display);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   margin: 1px 0 0;
   white-space: nowrap;
@@ -3945,7 +3945,7 @@
 .lrow__by {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   margin: 3px 0 0;
   line-height: 1.35;
@@ -3965,7 +3965,7 @@
 .lrow__by-stn {
   font-family: var(--app-font-display);
   font-style: normal;
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3978,14 +3978,14 @@
 .lrow__by--import {
   font-family: var(--app-font-mono);
   font-style: normal;
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--faint));
 }
 .lrow__badge {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4007,7 +4007,7 @@
   border-radius: 3px;
   background: none;
   color: hsl(var(--muted-foreground));
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4026,7 +4026,7 @@
 }
 .sel-hero__kicker {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -4035,7 +4035,7 @@
 }
 .sel-hero__headline {
   font-family: var(--app-font-reading);
-  font-size: 21px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
@@ -4048,7 +4048,7 @@
 }
 .sel-hero__stat {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4063,7 +4063,7 @@
   cursor: default;
 }
 .sel-hero__stat b {
-  font-size: 16px;
+  font-size: var(--lore-size-interface);
   font-family: var(--app-font-mono);
   font-weight: 400;
   color: hsl(var(--foreground));
@@ -4095,7 +4095,7 @@
 .sel-filters::-webkit-scrollbar { display: none; }
 .sel-fchip {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4119,7 +4119,7 @@
 }
 .sel-fchip__ct {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
 }
 .sel-fchip--on .sel-fchip__ct { color: hsl(var(--library) / 0.7); }
@@ -4144,7 +4144,7 @@
 .sel-card__body { flex: 1; min-width: 0; }
 .sel-card__nm {
   font-family: var(--app-font-reading);
-  font-size: 18px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
@@ -4155,7 +4155,7 @@
 .sel-card__ctx {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground));
   margin: 2px 0 0;
   white-space: nowrap;
@@ -4171,7 +4171,7 @@
 .sel-card__ctx a:hover, .sel-card__ctx b:hover { color: hsl(var(--library)); }
 .sel-card__meta {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   margin: 4px 0 0;
   white-space: nowrap;
@@ -4193,7 +4193,7 @@
 }
 .sel-card__onair {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -4208,15 +4208,15 @@
 .sel-card__ov-num {
   display: block;
   font-family: var(--app-font-mono);
-  font-size: 18px;
+  font-size: var(--lore-size-signature);
   line-height: 1;
   color: hsl(var(--library));
 }
-.sel-card__ov-num--zero { color: hsl(var(--faint)); font-size: 15px; }
+.sel-card__ov-num--zero { color: hsl(var(--faint)); font-size: var(--lore-size-interface); }
 .sel-card__ov-lbl {
   display: block;
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -4224,7 +4224,7 @@
 }
 .sel-card__follow {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -4271,7 +4271,7 @@
 .icard__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .icard__tr {
   font-family: var(--app-font-reading);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -4281,7 +4281,7 @@
 }
 .icard__ar {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -4290,7 +4290,7 @@
 .icard__by {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -4326,7 +4326,7 @@
   background: hsl(var(--card));
   color: hsl(var(--foreground));
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4392,7 +4392,7 @@
 
 .lrow__shelf-album-title {
   font-family: var(--app-font-display);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   overflow: hidden;
@@ -4402,7 +4402,7 @@
 
 .lrow__shelf-album-sub {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   margin-top: 2px;
   text-transform: uppercase;
@@ -4411,7 +4411,7 @@
 
 .lrow__shelf-play-all {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4448,7 +4448,7 @@
 
 .lrow__shelf-track-pos {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   width: 18px;
   text-align: right;
@@ -4459,7 +4459,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--app-font-reading);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--foreground));
   background: none;
   border: none;
@@ -4475,7 +4475,7 @@
 
 .lrow__shelf-track-dur {
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   flex-shrink: 0;
 }
@@ -4488,7 +4488,7 @@
   border-top: 1px solid hsl(var(--border) / 0.25);
   background: none;
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--dim));
   cursor: pointer;
   text-align: left;
@@ -4504,14 +4504,14 @@
   gap: 6px;
   padding: 12px;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
 }
 
 .lrow__shelf-mb-link {
   color: hsl(var(--dim));
   text-decoration: none;
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -4561,7 +4561,7 @@
 
 .lrow__portal-label {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--faint));
@@ -4619,7 +4619,7 @@
 
 .lrow__portal-tile-name {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--dim));
   margin-top: 3px;
   overflow: hidden;
@@ -4768,7 +4768,7 @@
   background: hsl(var(--secondary) / 0.4);
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   cursor: pointer;
   color: hsl(var(--foreground) / 0.7);
 }
@@ -4777,7 +4777,7 @@
 .dial-sb-now { flex: 1; min-width: 0; text-align: center; }
 .dial-sb-t {
   font-family: var(--app-font-display);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -4786,7 +4786,7 @@
 }
 .dial-sb-u {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.7);
   white-space: nowrap;
   overflow: hidden;
@@ -4820,7 +4820,7 @@
   flex: 1;
   padding: 5px 8px;
   font-family: var(--app-font-label);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -4837,7 +4837,7 @@
   align-items: center;
   gap: 3px;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
 }
 .dial-sb-dwell button {
@@ -4849,7 +4849,7 @@
   background: hsl(var(--secondary) / 0.4);
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 3px;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   cursor: pointer;
   line-height: 1;
 }
@@ -4864,7 +4864,7 @@
   background: transparent;
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   cursor: pointer;
   color: hsl(var(--muted-foreground));
 }
@@ -4931,7 +4931,7 @@
 
 .fdrow__run-main {
   font-family: var(--app-font-display);
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
   font-weight: 400;
   line-height: 1.25;
   color: hsl(var(--foreground) / 0.9);
@@ -4950,7 +4950,7 @@
 }
 
 .fdrow__run-sub {
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   line-height: 1.4;
   display: flex;
@@ -4971,7 +4971,7 @@
 .fdrow__run-day {
   margin-left: auto;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   letter-spacing: 0.04em;
   color: hsl(var(--muted-foreground) / 0.55);
 }
@@ -4986,7 +4986,7 @@
   border-bottom: 1px solid hsl(var(--border) / 0.45);
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
 }
 .dial-set-slice__label {
   display: inline-flex;
@@ -5039,7 +5039,7 @@
 /* Tier 1: reason sentence — leads at full display weight */
 .fdrow__t1 {
   font-family: var(--app-font-display);
-  font-size: 20px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   line-height: 1.3;
   margin-bottom: 5px;
@@ -5049,7 +5049,7 @@
 .fdrow__live-sentence { color: hsl(var(--foreground)); }
 /* Blended-mode secondary: live DJ/track attribution below the community aggregate count */
 .fdrow__live-secondary {
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground) / 0.8);
   margin-top: 2px;
   line-height: 1.4;
@@ -5141,7 +5141,7 @@
   border: 1px solid hsl(var(--accent) / 0.35);
   color: hsl(var(--foreground) / 0.9);
   font-family: var(--app-font-display);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   letter-spacing: 0.04em;
   padding: 4px 8px;
   border-radius: 6px;
@@ -5204,7 +5204,7 @@
   border: none;
   background: none;
   font-family: var(--app-font-display);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   line-height: 1.4;
   cursor: default;
@@ -5247,7 +5247,7 @@
 /* Quiet context label (e.g. "Continuous") — station name removed from inline text */
 .fdrow__t3 {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--library) / 0.75);
   margin-bottom: 5px;
   pointer-events: none;
@@ -5261,7 +5261,7 @@
   margin-left: 8px;
   margin-top: 2px;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   letter-spacing: 0.04em;
   color: hsl(var(--selector-station));
   background: hsl(var(--selector-station) / 0.12);
@@ -5292,13 +5292,13 @@
 .fdrow__first-spin { color: hsl(var(--library) / 0.8); font-style: normal; }
 
 @media (max-width: 420px) {
-  .fdrow__t1 { font-size: 17px; }
+  .fdrow__t1 { font-size: var(--lore-size-interface); }
 }
 
 /* Zone 3 lifetime overlap caption — "N artists you know play here" */
 .fdrow__ov-caption {
   font-family: var(--app-font-display);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.75);
   margin-bottom: 4px;
 }
@@ -5307,7 +5307,7 @@
 /* Zone 3 now-playing line — "▶ Artist — Track" on reason-less rows */
 .fdrow__np-line {
   font-family: var(--app-font-display);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.75);
   margin-bottom: 4px;
   overflow: hidden;
@@ -5323,17 +5323,17 @@
 .seed-suggest__row-head { display: flex; align-items: baseline; gap: 8px; }
 .seed-suggest__row-label {
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: hsl(var(--muted-foreground) / 0.9);
 }
-.seed-suggest__row-hint { font-size: 12px; color: hsl(var(--muted-foreground) / 0.55); }
+.seed-suggest__row-hint { font-size: var(--lore-size-small); color: hsl(var(--muted-foreground) / 0.55); }
 .seed-suggest__row-action {
   background: none;
   border: none;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--primary) / 0.85);
   cursor: pointer;
   text-decoration: underline dotted;
@@ -5346,7 +5346,7 @@
   color: hsl(var(--foreground) / 0.85);
   border-radius: 999px;
   padding: 4px 12px;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   cursor: pointer;
   max-width: 100%;
   overflow: hidden;
@@ -5368,14 +5368,14 @@
   border: none;
   padding: 0;
   align-self: flex-start;
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.8);
   text-decoration: underline dotted;
   cursor: pointer;
 }
 .seed-suggest__ocr-btn:disabled { cursor: progress; }
-.seed-suggest__ocr-error { font-size: 13px; color: hsl(var(--destructive) / 0.9); }
-.seed-suggest__loading, .seed-suggest__limit { font-size: 13px; color: hsl(var(--muted-foreground) / 0.7); }
+.seed-suggest__ocr-error { font-size: var(--lore-size-small); color: hsl(var(--destructive) / 0.9); }
+.seed-suggest__loading, .seed-suggest__limit { font-size: var(--lore-size-small); color: hsl(var(--muted-foreground) / 0.7); }
 
 
 
@@ -5394,7 +5394,7 @@
 
 .fd-liner-card__track {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.85);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5413,7 +5413,7 @@
 }
 .fd-liner-card__credit {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.7);
   line-height: 1.7;
   white-space: nowrap;
@@ -5430,7 +5430,7 @@
 .fd-liner-card__claim {
   font-family: var(--app-font-reading);
   font-style: normal;
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground) / 0.7);
   margin-top: 2px;
   line-height: 1.4;
@@ -5457,7 +5457,7 @@
 .artist-add-strip .topbar-paste-box {
   width: 100%;
   height: 26px;
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   padding: 3px 8px;
 }
 .artist-add-strip .topbar-artist-input-wrap {
@@ -5476,7 +5476,7 @@
   border-radius: 999px;
   padding: 5px 14px;
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   cursor: pointer;
   white-space: nowrap;
@@ -5536,7 +5536,7 @@
 }
 .social-mode-bar--topbar .dial-mode__button {
   padding: 5px 10px;
-  font-size: 10px;
+  font-size: var(--lore-size-small);
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -5577,7 +5577,7 @@
 .dial-tab--add__short { display: none; }
 @media (max-width: 640px) {
   .dial-tab--add__full { display: none; }
-  .dial-tab--add__short { display: inline; font-size: 14px; line-height: 1; }
+  .dial-tab--add__short { display: inline; font-size: var(--lore-size-interface); line-height: 1; }
 }
 
 /* Inline add-artists input row under the tab strip */
@@ -5617,7 +5617,7 @@
 .fdzone-lbl__pip--live    { background: hsl(var(--live)); animation: lore-live-pip 1.4s ease-in-out infinite; }
 .fdzone-lbl__text {
   font-family: var(--app-font-label);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.13em;
@@ -5629,7 +5629,7 @@
   font-family: var(--app-font-reading);
   font-style: normal;
   font-weight: 400;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   text-transform: none;
   letter-spacing: 0;
   color: hsl(var(--muted-foreground) / 0.45);
@@ -5650,7 +5650,7 @@
   background: none;
   border: none;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: var(--lore-size-small);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -5686,7 +5686,7 @@
 
 .ghost-row__name {
   font-family: var(--app-font-display);
-  font-size: 18px;
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   line-height: 1.15;
   color: hsl(var(--foreground) / 0.85);
@@ -5699,7 +5699,7 @@
 .ghost-row__reason {
   font-family: var(--app-font-display);
   font-style: normal;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   line-height: 1.4;
   color: hsl(var(--muted-foreground) / 0.8);
 }
@@ -5713,7 +5713,7 @@
 .sel-card__overlap-sentence {
   font-family: var(--app-font-display);
   font-style: normal;
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   color: hsl(var(--muted-foreground));
   margin-top: 3px;
   line-height: 1.4;
@@ -5746,7 +5746,7 @@
   border: 1px solid hsl(var(--border));
   background: hsl(var(--muted) / 0.25);
   font-family: var(--app-font-mono);
-  font-size: 13px;
+  font-size: var(--lore-size-small);
   color: hsl(var(--foreground));
   cursor: pointer;
   transition: border-color .12s, background .12s, color .12s;
@@ -5821,27 +5821,44 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   BRUTALIST TYPOGRAPHY — one face, one size.
-   Everything on the site is Signifier at a single uniform size (14.5px —
-   one step above the old logo size of ~12.5px). The moon + Lore wordmark
-   is the lone exception: two steps larger than it used to be (base 22px →
-   letters ~17px, moon glyph ~16px, both em-scaled from the wordmark base).
-   Appended last so it wins the cascade.
+   TWO-LAYER TYPOGRAPHY — voice + interface.
+   The interface layer is the native system sans (via --lore-font-body) at
+   the fixed three-step size scale defined in tokens/typography.css. The
+   voice layer — Signifier — is pinned explicitly below to the wordmark,
+   the dial's signature sentence rows, and editorial reading surfaces, so
+   it never depends on the global cascade.
    ═══════════════════════════════════════════════════════════════════════════ */
-body,
-body * {
-  font-family: 'Signifier', Georgia, serif !important;
-  font-size: 23px !important;
+body {
+  font-family: var(--lore-font-body);
+  font-size: var(--lore-size-interface);
 }
-/* Logo sits at the uniform body size like everything else. */
+/* Voice surfaces — pinned to Signifier. */
 .dial-topbar__wordmark,
 .dial-topbar__wordmark * {
-  font-size: 23px !important;
+  font-family: var(--lore-font-signature);
+  font-size: var(--lore-size-signature);
 }
-/* Section nav exception: mono small-caps must fit the section labels across
-   a phone, so it sits below the uniform body size. */
+/* Dial sentence-grammar rows keep the Signifier voice; the front-door
+   density block later scales .dial-root--front .fdrow__t1 down to the
+   interface step without changing the face. */
+.fdrow__t1,
+.fdrow__t1 *,
+.fdrow__pop-sentence,
+.sel-card__overlap-sentence,
+.crail__sentence,
+.crail__sentence * {
+  font-family: var(--lore-font-signature);
+}
+.crail__sentence {
+  font-size: var(--lore-size-signature);
+}
+/* Editorial reading surfaces stay serif (Signifier via --lore-font-editorial). */
+.reading-context {
+  font-family: var(--lore-font-editorial, var(--lore-font-signature));
+}
+/* Section nav: small-caps labels must fit across a phone. */
 .slim-nav__btn {
-  font-size: 17px !important;
+  font-size: var(--lore-size-interface);
 }
 /* Wordmark (all pages) + its dotted underline match the same gray. */
 .dial-topbar__wordmark {
@@ -5918,7 +5935,7 @@ body * {
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   font-family: var(--app-font-mono);
-  font-size: 11px !important;
+  font-size: var(--lore-size-small);
   letter-spacing: .05em;
   padding: 2px 4px;
   text-transform: uppercase;
@@ -5934,7 +5951,7 @@ body * {
   flex: 1;
   text-align: center;
   color: hsl(var(--foreground) / 0.85);
-  font-size: 15px !important;
+  font-size: var(--lore-size-interface);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5945,7 +5962,7 @@ body * {
   border: none;
   color: hsl(var(--foreground) / 0.7);
   cursor: pointer;
-  font-size: 25px !important;
+  font-size: var(--lore-size-signature);
   line-height: 1;
   padding: 0 4px;
   flex-shrink: 0;
@@ -5956,7 +5973,7 @@ body * {
   margin: 8px 0 0;
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-display);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
 }
 /* Quiet head (no set tab open): no title, no placeholder — the chevrons and
    Tune close ranks on the right and the head gives back its bottom margin. */
@@ -5997,14 +6014,14 @@ body * {
   margin: 0 0 5px;
   color: hsl(var(--accent));
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   letter-spacing: .12em;
   text-transform: uppercase;
 }
 .dial-hero__tuned-head h2 {
   margin: 0;
   font-family: var(--app-font-display);
-  font-size: clamp(24px, 3vw, 38px);
+  font-size: var(--lore-size-signature);
   font-weight: 400;
   line-height: 1;
 }
@@ -6021,7 +6038,7 @@ body * {
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  font-size: 22px;
+  font-size: var(--lore-size-signature);
   line-height: 1;
 }
 .dial-hero__tuned-close:hover,
@@ -6040,7 +6057,7 @@ body * {
   margin: 16px 0 0;
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-display);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   line-height: 1.45;
 }
 .dial-hero__tuned-list {
@@ -6059,14 +6076,14 @@ body * {
   padding: 6px 0 6px 10px;
   border-bottom: 1px solid hsl(var(--border) / .45);
   font-family: var(--app-font-display);
-  font-size: 17px;
+  font-size: var(--lore-size-interface);
 }
 .dial-hero__tuned-remove {
   width: 28px;
   height: 28px;
   flex: 0 0 auto;
   border-color: transparent;
-  font-size: 19px;
+  font-size: var(--lore-size-signature);
   line-height: 1;
 }
 .dial-hero__tuned-add {
@@ -6078,7 +6095,7 @@ body * {
   margin-bottom: 7px;
   color: hsl(var(--foreground) / .75);
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: var(--lore-size-small);
   letter-spacing: .1em;
   text-transform: uppercase;
 }
@@ -6094,8 +6111,8 @@ body * {
 
 @media (max-width: 480px) {
   .dial-hero__tuned-panel { padding: 18px 16px; }
-  .dial-hero__tuned-head h2 { font-size: 27px; }
-  .dial-hero__tuned-item { font-size: 16px; }
+  .dial-hero__tuned-head h2 { font-size: var(--lore-size-signature); }
+  .dial-hero__tuned-item { font-size: var(--lore-size-interface); }
 }
 
 /* The queue uses artist names rather than chips so its order reads as a set.
@@ -6127,7 +6144,7 @@ body * {
   border: none;
   background: transparent;
   font-family: var(--app-font-display);
-  font-size: 14px;
+  font-size: var(--lore-size-interface);
   line-height: 1.35;
   text-align: left;
 }
@@ -6266,25 +6283,25 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
    scan surface. Keep its summaries and controls compact without changing the
    type direction used elsewhere in the app. */
 .dial-root--front .fdrow__t1 {
-  font-size: 16px !important;
+  font-size: var(--lore-size-interface);
   line-height: 1.3;
 }
 .dial-root--front .fdrow__live-secondary,
 .dial-root--front .fdrow__ov-caption {
-  font-size: 12px !important;
+  font-size: var(--lore-size-small);
   line-height: 1.35;
 }
 .dial-root--front .fdrow__t3,
 .dial-root--front .fdrow__station-chip,
 .dial-root--front .fdrow__run-sub {
-  font-size: 11px !important;
+  font-size: var(--lore-size-small);
 }
 .dial-root--front .fdzone-lbl__text,
 .dial-root--front .fdzone-lbl__hint,
 .dial-root--front .dial-show-more,
 .dial-root--front .dial-show-more-inline,
 .dial-root--front .dial-tab {
-  font-size: 12px !important;
+  font-size: var(--lore-size-small);
 }
 .dial-root--front .dial-show-more,
 .dial-root--front .dial-show-more-inline,
@@ -6325,7 +6342,7 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   border: none;
   color: hsl(var(--foreground) / 0.8);
   cursor: pointer;
-  font-size: 13px !important;
+  font-size: var(--lore-size-small);
   white-space: nowrap;
   padding: 2px 0;
 }
@@ -6369,7 +6386,7 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   background: none;
   color: hsl(var(--foreground) / 0.85);
   cursor: pointer;
-  font-size: 13px !important;
+  font-size: var(--lore-size-small);
   padding: 3px 9px;
 }
 .set-panel__action svg { width: 13px; height: 13px; }
@@ -6380,7 +6397,7 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   color: hsl(var(--foreground) / 0.85);
   border: 1px solid hsl(var(--border) / 0.7);
   border-radius: 6px;
-  font-size: 13px !important;
+  font-size: var(--lore-size-small);
   padding: 3px 6px;
 }
 .set-panel__export {
@@ -6393,14 +6410,14 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
 }
 .set-panel__export a {
   color: hsl(var(--foreground) / 0.8);
-  font-size: 13px !important;
+  font-size: var(--lore-size-small);
   text-decoration: underline dotted;
 }
 .set-panel__export a:hover { color: #fff; }
 .set-panel__export-skips {
   margin: 2px 0 0;
   color: hsl(var(--muted-foreground));
-  font-size: 12px !important;
+  font-size: var(--lore-size-small);
 }
 
 /* Multi-set scopes read chronologically; each card leads with the most
@@ -6417,7 +6434,7 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
 }
 .set-panel__provenance time {
   color: hsl(var(--muted-foreground));
-  font-size: 12px !important;
+  font-size: var(--lore-size-small);
   white-space: nowrap;
 }
 .set-panel__cascade { display: inline-flex; gap: 8px; }
@@ -6429,7 +6446,7 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   padding: 0;
   cursor: pointer;
   color: hsl(var(--foreground) / 0.85);
-  font-size: 13px !important;
+  font-size: var(--lore-size-small);
   text-decoration: underline dotted;
   white-space: nowrap;
 }
@@ -6547,7 +6564,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--foreground) / .7);
   border-radius: 3px;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   line-height: 1;
   padding: 1px 4px;
   margin-left: 4px;
@@ -6563,13 +6580,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 /* ── Context rail (tuned surface) ──────────────────────────────────────────── */
 .crail { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 0; }
 .crail__sentence { margin: 0; font-family: var(--app-font-display); line-height: 1.4; }
-.crail__attribution { margin: 0; font-size: 12px; }
+.crail__attribution { margin: 0; font-size: var(--lore-size-small); }
 .crail-lens { border-top: 1px solid var(--rule-strong, #444); padding-top: 8px; }
 .crail-lens__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.crail-lens__title { text-transform: uppercase; letter-spacing: .08em; font-size: 10px; color: hsl(var(--foreground) / .5); }
+.crail-lens__title { text-transform: uppercase; letter-spacing: .08em; font-size: var(--lore-size-small); color: hsl(var(--foreground) / .5); }
 .crail-lens__open { color: hsl(var(--foreground) / .75); text-decoration: underline dotted; text-underline-offset: 3px; white-space: nowrap; }
 .crail-lens__lede { margin: 4px 0; }
-.crail-lens__sub { margin-top: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: hsl(var(--foreground) / .5); }
+.crail-lens__sub { margin-top: 6px; font-size: var(--lore-size-small); text-transform: uppercase; letter-spacing: .06em; color: hsl(var(--foreground) / .5); }
 .crail-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .crail-list--ordered { counter-reset: crail; }
 .crail-list--ordered > li::before { counter-increment: crail; content: counter(crail) "  "; color: hsl(var(--foreground) / .4); }
@@ -6578,7 +6595,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .crail-setrow__show { color: hsl(var(--foreground) / .8); }
 .crail-setrow__names { color: hsl(var(--foreground) / .6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crail-empty { margin: 4px 0 0; color: hsl(var(--foreground) / .5); font-style: normal; }
-.crail-yours-mark { color: hsl(var(--foreground) / .6); font-size: 12px; }
+.crail-yours-mark { color: hsl(var(--foreground) / .6); font-size: var(--lore-size-small); }
 
 /* ── Mobile density: drilled objects, lenses, library rows ────────────────
    Compact vertical rhythm at phone widths — no wasted chrome, no horizontal
@@ -6626,7 +6643,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     overflow: hidden;
     text-overflow: ellipsis;
     color: hsl(var(--muted-foreground));
-    font-size: 13px !important;
+    font-size: var(--lore-size-small);
   }
   .set-queue__addplus,
   .set-queue__removeseed {
@@ -6647,7 +6664,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     margin: 2px 0 6px;
     cursor: pointer;
     font-family: var(--app-font-mono);
-    font-size: 11px !important;
+    font-size: var(--lore-size-small);
     letter-spacing: 0.05em;
     color: hsl(var(--muted-foreground));
     text-decoration: underline dotted;
@@ -6658,7 +6675,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   /* One-line dock rules are now global (see base .player-bar-info /
      .player-bar-mobiletrack / .player-ticker); phone widths additionally
      drop the scan/direction controls below. */
-  .player-bar-mobiletrack { font-size: 12px !important; }
+  .player-bar-mobiletrack { font-size: var(--lore-size-small); }
   .player-bar-block [data-testid="player-scan"],
   .player-bar-block .player-bar-btn--ghost {
     display: none;
@@ -6682,7 +6699,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 
   /* Contextual breadcrumbs — small, quiet, top-of-page. */
   .dial-crumbs { padding: 2px 0 6px; }
-  .dial-crumbs, .dial-crumbs * { font-size: 11px !important; }
+  .dial-crumbs, .dial-crumbs * { font-size: var(--lore-size-small); }
 }
 
 /* ── Expanded now-playing sheet — full-screen player opened from the mini

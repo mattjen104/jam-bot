@@ -2,22 +2,32 @@
    Lore — shared typography tokens
    Consumed by both index.css (classic UI) and wp.css (WebPlayer).
 
-   Three semantic roles:
-     body     Inter / system-ui sans — flowing prose, UI copy, descriptions
-     display  Archivo Narrow / system-ui — labels, chips, station names, callouts
-     mono     IBM Plex Mono / Menlo — metadata, timestamps, counts, technical strings
+   Two honest layers:
 
-   Brutalist mode: Signifier (Klim Type Foundry) is the single face for the
-   entire site — all role tokens point at it, and index.css flattens sizes
-   to one uniform value (wordmark excepted). Falls back to Georgia/serif if
-   the font file hasn't loaded yet.
+   VOICE — Signifier (Klim Type Foundry), the only downloaded face.
+     --lore-font-wordmark    the moon + Lore wordmark
+     --lore-font-signature   dial sentence-grammar rows and other signature
+                             sentences; editorial reading surfaces
+                             (.reading-context) also resolve to Signifier.
 
-   Editorial serif (Newsreader) is NOT loaded globally. Scope it by wrapping
-   a container with the `.reading-context` class when a genuine long-form or
-   editorial reading surface is needed.
+   INTERFACE — native system sans (system-ui stack, no download).
+     --lore-font-body        flowing prose, UI copy, descriptions
+     --lore-font-display     labels, chips, station names, callouts
+     --lore-font-mono        metadata, timestamps, counts, technical strings
+     (All three resolve to the same native sans stack; the role names are
+      kept so existing callsites keep working.)
+
+   SIZE SCALE — three fixed steps; use these instead of raw px:
+     --lore-size-signature   23px  voice surfaces: wordmark, signature
+                                   sentence rows, prominent headings
+     --lore-size-interface   16px  default UI copy, buttons, nav, row titles
+     --lore-size-small       12px  bylines, timestamps, counts, chips,
+                                   captions, small metadata
+   Do not name Signifier or a px font-size outside this file except in the
+   explicitly pinned voice surfaces in index.css.
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* Signifier Regular — site-wide face */
+/* Signifier Regular — the voice face */
 @font-face {
   font-family: 'Signifier';
   src: url('/lore/fonts/Signifier-Regular.ttf') format('truetype');
@@ -27,14 +37,23 @@
 }
 
 :root {
-  /* Brutalist mode: one face for the entire site — Signifier everywhere. */
-  --lore-font-body:     'Signifier', Georgia, serif;
-  --lore-font-display:  'Signifier', Georgia, serif;
-  --lore-font-mono:     'Signifier', Georgia, serif;
-  --lore-font-wordmark: 'Signifier', Georgia, serif;
+  /* Voice layer — Signifier, serif fallback while the file loads. */
+  --lore-font-wordmark:  'Signifier', Georgia, serif;
+  --lore-font-signature: 'Signifier', Georgia, serif;
+
+  /* Interface layer — native system sans, nothing downloaded. */
+  --lore-font-body:    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --lore-font-display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --lore-font-mono:    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Fixed three-step size scale. */
+  --lore-size-signature: 23px;
+  --lore-size-interface: 16px;
+  --lore-size-small:     12px;
 }
 
-/* Editorial face — only active inside an explicit reading surface. */
+/* Editorial face — only active inside an explicit reading surface.
+   Signifier is the only downloaded face, so editorial resolves to it. */
 .reading-context {
-  --lore-font-editorial: 'Newsreader', Georgia, serif;
+  --lore-font-editorial: 'Signifier', Georgia, serif;
 }
