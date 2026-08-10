@@ -18,6 +18,9 @@
 #                                       the album art at short/tall/portrait viewports)
 #   - cornerNavTappability.spec.ts     (corner nav links visible + clickable above the
 #                                       player dock at 360×640 portrait and 640×360 landscape)
+#   - firstRunSidebarOnboarding.spec.ts (first-time visitor sees .frb__block sentences,
+#                                       NOT .z1-placeholder__seedchip chips; data-rung
+#                                       order non-decreasing)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -85,6 +88,7 @@ RUN_SPECS=(
   e2e/dialHeroQueueGeometry.spec.ts
   e2e/cornerNavTappability.spec.ts
   e2e/mobileFrontDoor.spec.ts
+  e2e/firstRunSidebarOnboarding.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
