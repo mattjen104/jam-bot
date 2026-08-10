@@ -33,6 +33,7 @@ import {
   type SetDaypart,
 } from "./dialViewHelpers";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { PinnedSetRow } from "./dial/PinnedSetRow";
 import { useDialSurface } from "../dial/useDialSurface";
 import { DialContextRegion } from "../dial/DialContextRegion";
 import { railHasRealContent } from "../dial/railContent";
@@ -3288,19 +3289,12 @@ export function DialView() {
               back to the art and sentence rows (data-queue-layout="none"). */}
           <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}${setPanelOpen ? "" : " dial-hero__setpanel--hidden"}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
               {pinnedRow ? (
-                <div className="dial-pinned-row" aria-label="Tuned station">
-                  <FrontDoorRow
-                    ds={pinnedRow.ds}
-                    show={pinnedRow.show}
-                    ov={pinnedRow.ds.lifetimeCrossings}
-                    isActive={true}
-                    isSampling={false}
-                    onTuneIn={() => undefined}
-                    onOpenWorkspace={() => openStationWorkspace(pinnedRow)}
-                    displayMode={crossingSourceMode}
-                    artworkUrl={activeArtworkUrl}
-                  />
-                </div>
+                <PinnedSetRow
+                  ds={pinnedRow.ds}
+                  show={pinnedRow.show}
+                  seedsLower={seedsLower}
+                  onAddArtist={addSeed}
+                />
               ) : null}
               {/* Quiet front door: with no set tab open the header carries no
                   real content — drop the "Choose a live set" title and the

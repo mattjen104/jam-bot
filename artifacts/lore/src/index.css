@@ -5266,6 +5266,97 @@
   background: hsl(var(--background) / 0.96);
   backdrop-filter: blur(10px);
 }
+
+/* Pinned tuned-station set (Task #37): the sentence carries the full setlist */
+.dial-pinned-set {
+  padding: 10px 14px 12px;
+}
+.dial-pinned-set__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.dial-pinned-set__chev {
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--lore-size-body);
+  line-height: 1;
+  color: hsl(var(--library) / 0.75);
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.dial-pinned-set__chev:hover,
+.dial-pinned-set__chev[aria-pressed="true"] {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.12);
+}
+.dial-pinned-set__chev:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.dial-pinned-set__sentence {
+  margin: 0;
+  line-height: 1.7;
+}
+.dial-pinned-set__meta {
+  margin-top: 6px;
+  padding-left: 32px;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--library) / 0.65);
+}
+.dial-pinned-set__export {
+  margin-top: 8px;
+  padding-left: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dial-pinned-set__export select {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 5px;
+  padding: 3px 6px;
+}
+.dial-pinned-set__export button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.35);
+  border-radius: 5px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.dial-pinned-set__export button:hover {
+  background: hsl(var(--primary) / 0.2);
+}
+.dial-pinned-set__export button svg {
+  width: 13px;
+  height: 13px;
+}
+.dial-pinned-set__note {
+  width: 100%;
+  margin: 2px 0 0;
+  font-size: var(--lore-size-small);
+  color: hsl(var(--library) / 0.75);
+}
 /* Same tokens for ghost-row sentences */
 .ghost-row__reason .fdrow__artist  { color: hsl(var(--library)); }
 .ghost-row__reason .fdrow__station { color: hsl(var(--library)); font-weight: 400; }

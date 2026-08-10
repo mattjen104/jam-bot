@@ -350,7 +350,7 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
 // ---------------------------------------------------------------------------
 
 describe("Minimal default front door — set panel gating", () => {
-  it("pins a tuned row, opens sets only from provenance, and keeps the pinned row after closing", () => {
+  it("pins a tuned row as the pinned set (no station workspace tab), and keeps it", () => {
     mockDial();
     render(<DialView />);
 
@@ -362,20 +362,29 @@ describe("Minimal default front door — set panel gating", () => {
     expect(panel.className).toContain("dial-hero__setpanel--hidden");
     expect(hero.getAttribute("data-queue-layout")).toBe("none");
 
-    // Clicking the row tunes and pins it, but does not open a set tab.
+    // Clicking the row tunes and pins it as the pinned set (Task #37):
+    // provenance is inline in the sentence, so no separate workspace tab opens.
     fireEvent.click(document.querySelector(".fdrow")!);
     expect(panel.className).not.toContain("dial-hero__setpanel--hidden");
     expect(hero.getAttribute("data-queue-layout")).not.toBe("none");
     expect(screen.queryAllByRole("tab")).toHaveLength(0);
 
-    // Only the provenance control opens the station workspace.
-    fireEvent.click(screen.getAllByRole("button", { name: /open .* sets/i })[0]);
-    expect(screen.getAllByRole("tab")).toHaveLength(1);
-
-    // Closing the workspace preserves the pinned player row.
-    fireEvent.click(screen.getByRole("button", { name: /^close/i }));
-    expect(panel.className).not.toContain("dial-hero__setpanel--hidden");
-    expect(document.querySelector(".dial-pinned-row")).toBeTruthy();
+    // The pinned set row is present and no longer exposes an "open sets"
+    // workspace control — the set lives right here in the sentence.
+    const pinned = document.querySelector(".dial-pinned-set");
+    expect(pinned).toBeTruthy();
+    expect(
+      Array.from(pinned!.querySelectorAll("button")).filter((btn) =>
+        /open .* sets/i.test(btn.getAttribute("aria-label") ?? "")),
+    ).toHaveLength(0);
+    // Its single chevron toggles the previous completed set.
+    expect(
+      Array.from(pinned!.querySelectorAll("button")).filter((btn) =>
+        /previous set/i.test(btn.getAttribute("aria-label") ?? "")),
+    ).toHaveLength(1);
+    // No export/playlist controls in live mode — structurally absent.
+    expect(pinned!.querySelector(".dial-pinned-set__export")).toBeNull();
+    expect(pinned!.querySelector("select")).toBeNull();
   });
 });
 
