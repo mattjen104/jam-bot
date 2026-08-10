@@ -80,7 +80,16 @@ export interface GrammarLinks {
  *  - plus an explicit `+` affordance beside non-yours names when onAddArtist
  *    is provided. The name itself NEVER adds.
  */
-export function artistNode(name: string, links?: GrammarLinks, key?: string | number): ReactNode {
+export function artistNode(
+  name: string,
+  links?: GrammarLinks,
+  key?: string | number,
+  opts?: {
+    /** Setlist surfaces render the `+` LEADING the name; sentences keep it
+     * trailing. The affordance is identical either way — only order differs. */
+    plusBefore?: boolean;
+  },
+): ReactNode {
   const yours = links?.isYours?.(name) ?? false;
   const cls = `gram__artist${yours ? " gram--yours" : ""}`;
   const nameEl = links?.onArtist ? (
@@ -100,7 +109,11 @@ export function artistNode(name: string, links?: GrammarLinks, key?: string | nu
       onClick={(e) => { e.stopPropagation(); links.onAddArtist!(name); }}
     >+</button>
   ) : null;
-  return <span className="gram__artist-wrap" key={key ?? name}>{nameEl}{addEl}</span>;
+  return (
+    <span className="gram__artist-wrap" key={key ?? name}>
+      {opts?.plusBefore ? <>{addEl}{nameEl}</> : <>{nameEl}{addEl}</>}
+    </span>
+  );
 }
 
 /** A DJ/selector name — linkable role, dotted underline when navigable. */

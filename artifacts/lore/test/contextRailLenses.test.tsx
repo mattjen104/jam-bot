@@ -19,7 +19,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getSearchArtistRunsQueryKey: (params: unknown) => ["artist-runs", params],
 }));
 
-import { ContextRail, type RailSet } from "../src/components/ContextRail";
+import { ContextRail, ArtistPane, type RailSet } from "../src/components/ContextRail";
 import type { ContextDescriptor } from "../src/dial/dialContext";
 import type { DialShow, DialSpin, DialStation } from "../src/hooks/useDialData";
 
@@ -114,6 +114,7 @@ const baseProps = () => ({
   seedsLower: new Set<string>(),
   onAddSeed: vi.fn(),
   onPush: vi.fn(),
+  onOpenArtist: vi.fn(),
 });
 
 afterEach(() => {
@@ -134,7 +135,7 @@ describe("ContextRail", () => {
     expect(open.getAttribute("href")).toBe("/archive/stations/kcrw");
   });
 
-  it("sentence artist links push an artist frame (mbid when known)", () => {
+  it("sentence artist links open the artist TAB (mbid when known) — never a lens frame", () => {
     const props = baseProps();
     const row = makeRow();
     row.show.currentTrack = makeSpin({ artist: "Broadcast", artistMbid: "mbid-broadcast", isLibraryHit: true });
@@ -142,7 +143,8 @@ describe("ContextRail", () => {
     render(<ContextRail ctx={ctxWith([{ kind: "station", id: "kcrw", label: "KCRW" }])} {...props} row={row} />);
     const sentence = document.querySelector(".crail__sentence") as HTMLElement;
     fireEvent.click(within(sentence).getByRole("button", { name: "Broadcast" }));
-    expect(props.onPush).toHaveBeenCalledWith({ kind: "artist", id: "mbid-broadcast", label: "Broadcast" });
+    expect(props.onOpenArtist).toHaveBeenCalledWith("Broadcast", "mbid-broadcast");
+    expect(props.onPush).not.toHaveBeenCalled();
   });
 
   it("show attribution opens the show lens; DJ lens links to /dj/:name", () => {
@@ -228,7 +230,24 @@ describe("ContextRail", () => {
       .toBe("/archive/stations/kcrw");
   });
 
-  it("artist lens lists sets containing the artist from the archive endpoint", () => {
+  it("an artist frame on the stack degrades to the station lens (artist lens is retired)", () => {
+    const props = baseProps();
+    render(
+      <ContextRail
+        ctx={ctxWith([
+          { kind: "station", id: "kcrw", label: "KCRW" },
+          { kind: "artist", id: "mbid-broadcast", label: "Broadcast" },
+        ])}
+        {...props}
+      />,
+    );
+    // No artist lens surface renders — the default station lens shows instead.
+    expect(screen.queryByText(/sets containing this artist/i)).toBeNull();
+    expect(screen.getByRole("link", { name: /open archive/i }).getAttribute("href"))
+      .toBe("/archive/stations/kcrw");
+  });
+
+  it("ArtistPane (tab body) lists archive runs, canonical link, and MBID name recovery", () => {
     searchArtistRuns.mockReturnValue({
       data: {
         query: "Broadcast",
@@ -243,83 +262,97 @@ describe("ContextRail", () => {
       isLoading: false,
       isError: false,
     } as never);
-    const props = baseProps();
+    const onAdd = vi.fn();
+    // name=null + mbid → the pane must recover the display name from loaded data.
     render(
-      <ContextRail
-        ctx={ctxWith([
-          { kind: "station", id: "kcrw", label: "KCRW" },
-          { kind: "artist", id: "mbid-broadcast", label: "Broadcast" },
-        ])}
-        {...props}
+      <ArtistPane
+        name={null}
+        mbid="mbid-broadcast"
+        sets={[makeSet()]}
+        rowSpins={[]}
+        links={{ isYours: () => false, onAddArtist: onAdd }}
+        onOpenSet={vi.fn()}
       />,
     );
-    expect(screen.getByText(/sets containing this artist/i)).toBeTruthy();
-    const runLink = screen.getByRole("link", { name: /kexp/i });
-    expect(runLink.getAttribute("href")).toBe("/archive/station-runs/77");
-    expect(screen.getByRole("link", { name: /open/i }).getAttribute("href")).toBe("/artist/mbid-broadcast");
-  });
-
-  it("artist lens degrades to already-loaded dial sets without a spinner when the endpoint has nothing", () => {
-    const props = baseProps();
-    render(
-      <ContextRail
-        ctx={ctxWith([
-          { kind: "station", id: "kcrw", label: "KCRW" },
-          { kind: "artist", id: "name:Broadcast", label: "Broadcast" },
-        ])}
-        {...props}
-      />,
-    );
-    // fallback: the loaded set containing Broadcast is listed, no loading text
-    expect(screen.queryByText(/searching the archive/i)).toBeNull();
-    expect(document.querySelector(".crail-lens")!.textContent).toContain("Morning Becomes Eclectic");
-    // + affordance to seed the artist
-    fireEvent.click(screen.getByRole("button", { name: /add broadcast to your artists/i }));
-    expect(props.onAddSeed).toHaveBeenCalledWith("Broadcast");
-  });
-
-  it("artist lens restored from a URL (mbid frame, no label) recovers the name from loaded data", () => {
-    // surface.push serializes only kind:id — frame labels are NOT restored
-    // after a refresh/shared link. The lens must recover the artist name
-    // from already-loaded dial data and stay fully functional.
-    const props = baseProps();
-    render(
-      <ContextRail
-        ctx={ctxWith([
-          { kind: "station", id: "kcrw", label: "KCRW" },
-          { kind: "artist", id: "mbid-broadcast" },
-        ])}
-        {...props}
-      />,
-    );
-    // name recovered → search enabled with the recovered name
     expect(searchArtistRuns).toHaveBeenLastCalledWith(
       { q: "Broadcast" },
       expect.objectContaining({ query: expect.objectContaining({ enabled: true }) }),
     );
-    // lede shows the recovered name, canonical open link intact
     expect(document.querySelector(".crail-lens__lede")!.textContent).toContain("Broadcast");
+    expect(screen.getByText(/sets containing this artist/i)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /kexp/i }).getAttribute("href")).toBe("/archive/station-runs/77");
     expect(screen.getByRole("link", { name: /open/i }).getAttribute("href")).toBe("/artist/mbid-broadcast");
-    // loaded-set fallback works
-    expect(document.querySelector(".crail-lens")!.textContent).toContain("Morning Becomes Eclectic");
-    // + add affordance works
     fireEvent.click(screen.getByRole("button", { name: /add broadcast to your artists/i }));
-    expect(props.onAddSeed).toHaveBeenCalledWith("Broadcast");
+    expect(onAdd).toHaveBeenCalledWith("Broadcast");
   });
 
-  it("artist lens restored from a URL (name frame, no label) recovers the name from the frame id", () => {
+  it("ArtistPane degrades to already-loaded dial sets without a spinner when the endpoint has nothing", () => {
+    render(
+      <ArtistPane
+        name="Broadcast"
+        mbid={null}
+        sets={[makeSet()]}
+        rowSpins={[]}
+        links={{ isYours: () => false, onAddArtist: vi.fn() }}
+        onOpenSet={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/searching the archive/i)).toBeNull();
+    expect(document.querySelector(".crail-lens")!.textContent).toContain("Morning Becomes Eclectic");
+  });
+
+  it("compact set rows: name click opens the artist tab without opening the set; non-yours names get a leading +", () => {
     const props = baseProps();
     render(
       <ContextRail
         ctx={ctxWith([
           { kind: "station", id: "kcrw", label: "KCRW" },
-          { kind: "artist", id: "name:Broadcast" },
+          { kind: "show", id: "Morning Becomes Eclectic", label: "Morning Becomes Eclectic" },
         ])}
         {...props}
       />,
     );
-    expect(document.querySelector(".crail-lens__lede")!.textContent).toContain("Broadcast");
-    expect(document.querySelector(".crail-lens")!.textContent).toContain("Morning Becomes Eclectic");
+    const row = document.querySelector(".crail-setrow") as HTMLElement;
+    // Broadcast (non-yours): leading + affordance precedes the name.
+    const wrap = within(row).getByRole("button", { name: "Broadcast" }).closest(".gram__artist-wrap")!;
+    const children = [...wrap.children];
+    expect(children[0]!.className).toContain("dial-addplus");
+    fireEvent.click(within(row).getByRole("button", { name: /add broadcast to your artists/i }));
+    expect(props.onAddSeed).toHaveBeenCalledWith("Broadcast");
+    // Name click navigates to the artist tab, NOT the row's open-set action.
+    fireEvent.click(within(row).getByRole("button", { name: "Broadcast" }));
+    expect(props.onOpenArtist).toHaveBeenCalledWith("Broadcast", "mbid-broadcast");
+    expect(props.onPush).not.toHaveBeenCalled();
+    // Portishead is yours (library hit): white treatment, no + affordance.
+    const portishead = within(row).getByRole("button", { name: "Portishead" });
+    expect(portishead.className).toContain("gram--yours");
+    expect(within(row).queryByRole("button", { name: /add portishead/i })).toBeNull();
+    // The row itself still opens the set.
+    fireEvent.click(row);
+    expect(props.onPush).toHaveBeenCalledWith({
+      kind: "set",
+      id: "kcrw:2026-08-08T09:00:00Z",
+      label: "Morning Becomes Eclectic",
+    });
+  });
+
+  it("set lens artist list renders a leading + for non-yours artists and none for yours", () => {
+    const props = baseProps();
+    render(
+      <ContextRail
+        ctx={ctxWith([
+          { kind: "station", id: "kcrw", label: "KCRW" },
+          { kind: "set", id: "kcrw:2026-08-08T09:00:00Z", label: "Morning Becomes Eclectic" },
+        ])}
+        {...props}
+      />,
+    );
+    const lens = document.querySelector(".crail-lens") as HTMLElement;
+    const wrap = within(lens).getByRole("button", { name: "Broadcast" }).closest(".gram__artist-wrap")!;
+    expect([...wrap.children][0]!.className).toContain("dial-addplus");
+    expect(within(lens).queryByRole("button", { name: /add portishead/i })).toBeNull();
+    fireEvent.click(within(lens).getByRole("button", { name: "Broadcast" }));
+    expect(props.onOpenArtist).toHaveBeenCalledWith("Broadcast", "mbid-broadcast");
   });
 
   it("renders nothing at all when everything would be placeholder (quiet front door)", () => {
@@ -367,16 +400,18 @@ describe("ContextRail", () => {
     expect(screen.queryByText(/no recent spins visible yet/i)).toBeNull();
   });
 
-  it("never touches playback: interactions only push frames", () => {
+  it("never touches playback: interactions only navigate (tab open / frame push)", () => {
     // The rail receives no player handles at all — its only outward channels
-    // are onPush and onAddSeed. Clicking through sentence links must call
-    // onPush and nothing else observable.
+    // are onPush, onOpenArtist, and onAddSeed. Clicking a sentence artist
+    // opens the artist tab and nothing else observable.
     const props = baseProps();
     render(<ContextRail ctx={ctxWith([{ kind: "station", id: "kcrw", label: "KCRW" }])} {...props} />);
     expect(document.querySelector("audio")).toBeNull();
     const sentence = document.querySelector(".crail__sentence") as HTMLElement;
     fireEvent.click(within(sentence).getByRole("button", { name: "Portishead" }));
-    expect(props.onPush).toHaveBeenCalledTimes(1);
+    expect(props.onOpenArtist).toHaveBeenCalledTimes(1);
+    expect(props.onOpenArtist).toHaveBeenCalledWith("Portishead", null);
+    expect(props.onPush).not.toHaveBeenCalled();
     expect(props.onAddSeed).not.toHaveBeenCalled();
   });
 });

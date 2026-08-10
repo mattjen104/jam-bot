@@ -59,6 +59,12 @@ export interface ContextRailProps {
   onAddSeed: (name: string) => void;
   /** Push a lens frame onto the context stack (never touches playback). */
   onPush: (frame: ContextFrame) => void;
+  /**
+   * Open the artist TAB in the set-panel tab strip. Artist navigation no
+   * longer pushes lens frames — the artist lens is retired; every artist
+   * click routes here instead.
+   */
+  onOpenArtist: (name: string, mbid: string | null) => void;
   displayMode?: DialDisplayMode;
 }
 
@@ -112,15 +118,37 @@ function Lens({ title, openHref, openLabel, children }: {
   );
 }
 
-/** Compact set row used by station/show/DJ lenses. */
-function SetRow({ set, onOpenSet }: { set: RailSet; onOpenSet: (set: RailSet) => void }) {
-  const names = set.artists.slice(0, 3).map((a) => a.name).join(" · ");
+/** Compact set row used by station/show/DJ lenses.
+ *
+ * The row itself opens the set; the individual " · "-joined artist names are
+ * their own click targets (artist tab) and must never bubble into the row's
+ * open-set action — hence a div[role=button] shell, not a nested <button>. */
+function SetRow({ set, links, onOpenSet }: {
+  set: RailSet;
+  links?: GrammarLinks;
+  onOpenSet: (set: RailSet) => void;
+}) {
+  const visible = set.artists.slice(0, 3);
   return (
-    <button type="button" className="crail-setrow gram-link--nav" onClick={() => onOpenSet(set)}>
+    <div
+      role="button"
+      tabIndex={0}
+      className="crail-setrow gram-link--nav"
+      onClick={() => onOpenSet(set)}
+      onKeyDown={(e) => { if (e.key === "Enter") onOpenSet(set); }}
+    >
       <span className="crail-setrow__when">{fmtDay(set.startedAt, set.ianaTimezone)}</span>
       {set.showName && <span className="crail-setrow__show">{set.showName}</span>}
-      <span className="crail-setrow__names">{names}{set.artists.length > 3 ? " …" : ""}</span>
-    </button>
+      <span className="crail-setrow__names">
+        {visible.map((a, i) => (
+          <span key={`${a.name}-${i}`}>
+            {i > 0 && " · "}
+            {artistNode(a.name, links, i, { plusBefore: true })}
+          </span>
+        ))}
+        {set.artists.length > 3 ? " …" : ""}
+      </span>
+    </div>
   );
 }
 
@@ -149,13 +177,13 @@ function StationLens({ row, sets, links, onOpenSet }: {
         <ul className="crail-list">
           {recentSpins.map((spin, i) => (
             <li key={`${spin.playedAt}-${i}`} className="crail-list__item">
-              {artistNode(spin.artist, links, i)}
+              {artistNode(spin.artist, links, i, { plusBefore: true })}
             </li>
           ))}
         </ul>
       ) : sets.length > 0 ? (
         <ul className="crail-list">
-          {sets.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+          {sets.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} links={links} onOpenSet={onOpenSet} /></li>)}
         </ul>
       ) : (
         <p className="crail-empty">No recent spins visible yet.</p>
@@ -179,7 +207,7 @@ function ShowLens({ frame, sets, links, stationSlug, onOpenSet }: {
       <p className="crail-lens__lede">{showName}{djNames.length > 0 && <> — {djNames.map((dj, i) => <span key={dj}>{i > 0 && ", "}{djNode(dj, links)}</span>)}</>}</p>
       {matching.length > 0 ? (
         <ul className="crail-list">
-          {matching.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+          {matching.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} links={links} onOpenSet={onOpenSet} /></li>)}
         </ul>
       ) : (
         <p className="crail-empty">No archived sets loaded for this show yet.</p>
@@ -188,9 +216,10 @@ function ShowLens({ frame, sets, links, stationSlug, onOpenSet }: {
   );
 }
 
-function DjLens({ frame, sets, onOpenSet }: {
+function DjLens({ frame, sets, links, onOpenSet }: {
   frame: ContextFrame;
   sets: RailSet[];
+  links?: GrammarLinks;
   onOpenSet: (set: RailSet) => void;
 }) {
   const name = frame.label ?? frame.id;
@@ -200,7 +229,7 @@ function DjLens({ frame, sets, onOpenSet }: {
       <p className="crail-lens__lede">{name}</p>
       {matching.length > 0 ? (
         <ul className="crail-list">
-          {matching.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+          {matching.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} links={links} onOpenSet={onOpenSet} /></li>)}
         </ul>
       ) : (
         <p className="crail-empty">No sets by {name} loaded yet.</p>
@@ -227,7 +256,7 @@ function SetLens({ frame, sets, links }: {
         <ol className="crail-list crail-list--ordered">
           {artists.map((artist, i) => (
             <li key={`${artist.name}-${i}`} className="crail-list__item">
-              {artistNode(artist.name, links, i)}
+              {artistNode(artist.name, links, i, { plusBefore: true })}
             </li>
           ))}
         </ol>
@@ -238,21 +267,28 @@ function SetLens({ frame, sets, links }: {
   );
 }
 
-function ArtistLens({ frame, sets, rowSpins, links, onOpenSet }: {
-  frame: ContextFrame;
+/**
+ * ArtistPane — the artist page content, rendered as the BODY of an artist tab
+ * in the set-panel tab strip. This is the retired artist lens's content,
+ * reused verbatim: identity lede with add affordance, sets containing the
+ * artist (archive endpoint with loaded-set fallback), and the canonical
+ * artist-route link when a strong identifier (MBID) exists.
+ */
+export function ArtistPane({ name: givenName, mbid, sets, rowSpins, links, onOpenSet }: {
+  /** Display name when known; null for an MBID-only restore. */
+  name: string | null;
+  mbid: string | null;
   sets: RailSet[];
   rowSpins: readonly { artist: string; artistMbid?: string | null }[];
   links: GrammarLinks;
   onOpenSet: (set: RailSet) => void;
 }) {
-  const decoded = decodeArtistFrame(frame);
-  const mbid = decoded.mbid;
-  // Frame labels are not serialized into the URL, so an MBID-backed artist
-  // frame restored from a refresh/shared link arrives with no name. Recover
-  // it from everything the dial has already loaded — the lens must stay
-  // fully functional (search, fallback list, add affordance) after restore.
+  // Tab scopes serialize only the identifier, so an MBID-backed artist tab
+  // restored from a refresh/shared link can arrive with no name. Recover it
+  // from everything the dial has already loaded — the pane must stay fully
+  // functional (search, fallback list, add affordance) after restore.
   const name = useMemo(() => {
-    if (decoded.name) return decoded.name;
+    if (givenName) return givenName;
     if (!mbid) return null;
     for (const spin of rowSpins) {
       if (spin.artistMbid === mbid) return spin.artist;
@@ -263,7 +299,7 @@ function ArtistLens({ frame, sets, rowSpins, links, onOpenSet }: {
       }
     }
     return null;
-  }, [decoded.name, mbid, sets, rowSpins]);
+  }, [givenName, mbid, sets, rowSpins]);
   const enabled = !!name && name.length >= 2;
   // "Sets containing this artist" — the archive artist-runs endpoint groups
   // matching spins into whole runs. Cheap (bounded, indexed) and already
@@ -309,7 +345,7 @@ function ArtistLens({ frame, sets, rowSpins, links, onOpenSet }: {
         </ul>
       ) : loadedMatches.length > 0 ? (
         <ul className="crail-list">
-          {loadedMatches.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} onOpenSet={onOpenSet} /></li>)}
+          {loadedMatches.slice(0, 4).map((set) => <li key={set.id}><SetRow set={set} links={links} onOpenSet={onOpenSet} /></li>)}
         </ul>
       ) : (
         <p className="crail-empty">
@@ -333,6 +369,7 @@ export function ContextRail({
   seedsLower,
   onAddSeed,
   onPush,
+  onOpenArtist,
   displayMode = "personal",
 }: ContextRailProps) {
   const stationSlug = ctx.stack[0]?.kind === "station" ? ctx.stack[0].id : null;
@@ -375,11 +412,9 @@ export function ContextRail({
   };
 
   const links: GrammarLinks = {
-    onArtist: (name) => push({
-      kind: "artist",
-      id: artistFrameId(name, artistMbids.get(name.trim().toLowerCase()) ?? null),
-      label: name,
-    }),
+    // Artist navigation opens the artist TAB — never a lens frame. The panel
+    // dedups by identifier, so repeated clicks focus the existing tab.
+    onArtist: (name) => onOpenArtist(name, artistMbids.get(name.trim().toLowerCase()) ?? null),
     onDj: (name) => push({ kind: "dj", id: name, label: name }),
     isYours,
     onAddArtist: onAddSeed,
@@ -415,11 +450,17 @@ export function ContextRail({
   } else if (top.kind === "show") {
     lens = <ShowLens frame={top} sets={sets} links={links} stationSlug={stationSlug} onOpenSet={openSetFromRow} />;
   } else if (top.kind === "dj") {
-    lens = <DjLens frame={top} sets={sets} onOpenSet={openSetFromRow} />;
+    lens = <DjLens frame={top} sets={sets} links={links} onOpenSet={openSetFromRow} />;
   } else if (top.kind === "set") {
     lens = <SetLens frame={top} sets={sets} links={links} />;
   } else if (top.kind === "artist") {
-    lens = <ArtistLens frame={top} sets={sets} rowSpins={row?.show?.spins ?? []} links={links} onOpenSet={openSetFromRow} />;
+    // The artist lens is retired: artist frames only appear here transiently
+    // (e.g. restored from an old serialized URL before DialView maps them to
+    // a tab). Degrade to the default station lens rather than rendering a
+    // second artist surface.
+    lens = stationLensEmpty
+      ? null
+      : <StationLens row={row} sets={stationSets} links={links} onOpenSet={openSetFromRow} />;
   }
 
   // All placeholder → render nothing: no empty container, no leftover rule.

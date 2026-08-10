@@ -126,6 +126,7 @@ function Harness({ onPlay = vi.fn() }: { onPlay?: (sets: SetPanelSet[], label: s
           // the background and only takes focus when nothing is active.
           open({ kind: "set", setId: "replay" }, shouldActivateReplayTab(activeId));
         }}
+        renderArtistBody={(scope) => <div data-testid="artist-body">{scope.label ?? scope.value}</div>}
       />
     </div>
   );
@@ -239,6 +240,52 @@ describe("Tabbed set panel", () => {
     expect(activeAfter?.textContent).toBe("DJ Aster"); // …but the scope stays visible
     // the DJ's full sets are still on screen
     expect(document.querySelectorAll(".set-panel__card")).toHaveLength(3);
+  });
+
+  it("opens an artist tab from a queue name click, focuses it, and dedups repeats", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByText("open-first"));
+    // Names are navigation targets; add stays on the explicit leading `+`.
+    const card = document.querySelector(".set-panel__card") as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "New Band" }));
+
+    let tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toContain("New Band");
+    const artistTab = tabs.find((t) => t.textContent === "New Band")!;
+    expect(artistTab.getAttribute("aria-selected")).toBe("true");
+    // The artist tab renders its own body instead of set cards/actions.
+    expect(screen.getByTestId("artist-body").textContent).toBe("New Band");
+    expect(document.querySelector(".set-panel__card")).toBeNull();
+    expect(document.querySelector(".set-panel__actions")).toBeNull();
+
+    // Re-clicking the same artist focuses the existing tab, no duplicate.
+    fireEvent.click(screen.getAllByRole("tab")[0]); // back to the set tab
+    fireEvent.click(within(document.querySelector(".set-panel__card") as HTMLElement)
+      .getByRole("button", { name: "New Band" }));
+    tabs = screen.getAllByRole("tab");
+    expect(tabs.filter((t) => t.textContent === "New Band")).toHaveLength(1);
+    expect(tabs.find((t) => t.textContent === "New Band")!.getAttribute("aria-selected")).toBe("true");
+
+    // Artist tabs close like any other tab.
+    fireEvent.click(screen.getByRole("button", { name: /close New Band/i }));
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).not.toContain("New Band");
+  });
+
+  it("renders a leading + for non-yours queue artists and none for yours (white)", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByText("open-first"));
+    const card = document.querySelector(".set-panel__card") as HTMLElement;
+    // Non-yours: `+` precedes the name inside the wrap.
+    const newBandWrap = within(card).getByRole("button", { name: "New Band" })
+      .closest(".set-queue__artist-wrap")!;
+    expect([...newBandWrap.children][0]!.className).toContain("dial-addplus");
+    // Yours renders white with no `+` add affordance.
+    const fleetwood = within(card).getByRole("button", { name: /Fleetwood Mac/ });
+    expect(fleetwood.className).toContain("set-queue__artist--library");
+    expect(within(card).queryByRole("button", { name: /add fleetwood mac/i })).toBeNull();
+    // Yours names still navigate to the artist tab.
+    fireEvent.click(fleetwood);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toContain("Fleetwood Mac");
   });
 
   it("exports to a chosen service including Qobuz and reports skipped tracks", () => {

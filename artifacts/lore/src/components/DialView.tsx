@@ -13,7 +13,8 @@ import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnec
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
-import { ContextRail } from "./ContextRail";
+import { ContextRail, ArtistPane, artistFrameId, decodeArtistFrame } from "./ContextRail";
+import type { GrammarLinks } from "../dial/grammar";
 import { SearchOverlay } from "./SearchOverlay";
 import { SeedInput } from "./SeedInput";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
@@ -422,6 +423,10 @@ export type SetPanelScope =
   | { kind: "dj"; value: string }
   | { kind: "show"; value: string }
   | { kind: "station"; value: string }
+  /** An artist page rendered as a tab. `value` is the stable artist
+   * identifier: the MBID when known, else `name:<name>` (same encoding as
+   * the retired artist lens frames, so serialized lens URLs map cleanly). */
+  | { kind: "artist"; value: string; label?: string }
   /** The tuned station context rendered AS a tab (sidebar layout only).
    * `value` is the station slug. There is at most one context tab; its id is
    * always CONTEXT_TAB_ID so re-tuning retargets the same tab. */
@@ -456,9 +461,9 @@ export function shouldActivateReplayTab(activeTabId: string | null): boolean {
  * inLibrary flags inside SetQueueList.
  */
 export function scopedSets(scope: SetPanelScope, allSets: SetPanelSet[]): SetPanelSet[] {
-  // The context tab renders its own body (breadcrumb + summary + rail), never
-  // a set list — it scopes over nothing.
-  if (scope.kind === "context") return [];
+  // The context and artist tabs render their own bodies, never a set list —
+  // they scope over nothing.
+  if (scope.kind === "context" || scope.kind === "artist") return [];
   const matches = scope.kind === "set"
     ? allSets.filter((set) => set.id === scope.setId)
     : scope.kind === "dj"
@@ -479,6 +484,18 @@ export function setPanelTabLabel(tab: SetPanelTab, sets: SetPanelSet[], contextL
   }
   if (tab.scope.kind === "dj") return tab.scope.value;
   if (tab.scope.kind === "show") return tab.scope.value;
+  if (tab.scope.kind === "artist") {
+    if (tab.scope.label) return tab.scope.label;
+    const value = tab.scope.value;
+    if (value.startsWith("name:")) return value.slice(5);
+    // MBID identifier — recover a display name from loaded spins.
+    for (const set of sets) {
+      for (const spin of set.spins) {
+        if (spin.artistMbid === value) return spin.artist;
+      }
+    }
+    return "Artist";
+  }
   if (tab.scope.kind === "station") {
     const slug = tab.scope.value;
     const set = sets.find((candidate) => candidate.stationSlug === slug);
@@ -545,6 +562,7 @@ export function TabbedSetPanel({
   onPlay,
   contextLabel,
   contextBody,
+  renderArtistBody,
 }: {
   tabs: SetPanelTab[];
   activeId: string | null;
@@ -560,6 +578,9 @@ export function TabbedSetPanel({
   contextLabel?: string | null;
   /** Body of the station-context tab — breadcrumb + summary + rail. */
   contextBody?: ReactNode;
+  /** Body of an artist tab — the artist page content (runs, spins, taste
+   * control). When absent, artist tabs render nothing below the strip. */
+  renderArtistBody?: (scope: Extract<SetPanelScope, { kind: "artist" }>) => ReactNode;
 }) {
   const [service, setService] = useState<SetExportService>("Spotify");
   const [exportOpen, setExportOpen] = useState(false);
@@ -567,12 +588,31 @@ export function TabbedSetPanel({
   // control (CSS-gated — desktop always shows the row and hides the toggle).
   const [actionsOpen, setActionsOpen] = useState(false);
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
-  // The context tab renders its own body; every set-oriented affordance
-  // (actions, export, cards) treats it as "no set tab active".
+  // The context and artist tabs render their own bodies; every set-oriented
+  // affordance (actions, export, cards) treats them as "no set tab active".
   const isContextActive = activeTab?.scope.kind === "context";
-  const active = isContextActive ? null : activeTab;
+  const activeArtistScope = activeTab?.scope.kind === "artist" ? activeTab.scope : null;
+  const active = isContextActive || activeArtistScope ? null : activeTab;
   const displayed = active ? scopedSets(active.scope, allSets) : [];
   const exported = exportOpen && active ? buildSetExport(displayed, service) : null;
+  // Artist name → MBID from every loaded set, so a queue name click opens a
+  // strongly-identified tab whenever the dial already knows the MBID.
+  const artistMbids = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const set of allSets) {
+      for (const spin of set.spins) {
+        if (spin.artistMbid && !map.has(spin.artist.toLowerCase())) {
+          map.set(spin.artist.toLowerCase(), spin.artistMbid);
+        }
+      }
+    }
+    return map;
+  }, [allSets]);
+  const openArtist = (name: string) => onScope({
+    kind: "artist",
+    value: artistFrameId(name, artistMbids.get(name.trim().toLowerCase()) ?? null),
+    label: name,
+  });
 
   return (
     <>
@@ -590,6 +630,9 @@ export function TabbedSetPanel({
       )}
       {isContextActive && contextBody != null && (
         <div className="set-panel__context">{contextBody}</div>
+      )}
+      {activeArtistScope && renderArtistBody != null && (
+        <div className="set-panel__artist">{renderArtistBody(activeArtistScope)}</div>
       )}
       {active && (
         <button
@@ -651,7 +694,7 @@ export function TabbedSetPanel({
                 </div>
                 <button type="button" className="set-panel__station fdrow__station-chip" onClick={() => onScope({ kind: "station", value: set.stationSlug })}>{set.stationName}</button>
               </header>
-              <SetQueueList artists={set.artists} seedsLower={seedsLower} onAdd={onAdd} onRemove={onRemove} progress={set.progress} />
+              <SetQueueList artists={set.artists} seedsLower={seedsLower} onAdd={onAdd} onRemove={onRemove} onOpenArtist={openArtist} progress={set.progress} />
             </article>
           ))}
         </div>
@@ -665,11 +708,14 @@ export function TabbedSetPanel({
  * sets. A click is a real toggle for taste seeds; hard library matches remain
  * visibly completed but are not removed from the listener's external library.
  */
-export function SetQueueList({ artists, seedsLower, onAdd, onRemove, progress }: {
+export function SetQueueList({ artists, seedsLower, onAdd, onRemove, onOpenArtist, progress }: {
   artists: QueueArtist[];
   seedsLower: Set<string>;
   onAdd: (name: string) => void;
   onRemove: (name: string) => void;
+  /** When provided, artist names become navigation targets that open the
+   * artist tab (yours or not). Add/seed stays on the explicit `+`. */
+  onOpenArtist?: (name: string) => void;
   progress: number;
 }) {
   const completed = Math.max(0, Math.min(100, progress * 100));
@@ -684,13 +730,11 @@ export function SetQueueList({ artists, seedsLower, onAdd, onRemove, progress }:
           const key = artist.name.trim().toLowerCase();
           const seeded = seedsLower.has(key);
           const inLibrary = artist.inLibrary || seeded;
+          const nameCls = `set-queue__artist ${inLibrary ? "set-queue__artist--library dial-artist--complete" : "set-queue__artist--other"}`;
+          const nameAria = inLibrary ? `${artist.name} is in your library` : undefined;
           return (
             <span key={`${key}-${index}`} className="set-queue__artist-wrap">
-              <span
-                className={`set-queue__artist ${inLibrary ? "set-queue__artist--library dial-artist--complete" : "set-queue__artist--other"}`}
-                aria-label={inLibrary ? `${artist.name} is in your library` : undefined}
-              >{artist.name}</span>
-              {artist.title ? <span className="set-queue__title" aria-hidden="true"> — {artist.title}</span> : null}
+              {/* Leading `+` — the add affordance precedes the name in setlists. */}
               {!inLibrary && (
                 <button
                   type="button"
@@ -699,6 +743,17 @@ export function SetQueueList({ artists, seedsLower, onAdd, onRemove, progress }:
                   onClick={(e) => { e.stopPropagation(); onAdd(artist.name); }}
                 >+</button>
               )}
+              {onOpenArtist ? (
+                <button
+                  type="button"
+                  className={`${nameCls} gram-link--nav`}
+                  aria-label={nameAria}
+                  onClick={(e) => { e.stopPropagation(); onOpenArtist(artist.name); }}
+                >{artist.name}</button>
+              ) : (
+                <span className={nameCls} aria-label={nameAria}>{artist.name}</span>
+              )}
+              {artist.title ? <span className="set-queue__title" aria-hidden="true"> — {artist.title}</span> : null}
               {seeded && (
                 <button
                   type="button"
@@ -2798,6 +2853,16 @@ export function DialView() {
     setSetTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, scope }]);
     if (activate) setActiveSetTabId(id);
   }, []);
+  /** Open (or focus) the artist tab for a name/identifier pair. Stable id =
+   * MBID when known, else name-keyed — repeated opens focus the same tab. */
+  const openArtistTab = useCallback((name: string | null, mbid: string | null) => {
+    if (!name && !mbid) return;
+    openSetTab({
+      kind: "artist",
+      value: artistFrameId(name ?? "", mbid),
+      ...(name ? { label: name } : {}),
+    });
+  }, [openSetTab]);
   const closeSetTab = useCallback((id: string) => {
     setSetTabs((current) => {
       const index = current.findIndex((tab) => tab.id === id);
@@ -3141,6 +3206,7 @@ export function DialView() {
           seedsLower={seedsLower}
           onAddSeed={addSeed}
           onPush={surface.push}
+          onOpenArtist={openArtistTab}
           displayMode={crossingSourceMode}
         />
       ) : null}
@@ -3181,6 +3247,44 @@ export function DialView() {
       });
     }
   }, [contextInSidebar, inContext, ctxSlug]);
+
+  // The artist lens is retired: any artist frame that still lands on the
+  // context stack (old serialized ?lens=artist:… URLs, stale callers) is
+  // mapped to an artist TAB and popped — no path may render an artist lens.
+  useEffect(() => {
+    if (surface.mode !== "context" || !surface.ctx) return;
+    const top = surface.ctx.stack[surface.ctx.stack.length - 1];
+    if (!top || top.kind !== "artist") return;
+    const { name, mbid } = decodeArtistFrame(top);
+    openArtistTab(name, mbid);
+    surface.back();
+  }, [surface, openArtistTab]);
+
+  // Artist-tab body: the artist page content (the retired lens's content,
+  // reused). Links mirror the rail's policy — `+` adds, names navigate.
+  const artistTabLinks = useMemo<GrammarLinks>(() => {
+    const isYours = (name: string): boolean => {
+      const key = name.trim().toLowerCase();
+      if (seedsLower.has(key)) return true;
+      return allSets.some((set) => set.spins.some((spin) =>
+        spin.artist.toLowerCase() === key && (spin.isLibraryHit || spin.isArtistHit)));
+    };
+    return { isYours, onAddArtist: addSeed };
+  }, [seedsLower, allSets, addSeed]);
+  const renderArtistBody = useCallback((scope: Extract<SetPanelScope, { kind: "artist" }>) => {
+    const name = scope.label ?? (scope.value.startsWith("name:") ? scope.value.slice(5) : null);
+    const mbid = scope.value.startsWith("name:") ? null : scope.value;
+    return (
+      <ArtistPane
+        name={name}
+        mbid={mbid}
+        sets={allSets}
+        rowSpins={ctxRow?.show?.spins ?? []}
+        links={artistTabLinks}
+        onOpenSet={(set) => openSetTab({ kind: "set", setId: set.id })}
+      />
+    );
+  }, [allSets, ctxRow, artistTabLinks, openSetTab]);
 
   // Closing the context tab exits context mode — same as ↑ Back reaching the
   // dial. The tab itself is removed by the effect above once mode flips.
@@ -3376,6 +3480,7 @@ export function DialView() {
                   onPlay={playSetlist}
                   contextLabel={ctxStationName}
                   contextBody={contextTabBody}
+                  renderArtistBody={renderArtistBody}
                 />
               ) : null}
           </div>
