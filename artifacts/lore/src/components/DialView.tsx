@@ -95,12 +95,16 @@ export { findRunIndexByHour, useSwipeHandler, usePastScanState };
 function useDelayedBoolean(value: boolean, delayMs = 150): boolean {
   const [delayed, setDelayed] = useState(false);
   useEffect(() => {
-    if (!value) {
-      setDelayed(false);
-      return;
-    }
+    if (!value) return;
     const id = setTimeout(() => setDelayed(true), delayMs);
-    return () => clearTimeout(id);
+    // Clearing `delayed` on teardown (rather than synchronously in the effect
+    // body) resets it for the next `value=true` window without a
+    // setState-in-effect. The `value && delayed` return already suppresses the
+    // stale-true frame while this cleanup is pending.
+    return () => {
+      clearTimeout(id);
+      setDelayed(false);
+    };
   }, [value, delayMs]);
   // Short-circuit: when value is false, always return false regardless of the
   // pending effect clearing `delayed`.  This prevents a one-frame coexistence
@@ -1712,8 +1716,18 @@ export function DialView() {
   // moon-tap hero appears instantly at full quality.
   const avatarAlbum = avatarData?.current ?? avatarData?.candidates?.[0] ?? null;
   const [heroArt, setHeroArt] = useState<string>(RUMOURS);
+  // When there is no usable avatar, the hero falls back to RUMOURS. Applied as
+  // a render-time reset against the previous validity (rather than a
+  // synchronous setState inside the probing effect); the effect below only
+  // performs the async candidate probing when an avatar is actually present.
+  const heroAvatarUsable = !!avatarAlbum && !!avatarUrl && avatarUrl !== RUMOURS;
+  const [prevHeroAvatarUsable, setPrevHeroAvatarUsable] = useState(heroAvatarUsable);
+  if (heroAvatarUsable !== prevHeroAvatarUsable) {
+    setPrevHeroAvatarUsable(heroAvatarUsable);
+    if (!heroAvatarUsable) setHeroArt(RUMOURS);
+  }
   useEffect(() => {
-    if (!avatarAlbum || !avatarUrl || avatarUrl === RUMOURS) { setHeroArt(RUMOURS); return; }
+    if (!avatarAlbum || !avatarUrl || avatarUrl === RUMOURS) return;
     let cancelled = false;
     void heroArtCandidates(avatarAlbum).then((urls) => {
       if (cancelled) return;
@@ -2145,9 +2159,10 @@ export function DialView() {
       })
       .sort((a, b) => (b.owned + b.discover) - (a.owned + a.discover));
   }, [recentRuns, availableSetDays, setDay, setDaypart]);
-  useEffect(() => {
-    if (setDay != null && !availableSetDays.includes(setDay)) setSetDay(null);
-  }, [availableSetDays, setDay]);
+  // Drop a selected set-day once it's no longer among the available days.
+  // Corrected during render (it converges immediately) rather than via a
+  // setState-in-effect.
+  if (setDay != null && !availableSetDays.includes(setDay)) setSetDay(null);
 
   // Two-level past-scan state machine (coarse = runs, fine = crossing moments).
   const pastScan = usePastScanState(recentRuns);
@@ -2470,6 +2485,11 @@ export function DialView() {
   useEffect(() => {
     if (!ride.active || ride.queue.length === 0) return;
     const id = "replay";
+    // Syncs the external player (`ride`) subscription state into the local
+    // set-panel model and conditionally focuses the replay tab. This mirrors
+    // an external store whose updates arrive via PlayerProvider, so the sync
+    // belongs in an effect keyed on ride identity.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs external player (ride) subscription state into the set-panel model
     setOpenedSets((current) => ({
       ...current,
       [id]: {
@@ -2760,9 +2780,14 @@ export function DialView() {
 
   // Entering context mode opens/focuses the context tab in the sidebar;
   // leaving context (↑ Back at root, Dial crumb, station change reset)
-  // removes it. Portrait never manages a context tab.
-  useEffect(() => {
-    if (!contextInSidebar || (inContext && !ctxSlug)) return;
+  // removes it. Portrait never manages a context tab. Reconciled as a
+  // render-time adjustment against the previous (contextInSidebar, inContext,
+  // ctxSlug) tuple rather than a setState-in-effect.
+  const ctxTabKey = `${contextInSidebar ? 1 : 0}|${inContext ? 1 : 0}|${ctxSlug ?? ""}`;
+  const [prevCtxTabKey, setPrevCtxTabKey] = useState(ctxTabKey);
+  if (ctxTabKey !== prevCtxTabKey) {
+    setPrevCtxTabKey(ctxTabKey);
+    if (!(!contextInSidebar || (inContext && !ctxSlug))) {
     if (inContext && ctxSlug) {
       setSetTabs((current) => {
         const tab: SetPanelTab = { id: CONTEXT_TAB_ID, scope: { kind: "context", value: ctxSlug } };
@@ -2786,7 +2811,8 @@ export function DialView() {
         return next;
       });
     }
-  }, [contextInSidebar, inContext, ctxSlug]);
+    }
+  }
 
   // The artist lens is retired: any artist frame that still lands on the
   // context stack (old serialized ?lens=artist:… URLs, stale callers) is
@@ -2796,6 +2822,11 @@ export function DialView() {
     const top = surface.ctx.stack[surface.ctx.stack.length - 1];
     if (!top || top.kind !== "artist") return;
     const { name, mbid } = decodeArtistFrame(top);
+    // Reconciles an external navigation surface (a legacy artist frame pushed
+    // onto the context stack) into a tab, then imperatively pops the surface.
+    // The surface.back() mutation must run in an effect, not during render, so
+    // the paired openArtistTab setState legitimately lives here too.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- imperative reconciliation of external navigation surface paired with surface.back()
     openArtistTab(name, mbid);
     surface.back();
   }, [surface, openArtistTab]);

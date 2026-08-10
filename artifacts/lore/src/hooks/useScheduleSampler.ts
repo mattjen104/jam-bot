@@ -130,7 +130,9 @@ function useSamplerPlayer(onDone: () => void) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const urlsRef = useRef<string[]>([]);
   const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
 
   // Always-fresh playAt — avoids stale closure in recursive setTimeout calls.
   const playAtRef = useRef<(idx: number) => void>(() => {});
@@ -148,26 +150,32 @@ function useSamplerPlayer(onDone: () => void) {
     };
   }, []);
 
-  playAtRef.current = (idx: number) => {
-    const urls = urlsRef.current;
-    if (idx >= urls.length) {
-      setIsSampling(false);
-      onDoneRef.current();
-      return;
-    }
-    const el = audioRef.current;
-    if (!el) return;
-    el.src = urls[idx]!;
-    el.currentTime = 0;
-    void el.play().catch(() => {
-      // Skip unplayable clip silently
-      playAtRef.current(idx + 1);
-    });
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      playAtRef.current(idx + 1);
-    }, CLIP_DURATION_MS);
-  };
+  // Install the recursive playback driver into a ref on mount. It closes only
+  // over stable refs/setters, so a one-time install is sufficient; keeping it
+  // in an effect (rather than reassigning every render) avoids ref writes
+  // during render. It runs before start() (only invoked from event handlers).
+  useEffect(() => {
+    playAtRef.current = (idx: number) => {
+      const urls = urlsRef.current;
+      if (idx >= urls.length) {
+        setIsSampling(false);
+        onDoneRef.current();
+        return;
+      }
+      const el = audioRef.current;
+      if (!el) return;
+      el.src = urls[idx]!;
+      el.currentTime = 0;
+      void el.play().catch(() => {
+        // Skip unplayable clip silently
+        playAtRef.current(idx + 1);
+      });
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        playAtRef.current(idx + 1);
+      }, CLIP_DURATION_MS);
+    };
+  }, []);
 
   const start = useCallback((urls: string[]) => {
     if (timerRef.current) clearTimeout(timerRef.current);

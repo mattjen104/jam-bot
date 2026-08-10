@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { proxyArtUrl } from "../lib/proxyArt";
 import type {
@@ -574,7 +575,10 @@ function ShowTimeline({
   runs: StationScheduleRun[];
   stationSlug: string;
 }) {
-  const now = Date.now();
+  // Read the clock once at mount rather than during every render — the impure
+  // Date.now() call belongs in a state initializer, and the active-run window
+  // is coarse enough (4h) that a single snapshot is indistinguishable.
+  const [now] = useState(() => Date.now());
   // Only mark a run active when it genuinely overlaps the current window (started
   // already and ended no more than 4 hours ago).  The previous fallback to
   // runs[runs.length - 1] caused stale runs that ended hours ago to appear

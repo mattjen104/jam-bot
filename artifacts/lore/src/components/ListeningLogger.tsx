@@ -71,7 +71,9 @@ export function ListeningLogger() {
   // Latest ride.progressMs kept fresh in a ref so interval callbacks always
   // read the current position without being listed in their dependency arrays.
   const rideProgressMsRef = useRef(ride.progressMs);
-  rideProgressMsRef.current = ride.progressMs;
+  useEffect(() => {
+    rideProgressMsRef.current = ride.progressMs;
+  }, [ride.progressMs]);
 
   // --- Live radio: log the station's now-playing while the stream sounds ---
   const station = radio.station;

@@ -448,12 +448,11 @@ export function YourWeekCard() {
 
   // If the client clock is ahead and selectedWeek points to a future week
   // that the server hasn't reached yet, snap it back as soon as the server
-  // current week is known.
-  useEffect(() => {
-    if (serverCurrentWeek && selectedWeek > serverCurrentWeek) {
-      setSelectedWeek(serverCurrentWeek);
-    }
-  }, [serverCurrentWeek, selectedWeek]);
+  // current week is known. Applied as a render-time adjustment rather than a
+  // setState-in-effect.
+  if (serverCurrentWeek && selectedWeek > serverCurrentWeek) {
+    setSelectedWeek(serverCurrentWeek);
+  }
 
   const isCurrentWeek = selectedWeek >= currentWeek;
   const weekLabelRef = useRef<HTMLButtonElement>(null);

@@ -156,13 +156,19 @@ export function BottlePanel({
     if (open) markRead();
   }, [open, markRead]);
 
-  // Reset panel state when MBID changes
-  useEffect(() => {
+  // Reset panel state when MBID changes. The state resets are applied as a
+  // render-time adjustment against the previous MBID; the timer teardown (a
+  // side effect) stays in an effect that runs on the same change.
+  const [prevMbid, setPrevMbid] = useState(mbid);
+  if (mbid !== prevMbid) {
+    setPrevMbid(mbid);
     setOpen(false);
     setNoteText("");
     setSentConfirm(false);
     setSealed(false);
     setSendError(null);
+  }
+  useEffect(() => {
     if (errorTimer.current) clearTimeout(errorTimer.current);
   }, [mbid]);
 

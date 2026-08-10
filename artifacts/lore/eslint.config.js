@@ -24,13 +24,13 @@ export default tseslint.config(
       "no-empty": ["warn", { allowEmptyCatch: true }],
       "react-refresh/only-export-components": "warn",
       "react-hooks/exhaustive-deps": "warn",
-      // New React-compiler lint rules (react-hooks v7): valuable signals but
-      // the codebase predates them; warn-only so new code gets feedback
-      // without a disruptive cleanup sweep. rules-of-hooks stays an error.
-      "react-hooks/set-state-in-effect": "warn",
-      "react-hooks/refs": "warn",
-      "react-hooks/purity": "warn",
-      "react-hooks/immutability": "warn",
+      // React-compiler lint rules (react-hooks v7): the codebase reached zero
+      // violations, so these are errors to block regressions at merge time.
+      // Remaining false positives carry targeted, justified inline disables.
+      "react-hooks/set-state-in-effect": "error",
+      "react-hooks/refs": "error",
+      "react-hooks/purity": "error",
+      "react-hooks/immutability": "error",
       "react-hooks/static-components": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
       "react-hooks/globals": "warn",
@@ -45,6 +45,13 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "react-refresh/only-export-components": "off",
+      // Test harnesses legitimately use render-phase "latest value" ref
+      // mirrors to observe hook APIs; the compiler rules target app code
+      // (src/), where they are errors.
+      "react-hooks/refs": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/immutability": "off",
     },
   },
 );

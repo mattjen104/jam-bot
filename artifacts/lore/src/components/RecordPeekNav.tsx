@@ -136,10 +136,14 @@ export function RecordPeekNav() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const downPoint = useRef<{ x: number; y: number } | null>(null);
 
-  useEffect(() => {
+  // Clear any open peek/busy state on navigation, applied as a render-time
+  // reset against the previous location rather than an effect.
+  const [prevLocation, setPrevLocation] = useState(location);
+  if (location !== prevLocation) {
+    setPrevLocation(location);
     setPeek(null);
     setBusy(false);
-  }, [location]);
+  }
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);

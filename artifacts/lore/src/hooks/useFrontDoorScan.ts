@@ -26,11 +26,17 @@ export function useFrontDoorScan(count: number) {
     if (rt.current.raf != null) { cancelAnimationFrame(rt.current.raf); rt.current.raf = null; }
   }, []);
 
+  // Self-referential loops (tick recurses via rAF, hop reschedules itself via
+  // setTimeout) go through refs so neither callback reads its own binding
+  // before it is initialised — the compiler flags such self-references.
+  const tickRef = useRef<() => void>(() => {});
+  const hopRef = useRef<(idx: number) => void>(() => {});
+
   const tick = useCallback(() => {
     if (!rt.current.active) return;
     const p = Math.min(1, (Date.now() - rt.current.t0) / dwellRef.current);
     setProgress(p);
-    if (p < 1) rt.current.raf = requestAnimationFrame(tick);
+    if (p < 1) rt.current.raf = requestAnimationFrame(() => tickRef.current());
   }, []);
 
   const hop = useCallback((idx: number) => {
@@ -42,9 +48,14 @@ export function useFrontDoorScan(count: number) {
     cancelTimers();
     setSamplingIdx(i);
     setProgress(0);
-    rt.current.raf = requestAnimationFrame(tick);
-    rt.current.timer = setTimeout(() => hop(i + 1), dwellRef.current);
-  }, [cancelTimers, tick]);
+    rt.current.raf = requestAnimationFrame(() => tickRef.current());
+    rt.current.timer = setTimeout(() => hopRef.current(i + 1), dwellRef.current);
+  }, [cancelTimers]);
+
+  useEffect(() => {
+    tickRef.current = tick;
+    hopRef.current = hop;
+  }, [tick, hop]);
 
   const stop = useCallback(() => {
     rt.current.active = false;

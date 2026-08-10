@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, ExternalLink, Loader2, Music2, RefreshCw } from "lucide-react";
 import {
   postReplayMaterialization,
@@ -25,16 +25,17 @@ export function ReplayPlaylistPanel({
   embedded?: boolean;
 }) {
   const { data: targetData } = useReplayPlaylistTargets(replayId);
-  const [selectedService, setSelectedService] = useState<ReplayPlaylistTarget["service"] | null>(null);
+  const [selectedServiceRaw, setSelectedService] = useState<ReplayPlaylistTarget["service"] | null>(null);
   const [jobId, setJobId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data: materialization } = useReplayMaterializationJob(jobId);
 
-  useEffect(() => {
-    if (materialization?.status === "done" || materialization?.status === "error") {
-      setSelectedService(null);
-    }
-  }, [materialization?.status]);
+  // The "busy" service selection only holds while a job is in flight; a
+  // finished (done/error) job clears it. Derive that during render instead of
+  // syncing it back into state from an effect.
+  const jobSettled =
+    materialization?.status === "done" || materialization?.status === "error";
+  const selectedService = jobSettled ? null : selectedServiceRaw;
 
   async function materialize(service: ReplayPlaylistTarget["service"]) {
     setActionError(null);

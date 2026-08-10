@@ -276,3 +276,28 @@ describe("PickerRun ?play=1&from= deep link", () => {
     expect(screen.queryByTestId("from-fallback-notice")).toBeNull();
   });
 });
+
+describe("unmount before deferred autoplay start", () => {
+  it("does not start the replay or set state when unmounted before the microtask", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const playSpy = window.HTMLMediaElement.prototype.play as Mock;
+    playSpy.mockClear();
+
+    // ?from= misses so both the fallback-notice setState AND startReplay are
+    // deferred in the guarded microtask.
+    const { unmount } = renderRunPage("station", "play=1&from=mbid-missing");
+    // Unmount synchronously — before the deferred microtask runs. The
+    // cancellation flag must drop the start entirely.
+    unmount();
+    // Flush microtasks + a macrotask so any (buggy) deferred start would land.
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    // No playback surface was touched, and no setState-after-unmount noise.
+    expect(playSpy).not.toHaveBeenCalled();
+    const badCalls = errorSpy.mock.calls.filter((args) =>
+      String(args[0]).includes("unmounted"),
+    );
+    expect(badCalls).toEqual([]);
+  });
+});

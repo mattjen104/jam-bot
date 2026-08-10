@@ -42,10 +42,15 @@ export function GuidedReplayQueue({ replayId }: { replayId: number }) {
   const [activity, setActivity] = useState("Choose Open to visit the selected service.");
   const [wasHidden, setWasHidden] = useState(false);
 
-  useEffect(() => {
+  // Reset the walkthrough when the selected (or resolved) service changes,
+  // applied as a render-time state adjustment rather than an effect.
+  const serviceKey = `${service ?? ""}|${data?.service ?? ""}`;
+  const [prevServiceKey, setPrevServiceKey] = useState(serviceKey);
+  if (serviceKey !== prevServiceKey) {
+    setPrevServiceKey(serviceKey);
     setPosition(0);
     setActivity("Choose Open to visit the selected service.");
-  }, [service, data?.service]);
+  }
 
   useEffect(() => {
     const onVisibility = () => {

@@ -550,12 +550,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const [scanActive, setScanActive] = useState(false);
   const [scanIdx, setScanIdx] = useState(0);
-  const [scanCurrent, setScanCurrent] = useState<ScanHop | null>(null);
   const [scanDir, setScanDir] = useState<1 | -1>(1);
+
+  // Display info for the current scan hop — derived during render from the
+  // active scan index. It is null whenever scanning is off (all the old
+  // imperative `setScanCurrent(null)` sites also toggled `scanActive` off).
+  const scanCurrent = useMemo<ScanHop | null>(() => {
+    if (!scanActive || scannableStations.length === 0) return null;
+    const entry = scannableStations[scanIdx % scannableStations.length];
+    if (!entry) return null;
+    return {
+      title: entry.title,
+      artist: entry.artist,
+      mbid: entry.mbid,
+      stationName: entry.station.name,
+      stationSlug: entry.station.slug,
+    };
+  }, [scanActive, scanIdx, scannableStations]);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every toggle so stale async preview fetches are discarded.
   const scanTokenRef = useRef(0);
+  // Latest-value mirror read synchronously inside user-triggered handlers
+  // (start/startReplay crossing detection). It must hold the current value at
+  // call time regardless of effect-flush timing, so it is written during render
+  // — the canonical case where a render-phase ref write is correct.
   const radioRef = useRef(radio);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in event handlers; render-phase write is required for correctness
   radioRef.current = radio;
 
   const clearScanTimer = useCallback(() => {
@@ -572,20 +592,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     el.load();
   }, []);
 
-  // Audio element — singleton created during render, shared by rides and preview scan.
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  if (audioRef.current === null && typeof Audio !== "undefined") {
+  // Audio element — singleton, shared by rides and preview scan. Created once
+  // via a lazy `useState` initializer (stable identity across renders) and
+  // handed to a ref so the many callbacks/effects can read `.current`
+  // synchronously without writing to the ref during render.
+  const [audioEl] = useState<HTMLAudioElement | null>(() => {
+    if (typeof Audio === "undefined") return null;
     const el = new Audio();
     el.preload = "none";
-    audioRef.current = el;
-  }
+    return el;
+  });
+  const audioRef = useRef<HTMLAudioElement | null>(audioEl);
 
   const toggleScan = useCallback(() => {
     setScanActive((prev) => {
       if (prev) {
         clearScanTimer();
         scanTokenRef.current += 1;
-        setScanCurrent(null);
+        // `scanCurrent` derives to null once `scanActive` flips false below.
         // Silence the preview audio element used by the scan.
         stopScanAudio(audioRef.current);
         return false;
@@ -613,14 +637,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Stop any live broadcast — scan uses the preview audio element exclusively.
     radioRef.current.stop();
 
-    // Expose display info immediately so the UI doesn't flicker blank.
-    setScanCurrent({
-      title: entry.title,
-      artist: entry.artist,
-      mbid: entry.mbid,
-      stationName: entry.station.name,
-      stationSlug: entry.station.slug,
-    });
+    // Display info (`scanCurrent`) is derived during render from `scanIdx`, so
+    // the UI already reflects this hop — no imperative state update needed here.
 
     // Fetch the 30 s iTunes preview and play it.
     void getRecordingPreview(entry.mbid)
@@ -675,7 +693,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Options-panel state: explicit service preference + derived async fields.
   const [preferredService, setPreferredServiceState] = useState<"youtube" | "apple-music" | "bandcamp" | null>(null);
-  const [bandcampAlbumUrl, setBandcampAlbumUrl] = useState<string | null>(null);
+  // Bandcamp album URL is stored keyed by the MBID it was fetched for, so the
+  // exposed value can be *derived* to null on track change during render
+  // (rather than reset synchronously inside the fetch effect).
+  const [bandcampAlbum, setBandcampAlbum] = useState<{
+    mbid: string;
+    url: string | null;
+  } | null>(null);
   // True once Apple Music has successfully played a track this session.
   const [appleMusicConnected, setAppleMusicConnected] = useState(false);
   // True when every alt driver (Apple Music AND YouTube) has been exhausted
@@ -687,7 +711,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Past-mode tier orchestration state.
   const [pastModeTier, setPastModeTier] = useState<PlaybackTier | null>(null);
   const [pastModeTierLabel, setPastModeTierLabel] = useState<string | null>(null);
-  const [cueSheetVisible, setCueSheetVisible] = useState(false);
+  // The Tier-4 cue sheet is derived (see below). The only asynchronous input
+  // is the spin-duration timer, which records the MBID it fired for; everything
+  // else is derived from live state so there is never a synchronous reset.
+  const [cueSheetTimerMbid, setCueSheetTimerMbid] = useState<string | null>(null);
   const [pastRunFailed, setPastRunFailed] = useState(false);
   const [pastRunFailure, setPastRunFailure] = useState<PastRunFailure | null>(
     null,
@@ -725,6 +752,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Ref mirror so stable callbacks (tryAltDriverRef etc.) can read without
   // being captured in their closure dependency arrays.
   const interstitialArmedRef = useRef(false);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read inside stable driver callbacks; render-phase write is required for correctness
   interstitialArmedRef.current = interstitialArmed;
 
   // True when the device-continuity check found a mismatch between the active
@@ -783,9 +811,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Stable refs to Spotify primitives the crossing handler needs inside async
   // .then() callbacks — avoids capturing a stale closure over spotify.
-  const spotifyFetchDevicesRef = useRef<(() => Promise<SpotifyDevice[]>) | null>(null);
+  // Latest-value mirrors read synchronously inside the crossing handler; must
+  // be current at call time, so written during render (canonical correct case).
+  const spotifyFetchDevicesRef = useRef<(() => Promise<SpotifyDevice[]>) | null>(
+    spotify.fetchDevices,
+  );
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in the crossing handler; render-phase write is required
   spotifyFetchDevicesRef.current = spotify.fetchDevices;
   const spotifyPinnedDeviceIdRef = useRef<string | null | undefined>(spotify.pinnedDevice?.id);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in the crossing handler; render-phase write is required
   spotifyPinnedDeviceIdRef.current = spotify.pinnedDevice?.id;
 
   // Guards so async resolves don't stack up or race a stopped ride.
@@ -801,16 +835,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Track preview playhead for lyric sync (fires ~4×/s from the audio element).
   // Also capture the clip duration so the progress bar has a total to fill against.
+  // Reads `source` directly (not the ref) so the audio-progress handlers don't
+  // capture `sourceRef` inside an effect — re-subscribing on source change is
+  // cheap (≤6 values) and keeps the ref free of effect-read immutability flags.
+  const isPreviewSource = source === "preview";
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
     const onTimeUpdate = () => {
-      if (sourceRef.current === "preview") {
+      if (isPreviewSource) {
         setProgressMs(Math.round(el.currentTime * 1000));
       }
     };
     const onDurationChange = () => {
-      if (sourceRef.current === "preview") {
+      if (isPreviewSource) {
         const d = el.duration;
         setDurationMs(Number.isFinite(d) && d > 0 ? Math.round(d * 1000) : null);
       }
@@ -823,17 +861,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       el.removeEventListener("durationchange", onDurationChange);
       el.removeEventListener("loadedmetadata", onDurationChange);
     };
-  }, []); // audioRef.current is a singleton created during render — stable
+  }, [isPreviewSource]); // audioRef.current is a singleton — only re-subscribe on source flips
 
   // Mirror of `source` readable inside stable callbacks.
   const sourceRef = useRef<"spotify" | "youtube" | "apple-music" | "local-file" | "bandcamp" | "preview" | null>(null);
   // Queue length readable inside the poll interval without re-arming it.
   const queueLenRef = useRef(0);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read inside stable interval callbacks; render-phase write is required for correctness
   queueLenRef.current = queue.length;
-  // Refs for reading latest mode/orientation inside stable interval callbacks.
+  // Refs for reading latest mode/orientation inside stable interval callbacks
+  // AND synchronously in the crossing handlers — must be current at call time.
   const playbackModeRef = useRef<PlaybackMode>(playbackMode);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in handlers and interval callbacks; render-phase write is required
   playbackModeRef.current = playbackMode;
   const timeOrientationRef = useRef<TimeOrientation>(timeOrientation);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in handlers and interval callbacks; render-phase write is required
   timeOrientationRef.current = timeOrientation;
 
   const stopRadio = radio.stop;
@@ -888,7 +930,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Reset past-mode tier state.
     setPastModeTier(null);
     setPastModeTierLabel(null);
-    setCueSheetVisible(false);
+    setCueSheetTimerMbid(null);
     setPastRunFailed(false);
     setPastRunFailure(null);
     tier1RunQueuedRef.current = false;
@@ -905,7 +947,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       clearScanTimer();
       scanTokenRef.current += 1;
       setScanActive(false);
-      setScanCurrent(null);
       stopScanAudio(audioRef.current);
       // The ride takes over audio: pause the live stream (resumable) so two
       // sources never play at once — enqueue-never-cut, but audio is exclusive.
@@ -999,7 +1040,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Clear past-mode tier state — trail rides do not use tier orchestration.
       setPastModeTier(null);
       setPastModeTierLabel(null);
-      setCueSheetVisible(false);
+      setCueSheetTimerMbid(null);
       setPastRunFailed(false);
       setPastRunFailure(null);
       tier1RunQueuedRef.current = false;
@@ -1039,7 +1080,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       clearScanTimer();
       scanTokenRef.current += 1;
       setScanActive(false);
-      setScanCurrent(null);
       stopScanAudio(audioRef.current);
       pauseRadio?.();
       rideRef.current += 1;
@@ -1130,7 +1170,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       tier23LinkFetchingRef.current = new Set();
       setPastRunFailed(false);
       setPastRunFailure(null);
-      setCueSheetVisible(false);
+      setCueSheetTimerMbid(null);
       // Compute playback tier for past-orientation rides from the connected services.
       if (newOrientation === "past") {
         const tier = selectPastModeTier({
@@ -1218,13 +1258,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // (e.g. via an external start call), stop the scan immediately so the two
   // modes never fight over the shared audio element.
   useEffect(() => {
-    if (!active) return;
+    if (!active || !scanActive) return;
     clearScanTimer();
     scanTokenRef.current += 1;
-    setScanActive(false);
-    setScanCurrent(null);
+    // Tearing down the preview audio and cancelling the scan is genuine
+    // external-sync work triggered by a ride taking over the shared audio
+    // element — not a value derivable during render.
     stopScanAudio(audioRef.current);
-  }, [active, clearScanTimer, stopScanAudio]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting scan when a ride claims the shared audio element is a legit external reset, not a derivable value
+    setScanActive(false);
+  }, [active, scanActive, clearScanTimer, stopScanAudio]);
 
   const next = useCallback(() => {
     setIndex((i) => {
@@ -1324,8 +1367,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const token = rideRef.current;
     fetchingNextRef.current = true;
-    setSeeking(true);
     const visited = new Set(queue.map((q) => q.mbid));
+
+    // Loading flag is raised asynchronously (microtask) so it happens outside
+    // the synchronous render/commit path; it is lowered in the fetch's
+    // `.finally`. The `fetchingNextRef` guard above already prevents re-entry.
+    queueMicrotask(() => {
+      if (token === rideRef.current) setSeeking(true);
+    });
 
     void getRecordingSegues(from.mbid)
       .then((res) => {
@@ -1513,7 +1562,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         : youtubeDriver;
 
   // Keep the driver control refs in sync so stop()/togglePause() can call them
-  // without capturing the driver instances in their stable callbacks.
+  // without capturing the driver instances in their stable callbacks. These
+  // are read synchronously inside user-triggered handlers (e.g. start() calls
+  // activeDriverStopRef.current() immediately), so they must be current at call
+  // time and are written during render.
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in handlers; render-phase write is required
   activeDriverStopRef.current = () => {
     spotifyDriver.handle.stop();
     youtubeDriver.stop();
@@ -1524,6 +1577,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Route pause/resume/seek to whichever driver is currently sounding, not the
   // statically-preferred one — Spotify may be preferred but YouTube/Apple
   // could be carrying the audio after a per-track fallback.
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in handlers; render-phase write is required
   activeDriverPauseRef.current = async () => {
     const src = sourceRef.current;
     if (src === "youtube") return youtubeDriver.pause();
@@ -1532,6 +1586,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (src === "bandcamp") return bandcampDriver.pause();
     return spotifyDriver.handle.pause();
   };
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read synchronously in handlers; render-phase write is required
   activeDriverResumeRef.current = async () => {
     const src = sourceRef.current;
     if (src === "youtube") return youtubeDriver.resume();
@@ -1540,8 +1595,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (src === "bandcamp") return bandcampDriver.resume();
     return spotifyDriver.handle.resume();
   };
+  // Uses `source` (state) rather than `sourceRef.current` because this IIFE
+  // executes during render; state is the correct render-phase read and mirrors
+  // the ref exactly.
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror write; the read below uses `source` state, not the ref
   activeDriverSeekRef.current = (() => {
-    const src = sourceRef.current;
+    const src = source;
     if (src === "youtube") return youtubeDriver.seek ?? null;
     if (src === "apple-music") return appleMusicDriver.seek ?? null;
     if (src === "local-file") return localFileDriver.seek ?? null;
@@ -1556,6 +1615,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Used wherever the old `fallbackUsed` gated live broadcast resume / preview
   // skip — so that a preferredService failure also triggers broadcast recovery.
   const effectiveFallbackUsed = fallbackUsed || altDriversAllFailed;
+
+  // `altDriverActiveMbid` is set whenever an alt driver is loading OR playing
+  // a track — it gates the preview effect and the live-broadcast fallback so we
+  // don't resume the broadcast while an alt driver is still attempting.
+  // Declared here (before `retryService`) so it is not accessed before its
+  // declaration.
+  const [altDriverActiveMbid, setAltDriverActiveMbid] = useState<string | null>(null);
+  // Per-driver failure keys: "am:<mbid>" for Apple Music, "yt:<mbid>" for YouTube.
+  const altDriverFailedRef = useRef<Set<string>>(new Set());
 
   /**
    * Retry the active ride service.  When the user explicitly selected an alt
@@ -1689,6 +1757,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const unlocked = interstitialToneRef.current;
     interstitialToneRef.current = null;
     const tone = unlocked ?? new Audio(interstitialToneUrl);
+    // `tone` may be the pre-unlocked element read from the ref above; muting it
+    // is the intended imperative reuse. The compiler flags this as mutating a
+    // ref-derived value, but the element has already been detached (ref nulled).
+    // eslint-disable-next-line react-hooks/immutability -- imperative reuse of a detached, ref-sourced Audio element; mutation is required and safe
     tone.muted = false;
     try { tone.currentTime = 0; } catch { /* not seekable yet — plays from 0 */ }
     tone.addEventListener("ended", dismiss);
@@ -1741,13 +1813,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // ---- Alt-driver state (YouTube / Apple Music as Spotify fallback) --------
   // When Spotify fails for a track, PlayerProvider tries Apple Music (if
   // available), then YouTube, before dropping to broadcast/preview.
-  // `altDriverActiveMbid` is set whenever an alt driver is loading OR playing
-  // a track — it gates the preview effect and the live-broadcast fallback so we
-  // don't resume the broadcast while an alt driver is still attempting.
-  const [altDriverActiveMbid, setAltDriverActiveMbid] = useState<string | null>(null);
-  // Per-driver failure keys: "am:<mbid>" for Apple Music, "yt:<mbid>" for YouTube.
-  const altDriverFailedRef = useRef<Set<string>>(new Set());
-
   // ---- Explicit service selection ------------------------------------------
 
   /**
@@ -1786,24 +1851,30 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // and live now-playing advances.  Spotify handles its own continuity via its
   // internal poll + command effect; all other drivers need explicit teardown.
   useEffect(() => {
+    // Imperative teardown of the alt drivers — genuine side effects that must
+    // run in the effect (audio exclusivity across track changes).
     youtubeDriver.stop();
     appleMusicDriver.stop();
     localFileDriver.stop();
     bandcampDriver.stop();
-    if (
+    const clearedSource =
       sourceRef.current === "youtube" ||
       sourceRef.current === "apple-music" ||
       sourceRef.current === "local-file" ||
-      sourceRef.current === "bandcamp"
-    ) {
-      sourceRef.current = null;
-      setSource(null);
-    }
-    setAltDriverActiveMbid(null);
+      sourceRef.current === "bandcamp";
+    if (clearedSource) sourceRef.current = null;
     altDriverFailedRef.current.clear();
+    // These are genuine external resets triggered by a track change enforcing
+    // audio exclusivity (a driver was torn down above) — not values derivable
+    // during render, and they must land synchronously with the imperative
+    // driver teardown so the alt-driver-start effect sees a coherent snapshot.
+    /* eslint-disable react-hooks/set-state-in-effect -- track-change teardown resets tied to imperative driver stops; must be synchronous, not derivable */
+    if (clearedSource) setSource(null);
+    setAltDriverActiveMbid(null);
     setAltDriversAllFailed(false);
     // Clear stale duration when the track changes.
     setDurationMs(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMbid]);
 
@@ -1812,14 +1883,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const driverActive = spotifyModeForCurrent || altDriverActiveMbid === currentMbid;
 
   // ---- Bandcamp album URL — async fetch on track change --------------------
+  // The exposed `bandcampAlbumUrl` is derived below: it is null unless the
+  // stored result matches the current MBID, so there is no need to reset state
+  // synchronously here — the fetch only ever writes an MBID-tagged result.
   useEffect(() => {
-    setBandcampAlbumUrl(null);
     if (!currentMbid) return;
+    const mbidForFetch = currentMbid;
     let cancelled = false;
     const run = async () => {
       try {
         // `await` handles a mocked/absent function returning undefined gracefully.
-        const support = await getRecordingSupport(currentMbid);
+        const support = await getRecordingSupport(mbidForFetch);
         if (cancelled) return;
         // Album-scope Bandcamp links have detail "Bandcamp release".
         // Track-scope links have detail "Exact Bandcamp track" and are excluded.
@@ -1827,9 +1901,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (l: any) => l.kind === "bandcamp" && l.detail === "Bandcamp release",
         );
-        setBandcampAlbumUrl(bcLink?.url ?? null);
+        setBandcampAlbum({ mbid: mbidForFetch, url: bcLink?.url ?? null });
       } catch {
-        if (!cancelled) setBandcampAlbumUrl(null);
+        if (!cancelled) setBandcampAlbum({ mbid: mbidForFetch, url: null });
       }
     };
     void run();
@@ -1837,6 +1911,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [currentMbid]);
+
+  // Derived: only surface the album URL fetched for the current track.
+  const bandcampAlbumUrl =
+    bandcampAlbum && bandcampAlbum.mbid === currentMbid
+      ? bandcampAlbum.url
+      : null;
 
   // Try the next alt driver in the cascade:
   //   Local file → Apple Music → Bandcamp → YouTube
@@ -1846,8 +1926,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (mbid: string, item: RideItem, skipApple: boolean, skipBandcamp?: boolean) => void
   >(() => {});
   // Defined after the subscriptions below so the closures can call it recursively.
-  // The ref indirection avoids a dependency cycle.
+  // The ref indirection deliberately breaks a dependency cycle; writing the
+  // latest implementation into the ref inside this effect is the intended
+  // pattern (the compiler flags the assignment because the ref is also read
+  // from driver callbacks, but the write is required and safe).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability -- intentional ref-indirection to break a dependency cycle; writing the latest closure into the ref is required
     tryAltDriverRef.current = (
       mbid: string,
       item: RideItem,
@@ -2277,12 +2361,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     /** Timestamp (Date.now()) after which rate-limit back-off has expired. */
     rateLimitedUntil: number;
   }>({ lastMbid: null, commanded: false, inFlight: false, rateLimitedUntil: 0 });
-  // Mirror of `active` readable inside the cast cleanup (refs assigned during
-  // render are current by the time cleanups run in the commit phase).
-  const rideActiveRef = useRef(active);
+  // Mirror of `active` readable inside the cast cleanup and other stable
+  // callbacks. Synced in an effect so we never write the ref during render.
+  // Latest-value mirror read synchronously in the scan-start guard and in the
+  // cast-cleanup teardown; must be current at call time → render-phase write.
+  // Initialised with a constant (not `active`) so the compiler doesn't treat it
+  // as a value passed to a hook; the render-phase write keeps it current.
+  const rideActiveRef = useRef(false);
+  // eslint-disable-next-line react-hooks/refs, react-hooks/immutability -- latest-value mirror read synchronously in the scan guard and cast cleanup; render-phase write is required and safe
   rideActiveRef.current = active;
   // Mirror of castPaused readable inside the poll without re-arming it.
-  const castPausedRef = useRef(castPaused);
+  const castPausedRef = useRef(false);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror read inside the cast poll callback; render-phase write is required
   castPausedRef.current = castPaused;
   // Retry hook set by the live-cast effect (null when no cast session is
   // active) — lets UI re-issue the Spotify play for the current track after
@@ -2304,9 +2394,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     castRef.current = { lastMbid: null, commanded: false, inFlight: false, rateLimitedUntil: 0 };
+    // Initialise the cast-session UI. These are external-side-effect resets that
+    // establish the session state when the cast effect (re-)arms — they must be
+    // synchronous with the imperative session setup, not deferred.
+    /* eslint-disable react-hooks/set-state-in-effect -- cast-session initialisation tied to imperative session (re-)arm; must be synchronous */
     setCastStatus("connecting");
     setCastFallbackReason(null);
     setCastPaused(false);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     // Collect auto-retry timers so they can be cancelled on effect teardown.
     const retryTimers: ReturnType<typeof setTimeout>[] = [];
@@ -2509,7 +2604,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Interstitial gate: hold off past-audio start until the live→past
     // interstitial clears (the Lore tone plays + device check resolves).
     if (interstitialArmed) {
-      setStatus("loading");
+      // Show a loading state while gated. Deferred to a microtask so it is not
+      // a synchronous setState in the effect body; it flushes before the next
+      // render, so an `interstitialArmed` clear can't be clobbered by a stale
+      // update from a prior run.
+      const gateToken = rideRef.current;
+      queueMicrotask(() => {
+        if (gateToken === rideRef.current) setStatus("loading");
+      });
       return undefined;
     }
     if (driverActive) return undefined; // a service driver carries this track
@@ -2540,7 +2642,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // We patch the queue item BY MBID, never by captured index, so a response
     // that lands after the listener advanced can't attach to the wrong track.
     if (currentPreview === undefined) {
-      setStatus("loading");
+      // Loading flag raised on a microtask (outside the synchronous effect
+      // body); it is superseded by the fetch result / audio events that follow.
+      queueMicrotask(() => {
+        if (token === rideRef.current) setStatus("loading");
+      });
       if (previewFetchingRef.current.has(targetMbid)) return undefined;
       previewFetchingRef.current.add(targetMbid);
       // Hydrate link-outs for segued items (seed items already carry links) so
@@ -2592,19 +2698,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         playbackMode === "resolve_to_service" &&
         effectiveFallbackUsed
       ) {
-        setPastRunFailed(true);
         const failedItem = queue.find((q) => q.mbid === targetMbid);
-        setPastRunFailure(
-          failedItem
-            ? {
-                mbid: failedItem.mbid,
-                title: failedItem.title,
-                artist: failedItem.artist,
-                service: serviceDisplayLabel(preferredService),
-              }
-            : null,
-        );
-        setStatus("error");
+        // Surface the hard-stop failure state on a microtask so it is not a
+        // synchronous setState in the effect body; token-guarded against a
+        // ride swap that occurs before it flushes.
+        queueMicrotask(() => {
+          if (token !== rideRef.current) return;
+          setPastRunFailed(true);
+          setPastRunFailure(
+            failedItem
+              ? {
+                  mbid: failedItem.mbid,
+                  title: failedItem.title,
+                  artist: failedItem.artist,
+                  service: serviceDisplayLabel(preferredService),
+                }
+              : null,
+          );
+          setStatus("error");
+        });
         return undefined;
       }
       // For all other modes: auto-advance so the ride keeps flowing.
@@ -2615,7 +2727,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         return () => clearTimeout(t);
       }
       // Nothing after it and nothing to play: the trail has run dry.
-      setStatus("ended");
+      // Deferred to a microtask (token-guarded) so it is not a synchronous
+      // setState in the effect body.
+      queueMicrotask(() => {
+        if (token === rideRef.current) setStatus("ended");
+      });
       return undefined;
     }
 
@@ -2827,6 +2943,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // even while the crossing interstitial is armed: a run that cannot resolve
     // must fail loudly regardless of the gate, and it also stops the link-
     // prefetch loop from re-fetching empty-links items indefinitely.
+    const queueRunToken = rideRef.current;
     const slice = queue.slice(index);
     const uris: string[] = [];
     for (const item of slice) {
@@ -2834,14 +2951,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!uri) {
         // A queue item has no Spotify URI even after link prefetch — hard stop.
         tier1RunQueuedRef.current = true; // prevent re-fire
-        setPastRunFailed(true);
-        setPastRunFailure({
-          mbid: item.mbid,
-          title: item.title,
-          artist: item.artist,
-          service: "Spotify",
+        const failedItem = item;
+        // Surface the hard-stop failure on a microtask so it is not a
+        // synchronous setState in the effect body.
+        queueMicrotask(() => {
+          if (queueRunToken !== rideRef.current) return;
+          setPastRunFailed(true);
+          setPastRunFailure({
+            mbid: failedItem.mbid,
+            title: failedItem.title,
+            artist: failedItem.artist,
+            service: "Spotify",
+          });
+          setStatus("error");
         });
-        setStatus("error");
         return;
       }
       uris.push(uri);
@@ -3042,7 +3165,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     if (embedOpt) {
       // Wire the driver and correct the tier if needed (e.g. manifest said Tier
-      // 2 but the only matching service is Tier 3 Bandcamp).
+      // 2 but the only matching service is Tier 3 Bandcamp). `setPreferredService`
+      // is a callback that performs ordered driver teardown as well as a state
+      // update, so it must run synchronously here (deferring would reorder the
+      // teardown relative to this one-shot, link-triggered activation).
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot embed-driver activation on async link arrival; the setter also runs ordered driver teardown that must not be deferred
       setPreferredService(embedOpt.service as "youtube" | "bandcamp");
       const refinedTier = embedOpt.embedAutoAdvance ? 2 : 3;
       if (refinedTier !== pastModeTier) setPastModeTier(refinedTier);
@@ -3062,23 +3189,36 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Reset on every track change (currentMbid).
   // ---------------------------------------------------------------------------
   const currentItemSpinDur = queue[index]?.spinDurationSeconds;
+  const cueSheetMbid = queue[index]?.mbid ?? null;
   useEffect(() => {
-    // Reset on track change regardless of mode.
-    setCueSheetVisible(false);
-
     if (!active || timeOrientation !== "past" || pastModeTier !== 4) return;
     const spinDur = currentItemSpinDur;
     if (spinDur == null) {
-      // Null/absent duration → show immediately and persistently.
-      setCueSheetVisible(true);
+      // Null/absent duration → visible immediately (handled by derivation).
       return;
     }
-    const id = window.setTimeout(() => setCueSheetVisible(true), spinDur * 1000);
+    // Only the delayed reveal needs async state: record the MBID the timer
+    // fired for so the derived `cueSheetVisible` below can flip on.
+    const targetMbid = cueSheetMbid;
+    const id = window.setTimeout(
+      () => setCueSheetTimerMbid(targetMbid),
+      spinDur * 1000,
+    );
     return () => window.clearTimeout(id);
     // currentMbid (from queue[index].mbid) drives the reset; spinDur is a
     // derived property of the same item so including currentItemSpinDur is
     // sufficient — no need to also depend on index directly here.
-  }, [active, timeOrientation, pastModeTier, queue[index]?.mbid, currentItemSpinDur]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, timeOrientation, pastModeTier, cueSheetMbid, currentItemSpinDur]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derived Tier-4 cue-sheet visibility. Shown when a Tier-4 past ride has
+  // either no spin duration (immediate + persistent) or the spin-duration
+  // timer has already fired for the current track.
+  const cueSheetVisible =
+    active &&
+    timeOrientation === "past" &&
+    pastModeTier === 4 &&
+    (currentItemSpinDur == null ||
+      (cueSheetMbid != null && cueSheetTimerMbid === cueSheetMbid));
 
   // Buffer-outrun: the scrub head has advanced to an item whose preview URL
   // has not yet been resolved.  The UI must show "Finding this on [Service]…"

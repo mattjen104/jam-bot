@@ -421,7 +421,9 @@ function ListSourcesPanel({
   }, [adminHeaders]);
 
   useEffect(() => {
-    void loadSources();
+    // Defer into a microtask callback so state updates happen asynchronously
+    // (from the fetch result) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => loadSources());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -953,7 +955,9 @@ function EntriesPanel({
   );
 
   useEffect(() => {
-    void load(showAll);
+    // Defer into a microtask callback so state updates happen asynchronously
+    // (from the fetch result) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => load(showAll));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAll]);
 

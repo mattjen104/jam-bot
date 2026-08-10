@@ -564,11 +564,16 @@ export function deriveCrossingsPhase(args: {
  */
 export function useBoundedPending(pending: boolean, deadlineMs: number): boolean {
   const [expired, setExpired] = useState(false);
+  // Reset the expiry latch during render whenever `pending` clears, so a later
+  // refetch gets a fresh deadline. Deriving this avoids a synchronous setState
+  // in the effect below (which only arms the async timeout).
+  const [prevPending, setPrevPending] = useState(pending);
+  if (prevPending !== pending) {
+    setPrevPending(pending);
+    if (!pending && expired) setExpired(false);
+  }
   useEffect(() => {
-    if (!pending) {
-      setExpired(false);
-      return;
-    }
+    if (!pending) return;
     const id = setTimeout(() => setExpired(true), deadlineMs);
     return () => clearTimeout(id);
   }, [pending, deadlineMs]);
@@ -821,6 +826,10 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   const LIVE_PULSE_WINDOW_MS = 60 * 60 * 1000;
   const liveBySlug = useMemo(() => {
     const m = new Map<string, boolean>();
+    // Current wall-clock time is intentional here: this memo recomputes on
+    // each 30s live poll and stamps recency relative to "now". There is no
+    // stable input that encodes the present instant.
+    // eslint-disable-next-line react-hooks/purity -- render-time clock read is the intended freshness check, recomputed per poll
     const now = Date.now();
     for (const item of liveData?.items ?? []) {
       const np = item.nowPlaying;
@@ -916,7 +925,9 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     // Rolling 24-hour cutoff for crossings. We fetch both today's and
     // yesterday's data so that overnight shows are present, but only spins
     // within the past 24 hours count toward crossings — spins from earlier
-    // yesterday (e.g. 6 am when it is now 9 am) are excluded.
+    // yesterday (e.g. 6 am when it is now 9 am) are excluded. The memo
+    // recomputes on each spin/schedule poll, stamping the window from "now".
+    // eslint-disable-next-line react-hooks/purity -- rolling 24h cutoff is defined relative to the present instant, recomputed per data poll
     const window24hCutoffMs = Date.now() - 24 * 60 * 60 * 1000;
 
     return raw.map((station) => {

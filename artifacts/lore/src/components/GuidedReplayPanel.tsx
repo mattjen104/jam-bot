@@ -91,11 +91,14 @@ export function GuidedReplayPanel({
 
   // If the active service has no coverage in this manifest (e.g. a persisted
   // preference from a different replay), fall back to the first available tab.
-  useEffect(() => {
-    if (availableServices.length > 0 && !availableServices.some((o) => o.service === service)) {
-      setService(availableServices[0].service);
-    }
-  }, [availableServices, service]);
+  // Corrected during render (it converges immediately) rather than via a
+  // setState-in-effect.
+  if (
+    availableServices.length > 0 &&
+    !availableServices.some((o) => o.service === service)
+  ) {
+    setService(availableServices[0].service);
+  }
 
   const guide = useMemo(() => materialize(entries, service), [entries, service]);
   const current = guide.playable[playableIndex] ?? null;
@@ -107,14 +110,21 @@ export function GuidedReplayPanel({
   const officialSource =
     officialDoor === "album" ? officialDoors.album : officialDoor === "current" ? officialDoors.current : null;
   const currentEmbedUrl = officialSource?.embedUrl ?? current?.source?.embedUrl ?? null;
-  currentEmbedUrlRef.current = currentEmbedUrl;
+  useEffect(() => {
+    currentEmbedUrlRef.current = currentEmbedUrl;
+  }, [currentEmbedUrl]);
   const isEmbed = currentEmbedUrl != null;
 
-  useEffect(() => {
+  // Reset the playback cursor and embed state when the service tab changes.
+  // Applied as a render-time adjustment against the previous service rather
+  // than a setState-in-effect.
+  const [prevService, setPrevService] = useState(service);
+  if (service !== prevService) {
+    setPrevService(service);
     setPlayableIndex(0);
     setEmbedState("loading");
     setOfficialDoor(null);
-  }, [service]);
+  }
 
   const next = () => {
     setPlayableIndex((index) => Math.min(index + 1, Math.max(0, guide.playable.length - 1)));

@@ -57,21 +57,32 @@ export function useSongBottles(
   const [bottles, setBottles] = useState<SongBottle[]>([]);
   const [archivedCount, setArchivedCount] = useState(0);
   const [hasUnread, setHasUnread] = useState(false);
-  const [loading, setLoading] = useState(false);
+  // Start in the loading state when an MBID is present at mount, matching the
+  // fetch that the effect kicks off immediately.
+  const [loading, setLoading] = useState(() => Boolean(mbid));
   const [error, setError] = useState<string | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
 
+  // Reset per-track state during render when the MBID changes (or clears) so
+  // we never show the previous track's bottles. Deriving this reset avoids a
+  // synchronous setState in the fetch effect below (which now only kicks off
+  // the async load and populates state from its promise callbacks).
+  const [prevMbid, setPrevMbid] = useState(mbid);
+  if (prevMbid !== mbid) {
+    setPrevMbid(mbid);
+    if (bottles.length > 0) setBottles([]);
+    if (archivedCount !== 0) setArchivedCount(0);
+    if (hasUnread) setHasUnread(false);
+    // Enter the loading state (and clear any prior error) synchronously with
+    // the MBID change, so the fetch effect only performs async work.
+    setLoading(Boolean(mbid));
+    setError(null);
+  }
+
   // Fetch initial bottles
   useEffect(() => {
-    if (!mbid) {
-      setBottles([]);
-      setArchivedCount(0);
-      setHasUnread(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    if (!mbid) return;
     fetch(apiUrl(`/songs/${encodeURIComponent(mbid)}/bottles`), {
       credentials: "include",
     })

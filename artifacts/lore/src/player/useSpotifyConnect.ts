@@ -61,7 +61,17 @@ export function useSpotifyConnect(): SpotifyConnectApi {
   const [connected, setConnected] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [product, setProduct] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Derive the OAuth-return notice from the URL during the initial render so
+  // we never synchronously setState inside the mount effect. The effect below
+  // still strips the query param (a side effect that must not run in render).
+  const [notice, setNotice] = useState<string | null>(() => {
+    try {
+      const flag = new URL(window.location.href).searchParams.get("spotify");
+      return flag ? (NOTICES[flag] ?? null) : null;
+    } catch {
+      return null;
+    }
+  });
   const [pinnedDevice, setPinnedDevice] = useState<SpotifyDevice | null>(() => {
     const stored = readStoredPinnedDevice();
     if (!stored) return null;
@@ -93,13 +103,13 @@ export function useSpotifyConnect(): SpotifyConnectApi {
   useEffect(() => {
     aliveRef.current = true;
 
-    // Handle the OAuth return redirect: surface a one-shot notice and strip
-    // the query param so refreshes don't repeat it.
+    // Handle the OAuth return redirect: strip the query param so refreshes
+    // don't repeat the notice (the notice itself is derived during render, in
+    // the `notice` state initializer above).
     try {
       const url = new URL(window.location.href);
       const flag = url.searchParams.get("spotify");
       if (flag) {
-        setNotice(NOTICES[flag] ?? null);
         url.searchParams.delete("spotify");
         window.history.replaceState(null, "", url.toString());
       }

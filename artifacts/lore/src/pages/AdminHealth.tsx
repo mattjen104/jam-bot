@@ -179,7 +179,9 @@ function HealthPanel({
   );
 
   useEffect(() => {
-    void fetchAll();
+    // Defer into a microtask callback so state updates happen asynchronously
+    // (from the fetch result) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => fetchAll());
     timerRef.current = setInterval(() => void fetchAll({ silent: true }), REFRESH_INTERVAL_MS);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -318,7 +320,9 @@ const SETTLED_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 
 function MonitoringBanner({ monitoringSince }: { monitoringSince: string }) {
   const since = new Date(monitoringSince);
-  const uptimeMs = Date.now() - since.getTime();
+  // Capture "now" once at mount via a state initializer so render stays pure.
+  const [mountedAt] = useState(() => Date.now());
+  const uptimeMs = mountedAt - since.getTime();
   const isNew = uptimeMs < SETTLED_THRESHOLD_MS;
 
   return (

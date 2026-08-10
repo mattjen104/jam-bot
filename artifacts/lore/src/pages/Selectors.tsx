@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import {
@@ -20,6 +20,20 @@ const RECENTLY_ACTIVE_MS = 14 * 24 * 60 * 60 * 1000;
 function isRecentlyActive(pickedAt: string | null | undefined): boolean {
   if (!pickedAt) return false;
   return Date.now() - new Date(pickedAt).getTime() < RECENTLY_ACTIVE_MS;
+}
+
+/**
+ * A "now" timestamp that refreshes on an interval. Captured in state (never via
+ * a bare Date.now() during render) so render stays pure while "on-air" labels
+ * still tick without a manual refetch.
+ */
+function useNowMs(intervalMs = 60_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
 }
 
 function timeAgoShort(iso: string | null | undefined): string {
@@ -325,9 +339,10 @@ function RadioDjCard({
   overlapPct: number;
   sharedCount?: number;
 }) {
+  const nowMs = useNowMs();
   const isLive =
     selector.lastPlayedAt != null &&
-    Date.now() - new Date(selector.lastPlayedAt).getTime() < ON_AIR_MS;
+    nowMs - new Date(selector.lastPlayedAt).getTime() < ON_AIR_MS;
 
   const sel: UnifiedSelector = {
     handle: selector.handle,
@@ -353,6 +368,7 @@ function RadioDjCard({
 export default function Selectors() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [stationFilter, setStationFilter] = useState<string>("all");
+  const nowMs = useNowMs();
   const { radio } = usePlayer();
   const { data: listData, isLoading: listLoading, isError: listError } = useListPickers();
   const { data: dialData } = useGetPickersDial();
@@ -414,18 +430,18 @@ export default function Selectors() {
       const aOv = overlap?.overlapByHandle.get(a.handle) ?? 0;
       const bOv = overlap?.overlapByHandle.get(b.handle) ?? 0;
       if (bOv !== aOv) return bOv - aOv;
-      const aLive = a.lastPlayedAt != null && Date.now() - new Date(a.lastPlayedAt).getTime() < ON_AIR_MS ? 1 : 0;
-      const bLive = b.lastPlayedAt != null && Date.now() - new Date(b.lastPlayedAt).getTime() < ON_AIR_MS ? 1 : 0;
+      const aLive = a.lastPlayedAt != null && nowMs - new Date(a.lastPlayedAt).getTime() < ON_AIR_MS ? 1 : 0;
+      const bLive = b.lastPlayedAt != null && nowMs - new Date(b.lastPlayedAt).getTime() < ON_AIR_MS ? 1 : 0;
       return bLive - aLive;
     });
-  }, [filteredKexp, overlap]);
+  }, [filteredKexp, overlap, nowMs]);
 
   // Hero stats
   const liveCount =
     kexpSelectors.filter(
       (s: SelectorSummary) =>
         s.lastPlayedAt != null &&
-        Date.now() - new Date(s.lastPlayedAt).getTime() < ON_AIR_MS,
+        nowMs - new Date(s.lastPlayedAt).getTime() < ON_AIR_MS,
     ).length;
 
   const overlapCount = useMemo(() => {

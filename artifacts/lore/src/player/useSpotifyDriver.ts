@@ -109,33 +109,50 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
     noDevicePolls: number;
   } | null>(null);
 
-  // MBIDs where a device-lost fallback was triggered.
+  // MBIDs where a device-lost fallback was triggered. The ref is the
+  // source of truth for synchronous callback reads; the state mirror is used
+  // for render-time derived flags (they stay in lock-step via the helpers
+  // below, which previously bumped a fallback tick).
   const spotifyDeviceLostRef = useRef<Set<string>>(new Set());
+  const [deviceLostSet, setDeviceLostSet] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   // MBID currently being commanded (prevents double-play).
   const spotifyCommandingRef = useRef<string | null>(null);
 
   // Tracks that failed on Spotify this ride.
   const spotifyFailedRef = useRef<Set<string>>(new Set());
+  const [failedSet, setFailedSet] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
+  // Republish the current ref contents into state. Called from the same
+  // places that used to bump the fallback tick, so derived render flags stay
+  // in sync with the mutable ref source of truth.
+  const publishSpotifySets = useCallback(() => {
+    setFailedSet(new Set(spotifyFailedRef.current));
+    setDeviceLostSet(new Set(spotifyDeviceLostRef.current));
+  }, []);
 
   // Pause commanded by us / observed from the Spotify app.
   const spotifyPausedRef = useRef(false);
 
-  // Bumped when a track falls back so derived values recompute.
-  const [spotifyFallbackTick, setSpotifyFallbackTick] = useState(0);
-
-  // Stable refs for pinned-device access inside interval callbacks.
+  // Stable refs for pinned-device access inside interval callbacks. They are
+  // synced from props via an effect (never written during render).
   const pinnedDeviceIdRef = useRef<string | null>(null);
-  pinnedDeviceIdRef.current = spotify.pinnedDevice?.id ?? null;
-
   const unpinDeviceRef = useRef(spotify.unpinDevice);
-  unpinDeviceRef.current = spotify.unpinDevice;
-
   const showNoticeRef = useRef(spotify.showNotice);
-  showNoticeRef.current = spotify.showNotice;
-
   const fetchDevicesRef = useRef(spotify.fetchDevices);
-  fetchDevicesRef.current = spotify.fetchDevices;
+
+  const pinnedDeviceId = spotify.pinnedDevice?.id ?? null;
+  const { unpinDevice, showNotice, fetchDevices } = spotify;
+  useEffect(() => {
+    pinnedDeviceIdRef.current = pinnedDeviceId;
+    unpinDeviceRef.current = unpinDevice;
+    showNoticeRef.current = showNotice;
+    fetchDevicesRef.current = fetchDevices;
+  }, [pinnedDeviceId, unpinDevice, showNotice, fetchDevices]);
 
   const spotifyEligible = spotify.connected && spotify.premium;
   const refreshSpotify = spotify.refresh;
@@ -159,18 +176,17 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
     // Skip when the listener explicitly selected an alt service from the
     // options panel — Spotify Connect is developer-only, not user-facing.
     !preferredService &&
-    spotifyFallbackTick >= 0 &&
-    !spotifyFailedRef.current.has(currentMbid);
+    !failedSet.has(currentMbid);
 
   const fallbackUsed =
     playbackMode === "resolve_to_service" &&
     !!currentMbid &&
-    spotifyFailedRef.current.has(currentMbid);
+    failedSet.has(currentMbid);
 
   const deviceLost =
     playbackMode === "resolve_to_service" &&
     !!currentMbid &&
-    spotifyDeviceLostRef.current.has(currentMbid);
+    deviceLostSet.has(currentMbid);
 
   // ---- Effect: command Spotify to play the current track -------------------
 
@@ -213,7 +229,7 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
         if (token !== rideRef.current) return;
         spotifyFailedRef.current.add(targetMbid);
         spotifyNowRef.current = null;
-        setSpotifyFallbackTick((t) => t + 1);
+        publishSpotifySets();
         const httpStatus = (err as { status?: number }).status;
         if (httpStatus === 401 || httpStatus === 403) {
           refreshSpotify();
@@ -261,7 +277,7 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
             spotifyFailedRef.current.add(currentMbid);
             spotifyDeviceLostRef.current.add(currentMbid);
             spotifyNowRef.current = null;
-            setSpotifyFallbackTick((t) => t + 1);
+            publishSpotifySets();
             unpinDeviceRef.current();
             notify({ state: "device-lost", trackId: currentMbid });
             return;
@@ -352,8 +368,8 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
     spotifyDeviceLostRef.current.delete(currentMbid);
     spotifyCommandingRef.current = null;
     spotifyNowRef.current = null;
-    setSpotifyFallbackTick((t) => t + 1);
-  }, [currentMbid]);
+    publishSpotifySets();
+  }, [currentMbid, publishSpotifySets]);
 
   // ---- Handle --------------------------------------------------------------
 
@@ -405,6 +421,7 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
         spotifyPausedRef.current = false;
         spotifyFailedRef.current.clear();
         spotifyDeviceLostRef.current.clear();
+        publishSpotifySets();
       },
 
       onStatusChange: (cb) => {

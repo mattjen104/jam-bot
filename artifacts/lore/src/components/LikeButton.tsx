@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetSpotifySaved,
@@ -25,9 +25,13 @@ export function LikeButton({ mbid }: { mbid: string }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   // A notice belongs to the track it happened on — never carry it across.
-  useEffect(() => {
+  // Applied as a render-time reset against the previous MBID instead of an
+  // effect that would set state after paint.
+  const [prevMbid, setPrevMbid] = useState(mbid);
+  if (mbid !== prevMbid) {
+    setPrevMbid(mbid);
     setNotice(null);
-  }, [mbid]);
+  }
 
   const savedQuery = useGetSpotifySaved(
     { mbid },

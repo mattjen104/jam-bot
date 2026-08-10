@@ -34,8 +34,19 @@ export function useHeroArt(): { heroArt: string; avatarUrl: string } {
   const avatarAlbum = avatarData?.current ?? avatarData?.candidates?.[0] ?? null;
   const [heroArt, setHeroArt] = useState<string>(RUMOURS);
 
+  // When there's no resolvable avatar art, the hero is the RUMOURS fallback.
+  // Reset to it during render (keyed on the resolved avatar) instead of
+  // synchronously in the effect, which then only performs async probing.
+  const canResolve = Boolean(avatarAlbum) && Boolean(avatarUrl) && avatarUrl !== RUMOURS;
+  const [prevKey, setPrevKey] = useState<string | null>(canResolve ? avatarUrl : null);
+  const key = canResolve ? avatarUrl : null;
+  if (prevKey !== key) {
+    setPrevKey(key);
+    if (!canResolve && heroArt !== RUMOURS) setHeroArt(RUMOURS);
+  }
+
   useEffect(() => {
-    if (!avatarAlbum || !avatarUrl || avatarUrl === RUMOURS) { setHeroArt(RUMOURS); return; }
+    if (!avatarAlbum || !avatarUrl || avatarUrl === RUMOURS) return;
     let cancelled = false;
     void heroArtCandidates(avatarAlbum).then((urls) => {
       if (cancelled) return;

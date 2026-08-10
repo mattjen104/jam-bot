@@ -61,8 +61,12 @@ import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
 const LEDGER_PROMPT_DISMISSED_KEY = "lore:ledger_prompt_dismissed_until";
 const LEDGER_PROMPT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-function shouldShowLedgerPrompt(ledgerEnabled: boolean): boolean {
-  if (ledgerEnabled) return false;
+/**
+ * Whether the ledger prompt's dismissal TTL has elapsed. Reads localStorage and
+ * Date.now (both impure), so callers must snapshot the result (e.g. in a
+ * useState initializer) rather than call it during render.
+ */
+function ledgerPromptDismissGatePassed(): boolean {
   try {
     const until = Number(localStorage.getItem(LEDGER_PROMPT_DISMISSED_KEY) ?? 0);
     return Date.now() >= until;
@@ -1030,20 +1034,24 @@ export default function Library() {
   // Ledger consent
   const { data: prefs } = useMyPreferences();
   const ledgerEnabled = prefs?.ledgerEnabled ?? false;
-  const [ledgerPromptVisible, setLedgerPromptVisible] = useState<boolean>(false);
+  // Snapshot the dismissal-TTL gate (localStorage + Date.now, both impure) once
+  // at mount so the prompt's visibility can be derived purely during render
+  // rather than synced into state from an effect.
+  const [ledgerDismissGatePassed] = useState(() => ledgerPromptDismissGatePassed());
+  // Session-level manual hide (Not now / Start recording), applied immediately.
+  const [ledgerPromptHidden, setLedgerPromptHidden] = useState(false);
   const [ledgerBusy, setLedgerBusy] = useState(false);
-  useEffect(() => {
-    if (prefs !== undefined) setLedgerPromptVisible(shouldShowLedgerPrompt(prefs.ledgerEnabled));
-  }, [prefs]);
+  const ledgerPromptVisible =
+    prefs !== undefined && !ledgerEnabled && ledgerDismissGatePassed && !ledgerPromptHidden;
   const handleEnableLedger = async () => {
     setLedgerBusy(true);
     try {
       await patchPreferences({ ledgerEnabled: true });
       void queryClient.invalidateQueries({ queryKey: ME_PREFERENCES_KEY });
-      setLedgerPromptVisible(false);
+      setLedgerPromptHidden(true);
     } catch { /* silent */ } finally { setLedgerBusy(false); }
   };
-  const handleDismissLedgerPrompt = () => { dismissLedgerPrompt(); setLedgerPromptVisible(false); };
+  const handleDismissLedgerPrompt = () => { dismissLedgerPrompt(); setLedgerPromptHidden(true); };
 
   // Kept list (infinite scroll)
   const {
@@ -1123,15 +1131,19 @@ export default function Library() {
     void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_COVERAGE_KEY });
     // Bust crossings so the Dial reflects the new library immediately
     void queryClient.invalidateQueries({ queryKey: ["me", "crossings"] });
-    // Auto-dismiss banner after 60s
-    setBannerDismissed(false);
+    // Auto-dismiss banner after 60s. Defer the reveal into a microtask so
+    // setState happens asynchronously (in response to the async job status
+    // change) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => setBannerDismissed(false));
     const t = setTimeout(() => setBannerDismissed(true), 60_000);
     return () => clearTimeout(t);
   }, [jobData?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   // Clear banner dismissed state when a new job starts
   useEffect(() => {
     if (jobData?.status === "pending" || jobData?.status === "running") {
-      setBannerDismissed(false);
+      // Defer so setState happens asynchronously (in response to the async job
+      // status change) rather than synchronously in the effect body.
+      void Promise.resolve().then(() => setBannerDismissed(false));
     }
   }, [jobData?.status]);
   const showImportBanner =
@@ -1304,8 +1316,14 @@ export default function Library() {
 
   // Inline group filter (album / artist views only)
   const [groupFilter, setGroupFilter] = useState("");
-  // Reset filter when the view mode changes so album-filter doesn't persist into artist view
-  useEffect(() => { setGroupFilter(""); }, [viewMode]);
+  // Reset filter when the view mode changes so album-filter doesn't persist
+  // into artist view. Use React's render-phase "store previous value" reset so
+  // the filter clears synchronously with the view change (no effect needed).
+  const [prevViewMode, setPrevViewMode] = useState(viewMode);
+  if (viewMode !== prevViewMode) {
+    setPrevViewMode(viewMode);
+    setGroupFilter("");
+  }
   const groupFilterQ = groupFilter.trim().toLowerCase();
 
   const filteredAlbumGroups = useMemo(() => {

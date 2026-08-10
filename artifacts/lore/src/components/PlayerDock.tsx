@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   useGetStationNowPlaying,
@@ -21,7 +21,7 @@ const MOBILE_SHELL_QUERY = "(orientation: portrait), (max-width: 720px)";
  */
 export function PlayerDock() {
   const { radio, ride, spotify, scan } = usePlayer();
-  const [expanded, setExpanded] = useState(false);
+  const [expandedRaw, setExpanded] = useState(false);
   const [location] = useLocation();
 
   const stationSlug = radio.station?.slug ?? "";
@@ -37,12 +37,18 @@ export function PlayerDock() {
   // Collapse when the station goes away, a ride takes over, or the listener
   // navigates (e.g. taps a song/artist link inside the sheet).
   const hasStation = !!radio.station;
-  useEffect(() => {
-    if (!hasStation || ride.active) setExpanded(false);
-  }, [hasStation, ride.active]);
-  useEffect(() => {
+  // Navigation resets the dock: track the previous location and drop the raw
+  // expanded flag during render (React's "adjust state while rendering"
+  // pattern) rather than syncing it from an effect.
+  const [prevLocation, setPrevLocation] = useState(location);
+  if (location !== prevLocation) {
+    setPrevLocation(location);
     setExpanded(false);
-  }, [location]);
+  }
+  // Station-gone / ride-active collapse is a pure derivation — no state sync
+  // needed. The dock is only ever expanded when a station is present and no
+  // ride is taking over the dock.
+  const expanded = expandedRaw && hasStation && !ride.active;
 
   const notice = spotify.notice ? (
     <div

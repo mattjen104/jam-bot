@@ -28,11 +28,19 @@ export function ArtistPortalStrip({
   onSelect,
 }: ArtistPortalStripProps) {
   const [releases, setReleases] = useState<ArtistRelease[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Enter the loading state synchronously when the recording changes, as a
+  // render-time adjustment rather than a setState inside the fetch effect.
+  const [prevRecordingMbid, setPrevRecordingMbid] = useState(recordingMbid);
+  if (recordingMbid !== prevRecordingMbid) {
+    setPrevRecordingMbid(recordingMbid);
+    setReleases(null);
+    setLoading(true);
+  }
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetch(`/api/recordings/${recordingMbid}/artist-releases`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: { releases: ArtistRelease[] }) => {

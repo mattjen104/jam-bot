@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useGetRecordingAlbumTracks,
@@ -108,8 +108,15 @@ export function AlbumShelf({ mbid, artistName }: AlbumShelfProps) {
 
   const { ride, spotify } = usePlayer();
 
-  // Reset "show all" when the album changes
-  useEffect(() => { setShowAll(false); }, [swappedAlbum?.rgMbid]);
+  // Reset "show all" when the album changes. Tracked as a render-time state
+  // adjustment against the previous rgMbid rather than an effect, so the reset
+  // is applied synchronously before paint.
+  const swappedRgMbid = swappedAlbum?.rgMbid ?? null;
+  const [prevSwappedRgMbid, setPrevSwappedRgMbid] = useState(swappedRgMbid);
+  if (swappedRgMbid !== prevSwappedRgMbid) {
+    setPrevSwappedRgMbid(swappedRgMbid);
+    setShowAll(false);
+  }
 
   async function handleSwapAlbum(rgMbid: string) {
     if (rgMbid === activeRgMbid) return;

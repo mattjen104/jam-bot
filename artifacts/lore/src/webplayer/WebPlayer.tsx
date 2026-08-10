@@ -338,13 +338,15 @@ function ImportStrip() {
 
 /** Ticking "updated Xs ago" freshness label for the on-air list. */
 function OnAirFreshness({ updatedAt }: { updatedAt: number }) {
-  const [, setTick] = useState(0);
+  // Capture "now" in interval-driven state so render stays pure (no Date.now()
+  // call during render). The interval refreshes it, driving the ticking label.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 10_000);
+    const id = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(id);
   }, []);
   if (!updatedAt) return null;
-  const secs = Math.max(0, Math.round((Date.now() - updatedAt) / 1000));
+  const secs = Math.max(0, Math.round((now - updatedAt) / 1000));
   const label = secs < 15 ? "just now" : secs < 90 ? `${secs}s ago` : `${Math.round(secs / 60)}m ago`;
   return (
     <span className="wp-mono" style={{ fontSize: 13, color: "var(--wp-text-muted)" }} data-testid="wp-onair-freshness">

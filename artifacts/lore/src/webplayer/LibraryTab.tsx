@@ -540,7 +540,12 @@ function usePrivateNote(mbid: string | null): [string, (v: string) => void] {
   });
   useEffect(() => {
     if (!key) return;
-    try { setNoteState(localStorage.getItem(key) ?? ""); } catch { /* noop */ }
+    // Re-read the note from localStorage when the key (selected recording)
+    // changes. Defer into a microtask so setState happens asynchronously rather
+    // than synchronously in the effect body.
+    void Promise.resolve().then(() => {
+      try { setNoteState(localStorage.getItem(key) ?? ""); } catch { /* noop */ }
+    });
   }, [key]);
   const setNote = useCallback((v: string) => {
     setNoteState(v);

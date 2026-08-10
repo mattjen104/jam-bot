@@ -136,7 +136,9 @@ function StationsPanel({
   }, [token]);
 
   useEffect(() => {
-    void loadAllocation();
+    // Defer into a microtask callback so state updates happen asynchronously
+    // (from the fetch result) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => loadAllocation());
   }, [loadAllocation]);
 
   const load = useCallback(async () => {
@@ -160,7 +162,9 @@ function StationsPanel({
   }, [token]);
 
   useEffect(() => {
-    void load();
+    // Defer into a microtask callback so state updates happen asynchronously
+    // (from the fetch result) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => load());
   }, [load]);
 
   const patchFlags = useCallback(

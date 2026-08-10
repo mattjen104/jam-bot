@@ -9,7 +9,7 @@
  * links restore the exact context. Restoring never starts playback — the
  * `restored` flag tells the caller the initial state came from the URL.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   type ContextFrame,
   type DialSurfaceState,
@@ -59,7 +59,10 @@ export interface DialSurface {
 
 export function useDialSurface(): DialSurface {
   const [state, setState] = useState<DialSurfaceState>(readInitialState);
-  const restoredRef = useRef(state.mode === "context");
+  // Whether the initial state was rebuilt from the URL in context mode. This is
+  // a fixed property of the first render, so it lives in state (read safely in
+  // render) rather than a ref (which must not be read during render).
+  const [restored] = useState(() => state.mode === "context");
 
   const apply = useCallback((next: (prev: DialSurfaceState) => DialSurfaceState) => {
     setState((prev) => {
@@ -89,11 +92,11 @@ export function useDialSurface(): DialSurface {
     state,
     mode: state.mode,
     ctx: state.ctx,
-    restored: restoredRef.current,
+    restored,
     tune,
     push,
     back,
     dial,
     temporal,
-  }), [state, tune, push, back, dial, temporal]);
+  }), [state, restored, tune, push, back, dial, temporal]);
 }

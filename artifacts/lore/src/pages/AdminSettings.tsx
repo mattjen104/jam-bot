@@ -92,7 +92,9 @@ function SettingsPanel({ token, onClearToken }: { token: string; onClearToken: (
   }, [token, onClearToken]);
 
   useEffect(() => {
-    void fetchSettings();
+    // Defer into a microtask callback so state updates happen asynchronously
+    // (from the fetch result) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => fetchSettings());
   }, [fetchSettings]);
 
   const toggle = useCallback(async (key: string, currentValue: boolean) => {

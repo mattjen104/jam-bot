@@ -46,17 +46,24 @@ export function StationScrubTimeline({
 
   // Keep the slider snapped to whichever page is actually loaded (e.g. after
   // the initial "most recent" fetch resolves the true newest timestamp).
-  useEffect(() => {
-    if (before !== undefined) return; // user has started scrubbing
-    const anchorMs = data?.tracks[0]?.playedAt
-      ? new Date(data.tracks[0].playedAt).getTime()
-      : newestMs;
-    if (hasRange && anchorMs != null) {
-      setSliderPos(
-        Math.round(((anchorMs - oldestMs!) / (newestMs! - oldestMs!)) * SLIDER_MAX),
-      );
-    }
-  }, [before, data, hasRange, oldestMs, newestMs]);
+  // Applied as a render-time adjustment against the previous computed anchor
+  // rather than a setState-in-effect: while the listener has not begun
+  // scrubbing (`before === undefined`), the handle follows the loaded page.
+  const anchorMs =
+    before === undefined
+      ? data?.tracks[0]?.playedAt
+        ? new Date(data.tracks[0].playedAt).getTime()
+        : newestMs
+      : null;
+  const snappedPos =
+    hasRange && anchorMs != null
+      ? Math.round(((anchorMs - oldestMs!) / (newestMs! - oldestMs!)) * SLIDER_MAX)
+      : null;
+  const [prevSnappedPos, setPrevSnappedPos] = useState<number | null>(null);
+  if (snappedPos != null && snappedPos !== prevSnappedPos) {
+    setPrevSnappedPos(snappedPos);
+    setSliderPos(snappedPos);
+  }
 
   // Debounce the actual data fetch while the user drags the slider.
   useEffect(() => {

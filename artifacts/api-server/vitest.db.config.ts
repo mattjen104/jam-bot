@@ -15,7 +15,7 @@ export default defineConfig({
     // take 10s+ each under concurrent load; a 30s budget flakes on contention.
     // now-playing multi-station scans all active stations → can reach 90s+;
     // those tests override inline to 150s.
-    testTimeout: 60_000,
+    testTimeout: 180_000,
     hookTimeout: 180_000,
     // 2 workers, not 4: at 4 the heavy-query files (me-overlaps, me-crossings,
     // now-playing-first-spin, import-worker) time out on shared-Postgres

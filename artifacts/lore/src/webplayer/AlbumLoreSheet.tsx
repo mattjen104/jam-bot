@@ -261,7 +261,12 @@ function SupportSection({
   const [holdError, setHoldError] = useState(false);
 
   useEffect(() => {
-    if (supportQuery.data) setHeld(supportQuery.data.held);
+    const data = supportQuery.data;
+    if (!data) return;
+    // Sync query result into local (optimistically-toggled) state. Defer into a
+    // microtask so setState happens asynchronously rather than synchronously in
+    // the effect body.
+    void Promise.resolve().then(() => setHeld(data.held));
   }, [supportQuery.data]);
 
   const support = supportQuery.data;

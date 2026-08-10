@@ -23,16 +23,7 @@ Use `spin.artistMbid` (not `spin.mbid` / recording MBID) for the resolved/unreso
 
 **Why:** Recording and artist resolution are independent. A recording may resolve while the artist identity is still unknown in the graph, and vice versa. Keyboard-focusable buttons that do nothing are an accessibility failure.
 
-## Test fixture gotchas
+## Test gotchas
 
-- `makeStation` in `firstRunSidebar.test.tsx` defaults `isPickerShow` to `!!djName`. Override explicitly when testing the divergent case (djName set but isPickerShow=false).
-- `spinEntries` must set both `mbid` (recording) and `artistMbid` (artist) — they default independently.
-- Scope all DOM queries to `container` from `render()`, never `document.querySelector` — stale nodes from prior renders accumulate without confirmed cleanup.
-
-## Code review rejection history (for future reference)
-
-This component was rejected 4 times before passing:
-1. `spin.mbid` used instead of `spin.artistMbid` — tests reproduced the same bug so didn't catch it
-2. Unresolved artists had `role="button"` + `tabIndex=0` → accessibility failure
-3. `deriveRung` checked `djName` not `isPickerShow` for rung 1
-4. Automation check was AFTER the djName/isPickerShow check (ordering bug)
+- When a fixture derives one flag from another (e.g. picker-show from djName), override explicitly to test the divergent case — otherwise the test reproduces the production bug instead of catching it.
+- Scope DOM queries to `container` from `render()`, never `document.querySelector` — stale nodes from prior renders accumulate without confirmed cleanup.

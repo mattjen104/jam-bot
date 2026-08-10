@@ -25,14 +25,21 @@ export function useRadioPlayer() {
     error: null,
   });
 
-  if (audioRef.current === null && typeof Audio !== "undefined") {
-    const el = new Audio();
-    el.preload = "none";
-    audioRef.current = el;
-  }
+  // Lazily create the HTMLAudioElement outside render (effects and event
+  // handlers only) so ref writes stay out of the render phase. Every playback
+  // entry point calls this instead of reading audioRef directly, so a user
+  // gesture that fires before the mount effect still gets a live element.
+  const ensureAudio = useCallback((): HTMLAudioElement | null => {
+    if (audioRef.current === null && typeof Audio !== "undefined") {
+      const el = new Audio();
+      el.preload = "none";
+      audioRef.current = el;
+    }
+    return audioRef.current;
+  }, []);
 
   useEffect(() => {
-    const el = audioRef.current;
+    const el = ensureAudio();
     if (!el) return;
     el.volume = state.volume;
     const onPlaying = () =>
@@ -58,7 +65,7 @@ export function useRadioPlayer() {
       el.removeEventListener("pause", onPause);
       el.removeEventListener("error", onError);
     };
-  }, [state.volume]);
+  }, [state.volume, ensureAudio]);
 
   const teardownHls = useCallback(() => {
     const hls = hlsRef.current as { destroy?: () => void } | null;
@@ -96,7 +103,7 @@ export function useRadioPlayer() {
 
   const play = useCallback(
     async (station: Station) => {
-      const el = audioRef.current;
+      const el = ensureAudio();
       if (!el) return;
       if (!station.streamUrl) {
         setState((s) => ({
@@ -120,12 +127,12 @@ export function useRadioPlayer() {
         }));
       }
     },
-    [attachSource],
+    [attachSource, ensureAudio],
   );
 
   const toggle = useCallback(
     async (station: Station) => {
-      const el = audioRef.current;
+      const el = ensureAudio();
       if (!el) return;
       const isCurrent = state.station?.slug === station.slug;
       if (isCurrent && state.status === "playing") {
@@ -142,7 +149,7 @@ export function useRadioPlayer() {
       }
       await play(station);
     },
-    [play, state.station?.slug, state.status],
+    [play, ensureAudio, state.station?.slug, state.status],
   );
 
   const stop = useCallback(() => {

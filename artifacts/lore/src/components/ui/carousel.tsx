@@ -109,6 +109,10 @@ const Carousel = React.forwardRef<
         return
       }
 
+      // Seed the initial scroll capability from the embla api the moment it
+      // exists (embla emits no initial event, so this one-shot read is the
+      // only way to capture starting state before subscribing).
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs the initial value of an external (embla) store that has no initial event
       onSelect(api)
       api.on("reInit", onSelect)
       api.on("select", onSelect)

@@ -35,18 +35,32 @@ export default function SelectorRun() {
       ? resolved.findIndex((t) => t.recording!.mbid === fromMbid)
       : -1;
     const startIndex = fromMbid ? Math.max(0, foundIndex) : 0;
-    if (fromMbid && foundIndex === -1) setShowFallbackNotice(true);
-    ride.startReplay(
-      resolved.map((t) => ({
-        mbid: t.recording!.mbid,
-        title: t.recording!.title,
-        artist: t.recording!.artist,
-        artworkUrl: t.recording!.artworkUrl ?? null,
-        links: t.recording!.links ?? [],
-      })),
-      `${data.picker.name}${data.run.pickedAt ? ` · ${runDate(data.run.pickedAt)}` : ""}`,
-      { timeOrientation: "curated", startIndex },
-    );
+    const tracks = resolved.map((t) => ({
+      mbid: t.recording!.mbid,
+      title: t.recording!.title,
+      artist: t.recording!.artist,
+      artworkUrl: t.recording!.artworkUrl ?? null,
+      links: t.recording!.links ?? [],
+    }));
+    const label = `${data.picker.name}${data.run.pickedAt ? ` · ${runDate(data.run.pickedAt)}` : ""}`;
+    // Defer state/external side-effects into a microtask so setState happens
+    // asynchronously (once async run data has arrived) rather than
+    // synchronously in the effect body. The cancellation flag makes the
+    // deferred start a no-op if the component unmounts or the replay inputs
+    // change before the microtask runs (navigation must never start an
+    // obsolete replay or set state after unmount).
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      if (fromMbid && foundIndex === -1) setShowFallbackNotice(true);
+      ride.startReplay(tracks, label, { timeOrientation: "curated", startIndex });
+    });
+    return () => {
+      // One-shot: if this fires before the microtask (unmount or replay-input
+      // change), the deferred start is dropped entirely rather than replayed
+      // later with stale inputs.
+      cancelled = true;
+    };
   }, [autoPlay, fromMbid, data, ride]);
 
   return (

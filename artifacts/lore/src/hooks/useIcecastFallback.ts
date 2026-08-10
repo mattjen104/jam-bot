@@ -70,11 +70,19 @@ export function useIcecastFallback(
 ): IcecastNowPlaying | null {
   const [nowPlaying, setNowPlaying] = useState<IcecastNowPlaying | null>(null);
 
+  // Clear stale now-playing during render whenever the target stream changes
+  // or the fallback is disabled, so we never briefly surface the previous
+  // station's track before the next poll resolves. Deriving this reset avoids
+  // a synchronous setState in the effect below.
+  const key = enabled ? streamUrl ?? null : null;
+  const [prevKey, setPrevKey] = useState(key);
+  if (prevKey !== key) {
+    setPrevKey(key);
+    if (nowPlaying !== null) setNowPlaying(null);
+  }
+
   useEffect(() => {
-    if (!enabled || !streamUrl) {
-      setNowPlaying(null);
-      return;
-    }
+    if (!enabled || !streamUrl) return;
 
     const derived = deriveStatusUrl(streamUrl);
     if (!derived) return;
@@ -137,5 +145,7 @@ export function useIcecastFallback(
     };
   }, [streamUrl, enabled]);
 
-  return nowPlaying;
+  // When disabled or streamless, surface null without needing to reset state
+  // synchronously in the effect — the poll re-populates once re-enabled.
+  return enabled && streamUrl ? nowPlaying : null;
 }

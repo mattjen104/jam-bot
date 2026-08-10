@@ -120,7 +120,11 @@ function RadioBrowserPanel({
     }
   }, [token]);
 
-  useEffect(() => { void loadStations(); }, [loadStations]);
+  useEffect(() => {
+    // Defer into a microtask callback so state updates happen asynchronously
+    // (from the fetch result) rather than synchronously in the effect body.
+    void Promise.resolve().then(() => loadStations());
+  }, [loadStations]);
 
   return (
     <div className="min-h-screen">

@@ -348,7 +348,10 @@ export function useLocalFileDriver(): PlaybackDriverHandle & LocalFileDriverExtr
 
   // `available` is only true when real File objects are loaded in the current
   // session — not based on the historical count restored from IndexedDB.
-  const available = filesInMemory && fileMapRef.current.size > 0;
+  // `filesInMemory` is kept in lock-step with `fileMapRef.current.size > 0`
+  // at every mutation site, so reading it alone (instead of the ref during
+  // render) is behaviourally identical.
+  const available = filesInMemory;
 
   return useMemo<PlaybackDriverHandle & LocalFileDriverExtras>(
     () => ({
@@ -472,7 +475,6 @@ export function useLocalFileDriver(): PlaybackDriverHandle & LocalFileDriverExtr
       browse,
       clearFiles,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [available, hasDirectory, fileCount, matchCount, scanning, browse, clearFiles, notify],
   );
 }

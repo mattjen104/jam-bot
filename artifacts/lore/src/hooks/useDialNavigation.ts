@@ -10,7 +10,7 @@
  *   usePastScanState   — two-level coarse/fine navigation state machine
  *   useSwipeHandler    — horizontal swipe detection for fine steps
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import type React from "react";
 import { type OverlapRun } from "../lib/meHooks";
 
@@ -126,14 +126,13 @@ export function usePastScanState(coarseCands: OverlapRun[]) {
 
   // The candidate list can shrink under us (e.g. the dial range is narrowed
   // while stepped back). Clamp the coarse position so currentRun never reads
-  // past the end of the array. Plain effect reads — no nested setters, which
-  // are unsafe under Strict/Concurrent semantics.
-  useEffect(() => {
-    if (coarseIdx !== null && coarseIdx >= coarseCount) {
-      setCoarseIdx(coarseCount > 0 ? coarseCount - 1 : null);
-      setFineIdx(null);
-    }
-  }, [coarseCount, coarseIdx]);
+  // past the end of the array. Deriving this during render (instead of in an
+  // effect) keeps the clamped index consistent within the same commit and
+  // avoids a synchronous setState-in-effect cascade.
+  if (coarseIdx !== null && coarseIdx >= coarseCount) {
+    setCoarseIdx(coarseCount > 0 ? coarseCount - 1 : null);
+    setFineIdx(null);
+  }
 
   // Internal setter: updates coarse and resets fine whenever the index changes.
   const setCoarseWithFineReset = useCallback(
