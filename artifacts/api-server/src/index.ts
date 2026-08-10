@@ -96,6 +96,7 @@ import { applyAppleLibraryItemsMigration } from "./lore/apple-library-items-migr
 import { startLifetimeCrossingsJob } from "./lore/lifetime-crossings-job.js";
 import { startBlendedCrossingsWarmJob } from "./lore/blended-crossings-job.js";
 import { warmPersonalCrossingsAtBoot } from "./lore/personal-crossings-warm.js";
+import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -239,6 +240,7 @@ async function bootLore(): Promise<void> {
     startQualityRecomputeJob();
     await runMigration("applyLifetimeCrossingsMigration", applyLifetimeCrossingsMigration);
     await runMigration("applyAppleLibraryItemsMigration", applyAppleLibraryItemsMigration);
+    await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
     startLifetimeCrossingsJob();
     startBlendedCrossingsWarmJob();
     warmPersonalCrossingsAtBoot();

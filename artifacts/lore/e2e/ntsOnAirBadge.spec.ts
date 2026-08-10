@@ -194,7 +194,7 @@ test.describe("On-air show + DJ attribution on the dial front door", () => {
     await installDialRoutes(page, { live: true, schedule: null });
     await page.goto("/lore/");
 
-    // Dial settles into the first-run placeholder (no library, no seeds)…
+    // Dial settles into the first-run sidebar (no library, no seeds)…
     await expect(
       page.getByText("Know who you're looking for?", { exact: false }),
     ).toBeVisible({ timeout: 15_000 });

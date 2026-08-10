@@ -53,6 +53,11 @@ export type RadioBrowserGenre = (typeof RADIO_BROWSER_GENRE_WHITELIST)[number];
  * from RadioBrowser discovery, regardless of tags/bitrate/votes. Add brand
  * names here that slip in under a whitelisted genre tag despite being
  * low-quality/ad-heavy "lounge aggregator" style stations.
+ *
+ * **Important:** this guard only runs at ingest time. If you add a new entry
+ * here you must also add the matching LIKE predicate to the companion boot
+ * migration so that stations already in the database are retroactively hidden.
+ * See `artifacts/api-server/src/lore/station-blocklist-hide-migration.ts`.
  */
 export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
   "epic lounge",
