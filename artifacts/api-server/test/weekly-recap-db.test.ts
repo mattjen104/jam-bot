@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
+  attendanceRollupsTable,
   attendanceTable,
   db,
   libraryItemsTable,
@@ -161,6 +162,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!dbAvailable) return;
+  // Rollup passes (this file seeds rollupCounted attendance; a concurrent
+  // rollup job can also write rows) leave attendance_rollups rows that FK
+  // recordings — clear them first or the recordings delete below 23503s.
+  await db.delete(attendanceRollupsTable).where(inArray(
+    attendanceRollupsTable.userId,
+    [userId, emptyUserId],
+  ));
   await db.delete(attendanceTable).where(inArray(
     attendanceTable.userId,
     [userId, emptyUserId],

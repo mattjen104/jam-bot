@@ -112,4 +112,5 @@
 - [Merge-splice can truncate whole handler tails](crossings-route-merge-splice.md) — /me/crossings once lost its closing braces on master (typecheck red for everyone); brace-balance the file and reconstruct from the last balanced revision + tests.
 - [Station context as sidebar tab](context-sidebar-tab.md) — context tab (fixed id) lives in the set-panel strip only in landscape; portrait keeps in-body region; jsdom lacks matchMedia so guard it.
 - [Crossings soft-name normalization](crossings-soft-name-normalization.md) — article/punct-tolerant seed matching is personal-compute only (blended, library-hits, lifetime-job still exact); empty results cache short (~2 min).
+- [attendance_rollups FK cleanup](attendance-rollups-fk-cleanup.md) — DB tests must delete attendance_rollups (by test userIds) before recordings, or afterAll 23503s; rollup rows can appear via concurrent global passes.
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).
