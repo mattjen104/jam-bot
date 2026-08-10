@@ -64,6 +64,7 @@ import {
   type QueueArtist,
 } from "./dial/FrontDoorRow";
 import { Zone1Lane, type DialLaneRow } from "./dial/Zone1Lane";
+import { FirstRunSidebar } from "./FirstRunSidebar";
 import { Zone2Lane } from "./dial/Zone2Lane";
 import { Zone3Lane, ZONE3_VISIBLE } from "./dial/Zone3Lane";
 import {
@@ -3270,6 +3271,11 @@ export function DialView() {
                           onAddSeed={addSeed}
                           onRemoveSeed={removeSeed}
                           liveSuggestions={liveArtistSuggestions}
+                          stations={stations}
+                          onTune={(slug) => {
+                            const ds = stations.find((s) => s.station.slug === slug);
+                            if (ds) void radio.toggle(ds.station);
+                          }}
                         />
                       </>
                     )}
@@ -3444,6 +3450,8 @@ function Zone1Placeholder({
   onAddSeed,
   onRemoveSeed: _onRemoveSeed,
   liveSuggestions = [],
+  stations = [],
+  onTune,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
@@ -3453,6 +3461,8 @@ function Zone1Placeholder({
   onAddSeed: (artist: string) => void;
   onRemoveSeed: (artist: string) => void;
   liveSuggestions?: LiveArtistSuggestion[];
+  stations?: DialStation[];
+  onTune?: (slug: string) => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -3487,20 +3497,18 @@ function Zone1Placeholder({
     );
   }
 
-  // New user — type an artist, tap a suggestion chip, or drop a screenshot.
+  // New user — station sentences first, manual search below.
   return (
-    <div className="z1-placeholder z1-placeholder--seed">
-      <div className="z1-placeholder__body">
-        <p className="z1-placeholder__pitch">
-          Pick the artists you love — Lore will show you when they're playing live.
-        </p>
-        <SeedSuggestions
-          liveSuggestions={liveSuggestions}
-          seeds={seeds}
-          onAddSeed={onAddSeed}
-        >
-          <SeedInput seeds={seeds} onAdd={onAddSeed} />
-        </SeedSuggestions>
+    <div className="z1-placeholder z1-placeholder--first-run">
+      <FirstRunSidebar
+        stations={stations}
+        seeds={seeds}
+        onAddSeed={onAddSeed}
+        onTune={onTune ?? (() => undefined)}
+      />
+      <div className="z1-placeholder__manual">
+        <span className="z1-placeholder__manual-label">Know who you're looking for?</span>
+        <SeedInput seeds={seeds} onAdd={onAddSeed} />
       </div>
     </div>
   );

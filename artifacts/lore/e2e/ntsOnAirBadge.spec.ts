@@ -194,9 +194,9 @@ test.describe("On-air show + DJ attribution on the dial front door", () => {
     await installDialRoutes(page, { live: true, schedule: null });
     await page.goto("/lore/");
 
-    // Dial settles into the onboarding placeholder (no library, no seeds)…
+    // Dial settles into the first-run sidebar (no library, no seeds)…
     await expect(
-      page.getByText("Pick the artists you love", { exact: false }),
+      page.getByText("Know who you're looking for?", { exact: false }),
     ).toBeVisible({ timeout: 15_000 });
 
     // …and with no schedule attribution there is no DJ credit.
@@ -213,7 +213,7 @@ test.describe("On-air show + DJ attribution on the dial front door", () => {
     await page.goto("/lore/");
 
     await expect(
-      page.getByText("Pick the artists you love", { exact: false }),
+      page.getByText("Know who you're looking for?", { exact: false }),
     ).toBeVisible({ timeout: 15_000 });
 
     // No live pulse → no DJs-on-air band, no live DJ credit.

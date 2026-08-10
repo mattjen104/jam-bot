@@ -1,0 +1,38 @@
+---
+name: FirstRunSidebar provenance rung design
+description: Rules for the first-run onboarding sidebar: rung classification, artist resolution, interaction model, and test gotchas.
+---
+
+## Rung classification (`deriveRung`)
+
+Order matters — check automation FIRST, then show flags:
+
+1. `automationClass === "automated"` → **rung 4** (absolute precedence, overrides any show/DJ data)
+2. `liveShow?.isPickerShow === true` → **rung 1** (validated single selector; `djName` alone is NOT sufficient)
+3. `liveShow` present (any other) → **rung 2** (live shift, host not validated as picker)
+4. No live show → **rung 3** (attributed station, no agent claim)
+
+**Why:** `isPickerShow` is set by `useDialData` only when a picker ID and exactly one eligible DJ are present. A named but unvalidated show must not become the strong "X is playing…" claim.
+
+## Artist resolution
+
+Use `spin.artistMbid` (not `spin.mbid` / recording MBID) for the resolved/unresolved decision.
+
+- `artistMbid !== null` → resolved, interactive keep (role=button, tabIndex=0, aria-pressed)
+- `artistMbid === null` → unresolved, **plain `<span>`** — no role, no tabIndex, no aria handlers
+
+**Why:** Recording and artist resolution are independent. A recording may resolve while the artist identity is still unknown in the graph, and vice versa. Keyboard-focusable buttons that do nothing are an accessibility failure.
+
+## Test fixture gotchas
+
+- `makeStation` in `firstRunSidebar.test.tsx` defaults `isPickerShow` to `!!djName`. Override explicitly when testing the divergent case (djName set but isPickerShow=false).
+- `spinEntries` must set both `mbid` (recording) and `artistMbid` (artist) — they default independently.
+- Scope all DOM queries to `container` from `render()`, never `document.querySelector` — stale nodes from prior renders accumulate without confirmed cleanup.
+
+## Code review rejection history (for future reference)
+
+This component was rejected 4 times before passing:
+1. `spin.mbid` used instead of `spin.artistMbid` — tests reproduced the same bug so didn't catch it
+2. Unresolved artists had `role="button"` + `tabIndex=0` → accessibility failure
+3. `deriveRung` checked `djName` not `isPickerShow` for rung 1
+4. Automation check was AFTER the djName/isPickerShow check (ordering bug)

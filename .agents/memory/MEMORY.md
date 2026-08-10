@@ -87,6 +87,7 @@
 - [Album-cover listener identity](album-avatar-identity.md) — anonymous cover identity preserves bottle emojis; covers are privacy-thresholded station tokens.
 - [Support ladder identity grounding](support-ladder-identity-grounding.md) — never infer a release MBID from a recording→release-group bridge; provider facts must carry release identity explicitly.
 - [Art fallback local asset](art-fallback-local-asset.md) — RUMOURS placeholder must be a bundled local file (old CAA URL 404s); compare img.src by suffix, every art <img> needs onArtError.
+- [FirstRunSidebar provenance rung design](frb-provenance-rung-design.md) — automation always rung 4 first; isPickerShow (not djName) gates rung 1; artistMbid (not recording mbid) gates interaction; unresolved = plain span, no role/tabIndex.
 - [Crossings empty-taste fast path](crossings-empty-taste-fastpath.md) — fast path must check EVERY taste source (library_items, taste_seeds, unresolved spotify_library_items) or soft-only users cache []; every library-creating path must bustCrossingsCache.
 - [Crossings query performance](crossings-query-performance.md) — single 180-day bounded query only; unbounded/two-query approach causes 10–16s hangs; cache TTL = 30 min.
 - [Dial ranged coarse-scan window](dial-range-window.md) — time-only spins filters need the played_at-leading index (boot migration); spine goes dense >60 runs; clamp coarseIdx on shrink.
