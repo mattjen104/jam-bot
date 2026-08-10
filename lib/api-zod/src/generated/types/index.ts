@@ -80,6 +80,7 @@ export * from "./getMyWeeklyRecapParams";
 export * from "./getOembedParams";
 export * from "./getRecordingsAvailabilityParams";
 export * from "./getSpotifySavedParams";
+export * from "./getStationArchiveParams";
 export * from "./getStationSocialPresenceParams";
 export * from "./getStationSpinsParams";
 export * from "./getStationsRecentSpinsParams";

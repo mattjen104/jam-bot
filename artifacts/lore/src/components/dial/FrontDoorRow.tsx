@@ -19,6 +19,7 @@ import {
   cleanLiveValue,
   sameLiveValue,
   crossingSentence,
+  liveProvenanceSummary,
   reason,
 } from "../dialViewHelpers";
 import { proxyArtUrl } from "../../lib/proxyArt";
@@ -324,9 +325,11 @@ export interface FrontDoorRowProps {
   onAddArtist?: (name: string) => void;
   /** Opens the persistent player queue for this station's complete set. */
   onSetExpand?: () => void;
+  /** Opens the station archive workspace without tuning the row. */
+  onOpenWorkspace?: () => void;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, onOpenWorkspace }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -336,6 +339,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
     ? { ...show, djName: usableDj }
     : show;
   const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode, ds.topArtistNames);
+  const compact = liveProvenanceSummary(ds.station.name, safeShow, ds.liveTrack?.artist);
 
   // Clickable-"and" expansion: probe the sentence first to learn which artist
   // names it already shows, derive the rest of the set (setlist order, library
@@ -373,9 +377,26 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
   const tier1Cls = displayMode === "blended"
     ? rz.cls
     : crossing ? rz.cls : usePop ? "fdrow__pop-sentence" : live ? "fdrow__live-sentence" : rz.cls;
-  const tier1Node = displayMode === "blended"
+  const fallbackTier1Node = displayMode === "blended"
     ? rz.node
     : crossing?.node ?? (usePop ? popLine : null) ?? live?.node ?? rz.node;
+  const tier1Node = compact && onOpenWorkspace ? (
+    <>
+      <button
+        type="button"
+        className="fdrow__provenance"
+        aria-label={`Open ${ds.station.name} sets`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenWorkspace();
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        {compact.provenance.join(" | ")}
+      </button>
+      {compact.artist ? <> is playing <b className="fdrow__artist">{compact.artist}</b>.</> : " is on air."}
+    </>
+  ) : fallbackTier1Node;
   const rowCls = [
     "fdrow",
     rz.r === 1 ? "fdrow--t1" : "",
@@ -391,9 +412,15 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
       className={rowCls}
       data-scrub-slug={scrubSlug}
       role="button"
+      aria-label={compact?.text ?? undefined}
       tabIndex={0}
       onClick={onTuneIn}
-      onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onTuneIn();
+        }
+      }}
     >
       {isActive && artworkUrl && (
         <div

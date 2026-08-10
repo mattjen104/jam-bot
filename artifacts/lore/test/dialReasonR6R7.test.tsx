@@ -235,9 +235,7 @@ describe("reason() r=6 — 24h station exact crossings row label", () => {
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
     const text = t1!.textContent ?? "";
-    expect(text).toContain("5");
-    expect(text).toContain("of yours");
-    expect(text).toContain("here in the last 24h");
+    expect(text).toBe("Afternoon Mix | Station r6-station is on air.");
   });
 
   it("does not include 'no selector listed' text", () => {
@@ -254,9 +252,7 @@ describe("reason() r=6 — 24h station exact crossings row label", () => {
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
     const text = t1!.textContent ?? "";
-    expect(text).toContain("1");
-    expect(text).toContain("of yours");
-    expect(text).toContain("here in the last 24h");
+    expect(text).toBe("Afternoon Mix | Station r6-single is on air.");
   });
 
   it("lands the row in Zone 1 (history band), not the Zone 3 'DJs on air' band", () => {
@@ -289,9 +285,7 @@ describe("reason() r=7 — 24h station artist crossings row label", () => {
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
     const text = t1!.textContent ?? "";
-    expect(text).toContain("3");
-    expect(text).toContain("tracks by your artists");
-    expect(text).toContain("here in the last 24h");
+    expect(text).toBe("Afternoon Mix | Station r7-station is on air.");
   });
 
   it("does not include 'no selector listed' text", () => {
@@ -308,9 +302,7 @@ describe("reason() r=7 — 24h station artist crossings row label", () => {
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
     const text = t1!.textContent ?? "";
-    expect(text).toContain("1");
-    expect(text).toContain("tracks by your artists");
-    expect(text).toContain("here in the last 24h");
+    expect(text).toBe("Afternoon Mix | Station r7-single is on air.");
   });
 
   it("lands the row in Zone 1 (history band), not the Zone 3 'DJs on air' band", () => {
@@ -361,11 +353,7 @@ describe("reason() r=6 takes priority over r=7", () => {
     expect(t1).not.toBeNull();
     const text = t1!.textContent ?? "";
 
-    // r=6 copy present
-    expect(text).toContain("of yours");
-    expect(text).toContain("here in the last 24h");
-
-    // r=7 copy absent
-    expect(text).not.toContain("tracks by your artists");
+    // Live summaries use provenance rather than exposing score-rung copy.
+    expect(text).toBe("Afternoon Mix | Station r6-priority is on air.");
   });
 });

@@ -210,7 +210,7 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
 
     // Song titles are never shown — the sentence credits DJ + artist + show.
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("DJ Tester selected Pixies on Morning Show");
+    expect(sentence).toBe("DJ Tester | Morning Show | Test Radio is playing Pixies.");
     // The track title must not leak into the row.
     expect(sentence).not.toContain("Gravity Falls");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
@@ -230,7 +230,7 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     renderDial();
 
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("Grateful Dead on Morning Show now");
+    expect(sentence).toBe("Morning Show | Test Radio is playing Grateful Dead.");
     expect(sentence).not.toContain("Dark Star");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });

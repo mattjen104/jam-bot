@@ -11,6 +11,9 @@ import {
   setPanelScopeId,
   setPanelTabLabel,
   SET_EXPORT_SERVICES,
+  STATION_SET_EXPORT_FORMATS,
+  buildStationSetExport,
+  stationSetFilename,
   type SetPanelScope,
   type SetPanelSet,
   type SetPanelTab,
@@ -438,5 +441,27 @@ describe("set panel scope model", () => {
     }
     expect(buildSetExport([SETS[0]], "Spotify").entries[0].url)
       .toBe("https://open.spotify.com/search/Fleetwood%20Mac%20Dreams");
+  });
+
+  it("builds all portable station-set formats in broadcast order and sanitizes local-time filenames", () => {
+    const set = {
+      ...SETS[0],
+      runId: 10,
+      ianaTimezone: "America/Los_Angeles",
+      djNames: ["DJ Aster / Vega"],
+    };
+    const tracks = [
+      { artist: "First Artist", title: "First Song", playedAt: "2026-08-07T18:05:00Z", mbid: "first" },
+      { artist: "Second Artist", title: "Second Song", playedAt: "2026-08-07T18:10:00Z", location: "https://example.com/second" },
+      { artist: "", title: "Missing Artist", playedAt: "2026-08-07T18:15:00Z" },
+    ];
+    for (const format of STATION_SET_EXPORT_FORMATS) {
+      const result = buildStationSetExport(format, set, tracks);
+      expect(result.content.indexOf("First Artist")).toBeLessThan(result.content.indexOf("Second Artist"));
+      expect(result.skipped).toBe(1);
+    }
+    const filename = stationSetFilename(set, "xspf");
+    expect(filename).toMatch(/^DJ-Aster-Vega-Drive-Time-KEXP-2026-08-07-11-00am\.xspf$/);
+    expect(filename).not.toMatch(/[/:|]/);
   });
 });

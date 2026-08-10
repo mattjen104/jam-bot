@@ -1092,6 +1092,11 @@ export interface StationRunSummary {
 export interface StationArchive {
   station: Station;
   runs: StationRunSummary[];
+  /**
+   * Next run offset when paginated, or null when this is the last page.
+   * @nullable
+   */
+  nextOffset?: number | null;
 }
 
 /**
@@ -3341,6 +3346,20 @@ export type ListPickersParams = {
    * Filter to a specific pickerType (e.g. "editorial").
    */
   type?: string;
+};
+
+export type GetStationArchiveParams = {
+  /**
+   * Zero-based run offset for sidebar archive pagination.
+   * @minimum 0
+   */
+  offset?: number;
+  /**
+   * Page size for sidebar archive pagination.
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
 };
 
 export type GetStationSpinsParams = {

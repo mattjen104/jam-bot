@@ -14,7 +14,7 @@
  * unresolved artists use the hollow-square channel and are never "kept" visually.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 
 import { buildOnboardingBlocks, FirstRunSidebar } from "../src/components/FirstRunSidebar";
@@ -422,16 +422,50 @@ describe("FirstRunSidebar", () => {
     expect(container.querySelectorAll(".z1-placeholder__seedchip")).toHaveLength(0);
   });
 
-  it("calls onTune when a station name is clicked", () => {
+  it("keeps row tuning separate from the provenance workspace control", () => {
     const onTune = vi.fn();
+    const onOpenWorkspace = vi.fn();
     const ds = makeStation({ slug: "wfmu", name: "WFMU", djName: "DJ Test" });
     const { container } = render(
-      <FirstRunSidebar stations={[ds]} seeds={[]} onAddSeed={noop} onTune={onTune} />,
+      <FirstRunSidebar
+        stations={[ds]}
+        seeds={[]}
+        onAddSeed={noop}
+        onTune={onTune}
+        onOpenWorkspace={onOpenWorkspace}
+      />,
     );
-    const stationEl = container.querySelector<HTMLElement>(".frb__station-name");
-    expect(stationEl).toBeTruthy();
-    fireEvent.click(stationEl!);
+    const tune = within(container).getByRole("button", { name: /tune WFMU/i });
+    const provenance = within(container).getByRole("button", { name: /open WFMU sets/i });
+    fireEvent.click(tune);
     expect(onTune).toHaveBeenCalledWith("wfmu");
+    expect(onOpenWorkspace).not.toHaveBeenCalled();
+
+    fireEvent.click(provenance);
+    expect(onOpenWorkspace).toHaveBeenCalledWith("wfmu");
+    expect(onTune).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps artist saving separate from station tuning for click, Enter, and Space", () => {
+    const onTune = vi.fn();
+    const onAddSeed = vi.fn();
+    const ds = makeStation({
+      slug: "wfmu",
+      name: "WFMU",
+      djName: "DJ Test",
+      spins: [{ artist: "Broadcast", artistMbid: "artist-broadcast" }],
+    });
+    const { container } = render(
+      <FirstRunSidebar stations={[ds]} seeds={[]} onAddSeed={onAddSeed} onTune={onTune} />,
+    );
+    const artist = within(container).getByRole("button", { name: "Broadcast" });
+
+    fireEvent.click(artist);
+    fireEvent.keyDown(artist, { key: "Enter" });
+    fireEvent.keyDown(artist, { key: " " });
+
+    expect(onAddSeed).toHaveBeenCalledTimes(3);
+    expect(onTune).not.toHaveBeenCalled();
   });
 
   it("shows rung-2 dagger (†) for live shift with host not named in feed", () => {

@@ -10,7 +10,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
-import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
+import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, useGetStationArchive, useGetStationRun, getStationArchive, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { ContextRail, ArtistPane, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import type { GrammarLinks } from "../dial/grammar";
@@ -388,6 +388,280 @@ export function buildSetExport(sets: SetPanelSet[], service: SetExportService): 
   return { entries, skipped };
 }
 
+export const STATION_SET_EXPORT_FORMATS = ["m3u8", "csv", "xspf", "jspf"] as const;
+export type StationSetExportFormat = (typeof STATION_SET_EXPORT_FORMATS)[number];
+export interface StationSetExportTrack {
+  artist: string;
+  title: string;
+  playedAt?: string | null;
+  mbid?: string | null;
+  location?: string | null;
+}
+
+function xmlEscape(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
+function csvField(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+export function stationSetIdentity(
+  set: Pick<SetPanelSet, "djNames" | "showName" | "stationName" | "startedAt" | "ianaTimezone">,
+): { provenance: string; date: string; time: string } {
+  const labels = [...set.djNames, set.showName, set.stationName]
+    .filter((value): value is string => !!value?.trim())
+    .filter((value, index, all) =>
+      all.findIndex((other) => other.localeCompare(value, undefined, { sensitivity: "accent" }) === 0) === index);
+  const date = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    ...(set.ianaTimezone ? { timeZone: set.ianaTimezone } : {}),
+  }).format(new Date(set.startedAt));
+  return { provenance: labels.join(" | "), date, time: fmtHM(set.startedAt, set.ianaTimezone) };
+}
+
+export function stationSetFilename(set: SetPanelSet, format: StationSetExportFormat): string {
+  const identity = stationSetIdentity(set);
+  const safe = `${identity.provenance}-${identity.date}-${identity.time}`
+    .normalize("NFKD")
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-")
+    .slice(0, 140) || "lore-set";
+  return `${safe}.${format}`;
+}
+
+export function buildStationSetExport(
+  format: StationSetExportFormat,
+  set: SetPanelSet,
+  tracks: StationSetExportTrack[],
+): { content: string; skipped: number; contentType: string } {
+  const valid = tracks.filter((track) => track.artist.trim() && track.title.trim());
+  let skipped = tracks.length - valid.length;
+  const identity = stationSetIdentity(set);
+  if (format === "csv") {
+    const rows = ["played_at,artist,title,recording_mbid", ...valid.map((track) =>
+      [track.playedAt ?? "", track.artist, track.title, track.mbid ?? ""].map(csvField).join(","))];
+    return { content: `${rows.join("\r\n")}\r\n`, skipped, contentType: "text/csv;charset=utf-8" };
+  }
+  if (format === "jspf") {
+    return {
+      content: `${JSON.stringify({ playlist: {
+        title: `${identity.provenance} · ${identity.date} ${identity.time}`,
+        creator: "Lore Radio",
+        track: valid.map((track) => ({
+          creator: track.artist, title: track.title,
+          ...(track.location ? { location: [track.location] } : {}),
+          ...(track.mbid ? { identifier: [`https://musicbrainz.org/recording/${track.mbid}`] } : {}),
+        })),
+      } }, null, 2)}\n`,
+      skipped,
+      contentType: "application/jspf+json;charset=utf-8",
+    };
+  }
+  if (format === "xspf") {
+    const body = valid.map((track) => [
+      "    <track>",
+      `      <creator>${xmlEscape(track.artist)}</creator>`,
+      `      <title>${xmlEscape(track.title)}</title>`,
+      track.location ? `      <location>${xmlEscape(track.location)}</location>` : "",
+      track.mbid ? `      <identifier>https://musicbrainz.org/recording/${xmlEscape(track.mbid)}</identifier>` : "",
+      "    </track>",
+    ].filter(Boolean).join("\n")).join("\n");
+    return {
+      content: `<?xml version="1.0" encoding="UTF-8"?>\n<playlist version="1" xmlns="http://xspf.org/ns/0/">\n  <title>${xmlEscape(identity.provenance)} · ${identity.date} ${identity.time}</title>\n  <trackList>\n${body}\n  </trackList>\n</playlist>\n`,
+      skipped,
+      contentType: "application/xspf+xml;charset=utf-8",
+    };
+  }
+  const located = valid.filter((track) => track.location || track.mbid);
+  skipped += valid.length - located.length;
+  return {
+    content: `#EXTM3U\n${located.map((track) =>
+      `#EXTINF:-1,${track.artist} - ${track.title}\n${track.location ?? `https://musicbrainz.org/recording/${track.mbid}`}`).join("\n")}\n`,
+    skipped,
+    contentType: "audio/mpegurl;charset=utf-8",
+  };
+}
+
+function StationSetWorkspace({
+  slug,
+  liveSet,
+  seedsLower,
+  onAdd,
+  onRemove,
+  onOpenArtist,
+}: {
+  slug: string;
+  liveSet: SetPanelSet | null;
+  seedsLower: Set<string>;
+  onAdd: (name: string) => void;
+  onRemove: (name: string) => void;
+  onOpenArtist: (name: string) => void;
+}) {
+  const workspaceRef = useRef<HTMLElement>(null);
+  const archive = useGetStationArchive(slug, { offset: 0, limit: 25 });
+  const [additionalRuns, setAdditionalRuns] = useState<NonNullable<typeof archive.data>["runs"]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [format, setFormat] = useState<StationSetExportFormat>("m3u8");
+  const [exportNote, setExportNote] = useState<string | null>(null);
+  const archiveRuns = useMemo(() => {
+    const byId = new Map<number, NonNullable<typeof archive.data>["runs"][number]>();
+    for (const run of [...(archive.data?.runs ?? []), ...additionalRuns]) {
+      if (liveSet?.runId != null && run.runId === liveSet.runId) continue;
+      byId.set(run.runId, run);
+    }
+    return [...byId.values()];
+  }, [archive.data?.runs, additionalRuns, liveSet?.runId]);
+  const selectedRun = archiveRuns.find((run) => run.runId === selectedRunId) ?? null;
+  const historical = useGetStationRun(selectedRunId ?? 0);
+  const stationTz = archive.data?.station.ianaTimezone ?? liveSet?.ianaTimezone ?? null;
+  const selectedSet: SetPanelSet | null = selectedRun && historical.data ? {
+    id: `${slug}:archive:${selectedRun.runId}`,
+    runId: selectedRun.runId,
+    stationSlug: slug,
+    stationName: historical.data.station.name,
+    startedAt: selectedRun.startedAt,
+    ianaTimezone: stationTz,
+    showName: selectedRun.show?.name ?? null,
+    djNames: selectedRun.show?.djName ? [selectedRun.show.djName] : [],
+    artists: historical.data.tracks.slice().reverse().map((track) => ({
+      name: track.recording?.artist || track.rawArtist,
+      title: track.recording?.title || track.rawTitle,
+      inLibrary: false,
+    })).filter((track) => track.name.trim()),
+    spins: [],
+    progress: 1,
+  } : selectedRunId == null ? liveSet : null;
+  const tracks: StationSetExportTrack[] = selectedRunId == null
+    ? (liveSet?.spins ?? []).map((spin) => ({
+        artist: spin.artist, title: spin.title, playedAt: spin.playedAt, mbid: spin.mbid,
+      }))
+    : (historical.data?.tracks ?? []).map((track) => ({
+        artist: track.recording?.artist || track.rawArtist,
+        title: track.recording?.title || track.rawTitle,
+        playedAt: track.playedAt,
+        mbid: track.recording?.mbid ?? null,
+        location: track.recording?.links?.find((link) => link.kind === "exact")?.url ?? null,
+      }));
+  const download = () => {
+    if (!selectedSet) return;
+    const built = buildStationSetExport(format, selectedSet, tracks);
+    const url = URL.createObjectURL(new Blob([built.content], { type: built.contentType }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = stationSetFilename(selectedSet, format);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setExportNote(built.skipped > 0
+      ? `${built.skipped} track${built.skipped === 1 ? "" : "s"} lacked the fields required for ${format.toUpperCase()} and ${built.skipped === 1 ? "was" : "were"} skipped.`
+      : `Downloaded ${tracks.length} tracks in broadcast order.`);
+  };
+  const effectiveNextOffset = nextOffset === undefined ? archive.data?.nextOffset : nextOffset;
+  const loadMore = async () => {
+    if (effectiveNextOffset == null || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await getStationArchive(slug, { offset: effectiveNextOffset, limit: 25 });
+      setAdditionalRuns((current) => [...current, ...page.runs]);
+      setNextOffset(page.nextOffset);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+  const identity = selectedSet ? stationSetIdentity(selectedSet) : null;
+  useEffect(() => {
+    workspaceRef.current?.focus();
+  }, [slug]);
+
+  return (
+    <section
+      ref={workspaceRef}
+      className="station-workspace"
+      aria-label={`${archive.data?.station.name ?? slug} set workspace`}
+      tabIndex={-1}
+    >
+      {archive.isLoading && !liveSet ? <p className="dial-hero__setpanel-empty">Loading station sets…</p> : null}
+      {archive.isError ? <p className="dial-hero__setpanel-empty">The station archive is unavailable right now.</p> : null}
+      {selectedSet && identity ? (
+        <article className="station-workspace__selected">
+          <header className="station-workspace__header">
+            <strong>{identity.provenance}</strong>
+            <time dateTime={selectedSet.startedAt}>{identity.date} · {identity.time}</time>
+          </header>
+          <div className="station-workspace__export">
+            <label>
+              <span className="sr-only">Set export format</span>
+              <select aria-label="Set export format" value={format} onChange={(event) => setFormat(event.target.value as StationSetExportFormat)}>
+                {STATION_SET_EXPORT_FORMATS.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}
+              </select>
+            </label>
+            <button type="button" onClick={download}><Download /> Download</button>
+          </div>
+          {exportNote ? <p className="station-workspace__note" role="status">{exportNote}</p> : null}
+          {historical.isLoading && selectedRunId != null ? <p className="dial-hero__setpanel-empty">Loading every play…</p> : (
+            <SetQueueList
+              artists={selectedSet.artists}
+              seedsLower={seedsLower}
+              onAdd={onAdd}
+              onRemove={onRemove}
+              onOpenArtist={onOpenArtist}
+              progress={1}
+            />
+          )}
+        </article>
+      ) : null}
+      {archiveRuns.length > 0 ? (
+        <div className="station-workspace__history" role="list" aria-label="Older station sets">
+          {liveSet ? (
+            <button
+              type="button"
+              role="listitem"
+              className={`station-workspace__history-row station-workspace__history-row--current${selectedRunId == null ? " station-workspace__history-row--selected" : ""}`}
+              aria-pressed={selectedRunId == null}
+              onClick={() => setSelectedRunId(null)}
+            >
+              <span>Current set · {stationSetIdentity(liveSet).provenance}</span>
+              <time dateTime={liveSet.startedAt}>{stationSetIdentity(liveSet).date} · {stationSetIdentity(liveSet).time}</time>
+            </button>
+          ) : null}
+          {archiveRuns.map((run) => {
+            const summary: SetPanelSet = {
+              id: String(run.runId), runId: run.runId, stationSlug: slug,
+              stationName: archive.data!.station.name, startedAt: run.startedAt,
+              ianaTimezone: stationTz, showName: run.show?.name ?? null,
+              djNames: run.show?.djName ? [run.show.djName] : [],
+              artists: [], spins: [], progress: 1,
+            };
+            const rowIdentity = stationSetIdentity(summary);
+            return (
+              <button
+                key={run.runId}
+                type="button"
+                role="listitem"
+                className={`station-workspace__history-row${selectedRunId === run.runId ? " station-workspace__history-row--selected" : ""}`}
+                aria-pressed={selectedRunId === run.runId}
+                onClick={() => setSelectedRunId(run.runId)}
+              >
+                <span>{rowIdentity.provenance}</span>
+                <time dateTime={run.startedAt}>{rowIdentity.date} · {rowIdentity.time}</time>
+              </button>
+            );
+          })}
+          {effectiveNextOffset != null ? (
+            <button type="button" className="station-workspace__more" disabled={loadingMore} onClick={() => void loadMore()}>
+              {loadingMore ? "Loading more sets…" : "Load more sets"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 /**
  * Tabbed set browser — fully controlled by the parent so that front-door row
  * clicks, replay updates, and provenance drills all share one tab model.
@@ -437,6 +711,7 @@ export function TabbedSetPanel({
   // affordance (actions, export, cards) treats them as "no set tab active".
   const isContextActive = activeTab?.scope.kind === "context";
   const activeArtistScope = activeTab?.scope.kind === "artist" ? activeTab.scope : null;
+  const activeStationScope = activeTab?.scope.kind === "station" ? activeTab.scope : null;
   const active = isContextActive || activeArtistScope ? null : activeTab;
   const displayed = active ? scopedSets(active.scope, allSets) : [];
   const exported = exportOpen && active ? buildSetExport(displayed, service) : null;
@@ -458,6 +733,11 @@ export function TabbedSetPanel({
     value: artistFrameId(name, artistMbids.get(name.trim().toLowerCase()) ?? null),
     label: name,
   });
+  const stationLiveSet = activeStationScope
+    ? [...allSets]
+      .filter((set) => set.stationSlug === activeStationScope.value && set.id !== "replay")
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0] ?? null
+    : null;
 
   return (
     <>
@@ -479,7 +759,18 @@ export function TabbedSetPanel({
       {activeArtistScope && renderArtistBody != null && (
         <div className="set-panel__artist">{renderArtistBody(activeArtistScope)}</div>
       )}
-      {active && (
+      {activeStationScope && (
+        <StationSetWorkspace
+          key={activeStationScope.value}
+          slug={activeStationScope.value}
+          liveSet={stationLiveSet}
+          seedsLower={seedsLower}
+          onAdd={onAdd}
+          onRemove={onRemove}
+          onOpenArtist={openArtist}
+        />
+      )}
+      {active && !activeStationScope && (
         <button
           type="button"
           className="set-panel__actions-toggle"
@@ -488,7 +779,7 @@ export function TabbedSetPanel({
           onClick={() => setActionsOpen((open) => !open)}
         >{actionsOpen ? "less" : "play · export"}</button>
       )}
-      {active && (
+      {active && !activeStationScope && (
         <div className={`set-panel__actions${actionsOpen ? " set-panel__actions--open" : ""}`}>
           <button
             type="button"
@@ -514,7 +805,7 @@ export function TabbedSetPanel({
           </button>
         </div>
       )}
-      {exported && (
+      {exported && !activeStationScope && (
         <div className="set-panel__export" aria-label={`Export to ${service}`}>
           {exported.entries.map((entry, i) => (
             <a key={`${entry.url}:${i}`} href={entry.url} target="_blank" rel="noreferrer">{entry.label}</a>
@@ -524,8 +815,8 @@ export function TabbedSetPanel({
           )}
         </div>
       )}
-      {active && displayed.length === 0 && <p className="dial-hero__setpanel-empty">No complete sets are available for this attribution yet.</p>}
-      {displayed.length > 0 && (
+      {active && !activeStationScope && displayed.length === 0 && <p className="dial-hero__setpanel-empty">No complete sets are available for this attribution yet.</p>}
+      {!activeStationScope && displayed.length > 0 && (
         <div className="set-panel__sets">
           {displayed.map((set) => (
             <article className="set-panel__card" key={set.id}>
@@ -2343,10 +2634,11 @@ export function DialView() {
   // This is deliberately player-context state, not an expandable row. It lets
   // live broadcasts and fixed replays share the same set-list surface.
   const [setTabs, setSetTabs] = useState<SetPanelTab[]>([]);
+  const [pinnedStationSlug, setPinnedStationSlug] = useState<string | null>(null);
   /** Minimal default front door: the set/queue panel only shows once the
    * listener engages the queue (opens a set tab) or the tuned-artists surface
    * is open (its close trigger lives in the panel head). */
-  const setPanelOpen = setTabs.length > 0 || tunedArtistsOpen;
+  const setPanelOpen = setTabs.length > 0 || tunedArtistsOpen || pinnedStationSlug != null;
   const [activeSetTabId, setActiveSetTabId] = useState<string | null>(null);
   // Sets opened explicitly (front-door click, replay updates). Kept separate
   // from the derived broadcast sets so listedArtists fallbacks and replay
@@ -2399,6 +2691,12 @@ export function DialView() {
     for (const set of broadcastSets) merged.set(set.id, set);
     return [...merged.values()];
   }, [broadcastSets, openedSets]);
+  const pinnedRow = useMemo(
+    () => pinnedStationSlug
+      ? sortedRows.find((row) => row.ds.station.slug === pinnedStationSlug) ?? null
+      : null,
+    [pinnedStationSlug, sortedRows],
+  );
 
   /** Append-or-focus a tab. `activate=false` lets background updates (replay
    * index ticks) refresh a tab without yanking focus from the one the
@@ -2417,6 +2715,34 @@ export function DialView() {
       value: artistFrameId(name ?? "", mbid),
       ...(name ? { label: name } : {}),
     });
+  }, [openSetTab]);
+  const openStationWorkspace = useCallback((row: { ds: DialStation; show: DialShow | null }) => {
+    const spins = row.show?.spins ?? [];
+    if (spins.length > 0) {
+      const startedAt = row.show?.startedAt ?? spins[0]?.playedAt ?? new Date().toISOString();
+      const id = `${row.ds.station.slug}:${startedAt}`;
+      setOpenedSets((current) => ({
+        ...current,
+        [id]: {
+          id,
+          runId: row.show?.runId ?? null,
+          stationSlug: row.ds.station.slug,
+          stationName: row.ds.station.name,
+          startedAt,
+          ianaTimezone: row.show?.ianaTimezone ?? row.ds.station.ianaTimezone ?? null,
+          showName: usableShowName(row.show),
+          djNames: row.show ? eligibleDjNames(dialShowAsAttribution(row.show)) : [],
+          artists: [...spins].reverse().map((spin) => ({
+            name: spin.artist,
+            title: spin.title || null,
+            inLibrary: spin.isLibraryHit || spin.isArtistHit,
+          })).filter((artist) => artist.name.trim()),
+          spins,
+          progress: 1,
+        },
+      }));
+    }
+    openSetTab({ kind: "station", value: row.ds.station.slug });
   }, [openSetTab]);
   const closeSetTab = useCallback((id: string) => {
     setSetTabs((current) => {
@@ -2874,12 +3200,11 @@ export function DialView() {
   // Shared tune handler for both Zone 3 bands.
   const tuneZoneRow = useCallback((row: DialLaneRow) => {
     scan.stop();
-    openLiveQueue(row);
-    commitTune(row.ds.station.slug, row.ds.station.name);
+    setPinnedStationSlug(row.ds.station.slug);
     if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
       void radio.toggle(row.ds.station);
     }
-  }, [scan, openLiveQueue, commitTune, radio]);
+  }, [scan, radio]);
   const popLineFor = useCallback((slug: string) =>
     popHasContent(slug)
       ? <PopCrossingLine artists={popMap.get(slug)!} seedsLower={seedsLower} onAdd={addSeed} />
@@ -2900,6 +3225,7 @@ export function DialView() {
         ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
         : row.ds.lifetimeCrossings}
       onTuneIn={tuneZoneRow}
+      onOpenWorkspace={openStationWorkspace}
       onToggleExpanded={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
       onCollapse={() => setZone3Expanded(false)}
     />
@@ -2961,6 +3287,21 @@ export function DialView() {
               titles — is display:none-hidden and the layout gives its strip
               back to the art and sentence rows (data-queue-layout="none"). */}
           <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}${setPanelOpen ? "" : " dial-hero__setpanel--hidden"}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+              {pinnedRow ? (
+                <div className="dial-pinned-row" aria-label="Tuned station">
+                  <FrontDoorRow
+                    ds={pinnedRow.ds}
+                    show={pinnedRow.show}
+                    ov={pinnedRow.ds.lifetimeCrossings}
+                    isActive={true}
+                    isSampling={false}
+                    onTuneIn={() => undefined}
+                    onOpenWorkspace={() => openStationWorkspace(pinnedRow)}
+                    displayMode={crossingSourceMode}
+                    artworkUrl={activeArtworkUrl}
+                  />
+                </div>
+              ) : null}
               {/* Quiet front door: with no set tab open the header carries no
                   real content — drop the "Choose a live set" title and the
                   placeholder sentence, keeping only the compact time-travel
@@ -3250,13 +3591,13 @@ export function DialView() {
                         onAddArtist={addSeed}
                         onTuneIn={(row) => {
                           scan.stop();
-                          openLiveQueue(row, popMap.get(row.ds.station.slug));
-                          commitTune(row.ds.station.slug, row.ds.station.name);
+                          setPinnedStationSlug(row.ds.station.slug);
                           if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
                             void radio.toggle(row.ds.station);
                           }
                         }}
                         onSetExpand={(row) => openLiveQueue(row, popMap.get(row.ds.station.slug))}
+                        onOpenWorkspace={openStationWorkspace}
                       />
                     )}
 
@@ -3305,7 +3646,17 @@ export function DialView() {
                           stations={stations}
                           onTune={(slug) => {
                             const ds = stations.find((s) => s.station.slug === slug);
-                            if (ds) void radio.toggle(ds.station);
+                            if (ds) {
+                              setPinnedStationSlug(slug);
+                              void radio.toggle(ds.station);
+                            }
+                          }}
+                          onOpenWorkspace={(slug) => {
+                            const ds = stations.find((station) => station.station.slug === slug);
+                            if (ds) openStationWorkspace({
+                              ds,
+                              show: ds.shows.find((show) => show.state === "live") ?? null,
+                            });
                           }}
                         />
                       </>
@@ -3483,6 +3834,7 @@ function Zone1Placeholder({
   liveSuggestions = [],
   stations = [],
   onTune,
+  onOpenWorkspace,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
@@ -3494,6 +3846,7 @@ function Zone1Placeholder({
   liveSuggestions?: LiveArtistSuggestion[];
   stations?: DialStation[];
   onTune?: (slug: string) => void;
+  onOpenWorkspace?: (slug: string) => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -3536,6 +3889,7 @@ function Zone1Placeholder({
         seeds={seeds}
         onAddSeed={onAddSeed}
         onTune={onTune ?? (() => undefined)}
+        onOpenWorkspace={onOpenWorkspace}
       />
       <div className="z1-placeholder__manual">
         <span className="z1-placeholder__manual-label">Know who you're looking for?</span>

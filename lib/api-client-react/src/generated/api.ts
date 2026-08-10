@@ -44,6 +44,7 @@ import type {
   GetOembedParams,
   GetRecordingsAvailabilityParams,
   GetSpotifySavedParams,
+  GetStationArchiveParams,
   GetStationSocialPresenceParams,
   GetStationSpinsParams,
   GetStationsRecentSpinsParams,
@@ -2295,22 +2296,44 @@ export function useListPickers<
 
  * @summary A station's documented runs (ghost radio browse surface)
  */
-export const getGetStationArchiveUrl = (slug: string) => {
-  return `/api/stations/${slug}/archive`;
+export const getGetStationArchiveUrl = (
+  slug: string,
+  params?: GetStationArchiveParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/${slug}/archive?${stringifiedParams}`
+    : `/api/stations/${slug}/archive`;
 };
 
 export const getStationArchive = async (
   slug: string,
+  params?: GetStationArchiveParams,
   options?: RequestInit,
 ): Promise<StationArchive> => {
-  return customFetch<StationArchive>(getGetStationArchiveUrl(slug), {
+  return customFetch<StationArchive>(getGetStationArchiveUrl(slug, params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetStationArchiveQueryKey = (slug: string) => {
-  return [`/api/stations/${slug}/archive`] as const;
+export const getGetStationArchiveQueryKey = (
+  slug: string,
+  params?: GetStationArchiveParams,
+) => {
+  return [
+    `/api/stations/${slug}/archive`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getGetStationArchiveQueryOptions = <
@@ -2318,6 +2341,7 @@ export const getGetStationArchiveQueryOptions = <
   TError = ErrorType<ApiError>,
 >(
   slug: string,
+  params?: GetStationArchiveParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getStationArchive>>,
@@ -2329,11 +2353,13 @@ export const getGetStationArchiveQueryOptions = <
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetStationArchiveQueryKey(slug);
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationArchiveQueryKey(slug, params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getStationArchive>>
-  > = ({ signal }) => getStationArchive(slug, { signal, ...requestOptions });
+  > = ({ signal }) =>
+    getStationArchive(slug, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -2361,6 +2387,7 @@ export function useGetStationArchive<
   TError = ErrorType<ApiError>,
 >(
   slug: string,
+  params?: GetStationArchiveParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getStationArchive>>,
@@ -2370,7 +2397,7 @@ export function useGetStationArchive<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetStationArchiveQueryOptions(slug, options);
+  const queryOptions = getGetStationArchiveQueryOptions(slug, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

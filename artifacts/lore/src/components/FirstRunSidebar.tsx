@@ -27,6 +27,7 @@ export interface OnboardingBlock {
   artists: OnboardingArtist[];
   /** How many more artists aired this hour beyond what's shown. */
   extraCount: number;
+  currentArtist: OnboardingArtist | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +103,11 @@ export function buildOnboardingBlocks(stations: DialStation[]): OnboardingBlock[
       location: stationLocation(ds.station),
       artists,
       extraCount,
+      currentArtist: ds.liveTrack?.artist
+        ? { name: ds.liveTrack.artist, mbid: ds.liveTrack.artistMbid }
+        : liveShow?.currentTrack?.artist
+          ? { name: liveShow.currentTrack.artist, mbid: liveShow.currentTrack.artistMbid }
+          : allArtists[allArtists.length - 1] ?? null,
       _rung: rung,
     };
   });
@@ -185,92 +191,19 @@ function StationBlock({
   seedKeys,
   onKeep,
   onTune,
+  onOpenWorkspace,
 }: {
   block: OnboardingBlock;
   seedKeys: Set<string>;
   onKeep: (name: string) => void;
   onTune: (slug: string) => void;
+  onOpenWorkspace: (slug: string) => void;
 }) {
-  const handleTune = () => onTune(block.slug);
-  const handleTuneKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onTune(block.slug);
-    }
-  };
-
-  const stationNode = (
-    <span
-      className={`frb__station-name${block.rung >= 3 ? " frb__station-name--dim" : ""}`}
-      role="button"
-      tabIndex={0}
-      onClick={handleTune}
-      onKeyDown={handleTuneKey}
-    >
-      {block.name}
-    </span>
-  );
-
-  const pickerNode = block.pickerName ? (
-    <span className="frb__picker">{block.pickerName}</span>
-  ) : null;
-
-  const artistListNode =
-    block.artists.length > 0 ? (
-      <ArtistList artists={block.artists} seedKeys={seedKeys} onKeep={onKeep} />
-    ) : null;
-
-  // ── Sentence grammar by rung ─────────────────────────────────────────────
-  let sentence: React.ReactNode;
-  if (block.rung === 1 && pickerNode && artistListNode) {
-    sentence = (
-      <>
-        {pickerNode} is playing {artistListNode} on {stationNode}.
-      </>
-    );
-  } else if (block.rung === 1 && pickerNode) {
-    sentence = (
-      <>
-        {pickerNode} is on air on {stationNode}.
-      </>
-    );
-  } else if (block.rung === 2 && artistListNode) {
-    sentence = (
-      <>
-        {stationNode}
-        <span className="frb__dagger" aria-label=" (live shift, host not named in feed)">
-          †
-        </span>{" "}
-        has played {artistListNode} this hour.
-      </>
-    );
-  } else if (block.rung === 2) {
-    sentence = (
-      <>
-        {stationNode}
-        <span className="frb__dagger" aria-label=" (live shift, host not named in feed)">
-          †
-        </span>{" "}
-        is on air.
-      </>
-    );
-  } else if (block.rung === 3 && artistListNode) {
-    sentence = (
-      <>
-        {stationNode} — {artistListNode}.
-      </>
-    );
-  } else if (block.rung === 3) {
-    sentence = stationNode;
-  } else if (block.rung === 4 && artistListNode) {
-    sentence = (
-      <>
-        {artistListNode} were played on {stationNode}.
-      </>
-    );
-  } else {
-    sentence = stationNode;
-  }
+  const provenance = [block.pickerName, block.showName, block.name]
+    .filter((value): value is string => !!value?.trim())
+    .filter((value, index, all) =>
+      all.findIndex((other) => other.localeCompare(value, undefined, { sensitivity: "accent" }) === 0) === index);
+  const currentArtist = block.currentArtist;
 
   // ── Citation line by rung ────────────────────────────────────────────────
   let citeText: string;
@@ -292,15 +225,32 @@ function StationBlock({
   }
 
   return (
-    <div className="frb__block" data-rung={block.rung}>
+    <div
+      className="frb__block"
+      data-rung={block.rung}
+    >
+      <button
+        type="button"
+        className="frb__tune-target"
+        aria-label={`Tune ${block.name}`}
+        onClick={() => onTune(block.slug)}
+      />
       <p className="frb__sentence">
-        {sentence}
-        {block.extraCount > 0 && (
-          <>
-            {" "}
-            <span className="frb__extra">the full set</span>
-          </>
-        )}
+        <button
+          type="button"
+          className="frb__provenance frb__station-name"
+          aria-label={`Open ${block.name} sets`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenWorkspace(block.slug);
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {provenance.join(" | ")}
+        </button>
+        {currentArtist ? (
+          <> is playing <ArtistList artists={[currentArtist]} seedKeys={seedKeys} onKeep={onKeep} />.</>
+        ) : " is on air."}
       </p>
       <span className="frb__cite">{citeText}</span>
     </div>
@@ -331,11 +281,13 @@ export function FirstRunSidebar({
   seeds,
   onAddSeed,
   onTune,
+  onOpenWorkspace,
 }: {
   stations: DialStation[];
   seeds: string[];
   onAddSeed: (artist: string) => void;
   onTune: (slug: string) => void;
+  onOpenWorkspace?: (slug: string) => void;
 }) {
   const blocks = useMemo(() => buildOnboardingBlocks(stations), [stations]);
   const [showAll, setShowAll] = useState(false);
@@ -369,6 +321,7 @@ export function FirstRunSidebar({
             seedKeys={seedKeys}
             onKeep={onAddSeed}
             onTune={onTune}
+            onOpenWorkspace={onOpenWorkspace ?? (() => undefined)}
           />
         ))}
       </div>

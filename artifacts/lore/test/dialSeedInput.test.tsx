@@ -350,7 +350,7 @@ describe("Dial tuned artists — type-to-add full cycle", () => {
 // ---------------------------------------------------------------------------
 
 describe("Minimal default front door — set panel gating", () => {
-  it("hides the set panel and reclaims layout until a set opens; closing all tabs restores the minimal view", () => {
+  it("pins a tuned row, opens sets only from provenance, and keeps the pinned row after closing", () => {
     mockDial();
     render(<DialView />);
 
@@ -362,17 +362,20 @@ describe("Minimal default front door — set panel gating", () => {
     expect(panel.className).toContain("dial-hero__setpanel--hidden");
     expect(hero.getAttribute("data-queue-layout")).toBe("none");
 
-    // Clicking a crossing row opens its live set — the panel appears with a
-    // real queue layout.
+    // Clicking the row tunes and pins it, but does not open a set tab.
     fireEvent.click(document.querySelector(".fdrow")!);
     expect(panel.className).not.toContain("dial-hero__setpanel--hidden");
     expect(hero.getAttribute("data-queue-layout")).not.toBe("none");
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+
+    // Only the provenance control opens the station workspace.
+    fireEvent.click(screen.getAllByRole("button", { name: /open .* sets/i })[0]);
     expect(screen.getAllByRole("tab")).toHaveLength(1);
 
-    // Closing the last set tab returns to the minimal front door.
+    // Closing the workspace preserves the pinned player row.
     fireEvent.click(screen.getByRole("button", { name: /^close/i }));
-    expect(panel.className).toContain("dial-hero__setpanel--hidden");
-    expect(hero.getAttribute("data-queue-layout")).toBe("none");
+    expect(panel.className).not.toContain("dial-hero__setpanel--hidden");
+    expect(document.querySelector(".dial-pinned-row")).toBeTruthy();
   });
 });
 

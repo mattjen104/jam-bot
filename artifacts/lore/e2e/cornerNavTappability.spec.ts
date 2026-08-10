@@ -268,9 +268,9 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       await loreLink.click();
       // After clicking [lore] we land back on the dial; tune back in for the
       // library link check.
-      const row = page.getByRole("button", {
-        name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`),
-      });
+      const row = page.locator("[data-scrub-slug][role='button']").filter({
+        hasText: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`),
+      }).first();
       await expect(row).toBeVisible({ timeout: 10_000 });
       await row.click();
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
@@ -281,9 +281,9 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
 
       // Navigate back to the dial and re-tune to verify geometry.
       await page.goto("/lore/");
-      const row2 = page.getByRole("button", {
-        name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`),
-      });
+      const row2 = page.locator("[data-scrub-slug][role='button']").filter({
+        hasText: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`),
+      }).first();
       await expect(row2).toBeVisible({ timeout: 15_000 });
       await row2.click();
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });

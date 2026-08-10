@@ -228,35 +228,29 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("first click on a station row", () => {
-  it("tunes, plays, and enters context mode (list replaced, breadcrumb shown)", () => {
+  it("tunes and pins the player row without replacing the dial choices", () => {
     mockDialData([makeZone1Station("kexp"), makeZone1Station("wfmu")]);
     renderDial();
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThanOrEqual(2);
 
     clickRow("kexp");
 
-    // Playback started — listening is the price of entry.
     expect(radioMock.toggle).toHaveBeenCalledTimes(1);
     expect(radioMock.toggle.mock.calls[0][0].slug).toBe("kexp");
-
-    // Context region replaces the list; the other station's row is gone.
-    expect(document.querySelector(".dial-context-region")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: /breadcrumb/i })).toBeTruthy();
-    expect(screen.getByText("Dial")).toBeTruthy();
-    // Only the summary row for the tuned station remains.
+    expect(document.querySelector(".dial-context-region")).toBeNull();
+    expect(document.querySelector(".dial-pinned-row")).toBeTruthy();
     const rows = Array.from(document.querySelectorAll(".fdrow"));
-    expect(rows.some((el) => el.textContent?.includes("wfmu"))).toBe(false);
-
-    // URL encodes the context.
-    expect(ctxParam()).toBe("station:kexp");
+    expect(rows.some((el) => el.textContent?.includes("wfmu"))).toBe(true);
+    expect(ctxParam()).toBeNull();
   });
 
-  it("hides the Zone 2/3 discovery bands in context mode", () => {
+  it("keeps the Zone 2 discovery band available after tuning", () => {
     mockDialData([makeZone1Station("kexp")]);
+    mockGhosts([makeGhost("chirp")]);
     renderDial();
     clickRow("kexp");
-    expect(document.querySelector(".ghost-row")).toBeNull();
-    expect(document.querySelectorAll(".dial-context-region").length).toBe(1);
+    expect(document.querySelector(".ghost-row")).toBeTruthy();
+    expect(document.querySelectorAll(".dial-context-region").length).toBe(0);
   });
 });
 
@@ -285,66 +279,61 @@ describe("Zone 2 ghost rows", () => {
   });
 });
 
-describe("back / dial semantics", () => {
-  it("Dial returns to station selection WITHOUT stopping audio", () => {
+describe("front-door tune and workspace semantics", () => {
+  it("provenance opens the station workspace without retuning", () => {
     mockDialData([makeZone1Station("kexp"), makeZone1Station("wfmu")]);
     renderDial();
     clickRow("kexp");
     radioMock.toggle.mockClear();
 
-    fireEvent.click(screen.getByText("Dial"));
+    fireEvent.click(screen.getAllByRole("button", { name: /open Station kexp sets/i })[0]);
 
-    // Back on the station list…
     expect(document.querySelector(".dial-context-region")).toBeNull();
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThanOrEqual(2);
     expect(ctxParam()).toBeNull();
-    // …and the player was never touched.
-    expect(radioMock.stop).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: /kexp/i })).toBeTruthy();
     expect(radioMock.toggle).not.toHaveBeenCalled();
   });
 
-  it("Back pops the root frame back to dial mode without touching the player", () => {
+  it("Space on a station row tunes without opening a workspace", () => {
     mockDialData([makeZone1Station("kexp")]);
     renderDial();
-    clickRow("kexp");
-    radioMock.toggle.mockClear();
-
-    fireEvent.click(screen.getByRole("button", { name: /back one level/i }));
-
+    const row = document.querySelector<HTMLElement>("#zone1-rows .fdrow")!;
+    fireEvent.keyDown(row, { key: " " });
+    expect(radioMock.toggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("tab")).toBeNull();
     expect(document.querySelector(".dial-context-region")).toBeNull();
     expect(ctxParam()).toBeNull();
-    expect(radioMock.stop).not.toHaveBeenCalled();
-    expect(radioMock.toggle).not.toHaveBeenCalled();
   });
 
-  it("picking a different station is a deliberate reset that retunes", () => {
+  it("picking a different station retunes while preserving the dial", () => {
     mockDialData([makeZone1Station("kexp"), makeZone1Station("wfmu")]);
     renderDial();
     clickRow("kexp");
     radioMock.station = { slug: "kexp", name: "Station kexp" };
     radioMock.status = "playing";
-    fireEvent.click(screen.getByText("Dial"));
     radioMock.toggle.mockClear();
 
     clickRow("wfmu");
 
     expect(radioMock.toggle).toHaveBeenCalledTimes(1);
     expect(radioMock.toggle.mock.calls[0][0].slug).toBe("wfmu");
-    expect(ctxParam()).toBe("station:wfmu");
+    expect(ctxParam()).toBeNull();
+    expect(document.querySelector(".dial-context-region")).toBeNull();
   });
 
-  it("re-clicking the already-playing station re-enters context without toggling it off", () => {
+  it("re-clicking the already-playing station keeps it pinned without toggling it off", () => {
     mockDialData([makeZone1Station("kexp")]);
     renderDial();
     clickRow("kexp");
     radioMock.station = { slug: "kexp", name: "Station kexp" };
     radioMock.status = "playing";
-    fireEvent.click(screen.getByText("Dial"));
     radioMock.toggle.mockClear();
 
-    clickRow("kexp");
+    fireEvent.click(document.querySelector("#zone1-rows .fdrow")!);
 
-    expect(document.querySelector(".dial-context-region")).toBeTruthy();
+    expect(document.querySelector(".dial-pinned-row")).toBeTruthy();
+    expect(document.querySelector(".dial-context-region")).toBeNull();
     expect(radioMock.toggle).not.toHaveBeenCalled();
     expect(radioMock.stop).not.toHaveBeenCalled();
   });

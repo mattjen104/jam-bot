@@ -11,4 +11,9 @@ import type { StationRunSummary } from "./stationRunSummary";
 export interface StationArchive {
   station: Station;
   runs: StationRunSummary[];
+  /**
+   * Next run offset when paginated, or null when this is the last page.
+   * @nullable
+   */
+  nextOffset?: number | null;
 }

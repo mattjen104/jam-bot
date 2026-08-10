@@ -1475,6 +1475,24 @@ export const GetStationArchiveParams = zod.object({
   slug: zod.coerce.string().min(1),
 });
 
+export const getStationArchiveQueryOffsetMin = 0;
+
+export const getStationArchiveQueryLimitMax = 50;
+
+export const GetStationArchiveQueryParams = zod.object({
+  offset: zod.coerce
+    .number()
+    .min(getStationArchiveQueryOffsetMin)
+    .optional()
+    .describe("Zero-based run offset for sidebar archive pagination."),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getStationArchiveQueryLimitMax)
+    .optional()
+    .describe("Page size for sidebar archive pagination."),
+});
+
 export const GetStationArchiveResponse = zod.object({
   station: zod
     .object({
@@ -1620,6 +1638,12 @@ export const GetStationArchiveResponse = zod.object({
         "One documented station run — a show's plays on one UTC broadcast day. `runId` is opaque (fetch the tracklist via \/archive\/station-runs).",
       ),
   ),
+  nextOffset: zod
+    .number()
+    .nullish()
+    .describe(
+      "Next run offset when paginated, or null when this is the last page.",
+    ),
 });
 
 /**

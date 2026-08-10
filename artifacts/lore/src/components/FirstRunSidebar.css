@@ -59,11 +59,27 @@
 }
 
 .frb__block {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 10px 15px 11px;
   border-top: 1px solid hsl(var(--border) / 0.3);
+}
+
+.frb__tune-target {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.frb__tune-target:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
 }
 
 .frb__block:first-child {
@@ -72,12 +88,20 @@
 
 /* ── Sentence line — voice surface, Signifier via .reading-context ── */
 .frb__sentence {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
   margin: 0;
   font-family: var(--lore-font-editorial, var(--lore-font-signature));
   font-size: var(--lore-size-interface);
   line-height: 1.5;
   color: hsl(var(--muted-foreground));
   font-weight: 300;
+}
+
+.frb__sentence button,
+.frb__sentence [role="button"] {
+  pointer-events: auto;
 }
 
 /* ── Picker (named selector) ── */
@@ -160,16 +184,11 @@
   flex-shrink: 0;
 }
 
-/* "the full set" — muted link for extra artists */
-.frb__extra {
-  font-size: 0.88em;
-  color: hsl(var(--muted-foreground) / 0.45);
-  border-bottom: 1px dotted hsl(var(--border) / 0.4);
-  cursor: default;
-}
-
 /* ── Citation line — mono-label style, system sans ── */
 .frb__cite {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);
   text-transform: uppercase;

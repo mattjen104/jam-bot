@@ -210,14 +210,12 @@ async function openPopulatedQueue(page: Page) {
   // The attributed live row renders in the DJs-on-air band.
   const row = page.getByRole("button", { name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`) });
   await expect(row).toBeVisible({ timeout: 15_000 });
+  // The row itself tunes only and leaves the other dial choices in place.
   await row.click();
-  // Clicking tunes in AND opens the set tab. In the landscape (sidebar)
-  // layout tuning also opens/focuses the station-CONTEXT tab, so the queue
-  // tab (labelled "HH:MM · Station") must be focused explicitly; in portrait
-  // the set tab is already active and this click is a no-op focus.
-  const queueTab = page.getByRole("tab", { name: /·/ });
-  await expect(queueTab.first()).toBeVisible({ timeout: 15_000 });
-  await queueTab.first().click();
+  // Only the distinct provenance control opens the station set workspace.
+  const provenance = page.getByRole("button", { name: /open .* sets/i }).first();
+  await expect(provenance).toBeVisible({ timeout: 15_000 });
+  await provenance.click();
   await expect(page.locator(".set-queue__artist").first()).toBeVisible({ timeout: 15_000 });
   expect(await page.locator(".set-queue__artist").count()).toBe(SPIN_COUNT);
 }

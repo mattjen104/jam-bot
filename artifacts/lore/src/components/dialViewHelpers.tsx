@@ -51,6 +51,51 @@ export function sameLiveValue(a: string | null, b: string | null): boolean {
   return a != null && b != null && a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0;
 }
 
+export interface LiveProvenanceSummary {
+  provenance: string[];
+  artist: string | null;
+  text: string;
+}
+
+/**
+ * Compact, truthful live identity used by every front-door sentence.
+ * Values are strongest-first (eligible DJ → usable show → station), cleaned,
+ * and de-duplicated without leaving empty separators.
+ */
+export function liveProvenanceSummary(
+  stationName: string,
+  show: DialShow | null,
+  fallbackArtist?: string | null,
+): LiveProvenanceSummary | null {
+  const station = cleanLiveValue(stationName);
+  if (!station) return null;
+  const current = show?.currentTrack ?? null;
+  const djNames = show
+    ? eligibleDjNames(dialShowAsAttribution(show), {
+        artist: current?.artist,
+        title: current?.title,
+        showTitle: show.showName,
+        stationName: station,
+      })
+    : [];
+  const dj = djNames.length === 1 ? cleanLiveValue(djNames[0]) : null;
+  const showName = usableShowName(show);
+  const rawParts = [dj, showName, station].filter((value): value is string => value != null);
+  const provenance = rawParts.filter(
+    (value, index) => rawParts.findIndex((other) => sameLiveValue(other, value)) === index,
+  );
+  const candidateArtist = cleanLiveValue(current?.artist ?? fallbackArtist);
+  const artist = provenance.some((value) => sameLiveValue(value, candidateArtist))
+    ? null
+    : candidateArtist;
+  const prefix = provenance.join(" | ");
+  return {
+    provenance,
+    artist,
+    text: artist ? `${prefix} is playing ${artist}.` : `${prefix} is on air.`,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Artist name list rendering
 // ---------------------------------------------------------------------------

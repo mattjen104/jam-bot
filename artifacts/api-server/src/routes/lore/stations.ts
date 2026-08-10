@@ -854,7 +854,19 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
     return res.status(404).json({ error: "Station not found" });
   }
 
-  const runs = await db
+  const requestedOffset = typeof req.query.offset === "string"
+    ? Number.parseInt(req.query.offset, 10)
+    : null;
+  const requestedLimit = typeof req.query.limit === "string"
+    ? Number.parseInt(req.query.limit, 10)
+    : null;
+  const paged = requestedOffset != null || requestedLimit != null;
+  const offset = Number.isFinite(requestedOffset) && requestedOffset! >= 0 ? requestedOffset! : 0;
+  const pageSize = Number.isFinite(requestedLimit)
+    ? Math.min(50, Math.max(1, requestedLimit!))
+    : 25;
+  const queryLimit = paged ? pageSize + 1 : 120;
+  const runRows = await db
     .select({
       runId: spinRunIdExpr,
       date: spinDayExpr,
@@ -875,7 +887,10 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
     .where(eq(spinsTable.stationId, station.id))
     .groupBy(spinDayExpr, spinsTable.showId, showsTable.name, showsTable.djName)
     .orderBy(sql`max(${spinsTable.playedAt}) desc`)
-    .limit(120);
+    .limit(queryLimit)
+    .offset(paged ? offset : 0);
+  const hasMore = paged && runRows.length > pageSize;
+  const runs = hasMore ? runRows.slice(0, pageSize) : runRows;
 
   const resolvedClass = await resolveAutomationClass(
     station.id,
@@ -906,6 +921,7 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
         startedAt: new Date(r.startedAt).toISOString(),
         endedAt: new Date(r.endedAt).toISOString(),
       })),
+      ...(paged ? { nextOffset: hasMore ? offset + pageSize : null } : {}),
     }),
   );
 }));
