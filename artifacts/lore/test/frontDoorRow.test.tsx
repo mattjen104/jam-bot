@@ -72,6 +72,17 @@ function renderRow(ds: DialStation, show: DialShow | null, ov = 0, displayMode?:
   );
 }
 
+function renderCompactRow(
+  ds: DialStation,
+  show: DialShow | null,
+  props: Partial<React.ComponentProps<typeof FrontDoorRow>> = {},
+) {
+  return render(
+    <FrontDoorRow ds={ds} show={show} ov={0} isActive={false} isSampling={false}
+      onTuneIn={props.onTuneIn ?? vi.fn()} compactSentence {...props} />,
+  );
+}
+
 function leadingSentence(container: HTMLElement) {
   const sentence = container.querySelector(".fdrow__t1");
   expect(sentence).not.toBeNull();
@@ -482,5 +493,61 @@ describe("attribution-only stations (no stream, no relay)", () => {
     expect(container.querySelector(".fdrow__site-link")).toBeNull();
     fireEvent.click(container.querySelector(".fdrow")!);
     expect(onTuneIn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("compact Dial feed identity", () => {
+  it("renders fixed identity cells and keeps the row label in sync", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP" }),
+      makeShow({
+        djName: "DJ Test",
+        showName: "Morning Show",
+        currentTrack: makeSpin({ artist: "The Long Winters" }),
+      }),
+    );
+
+    const identity = container.querySelector(".fdrow__compact-identity");
+    expect(identity).not.toBeNull();
+    expect(identity?.querySelector(".fdrow__compact-artist")?.textContent).toBe("The Long Winters");
+    expect(identity?.querySelector(".fdrow__compact-separator")?.textContent).toBe("|");
+    expect(identity?.querySelector(".fdrow__compact-station")?.textContent).toBe("KEXP");
+    expect(identity?.textContent).toBe("The Long Winters|KEXP");
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("The Long Winters | KEXP");
+    expect(identity?.textContent).not.toMatch(/DJ Test|Morning Show|is playing|is on air/);
+  });
+
+  it("preserves the compact columns without inventing an artist", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP" }),
+      makeShow({ djName: "DJ Test", showName: "Morning Show", currentTrack: null }),
+    );
+    expect(container.querySelector(".fdrow__compact-artist")?.textContent).toBe("");
+    expect(container.querySelector(".fdrow__compact-separator")).not.toBeNull();
+    expect(container.querySelector(".fdrow__compact-station")?.textContent).toBe("KEXP");
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("KEXP");
+  });
+
+  it("keeps tune-in and attribution-only site-link behavior on compact rows", () => {
+    const onTuneIn = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "WVUM", homepageUrl: "https://wvum.org" } as Partial<DialStation["station"]>),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      { onTuneIn },
+    );
+    const row = container.querySelector(".fdrow")!;
+    fireEvent.click(row);
+    expect(onTuneIn).not.toHaveBeenCalled();
+    expect(container.querySelector(".fdrow__site-link")?.textContent).toContain("Listen on site");
+
+    cleanup();
+    const playableTuneIn = vi.fn();
+    const { container: playable } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      { onTuneIn: playableTuneIn },
+    );
+    fireEvent.click(playable.querySelector(".fdrow")!);
+    expect(playableTuneIn).toHaveBeenCalledOnce();
   });
 });

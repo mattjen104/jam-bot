@@ -170,7 +170,7 @@ async function installDialRoutes(
 // ---------------------------------------------------------------------------
 
 test.describe("On-air show + DJ attribution on the dial front door", () => {
-  test("live station with attributed show renders with the DJ credit in the unified feed", async ({
+  test("live station with attributed show renders as the compact artist | station identity", async ({
     page,
   }) => {
     await installDialRoutes(page, {
@@ -179,12 +179,18 @@ test.describe("On-air show + DJ attribution on the dial front door", () => {
     });
     await page.goto("/lore/");
 
-    // The row carries the DJ credit and the show name in one sentence
-    // ("Ben UFO selected … on Hessle Audio"). The unified feed has no zone
-    // sub-labels — the credit itself is the attribution surface.
-    const row = page.getByRole("button", { name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`) });
+    // The compact feed row reads "Some Artist | NTS 1" — attribution still
+    // drives the row's band placement, but the DJ/show provenance sentence is
+    // intentionally absent from this compact surface.
+    const row = page.getByRole("button", { name: /Some Artist \| NTS 1/ });
     await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(row.locator(".fdrow__compact-separator")).toHaveText("|");
     await expect(page.getByText("DJs on air")).not.toBeVisible();
+    // DJ/show provenance must be absent from the compact feed row itself.
+    // (The first-run sidebar keeps its sentence treatment and may still show
+    // the show name — that surface is intentionally unchanged.)
+    await expect(row.getByText(DJ_NAME)).not.toBeVisible();
+    await expect(row.getByText(SHOW_NAME)).not.toBeVisible();
   });
 
   test("DJ credit is absent when the schedule has no attribution", async ({

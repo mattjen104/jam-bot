@@ -5136,6 +5136,39 @@
 }
 .fdrow__t1 b { font-style: normal; font-weight: 400; color: inherit; }
 .fdrow__live-sentence { color: hsl(var(--dial-fg)); }
+/* Main Dial feed compact identity. The identity owns the full available row
+   width so optional site links cannot move the shared pipe boundary. */
+#dial-feed-rows .fdrow__compact-sentence {
+  display: block;
+}
+#dial-feed-rows .fdrow__compact-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+#dial-feed-rows .fdrow__compact-artist,
+#dial-feed-rows .fdrow__compact-station {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+#dial-feed-rows .fdrow__compact-artist {
+  min-height: 1.3em;
+  text-align: right;
+}
+#dial-feed-rows .fdrow__compact-separator {
+  color: hsl(var(--dial-fg) / 0.7);
+  text-align: center;
+}
+#dial-feed-rows .fdrow__compact-station {
+  text-align: left;
+}
+#dial-feed-rows .fdrow__compact-sentence .fdrow__site-link {
+  margin-top: 5px;
+}
 /* Blended-mode secondary: live DJ/track attribution below the community aggregate count */
 .fdrow__live-secondary {
   font-size: var(--lore-size-interface);

@@ -158,9 +158,9 @@ async function installRoutes(page: Page) {
 async function loadWithDock(page: Page) {
   await page.goto("/lore/");
 
-  // Wait for the DJs-on-air band: the live station with an attributed show.
+  // Wait for the live station row (compact "Artist | Station" identity).
   const row = page.getByRole("button", {
-    name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`),
+    name: /Some Artist \| NTS 1/,
   });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -269,7 +269,7 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       // After clicking [lore] we land back on the dial; tune back in for the
       // library link check.
       const row = page.locator("[data-scrub-slug][role='button']").filter({
-        hasText: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`),
+        hasText: /Some Artist/,
       }).first();
       await expect(row).toBeVisible({ timeout: 10_000 });
       await row.click();
@@ -282,7 +282,7 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       // Navigate back to the dial and re-tune to verify geometry.
       await page.goto("/lore/");
       const row2 = page.locator("[data-scrub-slug][role='button']").filter({
-        hasText: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`),
+        hasText: /Some Artist/,
       }).first();
       await expect(row2).toBeVisible({ timeout: 15_000 });
       await row2.click();

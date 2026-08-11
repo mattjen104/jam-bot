@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Regression tests for:
- *   1. Zone 3 FrontDoorRow's complete live sentence, rather than a separate
- *      bare-fact track line.
+ *   1. Main Dial feed compact rows' artist/station identity, rather than a
+ *      provenance sentence or separate bare-fact track line.
  *   2. "Unknown" text suppression — the string "Unknown" must never appear when
  *      show.djName is null and show.showName is a variant of "unknown show".
  *   3. OfflineRow show-name / track-title rendering — showName suppressed for
@@ -191,11 +191,11 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 1. Zone 3 FrontDoorRow — bare-fact track line
+// 1. Main Dial feed — compact artist/station identity
 // ---------------------------------------------------------------------------
 
-describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
-  it("credits the DJ and current artist on the show (r=5: DJ, no crossings)", () => {
+describe("Dial feed compact identity", () => {
+  it("shows only the current artist and station, not DJ/show provenance", () => {
     const track = makeSpin({ title: "Gravity Falls", artist: "Pixies" });
     const show = makeShow({
       djName: "DJ Tester",
@@ -208,15 +208,24 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     mockDialData([station]);
     renderDial();
 
-    // Song titles are never shown — the sentence credits DJ + artist + show.
+    // The main feed is intentionally a two-column identity. Song titles and
+    // scheduled provenance stay off this compact surface.
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("DJ Tester | Morning Show | Test Radio is playing Pixies.");
+    expect(sentence).toBe("Pixies|Test Radio");
+    expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("Pixies");
+    expect(document.querySelector(".fdrow__compact-separator")?.textContent).toBe("|");
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
+    expect(document.querySelector(".fdrow__t1")?.classList.contains("fdrow__compact-sentence")).toBe(true);
+    expect(document.querySelector(".fdrow__compact-identity")?.getAttribute("aria-label")).toBe("Pixies | Test Radio");
+    expect(sentence).not.toContain("DJ Tester");
+    expect(sentence).not.toContain("Morning Show");
+    expect(sentence).not.toMatch(/is playing|is on air/);
     // The track title must not leak into the row.
     expect(sentence).not.toContain("Gravity Falls");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });
 
-  it("uses an artist-led sentence when no DJ is attached", () => {
+  it("keeps the same columns when no DJ is attached", () => {
     const track = makeSpin({ title: "Dark Star", artist: "Grateful Dead" });
     const show0 = makeShow({
       djName: null,
@@ -230,9 +239,31 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     renderDial();
 
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("Morning Show | Test Radio is playing Grateful Dead.");
+    expect(sentence).toBe("Grateful Dead|Test Radio");
+    expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("Grateful Dead");
+    expect(document.querySelector(".fdrow__compact-separator")).not.toBeNull();
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
     expect(sentence).not.toContain("Dark Star");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
+  });
+
+  it("leaves the artist cell empty when no usable artist exists", () => {
+    const show = makeShow({
+      djName: "DJ Tester",
+      currentTrack: null,
+    });
+    const station = makeStation({ isLive: true, shows: [show] });
+
+    mockDialData([station]);
+    renderDial();
+
+    const artist = document.querySelector(".fdrow__compact-artist");
+    expect(artist).not.toBeNull();
+    expect(artist?.textContent).toBe("");
+    expect(artist?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelector(".fdrow__compact-separator")).not.toBeNull();
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
+    expect(document.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("Test Radio");
   });
 
   it("does NOT render bare-fact track for Zone 1 rows (r=1: isLibraryHit)", () => {

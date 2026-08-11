@@ -313,8 +313,8 @@ export interface FrontDoorRowProps {
   /** Opens the persistent player queue for this station's complete set. */
   onSetExpand?: () => void;
   /**
-   * Renders the compact pipe-separated provenance sentence as tier 1 (inert
-   * text — the station workspace is retired). Dial lanes pass this; without
+   * Renders the compact pipe-separated artist/station identity as tier 1.
+   * Dial lanes pass this; without
    * it the row falls back to the full crossing/reason sentence machinery.
    */
   compactSentence?: boolean;
@@ -373,13 +373,19 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // The lane row carries the set inline. Always use the bright-foreground
   // class so the weight rung (w0/w5…) cannot dim the summary sentence.
   const tier1Node = compactSentence && compact ? (
-    <>
-      <span className="fdrow__provenance">{compact.provenance.join(" | ")}</span>
-      {compact.artist ? <> is playing <b className="fdrow__artist">{compact.artist}</b>.</> : " is on air."}
-    </>
+    <span
+      className="fdrow__compact-identity"
+      aria-label={compact.text}
+    >
+      <span className="fdrow__compact-artist" aria-hidden={compact.artist == null}>
+        {compact.artist ?? ""}
+      </span>
+      <span className="fdrow__compact-separator" aria-hidden="true">|</span>
+      <span className="fdrow__compact-station">{compact.station}</span>
+    </span>
   ) : fallbackTier1Node;
   const tier1Cls = compactSentence && compact
-    ? "fdrow__live-sentence"
+     ? "fdrow__live-sentence fdrow__compact-sentence"
     : displayMode === "blended"
     ? rz.cls
     : crossing ? rz.cls : usePop ? "fdrow__pop-sentence" : live ? "fdrow__live-sentence" : rz.cls;

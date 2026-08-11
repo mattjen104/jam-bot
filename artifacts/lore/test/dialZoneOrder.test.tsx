@@ -324,7 +324,10 @@ describe("Zone 3 DJ band split", () => {
     expect(rows.length).toBe(4);
 
     // The first row must be the attributed station (dj band comes first).
-    expect(rows[0].textContent).toContain("DJ Featured");
+    // The compact feed identity no longer surfaces the DJ credit, so the
+    // ordering is proven by the station name and the band attribute.
+    expect(rows[0].textContent).toContain("Station attr0");
+    expect(rows[0].closest("[data-feed-band]")?.getAttribute("data-feed-band")).toBe("dj");
     // No "See all" button — the unified feed never truncates behind a toggle.
     expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
   });
@@ -374,7 +377,7 @@ describe("Zone 3 DJ band split", () => {
     expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
   });
 
-  it("r=5 rows render in the dj band with the DJ credit, no zone sub-label", () => {
+  it("r=5 rows render in the dj band without DJ provenance, no zone sub-label", () => {
     const stations: DialStation[] = [
       makeAttributedZone3Station("attr0", "DJ Picker"),
     ];
@@ -383,11 +386,13 @@ describe("Zone 3 DJ band split", () => {
 
     render(<DialView />);
 
-    // The unified feed has no zone sub-labels — the DJ credit lives in the row.
+    // The unified feed has no zone sub-labels, and the compact row identity
+    // intentionally omits the DJ credit — attribution still drives the band.
     expect(screen.queryByText("DJs on air")).toBeNull();
     const rows = document.querySelectorAll(".fdrow");
     expect(rows.length).toBe(1);
-    expect(rows[0].textContent).toContain("DJ Picker");
+    expect(rows[0].textContent).toContain("Station attr0");
+    expect(rows[0].textContent).not.toContain("DJ Picker");
     expect(rows[0].closest("[data-feed-band]")?.getAttribute("data-feed-band")).toBe("dj");
   });
 

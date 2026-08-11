@@ -232,10 +232,13 @@ describe("reason() r=6 — 24h station exact crossings row label", () => {
     mockDialData([makeR6Station("r6-station", 5)]);
     renderDial();
 
+    // Compact feed rows carry only the artist|station identity; with no
+    // usable current artist the artist cell stays empty (never invented).
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
-    const text = t1!.textContent ?? "";
-    expect(text).toBe("Afternoon Mix | Station r6-station is on air.");
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Station r6-station");
+    expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("");
+    expect(t1!.textContent).not.toContain("is on air");
   });
 
   it("does not include 'no selector listed' text", () => {
@@ -251,8 +254,8 @@ describe("reason() r=6 — 24h station exact crossings row label", () => {
 
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
-    const text = t1!.textContent ?? "";
-    expect(text).toBe("Afternoon Mix | Station r6-single is on air.");
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Station r6-single");
+    expect(t1!.textContent).not.toContain("is on air");
   });
 
   it("lands the row in Zone 1 (history band), not the Zone 3 'DJs on air' band", () => {
@@ -284,8 +287,9 @@ describe("reason() r=7 — 24h station artist crossings row label", () => {
 
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
-    const text = t1!.textContent ?? "";
-    expect(text).toBe("Afternoon Mix | Station r7-station is on air.");
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Station r7-station");
+    expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("");
+    expect(t1!.textContent).not.toContain("is on air");
   });
 
   it("does not include 'no selector listed' text", () => {
@@ -301,8 +305,8 @@ describe("reason() r=7 — 24h station artist crossings row label", () => {
 
     const t1 = document.querySelector(".fdrow__t1");
     expect(t1).not.toBeNull();
-    const text = t1!.textContent ?? "";
-    expect(text).toBe("Afternoon Mix | Station r7-single is on air.");
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Station r7-single");
+    expect(t1!.textContent).not.toContain("is on air");
   });
 
   it("lands the row in Zone 1 (history band), not the Zone 3 'DJs on air' band", () => {
@@ -353,7 +357,9 @@ describe("reason() r=6 takes priority over r=7", () => {
     expect(t1).not.toBeNull();
     const text = t1!.textContent ?? "";
 
-    // Live summaries use provenance rather than exposing score-rung copy.
-    expect(text).toBe("Afternoon Mix | Station r6-priority is on air.");
+    // Compact rows never expose score-rung copy — just the station identity.
+    expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Station r6-priority");
+    expect(text).not.toContain("is on air");
+    expect(text).not.toContain("of yours");
   });
 });

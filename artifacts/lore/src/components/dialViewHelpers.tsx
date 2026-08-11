@@ -51,48 +51,35 @@ export function sameLiveValue(a: string | null, b: string | null): boolean {
   return a != null && b != null && a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0;
 }
 
-export interface LiveProvenanceSummary {
-  provenance: string[];
+export interface CompactLiveSummary {
+  station: string;
   artist: string | null;
   text: string;
 }
 
 /**
- * Compact, truthful live identity used by every front-door sentence.
- * Values are strongest-first (eligible DJ → usable show → station), cleaned,
- * and de-duplicated without leaving empty separators.
+ * Compact, truthful live identity used by the main Dial feed.
+ * The compact surface intentionally contains only the best available artist
+ * and the station.  Show/DJ provenance belongs to the non-compact sentence
+ * surfaces and must not leak into this identity.
  */
 export function liveProvenanceSummary(
   stationName: string,
   show: DialShow | null,
   fallbackArtist?: string | null,
-): LiveProvenanceSummary | null {
+): CompactLiveSummary | null {
   const station = cleanLiveValue(stationName);
   if (!station) return null;
   const current = show?.currentTrack ?? null;
-  const djNames = show
-    ? eligibleDjNames(dialShowAsAttribution(show), {
-        artist: current?.artist,
-        title: current?.title,
-        showTitle: show.showName,
-        stationName: station,
-      })
-    : [];
-  const dj = djNames.length === 1 ? cleanLiveValue(djNames[0]) : null;
-  const showName = usableShowName(show);
-  const rawParts = [dj, showName, station].filter((value): value is string => value != null);
-  const provenance = rawParts.filter(
-    (value, index) => rawParts.findIndex((other) => sameLiveValue(other, value)) === index,
-  );
-  const candidateArtist = cleanLiveValue(current?.artist ?? fallbackArtist);
-  const artist = provenance.some((value) => sameLiveValue(value, candidateArtist))
-    ? null
-    : candidateArtist;
-  const prefix = provenance.join(" | ");
+  // A stale/placeholder scheduled track must not prevent the live pulse from
+  // supplying the artist.  Keep the station echo guard after fallback so an
+  // echoed station name is never presented as an artist.
+  const artistCandidate = cleanLiveValue(current?.artist) ?? cleanLiveValue(fallbackArtist);
+  const artist = sameLiveValue(artistCandidate, station) ? null : artistCandidate;
   return {
-    provenance,
+    station,
     artist,
-    text: artist ? `${prefix} is playing ${artist}.` : `${prefix} is on air.`,
+    text: artist ? `${artist} | ${station}` : station,
   };
 }
 
