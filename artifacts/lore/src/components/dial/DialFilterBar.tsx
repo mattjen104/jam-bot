@@ -20,6 +20,7 @@ export interface DialFilterBarProps {
   activeCategories: Set<StationCategory>;
   onToggleTier: (tier: AgeTier) => void;
   onToggleCategory: (cat: StationCategory) => void;
+  className?: string;
 }
 
 const AGE_LABELS: { tier: AgeTier; label: string; title: string }[] = [
@@ -40,9 +41,10 @@ export function DialFilterBar({
   activeCategories,
   onToggleTier,
   onToggleCategory,
+  className,
 }: DialFilterBarProps) {
   return (
-    <div className="dial-filter-bar" role="group" aria-label="Dial filters">
+    <div className={`dial-filter-bar${className ? ` ${className}` : ""}`} role="group" aria-label="Dial filters">
       {/* Left: song-age filters */}
       <div className="dial-filter-bar__group" role="group" aria-label="Song age">
         {AGE_LABELS.map(({ tier, label, title }, i) => (

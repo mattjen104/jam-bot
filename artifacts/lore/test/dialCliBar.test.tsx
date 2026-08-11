@@ -1,0 +1,134 @@
+// @vitest-environment jsdom
+/**
+ * DialCliBar — the front-door CLI overlay that replaces the visible
+ * filter-button bar. The whole sidebar is an invisible input field; the
+ * oversized "Lore" wordmark is the empty-state label and is replaced by
+ * the typed command text (no cursor glyph).
+ *
+ * Covers:
+ *  1. Renders the wordmark (empty state) and the command input.
+ *  2. Slash commands fire the matching toggle callback and clear the field.
+ *  3. Age-tier vs station-category commands route to the right callback.
+ *  4. Unrecognised input is silently ignored (no callback).
+ *  5. Commands are case-insensitive and whitespace-tolerant.
+ *  6. Form submit (mobile "go"/tap path) executes like Enter.
+ *  7. Typing replaces the wordmark text with the typed command.
+ *
+ * Toggle semantics themselves (additive tiers, last-category protection)
+ * stay in dialFilterState and are tested there.
+ */
+import React from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+
+import { DialCliBar } from "../src/components/dial/DialCliBar";
+import type { StationCategory } from "../src/components/dial/DialFilterBar";
+import type { AgeTier } from "../src/lib/dialAgeFilter";
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+function renderCli(overrides: Partial<React.ComponentProps<typeof DialCliBar>> = {}) {
+  const props = {
+    activeTiers: new Set<AgeTier>(),
+    activeCategories: new Set<StationCategory>(["lore"]),
+    onToggleTier: vi.fn(),
+    onToggleCategory: vi.fn(),
+    ...overrides,
+  };
+  const utils = render(<DialCliBar {...props} />);
+  const input = screen.getByRole("textbox", { name: "Dial command" }) as HTMLInputElement;
+  return { ...utils, props, input };
+}
+
+function type(input: HTMLInputElement, value: string) {
+  fireEvent.change(input, { target: { value } });
+}
+
+describe("DialCliBar", () => {
+  it("renders the wordmark and command input, with no cursor glyph", () => {
+    renderCli();
+    const bar = document.querySelector(".dial-cli-overlay");
+    expect(bar).toBeTruthy();
+    expect(bar?.querySelector(".dial-cli-overlay__wordmark")?.textContent).toBe("Lore");
+    // Redesign removed the blinking pipe cursor entirely.
+    expect(bar?.querySelector(".dial-cli-bar__cursor")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Dial command" })).toBeTruthy();
+  });
+
+  it("replaces the wordmark with the typed command text", () => {
+    const { input } = renderCli();
+    const wordmark = document.querySelector(".dial-cli-overlay__wordmark");
+    expect(wordmark?.textContent).toBe("Lore");
+    type(input, "/classics");
+    expect(wordmark?.textContent).toBe("/classics");
+    expect(wordmark?.className).toContain("dial-cli-overlay__wordmark--typing");
+    type(input, "");
+    expect(wordmark?.textContent).toBe("Lore");
+  });
+
+  it.each([
+    ["/first", "first"],
+    ["/current", "current"],
+    ["/catalog", "catalog"],
+    ["/deep", "deep"],
+  ] as const)("routes %s to onToggleTier and clears the field", (command, tier) => {
+    const { props, input } = renderCli();
+    type(input, command);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(props.onToggleTier).toHaveBeenCalledWith(tier);
+    expect(props.onToggleCategory).not.toHaveBeenCalled();
+    expect(input.value).toBe("");
+  });
+
+  it.each([
+    ["/lore", "lore"],
+    ["/classics", "classics"],
+    ["/ambient", "ambient"],
+  ] as const)("routes %s to onToggleCategory and clears the field", (command, cat) => {
+    const { props, input } = renderCli();
+    type(input, command);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(props.onToggleCategory).toHaveBeenCalledWith(cat);
+    expect(props.onToggleTier).not.toHaveBeenCalled();
+    expect(input.value).toBe("");
+  });
+
+  it("silently ignores unrecognised input on Enter", () => {
+    const { props, input } = renderCli();
+    type(input, "/nonsense");
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "classics"); // missing slash — not a command
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(props.onToggleTier).not.toHaveBeenCalled();
+    expect(props.onToggleCategory).not.toHaveBeenCalled();
+  });
+
+  it("accepts commands case-insensitively with surrounding whitespace", () => {
+    const { props, input } = renderCli();
+    type(input, "  /CLASSICS  ");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(props.onToggleCategory).toHaveBeenCalledWith("classics");
+  });
+
+  it("executes on form submit (mobile enter/tap path)", () => {
+    const { props, input } = renderCli();
+    type(input, "/deep");
+    const form = document.querySelector(".dial-cli-overlay__form");
+    expect(form).toBeTruthy();
+    fireEvent.submit(form as HTMLFormElement);
+    expect(props.onToggleTier).toHaveBeenCalledWith("deep");
+    expect(input.value).toBe("");
+  });
+
+  it("does not execute on other keys", () => {
+    const { props, input } = renderCli();
+    type(input, "/deep");
+    fireEvent.keyDown(input, { key: "Tab" });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(props.onToggleTier).not.toHaveBeenCalled();
+    expect(input.value).toBe("/deep");
+  });
+});

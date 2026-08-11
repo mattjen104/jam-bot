@@ -23,6 +23,7 @@ import { useSleepMode } from "../lib/sleepMode";
 import { useEraGenreMode } from "../lib/eraGenreMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
+import { DialCliBar } from "./dial/DialCliBar";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
 import {
@@ -2489,10 +2490,12 @@ export function DialView() {
 
   // --- topbar ---
   function renderTopbar() {
-    // The front door intentionally renders no topbar at all — the first thing
-    // the listener sees is the album art, the crossing summary sentences, and
-    // the two corner links. Drill-down levels show a breadcrumb topbar.
-    if (level === "all") return null;
+    if (level === "all") {
+      // CLI is rendered directly inside the dial-hero on the front door.
+      // Nothing goes in the topbar slot for "all" — the DialCliBar covers the
+      // entire sidebar area as a fixed overlay instead.
+      return null;
+    }
     if (level === "station" && currentStation) {
       return (
         <div className="dial-topbar">
@@ -2722,14 +2725,27 @@ export function DialView() {
         />
       )}
 
-      {/* Avatar album hero — the art IS the front-door content:
-          full-width square in portrait, full-height left panel in landscape
-          (see .dial-hero__art CSS). The front door has no branding strip:
-          the sort and time-travel controls carry the interface. Tapping the
-          art opens the fullscreen overlay. */}
+      {/* CLI overlay — fixed over the entire art sidebar on landscape.
+          Lives outside the dial-hero flow so it can sit at position: fixed
+          flush with the top of the viewport, perfectly parallel with the top
+          edge of the dial feed. Only shown on the front door (level === "all").
+          On portrait / mobile it collapses to a zero-height element so the
+          art still starts at the top of its natural flow position. */}
+      {level === "all" && (
+        <DialCliBar
+          activeTiers={activeTiers}
+          activeCategories={activeCategories}
+          onToggleTier={toggleTier}
+          onToggleCategory={toggleCategory}
+        />
+      )}
+
+      {/* Avatar album hero — the art IS the front-door content.
+          Portrait: full-width square, station list scrolls below.
+          Landscape / desktop: art pins to the left, everything else right.
+          Tapping the art opens the fullscreen overlay. */}
       {level === "all" ? (
         <div className="dial-hero">
-          {renderTopbar()}
           <div className="dial-hero__artwrap">
             <div
               className="dial-hero__art"
@@ -2952,6 +2968,7 @@ export function DialView() {
                         gesture mode (sleep / era-genre) owns the station list. */}
                     {!inContext && !hiddenModeActive && (
                       <DialFilterBar
+                        className="dial-filter-bar--hidden"
                         activeTiers={activeTiers}
                         activeCategories={activeCategories}
                         onToggleTier={toggleTier}
