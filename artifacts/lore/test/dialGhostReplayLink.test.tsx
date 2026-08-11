@@ -6,8 +6,8 @@
  *  a. Ghost row with runId present → click navigates to /replay/{runId}, not goStation
  *  b. Ghost row with runId null → click calls goStation(slug), copy contains no replay affordance
  *  c. djName suppressed by attribution guard (djName: null) does not appear in rendered copy
- *  d. Existing Zone 2 ZONE2_VISIBLE=3 truncation still passes
- *  e. zone2Expanded behaviour still passes (See all N / See less)
+ *  d. Ghost lane renders all rows with no See all / See less toggles
+ *     (infinite scroll; jsdom takes the render-everything fallback)
  */
 
 import React from "react";
@@ -337,29 +337,18 @@ describe("GhostRow — djName suppressed by attribution guard", () => {
   });
 });
 
-describe("Zone 2 ZONE2_VISIBLE truncation — unchanged behaviour", () => {
-  it("Zone 2 with 7 ghosts (all runId null) renders 3 ghost rows; See all 7 present", () => {
+describe("Zone 2 infinite scroll — no truncation toggle", () => {
+  it("Zone 2 with 7 ghosts (all runId null) renders all rows, no See all button", () => {
+    // jsdom has no IntersectionObserver, so the infinite-scroll lane takes its
+    // render-everything fallback; either way the toggle buttons are gone.
     mockEmptyDialData();
     const ghosts = Array.from({ length: 7 }, (_, i) => makeGhostNoRun(`g${i}`));
     mockGhosts(ghosts);
 
     render(<DialView />);
-
-    expect(document.querySelectorAll(".ghost-row").length).toBe(3);
-    expect(screen.getByRole("button", { name: "See all 7" })).toBeTruthy();
-  });
-
-  it("clicking 'See all 7' expands all ghost rows and shows See less", () => {
-    mockEmptyDialData();
-    const ghosts = Array.from({ length: 7 }, (_, i) => makeGhostNoRun(`g${i}`));
-    mockGhosts(ghosts);
-
-    render(<DialView />);
-
-    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 7" })); });
 
     expect(document.querySelectorAll(".ghost-row").length).toBe(7);
-    const lessBtns = screen.getAllByRole("button", { name: "See less" });
-    expect(lessBtns.length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "See less" })).toBeNull();
   });
 });

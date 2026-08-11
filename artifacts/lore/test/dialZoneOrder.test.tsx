@@ -305,8 +305,8 @@ describe("Zone 3 DJ band split", () => {
   it("attributed (r=5) rows appear in the DJ band above all unattributed rows", () => {
     // Three unattributed stations (r=0) with high lifetime crossings and one
     // attributed station (r=5). The band split places the attributed row in
-    // djBand (always fully shown) and the three unattributed rows in restBand
-    // (subject to ZONE3_VISIBLE=3 cap).
+    // the dj band and the three unattributed rows in the rest band; the
+    // unified feed renders all of them.
     const stations: DialStation[] = [
       makeUnattributedZone3Station("ua0", 300),
       makeUnattributedZone3Station("ua1", 200),
@@ -319,20 +319,19 @@ describe("Zone 3 DJ band split", () => {
     render(<DialView />);
 
     const rows = document.querySelectorAll(".fdrow");
-    // djBand: 1 attributed row (always visible).
-    // restBand: 3 rows visible (ZONE3_VISIBLE cap = 3, and there are exactly 3).
-    // Total: 4 rows.
+    // dj band: 1 attributed row; rest band: all 3 unattributed rows (the
+    // unified feed has no cap). Total: 4 rows.
     expect(rows.length).toBe(4);
 
-    // The first row must be the attributed station (djBand comes first).
+    // The first row must be the attributed station (dj band comes first).
     expect(rows[0].textContent).toContain("DJ Featured");
-    // No "See all" button — restBand.length === ZONE3_VISIBLE.
+    // No "See all" button — the unified feed never truncates behind a toggle.
     expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
   });
 
   it("restBand sorts by lifetimeCrossings desc when no attributed row exists", () => {
-    // All unattributed (r=0); djBand is empty. restBand is sorted by
-    // lifetimeCrossings desc and capped at ZONE3_VISIBLE = 3.
+    // All unattributed (r=0); dj band is empty. The rest band is sorted by
+    // lifetimeCrossings desc; all rows render (no cap in the unified feed).
     const stations: DialStation[] = [
       makeUnattributedZone3Station("ua0", 300),
       makeUnattributedZone3Station("ua1", 200),
@@ -345,17 +344,17 @@ describe("Zone 3 DJ band split", () => {
     render(<DialView />);
 
     const rows = document.querySelectorAll(".fdrow");
-    expect(rows.length).toBe(3);
+    expect(rows.length).toBe(4);
 
-    // First row should be the highest-crossing station (ua0).
+    // Rows in lifetimeCrossings desc order.
     expect(rows[0].textContent).toContain("ua0");
     expect(rows[1].textContent).toContain("ua1");
     expect(rows[2].textContent).toContain("ua2");
+    expect(rows[3].textContent).toContain("ua3");
   });
 
-  it("all-attributed Zone 3 shows all rows in djBand with no restBand cap", () => {
-    // All attributed (r=5) → djBand has both; restBand empty.
-    // djBand is always fully shown regardless of ZONE3_VISIBLE.
+  it("all-attributed rows render fully in the dj band", () => {
+    // All attributed (r=5) → dj band has both; rest band empty.
     const stations: DialStation[] = [
       makeAttributedZone3Station("attr0", "DJ Alpha"),
       makeAttributedZone3Station("attr1", "DJ Beta"),
@@ -375,7 +374,7 @@ describe("Zone 3 DJ band split", () => {
     expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
   });
 
-  it("r=5 rows render inside the 'DJs on air' sub-label band with picker accent", () => {
+  it("r=5 rows render in the dj band with the DJ credit, no zone sub-label", () => {
     const stations: DialStation[] = [
       makeAttributedZone3Station("attr0", "DJ Picker"),
     ];
@@ -384,14 +383,12 @@ describe("Zone 3 DJ band split", () => {
 
     render(<DialView />);
 
-    // The "DJs on air" sub-label must appear.
-    expect(
-      screen.getByText("DJs on air", { selector: ".fdzone-lbl__text" }),
-    ).toBeTruthy();
-    // The attributed row renders.
+    // The unified feed has no zone sub-labels — the DJ credit lives in the row.
+    expect(screen.queryByText("DJs on air")).toBeNull();
     const rows = document.querySelectorAll(".fdrow");
     expect(rows.length).toBe(1);
     expect(rows[0].textContent).toContain("DJ Picker");
+    expect(rows[0].closest("[data-feed-band]")?.getAttribute("data-feed-band")).toBe("dj");
   });
 
   it("does not credit an artist-valued DJ name as a selector", () => {

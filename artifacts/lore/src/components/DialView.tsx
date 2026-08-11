@@ -60,10 +60,9 @@ import {
   agoLabel,
   type QueueArtist,
 } from "./dial/FrontDoorRow";
-import { Zone1Lane, type DialLaneRow } from "./dial/Zone1Lane";
+import { DialFeedLane, type DialLaneRow } from "./dial/DialFeedLane";
 import { FirstRunSidebar } from "./FirstRunSidebar";
 import { Zone2Lane } from "./dial/Zone2Lane";
-import { Zone3Lane, ZONE3_VISIBLE } from "./dial/Zone3Lane";
 import {
   findRunIndexByHour,
   useSwipeHandler,
@@ -1872,13 +1871,15 @@ export function DialView() {
       });
   }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode]);
 
-  // Three zones (spec §6)
-  // Zone 1: r=1..4 (show-level evidence) + r=6/r=7 (24h station-level crossings).
-  //   r=6/r=7 belong here because the station HAS played the listener's music in
-  //   the last 24h — that IS a reason, even without a current attributed show.
-  // Zone 3: r=0 (no now-playing data at all) or r=5 (DJ on air, no library overlap).
-  // The currently-playing station stays in its lane (highlighted via isActive)
-  // — there is no separate pinned surface anymore.
+  // Unified live feed — the zones are collapsed into ONE flat station list.
+  // Ranking segments (internal only, no visual zones):
+  //   withReason — r=1..4 (show-level evidence) + r=6/r=7 (24h station-level
+  //                crossings): stations with a crossing reason lead the feed.
+  //   djBand     — r=5 (attributed show on air, no crossing yet).
+  //   restBand   — r=0 (no crossing, no attribution) — pinned float first.
+  // With no taste data every live station simply lands in djBand/restBand and
+  // the feed still shows all of them with their current plays.
+  // The currently-playing station stays in its lane (highlighted via isActive).
   const withReason = useMemo(
     () => sortedRows.filter((row) => (row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7),
     [sortedRows],
@@ -1887,9 +1888,9 @@ export function DialView() {
     () => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r === 5),
     [sortedRows],
   );
-  // Merged-tab display order for the crossing rows: default (▲) keeps the
-  // attribution-ladder order; flipped (▼) is its exact inverse, so the least-
-  // crossed stations lead and the strongest crossings sink to the bottom.
+  // Display order for the crossing rows: default (▲) keeps the attribution-
+  // ladder order; flipped (▼) is its exact inverse, so the least-crossed
+  // stations lead and the strongest crossings sink to the bottom.
   const zone1Display = useMemo(
     () => popSortDesc ? withReason : [...withReason].reverse(),
     [withReason, popSortDesc],
@@ -1904,12 +1905,11 @@ export function DialView() {
   );
   const presenceMap = useStationPresence(liveStationIds);
 
-  // Zone 3 band split (replaces slot-0 promotion from Task #1017):
+  // Ranking bands within the unified feed (internal ordering only — the feed
+  // renders as one uninterrupted list):
   //   djBand  — r=5 rows (attributed show on air, no crossing yet).
-  //             Always fully shown. Sorted by picker overlap desc.
-  //             Styled with picker accent ("DJs on air" sub-label).
-  //   restBand — r=0/6/7 rows (unattributed / dark).
-  //             Subject to ZONE3_VISIBLE cap + expand toggle.
+  //             Sorted by picker overlap desc.
+  //   restBand — r=0 rows (unattributed / dark).
   //             Pinned stations float above non-pinned within restBand.
   const djBand = useMemo(() =>
     alsoOnAir
@@ -2008,21 +2008,10 @@ export function DialView() {
   }, [offlineStations]);
   const _visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
 
-  const [zone2Expanded, setZone2Expanded] = useState(false);
-  const [zone3Expanded, setZone3Expanded] = useState(false);
-  /** Scrub → expand whichever collapsed band hides the row, then scroll to it. */
+  /** Scrub → the feed lane reveals the row (pagination) and scrolls to it. */
   const handleScrub = useCallback((item: ScrubItem) => {
-    // Band membership is looked up by slug (not scrub index) so the logic is
-    // independent of the current display order / sort direction.
-    const restIdx = restBand.findIndex((r) => r.ds.station.slug === item.slug);
-    if (restIdx >= ZONE3_VISIBLE) setZone3Expanded(true);
     setScrubTarget(item.slug);
-  }, [restBand]);
-  useEffect(() => {
-    if (!scrubTarget) return;
-    const el = document.querySelector(`[data-scrub-slug="${CSS.escape(scrubTarget)}"]`);
-    if (el) el.scrollIntoView({ block: "center" });
-  }, [scrubTarget, zone3Expanded]);
+  }, []);
 
 
   // ── Time-travel mode (top sets toggle) ─────────────────────────────────────
@@ -2389,42 +2378,6 @@ export function DialView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pastScan.fineIdx]);
 
-  // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
-  // stations does NOT reset the collapsed secondary bands.
-  const zone2SlugKey = useMemo(() => ghost.map((g) => g.slug).sort().join(","), [ghost]);
-  const zone3SlugKey = useMemo(() => alsoOnAir.map((r) => r.ds.station.slug).sort().join(","), [alsoOnAir]);
-
-  // Track previous slug keys so the reset effect only fires on genuine membership
-  // changes and NOT on the initial mount.
-  const prevZone2SlugKey = useRef<string | null>(null);
-  const prevZone3SlugKey = useRef<string | null>(null);
-
-  // Expand-time anchor — the slug key that was current when the user last clicked
-  // "See all". If the zone's membership temporarily shrinks and then recovers to
-  // exactly this key, the zone silently re-expands rather than staying collapsed.
-  const zone2ExpandAnchor = useRef<string | null>(null);
-  const zone3ExpandAnchor = useRef<string | null>(null);
-
-  // Reset expansion when zone membership genuinely changes.
-  // If the new key matches the expand-time anchor the user set, re-expand
-  // silently instead of resetting (transient-shrink recovery).
-  useEffect(() => {
-    if (prevZone2SlugKey.current === null) { prevZone2SlugKey.current = zone2SlugKey; return; }
-    if (prevZone2SlugKey.current === zone2SlugKey) return;
-    prevZone2SlugKey.current = zone2SlugKey;
-    if (zone2ExpandAnchor.current === zone2SlugKey) { setZone2Expanded(true); return; }
-    setZone2Expanded(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zone2SlugKey]);
-  useEffect(() => {
-    if (prevZone3SlugKey.current === null) { prevZone3SlugKey.current = zone3SlugKey; return; }
-    if (prevZone3SlugKey.current === zone3SlugKey) return;
-    prevZone3SlugKey.current = zone3SlugKey;
-    if (zone3ExpandAnchor.current === zone3SlugKey) { setZone3Expanded(true); return; }
-    setZone3Expanded(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zone3SlugKey]);
-
   // --- front-door scan (spec §11) ---
   const scan = useFrontDoorScan(withReason.length);
 
@@ -2664,10 +2617,8 @@ export function DialView() {
     surface.back();
   }, [surface, openArtistTab]);
 
-  // ── Also-on-air section (former tab, now folded into ON AIR × YOUR ARTISTS).
-  // Band order follows the triangle: ▲ renders DJ band then rest band below the
-  // crossing rows; ▼ renders rest band (rarest-first) then DJ band above them.
-  // Shared tune handler for both Zone 3 bands.
+  // ── Unified live feed — one flat list for all live stations.
+  // Shared tune handler for every feed row.
   const tuneZoneRow = useCallback((row: DialLaneRow) => {
     scan.stop();
     if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
@@ -2679,23 +2630,32 @@ export function DialView() {
       ? <PopCrossingLine artists={popMap.get(slug)!} seedsLower={seedsLower} onAdd={addSeed} />
       : null,
   [popHasContent, popMap, seedsLower, addSeed]);
-  const alsoSection = alsoOnAir.length > 0 && (
-    <Zone3Lane
-      djBand={djBand}
-      restBand={restBand}
+  // While crossing scores are pending the reason rows are withheld (the
+  // skeleton takes their place) but the rest of the feed renders immediately,
+  // so a slow crossings compute never blanks live stations.
+  const feedSection = sortedRows.length > 0 && (
+    <DialFeedLane
+      reasonRows={crossingsLoading ? [] : zone1Display}
+      djRows={djBand}
+      restRows={restBand}
       popSortDesc={popSortDesc}
-      expanded={zone3Expanded}
       activeSlug={radio.station?.slug ?? null}
+      samplingSlug={scan.samplingIdx != null ? withReason[scan.samplingIdx]?.ds.station.slug ?? null : null}
+      scrubTarget={scrubTarget}
       displayMode={crossingSourceMode}
       presenceMap={presenceMap}
+      popMap={popMap}
+      seedsLower={seedsLower}
       artworkUrl={activeArtworkUrl}
       popLineFor={popLineFor}
-      ovFor={(row, band) => band === "dj"
-        ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
-        : row.ds.lifetimeCrossings}
+      ovFor={(row, band) => band === "reason"
+        ? (row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings)
+        : band === "dj"
+          ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
+          : row.ds.lifetimeCrossings}
+      onAddArtist={addSeed}
       onTuneIn={tuneZoneRow}
-      onToggleExpanded={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
-      onCollapse={() => setZone3Expanded(false)}
+      onSetExpand={(_row) => undefined}
     />
   );
 
@@ -2916,15 +2876,14 @@ export function DialView() {
                   </>
                 )}
 
-                {/* ── Live mode: Zone 1 crossing rows ─────────────────────── */}
+                {/* ── Live mode: the unified live feed ────────────────────── */}
                 {effectiveTtMode === "live" && (
                   <>
-                    {/* Flipped sort (▼): the also-on-air bands (deep cuts) lead. */}
-                    {!inContext && !popSortDesc && alsoSection}
-                    {/* While crossing scores are pending, Zone 1 shows its
-                        context-sensitive skeleton IN PLACE of crossing rows —
-                        strict mutual exclusion with the .fdrow rows below.
-                        Zones 2/3 and the offline section render regardless. */}
+                    {/* While crossing scores are pending, the crossing rows'
+                        slot shows a context-sensitive skeleton — strict mutual
+                        exclusion with reason rows (the feed withholds them via
+                        reasonRows=[] while crossingsLoading). The rest of the
+                        feed and the offline section render regardless. */}
                     {!inContext && showSkeleton && (
                       <Zone1Placeholder
                         isSpotifyConnected={isSpotifyConnected}
@@ -2936,33 +2895,13 @@ export function DialView() {
                         onRemoveSeed={removeSeed}
                       />
                     )}
-                    {/* Zone 1: crossing rows — hidden the moment crossings go
-                        pending (not just when the delayed skeleton shows) so
-                        rows never flash during the skeleton grace window. */}
-                    {!inContext && !crossingsLoading && withReason.length > 0 && (
-                      /* All live crossing rows are visible by default. */
-                      <Zone1Lane
-                        rows={zone1Display}
-                        activeSlug={radio.station?.slug ?? null}
-                        samplingSlug={scan.samplingIdx != null ? withReason[scan.samplingIdx]?.ds.station.slug ?? null : null}
-                        displayMode={crossingSourceMode}
-                        presenceMap={presenceMap}
-                        popMap={popMap}
-                        seedsLower={seedsLower}
-                        ovFor={(row) => row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                        onAddArtist={addSeed}
-                        onTuneIn={(row) => {
-                          scan.stop();
-                          if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
-                            void radio.toggle(row.ds.station);
-                          }
-                        }}
-                        onSetExpand={(_row) => undefined}
-                      />
-                    )}
+
+                    {/* The unified feed: every live station, crossing matches
+                        ranked first (▲) or last (▼). Grows via infinite scroll. */}
+                    {!inContext && feedSection}
 
                     {/* Skeleton deadline expired but the server is still computing —
-                        honest in-progress copy instead of the false negative above.
+                        honest in-progress copy; live rows keep rendering below.
                         The 4s repoll keeps running; rows replace this when they land. */}
                     {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "computing" && (
                       <div className="z1-placeholder z1-placeholder--computing">
@@ -2986,8 +2925,9 @@ export function DialView() {
                       </div>
                     )}
 
-                    {/* No crossing rows, no library or seeds — full onboarding placeholder.
-                        The prominent CTA lives inside Zone1Placeholder for this state. */}
+                    {/* No crossing rows, no library or seeds — onboarding placeholder.
+                        The prominent CTA lives inside Zone1Placeholder for this state.
+                        The live feed still renders below it. */}
                     {!inContext && !crossingsLoading && withReason.length === 0 &&
                       !hasLibrary &&
                       !hasSeeds &&
@@ -3014,23 +2954,19 @@ export function DialView() {
                       </>
                     )}
 
-                    {/* Zone 2: Ghost stations — subsection within the primary tab.
-                        Rendered after Zone 1 content as "Missed while you were away".
-                        Shown in live mode and day mode, hidden in top sets mode
-                        and in context mode (Zone 2/3 hide once tuned). */}
+                    {/* Ghost stations — "Missed while you were away" subsection.
+                        Offline/missed playback, so it stays separate from the
+                        live feed. Hidden in context mode. */}
                     {!inContext && ghost.length > 0 && (
                       <Zone2Lane
                         ghost={ghost}
-                        expanded={zone2Expanded}
                         activeSlug={radio.station?.slug ?? null}
                         onTuneGhost={tuneGhost}
-                        onToggleExpanded={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
-                        onCollapse={() => setZone2Expanded(false)}
                       />
                     )}
 
-                    {/* Live-zone skeleton — shown after crossings resolve but while the
-                        first live pulse is still in-flight and no stations have appeared. */}
+                    {/* Live-feed skeleton — shown while the first live pulse is
+                        still in-flight and no stations have appeared. */}
                     {liveLoading && sortedRows.length === 0 && (
                       <>
                         <DialRowSkeleton delay={0} />
@@ -3039,18 +2975,12 @@ export function DialView() {
                       </>
                     )}
 
-                    {/* Default sort (▲): also-on-air bands trail the crossing rows. */}
-                    {!inContext && popSortDesc && alsoSection}
-
-                    {/* Library/seeds exist but nothing has crossed today — helpful nudge.
-                        Rendered AFTER the station lanes so the dial leads the front
-                        door instead of a full-height empty block burying it below
-                        the fold. Suppressed while liveLoading is true: crossings
-                        depend on the live-station list, so until that poll completes
-                        sortedRows is empty and withReason is vacuously 0 even if
-                        crossings exist. Only the settled phase may claim "none
+                    {/* Library/seeds exist but nothing has crossed today — helpful
+                        nudge, only when NO live stations render at all (otherwise
+                        the feed itself is the answer: matched rows lead, everything
+                        else still shows). Only the settled phase may claim "none
                         played" — see CrossingsPhase. */}
-                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "settled" && (
+                    {!inContext && !crossingsLoading && withReason.length === 0 && sortedRows.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "settled" && (
                       <div className="z1-placeholder z1-placeholder--no-cross z1-placeholder--compact">
                         <div className="z1-placeholder__body">
                           <p className="z1-placeholder__pitch">
@@ -3077,19 +3007,14 @@ export function DialView() {
                   </>
                 )}
 
-                {/* ── Past mode: Zone 2 ghost rows (Zone 3 suppressed) ────── */}
+                {/* ── Past mode: ghost rows (live feed suppressed) ────────── */}
                 {!inContext && effectiveTtMode === "past" && ghost.length > 0 && (
                   <Zone2Lane
                     ghost={ghost}
-                    expanded={zone2Expanded}
-                    idSuffix="-day"
                     activeSlug={radio.station?.slug ?? null}
                     onTuneGhost={tuneGhost}
-                    onToggleExpanded={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
-                    onCollapse={() => setZone2Expanded(false)}
                   />
                 )}
-                {/* Zone 3 (also-on-air) is suppressed in day and top modes */}
               </>
             )}
 

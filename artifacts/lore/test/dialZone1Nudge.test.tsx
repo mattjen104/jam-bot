@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 /**
- * Regression tests: the Zone 1 "None of your artists have played today" nudge
- * must appear when crossings are loaded and withReason is empty, and must
- * disappear the moment the first crossing row arrives.
+ * Regression tests: the "None of your artists have played today" nudge
+ * must appear only when crossings are loaded AND the unified live feed is
+ * empty (zero live stations). It must NEVER render alongside live station
+ * rows — in the unified feed, unmatched live stations are shown directly,
+ * so a "nothing played" message next to visible stations is a lie.
  *
  * Covers:
  *   1. Nudge renders when crossingsLoading=false, hasLibrary=true, and
- *      withReason is empty (no station-level or show-level crossings).
- *   2. Nudge is absent once withReason becomes non-empty (a station with a
- *      crossing score arrives).
+ *      there are no live stations at all.
+ *   2. Nudge is absent whenever any live station row exists — with or
+ *      without crossings.
  *   3. Nudge is absent while crossingsLoading=true (not settled yet).
  *   4. Nudge is absent when neither hasLibrary nor hasSeeds is true.
  */
@@ -256,33 +258,33 @@ describe("Zone 1 nudge — appears when loaded with no crossings", () => {
     expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
   });
 
-  it("renders the nudge even when live stations exist but none have crossings", () => {
+  it("suppresses the nudge when live stations exist, even without crossings", () => {
+    // Unified feed: unmatched live stations render as rows, so telling the
+    // user "none of your artists have played" next to them is misleading.
     mockDialData({ stations: [makeNoCrossStation("kexp"), makeNoCrossStation("wfmu")] });
     renderDial();
 
-    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
   });
 });
 
-describe("Zone 1 nudge — dial leads when settled empty", () => {
-  it("renders the station lanes BEFORE the nudge in DOM order", () => {
-    mockDialData({ stations: [makeNoCrossStation("kexp"), makeNoCrossStation("wfmu")] });
-    renderDial();
-
-    const nudge = screen.getByText(NUDGE_TEXT, { exact: false });
-    const stationRows = document.querySelectorAll(".fdrow");
-    expect(stationRows.length).toBeGreaterThan(0);
-    // Every station lane must precede the nudge in document order.
-    for (const row of Array.from(stationRows)) {
-      expect(
-        row.compareDocumentPosition(nudge) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
-    }
-  });
-
-  it("renders the seed chips compactly inside the nudge block, not above the dial", () => {
+describe("Zone 1 nudge — only when the feed is empty", () => {
+  it("never renders the nudge alongside live station rows", () => {
     mockDialData({
       stations: [makeNoCrossStation("kexp")],
+      hasLibrary: false,
+      hasSeeds: true,
+    });
+    renderDial();
+
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+  });
+
+  it("renders the seed chips compactly inside the nudge block when the feed is empty", () => {
+    mockDialData({
+      stations: [],
       hasLibrary: false,
       hasSeeds: true,
     });

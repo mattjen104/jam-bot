@@ -2283,24 +2283,11 @@
   pointer-events: none;
 }
 
-.dial-show-more {
-  display: block;
-  width: 100%;
-  padding: 14px 15px;
-  background: none;
-  border: none;
-  border-top: 1px solid hsl(var(--border) / 0.4);
-  font-family: var(--app-font-mono);
-  font-size: var(--lore-size-small);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  text-align: left;
-  transition: color 0.15s;
-}
-.dial-show-more:hover {
-  color: hsl(var(--foreground));
+/* ── Infinite-scroll sentinels (unified feed + ghost lane) ── */
+/* Non-zero height so IntersectionObserver reliably fires near the list end. */
+.dial-feed-sentinel,
+.zone2-sentinel {
+  height: 1px;
 }
 
 /* ── Live-zone skeleton (shown while first live pulse is in-flight) ── */
@@ -5703,71 +5690,6 @@
 }
 
 
-/* ── Zone section labels (spec §6) ──────────────────────────────────────── */
-.fdzone-lbl {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 15px 7px;
-}
-/* coloured pip — signals zone identity before the text */
-.fdzone-lbl__pip {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-right: 1px;
-}
-.fdzone-lbl__pip--library { background: hsl(var(--library)); }
-.fdzone-lbl__pip--picker  { background: hsl(var(--selector-dj)); }
-.fdzone-lbl__pip--live    { background: hsl(var(--live)); animation: lore-live-pip 1.4s ease-in-out infinite; }
-.fdzone-lbl__text {
-  font-family: var(--app-font-label);
-  font-size: var(--lore-size-small);
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.13em;
-  color: hsl(var(--muted-foreground));
-}
-/* hint pushes to the right edge, Newsreader italic per spec */
-.fdzone-lbl__hint {
-  margin-left: auto;
-  font-family: var(--app-font-reading);
-  font-style: normal;
-  font-weight: 400;
-  font-size: var(--lore-size-interface);
-  text-transform: none;
-  letter-spacing: 0;
-  color: hsl(var(--muted-foreground) / 0.45);
-}
-/* Zone label row — wraps ZoneLabel + optional inline collapse button */
-.fdzone-lbl-row {
-  display: flex;
-  align-items: center;
-}
-.fdzone-lbl-row .fdzone-lbl {
-  flex: 1;
-  min-width: 0;
-}
-/* Inline "See less" anchored at the zone header — stays above the fold */
-.dial-show-more-inline {
-  flex-shrink: 0;
-  padding: 4px 12px 4px 8px;
-  background: none;
-  border: none;
-  font-family: var(--app-font-mono);
-  font-size: var(--lore-size-small);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s;
-}
-.dial-show-more-inline:hover {
-  color: hsl(var(--foreground));
-}
-
 /* ── Zone 2 ghost rows — discovers tier ─────────────────────────────────── */
 /* Less warm than Zone 1, not dimmed like Zone 3. Neutral-cool left accent. */
 .ghost-row {
@@ -6402,16 +6324,8 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
 .dial-root--front .fdrow__run-sub {
   font-size: var(--lore-size-small);
 }
-.dial-root--front .fdzone-lbl__text,
-.dial-root--front .fdzone-lbl__hint,
-.dial-root--front .dial-show-more,
-.dial-root--front .dial-show-more-inline,
 .dial-root--front .dial-tab {
   font-size: var(--lore-size-small);
-}
-.dial-root--front .dial-show-more,
-.dial-root--front .dial-show-more-inline,
-.dial-root--front .dial-tab {
   letter-spacing: 0.05em;
 }
 .dial-root--front .fdrow {

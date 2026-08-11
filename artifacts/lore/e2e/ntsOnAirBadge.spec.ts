@@ -170,7 +170,7 @@ async function installDialRoutes(
 // ---------------------------------------------------------------------------
 
 test.describe("On-air show + DJ attribution on the dial front door", () => {
-  test("live station with attributed show renders in the DJs-on-air band", async ({
+  test("live station with attributed show renders with the DJ credit in the unified feed", async ({
     page,
   }) => {
     await installDialRoutes(page, {
@@ -179,13 +179,12 @@ test.describe("On-air show + DJ attribution on the dial front door", () => {
     });
     await page.goto("/lore/");
 
-    // The DJs-on-air zone label must appear (attributed live show, no crossings).
-    await expect(page.getByText("DJs on air")).toBeVisible({ timeout: 15_000 });
-
     // The row carries the DJ credit and the show name in one sentence
-    // ("Ben UFO selected … on Hessle Audio").
+    // ("Ben UFO selected … on Hessle Audio"). The unified feed has no zone
+    // sub-labels — the credit itself is the attribution surface.
     const row = page.getByRole("button", { name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`) });
-    await expect(row).toBeVisible();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("DJs on air")).not.toBeVisible();
   });
 
   test("DJ credit is absent when the schedule has no attribution", async ({

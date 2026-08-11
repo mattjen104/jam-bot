@@ -344,11 +344,11 @@ describe("Zone 1 — exactly 5 rows", () => {
   });
 });
 
-describe("Zone 2 and Zone 3 truncation", () => {
-  it("Zone 2 with 7 ghosts renders 3 ghost rows; Zone 3 with 12 renders 3 fdrows", () => {
-    // Zero Zone 1 stations (none with crossings), 12 Zone 3 stations (no show → r=0).
-    const zone3Stations = Array.from({ length: 12 }, (_, i) => makeZone3Station(`z3s${i}`));
-    mockDialData(zone3Stations);
+describe("Unified feed — no truncation toggles", () => {
+  it("renders all ghost rows and all live rows with no See all buttons", () => {
+    // Zero crossing stations, 12 unattributed live stations (no show → r=0).
+    const restStations = Array.from({ length: 12 }, (_, i) => makeZone3Station(`z3s${i}`));
+    mockDialData(restStations);
 
     const ghosts = Array.from({ length: 7 }, (_, i) => makeGhostStation(`ghost${i}`));
     mockGhosts(ghosts);
@@ -356,15 +356,14 @@ describe("Zone 2 and Zone 3 truncation", () => {
 
     renderDial();
 
-    // Zone 2: 3 ghost rows visible.
-    expect(ghostRowCount()).toBe(3);
-    const zone2Btn = screen.getByRole("button", { name: "See all 7" });
-    expect(zone2Btn).toBeTruthy();
+    // Ghost subsection: every row renders (jsdom has no IntersectionObserver,
+    // so the infinite-scroll lane takes its render-everything fallback).
+    expect(ghostRowCount()).toBe(7);
 
-    // Zone 3: 3 fdrows visible.
-    expect(fdrowCount()).toBe(3);
-    const zone3Btn = screen.getByRole("button", { name: "See all 12" });
-    expect(zone3Btn).toBeTruthy();
+    // Live feed: every live station renders — no cap, no toggle.
+    expect(fdrowCount()).toBe(12);
+    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "See less" })).toBeNull();
   });
 });
 
@@ -496,7 +495,7 @@ describe("Zone 3 restBand — pinned stations float above non-pinned (Fix 3)", (
     renderDial();
 
     const rows = document.querySelectorAll(".fdrow");
-    // Both are Zone 3 restBand; ZONE3_VISIBLE=3, so both appear.
+    // Both are rest-band rows in the unified feed; both appear.
     expect(rows.length).toBe(2);
     // Pinned row comes first despite zero crossings.
     expect(rows[0].textContent).toContain("pinned");

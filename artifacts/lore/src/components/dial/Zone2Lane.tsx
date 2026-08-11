@@ -1,19 +1,17 @@
 /**
- * Zone2Lane — the Dial's Zone 2 lane: ghost stations ("Missed while you were
- * away") that played the listener's artists but aren't currently on air in
- * Zone 1/3.
+ * Zone2Lane — the Dial's "Missed while you were away" lane: ghost stations
+ * that played the listener's artists but aren't currently on air.
  *
- * Extracted from DialView.tsx. The same lane renders in live mode and past
- * mode with different container ids (`idSuffix`) so the two collapse buttons
- * keep distinct aria-controls targets. All expand/collapse state and anchor
- * bookkeeping stays in DialView.
+ * Uses infinite scroll (IntersectionObserver sentinel) instead of a
+ * See-all / See-less toggle so the list grows naturally as the user scrolls.
  */
+import { useRef, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { type GhostStation } from "../../lib/meHooks";
 import { agoLabel } from "./FrontDoorRow";
 
-/** Cap on ghost rows shown before the "See all" expand affordance. */
-export const ZONE2_VISIBLE = 3;
+/** Initial page size — rows shown before the first infinite-scroll reveal. */
+export const ZONE2_INITIAL = 6;
 
 interface GhostRowProps {
   station: GhostStation;
@@ -68,64 +66,61 @@ export function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
 
 export interface Zone2LaneProps {
   ghost: GhostStation[];
-  expanded: boolean;
-  /** Suffix appended to the rows-container id (past mode uses "-day"). */
-  idSuffix?: string;
   activeSlug: string | null;
   onTuneGhost: (g: GhostStation) => void;
-  /** "See all N" / "See less" toggle — DialView owns the anchor bookkeeping. */
-  onToggleExpanded: () => void;
-  /** Inline "See less" collapse (label row) — plain collapse, no anchor. */
-  onCollapse: () => void;
 }
 
-export function Zone2Lane({
-  ghost,
-  expanded,
-  idSuffix = "",
-  activeSlug,
-  onTuneGhost,
-  onToggleExpanded,
-  onCollapse,
-}: Zone2LaneProps) {
+export function Zone2Lane({ ghost, activeSlug, onTuneGhost }: Zone2LaneProps) {
+  const [visible, setVisible] = useState(ZONE2_INITIAL);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset visible count when ghost list membership changes. Render-phase
+  // state adjustment (not an effect) so the shrunken list paints in one pass.
+  const [prevLen, setPrevLen] = useState(ghost.length);
+  if (prevLen !== ghost.length) {
+    setPrevLen(ghost.length);
+    setVisible(ZONE2_INITIAL);
+  }
+
+  // Progressive enhancement: without IntersectionObserver (jsdom, very old
+  // browsers) the list renders in full — no toggle, no dead end.
+  const hasObserver = typeof IntersectionObserver !== "undefined";
+
+  // Infinite scroll: expand by a page whenever the sentinel enters viewport.
+  useEffect(() => {
+    if (!hasObserver) return;
+    const el = sentinelRef.current;
+    if (!el || visible >= ghost.length) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisible((v) => Math.min(v + ZONE2_INITIAL, ghost.length));
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasObserver, visible, ghost.length]);
+
   if (ghost.length === 0) return null;
-  const rowsId = `zone2-rows${idSuffix}`;
+
+  const shown = hasObserver ? ghost.slice(0, visible) : ghost;
+
   return (
-    <>
-      <div className="fdzone-lbl-row">
-        {expanded && ghost.length > ZONE2_VISIBLE && (
-          <button
-            className="dial-show-more-inline"
-            aria-expanded={true}
-            aria-controls={rowsId}
-            onClick={onCollapse}
-          >
-            See less
-          </button>
-        )}
-      </div>
-      <>
-        <div id={rowsId}>
-          {ghost.slice(0, expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
-            <GhostRow
-              key={g.slug}
-              station={g}
-              isActive={g.slug === activeSlug}
-              onTuneIn={() => onTuneGhost(g)}
-            />
-          ))}
-        </div>
-        {ghost.length > ZONE2_VISIBLE && (
-          <button
-            className="dial-show-more"
-            aria-expanded={expanded}
-            aria-controls={rowsId}
-            onClick={onToggleExpanded}
-          >
-            {expanded ? "See less" : `See all ${ghost.length}`}
-          </button>
-        )}
-      </>
-    </>
+    <div id="zone2-rows">
+      {shown.map((g) => (
+        <GhostRow
+          key={g.slug}
+          station={g}
+          isActive={g.slug === activeSlug}
+          onTuneIn={() => onTuneGhost(g)}
+        />
+      ))}
+      {/* Sentinel — triggers the next page load when scrolled into view. */}
+      {hasObserver && visible < ghost.length && (
+        <div ref={sentinelRef} className="zone2-sentinel" aria-hidden="true" />
+      )}
+    </div>
   );
 }

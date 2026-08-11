@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /**
  * Contract: skeleton rows (.fdrow-skeleton) and real ZONE 1 crossing rows
- * (#zone1-rows .fdrow) must never appear simultaneously in the Dial front
+ * ([data-feed-band="reason"] .fdrow) must never appear simultaneously in the Dial front
  * door — the skeleton renders IN PLACE of the Zone 1 rows.
  *
  * Since the progressive-render change (task: fast front-door first load),
  * Zones 2/3 and the also-on-air bands render as soon as the station list is
  * available, even while crossing scores are still in-flight. Only Zone 1 —
  * the personalized crossing rows — is swapped for its skeleton:
- *   - crossingsLoading=true  → skeleton present, no #zone1-rows .fdrow rows,
+ *   - crossingsLoading=true  → skeleton present, no [data-feed-band="reason"] .fdrow rows,
  *                              but Zone 3 station rows MAY render
  *   - crossingsLoading=false → real Zone 1 rows present (when data exists),
  *                              no skeleton rows
@@ -251,11 +251,11 @@ describe("crossingsLoading=true — skeleton visible, real rows absent", () => {
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
-  it("renders no real Zone 1 (#zone1-rows .fdrow) rows while crossing scores are in-flight", () => {
+  it("renders no real reason-band (.fdrow) rows while crossing scores are in-flight", () => {
     mockDialData(true, [makeZone1Station("wfmu")]);
     render(<DialView />);
 
-    const zone1Rows = document.querySelectorAll("#zone1-rows .fdrow");
+    const zone1Rows = document.querySelectorAll('[data-feed-band="reason"] .fdrow');
     expect(zone1Rows.length).toBe(0);
   });
 
@@ -275,7 +275,7 @@ describe("crossingsLoading=true — skeleton visible, real rows absent", () => {
     act(() => { vi.advanceTimersByTime(150); });
 
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
-    expect(document.querySelectorAll("#zone1-rows .fdrow").length).toBe(0);
+    expect(document.querySelectorAll('[data-feed-band="reason"] .fdrow').length).toBe(0);
   });
 });
 
@@ -412,7 +412,7 @@ describe("mutual exclusion invariant — never both at once", () => {
     const skeletonCount = document.querySelectorAll(".fdrow-skeleton").length;
     // Progressive render: Zone 3 rows may be present — the exclusion contract
     // covers Zone 1's own rows, which the skeleton stands in for.
-    const zone1RowCount = document.querySelectorAll("#zone1-rows .fdrow").length;
+    const zone1RowCount = document.querySelectorAll('[data-feed-band="reason"] .fdrow').length;
 
     expect(skeletonCount).toBeGreaterThan(0);
     expect(zone1RowCount).toBe(0);
@@ -494,7 +494,7 @@ describe("Zone 2 (ghost rows) — skeleton guard during live refresh", () => {
     act(() => { vi.advanceTimersByTime(150); });
 
     const skeletons = document.querySelectorAll(".fdrow-skeleton").length;
-    const zone1Rows = document.querySelectorAll("#zone1-rows .fdrow").length;
+    const zone1Rows = document.querySelectorAll('[data-feed-band="reason"] .fdrow').length;
     expect(skeletons === 0 || zone1Rows === 0).toBe(true);
 
     setupZone2(false, [makeGhostStation("ghost1")]);
@@ -667,7 +667,7 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
 
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
-    expect(document.querySelectorAll("#zone1-rows .fdrow").length).toBe(0);
+    expect(document.querySelectorAll('[data-feed-band="reason"] .fdrow').length).toBe(0);
 
     // Refresh completes — rows remain, skeletons gone.
     setupZone3(false);
@@ -692,7 +692,7 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
     act(() => { vi.advanceTimersByTime(150); });
 
     const skeletonsDuringRefresh = document.querySelectorAll(".fdrow-skeleton").length;
-    const zone1RowsDuringRefresh = document.querySelectorAll("#zone1-rows .fdrow").length;
+    const zone1RowsDuringRefresh = document.querySelectorAll('[data-feed-band="reason"] .fdrow').length;
     expect(skeletonsDuringRefresh === 0 || zone1RowsDuringRefresh === 0).toBe(true);
 
     // Refresh resolves — real rows present, no skeletons.

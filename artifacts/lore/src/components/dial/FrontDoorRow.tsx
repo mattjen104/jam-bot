@@ -6,7 +6,6 @@
  *   FrontDoorRow    — a single live-station row (reason sentence, presence…)
  *   PopCrossingLine — the Also-On-Air inline setlist sentence
  *   SetQueueList    — the one renderer for broadcast/replay set queues
- *   ZoneLabel       — small zone sub-label with accent pip
  *   agoLabel        — relative-time formatter shared by ghost/offline rows
  *
  * DialView re-exports FrontDoorRow / PopCrossingLine / SetQueueList so
@@ -287,20 +286,6 @@ function AlsoSentence({ artists, seedsLower, onAdd }: {
       onRemove={() => undefined}
       progress={0}
     />
-  );
-}
-
-export function ZoneLabel({ label, hint, accent }: {
-  label: string;
-  hint?: string;
-  accent?: "library" | "picker" | "live";
-}) {
-  return (
-    <div className="fdzone-lbl">
-      {accent && <span className={`fdzone-lbl__pip fdzone-lbl__pip--${accent}`} />}
-      <span className="fdzone-lbl__text">{label}</span>
-      {hint && <span className="fdzone-lbl__hint">{hint}</span>}
-    </div>
   );
 }
 

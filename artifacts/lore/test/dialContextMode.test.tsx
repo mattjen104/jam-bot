@@ -299,7 +299,7 @@ describe("front-door tune and workspace semantics", () => {
   it("Space on a station row tunes without opening a workspace", () => {
     mockDialData([makeZone1Station("kexp")]);
     renderDial();
-    const row = document.querySelector<HTMLElement>("#zone1-rows .fdrow")!;
+    const row = document.querySelector<HTMLElement>('[data-feed-band="reason"] .fdrow')!;
     fireEvent.keyDown(row, { key: " " });
     expect(radioMock.toggle).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("tab")).toBeNull();
@@ -331,11 +331,11 @@ describe("front-door tune and workspace semantics", () => {
     radioMock.status = "playing";
     radioMock.toggle.mockClear();
 
-    fireEvent.click(document.querySelector("#zone1-rows .fdrow")!);
+    fireEvent.click(document.querySelector('[data-feed-band="reason"] .fdrow')!);
 
     // No pinned overlay exists anymore; the row simply stays in its lane.
     expect(document.querySelector(".dial-pinned-row")).toBeNull();
-    expect(document.querySelector("#zone1-rows .fdrow")).toBeTruthy();
+    expect(document.querySelector('[data-feed-band="reason"] .fdrow')).toBeTruthy();
     expect(document.querySelector(".dial-context-region")).toBeNull();
     expect(radioMock.toggle).not.toHaveBeenCalled();
     expect(radioMock.stop).not.toHaveBeenCalled();
