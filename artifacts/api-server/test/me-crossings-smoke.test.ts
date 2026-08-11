@@ -8,6 +8,7 @@ import app from "../src/app.js";
 import {
   _testOnly_clearCrossingsCache,
   _testOnly_clearBlendedCrossingsCache,
+  _testOnly_clearBlendedCrossingsL2Cache,
 } from "../src/routes/me/crossings.js";
 
 /**
@@ -85,12 +86,19 @@ describe("crossings route smoke (merge-splice guard)", () => {
 
   it("GET /api/me/crossings/blended returns 200 (not 5xx) against a minimal fixture", async () => {
     if (!dbAvailable) return;
+    // Clear both cache layers so this smoke request doesn't write a stale L2
+    // row that concurrent DB test workers could read as a valid cache hit.
     _testOnly_clearBlendedCrossingsCache();
+    await _testOnly_clearBlendedCrossingsL2Cache();
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`, {
       headers: { cookie: `lore_sid=${SID}` },
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: unknown };
     expect(Array.isArray(body.items)).toBe(true);
+    // Clear again after so the written L2 row (from the fire-and-forget write
+    // above) cannot pollute parallel test workers that share the same DB.
+    await _testOnly_clearBlendedCrossingsL2Cache();
+    _testOnly_clearBlendedCrossingsCache();
   }, 120_000);
 });
