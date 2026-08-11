@@ -851,10 +851,10 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WREK 91.1 FM",
       org: "Georgia Institute of Technology",
       country: "US",
-      // Only HTTP port-8000 stream confirmed (streaming.wrek.org:8000). No HTTPS
-      // CDN endpoint found after exhaustive search. Kept empty — mixed-content
-      // blocked in HTTPS apps.
-      streamUrl: "",
+      // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
+      // container. WREK's Nginx/Icecast endpoint is the station's 128kbps MP3
+      // stream; the HTTP port-8000 URL remains available as a legacy mount.
+      streamUrl: "https://streaming.wrek.org/main/128kb.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wrek.org",
@@ -1045,10 +1045,9 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WUOG 90.5 FM",
       org: "University of Georgia",
       country: "US",
-      // Only HTTP port-8000 stream found (stream.wuog.org:8000/stream, referenced
-      // on their live-stream page). No HTTPS CDN endpoint found. Kept empty —
-      // mixed-content blocked in HTTPS apps.
-      streamUrl: "",
+      // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
+      // container. WUOG's Nginx/Icecast endpoint provides the 128kbps MP3 feed.
+      streamUrl: "https://stream.wuog.org/stream",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wuog.org",
@@ -1308,10 +1307,10 @@ function spinitronJazzStations(): InsertStation[] {
       name: "KCSM 91.1 FM",
       org: "College of San Mateo",
       country: "US",
-      // No confirmed HTTPS CDN stream found. KCSM (Jazz 91) is a listener-
-      // supported station at the College of San Mateo, CA.
-      streamUrl: "",
-      streamQuality: "128kbps MP3",
+      // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
+      // container. Securenet Systems provides KCSM's official 96kbps MP3 mount.
+      streamUrl: "https://ice7.securenetsystems.net/KCSM2",
+      streamQuality: "96kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://kcsm.org",
       scheduleUrl: "https://kcsm.org/schedule",
@@ -1344,9 +1343,9 @@ function spinitronJazzStations(): InsertStation[] {
       name: "WDIY 88.1 FM",
       org: "WDIY",
       country: "US",
-      // No confirmed HTTPS CDN stream found. WDIY is a community station in
-      // Bethlehem, PA serving the Lehigh Valley with classical and jazz.
-      streamUrl: "",
+      // HTTPS audio/mpeg stream confirmed reachable (206 audio) from the Replit
+      // container. StreamGuys hosts WDIY's official 128kbps MP3 mount.
+      streamUrl: "https://war.streamguys1.com:7883/wdiy_7880",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wdiy.org",
@@ -1371,8 +1370,8 @@ function spinitronJazzStations(): InsertStation[] {
  *   SPINITRON_KEY_CJSF  — https://www.cjsf.ca   (Simon Fraser University)
  *   SPINITRON_KEY_CHUO  — https://www.chuo.fm   (University of Ottawa)
  *
- * Stream URLs are left empty pending HTTPS CDN verification; the Spinitron
- * web adapter supplies now-playing data regardless of stream availability.
+ * Stream URLs are verified HTTPS audio endpoints; the Spinitron web adapter
+ * supplies now-playing data independently of stream availability.
  */
 function spinitronCanadianAdditions(): InsertStation[] {
   return [
@@ -1381,10 +1380,10 @@ function spinitronCanadianAdditions(): InsertStation[] {
       name: "CKUA Radio",
       org: "CKUA Radio Network",
       country: "CA",
-      // CKUA (Alberta's storied independent radio) uses a professional streaming
-      // setup. HTTPS CDN stream URL not confirmed from the Replit container yet.
-      streamUrl: "",
-      streamQuality: "128kbps MP3",
+      // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
+      // container. StreamOn hosts CKUA's official 64kbps MP3 mount.
+      streamUrl: "https://ais-sa1.streamon.fm/7000_64k.mp3",
+      streamQuality: "64kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://ckua.com",
       scheduleUrl: "https://ckua.com/schedule",
@@ -1398,8 +1397,9 @@ function spinitronCanadianAdditions(): InsertStation[] {
       name: "CJSF 90.1 FM",
       org: "Simon Fraser University",
       country: "CA",
-      // No confirmed HTTPS CDN stream found for CJSF (SFU's campus station).
-      streamUrl: "",
+      // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
+      // container. CJSF's HTTPS Icecast endpoint provides the 128kbps MP3 feed.
+      streamUrl: "https://www.cjsf.ca/streaming",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.cjsf.ca",
@@ -1414,8 +1414,10 @@ function spinitronCanadianAdditions(): InsertStation[] {
       name: "CHUO 89.1 FM",
       org: "University of Ottawa",
       country: "CA",
-      // No confirmed HTTPS CDN stream found for CHUO (Ottawa U campus station).
-      streamUrl: "",
+      // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
+      // container. StatsRadio's HTTPS Icecast mount provides CHUO's 128kbps MP3
+      // feed (the active host is stream2.statsradio.com).
+      streamUrl: "https://stream2.statsradio.com:8102/stream",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.chuo.fm",
