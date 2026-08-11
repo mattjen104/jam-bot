@@ -591,41 +591,57 @@ export async function purgeNonQualifyingStations(): Promise<number> {
     )
   `;
 
-  // No ON DELETE CASCADE on these references — dependents must be cleared
-  // first (spins, shows, then the discovery-bookkeeping row in
-  // radio_browser_stations, which is easy to miss since it isn't part of
-  // the play-history spine) or the final DELETE hits a FK violation and
-  // silently no-ops every startup. See lore-station-deletion-fk-order memory.
-  await db.execute(sql.raw(`
-    DELETE FROM spins
-    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
-  `));
-  await db.execute(sql.raw(`
-    DELETE FROM shows
-    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
-  `));
-  await db.execute(sql.raw(`
-    DELETE FROM radio_browser_stations
-    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
-  `));
-  // station_quality has a FK to stations with no CASCADE — must be cleared
-  // before the stations row is deleted or every purge throws a 23503.
-  await db.execute(sql.raw(`
-    DELETE FROM station_quality
-    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
-  `));
-  // segue_edges also references stations without CASCADE (listKey-scoped
-  // adjacency built by the segue job) — a purged station that ever appeared
-  // in a segue would otherwise abort the purge with a 23503.
-  await db.execute(sql.raw(`
-    DELETE FROM segue_edges
-    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
-  `));
-  const result = await db.execute(sql.raw(`
-    DELETE FROM stations
-    WHERE ${whereClause}
-  `));
-  const deleted = (result as { rowCount?: number }).rowCount ?? 0;
+  // Run the entire FK-ordered DELETE sequence inside a single transaction and
+  // acquire an exclusive lock on radio_browser_stations up front.  Without the
+  // lock the background discovery job can INSERT a new radio_browser_stations
+  // row between our "DELETE FROM radio_browser_stations" step and the final
+  // "DELETE FROM stations" step, producing a 23503 FK violation.
+  // LOCK TABLE blocks concurrent INSERTs until the transaction commits while
+  // still allowing SELECTs, so read-only queries (e.g. the now-playing poller)
+  // are unaffected.
+  let deleted = 0;
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`LOCK TABLE radio_browser_stations IN EXCLUSIVE MODE`,
+    );
+
+    // No ON DELETE CASCADE on these references — dependents must be cleared
+    // first (spins, shows, then the discovery-bookkeeping row in
+    // radio_browser_stations, which is easy to miss since it isn't part of
+    // the play-history spine) or the final DELETE hits a FK violation and
+    // silently no-ops every startup. See lore-station-deletion-fk-order memory.
+    await tx.execute(sql.raw(`
+      DELETE FROM spins
+      WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+    `));
+    await tx.execute(sql.raw(`
+      DELETE FROM shows
+      WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+    `));
+    await tx.execute(sql.raw(`
+      DELETE FROM radio_browser_stations
+      WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+    `));
+    // station_quality has a FK to stations with no CASCADE — must be cleared
+    // before the stations row is deleted or every purge throws a 23503.
+    await tx.execute(sql.raw(`
+      DELETE FROM station_quality
+      WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+    `));
+    // segue_edges also references stations without CASCADE (listKey-scoped
+    // adjacency built by the segue job) — a purged station that ever appeared
+    // in a segue would otherwise abort the purge with a 23503.
+    await tx.execute(sql.raw(`
+      DELETE FROM segue_edges
+      WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+    `));
+    const result = await tx.execute(sql.raw(`
+      DELETE FROM stations
+      WHERE ${whereClause}
+    `));
+    deleted = (result as { rowCount?: number }).rowCount ?? 0;
+  });
+
   if (deleted > 0) {
     console.info(
       `[radio-browser] purged ${deleted} non-qualifying stations (whitelist + quality filter)`,

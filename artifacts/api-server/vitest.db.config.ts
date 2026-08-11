@@ -17,10 +17,13 @@ export default defineConfig({
     // those tests override inline to 150s.
     testTimeout: 180_000,
     hookTimeout: 180_000,
-    // 2 workers, not 4: at 4 the heavy-query files (me-overlaps, me-crossings,
-    // now-playing-first-spin, import-worker) time out on shared-Postgres
-    // contention; at 2 they pass consistently.
-    maxWorkers: 2,
+    // 1 worker: eliminates inter-file contention on the shared Postgres instance.
+    // At 2 workers the DB-test suite intermittently races the running API Server
+    // workflow's background pollers (radio-browser discovery, ICY watchers) and
+    // fails tests that pass in isolation (now-playing-cold-start, station-curation
+    // purge, support-holds).  Sequential execution removes that variable entirely
+    // while still exercising the same code paths.
+    maxWorkers: 1,
     minWorkers: 1,
   },
 });

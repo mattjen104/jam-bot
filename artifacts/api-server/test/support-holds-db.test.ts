@@ -57,7 +57,7 @@ beforeAll(async () => {
   if (address && typeof address === "object") {
     baseUrl = `http://127.0.0.1:${address.port}`;
   }
-});
+}, 90_000);
 
 afterAll(async () => {
   if (server) {
