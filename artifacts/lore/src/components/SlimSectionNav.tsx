@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useSleepMode, recordWordmarkTap } from "../lib/sleepMode";
 
 type Section = "lore" | "library";
 
@@ -24,10 +25,32 @@ export function sectionFor(location: string): Section {
  *    CSS shows this variant only at phone widths.
  *
  * Same links, same targets — only the placement differs.
+ *
+ * The [lore] wordmark carries an unadvertised gesture: five taps within
+ * three seconds toggle Sleep Radio mode (see lib/sleepMode.ts). While the
+ * mode is active a small moon glyph renders beside the wordmark; tapping
+ * the moon deactivates the mode.
  */
 export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "bottom" }) {
   const [location] = useLocation();
   const activeSection = sectionFor(location);
+  const { enabled: sleepEnabled, toggle: toggleSleep } = useSleepMode();
+  const moon = sleepEnabled ? (
+    <button
+      type="button"
+      className="sleep-moon-indicator"
+      aria-label="Sleep Radio active — tap to exit"
+      title="Sleep Radio"
+      data-testid="sleep-moon"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSleep();
+      }}
+    >
+      ☾
+    </button>
+  ) : null;
   if (variant === "bottom") {
     return (
       <nav className="bottom-nav" aria-label="Primary">
@@ -41,8 +64,10 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
               className={`bottom-nav__link${active ? " bottom-nav__link--active" : ""}`}
               data-section={section}
               aria-current={active ? "page" : undefined}
+              onClick={section === "lore" ? () => { recordWordmarkTap(); } : undefined}
             >
               {label}
+              {section === "lore" ? moon : null}
             </Link>
           );
         })}
@@ -61,8 +86,10 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
             className={`corner-nav__link corner-nav__link--${section === "lore" ? "left" : "right"}${active ? " corner-nav__link--active" : ""}`}
             data-section={section}
             aria-current={active ? "page" : undefined}
+            onClick={section === "lore" ? () => { recordWordmarkTap(); } : undefined}
           >
             {label}
+            {section === "lore" ? moon : null}
           </Link>
         );
       })}

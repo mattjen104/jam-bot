@@ -19,6 +19,11 @@ import { sql } from "drizzle-orm";
  * this migration (or add a new sibling migration) with the matching LIKE
  * predicates so the retroactive hide covers them too.
  *
+ * Sleep Radio interaction: rows already classified as sleep stations
+ * (sleep_mode=true, set by applySleepStationsMigration which runs first) are
+ * excluded — sleep classification takes precedence over permanent hiding so
+ * those stations remain reachable through GET /api/stations?mode=sleep.
+ *
  * CHMR and CISM restore procedure
  * ────────────────────────────────
  * These stations are hidden only while `now_playing_source IS NULL`. Once a
@@ -37,6 +42,7 @@ import { sql } from "drizzle-orm";
  * null nowPlayingSource does not overwrite a configured one.
  *
  * @see artifacts/api-server/src/lore/radio-browser.ts (RADIO_BROWSER_NAME_BLOCKLIST)
+ * @see artifacts/api-server/src/lore/sleep-stations-migration.ts (runs before this)
  * @see artifacts/api-server/src/lore/seed.ts (seedStations — COALESCE guard)
  * @see artifacts/api-server/src/routes/lore/admin.ts (PATCH .../now-playing-source)
  */
@@ -48,12 +54,40 @@ export async function applyStationBlocklistHideMigration(): Promise<void> {
       AND (
         LOWER(name) LIKE '%exclusively %'
         OR LOWER(name) LIKE '%epic lounge%'
+        OR LOWER(name) LIKE '%café calm%'
+        OR LOWER(name) LIKE '%cafe calm%'
+        OR LOWER(name) LIKE '%chillhop%'
+        OR LOWER(name) LIKE '%lofi girl%'
+        OR LOWER(name) LIKE '%lo-fi girl%'
+        OR LOWER(name) LIKE '%lofi hip hop%'
+        OR LOWER(name) LIKE '%lo-fi hip hop%'
+        OR LOWER(name) LIKE '%lofi hip-hop%'
+        OR LOWER(name) LIKE '%lo-fi hip-hop%'
+        OR LOWER(name) LIKE '%100 percent covers%'
+        OR LOWER(name) LIKE '%100% covers%'
+        OR LOWER(name) LIKE '%coffee%'
+        OR LOWER(name) LIKE '%cafe radio%'
+        OR LOWER(name) LIKE '%café radio%'
+        OR LOWER(name) LIKE '%radio cafe%'
+        OR LOWER(name) LIKE '%radio café%'
+        OR LOWER(name) LIKE '%lounge cafe%'
+        OR LOWER(name) LIKE '%lounge café%'
+        OR LOWER(name) LIKE '%cafe del mar%'
+        OR LOWER(name) LIKE '%café del mar%'
+        OR LOWER(name) LIKE '%hotel lounge%'
+        OR LOWER(name) LIKE '%0r - %'
+        OR LOWER(name) LIKE '%study beats%'
+        OR LOWER(name) LIKE '%study lofi%'
+        OR LOWER(name) LIKE '%chill beats%'
+        OR LOWER(name) LIKE '%relaxing music%'
+        OR LOWER(name) LIKE '%background music%'
         -- Only hide CHMR/CISM while they still lack a now-playing source.
         -- Once an operator has configured one (via PATCH .../now-playing-source)
         -- and unhidden the station, this predicate becomes false and the
         -- migration is a permanent no-op — the restore survives restarts.
         OR (slug IN ('chmr', 'cism') AND now_playing_source IS NULL)
       )
+      AND (sleep_mode IS NULL OR sleep_mode = false)
   `);
   const affected = (result as { rowCount?: number }).rowCount ?? 0;
   console.info(

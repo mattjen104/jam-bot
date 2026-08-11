@@ -66,6 +66,7 @@ import type {
   ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
   ListPickersParams,
+  ListStationsParams,
   LookupPickedMbidsParams,
   ManualSpinRequest,
   ManualSpinResponse,
@@ -523,41 +524,57 @@ export function useGetOembed<
 
  * @summary List curated radio stations
  */
-export const getListStationsUrl = () => {
-  return `/api/stations`;
+export const getListStationsUrl = (params?: ListStationsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations?${stringifiedParams}`
+    : `/api/stations`;
 };
 
 export const listStations = async (
+  params?: ListStationsParams,
   options?: RequestInit,
 ): Promise<StationList> => {
-  return customFetch<StationList>(getListStationsUrl(), {
+  return customFetch<StationList>(getListStationsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListStationsQueryKey = () => {
-  return [`/api/stations`] as const;
+export const getListStationsQueryKey = (params?: ListStationsParams) => {
+  return [`/api/stations`, ...(params ? [params] : [])] as const;
 };
 
 export const getListStationsQueryOptions = <
   TData = Awaited<ReturnType<typeof listStations>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listStations>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: ListStationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListStationsQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getListStationsQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listStations>>> = ({
     signal,
-  }) => listStations({ signal, ...requestOptions });
+  }) => listStations(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listStations>>,
@@ -578,15 +595,18 @@ export type ListStationsQueryError = ErrorType<unknown>;
 export function useListStations<
   TData = Awaited<ReturnType<typeof listStations>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listStations>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListStationsQueryOptions(options);
+>(
+  params?: ListStationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStationsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

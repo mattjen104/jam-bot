@@ -24,6 +24,8 @@ const run = randomUUID().slice(0, 8);
 const SLUG = `test-rt-st-${run}`;
 const HIDDEN_SLUG = `test-rt-st-hidden-${run}`;
 const INACTIVE_SLUG = `test-rt-st-inactive-${run}`;
+const SLEEP_SLUG = `test-rt-st-sleep-${run}`;
+const SLEEP_INACTIVE_SLUG = `test-rt-st-sleep-inactive-${run}`;
 const MBID = `test-rt-st-rec-${run}`;
 const MIN = 60 * 1000;
 const base = Date.now() + 5 * MIN;
@@ -63,6 +65,27 @@ beforeAll(async () => {
         name: `Test RT Inactive ${run}`,
         streamUrl: "http://example.invalid/rt-inactive",
         stationClass: "community",
+        active: false,
+      },
+      // Sleep Radio station — hidden from the normal directory but returned
+      // by ?mode=sleep. hidden=true + sleepMode=true mirrors what the sleep
+      // migration writes.
+      {
+        slug: SLEEP_SLUG,
+        name: `Test RT Sleep ${run}`,
+        streamUrl: "http://example.invalid/rt-sleep",
+        stationClass: "community",
+        hidden: true,
+        sleepMode: true,
+      },
+      // Inactive sleep station — must not appear in either mode.
+      {
+        slug: SLEEP_INACTIVE_SLUG,
+        name: `Test RT Sleep Inactive ${run}`,
+        streamUrl: "http://example.invalid/rt-sleep-inactive",
+        stationClass: "community",
+        hidden: true,
+        sleepMode: true,
         active: false,
       },
     ])
@@ -116,6 +139,40 @@ describe("GET /api/stations", () => {
     const ours = body.stations.find((s: { slug: string }) => s.slug === SLUG);
     expect(ours).toMatchObject({ slug: SLUG, name: `Test RT Station ${run}` });
     expect(typeof ours.name).toBe("string");
+  });
+
+  it("excludes sleep stations from the default directory", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(`${baseUrl}/api/stations`);
+    const body = await res.json();
+    const slugs = body.stations.map((s: { slug: string }) => s.slug);
+    expect(slugs).not.toContain(SLEEP_SLUG);
+    expect(slugs).not.toContain(SLEEP_INACTIVE_SLUG);
+  });
+
+  it("?mode=sleep returns only active sleep stations — no ordinary or hidden rows", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(`${baseUrl}/api/stations?mode=sleep`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const slugs = body.stations.map((s: { slug: string }) => s.slug);
+    expect(slugs).toContain(SLEEP_SLUG);
+    // Inactive sleep stations stay out.
+    expect(slugs).not.toContain(SLEEP_INACTIVE_SLUG);
+    // Ordinary visible stations do not leak into sleep mode…
+    expect(slugs).not.toContain(SLUG);
+    // …and neither do ordinary hidden (non-sleep) stations.
+    expect(slugs).not.toContain(HIDDEN_SLUG);
+    expect(slugs).not.toContain(INACTIVE_SLUG);
+  });
+
+  it("rejects unknown mode values with a clear 400", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(`${baseUrl}/api/stations?mode=party`);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("party");
+    expect(body.error).toContain("sleep");
   });
 });
 

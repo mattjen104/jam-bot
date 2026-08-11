@@ -586,7 +586,10 @@ export function useBoundedPending(pending: boolean, deadlineMs: number): boolean
 }
 
 export type DialDisplayMode = "personal" | "blended";
-export function useDialData(displayMode: DialDisplayMode = "personal"): {
+export function useDialData(
+  displayMode: DialDisplayMode = "personal",
+  opts: { sleepMode?: boolean } = {},
+): {
   stations: DialStation[];
   isLoading: boolean;
   isCoreLoading: boolean;
@@ -665,7 +668,13 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
   }, []);
 
   // ── fetch stations ──────────────────────────────────────────────────────
-  const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations();
+  // Sleep Radio swaps the station source; the query key includes the params,
+  // so entering/leaving the mode refetches the right list automatically while
+  // the default (no-params) cache stays warm for the normal dial.
+  const sleepMode = opts.sleepMode === true;
+  const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations(
+    sleepMode ? { mode: "sleep" } : undefined,
+  );
 
   // ── live pulse (30s polling) ─────────────────────────────────────────────
   const { data: liveData, isLoading: liveLoading } = useListStationsNowPlaying({
@@ -937,7 +946,11 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     const window24hCutoffMs = Date.now() - 24 * 60 * 60 * 1000;
 
     return raw.map((station) => {
-      const isLive = liveBySlug.get(station.slug) ?? false;
+      // Sleep Radio: sleep stations are 24/7 ambient streams that are hidden
+      // from the now-playing pollers, so the live pulse never marks them
+      // recent. Treat every station in the sleep list as tunable ("live") so
+      // the dial renders them through the ordinary live pipeline.
+      const isLive = sleepMode ? true : (liveBySlug.get(station.slug) ?? false);
       const rawRuns = runsBySlug.get(station.slug) ?? [];
       const rawSpins = spinsBySlug.get(station.slug) ?? [];
 
@@ -1104,7 +1117,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // isCoreLoading: only block until the station list arrives so the offline

@@ -5,9 +5,13 @@ import {
   detectFormat,
   fetchStationsByTag,
   upsertRadioBrowserStations,
+  isSleepStation,
   MIN_BITRATE_KBPS,
   MIN_VOTES,
   RADIO_BROWSER_GENRE_WHITELIST,
+  RADIO_BROWSER_NAME_BLOCKLIST,
+  SLEEP_STATION_PATTERNS,
+  SLEEP_STATION_SLUGS,
   SEED_GENRE_TAGS,
   type RadioBrowserStation,
 } from "../src/lore/radio-browser.js";
@@ -149,6 +153,144 @@ describe("filterStations", () => {
   it("respects custom minVotes override", () => {
     expect(filterStations([makeStation({ votes: 50 })], { minVotes: 200 })).toHaveLength(0);
     expect(filterStations([makeStation({ votes: 50 })], { minVotes: 10 })).toHaveLength(1);
+  });
+
+  // --- Permanent blocklist: coffee-shop / covers / mood stations ---
+
+  it.each([
+    "100 Percent Covers",
+    "Café Calm",
+    "Cafe Calm - Coffeeshop Vibes",
+    "Chillhop Radio",
+    "Lofi Girl",
+    "Lo-Fi Girl 24/7",
+    "Lofi Hip Hop Beats",
+    "The Coffee Shop Radio",
+    "Coffeehouse Radio",
+    "#1 Splash Coffee",
+    "EPIC CLASSICAL - Classical Coffee Bar",
+    "1.FM - Cafe Radio",
+    "Play Radio Cafe",
+    "POP LOUNGE CAFE",
+    "Café del Mar CALM",
+    "0R - HOTEL LOUNGE || Chill, Jazz, Smooth",
+    "0R - PIANO JAZZ LOUNGE || Jazz, Piano",
+    "Study Beats FM",
+    "Chill Beats 24/7",
+    "Relaxing Music Channel",
+    "Best Background Music",
+    "Exclusively Fleetwood Mac",
+    "Epic Lounge Chill",
+  ])("permanently rejects blocklisted station %j", (name) => {
+    expect(filterStations([makeStation({ name })])).toHaveLength(0);
+  });
+
+  it("does not reject ordinary stations that merely resemble blocklist words", () => {
+    for (const name of ["KEXP 90.3 FM", "Radio Paradise", "WFMU", "Radio Caffeine Free"]) {
+      expect(filterStations([makeStation({ name })]), name).toHaveLength(1);
+    }
+  });
+
+  it("sleep classification wins over the mood-brand blocklist (0R sleep channel)", () => {
+    // "0R - MUSIC FOR SLEEP …" matches both the "0r - " mood-brand blocklist
+    // entry AND the "deep sleep" sleep pattern; the sleep policy must win so
+    // the station stays available via Sleep Radio instead of being dropped.
+    const name =
+      "0R - MUSIC FOR SLEEP || Sleep, Relax, Calm, Meditation, Deep Sleep";
+    expect(isSleepStation(name)).toBe(true);
+    expect(filterStations([makeStation({ name })])).toHaveLength(1);
+  });
+
+  // --- Sleep stations: retained (not blocked) so ingest can classify them ---
+
+  it.each([
+    "White Noise 24/7",
+    "Rain Sounds Radio",
+    "Sleep Sounds",
+    "Sleep Radio One",
+    "Baby Sleep Music",
+    "Deep Sleep FM",
+  ])("keeps sleep-pattern station %j for classification", (name) => {
+    expect(filterStations([makeStation({ name })])).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isSleepStation — shared sleep classification policy
+// ---------------------------------------------------------------------------
+
+describe("isSleepStation", () => {
+  it.each([
+    "White Noise 24/7",
+    "Rain Sounds Radio",
+    "Sleep Sounds",
+    "Lore Sleep Radio",
+    "Baby Sleep Music",
+    "Deep Sleep FM",
+  ])("classifies %j by name pattern", (name) => {
+    expect(isSleepStation(name)).toBe(true);
+  });
+
+  it.each([
+    "somafm-drone-zone",
+    "somafm-dronezone",
+    "drone-zone",
+    "somafm-groove-salad",
+    "somafm-groovesalad",
+    "groove-salad",
+    "somafm-space-station",
+    "somafm-spacestation",
+    "space-station",
+  ])("classifies slug %j (SomaFM ambient channels)", (slug) => {
+    expect(isSleepStation("Unrelated Name", slug)).toBe(true);
+  });
+
+  it.each([
+    "SomaFM — Drone Zone",
+    "SomaFM Drone Zone (128k AAC)",
+    "SomaFM — Groove Salad",
+    "SomaFM Groove Salad (128k MP3)",
+    "SomaFM Groove Salad Classic (128k MP3)",
+    "SomaFM — Space Station Soma",
+    "SomaFM Space Station Soma (128k AAC)",
+  ])("classifies every SomaFM ambient naming variant %j", (name) => {
+    expect(isSleepStation(name)).toBe(true);
+  });
+
+  it("does not classify a non-SomaFM station that mentions a channel word", () => {
+    // "space station" alone (without SomaFM) is not a designated channel.
+    expect(isSleepStation("Radio Space Station Berlin")).toBe(false);
+  });
+
+  it("does not classify ordinary stations", () => {
+    expect(isSleepStation("KEXP 90.3 FM", "kexp")).toBe(false);
+    expect(isSleepStation("SomaFM Left Coast 70s", "somafm-left-coast-70s")).toBe(false);
+    expect(isSleepStation(null)).toBe(false);
+    expect(isSleepStation("")).toBe(false);
+  });
+
+  it("is case-insensitive on names", () => {
+    expect(isSleepStation("WHITE NOISE HQ")).toBe(true);
+  });
+
+  it("every documented sleep pattern and slug is honored (policy/migration sync)", () => {
+    for (const p of SLEEP_STATION_PATTERNS) {
+      expect(isSleepStation(`Station ${p} FM`), p).toBe(true);
+    }
+    for (const s of SLEEP_STATION_SLUGS) {
+      expect(isSleepStation("Any Name", s), s).toBe(true);
+    }
+  });
+
+  it("sleep patterns never overlap the permanent blocklist", () => {
+    // A name matching a sleep pattern must not also be permanently blocked,
+    // otherwise ingest would drop a station the sleep policy wants to retain.
+    for (const p of SLEEP_STATION_PATTERNS) {
+      const blocked = (RADIO_BROWSER_NAME_BLOCKLIST as readonly string[]).some((b) =>
+        p.includes(b),
+      );
+      expect(blocked, `sleep pattern "${p}" collides with the blocklist`).toBe(false);
+    }
   });
 });
 
@@ -371,6 +513,46 @@ describe("upsertRadioBrowserStations", () => {
     );
     expect(count).toBe(1);
     expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
+  });
+
+  it("inserts sleep-pattern stations with sleepMode=true and hidden=true", async () => {
+    const { db } = await import("@workspace/db");
+    const station = makeStation({ name: "Rain Sounds Radio" });
+    await upsertRadioBrowserStations([station], "ambient");
+
+    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).toBeDefined();
+    expect(payload.sleepMode).toBe(true);
+    expect(payload.hidden).toBe(true);
+  });
+
+  it("inserts SomaFM ambient channels (by slug) as sleep stations", async () => {
+    const { db } = await import("@workspace/db");
+    const station = makeStation({ name: "SomaFM Groove Salad" }); // slug: somafm-groove-salad
+    await upsertRadioBrowserStations([station], "ambient");
+
+    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.sleepMode).toBe(true);
+    expect(payload.hidden).toBe(true);
+  });
+
+  it("inserts ordinary stations with sleepMode=false and hidden=false", async () => {
+    const { db } = await import("@workspace/db");
+    const station = makeStation({ name: "Boot Liquor Americana" });
+    await upsertRadioBrowserStations([station], "americana");
+
+    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.sleepMode).toBe(false);
+    expect(payload.hidden).toBe(false);
   });
 });
 

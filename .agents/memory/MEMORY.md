@@ -119,3 +119,4 @@
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).
 - [Completion review vs pre-existing tree](task-review-preexisting-tree.md) — checkpoint auto-commits bundle stale working-tree changes into your task's review range; prove scope via diff against mainline tip + drift_reason, don't blind-revert.
 - [Icecast 400-on-HEAD probing](icecast-probe-400.md) — bare HEAD/curl -I gets 400 from healthy Icecast servers; probe with GET + Icy-MetaData:1, and try the https:// variant before assuming a stream is HTTP-only.
+- [IF NOT EXISTS constraint drift](if-not-exists-constraint-drift.md) — boot DDL can't add a missing PK to a pre-existing table; ON CONFLICT "no unique constraint" errors mean check pg_constraint, not the migration code.

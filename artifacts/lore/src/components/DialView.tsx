@@ -18,6 +18,7 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { useSocialMode } from "../lib/social";
+import { useSleepMode } from "../lib/sleepMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   cleanLiveValue,
@@ -1521,6 +1522,7 @@ export function DialView() {
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const { enabled: socialEnabled } = useSocialMode();
+  const { enabled: sleepEnabled } = useSleepMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
   const {
@@ -1541,7 +1543,7 @@ export function DialView() {
     crossingsPhase,
     stationsError,
     refetchStations,
-  } = useDialData(displayMode);
+  } = useDialData(displayMode, { sleepMode: sleepEnabled });
   // Defensive default keeps older mocks (which don't provide the phase) on the
   // legacy behavior; the real hook always supplies it.
   const cxPhase = crossingsPhase ?? "settled";

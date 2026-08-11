@@ -65,6 +65,13 @@ export async function setup(): Promise<void> {
       "../src/lore/lifetime-crossings-migration.js"
     );
     await applyLifetimeCrossingsMigration();
+
+    // Ensures sleep_mode column exists — required by any test that inserts
+    // into stationsTable after the schema added this column.
+    const { applySleepStationsMigration } = await import(
+      "../src/lore/sleep-stations-migration.js"
+    );
+    await applySleepStationsMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

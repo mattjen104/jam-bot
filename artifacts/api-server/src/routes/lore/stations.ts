@@ -343,7 +343,9 @@ const fingerprintLimiter = rateLimit({
 });
 
 // GET /api/stations
-// Only active=true, non-hidden, crossing-eligible stations are returned.
+// Default (no mode): active=true, non-hidden, crossing-eligible stations only.
+// ?mode=sleep: active=true, sleep_mode=true stations (hidden=true intentional).
+// Unknown mode values return 400.
 // Longtail candidates (active=false) are health-gated and must not appear in
 // the public directory. crossingEligible=false stations (e.g. FIP sub-channels)
 // continue to ingest and accumulate history but are excluded from the crossing
@@ -352,7 +354,24 @@ const fingerprintLimiter = rateLimit({
 // in the same transaction as each scraped_shows replace, so no second query
 // is needed here. LEFT JOINs station_quality to include qualityTier so the
 // dial UI can badge or deprioritize low-quality stations.
-router.get("/stations", h(async (_req, res) => {
+router.get("/stations", h(async (req, res) => {
+  const rawMode = typeof req.query.mode === "string" ? req.query.mode.trim() : undefined;
+  if (rawMode !== undefined && rawMode !== "sleep") {
+    return res.status(400).json({ error: `Unknown mode: "${rawMode}". Supported values: sleep` });
+  }
+  const isSleepMode = rawMode === "sleep";
+
+  const whereClause = isSleepMode
+    ? and(
+        eq(stationsTable.active, true),
+        eq(stationsTable.sleepMode, true),
+      )
+    : and(
+        eq(stationsTable.active, true),
+        eq(stationsTable.hidden, false),
+        eq(stationsTable.crossingEligible, true),
+      );
+
   const rows = await db
     .select({
       station: stationsTable,
@@ -363,11 +382,7 @@ router.get("/stations", h(async (_req, res) => {
       stationQualityTable,
       eq(stationQualityTable.stationId, stationsTable.id),
     )
-    .where(and(
-      eq(stationsTable.active, true),
-      eq(stationsTable.hidden, false),
-      eq(stationsTable.crossingEligible, true),
-    ))
+    .where(whereClause)
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   const now = new Date();

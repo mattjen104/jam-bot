@@ -3413,6 +3413,12 @@ export type GetStationsRecentSpinsParams = {
   date: string;
 };
 
+export type ListStationsParams = {
+  /**
+   * Station set to retrieve. Omit for the normal public directory. `sleep` returns only active Sleep Radio stations (ambient/utility channels hidden from the normal dial). Unknown values return 400.
+   */
+  mode?: "sleep";
+};
 export type GetStationsScheduleParams = {
   /**
    * Calendar day in YYYY-MM-DD format (UTC).

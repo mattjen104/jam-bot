@@ -65,11 +65,124 @@ export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
   // through human-curated radio.  The "Exclusively X" family from Radio
   // Browser is the primary example; the prefix match catches all variants.
   "exclusively ",
+  // Coffee-shop, covers, and algorithmic mood/background stations.
+  "café calm",
+  "cafe calm",
+  "chillhop",
+  "lofi girl",
+  "lo-fi girl",
+  "lofi hip hop",
+  "lo-fi hip hop",
+  "lofi hip-hop",
+  "lo-fi hip-hop",
+  "100 percent covers",
+  "100% covers",
+  // Coffee/cafe-named stations are background formats, not human-curated
+  // programming ("#1 Splash Coffee", "Classical Coffee Bar", "COFFEE LOUNGE").
+  "coffee",
+  "cafe radio",
+  "café radio",
+  "radio cafe",
+  "radio café",
+  "lounge cafe",
+  "lounge café",
+  "cafe del mar",
+  "café del mar",
+  "hotel lounge",
+  // "0R - <MOOD>" is an algorithmic mood-channel brand (HOTEL LOUNGE,
+  // ROMANTIC PIANO, PIANO JAZZ LOUNGE, …). The sleep classification wins
+  // first, so "0R - MUSIC FOR SLEEP" stays available via Sleep Radio.
+  "0r - ",
+  "study beats",
+  "study lofi",
+  "chill beats",
+  "relaxing music",
+  "background music",
+] as const);
+
+/**
+ * Name substrings (case-insensitive) that mark a station as a Sleep Radio
+ * station rather than a permanent blocklist exclusion. These stations are
+ * retained in the database with sleep_mode=true and hidden=true so they
+ * remain available through GET /api/stations?mode=sleep.
+ *
+ * **Important:** this list and the applySleepStationsMigration SQL predicates
+ * must stay in sync. When adding a new pattern here, also add the matching
+ * LIKE predicate to the migration.
+ * See `artifacts/api-server/src/lore/sleep-stations-migration.ts`.
+ */
+export const SLEEP_STATION_PATTERNS = Object.freeze([
+  "white noise",
+  "rain sound",
+  "sleep sound",
+  "sleep radio",
+  "baby sleep",
+  "deep sleep",
+  // Specific sleep-utility brands already in the pool that advertise
+  // themselves as sleep aids without matching the generic patterns above.
+  "sleeping pill",
+  "music for sleep",
+  "positively sleep",
+  "nature radio sleep",
+  "nature radio rain",
+] as const);
+
+/**
+ * Designated SomaFM ambient channels moved into Sleep Radio: Drone Zone,
+ * Groove Salad, and Space Station. Matched by channel name (case-insensitive)
+ * whenever the station name also mentions SomaFM — this covers every naming
+ * variant in the database ("SomaFM — Drone Zone", "SomaFM Groove Salad
+ * (128k MP3)", "SomaFM Space Station Soma (128k AAC)", "SomaFM Groove Salad
+ * Classic", …) without needing per-variant slugs.
+ */
+export const SOMAFM_SLEEP_CHANNELS = Object.freeze([
+  "drone zone",
+  "groove salad",
+  "space station",
+] as const);
+
+/**
+ * Exact slugs for designated SomaFM sleep/ambient stations that should be
+ * classified as sleep mode rather than blocked entirely. Kept alongside the
+ * name-based SOMAFM_SLEEP_CHANNELS match as a belt-and-suspenders guard for
+ * rows whose name lost the "SomaFM" prefix.
+ */
+export const SLEEP_STATION_SLUGS = Object.freeze([
+  "somafm-drone-zone",
+  "somafm-dronezone",
+  "drone-zone",
+  "somafm-groove-salad",
+  "somafm-groovesalad",
+  "groove-salad",
+  "somafm-space-station",
+  "somafm-spacestation",
+  "space-station",
 ] as const);
 
 function isNameBlocked(name: string | null | undefined): boolean {
   const lower = (name ?? "").toLowerCase();
   return RADIO_BROWSER_NAME_BLOCKLIST.some((b) => lower.includes(b));
+}
+
+/**
+ * Check if a station name or slug matches the Sleep Radio patterns.
+ * Returns true when the station should be retained with sleep_mode=true
+ * instead of being permanently blocked.
+ */
+export function isSleepStation(name: string | null | undefined, slug?: string | null): boolean {
+  const lower = (name ?? "").toLowerCase();
+  if (SLEEP_STATION_PATTERNS.some((p) => lower.includes(p))) return true;
+  // SomaFM ambient channels — matched by channel name so every bitrate/format
+  // variant row ("SomaFM Groove Salad (128k MP3)", "SomaFM — Drone Zone", …)
+  // classifies consistently.
+  if (
+    lower.includes("somafm") &&
+    SOMAFM_SLEEP_CHANNELS.some((c) => lower.includes(c))
+  ) {
+    return true;
+  }
+  if (slug) return (SLEEP_STATION_SLUGS as readonly string[]).includes(slug);
+  return false;
 }
 
 /**
@@ -233,7 +346,10 @@ export function filterStations(
     if (!s.lastcheckok) continue;
     const streamUrl = (s.url_resolved || s.url || "").trim();
     if (!streamUrl || !s.name?.trim()) continue;
-    if (isNameBlocked(s.name)) continue;
+    // Sleep stations are retained (not permanently blocked) — they pass
+    // filtering and get written to the DB as sleep_mode=true + hidden=true
+    // during upsert. Permanently blocklisted stations are rejected here.
+    if (isNameBlocked(s.name) && !isSleepStation(s.name)) continue;
     // Reject if known bitrate is below threshold; bitrate=0 means unknown → allow.
     if (s.bitrate > 0 && s.bitrate < minBitrate) continue;
     // Reject if below community vote threshold.
@@ -280,6 +396,9 @@ export async function upsertRadioBrowserStations(
       }
     }
 
+    // Classify as sleep station before upsert.
+    const sleepStation = isSleepStation(baseName, slug);
+
     try {
       const [stationRow] = await db
         .insert(stationsTable)
@@ -301,6 +420,10 @@ export async function upsertRadioBrowserStations(
           active: false,
           stationClass: "curated",
           nowPlayingSource: "radio_browser_icy",
+          // Sleep stations are inserted hidden so they never surface in the
+          // normal public dial. They remain accessible via ?mode=sleep.
+          hidden: sleepStation,
+          sleepMode: sleepStation,
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -314,6 +437,13 @@ export async function upsertRadioBrowserStations(
             // Only (re)activate ICY polling for genuine radio-browser rows —
             // never clobber a curated station that happens to share a slug.
             nowPlayingSource: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN 'radio_browser_icy' ELSE ${stationsTable.nowPlayingSource} END`,
+            // Ensure sleep classification is applied consistently on re-ingest.
+            // The sleep policy is name/slug-based, so a matching station stays
+            // classified regardless of source; a previously-classified row is
+            // never un-classified by re-discovery (the boot migration owns
+            // retroactive classification).
+            hidden: sql`CASE WHEN ${sql.raw("EXCLUDED.sleep_mode")} THEN true ELSE ${stationsTable.hidden} END`,
+            sleepMode: sql`CASE WHEN ${sql.raw("EXCLUDED.sleep_mode")} THEN true ELSE ${stationsTable.sleepMode} END`,
             updatedAt: new Date(),
           },
         })

@@ -144,6 +144,19 @@ paths:
         The public directory of curated, high-quality radio stations. Each
         station carries its own sanctioned live stream URL (played unmodified),
         a quality badge, and attribution links (homepage + donate).
+        Pass `mode=sleep` to retrieve the Sleep Radio station list instead of
+        the normal public directory. Unknown mode values return 400.
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: >
+            Station set to retrieve. Omit for the normal public directory.
+            `sleep` returns only active Sleep Radio stations (ambient/utility
+            channels hidden from the normal dial). Unknown values return 400.
+          schema:
+            type: string
+            enum: [sleep]
       responses:
         "200":
           description: Station directory
@@ -151,6 +164,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationList"
+        "400":
+          description: Unknown mode value
   /stations/artist-frequency:
     get:
       operationId: getStationsArtistFrequency

@@ -1438,6 +1438,27 @@
 .corner-nav__link--active[data-section="lore"]    { color: hsl(var(--accent)); }
 .corner-nav__link--active[data-section="library"] { color: hsl(var(--library)); }
 
+/* ── Sleep Radio moon — subtle indicator beside the [lore] wordmark while
+   the hidden Sleep Radio mode is active. Tapping it deactivates the mode.
+   Deliberately quiet: small, dim, no label. */
+.sleep-moon-indicator {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85em;
+  line-height: 1;
+  color: hsl(var(--accent) / 0.75);
+  text-decoration: none;
+  vertical-align: baseline;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .2s ease;
+}
+.sleep-moon-indicator:hover { color: hsl(var(--accent)); }
+.sleep-moon-indicator:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+
 /* ── Bottom nav row — Spotify-style mobile menu inside the bottom shell ────
    Rendered below the mini player at the very bottom of the screen. Hidden on
    desktop (the corner-nav treatment stays); shown at phone widths where the

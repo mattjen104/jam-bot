@@ -31,6 +31,45 @@ describe("applyStationBlocklistHideMigration", () => {
     expect(rendered).toContain("cism");
   });
 
+  it("covers the coffee-shop/covers/mood patterns retroactively", async () => {
+    await applyStationBlocklistHideMigration();
+    const { db } = await import("@workspace/db");
+    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const rendered: string = JSON.stringify(execute.mock.calls[0]?.[0]);
+    for (const pattern of [
+      "exclusively ",
+      "café calm",
+      "cafe calm",
+      "chillhop",
+      "lofi girl",
+      "lofi hip hop",
+      "100 percent covers",
+      "coffee",
+      "cafe radio",
+      "radio cafe",
+      "lounge cafe",
+      "cafe del mar",
+      "hotel lounge",
+      "0r - ",
+      "study beats",
+      "chill beats",
+      "relaxing music",
+      "background music",
+    ]) {
+      expect(rendered, pattern).toContain(pattern);
+    }
+  });
+
+  it("never re-hides or reclassifies sleep-mode stations", async () => {
+    await applyStationBlocklistHideMigration();
+    const { db } = await import("@workspace/db");
+    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const rendered: string = JSON.stringify(execute.mock.calls[0]?.[0]);
+    // The guard keeps sleep stations owned by the sleep migration — this
+    // migration must skip rows where sleep_mode is already true.
+    expect(rendered).toContain("sleep_mode");
+  });
+
   it("propagates database errors", async () => {
     const { db } = await import("@workspace/db");
     (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
