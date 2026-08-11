@@ -1129,6 +1129,8 @@ function spinitronCollegeStations(): InsertStation[] {
       // at whpk-stream.uchicago.edu — confirmed 200 audio/mpeg from the Replit
       // container (2026-08). Returns 400 on HEAD (normal Icecast behaviour)
       // but streams correctly on GET. 256kbps MP3.
+      // CORS: Access-Control-Allow-Origin: * on GET — confirmed browser-safe
+      // (2026-08). No mixed-content issues; pure HTTPS, standard port 443.
       streamUrl: "https://whpk-stream.uchicago.edu/stream",
       streamQuality: "256kbps MP3",
       streamFormat: "mp3",
@@ -1168,6 +1170,8 @@ function spinitronCollegeStations(): InsertStation[] {
       // confirmed 200 audio/mpeg from the Replit container (2026-08). Returns
       // 400 on HEAD (normal Icecast behaviour) but streams correctly on GET.
       // 128kbps MP3.
+      // CORS: Access-Control-Allow-Origin: * on GET — confirmed browser-safe
+      // (2026-08). No mixed-content issues; pure HTTPS, standard port 443.
       streamUrl: "https://stream.wzbc.org/wzbc",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -1186,7 +1190,10 @@ function spinitronCollegeStations(): InsertStation[] {
       // stream.wrct.org — WRCT's own site links both URLs; streamalt is the
       // CDN-fronted path. Confirmed 200 audio/mpeg from the Replit container
       // (2026-08). ICY headers present; icy-main-stream-url points to the
-      // HTTP origin. 128kbps MP3.
+      // HTTP origin — this is metadata only, not a redirect, so it does not
+      // cause mixed-content issues in the browser. 128kbps MP3.
+      // CORS: access-control-allow-origin: * from Cloudflare — confirmed
+      // browser-safe (2026-08). HTTP/2 on standard port 443.
       streamUrl: "https://streamalt.wrct.org/wrct-hi.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -1262,8 +1269,12 @@ function spinitronCollegeStations(): InsertStation[] {
       country: "US",
       // Duke's own Icecast server at weeping.wxdu.duke.edu with TLS on port
       // 8443 — confirmed 200 audio/mpeg from the Replit container (2026-08).
-      // 128kbps MP3. The station's site also references an HTTP mirror at
-      // 152.3.0.231:8000; the HTTPS port-8443 URL is preferred.
+      // 128kbps MP3. The server sends no Access-Control-Allow-Origin header,
+      // but that is irrelevant for plain <audio src> playback: CORS only
+      // blocks programmatic data access (Web Audio API / canvas). The Lore
+      // player uses new Audio() + el.src with no crossOrigin attribute and no
+      // AudioContext, so Chromium plays this stream without restriction.
+      // Browser fetch confirmed 200 audio/mpeg (2026-08).
       streamUrl: "https://weeping.wxdu.duke.edu:8443/wxdu128.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -1303,6 +1314,9 @@ function spinitronCollegeStations(): InsertStation[] {
       // WICB's site links this as the primary stream. Both MP3 and AAC+
       // mounts confirmed 200 from the Replit container (2026-08); MP3 used
       // for broad player compatibility. 128kbps MP3.
+      // CORS: kh15 Icecast build reflects any Origin header back as
+      // Access-Control-Allow-Origin — confirmed browser-safe from any origin
+      // (2026-08). No mixed-content issues; pure HTTPS, standard port 443.
       streamUrl: "https://icecast.do.zufall.co/wicb_mp3_high",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",

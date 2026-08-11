@@ -130,6 +130,29 @@ export async function applyAttendanceMigration(): Promise<void> {
     stepErrors.push({ step: "create_attendance_rollups", err });
   }
 
+  // Databases created before the PRIMARY KEY was included in the CREATE TABLE
+  // statement will not have a unique constraint on (user_id, recording_mbid),
+  // causing onConflictDoUpdate calls in the heartbeat path to fail with 42P10.
+  try {
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'attendance_rollups'::regclass
+            AND contype = 'p'
+        ) THEN
+          ALTER TABLE attendance_rollups
+            ADD CONSTRAINT attendance_rollups_pkey
+            PRIMARY KEY (user_id, recording_mbid);
+        END IF;
+      END
+      $$
+    `);
+  } catch (err) {
+    stepErrors.push({ step: "attendance_rollups_add_pkey", err });
+  }
+
   try {
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS attendance_rollups_user_idx
@@ -275,6 +298,30 @@ export async function applyAttendanceMigration(): Promise<void> {
     `);
   } catch (err) {
     stepErrors.push({ step: "create_attendance_weekly_rollups", err });
+  }
+
+  // Databases created before the PRIMARY KEY was added to the CREATE TABLE
+  // statement above will not have a unique constraint on the three columns,
+  // causing ON CONFLICT clauses to fail with 42P10. This step adds the
+  // primary key idempotently via pg_constraint introspection.
+  try {
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'attendance_weekly_rollups'::regclass
+            AND contype = 'p'
+        ) THEN
+          ALTER TABLE attendance_weekly_rollups
+            ADD CONSTRAINT attendance_weekly_rollups_pkey
+            PRIMARY KEY (user_id, recording_mbid, iso_week);
+        END IF;
+      END
+      $$
+    `);
+  } catch (err) {
+    stepErrors.push({ step: "attendance_weekly_rollups_add_pkey", err });
   }
 
   try {
