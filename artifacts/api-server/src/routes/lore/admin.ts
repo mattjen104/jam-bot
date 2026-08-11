@@ -1611,6 +1611,8 @@ router.get("/admin/stations", h(async (_req, res) => {
 // GET /api/admin/stations/flags — every station (incl. inactive/hidden) with
 // the curation flags. Plain JSON (deliberately outside the OpenAPI surface —
 // consumed only by the admin UI via plain fetch).
+// Includes nowPlayingConfig so operators can verify the full source state when
+// evaluating whether a hidden station (e.g. CHMR/CISM) is ready to restore.
 router.get("/admin/stations/flags", h(async (_req, res) => {
   const rows = await db
     .select({
@@ -1622,6 +1624,7 @@ router.get("/admin/stations/flags", h(async (_req, res) => {
       active: stationsTable.active,
       source: stationsTable.source,
       nowPlayingSource: stationsTable.nowPlayingSource,
+      nowPlayingConfig: stationsTable.nowPlayingConfig,
       logoUrl: stationsTable.logoUrl,
       favorite: stationsTable.favorite,
       hidden: stationsTable.hidden,
@@ -1754,11 +1757,142 @@ router.patch("/admin/stations/:id/timezone", h(async (req, res) => {
   return res.json(updated);
 }));
 
+// PATCH /api/admin/stations/:id/now-playing-source — configure the now-playing
+// source and config for a station (typically a hidden one) before restoring it
+// to the dial. This is step 1 of the CHMR/CISM restore procedure:
+//
+//   1. PATCH /api/admin/stations/:id/now-playing-source
+//      Body: { nowPlayingSource, nowPlayingConfig, streamUrl? }
+//   2. PATCH /api/admin/stations/:id/flags  { hidden: false }
+//
+// The source must be a recognised pollable value (checked via isPollable).
+// Setting nowPlayingSource to null is also accepted when an operator needs to
+// clear an incorrectly configured source — but note the blocklist-hide
+// migration will re-hide CHMR/CISM on the next restart while source is null.
+//
+// This endpoint does NOT unhide the station; operators must issue the flags
+// PATCH separately so the unhide is an explicit, auditable action distinct from
+// the source configuration step.
+router.patch("/admin/stations/:id/now-playing-source", h(async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid station id" });
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const rawSource = body["nowPlayingSource"];
+  const rawConfig = body["nowPlayingConfig"];
+  const rawStreamUrl = body["streamUrl"];
+
+  // nowPlayingSource: must be a known pollable string, or null to clear.
+  if (rawSource !== null && rawSource !== undefined && typeof rawSource !== "string") {
+    return res.status(400).json({ error: "nowPlayingSource must be a string or null" });
+  }
+  const source: string | null = typeof rawSource === "string" ? rawSource.trim() : null;
+  if (source !== null && !isPollable(source)) {
+    return res.status(400).json({
+      error: `Unknown nowPlayingSource: "${source}". Must be a recognised adapter value (e.g. radio_browser_icy, spinitron, spinitron_web, kexp_api, kcrw, bbc_api, somafm).`,
+    });
+  }
+
+  // nowPlayingConfig: must be a plain object (or null/absent to clear).
+  if (
+    rawConfig !== null &&
+    rawConfig !== undefined &&
+    (typeof rawConfig !== "object" || Array.isArray(rawConfig))
+  ) {
+    return res.status(400).json({ error: "nowPlayingConfig must be a plain object or null" });
+  }
+  const config = (rawConfig != null ? rawConfig : null) as Record<string, unknown> | null;
+
+  // streamUrl: optional — only update when explicitly provided in body.
+  const hasStreamUrl = Object.prototype.hasOwnProperty.call(body, "streamUrl");
+  if (hasStreamUrl && rawStreamUrl !== null && typeof rawStreamUrl !== "string") {
+    return res.status(400).json({ error: "streamUrl must be a string or null" });
+  }
+
+  // Build the update in two passes to keep Drizzle's strict column typing.
+  // Base columns are always written; streamUrl is only updated when the caller
+  // explicitly included it in the request body.
+  const streamUrlValue = hasStreamUrl
+    ? (typeof rawStreamUrl === "string" ? rawStreamUrl.trim() : null)
+    : undefined;
+
+  const [updated] = await (hasStreamUrl
+    ? db
+        .update(stationsTable)
+        .set({
+          nowPlayingSource: source,
+          nowPlayingConfig: config,
+          streamUrl: streamUrlValue!,
+          updatedAt: new Date(),
+        })
+        .where(eq(stationsTable.id, id))
+        .returning({
+          id: stationsTable.id,
+          slug: stationsTable.slug,
+          name: stationsTable.name,
+          nowPlayingSource: stationsTable.nowPlayingSource,
+          nowPlayingConfig: stationsTable.nowPlayingConfig,
+          streamUrl: stationsTable.streamUrl,
+          hidden: stationsTable.hidden,
+        })
+    : db
+        .update(stationsTable)
+        .set({
+          nowPlayingSource: source,
+          nowPlayingConfig: config,
+          updatedAt: new Date(),
+        })
+        .where(eq(stationsTable.id, id))
+        .returning({
+          id: stationsTable.id,
+          slug: stationsTable.slug,
+          name: stationsTable.name,
+          nowPlayingSource: stationsTable.nowPlayingSource,
+          nowPlayingConfig: stationsTable.nowPlayingConfig,
+          streamUrl: stationsTable.streamUrl,
+          hidden: stationsTable.hidden,
+        }));
+  if (!updated) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  // If the station is already visible (hidden=false), immediately re-enroll
+  // with the new source so polling switches over without a restart.
+  if (!updated.hidden) {
+    const [fullRow] = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.id, id))
+      .limit(1);
+    if (fullRow) enrollStationPoller(fullRow);
+  }
+
+  console.info(
+    JSON.stringify({
+      severity: "info",
+      action: "now-playing-source-updated",
+      stationId: updated.id,
+      slug: updated.slug,
+      nowPlayingSource: updated.nowPlayingSource,
+      hidden: updated.hidden,
+    }),
+  );
+
+  return res.json(updated);
+}));
+
 // PATCH /api/admin/stations/:id/flags — toggle favorite/hidden and apply the
 // change to the live poller immediately (no restart):
 //   hidden=true  → all polling/watching stops (soft-hide; row + history kept)
 //   hidden=false → re-enrolled (watcher iff favorite ICY, else interval poll)
 //   favorite toggles re-enroll so the watcher/interval choice is re-evaluated.
+//
+// Safety guard: setting hidden=false is rejected when the station has no
+// now-playing source configured (nowPlayingSource IS NULL). An unhidden station
+// with no source would appear on the dial but never produce spins. Configure
+// the source first via PATCH /api/admin/stations/:id/now-playing-source.
 router.patch("/admin/stations/:id/flags", h(async (req, res) => {
   const id = Number(req.params["id"]);
   if (!Number.isInteger(id) || id <= 0) {
@@ -1772,6 +1906,27 @@ router.patch("/admin/stations/:id/flags", h(async (req, res) => {
     return res
       .status(400)
       .json({ error: "Body must set favorite and/or hidden (booleans)" });
+  }
+
+  // Guard: refuse to unhide a station that has no now-playing source. Fetch
+  // the current row first so we can check without updating first.
+  if (patch.hidden === false) {
+    const [current] = await db
+      .select({ nowPlayingSource: stationsTable.nowPlayingSource })
+      .from(stationsTable)
+      .where(eq(stationsTable.id, id))
+      .limit(1);
+    if (!current) {
+      return res.status(404).json({ error: "Station not found" });
+    }
+    if (!current.nowPlayingSource) {
+      return res.status(422).json({
+        error:
+          "Cannot unhide station: no now-playing source is configured. " +
+          "Set one first via PATCH /api/admin/stations/:id/now-playing-source, " +
+          "then retry this request.",
+      });
+    }
   }
 
   const [updated] = await db

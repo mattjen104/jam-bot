@@ -329,7 +329,14 @@ function canadianCampusStations(): InsertStation[] {
       //     no public song endpoint accessible without credentials.
       //   • StatsRadio API (api.statsradio.com) — CHMR slug invalid (404).
       //   • TuneIn guide_id s24751 — show-level subtext only, no track data.
-      // nowPlayingSource is null until a working source is identified.
+      //
+      // nowPlayingSource is null (and hidden=true) until a working source is
+      // confirmed. Restore procedure when a source becomes available:
+      //   1. PATCH /api/admin/stations/:id/now-playing-source
+      //      { nowPlayingSource, nowPlayingConfig }
+      //   2. PATCH /api/admin/stations/:id/flags  { hidden: false }
+      // Both the blocklist-hide migration and this seed upsert are no-ops once
+      // nowPlayingSource is non-null, so the restore survives server restarts.
       streamUrl: "http://192.99.14.49:9005/live128",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -360,7 +367,14 @@ function canadianCampusStations(): InsertStation[] {
       //   • StatsRadio API — CISM slug returns NO_PLAYING_SONG (not a valid
       //     registered station; the slug match is unvalidated).
       //   • TuneIn guide_id s24807 — show-level subtext only, no track data.
-      // nowPlayingSource is null until a working source is identified.
+      //
+      // nowPlayingSource is null (and hidden=true) until a working source is
+      // confirmed. Restore procedure when a source becomes available:
+      //   1. PATCH /api/admin/stations/:id/now-playing-source
+      //      { nowPlayingSource, nowPlayingConfig }
+      //   2. PATCH /api/admin/stations/:id/flags  { hidden: false }
+      // Both the blocklist-hide migration and this seed upsert are no-ops once
+      // nowPlayingSource is non-null, so the restore survives server restarts.
       streamUrl: "http://stream03.ustream.ca:8000/cism128.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -1958,8 +1972,19 @@ export async function seedStations(): Promise<void> {
           homepageUrl: s.homepageUrl ?? null,
           scheduleUrl: s.scheduleUrl ?? null,
           donateUrl: s.donateUrl ?? null,
-          nowPlayingSource: s.nowPlayingSource ?? null,
-          nowPlayingConfig: s.nowPlayingConfig ?? null,
+          // Preserve operator-configured source+config when the seed source is
+          // null (e.g. CHMR/CISM while no public API has been found).  Using a
+          // CASE keyed on EXCLUDED.now_playing_source rather than COALESCE
+          // ensures the two columns always move together:
+          //   • seed source is NULL  → keep whatever is in the DB (the admin-
+          //     configured source AND its accompanying config survive restarts)
+          //   • seed source is non-null → apply the seed values for both
+          //     source and config (covers upgrades like CKCU null→spinitron)
+          // COALESCE alone can't do this because CHMR/CISM seed config is {}
+          // (a valid non-null object), so COALESCE would always pick {} and
+          // silently erase any adapter callsign/stream-id the operator set.
+          nowPlayingSource: sql`CASE WHEN EXCLUDED.now_playing_source IS NULL THEN ${stationsTable.nowPlayingSource} ELSE EXCLUDED.now_playing_source END`,
+          nowPlayingConfig: sql`CASE WHEN EXCLUDED.now_playing_source IS NULL THEN ${stationsTable.nowPlayingConfig} ELSE EXCLUDED.now_playing_config END`,
           stationClass: s.stationClass ?? "curated",
           // crossingEligible is intentionally omitted from the UPDATE set.
           // The seed only writes it on INSERT (DB default = true). Once a

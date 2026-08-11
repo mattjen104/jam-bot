@@ -17,10 +17,28 @@ import { sql } from "drizzle-orm";
  *
  * If the blocklist in radio-browser.ts gains new entries in the future, extend
  * this migration (or add a new sibling migration) with the matching LIKE
- * predicates so the retroactive hide covers them too. CHMR and CISM should
- * remain hidden until a working now-playing source is identified.
+ * predicates so the retroactive hide covers them too.
+ *
+ * CHMR and CISM restore procedure
+ * ────────────────────────────────
+ * These stations are hidden only while `now_playing_source IS NULL`. Once a
+ * working now-playing source is confirmed, the restore sequence is:
+ *
+ *   1. Configure the source (admin API, survives restarts):
+ *        PATCH /api/admin/stations/:id/now-playing-source
+ *        Body: { nowPlayingSource, nowPlayingConfig, streamUrl? }
+ *
+ *   2. Unhide (immediately enrolls the appropriate poller):
+ *        PATCH /api/admin/stations/:id/flags
+ *        Body: { hidden: false }
+ *
+ * This migration is then a permanent no-op for those stations so the restore
+ * survives server restarts. The seed upsert likewise uses COALESCE so its
+ * null nowPlayingSource does not overwrite a configured one.
  *
  * @see artifacts/api-server/src/lore/radio-browser.ts (RADIO_BROWSER_NAME_BLOCKLIST)
+ * @see artifacts/api-server/src/lore/seed.ts (seedStations — COALESCE guard)
+ * @see artifacts/api-server/src/routes/lore/admin.ts (PATCH .../now-playing-source)
  */
 export async function applyStationBlocklistHideMigration(): Promise<void> {
   const result = await db.execute<{ rowcount: string }>(sql`
@@ -30,7 +48,11 @@ export async function applyStationBlocklistHideMigration(): Promise<void> {
       AND (
         LOWER(name) LIKE '%exclusively %'
         OR LOWER(name) LIKE '%epic lounge%'
-        OR slug IN ('chmr', 'cism')
+        -- Only hide CHMR/CISM while they still lack a now-playing source.
+        -- Once an operator has configured one (via PATCH .../now-playing-source)
+        -- and unhidden the station, this predicate becomes false and the
+        -- migration is a permanent no-op — the restore survives restarts.
+        OR (slug IN ('chmr', 'cism') AND now_playing_source IS NULL)
       )
   `);
   const affected = (result as { rowCount?: number }).rowCount ?? 0;
