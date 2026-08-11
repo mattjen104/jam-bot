@@ -202,10 +202,19 @@ export const GetOembedResponse = zod.object({
 });
 
 /**
- * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate).
+ * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate). Pass `mode=sleep` to retrieve the Sleep Radio station list, or `mode=era-genre` to retrieve the era/genre station list, instead of the normal public directory. Unknown mode values return 400.
 
  * @summary List curated radio stations
  */
+export const ListStationsQueryParams = zod.object({
+  mode: zod
+    .enum(["sleep", "era-genre"])
+    .optional()
+    .describe(
+      "Station set to retrieve. Omit for the normal public directory. `sleep` returns only active Sleep Radio stations (ambient\/utility channels hidden from the normal dial). `era-genre` returns only active era\/genre stations (decade\/oldies\/retro and single-genre algorithmic channels hidden from the normal dial). Unknown values return 400.\n",
+    ),
+});
+
 export const ListStationsResponse = zod.object({
   stations: zod.array(
     zod

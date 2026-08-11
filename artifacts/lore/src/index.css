@@ -1479,6 +1479,27 @@
 .sleep-moon-indicator:hover { color: hsl(var(--accent)); }
 .sleep-moon-indicator:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
 
+/* ── Era/Genre vinyl — subtle indicator beside the [lore] wordmark while the
+   hidden era/genre browse mode is active. Tapping it deactivates the mode.
+   Same quiet treatment as the sleep moon. */
+.era-genre-indicator {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85em;
+  line-height: 1;
+  color: hsl(var(--accent) / 0.75);
+  text-decoration: none;
+  vertical-align: baseline;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .2s ease;
+}
+.era-genre-indicator:hover { color: hsl(var(--accent)); }
+.era-genre-indicator:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+
 /* ── Bottom nav row — Spotify-style mobile menu inside the bottom shell ────
    Rendered below the mini player at the very bottom of the screen. Hidden on
    desktop (the corner-nav treatment stays); shown at phone widths where the

@@ -345,6 +345,7 @@ const fingerprintLimiter = rateLimit({
 // GET /api/stations
 // Default (no mode): active=true, non-hidden, crossing-eligible stations only.
 // ?mode=sleep: active=true, sleep_mode=true stations (hidden=true intentional).
+// ?mode=era-genre: active=true, era_genre_mode=true stations (hidden=true intentional).
 // Unknown mode values return 400.
 // Longtail candidates (active=false) are health-gated and must not appear in
 // the public directory. crossingEligible=false stations (e.g. FIP sub-channels)
@@ -356,15 +357,21 @@ const fingerprintLimiter = rateLimit({
 // dial UI can badge or deprioritize low-quality stations.
 router.get("/stations", h(async (req, res) => {
   const rawMode = typeof req.query.mode === "string" ? req.query.mode.trim() : undefined;
-  if (rawMode !== undefined && rawMode !== "sleep") {
-    return res.status(400).json({ error: `Unknown mode: "${rawMode}". Supported values: sleep` });
+  if (rawMode !== undefined && rawMode !== "sleep" && rawMode !== "era-genre") {
+    return res.status(400).json({ error: `Unknown mode: "${rawMode}". Supported values: sleep, era-genre` });
   }
   const isSleepMode = rawMode === "sleep";
+  const isEraGenreMode = rawMode === "era-genre";
 
   const whereClause = isSleepMode
     ? and(
         eq(stationsTable.active, true),
         eq(stationsTable.sleepMode, true),
+      )
+    : isEraGenreMode
+    ? and(
+        eq(stationsTable.active, true),
+        eq(stationsTable.eraGenreMode, true),
       )
     : and(
         eq(stationsTable.active, true),

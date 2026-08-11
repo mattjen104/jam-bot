@@ -41,9 +41,19 @@ function getSleepEnabled(): boolean {
   return _cachedEnabled;
 }
 
+// Mutual-exclusion hook: the era/genre module registers a synchronous
+// deactivation callback here at import time. This avoids a circular static
+// import while keeping the mode switch synchronous (no async import race).
+let _deactivateOtherMode: (() => void) | null = null;
+export function _registerSleepMutualExclusion(cb: () => void): void {
+  _deactivateOtherMode = cb;
+}
+
 export function setSleepEnabled(value: boolean): void {
   _cachedEnabled = value;
   writeSleepEnabled(value);
+  // Mutual exclusion: turning sleep on turns era/genre off.
+  if (value && _deactivateOtherMode) _deactivateOtherMode();
   listeners.forEach((l) => l());
 }
 

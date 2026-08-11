@@ -198,6 +198,15 @@ export const stationsTable = pgTable("stations", {
    */
   sleepMode: boolean("sleep_mode").notNull().default(false),
   /**
+   * Era/genre classification. When true, the station is excluded from the
+   * normal public dial (together with hidden=true) but is available via
+   * GET /api/stations?mode=era-genre. Intended for era-themed stations
+   * (decades/oldies/retro) and single-genre algorithmic brand channels that
+   * dilute the human-curated dial. Sleep classification takes precedence — a
+   * station already sleep_mode=true is never reclassified. Defaults to false.
+   */
+  eraGenreMode: boolean("era_genre_mode").notNull().default(false),
+  /**
    * Whether this station appears in the listener-facing crossing surface
    * (station list and now-playing dial). When false the station continues to
    * ingest spins (history grows, crossing data accumulates) but is excluded

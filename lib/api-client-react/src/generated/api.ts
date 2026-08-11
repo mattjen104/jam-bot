@@ -520,7 +520,7 @@ export function useGetOembed<
 }
 
 /**
- * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate).
+ * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate). Pass `mode=sleep` to retrieve the Sleep Radio station list, or `mode=era-genre` to retrieve the era/genre station list, instead of the normal public directory. Unknown mode values return 400.
 
  * @summary List curated radio stations
  */
@@ -556,7 +556,7 @@ export const getListStationsQueryKey = (params?: ListStationsParams) => {
 
 export const getListStationsQueryOptions = <
   TData = Awaited<ReturnType<typeof listStations>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   params?: ListStationsParams,
   options?: {
@@ -586,7 +586,7 @@ export const getListStationsQueryOptions = <
 export type ListStationsQueryResult = NonNullable<
   Awaited<ReturnType<typeof listStations>>
 >;
-export type ListStationsQueryError = ErrorType<unknown>;
+export type ListStationsQueryError = ErrorType<void>;
 
 /**
  * @summary List curated radio stations
@@ -594,7 +594,7 @@ export type ListStationsQueryError = ErrorType<unknown>;
 
 export function useListStations<
   TData = Awaited<ReturnType<typeof listStations>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   params?: ListStationsParams,
   options?: {

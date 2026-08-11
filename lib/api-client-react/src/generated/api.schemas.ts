@@ -3339,6 +3339,22 @@ export type GetOembedParams = {
   url: string;
 };
 
+export type ListStationsParams = {
+  /**
+ * Station set to retrieve. Omit for the normal public directory. `sleep` returns only active Sleep Radio stations (ambient/utility channels hidden from the normal dial). `era-genre` returns only active era/genre stations (decade/oldies/retro and single-genre algorithmic channels hidden from the normal dial). Unknown values return 400.
+
+ */
+  mode?: ListStationsMode;
+};
+
+export type ListStationsMode =
+  (typeof ListStationsMode)[keyof typeof ListStationsMode];
+
+export const ListStationsMode = {
+  sleep: "sleep",
+  "era-genre": "era-genre",
+} as const;
+
 export type GetRecordingsAvailabilityParams = {
   /**
    * Comma-separated recording MBIDs (max 100).
@@ -3413,12 +3429,6 @@ export type GetStationsRecentSpinsParams = {
   date: string;
 };
 
-export type ListStationsParams = {
-  /**
-   * Station set to retrieve. Omit for the normal public directory. `sleep` returns only active Sleep Radio stations (ambient/utility channels hidden from the normal dial). Unknown values return 400.
-   */
-  mode?: "sleep";
-};
 export type GetStationsScheduleParams = {
   /**
    * Calendar day in YYYY-MM-DD format (UTC).

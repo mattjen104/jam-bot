@@ -98,6 +98,7 @@ import { startBlendedCrossingsWarmJob } from "./lore/blended-crossings-job.js";
 import { warmPersonalCrossingsAtBoot } from "./lore/personal-crossings-warm.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
 import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js";
+import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -186,6 +187,10 @@ async function bootLore(): Promise<void> {
     // must also catch stations discovered after the first run. Both steps
     // are idempotent.
     await runMigration("applySleepStationsMigration", applySleepStationsMigration);
+    // Classify era-themed / single-genre stations into the hidden era/genre
+    // browse mode. Runs AFTER sleep classification so sleep_mode rows are
+    // skipped (sleep precedence). Idempotent + catches newly discovered rows.
+    await runMigration("applyEraGenreStationsMigration", applyEraGenreStationsMigration);
     // Hide confirmed dead-end stations before any pollers or lease scheduling
     // starts, so existing rows cannot briefly consume watcher slots at boot.
     await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);

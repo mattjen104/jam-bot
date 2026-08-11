@@ -72,6 +72,14 @@ export async function setup(): Promise<void> {
       "../src/lore/sleep-stations-migration.js"
     );
     await applySleepStationsMigration();
+
+    // Ensures era_genre_mode column exists — required by any test that inserts
+    // into stationsTable after the schema added this column. Runs after the
+    // sleep migration to mirror the boot precedence order.
+    const { applyEraGenreStationsMigration } = await import(
+      "../src/lore/era-genre-stations-migration.js"
+    );
+    await applyEraGenreStationsMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

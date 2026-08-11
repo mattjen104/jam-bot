@@ -542,7 +542,24 @@ describe("upsertRadioBrowserStations", () => {
     expect(payload.hidden).toBe(true);
   });
 
-  it("inserts ordinary stations with sleepMode=false and hidden=false", async () => {
+  it("inserts ordinary stations with sleepMode=false, eraGenreMode=false and hidden=false", async () => {
+    const { db } = await import("@workspace/db");
+    // Note: the old fixture "Boot Liquor Americana" now (correctly) classifies
+    // into the era/genre bucket via the "americana" keyword — use a name that
+    // matches no sleep, blocklist, or era/genre pattern.
+    const station = makeStation({ name: "Radio Paradise Main Mix" });
+    await upsertRadioBrowserStations([station], "eclectic");
+
+    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.sleepMode).toBe(false);
+    expect(payload.eraGenreMode).toBe(false);
+    expect(payload.hidden).toBe(false);
+  });
+
+  it("inserts era/genre-pattern stations with eraGenreMode=true and hidden=true", async () => {
     const { db } = await import("@workspace/db");
     const station = makeStation({ name: "Boot Liquor Americana" });
     await upsertRadioBrowserStations([station], "americana");
@@ -551,8 +568,24 @@ describe("upsertRadioBrowserStations", () => {
       values: ReturnType<typeof vi.fn>;
     };
     const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.eraGenreMode).toBe(true);
     expect(payload.sleepMode).toBe(false);
-    expect(payload.hidden).toBe(false);
+    expect(payload.hidden).toBe(true);
+  });
+
+  it("sleep classification wins over era/genre on ingest", async () => {
+    const { db } = await import("@workspace/db");
+    // Matches a sleep pattern ("deep sleep") AND a genre keyword ("jazz").
+    const station = makeStation({ name: "Deep Sleep Jazz" });
+    await upsertRadioBrowserStations([station], "ambient");
+
+    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.sleepMode).toBe(true);
+    expect(payload.eraGenreMode).toBe(false);
+    expect(payload.hidden).toBe(true);
   });
 });
 

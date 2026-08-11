@@ -165,6 +165,35 @@ function isNameBlocked(name: string | null | undefined): boolean {
 }
 
 /**
+ * Era/decade name patterns (case-insensitive, word-boundary matched):
+ * decades (40s–00s and German 40er–90er forms), oldies, retro, revival,
+ * decade, gen x, flower power, classic hits, classic rock, plus "80s80s".
+ */
+export const ERA_GENRE_ERA_PATTERNS = Object.freeze([
+  "40s",
+  "50s",
+  "60s",
+  "70s",
+  "80s",
+  "90s",
+  "00s",
+  "40er",
+  "50er",
+  "60er",
+  "70er",
+  "80er",
+  "90er",
+  "80s80s",
+  "oldies",
+  "retro",
+  "revival",
+  "decade",
+  "gen x",
+  "flower power",
+  "classic hits",
+  "classic rock",
+] as const);
+/**
  * Check if a station name or slug matches the Sleep Radio patterns.
  * Returns true when the station should be retained with sleep_mode=true
  * instead of being permanently blocked.
@@ -398,6 +427,12 @@ export async function upsertRadioBrowserStations(
 
     // Classify as sleep station before upsert.
     const sleepStation = isSleepStation(baseName, slug);
+    // Era/genre classification (sleep + blocklist take precedence inside the
+    // helper). A newly discovered era/genre match is inserted hidden so it
+    // never surfaces on the normal dial, and stays reachable via
+    // GET /api/stations?mode=era-genre.
+    const eraGenreStation = isEraGenreStation(baseName, slug);
+    const hiddenAtInsert = sleepStation || eraGenreStation;
 
     try {
       const [stationRow] = await db
@@ -420,10 +455,12 @@ export async function upsertRadioBrowserStations(
           active: false,
           stationClass: "curated",
           nowPlayingSource: "radio_browser_icy",
-          // Sleep stations are inserted hidden so they never surface in the
-          // normal public dial. They remain accessible via ?mode=sleep.
-          hidden: sleepStation,
+          // Sleep and era/genre stations are inserted hidden so they never
+          // surface in the normal public dial. They remain accessible via
+          // ?mode=sleep and ?mode=era-genre respectively.
+          hidden: hiddenAtInsert,
           sleepMode: sleepStation,
+          eraGenreMode: eraGenreStation,
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -442,8 +479,16 @@ export async function upsertRadioBrowserStations(
             // classified regardless of source; a previously-classified row is
             // never un-classified by re-discovery (the boot migration owns
             // retroactive classification).
-            hidden: sql`CASE WHEN ${sql.raw("EXCLUDED.sleep_mode")} THEN true ELSE ${stationsTable.hidden} END`,
+            // Sleep hides unconditionally (name policy). Era/genre hides only
+            // genuine radio_browser rows: a curated row sharing a slug (e.g.
+            // the seeded FIP sub-channels) must keep polling/ingesting — its
+            // hidden flag is owned by the migration/seed policy, not ingest.
+            hidden: sql`CASE WHEN ${sql.raw("EXCLUDED.sleep_mode")} THEN true WHEN ${sql.raw("EXCLUDED.era_genre_mode")} AND ${stationsTable.source} = 'radio_browser' THEN true ELSE ${stationsTable.hidden} END`,
             sleepMode: sql`CASE WHEN ${sql.raw("EXCLUDED.sleep_mode")} THEN true ELSE ${stationsTable.sleepMode} END`,
+            // Same policy as sleep: a re-discovered era/genre match stays
+            // classified; an already-classified row is never un-classified
+            // by re-discovery (the boot migration owns retroactive marking).
+            eraGenreMode: sql`CASE WHEN ${sql.raw("EXCLUDED.era_genre_mode")} THEN true ELSE ${stationsTable.eraGenreMode} END`,
             updatedAt: new Date(),
           },
         })
@@ -731,3 +776,131 @@ export function stopRadioBrowserWorker(): void {
   }
   started = false;
 }
+
+/**
+ * Returns true when the station should be classified into the era/genre bucket
+ * (era_genre_mode=true, hidden=true), reachable via ?mode=era-genre.
+ *
+ * Precedence: sleep classification and permanent blocklist BOTH win first, so a
+ * station that is a sleep station or a blocklist match is never era/genre
+ * classified here (callers must apply this after those checks; the guards below
+ * make the helper safe to call standalone in tests too).
+ */
+export function isEraGenreStation(
+  name: string | null | undefined,
+  slug?: string | null,
+): boolean {
+  // Sleep and blocklist take precedence.
+  if (isSleepStation(name, slug)) return false;
+  if (isNameBlocked(name)) return false;
+  if (slug && (ERA_GENRE_FIP_SLUGS as readonly string[]).includes(slug)) {
+    return true;
+  }
+  const text = name ?? "";
+  if (!text.trim()) return false;
+  return ERA_GENRE_STATION_PATTERNS.some((p) => matchesWordBoundary(text, p));
+}
+
+/**
+ * Explicit FIP thematic sub-channel slugs (source='curated' seed stations) that
+ * belong in the era/genre bucket. FIP Main and FIP Electro stay on the dial.
+ * The radio-browser duplicate "FIP Musiques du monde" is caught by the name
+ * patterns / migration name predicate rather than a slug.
+ */
+export const ERA_GENRE_FIP_SLUGS = Object.freeze([
+  "fip-rock",
+  "fip-jazz",
+  "fip-groove",
+  "fip-world",
+  "fip-reggae",
+  "fip-metal",
+] as const);
+
+/**
+ * Case-insensitive word-boundary match: `pattern` matches `text` only when it
+ * is delimited by non-alphanumeric characters (or string edges) on both sides.
+ * This prevents accidental substring hits like "gems" inside "Experimentalgems"
+ * or "ska" inside "Alaska", while still matching "70s" in "RADIO BOB - 70er
+ * Rock" is handled by the explicit "70er" pattern. Multi-word patterns
+ * (e.g. "drum and bass", "hip hop") are matched verbatim with the same
+ * boundary rule.
+ */
+export function matchesWordBoundary(text: string, pattern: string): boolean {
+  const lowerText = text.toLowerCase();
+  const lowerPattern = pattern.toLowerCase();
+  let from = 0;
+  for (;;) {
+    const idx = lowerText.indexOf(lowerPattern, from);
+    if (idx === -1) return false;
+    const before = idx === 0 ? "" : lowerText[idx - 1];
+    const afterIdx = idx + lowerPattern.length;
+    const after = afterIdx >= lowerText.length ? "" : lowerText[afterIdx];
+    const boundaryBefore = before === "" || !/[a-z0-9]/.test(before);
+    const boundaryAfter = after === "" || !/[a-z0-9]/.test(after);
+    if (boundaryBefore && boundaryAfter) return true;
+    from = idx + 1;
+  }
+}
+
+/**
+ * Genre-format keyword patterns (case-insensitive, word-boundary matched):
+ * single-genre brand channels whose names carry a genre keyword.
+ */
+export const ERA_GENRE_GENRE_PATTERNS = Object.freeze([
+  "jazz",
+  "blues",
+  "folk",
+  "bluegrass",
+  "celtic",
+  "classical",
+  "piano",
+  "violin",
+  "trumpet",
+  "opera",
+  "reggae",
+  "ska",
+  "metal",
+  "punk",
+  "techno",
+  "trance",
+  "house",
+  "edm",
+  "disco",
+  "funk",
+  "soul",
+  "gospel",
+  "country",
+  "americana",
+  "schlager",
+  "salsa",
+  "tango",
+  "flamenco",
+  "bossa",
+  "swing",
+  "lounge",
+  "chillout",
+  "chill",
+  "ambient",
+  "new wave",
+  "synthpop",
+  "psychedelic",
+  "shoegaze",
+  "goa",
+  "acid",
+  "dub",
+  "drum and bass",
+  "hip hop",
+  "rnb",
+  "k-pop",
+  "psychill",
+  // The radio-browser duplicate of the FIP world sub-channel carries no English
+  // genre keyword ("FIP Musiques du monde"); match its French genre phrase so
+  // it joins the bucket alongside the seeded fip-world slug.
+  "musiques du monde",
+] as const);
+
+/** Combined era + genre name patterns — the single shared classification list. */
+export const ERA_GENRE_STATION_PATTERNS = Object.freeze([
+  ...ERA_GENRE_ERA_PATTERNS,
+  ...ERA_GENRE_GENRE_PATTERNS,
+]);

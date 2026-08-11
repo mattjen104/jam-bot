@@ -588,7 +588,7 @@ export function useBoundedPending(pending: boolean, deadlineMs: number): boolean
 export type DialDisplayMode = "personal" | "blended";
 export function useDialData(
   displayMode: DialDisplayMode = "personal",
-  opts: { sleepMode?: boolean } = {},
+  opts: { sleepMode?: boolean; eraGenreMode?: boolean } = {},
 ): {
   stations: DialStation[];
   isLoading: boolean;
@@ -672,8 +672,16 @@ export function useDialData(
   // so entering/leaving the mode refetches the right list automatically while
   // the default (no-params) cache stays warm for the normal dial.
   const sleepMode = opts.sleepMode === true;
+  const eraGenreMode = opts.eraGenreMode === true;
+  // Hidden browse modes swap the station source. Sleep takes precedence if both
+  // flags somehow arrive true (the modes are mutually exclusive upstream).
+  const modeParam = sleepMode
+    ? ({ mode: "sleep" } as const)
+    : eraGenreMode
+    ? ({ mode: "era-genre" } as const)
+    : undefined;
   const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations(
-    sleepMode ? { mode: "sleep" } : undefined,
+    modeParam,
   );
 
   // ── live pulse (30s polling) ─────────────────────────────────────────────
@@ -950,7 +958,7 @@ export function useDialData(
       // from the now-playing pollers, so the live pulse never marks them
       // recent. Treat every station in the sleep list as tunable ("live") so
       // the dial renders them through the ordinary live pipeline.
-      const isLive = sleepMode ? true : (liveBySlug.get(station.slug) ?? false);
+      const isLive = sleepMode || eraGenreMode ? true : (liveBySlug.get(station.slug) ?? false);
       const rawRuns = runsBySlug.get(station.slug) ?? [];
       const rawSpins = spinsBySlug.get(station.slug) ?? [];
 
@@ -1117,7 +1125,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // isCoreLoading: only block until the station list arrives so the offline
