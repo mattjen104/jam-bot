@@ -325,11 +325,15 @@ export interface FrontDoorRowProps {
   onAddArtist?: (name: string) => void;
   /** Opens the persistent player queue for this station's complete set. */
   onSetExpand?: () => void;
-  /** Opens the station archive workspace without tuning the row. */
-  onOpenWorkspace?: () => void;
+  /**
+   * Renders the compact pipe-separated provenance sentence as tier 1 (inert
+   * text — the station workspace is retired). Dial lanes pass this; without
+   * it the row falls back to the full crossing/reason sentence machinery.
+   */
+  compactSentence?: boolean;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, onOpenWorkspace }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -380,20 +384,12 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
   const fallbackTier1Node = displayMode === "blended"
     ? rz.node
     : crossing?.node ?? (usePop ? popLine : null) ?? live?.node ?? rz.node;
-  const tier1Node = compact && onOpenWorkspace ? (
+  // The station set workspace is retired (Task #37): the compact provenance
+  // prefix is inert text now — the whole row tunes, and the pinned sentence
+  // (PinnedSetRow) carries the set once tuned.
+  const tier1Node = compactSentence && compact ? (
     <>
-      <button
-        type="button"
-        className="fdrow__provenance"
-        aria-label={`Open ${ds.station.name} sets`}
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpenWorkspace();
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        {compact.provenance.join(" | ")}
-      </button>
+      <span className="fdrow__provenance">{compact.provenance.join(" | ")}</span>
       {compact.artist ? <> is playing <b className="fdrow__artist">{compact.artist}</b>.</> : " is on air."}
     </>
   ) : fallbackTier1Node;

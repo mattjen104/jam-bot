@@ -4,12 +4,13 @@
  *
  * Verifies:
  *  - the live sentence unfurls with the COMPLETE current setlist (no truncation)
- *  - live setlist artists add to the library only (no play/navigate) and the
- *    add affordance flips off once seeded
+ *  - setlist artists are inert pipe-separated text — no add buttons anywhere
+ *  - artists ordered newest-first (now-playing leads, then backwards in time)
+ *  - library/seeded artists keep the "yours" styling with no control
  *  - live mode never exposes export/playlist controls (structurally absent)
  *  - the single left chevron toggles to the previous completed set
  *  - the past set renders in past tense with the strongest provenance, its full
- *    artist list, and export controls
+ *    pipe-separated artist list, and export controls
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -98,21 +99,17 @@ function renderPinned(props: {
   ds?: DialStation;
   show?: DialShow | null;
   seedsLower?: Set<string>;
-  onAddArtist?: (name: string) => void;
 } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const onAddArtist = props.onAddArtist ?? vi.fn();
-  const utils = render(
+  return render(
     <QueryClientProvider client={qc}>
       <PinnedSetRow
         ds={props.ds ?? makeStation()}
         show={props.show === undefined ? null : props.show}
         seedsLower={props.seedsLower ?? new Set()}
-        onAddArtist={onAddArtist}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onAddArtist };
 }
 
 afterEach(() => {
@@ -140,20 +137,58 @@ describe("PinnedSetRow — live unfurl", () => {
     expect(document.body.textContent).toContain("DJ Nova");
   });
 
-  it("live setlist artists add to the library only — no export, no navigation", () => {
+  it("setlist artists are inert pipe-separated text — no add buttons, no navigation", () => {
     const spins = [makeSpin("A Band", "T1"), makeSpin("B Band", "T2")];
-    const { onAddArtist } = renderPinned({ show: makeShow(spins) });
+    renderPinned({ show: makeShow(spins) });
 
     // No export/playlist controls in live mode — structurally absent.
     expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
 
-    // Artist names are not navigation buttons (no gram-link--nav).
+    // No add-to-library buttons anywhere in the live setlist.
+    expect(screen.queryByRole("button", { name: /Add .* to your artists/i })).toBeNull();
+    expect(document.querySelector(".fdrow__addplus")).toBeNull();
+
+    // Artist names are plain text — no navigation affordance.
     expect(document.querySelector(".gram-link--nav")).toBeNull();
 
-    // The `+` affordance adds the artist.
-    fireEvent.click(screen.getByRole("button", { name: /Add A Band to your artists/i }));
-    expect(onAddArtist).toHaveBeenCalledWith("A Band");
+    // Both artist names appear in the sentence text.
+    expect(document.body.textContent).toContain("A Band");
+    expect(document.body.textContent).toContain("B Band");
+    // Joined by pipes.
+    expect(document.body.textContent).toContain(" | ");
+  });
+
+  it("orders the setlist newest-first (now-playing leads, backwards in time)", () => {
+    // Spins are provided oldest-first as the server returns them.
+    const spins = [
+      makeSpin("Oldest Artist", "T1"),
+      makeSpin("Middle Artist", "T2"),
+      makeSpin("Newest Artist", "T3"),
+    ];
+    renderPinned({ show: makeShow(spins) });
+
+    const text = document.body.textContent ?? "";
+    const newestIdx = text.indexOf("Newest Artist");
+    const middleIdx = text.indexOf("Middle Artist");
+    const oldestIdx = text.indexOf("Oldest Artist");
+    // Newest (now playing) should appear first in the rendered text.
+    expect(newestIdx).toBeLessThan(middleIdx);
+    expect(middleIdx).toBeLessThan(oldestIdx);
+  });
+
+  it("library artists keep the 'yours' style without an add control", () => {
+    const libraryArtist = makeSpin("Fav Artist", "T1", { isArtistHit: true });
+    const otherArtist = makeSpin("Other Artist", "T2");
+    renderPinned({ show: makeShow([libraryArtist, otherArtist]) });
+
+    // Library artist gets the --lib class.
+    const libEls = document.querySelectorAll(".fdrow__artist--lib");
+    expect(libEls.length).toBeGreaterThan(0);
+    expect(Array.from(libEls).some((el) => el.textContent?.includes("Fav Artist"))).toBe(true);
+
+    // Still no add button even for non-library artists.
+    expect(screen.queryByRole("button", { name: /Add .* to your artists/i })).toBeNull();
   });
 
   it("shows a single left chevron to step back one set", () => {
@@ -199,9 +234,12 @@ describe("PinnedSetRow — past set", () => {
       expect(document.body.textContent).toContain("DJ Sol");
       expect(document.body.textContent).toContain("played");
     });
-    // Full past artist list.
+    // Full past artist list rendered as inert pipe-separated text.
     expect(screen.getByText("Past One")).toBeTruthy();
     expect(screen.getByText("Past Two")).toBeTruthy();
+    expect(document.body.textContent).toContain(" | ");
+    // No add buttons in past mode either.
+    expect(screen.queryByRole("button", { name: /Add .* to your artists/i })).toBeNull();
     // Export/playlist controls appear ONLY for the completed past set.
     expect(screen.getByRole("button", { name: /download/i })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: /past set export format/i })).toBeTruthy();

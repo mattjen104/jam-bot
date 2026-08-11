@@ -422,28 +422,23 @@ describe("FirstRunSidebar", () => {
     expect(container.querySelectorAll(".z1-placeholder__seedchip")).toHaveLength(0);
   });
 
-  it("keeps row tuning separate from the provenance workspace control", () => {
+  it("renders provenance as inert text — the retired station workspace is unreachable", () => {
     const onTune = vi.fn();
-    const onOpenWorkspace = vi.fn();
     const ds = makeStation({ slug: "wfmu", name: "WFMU", djName: "DJ Test" });
     const { container } = render(
-      <FirstRunSidebar
-        stations={[ds]}
-        seeds={[]}
-        onAddSeed={noop}
-        onTune={onTune}
-        onOpenWorkspace={onOpenWorkspace}
-      />,
+      <FirstRunSidebar stations={[ds]} seeds={[]} onAddSeed={noop} onTune={onTune} />,
     );
+    // The tune target is the only station-level interaction.
     const tune = within(container).getByRole("button", { name: /tune WFMU/i });
-    const provenance = within(container).getByRole("button", { name: /open WFMU sets/i });
     fireEvent.click(tune);
     expect(onTune).toHaveBeenCalledWith("wfmu");
-    expect(onOpenWorkspace).not.toHaveBeenCalled();
 
-    fireEvent.click(provenance);
-    expect(onOpenWorkspace).toHaveBeenCalledWith("wfmu");
-    expect(onTune).toHaveBeenCalledTimes(1);
+    // No "Open … sets" control exists anywhere — the workspace is retired.
+    expect(within(container).queryByRole("button", { name: /open .* sets/i })).toBeNull();
+    // The provenance line still renders, but as plain text, not a button.
+    const provenance = container.querySelector(".frb__provenance");
+    expect(provenance).toBeTruthy();
+    expect(provenance!.tagName).not.toBe("BUTTON");
   });
 
   it("keeps artist saving separate from station tuning for click, Enter, and Space", () => {

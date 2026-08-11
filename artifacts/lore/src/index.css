@@ -5240,23 +5240,12 @@
 .fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
 .fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 400; font-style: normal; }
 .fdrow__t1 .fdrow__station { color: hsl(var(--library)); font-weight: 400; font-style: normal; }
+/* Inert provenance prefixes — plain text since the station workspace was
+   retired; the dotted underline treatment is gone with the click affordance. */
 .fdrow__provenance,
 .frb__provenance {
-  appearance: none;
-  border: 0;
-  border-bottom: 1px dotted currentColor;
-  background: none;
   color: inherit;
   font: inherit;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  text-underline-offset: 3px;
-}
-.fdrow__provenance:focus-visible,
-.frb__provenance:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: 3px;
 }
 .dial-pinned-row {
   position: sticky;
@@ -6485,116 +6474,6 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
    clear of the tab strip. */
 .set-panel__context { padding-top: 2px; }
 .set-panel__context .dial-context-region__rail { min-height: 0; }
-
-.station-workspace {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  gap: 12px;
-}
-.station-workspace__selected {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  gap: 8px;
-}
-.station-workspace__header {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: hsl(var(--foreground));
-}
-.station-workspace__header strong {
-  font-weight: 400;
-  color: hsl(var(--foreground));
-}
-.station-workspace__header time,
-.station-workspace__history-row time {
-  font-family: var(--app-font-mono);
-  font-size: var(--lore-size-small);
-  color: hsl(var(--muted-foreground));
-}
-.station-workspace__export {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.station-workspace__export select,
-.station-workspace__export button,
-.station-workspace__more {
-  border: 1px solid hsl(var(--border) / 0.7);
-  border-radius: 6px;
-  background: hsl(var(--muted) / 0.35);
-  color: hsl(var(--foreground));
-  font-size: var(--lore-size-small);
-  padding: 4px 8px;
-}
-.station-workspace__export button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-}
-.station-workspace__export svg { width: 13px; height: 13px; }
-.station-workspace__note {
-  margin: 0;
-  color: hsl(var(--muted-foreground));
-  font-size: var(--lore-size-small);
-}
-.station-workspace .set-queue__artists {
-  display: flex;
-  max-height: 34vh;
-  flex-direction: column;
-  flex-wrap: nowrap;
-  overflow-y: auto;
-}
-@media (orientation: landscape) {
-  /* The fixed sidebar panel is the single scroll owner in landscape. Keeping
-     the artist list uncapped preserves continuous scrolling into history and
-     avoids competing nested scroll regions at short viewport heights. */
-  .station-workspace .set-queue__artists {
-    max-height: none;
-    overflow-y: visible;
-  }
-}
-.station-workspace__history {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  border-top: 1px solid hsl(var(--border) / 0.5);
-  padding-top: 8px;
-}
-.station-workspace__history-row {
-  display: flex;
-  width: 100%;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  padding: 5px 4px;
-  text-align: left;
-}
-.station-workspace__history-row:hover,
-.station-workspace__history-row--selected {
-  background: hsl(var(--muted) / 0.45);
-  color: hsl(var(--foreground));
-}
-.station-workspace__history-row span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.station-workspace__history-row time { flex-shrink: 0; }
-.station-workspace__more {
-  align-self: flex-start;
-  cursor: pointer;
-  margin-top: 5px;
-}
 
 .set-panel__actions {
   display: flex;

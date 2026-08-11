@@ -10,7 +10,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
-import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, useGetStationArchive, useGetStationRun, getStationArchive, type Station } from "@workspace/api-client-react";
+import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { ContextRail, ArtistPane, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import type { GrammarLinks } from "../dial/grammar";
@@ -486,183 +486,6 @@ export function buildStationSetExport(
   };
 }
 
-function StationSetWorkspace({
-  slug,
-  liveSet,
-  seedsLower,
-  onAdd,
-  onRemove,
-  onOpenArtist,
-}: {
-  slug: string;
-  liveSet: SetPanelSet | null;
-  seedsLower: Set<string>;
-  onAdd: (name: string) => void;
-  onRemove: (name: string) => void;
-  onOpenArtist: (name: string) => void;
-}) {
-  const workspaceRef = useRef<HTMLElement>(null);
-  const archive = useGetStationArchive(slug, { offset: 0, limit: 25 });
-  const [additionalRuns, setAdditionalRuns] = useState<NonNullable<typeof archive.data>["runs"]>([]);
-  const [nextOffset, setNextOffset] = useState<number | null | undefined>(undefined);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
-  const [format, setFormat] = useState<StationSetExportFormat>("m3u8");
-  const [exportNote, setExportNote] = useState<string | null>(null);
-  const archiveRuns = useMemo(() => {
-    const byId = new Map<number, NonNullable<typeof archive.data>["runs"][number]>();
-    for (const run of [...(archive.data?.runs ?? []), ...additionalRuns]) {
-      if (liveSet?.runId != null && run.runId === liveSet.runId) continue;
-      byId.set(run.runId, run);
-    }
-    return [...byId.values()];
-  }, [archive.data?.runs, additionalRuns, liveSet?.runId]);
-  const selectedRun = archiveRuns.find((run) => run.runId === selectedRunId) ?? null;
-  const historical = useGetStationRun(selectedRunId ?? 0);
-  const stationTz = archive.data?.station.ianaTimezone ?? liveSet?.ianaTimezone ?? null;
-  const selectedSet: SetPanelSet | null = selectedRun && historical.data ? {
-    id: `${slug}:archive:${selectedRun.runId}`,
-    runId: selectedRun.runId,
-    stationSlug: slug,
-    stationName: historical.data.station.name,
-    startedAt: selectedRun.startedAt,
-    ianaTimezone: stationTz,
-    showName: selectedRun.show?.name ?? null,
-    djNames: selectedRun.show?.djName ? [selectedRun.show.djName] : [],
-    artists: historical.data.tracks.slice().reverse().map((track) => ({
-      name: track.recording?.artist || track.rawArtist,
-      title: track.recording?.title || track.rawTitle,
-      inLibrary: false,
-    })).filter((track) => track.name.trim()),
-    spins: [],
-    progress: 1,
-  } : selectedRunId == null ? liveSet : null;
-  const tracks: StationSetExportTrack[] = selectedRunId == null
-    ? (liveSet?.spins ?? []).map((spin) => ({
-        artist: spin.artist, title: spin.title, playedAt: spin.playedAt, mbid: spin.mbid,
-      }))
-    : (historical.data?.tracks ?? []).map((track) => ({
-        artist: track.recording?.artist || track.rawArtist,
-        title: track.recording?.title || track.rawTitle,
-        playedAt: track.playedAt,
-        mbid: track.recording?.mbid ?? null,
-        location: track.recording?.links?.find((link) => link.kind === "exact")?.url ?? null,
-      }));
-  const download = () => {
-    if (!selectedSet) return;
-    const built = buildStationSetExport(format, selectedSet, tracks);
-    const url = URL.createObjectURL(new Blob([built.content], { type: built.contentType }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = stationSetFilename(selectedSet, format);
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setExportNote(built.skipped > 0
-      ? `${built.skipped} track${built.skipped === 1 ? "" : "s"} lacked the fields required for ${format.toUpperCase()} and ${built.skipped === 1 ? "was" : "were"} skipped.`
-      : `Downloaded ${tracks.length} tracks in broadcast order.`);
-  };
-  const effectiveNextOffset = nextOffset === undefined ? archive.data?.nextOffset : nextOffset;
-  const loadMore = async () => {
-    if (effectiveNextOffset == null || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const page = await getStationArchive(slug, { offset: effectiveNextOffset, limit: 25 });
-      setAdditionalRuns((current) => [...current, ...page.runs]);
-      setNextOffset(page.nextOffset);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-  const identity = selectedSet ? stationSetIdentity(selectedSet) : null;
-  useEffect(() => {
-    workspaceRef.current?.focus();
-  }, [slug]);
-
-  return (
-    <section
-      ref={workspaceRef}
-      className="station-workspace"
-      aria-label={`${archive.data?.station.name ?? slug} set workspace`}
-      tabIndex={-1}
-    >
-      {archive.isLoading && !liveSet ? <p className="dial-hero__setpanel-empty">Loading station sets…</p> : null}
-      {archive.isError ? <p className="dial-hero__setpanel-empty">The station archive is unavailable right now.</p> : null}
-      {selectedSet && identity ? (
-        <article className="station-workspace__selected">
-          <header className="station-workspace__header">
-            <strong>{identity.provenance}</strong>
-            <time dateTime={selectedSet.startedAt}>{identity.date} · {identity.time}</time>
-          </header>
-          <div className="station-workspace__export">
-            <label>
-              <span className="sr-only">Set export format</span>
-              <select aria-label="Set export format" value={format} onChange={(event) => setFormat(event.target.value as StationSetExportFormat)}>
-                {STATION_SET_EXPORT_FORMATS.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}
-              </select>
-            </label>
-            <button type="button" onClick={download}><Download /> Download</button>
-          </div>
-          {exportNote ? <p className="station-workspace__note" role="status">{exportNote}</p> : null}
-          {historical.isLoading && selectedRunId != null ? <p className="dial-hero__setpanel-empty">Loading every play…</p> : (
-            <SetQueueList
-              artists={selectedSet.artists}
-              seedsLower={seedsLower}
-              onAdd={onAdd}
-              onRemove={onRemove}
-              onOpenArtist={onOpenArtist}
-              progress={1}
-            />
-          )}
-        </article>
-      ) : null}
-      {archiveRuns.length > 0 ? (
-        <div className="station-workspace__history" role="list" aria-label="Older station sets">
-          {liveSet ? (
-            <button
-              type="button"
-              role="listitem"
-              className={`station-workspace__history-row station-workspace__history-row--current${selectedRunId == null ? " station-workspace__history-row--selected" : ""}`}
-              aria-pressed={selectedRunId == null}
-              onClick={() => setSelectedRunId(null)}
-            >
-              <span>Current set · {stationSetIdentity(liveSet).provenance}</span>
-              <time dateTime={liveSet.startedAt}>{stationSetIdentity(liveSet).date} · {stationSetIdentity(liveSet).time}</time>
-            </button>
-          ) : null}
-          {archiveRuns.map((run) => {
-            const summary: SetPanelSet = {
-              id: String(run.runId), runId: run.runId, stationSlug: slug,
-              stationName: archive.data!.station.name, startedAt: run.startedAt,
-              ianaTimezone: stationTz, showName: run.show?.name ?? null,
-              djNames: run.show?.djName ? [run.show.djName] : [],
-              artists: [], spins: [], progress: 1,
-            };
-            const rowIdentity = stationSetIdentity(summary);
-            return (
-              <button
-                key={run.runId}
-                type="button"
-                role="listitem"
-                className={`station-workspace__history-row${selectedRunId === run.runId ? " station-workspace__history-row--selected" : ""}`}
-                aria-pressed={selectedRunId === run.runId}
-                onClick={() => setSelectedRunId(run.runId)}
-              >
-                <span>{rowIdentity.provenance}</span>
-                <time dateTime={run.startedAt}>{rowIdentity.date} · {rowIdentity.time}</time>
-              </button>
-            );
-          })}
-          {effectiveNextOffset != null ? (
-            <button type="button" className="station-workspace__more" disabled={loadingMore} onClick={() => void loadMore()}>
-              {loadingMore ? "Loading more sets…" : "Load more sets"}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 /**
  * Tabbed set browser — fully controlled by the parent so that front-door row
  * clicks, replay updates, and provenance drills all share one tab model.
@@ -712,7 +535,6 @@ export function TabbedSetPanel({
   // affordance (actions, export, cards) treats them as "no set tab active".
   const isContextActive = activeTab?.scope.kind === "context";
   const activeArtistScope = activeTab?.scope.kind === "artist" ? activeTab.scope : null;
-  const activeStationScope = activeTab?.scope.kind === "station" ? activeTab.scope : null;
   const active = isContextActive || activeArtistScope ? null : activeTab;
   const displayed = active ? scopedSets(active.scope, allSets) : [];
   const exported = exportOpen && active ? buildSetExport(displayed, service) : null;
@@ -734,12 +556,6 @@ export function TabbedSetPanel({
     value: artistFrameId(name, artistMbids.get(name.trim().toLowerCase()) ?? null),
     label: name,
   });
-  const stationLiveSet = activeStationScope
-    ? [...allSets]
-      .filter((set) => set.stationSlug === activeStationScope.value && set.id !== "replay")
-      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0] ?? null
-    : null;
-
   return (
     <>
       {tabs.length > 0 && (
@@ -760,18 +576,10 @@ export function TabbedSetPanel({
       {activeArtistScope && renderArtistBody != null && (
         <div className="set-panel__artist">{renderArtistBody(activeArtistScope)}</div>
       )}
-      {activeStationScope && (
-        <StationSetWorkspace
-          key={activeStationScope.value}
-          slug={activeStationScope.value}
-          liveSet={stationLiveSet}
-          seedsLower={seedsLower}
-          onAdd={onAdd}
-          onRemove={onRemove}
-          onOpenArtist={openArtist}
-        />
-      )}
-      {active && !activeStationScope && (
+      {/* The station archive workspace is retired (Task #37): a station-scoped
+          tab now renders the same complete-set cards as dj/show scopes, and the
+          pinned dial sentence owns live + one-back set browsing. */}
+      {active && (
         <button
           type="button"
           className="set-panel__actions-toggle"
@@ -780,7 +588,7 @@ export function TabbedSetPanel({
           onClick={() => setActionsOpen((open) => !open)}
         >{actionsOpen ? "less" : "play · export"}</button>
       )}
-      {active && !activeStationScope && (
+      {active && (
         <div className={`set-panel__actions${actionsOpen ? " set-panel__actions--open" : ""}`}>
           <button
             type="button"
@@ -806,7 +614,7 @@ export function TabbedSetPanel({
           </button>
         </div>
       )}
-      {exported && !activeStationScope && (
+      {exported && (
         <div className="set-panel__export" aria-label={`Export to ${service}`}>
           {exported.entries.map((entry, i) => (
             <a key={`${entry.url}:${i}`} href={entry.url} target="_blank" rel="noreferrer">{entry.label}</a>
@@ -816,8 +624,8 @@ export function TabbedSetPanel({
           )}
         </div>
       )}
-      {active && !activeStationScope && displayed.length === 0 && <p className="dial-hero__setpanel-empty">No complete sets are available for this attribution yet.</p>}
-      {!activeStationScope && displayed.length > 0 && (
+      {active && displayed.length === 0 && <p className="dial-hero__setpanel-empty">No complete sets are available for this attribution yet.</p>}
+      {displayed.length > 0 && (
         <div className="set-panel__sets">
           {displayed.map((set) => (
             <article className="set-panel__card" key={set.id}>
@@ -2717,34 +2525,6 @@ export function DialView() {
       ...(name ? { label: name } : {}),
     });
   }, [openSetTab]);
-  const openStationWorkspace = useCallback((row: { ds: DialStation; show: DialShow | null }) => {
-    const spins = row.show?.spins ?? [];
-    if (spins.length > 0) {
-      const startedAt = row.show?.startedAt ?? spins[0]?.playedAt ?? new Date().toISOString();
-      const id = `${row.ds.station.slug}:${startedAt}`;
-      setOpenedSets((current) => ({
-        ...current,
-        [id]: {
-          id,
-          runId: row.show?.runId ?? null,
-          stationSlug: row.ds.station.slug,
-          stationName: row.ds.station.name,
-          startedAt,
-          ianaTimezone: row.show?.ianaTimezone ?? row.ds.station.ianaTimezone ?? null,
-          showName: usableShowName(row.show),
-          djNames: row.show ? eligibleDjNames(dialShowAsAttribution(row.show)) : [],
-          artists: [...spins].reverse().map((spin) => ({
-            name: spin.artist,
-            title: spin.title || null,
-            inLibrary: spin.isLibraryHit || spin.isArtistHit,
-          })).filter((artist) => artist.name.trim()),
-          spins,
-          progress: 1,
-        },
-      }));
-    }
-    openSetTab({ kind: "station", value: row.ds.station.slug });
-  }, [openSetTab]);
   const closeSetTab = useCallback((id: string) => {
     setSetTabs((current) => {
       const index = current.findIndex((tab) => tab.id === id);
@@ -3226,7 +3006,6 @@ export function DialView() {
         ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
         : row.ds.lifetimeCrossings}
       onTuneIn={tuneZoneRow}
-      onOpenWorkspace={openStationWorkspace}
       onToggleExpanded={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
       onCollapse={() => setZone3Expanded(false)}
     />
@@ -3293,7 +3072,6 @@ export function DialView() {
                   ds={pinnedRow.ds}
                   show={pinnedRow.show}
                   seedsLower={seedsLower}
-                  onAddArtist={addSeed}
                 />
               ) : null}
               {/* Quiet front door: with no set tab open the header carries no
@@ -3591,7 +3369,6 @@ export function DialView() {
                           }
                         }}
                         onSetExpand={(row) => openLiveQueue(row, popMap.get(row.ds.station.slug))}
-                        onOpenWorkspace={openStationWorkspace}
                       />
                     )}
 
@@ -3644,13 +3421,6 @@ export function DialView() {
                               setPinnedStationSlug(slug);
                               void radio.toggle(ds.station);
                             }
-                          }}
-                          onOpenWorkspace={(slug) => {
-                            const ds = stations.find((station) => station.station.slug === slug);
-                            if (ds) openStationWorkspace({
-                              ds,
-                              show: ds.shows.find((show) => show.state === "live") ?? null,
-                            });
                           }}
                         />
                       </>
@@ -3828,7 +3598,6 @@ function Zone1Placeholder({
   liveSuggestions = [],
   stations = [],
   onTune,
-  onOpenWorkspace,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
@@ -3840,7 +3609,6 @@ function Zone1Placeholder({
   liveSuggestions?: LiveArtistSuggestion[];
   stations?: DialStation[];
   onTune?: (slug: string) => void;
-  onOpenWorkspace?: (slug: string) => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -3883,7 +3651,6 @@ function Zone1Placeholder({
         seeds={seeds}
         onAddSeed={onAddSeed}
         onTune={onTune ?? (() => undefined)}
-        onOpenWorkspace={onOpenWorkspace}
       />
       <div className="z1-placeholder__manual">
         <span className="z1-placeholder__manual-label">Know who you're looking for?</span>

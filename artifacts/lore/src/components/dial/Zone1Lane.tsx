@@ -36,7 +36,6 @@ export interface Zone1LaneProps {
   onAddArtist: (name: string) => void;
   onTuneIn: (row: DialLaneRow) => void;
   onSetExpand: (row: DialLaneRow) => void;
-  onOpenWorkspace: (row: DialLaneRow) => void;
 }
 
 export function Zone1Lane({
@@ -51,7 +50,6 @@ export function Zone1Lane({
   onAddArtist,
   onTuneIn,
   onSetExpand,
-  onOpenWorkspace,
 }: Zone1LaneProps) {
   return (
     <div id="zone1-rows">
@@ -71,7 +69,7 @@ export function Zone1Lane({
             seedsLower={seedsLower}
             onAddArtist={onAddArtist}
             onSetExpand={() => onSetExpand(row)}
-            onOpenWorkspace={() => onOpenWorkspace(row)}
+            compactSentence
           />
         </div>
       ))}

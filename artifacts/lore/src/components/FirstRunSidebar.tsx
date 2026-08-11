@@ -191,13 +191,11 @@ function StationBlock({
   seedKeys,
   onKeep,
   onTune,
-  onOpenWorkspace,
 }: {
   block: OnboardingBlock;
   seedKeys: Set<string>;
   onKeep: (name: string) => void;
   onTune: (slug: string) => void;
-  onOpenWorkspace: (slug: string) => void;
 }) {
   const provenance = [block.pickerName, block.showName, block.name]
     .filter((value): value is string => !!value?.trim())
@@ -236,18 +234,12 @@ function StationBlock({
         onClick={() => onTune(block.slug)}
       />
       <p className="frb__sentence">
-        <button
-          type="button"
-          className="frb__provenance frb__station-name"
-          aria-label={`Open ${block.name} sets`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenWorkspace(block.slug);
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
+        {/* Provenance is inert text: the station workspace is retired — the
+            row's tune target is the only station-level interaction, and the
+            pinned dial sentence carries the set once tuned. */}
+        <span className="frb__provenance frb__station-name">
           {provenance.join(" | ")}
-        </button>
+        </span>
         {currentArtist ? (
           <> is playing <ArtistList artists={[currentArtist]} seedKeys={seedKeys} onKeep={onKeep} />.</>
         ) : " is on air."}
@@ -281,13 +273,11 @@ export function FirstRunSidebar({
   seeds,
   onAddSeed,
   onTune,
-  onOpenWorkspace,
 }: {
   stations: DialStation[];
   seeds: string[];
   onAddSeed: (artist: string) => void;
   onTune: (slug: string) => void;
-  onOpenWorkspace?: (slug: string) => void;
 }) {
   const blocks = useMemo(() => buildOnboardingBlocks(stations), [stations]);
   const [showAll, setShowAll] = useState(false);
@@ -321,7 +311,6 @@ export function FirstRunSidebar({
             seedKeys={seedKeys}
             onKeep={onAddSeed}
             onTune={onTune}
-            onOpenWorkspace={onOpenWorkspace ?? (() => undefined)}
           />
         ))}
       </div>

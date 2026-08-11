@@ -280,19 +280,18 @@ describe("Zone 2 ghost rows", () => {
 });
 
 describe("front-door tune and workspace semantics", () => {
-  it("provenance opens the station workspace without retuning", () => {
+  it("the station workspace is retired — no 'Open … sets' control exists anywhere in the dial", () => {
     mockDialData([makeZone1Station("kexp"), makeZone1Station("wfmu")]);
     renderDial();
     clickRow("kexp");
-    radioMock.toggle.mockClear();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /open Station kexp sets/i })[0]);
-
-    expect(document.querySelector(".dial-context-region")).toBeNull();
-    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThanOrEqual(2);
-    expect(ctxParam()).toBeNull();
-    expect(screen.getByRole("tab", { name: /kexp/i })).toBeTruthy();
-    expect(radioMock.toggle).not.toHaveBeenCalled();
+    // No workspace entry point on any row: provenance is inert text.
+    expect(screen.queryByRole("button", { name: /open .* sets/i })).toBeNull();
+    expect(document.querySelector(".station-workspace")).toBeNull();
+    // The provenance prefix still renders, but never as a button.
+    for (const el of document.querySelectorAll(".fdrow__provenance")) {
+      expect(el.tagName).not.toBe("BUTTON");
+    }
   });
 
   it("Space on a station row tunes without opening a workspace", () => {

@@ -210,14 +210,14 @@ async function openPopulatedQueue(page: Page) {
   // The attributed live row renders in the DJs-on-air band.
   const row = page.getByRole("button", { name: new RegExp(`${DJ_NAME}.*${SHOW_NAME}`) });
   await expect(row).toBeVisible({ timeout: 15_000 });
-  // The row itself tunes only and leaves the other dial choices in place.
+  // The station set workspace is retired (Task #37): tuning the row pins the
+  // station, which opens the set panel with the pinned live sentence carrying
+  // the COMPLETE inert setlist inline.
   await row.click();
-  // Only the distinct provenance control opens the station set workspace.
-  const provenance = page.getByRole("button", { name: /open .* sets/i }).first();
-  await expect(provenance).toBeVisible({ timeout: 15_000 });
-  await provenance.click();
-  await expect(page.locator(".set-queue__artist").first()).toBeVisible({ timeout: 15_000 });
-  expect(await page.locator(".set-queue__artist").count()).toBe(SPIN_COUNT);
+  const sentence = page.locator(".dial-pinned-set__sentence");
+  await expect(sentence).toBeVisible({ timeout: 15_000 });
+  // The full 120-artist set renders inline (deduped fixture names are unique).
+  expect(await sentence.locator(".fdrow__artist").count()).toBe(SPIN_COUNT);
 }
 
 async function readGeometry(page: Page) {

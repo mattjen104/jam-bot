@@ -3,13 +3,14 @@
  *
  * This subsumes the old station set/wiki workspace into the Dial itself:
  *
- *   - The currently tuned/playing station is pinned at the top of the sidebar.
+ *   - The currently tuned/playing station is pinned at the top of the dial.
  *   - Its live provenance sentence unfurls to include the COMPLETE current
- *     setlist. Live setlist artist interactions add to the library only —
- *     they never play or navigate.
+ *     setlist as inert pipe-separated text — newest track first, walking
+ *     backwards in time. No add controls, no navigation, no playback.
+ *     Library/seeded artists keep the "yours" styling.
  *   - A single left chevron steps back exactly one completed set. The previous
- *     set renders in past tense with its full artist list and strongest
- *     available provenance, plus playlist/export controls.
+ *     set renders in past tense with its full pipe-separated artist list and
+ *     strongest available provenance, plus playlist/export controls.
  *   - Live mode never exposes export/playlist controls — those are structurally
  *     absent, not merely hidden.
  *   - There is no post-sentence byline; provenance lives inside the sentence.
@@ -49,13 +50,15 @@ import {
 } from "../DialView";
 
 /**
- * The live set built from the currently tuned show's spins. Artists render in
- * broadcast order (oldest → newest) so the unfurled sentence reads as the set
- * played out.
+ * The live set built from the currently tuned show's spins. Artists render
+ * newest-first — the now-playing track leads and the list walks backwards in
+ * time — so the unfurled sentence starts at the present moment.
  */
 function liveSetArtists(show: DialShow | null): QueueArtist[] {
   if (!show) return [];
   return show.spins
+    .slice()
+    .reverse()
     .map((spin) => ({
       name: spin.artist,
       inLibrary: spin.isLibraryHit || spin.isArtistHit,
@@ -66,14 +69,14 @@ function liveSetArtists(show: DialShow | null): QueueArtist[] {
 
 /**
  * The COMPLETE setlist rendered inline in the sentence — never truncated.
- * Add-only semantics: the name itself is inert text (never navigates, never
- * plays); non-library names carry the explicit `+` affordance, which flips
- * off once the artist is seeded. Yours renders bright with no control.
+ * Names are inert text joined by pipe separators (` | `), the same visual
+ * treatment as the provenance prefix, so provenance + setlist form one long
+ * single line. Nothing is clickable: no add control, no navigation, no
+ * playback. Artists already in the library / seeded keep the "yours" styling.
  */
 function inlineSetNodes(
   artists: QueueArtist[],
   seedsLower: Set<string>,
-  onAdd: (name: string) => void,
 ): ReactNode {
   const usable = artists
     .map((artist) => ({ ...artist, name: cleanLiveValue(artist.name) }))
@@ -84,37 +87,26 @@ function inlineSetNodes(
 
   const nodes: ReactNode[] = [];
   usable.forEach((artist, i) => {
-    if (i > 0) {
-      nodes.push(i === usable.length - 1 ? (usable.length > 2 ? ", and " : " and ") : ", ");
-    }
+    if (i > 0) nodes.push(" | ");
     const seeded = seedsLower.has(artist.name.trim().toLowerCase());
     const yours = artist.inLibrary || seeded;
-    if (yours) {
-      nodes.push(
+    nodes.push(
+      yours ? (
         <b key={artist.name} className="fdrow__artist fdrow__artist--lib dial-artist--complete" aria-label={`${artist.name} is in your library`}>
           {artist.name}
-        </b>,
-      );
-    } else {
-      nodes.push(
-        <span key={artist.name} className="fdrow__artist-wrap">
-          <span className="fdrow__artist fdrow__artist--other">{artist.name}</span>
-          <button
-            type="button"
-            className="fdrow__addplus dial-addplus"
-            aria-label={`Add ${artist.name} to your artists`}
-            onClick={(e) => { e.stopPropagation(); onAdd(artist.name); }}
-          >+</button>
-        </span>,
-      );
-    }
+        </b>
+      ) : (
+        <span key={artist.name} className="fdrow__artist fdrow__artist--other">{artist.name}</span>
+      ),
+    );
   });
   return <>{nodes}</>;
 }
 
 /**
  * Live provenance sentence — DJ / show / station, strongest-first, with NO
- * trailing byline. The whole setlist lives inline in the sentence.
+ * trailing byline. The whole pipe-separated setlist lives inline in the
+ * sentence.
  */
 function LiveSentence({
   ds,
@@ -190,7 +182,7 @@ function LiveSentence({
 /**
  * Past-tense provenance sentence for the completed previous set. Renders at the
  * strongest available rung (DJ → show → station) with a station-local time
- * context and the full artist list.
+ * context and the full pipe-separated artist list.
  */
 function PastSentence({
   set,
@@ -299,16 +291,18 @@ export interface PinnedSetRowProps {
   /** The tuned station's live show (state="live"), or null when off-air. */
   show: DialShow | null;
   seedsLower: Set<string>;
-  onAddArtist: (name: string) => void;
 }
 
 /**
  * The pinned row: the live unfurled sentence by default, with a single left
- * chevron that toggles back to the previous completed set. Live mode adds
- * only (no play, no navigate, no export); past mode adds export/playlist and
- * shows the strongest provenance in past tense.
+ * chevron that toggles back to the previous completed set.
+ *
+ * Live mode — inert pipe-separated artist names, newest first. No add
+ * controls, no navigation, no export; library/seeded artists styled "yours".
+ * Past mode — past-tense grammar, same pipe-separated inert list, plus
+ * playlist/export controls for that one completed set only.
  */
-export function PinnedSetRow({ ds, show, seedsLower, onAddArtist }: PinnedSetRowProps) {
+export function PinnedSetRow({ ds, show, seedsLower }: PinnedSetRowProps) {
   const [showingPast, setShowingPast] = useState(false);
   const liveArtists = useMemo(() => liveSetArtists(show), [show]);
   const liveRunId = show?.runId ?? null;
@@ -354,6 +348,8 @@ export function PinnedSetRow({ ds, show, seedsLower, onAddArtist }: PinnedSetRow
       ianaTimezone: stationTz,
       showName: prevRun.show?.name ?? null,
       djNames: prevRun.show?.djName ? [prevRun.show.djName] : [],
+      // Past set artists: server returns tracks oldest-first; reverse so the
+      // pipe-separated list also reads newest-first (matches live ordering).
       artists: runDetail.data.tracks
         .slice()
         .reverse()
@@ -389,8 +385,8 @@ export function PinnedSetRow({ ds, show, seedsLower, onAddArtist }: PinnedSetRow
 
   // The full setlist lives INLINE in the sentence — one rendering, no
   // separate queue block, so no name ever appears twice.
-  const liveList = inlineSetNodes(liveArtists, seedsLower, onAddArtist);
-  const pastList = pastSet ? inlineSetNodes(pastSet.artists, seedsLower, onAddArtist) : null;
+  const liveList = inlineSetNodes(liveArtists, seedsLower);
+  const pastList = pastSet ? inlineSetNodes(pastSet.artists, seedsLower) : null;
 
   return (
     <div className="dial-pinned-row dial-pinned-set" aria-label="Tuned station">

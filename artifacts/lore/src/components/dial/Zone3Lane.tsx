@@ -39,7 +39,6 @@ export interface Zone3LaneProps {
   /** Per-row overlap figure (picker overlap for DJ band, lifetime for rest). */
   ovFor: (row: DialLaneRow, band: "dj" | "rest") => number;
   onTuneIn: (row: DialLaneRow) => void;
-  onOpenWorkspace: (row: DialLaneRow) => void;
   /** "See all N" / "See less" toggle — DialView owns the anchor bookkeeping. */
   onToggleExpanded: () => void;
   /** Inline "See less" collapse (label row) — plain collapse, no anchor. */
@@ -58,7 +57,6 @@ export function Zone3Lane({
   popLineFor,
   ovFor,
   onTuneIn,
-  onOpenWorkspace,
   onToggleExpanded,
   onCollapse,
 }: Zone3LaneProps) {
@@ -74,11 +72,11 @@ export function Zone3Lane({
       isActive={row.ds.station.slug === activeSlug}
       isSampling={false}
       onTuneIn={() => onTuneIn(row)}
-      onOpenWorkspace={() => onOpenWorkspace(row)}
       displayMode={displayMode}
       presence={presenceMap.get(row.ds.station.id)}
       artworkUrl={artworkUrl}
       popLine={popLineFor(row.ds.station.slug)}
+      compactSentence
     />
   );
 
