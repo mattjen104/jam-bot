@@ -89,6 +89,7 @@ RUN_SPECS=(
   e2e/cornerNavTappability.spec.ts
   e2e/mobileFrontDoor.spec.ts
   e2e/firstRunSidebarOnboarding.spec.ts
+  e2e/dialInfiniteScroll.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
