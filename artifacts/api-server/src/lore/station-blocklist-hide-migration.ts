@@ -2,8 +2,9 @@ import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 /**
- * One-shot boot migration: hide stations whose names match an entry in
- * RADIO_BROWSER_NAME_BLOCKLIST.
+ * Boot migration: hide stations whose names match an entry in
+ * RADIO_BROWSER_NAME_BLOCKLIST, plus curated stations with no viable
+ * now-playing source.
  *
  * The ingest-time guard in radio-browser.ts already rejects new stations that
  * match the blocklist, but stations added before the blocklist was introduced
@@ -16,7 +17,8 @@ import { sql } from "drizzle-orm";
  *
  * If the blocklist in radio-browser.ts gains new entries in the future, extend
  * this migration (or add a new sibling migration) with the matching LIKE
- * predicates so the retroactive hide covers them too.
+ * predicates so the retroactive hide covers them too. CHMR and CISM should
+ * remain hidden until a working now-playing source is identified.
  *
  * @see artifacts/api-server/src/lore/radio-browser.ts (RADIO_BROWSER_NAME_BLOCKLIST)
  */
@@ -28,6 +30,7 @@ export async function applyStationBlocklistHideMigration(): Promise<void> {
       AND (
         LOWER(name) LIKE '%exclusively %'
         OR LOWER(name) LIKE '%epic lounge%'
+        OR slug IN ('chmr', 'cism')
       )
   `);
   const affected = (result as { rowCount?: number }).rowCount ?? 0;

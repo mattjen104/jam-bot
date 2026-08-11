@@ -179,6 +179,9 @@ async function bootLore(): Promise<void> {
     });
     await ensurePicksUnifiedView();
     await seedStations();
+    // Hide confirmed dead-end stations before any pollers or lease scheduling
+    // starts, so existing rows cannot briefly consume watcher slots at boot.
+    await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
     try {
       await backfillStationTimezones();
     } catch (err) {
@@ -240,7 +243,6 @@ async function bootLore(): Promise<void> {
     startQualityRecomputeJob();
     await runMigration("applyLifetimeCrossingsMigration", applyLifetimeCrossingsMigration);
     await runMigration("applyAppleLibraryItemsMigration", applyAppleLibraryItemsMigration);
-    await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
     startLifetimeCrossingsJob();
     startBlendedCrossingsWarmJob();
     warmPersonalCrossingsAtBoot();

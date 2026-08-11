@@ -288,9 +288,8 @@ function indieInternetStations(): InsertStation[] {
  * broadcast automation systems never populate the ICY metadata field.
  * Thorough investigation (2026-07) found no publicly accessible now-playing API
  * for either station (see per-station comments). Their `nowPlayingSource` is
- * null and they are omitted from `ICY_HEALTH_SEEDS`. They remain on the dial
- * and retain `favorite: true` for curation purposes, but will not log spins
- * until a working source is identified and configured.
+ * null and they are omitted from `ICY_HEALTH_SEEDS`. They are hidden from the
+ * dial until a working now-playing source is identified and configured.
  */
 function canadianCampusStations(): InsertStation[] {
   return [
@@ -340,6 +339,7 @@ function canadianCampusStations(): InsertStation[] {
       source: "curated",
       stationClass: "community",
       favorite: true,
+      hidden: true,
       sortOrder: 901,
     },
     {
@@ -370,6 +370,7 @@ function canadianCampusStations(): InsertStation[] {
       source: "curated",
       stationClass: "community",
       favorite: true,
+      hidden: true,
       sortOrder: 902,
     },
     {

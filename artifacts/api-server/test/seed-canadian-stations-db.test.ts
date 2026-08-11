@@ -6,6 +6,7 @@ import {
   radioBrowserStationsTable,
 } from "@workspace/db";
 import { seedStations, ensureIcyHealthRows } from "../src/lore/seed.js";
+import { applyStationBlocklistHideMigration } from "../src/lore/station-blocklist-hide-migration.js";
 
 /**
  * Integration test: six curated Canadian campus stations.
@@ -72,6 +73,7 @@ beforeAll(async () => {
   }
   if (dbAvailable) {
     await seedStations();
+    await applyStationBlocklistHideMigration();
   }
 }, 60_000);
 
@@ -98,6 +100,12 @@ describe("Canadian campus station seed enrollment", () => {
       } else {
         // CHMR, CISM — nowPlayingSource=null until a working API is found.
         expect(row.nowPlayingSource).toBeNull();
+      }
+
+      if ((["chmr", "cism"] as readonly string[]).includes(row.slug)) {
+        expect(row.hidden).toBe(true);
+      } else {
+        expect(row.hidden).toBe(false);
       }
     }
   });
