@@ -143,7 +143,7 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
 /** Live Zone-1 station (r=2: artistCrossings > 0). */
 function makeZone1Station(slug: string): DialStation {
   return {
-    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
+    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: "https://example.com/stream", websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
     isLive: true,
     shows: [makeShow({ artistCrossings: 1 })],
     crossings: 0,

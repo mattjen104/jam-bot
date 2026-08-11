@@ -22,6 +22,8 @@ import {
   reason,
 } from "../dialViewHelpers";
 import { proxyArtUrl } from "../../lib/proxyArt";
+import { resolvePlaybackSource } from "../../hooks/useRadioPlayer";
+import { safeHttpUrl } from "../../lib/utils";
 import {
   type DialStation,
   type DialShow,
@@ -391,6 +393,13 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     isActive ? "fdrow--playing" : "",
   ].filter(Boolean).join(" ");
 
+  // Attribution-only stations (no direct stream, no relay) cannot be played
+  // in-app: the row click must not reach radio.toggle (which would surface
+  // the "no live stream configured" safety-net error). Instead the row shows
+  // a "Listen on <site> ↗" affordance that opens the station's own website.
+  const playable = resolvePlaybackSource(ds.station) != null;
+  const siteHref = playable ? null : safeHttpUrl(ds.station.homepageUrl);
+
   return (
     <div
       className={rowCls}
@@ -398,9 +407,9 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       role="button"
       aria-label={compact?.text ?? undefined}
       tabIndex={0}
-      onClick={onTuneIn}
+      onClick={playable ? onTuneIn : undefined}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (playable && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onTuneIn();
         }
@@ -417,6 +426,18 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {/* Tier 1: reason sentence — leads at full display weight */}
         <div className={`fdrow__t1 ${tier1Cls}`}>
           {tier1Node}
+          {siteHref && (
+            <a
+              className="fdrow__site-link"
+              href={siteHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Listen on ${ds.station.name} site`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              ↗ Listen on site
+            </a>
+          )}
         </div>
 
         {/* "this set:" expanded block — shows the full station setlist below the

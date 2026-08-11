@@ -22,7 +22,7 @@ import { PlayerBar } from "../src/components/PlayerBar";
 import type { SpotifyConnectApi } from "../src/player/useSpotifyConnect";
 import type { Station } from "@workspace/api-client-react";
 
-const STATION = { slug: "kexp", name: "KEXP" } as Station;
+const STATION = { slug: "kexp", name: "KEXP", streamUrl: "https://kexp-mp3-128.streamguys1.com/kexp128.mp3" } as Station;
 
 function makeSpotify(overrides: Partial<SpotifyConnectApi>): SpotifyConnectApi {
   const product = overrides.product ?? null;

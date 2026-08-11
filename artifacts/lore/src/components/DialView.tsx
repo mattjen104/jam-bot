@@ -12,6 +12,7 @@ import { useLocation } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
+import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
@@ -1258,7 +1259,7 @@ function useScanState(cands: Array<{ sp: DialSpin; show: DialShow; station: Dial
 
   return { scanning, sampling, toggle, land, stopScan };
 }
-function ScanBar({
+export function ScanBar({
   stations,
   level,
   currentStation,
@@ -1266,23 +1267,31 @@ function ScanBar({
   currentDj,
   onPlay,
 }: ScanBarProps) {
-  // Collect library-crossing candidates for the current scope
+  // Collect library-crossing candidates for the current scope.
+  // Attribution-only stations (no stream, no relay) are excluded up front:
+  // a scan can neither sample nor land on a station that can't play.
   const cands = useMemo(() => {
+    const playable = (ds: DialStation) => resolvePlaybackSource(ds.station) != null;
     const hits: Array<{ sp: DialSpin; show: DialShow; station: DialStation }> = [];
     if (level === "show" && currentShow) {
-      for (const sp of currentShow.spins) {
-        if (sp.isLibraryHit) {
-          hits.push({ sp, show: currentShow, station: currentStation! });
+      if (currentStation && playable(currentStation)) {
+        for (const sp of currentShow.spins) {
+          if (sp.isLibraryHit) {
+            hits.push({ sp, show: currentShow, station: currentStation });
+          }
         }
       }
     } else if (level === "station" && currentStation) {
-      for (const show of currentStation.shows) {
-        if (show.state === "future") continue;
-        const sp = show.spins.find((s) => s.isLibraryHit);
-        if (sp) hits.push({ sp, show, station: currentStation });
+      if (playable(currentStation)) {
+        for (const show of currentStation.shows) {
+          if (show.state === "future") continue;
+          const sp = show.spins.find((s) => s.isLibraryHit);
+          if (sp) hits.push({ sp, show, station: currentStation });
+        }
       }
     } else if (level === "dj" && currentDj) {
       for (const ds of stations) {
+        if (!playable(ds)) continue;
         for (const show of ds.shows) {
           if (show.djName !== currentDj || show.state === "future") continue;
           const sp = show.spins.find((s) => s.isLibraryHit);
@@ -1292,6 +1301,7 @@ function ScanBar({
     } else {
       // all — crossings from every station
       for (const ds of stations) {
+        if (!playable(ds)) continue;
         for (const show of ds.shows) {
           if (show.state === "future") continue;
           const sp = show.spins.find((s) => s.isLibraryHit);
@@ -2385,12 +2395,16 @@ export function DialView() {
 
   // Play each sample as scan advances — uses radio.preview() so no listen event
   // is written to the journal or server ledger (spec §11).
+  // Attribution-only stations (no stream/relay) are skipped: previewing them
+  // would only surface the "no live stream configured" safety-net error.
   const prevSamplingIdx = useRef<number | null>(null);
   useEffect(() => {
     if (scan.scanning && scan.samplingIdx != null && scan.samplingIdx !== prevSamplingIdx.current) {
       prevSamplingIdx.current = scan.samplingIdx;
       const row = withReason[scan.samplingIdx];
-      if (row) void radio.preview(row.ds.station);
+      if (row && resolvePlaybackSource(row.ds.station) != null) {
+        void radio.preview(row.ds.station);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan.scanning, scan.samplingIdx]);
@@ -2620,9 +2634,12 @@ export function DialView() {
   }, [surface, openArtistTab]);
 
   // ── Unified live feed — one flat list for all live stations.
-  // Shared tune handler for every feed row.
+  // Shared tune handler for every feed row. Attribution-only stations
+  // (no stream, no relay) never reach radio.toggle — their rows render a
+  // "Listen on site" link instead of a tune-in click target.
   const tuneZoneRow = useCallback((row: DialLaneRow) => {
     scan.stop();
+    if (resolvePlaybackSource(row.ds.station) == null) return;
     if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
       void radio.toggle(row.ds.station);
     }
@@ -2948,7 +2965,7 @@ export function DialView() {
                           stations={stations}
                           onTune={(slug) => {
                             const ds = stations.find((s) => s.station.slug === slug);
-                            if (ds) {
+                            if (ds && resolvePlaybackSource(ds.station) != null) {
                               void radio.toggle(ds.station);
                             }
                           }}

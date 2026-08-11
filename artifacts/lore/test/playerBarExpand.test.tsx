@@ -17,7 +17,7 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
 import { PlayerBar } from "../src/components/PlayerBar";
 import type { Station } from "@workspace/api-client-react";
 
-const STATION = { slug: "kexp", name: "KEXP" } as Station;
+const STATION = { slug: "kexp", name: "KEXP", streamUrl: "https://kexp-mp3-128.streamguys1.com/kexp128.mp3" } as Station;
 
 function renderBar(opts: {
   onExpand?: () => void;

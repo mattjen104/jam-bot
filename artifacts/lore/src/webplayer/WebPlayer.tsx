@@ -4,6 +4,8 @@ import { Link, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
+import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
+import { safeHttpUrl } from "../lib/utils";
 import {
   useLatestImportJob,
   useMyKeepStatus,
@@ -436,6 +438,10 @@ function OnAirRow({
   // When a show name is the title, keep the station as context; otherwise the
   // trailing station label would just repeat the title — hide it.
   const stationContext = item.show?.name ? item.station.name : null;
+  // Attribution-only stations (no direct stream, no relay) can't play in-app;
+  // show a "Listen on site" link in the play-button slot instead.
+  const playable = resolvePlaybackSource(item.station) != null;
+  const siteHref = playable ? null : safeHttpUrl(item.station.homepageUrl);
   const oneLine: React.CSSProperties = {
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -453,27 +459,44 @@ function OnAirRow({
       }}
       data-testid={`wp-onair-${item.station.slug}`}
     >
-      <button
-        type="button"
-        className="wp-play wp-play-sm"
-        aria-label={`${isPlaying ? "Stop" : "Play"} ${title}`}
-        onClick={() => {
-          // Stop preview-mode scan before switching to a broadcast station.
-          if (scan.active) scan.toggle();
-          radio.toggle(item.station);
-        }}
-        style={
-          isPlaying
-            ? {
-                background: "var(--wp-fill-primary)",
-                color: "var(--wp-on-primary)",
-                border: "none",
-              }
-            : undefined
-        }
-      >
-        {isPlaying ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
-      </button>
+      {playable ? (
+        <button
+          type="button"
+          className="wp-play wp-play-sm"
+          aria-label={`${isPlaying ? "Stop" : "Play"} ${title}`}
+          onClick={() => {
+            // Stop preview-mode scan before switching to a broadcast station.
+            if (scan.active) scan.toggle();
+            radio.toggle(item.station);
+          }}
+          style={
+            isPlaying
+              ? {
+                  background: "var(--wp-fill-primary)",
+                  color: "var(--wp-on-primary)",
+                  border: "none",
+                }
+              : undefined
+          }
+        >
+          {isPlaying ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
+        </button>
+      ) : siteHref ? (
+        <a
+          className="wp-play wp-play-sm"
+          href={siteHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Listen on ${item.station.name} site`}
+          title={`Listen on ${item.station.name} site`}
+          data-testid={`wp-onair-site-${item.station.slug}`}
+          style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+        >
+          ↗
+        </a>
+      ) : (
+        <span className="wp-play wp-play-sm" aria-hidden="true" style={{ visibility: "hidden" }} />
+      )}
       <button
         type="button"
         onClick={() => onOpenRun(item.station.slug)}

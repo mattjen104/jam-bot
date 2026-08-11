@@ -100,7 +100,7 @@ function wrap(ui: React.ReactElement, qc?: QueryClient) {
 }
 
 const onAirItem = (over: Partial<WpOnAirItem["now"]> = {}): WpOnAirItem => ({
-  station: { slug: "kutx", name: "KUTX" } as WpOnAirItem["station"],
+  station: { slug: "kutx", name: "KUTX", streamUrl: "https://example.com/stream" } as WpOnAirItem["station"],
   show: { name: "Left of the Dial", djName: "Rae" },
   now: {
     mbid: "mbid-1",
@@ -147,6 +147,44 @@ describe("OnAirKeep visibility", () => {
     mockOnAir([onAirItem({ resolved: false })], true);
     wrap(<WebPlayer />);
     expect(screen.queryByTestId("wp-onair-keep-mbid-1")).toBeNull();
+  });
+});
+
+describe("OnAirRow attribution-only stations (no stream, no relay)", () => {
+  const attributionOnlyItem = (
+    station: Partial<WpOnAirItem["station"]>,
+  ): WpOnAirItem => ({
+    ...onAirItem(),
+    station: { slug: "wvum", name: "WVUM", streamUrl: null, ...station } as WpOnAirItem["station"],
+  });
+
+  it("shows a Listen-on-site link instead of the play button", () => {
+    mockOnAir([attributionOnlyItem({ homepageUrl: "https://wvum.org" })], true);
+    wrap(<WebPlayer />);
+    const link = screen.getByTestId("wp-onair-site-wvum") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("https://wvum.org/");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(screen.queryByLabelText(/Play Left of the Dial/)).toBeNull();
+  });
+
+  it("renders neither play button nor link when there is no homepage", () => {
+    mockOnAir([attributionOnlyItem({ homepageUrl: null })], true);
+    wrap(<WebPlayer />);
+    expect(screen.queryByTestId("wp-onair-site-wvum")).toBeNull();
+    expect(screen.queryByLabelText(/Play Left of the Dial/)).toBeNull();
+    // Row itself still renders — attribution metadata stays visible.
+    expect(screen.getByTestId("wp-onair-wvum")).toBeTruthy();
+  });
+
+  it("keeps the play button for a station with a relay", () => {
+    mockOnAir(
+      [attributionOnlyItem({ relayUrl: "/api/stations/wvum/relay", homepageUrl: "https://wvum.org" })],
+      true,
+    );
+    wrap(<WebPlayer />);
+    expect(screen.queryByTestId("wp-onair-site-wvum")).toBeNull();
+    expect(screen.getByLabelText(/Play Left of the Dial/)).toBeTruthy();
   });
 });
 

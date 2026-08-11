@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import type { Station, StationNowPlaying } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
+import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
+import { safeHttpUrl } from "../lib/utils";
 import { NowPlaying } from "./NowPlaying";
 import {
   ChevronDown,
@@ -102,19 +104,32 @@ export function PlayerSheet({
             className="player-bar-vol__range"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => onToggle(station)}
-          aria-label={isPlaying ? "Pause" : "Play"}
-          data-testid="player-sheet-toggle"
-          className="player-bar-btn player-bar-btn--play player-sheet__btn"
-        >
-          {isLoading
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : isPlaying
-              ? <Pause className="h-4 w-4 fill-current" />
-              : <Play className="h-4 w-4 fill-current ml-0.5" />}
-        </button>
+        {resolvePlaybackSource(station) != null ? (
+          <button
+            type="button"
+            onClick={() => onToggle(station)}
+            aria-label={isPlaying ? "Pause" : "Play"}
+            data-testid="player-sheet-toggle"
+            className="player-bar-btn player-bar-btn--play player-sheet__btn"
+          >
+            {isLoading
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : isPlaying
+                ? <Pause className="h-4 w-4 fill-current" />
+                : <Play className="h-4 w-4 fill-current ml-0.5" />}
+          </button>
+        ) : safeHttpUrl(station.homepageUrl) ? (
+          <a
+            href={safeHttpUrl(station.homepageUrl)!}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="player-bar-site-link player-sheet__btn"
+            aria-label={`Listen on ${station.name} site`}
+            data-testid="player-sheet-site-link"
+          >
+            ↗ Listen on site
+          </a>
+        ) : null}
         {onScanToggle && (
           <button
             type="button"

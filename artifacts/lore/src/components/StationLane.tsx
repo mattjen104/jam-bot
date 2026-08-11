@@ -6,6 +6,8 @@
  */
 import { useEffect, useRef } from "react";
 import type { DialStation, DialShow } from "../hooks/useDialData";
+import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
+import { safeHttpUrl } from "../lib/utils";
 
 // CSS layout constants — must match :root in index.css
 const NEEDLE_X = 270; // px — position of the NOW needle in each viewport
@@ -192,14 +194,29 @@ export function StationLane({ dialStation, isPinned: _isPinned, onStationClick, 
             </span>
           );
         })()}
-        <button
-          type="button"
-          className={`dial-lane__play${isActive ? " dial-lane__play--on" : ""}`}
-          onClick={(e) => { e.stopPropagation(); onPlay(); }}
-          aria-label={isActive ? `Stop ${station.name}` : `Play ${station.name}`}
-        >
-          {isActive ? "■" : "▶"}
-        </button>
+        {resolvePlaybackSource(station) != null ? (
+          <button
+            type="button"
+            className={`dial-lane__play${isActive ? " dial-lane__play--on" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onPlay(); }}
+            aria-label={isActive ? `Stop ${station.name}` : `Play ${station.name}`}
+          >
+            {isActive ? "■" : "▶"}
+          </button>
+        ) : (
+          safeHttpUrl(station.homepageUrl) ? (
+            <a
+              className="dial-lane__site-link"
+              href={safeHttpUrl(station.homepageUrl)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Listen on ${station.name} site`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              ↗ Site
+            </a>
+          ) : null
+        )}
       </div>
 
       {/* block row with NOW needle */}

@@ -134,7 +134,7 @@ function makeZone1Station(): DialStation {
       slug: "seed-station",
       name: "Seed Radio",
       automationClass: null,
-      streamUrl: null,
+      streamUrl: "https://example.com/stream",
       websiteUrl: null,
       hidden: false,
       favorite: false,

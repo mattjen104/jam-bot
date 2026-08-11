@@ -1,5 +1,7 @@
 import type { Station, NowPlaying } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
+import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
+import { safeHttpUrl } from "../lib/utils";
 import type {
   RadioCastStatus,
   RadioCastFallbackReason,
@@ -210,20 +212,33 @@ export function PlayerBar({
             </button>
           )}
 
-          {/* Play / pause */}
-          <button
-            type="button"
-            onClick={() => onToggle(station)}
-            aria-label={isPlaying ? "Pause" : "Play"}
-            data-testid="player-toggle"
-            className="player-bar-btn player-bar-btn--play"
-          >
-            {isLoading
-              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              : isPlaying
-                ? <Pause className="h-3.5 w-3.5 fill-current" />
-                : <Play className="h-3.5 w-3.5 fill-current ml-0.5" />}
-          </button>
+          {/* Play / pause — replaced by site link for attribution-only stations */}
+          {resolvePlaybackSource(station) != null ? (
+            <button
+              type="button"
+              onClick={() => onToggle(station)}
+              aria-label={isPlaying ? "Pause" : "Play"}
+              data-testid="player-toggle"
+              className="player-bar-btn player-bar-btn--play"
+            >
+              {isLoading
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : isPlaying
+                  ? <Pause className="h-3.5 w-3.5 fill-current" />
+                  : <Play className="h-3.5 w-3.5 fill-current ml-0.5" />}
+            </button>
+          ) : safeHttpUrl(station.homepageUrl) ? (
+            <a
+              href={safeHttpUrl(station.homepageUrl)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="player-bar-site-link"
+              aria-label={`Listen on ${station.name} site`}
+              data-testid="player-site-link"
+            >
+              ↗ Listen on site
+            </a>
+          ) : null}
 
           {/* Scan */}
           {onScanToggle && (

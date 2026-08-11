@@ -420,3 +420,67 @@ describe("fallback and interaction", () => {
   });
 
 });
+
+describe("attribution-only stations (no stream, no relay)", () => {
+  it("renders a Listen-on-site link instead of a tune-in click target", () => {
+    const onTuneIn = vi.fn();
+    const { container } = render(
+      <FrontDoorRow
+        ds={makeDialStation({ streamUrl: null, homepageUrl: "https://wvum.org" } as Partial<DialStation["station"]>)}
+        show={makeShow({ currentTrack: makeSpin() })}
+        ov={0} isActive={false} isSampling={false} onTuneIn={onTuneIn} onEarlier={vi.fn()}
+      />,
+    );
+    const link = container.querySelector(".fdrow__site-link") as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute("href")).toBe("https://wvum.org/");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+
+    // Clicking the row body never tunes — the safety-net error is unreachable.
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(onTuneIn).not.toHaveBeenCalled();
+  });
+
+  it("omits the link when the station has no homepage, and still never tunes", () => {
+    const onTuneIn = vi.fn();
+    const { container } = render(
+      <FrontDoorRow
+        ds={makeDialStation({ streamUrl: null, homepageUrl: null } as Partial<DialStation["station"]>)}
+        show={makeShow({ currentTrack: makeSpin() })}
+        ov={0} isActive={false} isSampling={false} onTuneIn={onTuneIn} onEarlier={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".fdrow__site-link")).toBeNull();
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(onTuneIn).not.toHaveBeenCalled();
+  });
+
+  it("keeps the normal tune-in behavior for stations with a relay", () => {
+    const onTuneIn = vi.fn();
+    const { container } = render(
+      <FrontDoorRow
+        ds={makeDialStation({ streamUrl: null, relayUrl: "/api/stations/x/relay" } as Partial<DialStation["station"]>)}
+        show={makeShow({ currentTrack: makeSpin() })}
+        ov={0} isActive={false} isSampling={false} onTuneIn={onTuneIn} onEarlier={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".fdrow__site-link")).toBeNull();
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(onTuneIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the normal tune-in behavior for stations with a direct stream", () => {
+    const onTuneIn = vi.fn();
+    const { container } = render(
+      <FrontDoorRow
+        ds={makeDialStation({ streamUrl: "https://example.com/stream" } as Partial<DialStation["station"]>)}
+        show={makeShow({ currentTrack: makeSpin() })}
+        ov={0} isActive={false} isSampling={false} onTuneIn={onTuneIn} onEarlier={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".fdrow__site-link")).toBeNull();
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(onTuneIn).toHaveBeenCalledTimes(1);
+  });
+});

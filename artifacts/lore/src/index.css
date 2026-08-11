@@ -156,6 +156,26 @@
   border-color: hsl(var(--accent) / 0.5);
   background: hsl(var(--accent) / 0.08);
 }
+/* Attribution-only station fallback: replaces the play button with a site link */
+.player-bar-site-link {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 7px;
+  background: transparent;
+  padding: 0 10px;
+  height: 30px;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.player-bar-site-link:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+/* Larger touch target in the expanded sheet */
+.player-sheet__btn.player-bar-site-link { height: 40px; }
 
 /* ── Ticker strip ───────────────────────────────────────────────────────────
    Hidden at all widths: the collapsed dock is a single line everywhere
@@ -2897,6 +2917,41 @@
   border-color: hsl(var(--live));
   background: rgba(162, 162, 162,.12);
 }
+/* Fallback for attribution-only stations (no stream, no relay) */
+.dial-lane__site-link {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--lore-size-small);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  background: none;
+  padding: 2px 6px;
+  border-radius: 99px;
+  flex-shrink: 0;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: color 0.1s, border-color 0.1s;
+}
+.dial-lane__site-link:hover { color: hsl(var(--foreground)); border-color: hsl(var(--muted-foreground)); }
+
+/* Feed-row variant — inline after the tier-1 sentence on attribution-only
+   stations (no stream, no relay). Same pill treatment as the lane link. */
+.fdrow__site-link {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  font-size: var(--lore-size-small);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  background: none;
+  padding: 2px 6px;
+  border-radius: 99px;
+  flex-shrink: 0;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: color 0.1s, border-color 0.1s;
+}
+.fdrow__site-link:hover { color: hsl(var(--foreground)); border-color: hsl(var(--muted-foreground)); }
 
 .dial-lane__pin {
   margin-left: 4px;
