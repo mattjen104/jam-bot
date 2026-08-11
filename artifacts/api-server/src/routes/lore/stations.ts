@@ -55,6 +55,7 @@ import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../.
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
+import { attachListener, isRelayAllowed } from "../../lore/stream-relay.js";
 import { computeGenreBreakdown, computeDiscoveryScore, labelFromScore } from "../../lore/genre-insights.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
@@ -723,6 +724,44 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
       nowPlaying: row ? toNowPlaying({ ...row, isFirstSpin }) : null,
     }),
   );
+}));
+
+// GET /api/stations/:slug/relay
+// Server-side HTTPS relay for allowlisted HTTP-only Icecast/Shoutcast streams.
+// Browsers running Lore over HTTPS block plain-HTTP audio as mixed content;
+// this endpoint opens one upstream connection per station and fans the raw
+// bytes (plus ICY metadata headers) out to every listener. See
+// lore/stream-relay.ts for session management, listener caps, and back-off.
+router.get("/stations/:slug/relay", h(async (req, res) => {
+  const slug = req.params.slug;
+  if (typeof slug !== "string" || !isRelayAllowed(slug)) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const [station] = await db
+    .select({ streamUrl: stationsTable.streamUrl })
+    .from(stationsTable)
+    .where(and(eq(stationsTable.slug, slug), eq(stationsTable.hidden, false)))
+    .limit(1);
+  if (!station) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const result = await attachListener(slug, station.streamUrl ?? "", res);
+  switch (result.kind) {
+    case "ok":
+      // attachListener has taken ownership of `res`: headers are written when
+      // the upstream connects, bytes stream until either side disconnects.
+      return;
+    case "not_allowed":
+      return res.status(404).json({ error: "Station not found" });
+    case "no_stream_url":
+      return res.status(503).json({ error: "No relayable stream for this station" });
+    case "cap_exceeded":
+      return res.status(503).json({ error: "Relay listener limit reached" });
+    case "upstream_unavailable":
+      return res.status(503).json({ error: "Upstream stream unavailable" });
+  }
 }));
 
 // POST /api/stations/:slug/report-now-playing

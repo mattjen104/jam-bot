@@ -1240,11 +1240,12 @@ function spinitronCollegeStations(): InsertStation[] {
       // Shoutcast DNAS at new-webstream.wmfo.org — HTTP-only (port 80);
       // the server does not expose TLS. Investigation (2026-08): 200 audio/aacp
       // confirmed on the HTTP URL, icy-br:52 (52kbps AAC+). No HTTPS CDN
-      // or proxy found. streamUrl left empty so the player degrades gracefully;
-      // Spinitron still provides metadata. Update when HTTPS is published.
+      // or proxy found. Browsers on HTTPS play it through the server-side
+      // relay (see stream-relay.ts); the HTTP URL also feeds the ICY watcher.
+      // The trailing ";" is Shoutcast's required stream-request path.
       // Spinitron fixture (test/fixtures/spinitron-wmfo.html) is already
       // captured for parseSpinitronWebPage regression testing.
-      streamUrl: "",
+      streamUrl: "http://new-webstream.wmfo.org/;",
       streamQuality: "52kbps AAC+",
       streamFormat: "aac",
       homepageUrl: "https://wmfo.org",

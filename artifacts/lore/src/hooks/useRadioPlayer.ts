@@ -11,9 +11,31 @@ interface PlayerState {
 }
 
 /**
+ * Resolve the audio source for a station. Direct HTTPS streams play as-is.
+ * Plain-HTTP streams are blocked as mixed content when Lore is served over
+ * HTTPS, so allowlisted stations carry a server-side `relayUrl` — a same-origin
+ * path that relays the upstream bytes (audio unchanged, ICY headers passed
+ * through). Returns null when the station has no playable source at all.
+ */
+export function resolvePlaybackSource(station: Station): string | null {
+  const direct = station.streamUrl;
+  const relay = station.relayUrl ?? null;
+  if (direct) {
+    // A plain-HTTP stream can't be fetched from an HTTPS page; use the relay
+    // when one exists. (When Lore itself runs over plain HTTP — local dev —
+    // the relay still works, so preferring it for http:// sources is safe.)
+    if (direct.startsWith("http://") && relay) return relay;
+    return direct;
+  }
+  return relay;
+}
+
+/**
  * Plays a station's sanctioned live stream URL, unmodified. Audio is never
- * proxied or re-encoded — the browser fetches the origin stream directly.
- * Falls back to hls.js only for `.m3u8` streams on browsers without native HLS.
+ * re-encoded — the browser fetches the origin stream directly, except for
+ * allowlisted HTTP-only stations, which route through the same-origin HTTPS
+ * relay (see resolvePlaybackSource). Falls back to hls.js only for `.m3u8`
+ * streams on browsers without native HLS.
  */
 export function useRadioPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -74,11 +96,11 @@ export function useRadioPlayer() {
   }, []);
 
   const attachSource = useCallback(
-    async (el: HTMLAudioElement, station: Station) => {
+    async (el: HTMLAudioElement, station: Station, source: string) => {
       teardownHls();
       const isHls =
         station.streamFormat === "hls" ||
-        station.streamUrl.toLowerCase().includes(".m3u8");
+        source.toLowerCase().includes(".m3u8");
       const canNativeHls =
         el.canPlayType("application/vnd.apple.mpegurl") !== "";
 
@@ -90,13 +112,13 @@ export function useRadioPlayer() {
             maxBufferLength: 8,  // live edge reachable faster (default: 30s)
             backBufferLength: 0, // no back-buffer needed for live radio
           });
-          hls.loadSource(station.streamUrl);
+          hls.loadSource(source);
           hls.attachMedia(el);
           hlsRef.current = hls;
           return;
         }
       }
-      el.src = station.streamUrl;
+      el.src = source;
     },
     [teardownHls],
   );
@@ -105,7 +127,8 @@ export function useRadioPlayer() {
     async (station: Station) => {
       const el = ensureAudio();
       if (!el) return;
-      if (!station.streamUrl) {
+      const source = resolvePlaybackSource(station);
+      if (!source) {
         setState((s) => ({
           ...s,
           status: "error",
@@ -116,7 +139,7 @@ export function useRadioPlayer() {
       }
       setState((s) => ({ ...s, status: "loading", station, error: null }));
       try {
-        await attachSource(el, station);
+        await attachSource(el, station, source);
         el.load();
         await el.play();
       } catch {

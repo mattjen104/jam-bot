@@ -3980,6 +3980,14 @@ components:
         ianaTimezone:
           type: ["string", "null"]
           description: Best-effort IANA timezone for station-local schedule and set presentation.
+        relayUrl:
+          type: ["string", "null"]
+          description: >-
+            Server-side HTTPS relay path (e.g. "/api/stations/wmfo/relay") for
+            allowlisted stations whose only audio stream is plain HTTP —
+            browsers on HTTPS block those as mixed content, so the player uses
+            this relay endpoint instead. Null/absent for stations that stream
+            over HTTPS directly or have no stream at all.
       required:
         - id
         - slug

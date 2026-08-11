@@ -303,6 +303,12 @@ export const ListStationsResponse = zod.object({
           .describe(
             "Best-effort IANA timezone for station-local schedule and set presentation.",
           ),
+        relayUrl: zod
+          .string()
+          .nullish()
+          .describe(
+            'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
+          ),
       })
       .describe("A curated radio station in the public directory."),
   ),
@@ -727,6 +733,12 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           "Best-effort IANA timezone for station-local schedule and set presentation.",
+        ),
+      relayUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -1588,6 +1600,12 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           "Best-effort IANA timezone for station-local schedule and set presentation.",
+        ),
+      relayUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
         ),
     })
     .describe("A curated radio station in the public directory."),

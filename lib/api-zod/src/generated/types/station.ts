@@ -78,4 +78,9 @@ export interface Station {
    * @nullable
    */
   ianaTimezone?: string | null;
+  /**
+   * Server-side HTTPS relay path (e.g. "/api/stations/wmfo/relay") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null/absent for stations that stream over HTTPS directly or have no stream at all.
+   * @nullable
+   */
+  relayUrl?: string | null;
 }

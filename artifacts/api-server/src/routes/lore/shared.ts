@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { eq, and, sql, type SQLWrapper } from "drizzle-orm";
 import { eligibleDjName } from "@workspace/lore-attribution";
+import { isRelayAllowed, relayUrlPath } from "../../lore/stream-relay.js";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
 
@@ -216,6 +217,13 @@ export function toStation(
     automationClass: resolvedAutomationClass !== undefined
       ? resolvedAutomationClass
       : (s.automationClass ?? null),
+    // HTTPS relay path for allowlisted HTTP-only streams (mixed-content
+    // workaround). Only emitted when the stored stream really is plain HTTP —
+    // HTTPS streams play directly in the browser and need no relay.
+    relayUrl:
+      isRelayAllowed(s.slug) && s.streamUrl?.startsWith("http://")
+        ? relayUrlPath(s.slug)
+        : null,
   };
 }
 
