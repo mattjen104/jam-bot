@@ -538,16 +538,21 @@ export type CrossingsPhase = "loading" | "computing" | "stalled" | "failed" | "s
  * Pure derivation of the crossings result phase — exported for tests.
  * `withinSkeleton` / `withinStall` are the two bounded-pending signals
  * (`useBoundedPending` over the skeleton and stall deadlines respectively).
+ * `hasResult` is true once an actual server response is in hand — "settled"
+ * (the only phase allowed to claim "none of your artists played") requires
+ * it, so a non-pending query that has never produced data (e.g. paused
+ * offline, or the pre-fetch mount window) can never yield a false negative.
  */
 export function deriveCrossingsPhase(args: {
   queryError: boolean;
   serverFailed: boolean;
   pending: boolean;
+  hasResult: boolean;
   withinSkeleton: boolean;
   withinStall: boolean;
 }): CrossingsPhase {
   if (args.queryError || args.serverFailed) return "failed";
-  if (!args.pending) return "settled";
+  if (!args.pending) return args.hasResult ? "settled" : "loading";
   if (args.withinSkeleton) return "loading";
   return args.withinStall ? "computing" : "stalled";
 }
@@ -747,6 +752,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     queryError: crossingsQueryError,
     serverFailed: crossingsResult?.failed === true,
     pending: crossingsPending,
+    hasResult: crossingsResult != null,
     withinSkeleton: crossingsLoading,
     withinStall: withinStallBound,
   });

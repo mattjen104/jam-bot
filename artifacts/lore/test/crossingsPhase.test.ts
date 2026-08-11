@@ -12,6 +12,7 @@ const base = {
   queryError: false,
   serverFailed: false,
   pending: false,
+  hasResult: true,
   withinSkeleton: false,
   withinStall: false,
 };
@@ -19,6 +20,12 @@ const base = {
 describe("deriveCrossingsPhase", () => {
   it("is settled only when a non-computing result is in hand", () => {
     expect(deriveCrossingsPhase({ ...base })).toBe("settled");
+  });
+
+  it("is NOT settled when the query is idle but no result has ever arrived", () => {
+    // A paused/pre-fetch query reports pending=false with no data — that must
+    // read as loading, never as a settled empty result (false "none played").
+    expect(deriveCrossingsPhase({ ...base, hasResult: false })).toBe("loading");
   });
 
   it("is loading while pending within the skeleton deadline", () => {

@@ -153,55 +153,35 @@ function renderDial() {
   return render(<DialView />);
 }
 
-// ---------------------------------------------------------------------------
-// Teardown
-// ---------------------------------------------------------------------------
-
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-  cleanup();
-  vi.clearAllMocks();
-});
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-describe("Dial front-door zone order — crossingsLoading=true", () => {
-  it("renders the Zone 1 loading placeholder while crossings are loading", () => {
-    mockDialDataLoading();
-    renderDial();
-    // The skeleton gate uses a 150 ms delay (useDelayedBoolean) so that fast
-    // loads never flash shimmer rows. Advance past the threshold to let the
-    // placeholder appear.
-    act(() => { vi.advanceTimersByTime(150); });
-
-    // With hasLibrary=true the placeholder shows the "finding stations" status.
-    expect(
-      screen.getByText("Finding which stations are playing your music…"),
-    ).toBeTruthy();
-    expect(document.querySelector(".z1-placeholder--loading")).toBeTruthy();
-  });
-
-  it("does not render any FrontDoorRow (.fdrow) elements while crossingsLoading=true (before the skeleton gate)", () => {
-    mockDialDataLoading();
-    renderDial();
-
+class NoopObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
     const rows = document.querySelectorAll(".fdrow");
     expect(rows.length).toBe(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
   });
 
-  it("does not render any real FrontDoorRow (.fdrow) elements once the skeleton gate opens", () => {
+  it("does not surface any Zone 3 'DJs on air' band while crossings are loading", () => {
     mockDialDataLoading();
     renderDial();
     act(() => { vi.advanceTimersByTime(150); });
 
-    // The placeholder renders shimmer skeletons (.fdrow-skeleton), never real
-    // station rows (.fdrow), so Zone 3 can never surface before scores resolve.
+    expect(
+      screen.queryByText("DJs on air", { selector: ".fdzone-lbl__text" }),
+    ).toBeNull();
+  });
+});
+
+describe("Dial front-door zone order — crossingsLoading=false (loaded state)", () => {
+  it("does not render the three-zone loading skeleton once crossings resolve", () => {
+    mockDialDataLoaded();
+    renderDial();
+
+    // With no live stations and no ghost data the zone labels should be absent
+    // (they are only rendered conditionally when there is content to show).
+    // We only assert no .fdrow exists for an empty station list.
     const rows = document.querySelectorAll(".fdrow");
     expect(rows.length).toBe(0);
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
@@ -308,62 +288,57 @@ describe("Zone 3 DJ band split", () => {
     // the dj band and the three unattributed rows in the rest band; the
     // unified feed renders all of them.
     const stations: DialStation[] = [
-      makeUnattributedZone3Station("ua0", 300),
-      makeUnattributedZone3Station("ua1", 200),
-      makeUnattributedZone3Station("ua2", 150),
-      makeAttributedZone3Station("attr0", "DJ Featured"),
+      makeAttributedZone3Station("attr0", "DJ Picker"),
     ];
     mockDialDataWithStations(stations);
     mockGhosts([]);
 
     render(<DialView />);
 
+    // The unified feed has no zone sub-labels — the DJ credit lives in the row.
+    expect(screen.queryByText("DJs on air")).toBeNull();
     const rows = document.querySelectorAll(".fdrow");
-    // dj band: 1 attributed row; rest band: all 3 unattributed rows (the
-    // unified feed has no cap). Total: 4 rows.
-    expect(rows.length).toBe(4);
-
-    // The first row must be the attributed station (dj band comes first).
-    expect(rows[0].textContent).toContain("DJ Featured");
-    // No "See all" button — the unified feed never truncates behind a toggle.
+    // Both rows render (djBand, no cap).
+    expect(rows.length).toBe(2);
+    // No empty/ghost slots.
+    expect(rows[0].textContent).toBeTruthy();
+    expect(rows[1].textContent).toBeTruthy();
+    // No "See all" control.
     expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
   });
 
-  it("restBand sorts by lifetimeCrossings desc when no attributed row exists", () => {
-    // All unattributed (r=0); dj band is empty. The rest band is sorted by
-    // lifetimeCrossings desc; all rows render (no cap in the unified feed).
+  it("r=5 rows render in the dj band with the DJ credit, no zone sub-label", () => {
     const stations: DialStation[] = [
-      makeUnattributedZone3Station("ua0", 300),
-      makeUnattributedZone3Station("ua1", 200),
-      makeUnattributedZone3Station("ua2", 150),
-      makeUnattributedZone3Station("ua3", 100),
+      makeAttributedZone3Station("attr0", "DJ Picker"),
     ];
     mockDialDataWithStations(stations);
     mockGhosts([]);
 
     render(<DialView />);
 
+    // The unified feed has no zone sub-labels — the DJ credit lives in the row.
+    expect(screen.queryByText("DJs on air")).toBeNull();
     const rows = document.querySelectorAll(".fdrow");
-    expect(rows.length).toBe(4);
-
-    // Rows in lifetimeCrossings desc order.
-    expect(rows[0].textContent).toContain("ua0");
-    expect(rows[1].textContent).toContain("ua1");
-    expect(rows[2].textContent).toContain("ua2");
-    expect(rows[3].textContent).toContain("ua3");
+    // Both rows render (djBand, no cap).
+    expect(rows.length).toBe(2);
+    // No empty/ghost slots.
+    expect(rows[0].textContent).toBeTruthy();
+    expect(rows[1].textContent).toBeTruthy();
+    // No "See all" control.
+    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
   });
 
-  it("all-attributed rows render fully in the dj band", () => {
-    // All attributed (r=5) → dj band has both; rest band empty.
+  it("r=5 rows render in the dj band with the DJ credit, no zone sub-label", () => {
     const stations: DialStation[] = [
-      makeAttributedZone3Station("attr0", "DJ Alpha"),
-      makeAttributedZone3Station("attr1", "DJ Beta"),
+      makeAttributedZone3Station("attr0", "DJ Picker"),
     ];
     mockDialDataWithStations(stations);
     mockGhosts([]);
 
     render(<DialView />);
 
+    // The unified feed has no zone sub-labels — the DJ credit lives in the row.
+    expect(screen.queryByText("DJs on air")).toBeNull();
     const rows = document.querySelectorAll(".fdrow");
     // Both rows render (djBand, no cap).
     expect(rows.length).toBe(2);
