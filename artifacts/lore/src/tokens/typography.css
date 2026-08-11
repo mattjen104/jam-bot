@@ -36,6 +36,15 @@
   font-display: swap;
 }
 
+/* JetBrains Mono Regular — the terminal face (dial sentence rows) */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/lore/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Voice layer — Signifier, serif fallback while the file loads. */
   --lore-font-wordmark:  'Signifier', Georgia, serif;
@@ -45,6 +54,10 @@
   --lore-font-body:    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --lore-font-display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --lore-font-mono:    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Terminal layer — JetBrains Mono, the modern code face used on the dial
+     sentence rows; native monospace fallbacks while the file loads. */
+  --lore-font-terminal: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, Consolas, monospace;
 
   /* Fixed three-step size scale. */
   --lore-size-signature: 23px;
