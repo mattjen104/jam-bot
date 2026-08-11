@@ -14,8 +14,6 @@
 #   - ntsOnAirBadge.spec.ts            (dial front-door on-air show + DJ attribution)
 #   - fallbackNotice.spec.ts           (archive-run fallback notice; all API routes
 #                                       intercepted with fixtures)
-#   - dialHeroQueueGeometry.spec.ts    (populated hero set queue stays beside/below
-#                                       the album art at short/tall/portrait viewports)
 #   - cornerNavTappability.spec.ts     (corner nav links visible + clickable above the
 #                                       player dock at 360×640 portrait and 640×360 landscape)
 #   - firstRunSidebarOnboarding.spec.ts (first-time visitor sees .frb__block sentences,
@@ -29,6 +27,9 @@
 #   - linerNotesSheet.spec.ts — tested RecordPeekNav + the NowPlaying liner-notes
 #     sheet; both are intentionally unmounted (section nav is SlimSectionNav, the
 #     NowPlaying panel is no longer rendered).
+#   - dialHeroQueueGeometry.spec.ts — tested the pinned-station set queue beside
+#     the album art; the pinned overlay / set panel was intentionally removed
+#     (station rows are now the only tuning interaction, no queue panel opens).
 #
 # Like the tone gate, this wrapper FAILS LOUDLY (never skips) when its
 # environmental preconditions are missing:
@@ -85,7 +86,6 @@ RUN_SPECS=(
   e2e/librarySyncLifecycle.spec.ts
   e2e/ntsOnAirBadge.spec.ts
   e2e/fallbackNotice.spec.ts
-  e2e/dialHeroQueueGeometry.spec.ts
   e2e/cornerNavTappability.spec.ts
   e2e/mobileFrontDoor.spec.ts
   e2e/firstRunSidebarOnboarding.spec.ts

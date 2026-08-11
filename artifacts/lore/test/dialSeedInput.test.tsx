@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
 /**
- * Regression guard for the Dial seed-input type-to-add flow.
+ * Regression guard for the simplified Dial front door.
  *
- * Exercises the full cycle through the Dial's tuned-artists panel:
+ * The Dial no longer exposes any add-artist entry points (the tuned-artists
+ * panel, the wordmark toggle, and the inline SeedInput were all removed), and
+ * tuning is now ONLY a station-row click that starts playback — no pinned
+ * station overlay, no workspace tabs, no set panel.
  *
- *   open Lore wordmark → type artist name → submit → artist appears →
- *   remove artist → artist disappears
- *
- * Any missed context dependency (hook wiring, provider, prop threading) would
- * break one of these steps and surface here before reaching production.
+ * These tests pin that removal: if any of the old affordances reappear
+ * (an "Open tuned artists" button, an "Artist name" textbox, a pinned set
+ * surface), this suite fails.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // DialView consumes react-query hooks directly, so every render must be wrapped
@@ -43,11 +44,12 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   return makeApiClientMock(importOriginal);
 });
 
-const { tasteSeeds, mutateAsync, mattStarter, startMattLibrary } = vi.hoisted(() => ({
+const { tasteSeeds, mutateAsync, mattStarter, startMattLibrary, radioToggle } = vi.hoisted(() => ({
   tasteSeeds: vi.fn(() => ({ data: [] as string[] })),
   mutateAsync: vi.fn(async (artists: string[]) => ({ artists })),
   mattStarter: vi.fn(() => ({ data: { available: false, addedCount: 0, totalCount: 0 } })),
   startMattLibrary: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  radioToggle: vi.fn(),
 }));
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
@@ -69,7 +71,7 @@ vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
       radio: {
         station: null,
         status: "idle",
-        toggle: vi.fn(),
+        toggle: radioToggle,
         preview: vi.fn(),
         tuneIn: vi.fn(),
         stop: vi.fn(),
@@ -125,8 +127,7 @@ import type { DialStation } from "../src/hooks/useDialData";
 // Helpers
 // ---------------------------------------------------------------------------
 
-// A live station with an artist crossing keeps the radio surface populated
-// while the wordmark swaps the hero/sidebar to the tuned-artists panel.
+// A live station with an artist crossing keeps the radio surface populated.
 function makeZone1Station(): DialStation {
   return {
     station: {
@@ -179,14 +180,6 @@ function mockDial() {
   });
 }
 
-function openTunedArtists() {
-  const tune = screen.getByRole("button", { name: "Open tuned artists" });
-  expect(tune.getAttribute("aria-pressed")).toBe("false");
-  fireEvent.click(tune);
-  expect(tune.getAttribute("aria-pressed")).toBe("true");
-  return screen.getByRole("textbox", { name: "Artist name" });
-}
-
 // ---------------------------------------------------------------------------
 // Teardown
 // ---------------------------------------------------------------------------
@@ -204,189 +197,53 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Dial tuned artists — type-to-add full cycle", () => {
-  it("adds a typed artist name as a chip and removes it on the × button", async () => {
+describe("Dial add-artist controls are removed", () => {
+  it("exposes no tuned-artists toggle and no artist-name input anywhere on the dial", () => {
     mockDial();
     render(<DialView />);
 
-    const input = openTunedArtists();
-    fireEvent.change(input, { target: { value: "Radiohead" } });
-
-    // Click Add — triggers optimistic update synchronously.
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    // The mutation is called with the new seed list.
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(["Radiohead"]);
-    });
-
-    // The chip appears inside SeedBar once visibleSeeds.length > 0.
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Remove Radiohead" })).toBeTruthy();
-    });
-
-    // Click the × remove button on the chip.
-    fireEvent.click(screen.getByRole("button", { name: "Remove Radiohead" }));
-
-    // The mutation is called with the empty list.
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith([]);
-    });
-
-    // The chip is gone.
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Remove Radiohead" })).toBeNull();
-    });
-  });
-
-  it("submits via Enter keypress as well as the Add button", async () => {
-    mockDial();
-    render(<DialView />);
-
-    const input = openTunedArtists();
-    fireEvent.change(input, { target: { value: "Arcade Fire" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(["Arcade Fire"]);
-    });
-
-    // Chip appears after Enter submission.
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Remove Arcade Fire" })).toBeTruthy();
-    });
-  });
-
-  it("clears the text field immediately after submission so the next artist can be typed", async () => {
-    mockDial();
-    render(<DialView />);
-
-    const input = openTunedArtists() as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "LCD Soundsystem" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    // SeedInput calls setValue("") synchronously on submit.
-    expect(input.value).toBe("");
-  });
-
-  it("rolls back the optimistic chip when the mutation fails", async () => {
-    mutateAsync.mockRejectedValueOnce(new Error("network error"));
-    mockDial();
-    render(<DialView />);
-
-    const input = openTunedArtists();
-    fireEvent.change(input, { target: { value: "Portishead" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    // After the rejection, optimisticSeeds resets to null → falls back to
-    // seedArtists (empty []) → the chip must disappear.
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Remove Portishead" })).toBeNull();
-    });
-  });
-
-  it("accumulates multiple seeds when added one after another", async () => {
-    mockDial();
-    render(<DialView />);
-
-    const input = openTunedArtists();
-
-    fireEvent.change(input, { target: { value: "Radiohead" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Remove Radiohead" })).toBeTruthy();
-    });
-
-    fireEvent.change(input, { target: { value: "Portishead" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(["Radiohead", "Portishead"]);
-    });
-  });
-
-  it("keeps the set panel visible while tuned artists is open, hidden again after close", () => {
-    mockDial();
-    render(<DialView />);
-
-    // Minimal front door: panel hidden before any engagement.
-    expect(document.querySelector(".dial-hero__setpanel--hidden")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open tuned artists" }));
-    // Panel shows (its head hosts the close trigger) while the surface is open.
-    expect(document.querySelector(".dial-hero__setpanel--hidden")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Close tuned artists" }));
-    expect(document.querySelector(".dial-hero__setpanel--hidden")).toBeTruthy();
-  });
-
-  it("sorts artists alphabetically and restores the live sidebar when closed", () => {
-    tasteSeeds.mockReturnValue({ data: ["zola jesus", "Arcade Fire", "Beach House"] });
-    mockDial();
-    render(<DialView />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Open tuned artists" }));
-    expect(screen.getByRole("heading", { name: "Tuned artists" })).toBeTruthy();
-    // The queue remains mounted so its compact Tune trigger is available for
-    // a predictable close/focus return, even while the art surface is swapped.
-    // (Quiet head: no "Choose a live set" filler title when no tab is open.)
-    expect(document.querySelector(".dial-hero__setpanel-head")).toBeTruthy();
-    expect(screen.queryByText("Choose a live set")).toBeNull();
-    expect([...document.querySelectorAll(".dial-hero__tuned-item > span")].map((node) => node.textContent))
-      .toEqual(["Arcade Fire", "Beach House", "zola jesus"]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Close tuned artists" }));
+    expect(screen.queryByRole("button", { name: "Open tuned artists" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close tuned artists" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Artist name" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
-    expect(document.querySelector(".dial-hero__setpanel-head")).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open tuned artists" }));
   });
-});
 
-// ---------------------------------------------------------------------------
-// Minimal default front door — the set/queue panel (head, chevrons, Tune,
-// titles) stays hidden until the listener opens a set, and the hero layout
-// reclaims the panel's strip (data-queue-layout="none") while it is hidden.
-// ---------------------------------------------------------------------------
-
-describe("Minimal default front door — set panel gating", () => {
-  it("pins a tuned row as the pinned set (no station workspace tab), and keeps it", () => {
+  it("keeps the add-artist controls absent even when the listener already has seeds", () => {
+    tasteSeeds.mockReturnValue({ data: ["Radiohead", "Portishead"] });
     mockDial();
     render(<DialView />);
 
-    const hero = document.querySelector(".dial-hero")!;
-    const panel = document.querySelector(".dial-hero__setpanel")!;
-
-    // First load: only art, corner links, and sentence rows — the panel is
-    // hidden and the layout reserves no strip for it.
-    expect(panel.className).toContain("dial-hero__setpanel--hidden");
-    expect(hero.getAttribute("data-queue-layout")).toBe("none");
-
-    // Clicking the row tunes and pins it as the pinned set (Task #37):
-    // provenance is inline in the sentence, so no separate workspace tab opens.
-    fireEvent.click(document.querySelector(".fdrow")!);
-    expect(panel.className).not.toContain("dial-hero__setpanel--hidden");
-    expect(hero.getAttribute("data-queue-layout")).not.toBe("none");
-    expect(screen.queryAllByRole("tab")).toHaveLength(0);
-
-    // The pinned set row is present and no longer exposes an "open sets"
-    // workspace control — the set lives right here in the sentence.
-    const pinned = document.querySelector(".dial-pinned-set");
-    expect(pinned).toBeTruthy();
-    expect(
-      Array.from(pinned!.querySelectorAll("button")).filter((btn) =>
-        /open .* sets/i.test(btn.getAttribute("aria-label") ?? "")),
-    ).toHaveLength(0);
-    // Its single chevron toggles the previous completed set.
-    expect(
-      Array.from(pinned!.querySelectorAll("button")).filter((btn) =>
-        /previous set/i.test(btn.getAttribute("aria-label") ?? "")),
-    ).toHaveLength(1);
-    // No export/playlist controls in live mode — structurally absent.
-    expect(pinned!.querySelector(".dial-pinned-set__export")).toBeNull();
-    expect(pinned!.querySelector("select")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Artist name" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
   });
 });
 
+describe("Minimal front door — no pinned overlay, no set panel", () => {
+  it("renders no set panel or workspace tabs at all", () => {
+    mockDial();
+    render(<DialView />);
 
+    expect(document.querySelector(".dial-hero__setpanel")).toBeNull();
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+  });
 
+  it("clicking a station row starts playback without pinning it or opening any panel", () => {
+    mockDial();
+    render(<DialView />);
+
+    const row = document.querySelector(".fdrow");
+    expect(row, "station row rendered").toBeTruthy();
+    fireEvent.click(row!);
+
+    // Row click is the playback interaction…
+    expect(radioToggle).toHaveBeenCalledTimes(1);
+    // …and nothing else: no pinned surface, no tabs, no set panel.
+    expect(document.querySelector(".dial-pinned-row")).toBeNull();
+    expect(document.querySelector(".dial-pinned-set")).toBeNull();
+    expect(document.querySelector(".dial-hero__setpanel")).toBeNull();
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    // The station row itself stays in its lane.
+    expect(document.querySelector(".fdrow")).toBeTruthy();
+  });
+});

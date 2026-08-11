@@ -228,7 +228,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("first click on a station row", () => {
-  it("tunes and pins the player row without replacing the dial choices", () => {
+  it("tunes without any pinned overlay and without replacing the dial choices", () => {
     mockDialData([makeZone1Station("kexp"), makeZone1Station("wfmu")]);
     renderDial();
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThanOrEqual(2);
@@ -238,8 +238,10 @@ describe("first click on a station row", () => {
     expect(radioMock.toggle).toHaveBeenCalledTimes(1);
     expect(radioMock.toggle.mock.calls[0][0].slug).toBe("kexp");
     expect(document.querySelector(".dial-context-region")).toBeNull();
-    expect(document.querySelector(".dial-pinned-row")).toBeTruthy();
+    // The pinned station overlay is retired — the tuned row stays in its lane.
+    expect(document.querySelector(".dial-pinned-row")).toBeNull();
     const rows = Array.from(document.querySelectorAll(".fdrow"));
+    expect(rows.some((el) => el.textContent?.includes("kexp"))).toBe(true);
     expect(rows.some((el) => el.textContent?.includes("wfmu"))).toBe(true);
     expect(ctxParam()).toBeNull();
   });
@@ -321,7 +323,7 @@ describe("front-door tune and workspace semantics", () => {
     expect(document.querySelector(".dial-context-region")).toBeNull();
   });
 
-  it("re-clicking the already-playing station keeps it pinned without toggling it off", () => {
+  it("re-clicking the already-playing station leaves it playing without toggling it off", () => {
     mockDialData([makeZone1Station("kexp")]);
     renderDial();
     clickRow("kexp");
@@ -331,7 +333,9 @@ describe("front-door tune and workspace semantics", () => {
 
     fireEvent.click(document.querySelector("#zone1-rows .fdrow")!);
 
-    expect(document.querySelector(".dial-pinned-row")).toBeTruthy();
+    // No pinned overlay exists anymore; the row simply stays in its lane.
+    expect(document.querySelector(".dial-pinned-row")).toBeNull();
+    expect(document.querySelector("#zone1-rows .fdrow")).toBeTruthy();
     expect(document.querySelector(".dial-context-region")).toBeNull();
     expect(radioMock.toggle).not.toHaveBeenCalled();
     expect(radioMock.stop).not.toHaveBeenCalled();

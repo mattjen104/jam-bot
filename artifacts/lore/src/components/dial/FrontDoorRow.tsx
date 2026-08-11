@@ -333,7 +333,7 @@ export interface FrontDoorRowProps {
   compactSentence?: boolean;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -383,7 +383,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
     : crossing?.node ?? (usePop ? popLine : null) ?? live?.node ?? rz.node;
   // The station set workspace is retired (Task #37): the compact provenance
   // prefix is inert text now — the whole row tunes, and the pinned sentence
-  // (PinnedSetRow) carries the set once tuned. Always use the bright-foreground
+  // The lane row carries the set inline. Always use the bright-foreground
   // class so the weight rung (w0/w5…) cannot dim the summary sentence.
   const tier1Node = compactSentence && compact ? (
     <>

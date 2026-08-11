@@ -6,17 +6,14 @@
  * Library) lives in AppLayout; DialView renders the topbar/scanbar/subnav
  * chrome above the scroll body.
  */
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
-import { ContextRail, ArtistPane, artistFrameId, decodeArtistFrame } from "./ContextRail";
-import type { GrammarLinks } from "../dial/grammar";
+import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
-import { SeedInput } from "./SeedInput";
-import { SeedSuggestions, extractArtistsFromImageFiles, imageFilesFrom } from "./SeedSuggestions";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { RUMOURS, onArtError } from "../lib/rumours";
@@ -33,7 +30,6 @@ import {
   type SetDaypart,
 } from "./dialViewHelpers";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { PinnedSetRow } from "./dial/PinnedSetRow";
 import { useDialSurface } from "../dial/useDialSurface";
 import { DialContextRegion } from "../dial/DialContextRegion";
 import { railHasRealContent } from "../dial/railContent";
@@ -929,72 +925,6 @@ export function sortTasteSeeds(seeds: string[]): string[] {
   });
 }
 
-function TunedArtistsPanel({
-  seeds,
-  onAddSeed,
-  onRemoveSeed,
-  onClose,
-}: {
-  seeds: string[];
-  onAddSeed: (artist: string) => void;
-  onRemoveSeed: (artist: string) => void;
-  onClose: () => void;
-}) {
-  const sortedSeeds = useMemo(() => sortTasteSeeds(seeds), [seeds]);
-
-  return (
-    <section className="dial-hero__tuned-panel" aria-labelledby="tuned-artists-title">
-      <div className="dial-hero__tuned-head">
-        <div>
-          <p className="dial-hero__tuned-kicker">Your dial</p>
-          <h2 id="tuned-artists-title">Tuned artists</h2>
-        </div>
-        <button
-          type="button"
-          className="dial-hero__tuned-close"
-          aria-label="Close tuned artists"
-          onClick={onClose}
-        >
-          ×
-        </button>
-      </div>
-      <p className="dial-hero__tuned-copy">
-        Lore will look for these artists on live radio.
-      </p>
-      {sortedSeeds.length > 0 ? (
-        <ul className="dial-hero__tuned-list">
-          {sortedSeeds.map((artist, index) => (
-            <li key={`${artist}-${index}`} className="dial-hero__tuned-item">
-              <span>{artist}</span>
-              <button
-                type="button"
-                className="dial-hero__tuned-remove"
-                aria-label={`Remove ${artist}`}
-                onClick={() => onRemoveSeed(artist)}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="dial-hero__tuned-empty">
-          No tuned artists yet. Add one to personalize your dial.
-        </p>
-      )}
-      <div className="dial-hero__tuned-add">
-        <label htmlFor="tuned-artist-input">Add an artist</label>
-        <SeedInput
-          seeds={seeds}
-          onAdd={onAddSeed}
-          placeholder="e.g. Radiohead"
-          inputId="tuned-artist-input"
-        />
-      </div>
-    </section>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Stations list view
 // ---------------------------------------------------------------------------
@@ -1591,8 +1521,6 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const tunedArtistsTriggerRef = useRef<HTMLButtonElement>(null);
-  const [tunedArtistsOpen, setTunedArtistsOpen] = useState(false);
   const { enabled: socialEnabled } = useSocialMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
@@ -1700,13 +1628,6 @@ export function DialView() {
     });
     void seedWriteRef.current.catch(() => undefined);
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
-
-  const closeTunedArtists = useCallback(() => {
-    setTunedArtistsOpen(false);
-    // The compact trigger lives in the queue header, which remains mounted
-    // while the tuned-artists surface is open.
-    tunedArtistsTriggerRef.current?.focus();
-  }, []);
 
   // Popular crossings — Also-On-Air sentences + sort order.
   const { data: popCrossings = [] } = useMyPopularCrossings();
@@ -1846,137 +1767,12 @@ export function DialView() {
     // avatarUrl is derived from avatarAlbum; keying on it keeps deps simple.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [avatarAlbum?.recordingMbid, avatarUrl]);
-  // "+ Artists" tab — inline add-artists input in the tab bar (replaces the
-  // old bottom artist-add strip). Submits via the same custom event the
-  // ticker listens to, so no shared state is needed.
-  const [addArtistsOpen, setAddArtistsOpen] = useState(false);
-  const [addArtistsText, setAddArtistsText] = useState("");
-  const submitAddArtists = useCallback((raw: string) => {
-    const names = raw.split(/[\n,;|•·]+/).map((s) => s.trim()).filter(Boolean);
-    names.forEach((name) =>
-      window.dispatchEvent(new CustomEvent("lore:add-ticker-artist", { detail: name })),
-    );
-    setAddArtistsText("");
-    setAddArtistsOpen(false);
-  }, []);
-
   // Fullscreen album-art overlay, opened by tapping the moon glyph in the topbar.
   const moonBtnRef = useRef<HTMLButtonElement>(null);
   const artCloseBtnRef = useRef<HTMLButtonElement>(null);
   // Whichever control opened the overlay (moon or hero art) gets focus back.
   const artOpenerRef = useRef<HTMLElement | null>(null);
   const [albumArtOpen, setAlbumArtOpen] = useState(false);
-  const [heroQueueLayout, setHeroQueueLayout] = useState<DialHeroQueueLayout>(() =>
-    typeof window === "undefined"
-      ? "side"
-      : chooseDialHeroQueueLayout({
-          viewportWidth: window.innerWidth,
-          viewportHeight: window.innerHeight,
-          shellHeight: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--shell-h")) || 0,
-        }),
-  );
-  /** Briefly true while the layout is being flipped — fades the panel out
-   * before the attribute changes so there is never a frame where the panel
-   * straddles both the old and new positions. */
-  const [layoutFlipping, setLayoutFlipping] = useState(false);
-  const heroQueueLayoutRef = useRef(heroQueueLayout);
-  useEffect(() => { heroQueueLayoutRef.current = heroQueueLayout; }, [heroQueueLayout]);
-  /** Version token — incremented on every new flip attempt so that stale
-   * fade-timer callbacks abort before applying a superseded layout target. */
-  const flipVersionRef = useRef(0);
-  /** Handle for the in-flight fade-out delay timer so rapid resizes can
-   * cancel it before the wrong layout is committed. */
-  const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Handle for the in-flight rAF (Phase 3 fade-in) so rapid resizes can
-   * cancel it before the wrong flip-clear fires. */
-  const flipRafRef = useRef<number | null>(null);
-
-  useLayoutEffect(() => {
-    /** Must match the CSS transition duration on .dial-hero__setpanel. */
-    const FADE_MS = 120;
-
-    const updateLayout = () => {
-      const shellHeight = Number.parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue("--shell-h"),
-      ) || 0;
-      const newLayout = chooseDialHeroQueueLayout({
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-        shellHeight,
-      });
-
-      if (newLayout === heroQueueLayoutRef.current) {
-        // Target already matches — cancel any in-flight flip and restore
-        // visibility in case a previous flip was superseded mid-fade.
-        flipVersionRef.current++;
-        if (flipTimerRef.current !== null) {
-          clearTimeout(flipTimerRef.current);
-          flipTimerRef.current = null;
-        }
-        setLayoutFlipping(false);
-        return;
-      }
-
-      // Cancel any in-flight flip (timer + rAF) and start a fresh sequence.
-      const version = ++flipVersionRef.current;
-      if (flipTimerRef.current !== null) {
-        clearTimeout(flipTimerRef.current);
-        flipTimerRef.current = null;
-      }
-      if (flipRafRef.current !== null) {
-        cancelAnimationFrame(flipRafRef.current);
-        flipRafRef.current = null;
-      }
-
-      // Honour reduced-motion: skip the fade and flip the layout immediately.
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        setLayoutFlipping(false);
-        setHeroQueueLayout(newLayout);
-        return;
-      }
-
-      // Phase 1: fade the panel out so the intermediate position is invisible.
-      setLayoutFlipping(true);
-
-      // Phase 2: once the CSS opacity transition has completed (timer aligned
-      // to the transition duration) apply the new layout.  Using a timer
-      // rather than transitionend makes the sequence reliable even when the
-      // element is off-screen or the transition is overridden.
-      flipTimerRef.current = setTimeout(() => {
-        flipTimerRef.current = null;
-        if (flipVersionRef.current !== version) return; // Superseded by a newer resize.
-        setHeroQueueLayout(newLayout);
-        // Phase 3: one rAF after the new layout commits, fade back in.
-        flipRafRef.current = requestAnimationFrame(() => {
-          flipRafRef.current = null;
-          if (flipVersionRef.current !== version) return; // Superseded.
-          setLayoutFlipping(false);
-        });
-      }, FADE_MS);
-    };
-
-    updateLayout();
-    window.addEventListener("resize", updateLayout);
-    const root = document.querySelector(".dial-root");
-    const observer = root && typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(updateLayout)
-      : null;
-    observer?.observe(root!);
-    return () => {
-      // Cancel any in-flight flip so stale callbacks don't fire after unmount.
-      flipVersionRef.current++;
-      if (flipTimerRef.current !== null) {
-        clearTimeout(flipTimerRef.current);
-        flipTimerRef.current = null;
-      }
-      if (flipRafRef.current !== null) {
-        cancelAnimationFrame(flipRafRef.current);
-        flipRafRef.current = null;
-      }
-      window.removeEventListener("resize", updateLayout);
-      observer?.disconnect();
-    };
-  }, []);
   useEffect(() => {
     if (!albumArtOpen) return;
     // Move focus into the overlay so keyboard users can reach the close button.
@@ -2081,16 +1877,15 @@ export function DialView() {
   //   r=6/r=7 belong here because the station HAS played the listener's music in
   //   the last 24h — that IS a reason, even without a current attributed show.
   // Zone 3: r=0 (no now-playing data at all) or r=5 (DJ on air, no library overlap).
-  // The currently-playing station is owned exclusively by PinnedSetRow — exclude
-  // it from both lane arrays so it never appears as a duplicate FrontDoorRow.
-  const pinnedSlug = radio.station?.slug ?? null;
+  // The currently-playing station stays in its lane (highlighted via isActive)
+  // — there is no separate pinned surface anymore.
   const withReason = useMemo(
-    () => sortedRows.filter((row) => ((row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7) && row.ds.station.slug !== pinnedSlug),
-    [sortedRows, pinnedSlug],
+    () => sortedRows.filter((row) => (row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7),
+    [sortedRows],
   );
   const alsoOnAir = useMemo(
-    () => sortedRows.filter((row) => (row.rz.r === 0 || row.rz.r === 5) && row.ds.station.slug !== pinnedSlug),
-    [sortedRows, pinnedSlug],
+    () => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r === 5),
+    [sortedRows],
   );
   // Merged-tab display order for the crossing rows: default (▲) keeps the
   // attribution-ladder order; flipped (▼) is its exact inverse, so the least-
@@ -2452,11 +2247,9 @@ export function DialView() {
   // This is deliberately player-context state, not an expandable row. It lets
   // live broadcasts and fixed replays share the same set-list surface.
   const [setTabs, setSetTabs] = useState<SetPanelTab[]>([]);
-  const [pinnedStationSlug, setPinnedStationSlug] = useState<string | null>(null);
   /** Minimal default front door: the set/queue panel only shows once the
-   * listener engages the queue (opens a set tab) or the tuned-artists surface
-   * is open (its close trigger lives in the panel head). */
-  const setPanelOpen = setTabs.length > 0 || tunedArtistsOpen || pinnedStationSlug != null;
+   * listener engages the queue (opens a set tab). */
+  const setPanelOpen = setTabs.length > 0;
   const [activeSetTabId, setActiveSetTabId] = useState<string | null>(null);
   // Sets opened explicitly (front-door click, replay updates). Kept separate
   // from the derived broadcast sets so listedArtists fallbacks and replay
@@ -2509,12 +2302,6 @@ export function DialView() {
     for (const set of broadcastSets) merged.set(set.id, set);
     return [...merged.values()];
   }, [broadcastSets, openedSets]);
-  const pinnedRow = useMemo(
-    () => pinnedStationSlug
-      ? sortedRows.find((row) => row.ds.station.slug === pinnedStationSlug) ?? null
-      : null,
-    [pinnedStationSlug, sortedRows],
-  );
 
   /** Append-or-focus a tab. `activate=false` lets background updates (replay
    * index ticks) refresh a tab without yanking focus from the one the
@@ -2534,14 +2321,6 @@ export function DialView() {
       ...(name ? { label: name } : {}),
     });
   }, [openSetTab]);
-  const closeSetTab = useCallback((id: string) => {
-    setSetTabs((current) => {
-      const index = current.findIndex((tab) => tab.id === id);
-      const next = current.filter((tab) => tab.id !== id);
-      setActiveSetTabId((activeNow) => activeNow === id ? (next[Math.max(0, index - 1)]?.id ?? null) : activeNow);
-      return next;
-    });
-  }, []);
 
   // ── Sidebar layout gate for the context tab ─────────────────────────────
   // The station context relocates into the set-panel sidebar ONLY in the
@@ -2560,43 +2339,6 @@ export function DialView() {
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
-
-  const openLiveQueue = useCallback((row: { ds: DialStation; show: DialShow | null }, listedArtists?: PopularCrossingArtist[] | null) => {
-    const spins = row.show?.spins ?? [];
-    const spinArtists = spins.map((spin) => ({
-      name: spin.artist,
-      inLibrary: spin.isLibraryHit || spin.isArtistHit,
-      title: spin.title || null,
-    })).filter((artist) => artist.name.trim());
-    const artists = spinArtists.length > 0
-      ? spinArtists
-      : (listedArtists ?? []).map((artist) => ({ name: artist.name, inLibrary: artist.inLibrary }));
-    const currentIndex = Math.max(0, spins.findIndex((spin) =>
-      spin.playedAt === row.show?.currentTrack?.playedAt,
-    ));
-    const startedAt = row.show?.startedAt ?? new Date().toISOString();
-    const id = `${row.ds.station.slug}:${startedAt}`;
-    const djNames = row.show ? eligibleDjNames(dialShowAsAttribution(row.show)) : [];
-    setOpenedSets((current) => ({
-      ...current,
-      [id]: {
-        id,
-        runId: row.show?.runId ?? null,
-        stationSlug: row.ds.station.slug,
-        stationName: row.ds.station.name,
-        startedAt,
-        ianaTimezone: row.show?.ianaTimezone ?? row.ds.station.ianaTimezone ?? null,
-        showName: usableShowName(row.show),
-        djNames,
-        artists,
-        spins,
-        progress: artists.length > 0
-          ? Math.min(1, (currentIndex + 1) / artists.length)
-          : 0,
-      },
-    }));
-    openSetTab({ kind: "set", setId: id });
-  }, [openSetTab]);
 
   useEffect(() => {
     if (!ride.active || ride.queue.length === 0) return;
@@ -2638,30 +2380,6 @@ export function DialView() {
     openSetTab({ kind: "set", setId: id }, shouldActivateReplayTab(activeSetTabId));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ride.active, ride.queue, ride.index, ride.replayLabel, currentRun?.day, currentRun?.station.ianaTimezone, openSetTab]);
-
-  /** Plays a displayed setlist as an ordered queue through the agnostic
-   * player — same seed pattern as every other startReplay call-site, so
-   * service preference/fallback behavior is untouched. */
-  const playSetlist = useCallback((sets: SetPanelSet[], label: string) => {
-    const seeds: RideSeed[] = sets.flatMap((set) => set.spins)
-      .filter((spin): spin is DialSpin & { mbid: string } => spin.mbid !== null)
-      .map((spin) => ({
-        mbid: spin.mbid,
-        title: spin.title,
-        artist: spin.artist,
-        artworkUrl: null,
-        links: [],
-        spinDurationSeconds: null,
-      }));
-    if (seeds.length === 0) return;
-    ride.startReplay(seeds, label, {
-      timeOrientation: "past",
-      startIndex: 0,
-      context: "dial-set-panel",
-    });
-  }, [ride]);
-
-  const activeSetTab = setTabs.find((tab) => tab.id === activeSetTabId) ?? null;
 
   // ── Fine-landing effect — fire startPastReplay(fineIdx) on crossing step ──
   // Fires when the user steps to a specific crossing (swipe or row click).
@@ -2892,7 +2610,6 @@ export function DialView() {
   // tab; the scroll body renders no standalone context region.
   const contextInSidebar = sidebarLayout;
   const contextRegionJsx = contextInSidebar ? null : renderContextRegion(!contextConsolidated);
-  const contextTabBody = contextInSidebar ? renderContextRegion(true) : null;
 
   // Entering context mode opens/focuses the context tab in the sidebar;
   // leaving context (↑ Back at root, Dial crumb, station change reset)
@@ -2947,50 +2664,12 @@ export function DialView() {
     surface.back();
   }, [surface, openArtistTab]);
 
-  // Artist-tab body: the artist page content (the retired lens's content,
-  // reused). Links mirror the rail's policy — `+` adds, names navigate.
-  const artistTabLinks = useMemo<GrammarLinks>(() => {
-    const isYours = (name: string): boolean => {
-      const key = name.trim().toLowerCase();
-      if (seedsLower.has(key)) return true;
-      return allSets.some((set) => set.spins.some((spin) =>
-        spin.artist.toLowerCase() === key && (spin.isLibraryHit || spin.isArtistHit)));
-    };
-    return { isYours, onAddArtist: addSeed };
-  }, [seedsLower, allSets, addSeed]);
-  const renderArtistBody = useCallback((scope: Extract<SetPanelScope, { kind: "artist" }>) => {
-    const name = scope.label ?? (scope.value.startsWith("name:") ? scope.value.slice(5) : null);
-    const mbid = scope.value.startsWith("name:") ? null : scope.value;
-    return (
-      <ArtistPane
-        name={name}
-        mbid={mbid}
-        sets={allSets}
-        rowSpins={ctxRow?.show?.spins ?? []}
-        links={artistTabLinks}
-        onOpenSet={(set) => openSetTab({ kind: "set", setId: set.id })}
-      />
-    );
-  }, [allSets, ctxRow, artistTabLinks, openSetTab]);
-
-  // Closing the context tab exits context mode — same as ↑ Back reaching the
-  // dial. The tab itself is removed by the effect above once mode flips.
-  const closePanelTab = useCallback((id: string) => {
-    if (id === CONTEXT_TAB_ID) {
-      surface.dial();
-      pastScan.reset();
-      return;
-    }
-    closeSetTab(id);
-  }, [surface, pastScan, closeSetTab]);
-
   // ── Also-on-air section (former tab, now folded into ON AIR × YOUR ARTISTS).
   // Band order follows the triangle: ▲ renders DJ band then rest band below the
   // crossing rows; ▼ renders rest band (rarest-first) then DJ band above them.
   // Shared tune handler for both Zone 3 bands.
   const tuneZoneRow = useCallback((row: DialLaneRow) => {
     scan.stop();
-    setPinnedStationSlug(row.ds.station.slug);
     if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
       void radio.toggle(row.ds.station);
     }
@@ -3038,123 +2717,25 @@ export function DialView() {
           the sort and time-travel controls carry the interface. Tapping the
           art opens the fullscreen overlay. */}
       {level === "all" ? (
-        <div className="dial-hero" data-queue-layout={setPanelOpen ? heroQueueLayout : "none"}>
+        <div className="dial-hero">
           {renderTopbar()}
-          <div className={`dial-hero__artwrap${tunedArtistsOpen ? " dial-hero__artwrap--tuned" : ""}`}>
-            {tunedArtistsOpen ? (
-              <TunedArtistsPanel
-                seeds={visibleSeeds}
-                onAddSeed={addSeed}
-                onRemoveSeed={removeSeed}
-                onClose={closeTunedArtists}
-              />
-            ) : (
-              <>
-                <div
-                  className="dial-hero__art"
-                  style={{ backgroundImage: `url(${heroArt})` }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Open album art fullscreen"
-                  onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      artOpenerRef.current = e.currentTarget;
-                      setAlbumArtOpen(true);
-                    }
-                  }}
-                />
-              </>
-            )}
+          <div className="dial-hero__artwrap">
+            <div
+              className="dial-hero__art"
+              style={{ backgroundImage: `url(${heroArt})` }}
+              role="button"
+              tabIndex={0}
+              aria-label="Open album art fullscreen"
+              onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  artOpenerRef.current = e.currentTarget;
+                  setAlbumArtOpen(true);
+                }
+              }}
+            />
           </div>
-          {/* Queue is a sibling of the art, never an overlay inside it. It
-              remains mounted in tuned-artists mode so the Tune trigger can
-              close that surface and restore focus.
-              Minimal front door: until the listener opens a set (or the
-              tuned-artists surface), the whole panel — head, chevrons, Tune,
-              titles — is display:none-hidden and the layout gives its strip
-              back to the art and sentence rows (data-queue-layout="none"). */}
-          <div className={`dial-hero__setpanel${layoutFlipping ? " dial-hero__setpanel--flipping" : ""}${setPanelOpen ? "" : " dial-hero__setpanel--hidden"}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-              {pinnedRow ? (
-                <PinnedSetRow
-                  ds={pinnedRow.ds}
-                  show={pinnedRow.show}
-                  seedsLower={seedsLower}
-                />
-              ) : null}
-              {/* Quiet front door: with no set tab open the header carries no
-                  real content — drop the "Choose a live set" title and the
-                  placeholder sentence, keeping only the compact time-travel
-                  chevrons and the Tune trigger reachable. */}
-              <div className={`dial-hero__setpanel-head${setTabs.length === 0 ? " dial-hero__setpanel-head--quiet" : ""}`}>
-                <button type="button" className="dial-hero__setpanel-chev" aria-label="Back in time — previous run" onClick={pastScan.prevRun}>‹</button>
-                {setTabs.length > 0 && (
-                  <span className="dial-hero__setpanel-title">
-                    {activeSetTab ? setPanelTabLabel(activeSetTab, allSets, ctxStationName) : "Choose a live set"}
-                  </span>
-                )}
-                <button
-                  ref={tunedArtistsTriggerRef}
-                  type="button"
-                  className="dial-hero__setpanel-tune"
-                  aria-label={tunedArtistsOpen ? "Return to radio queue" : "Open tuned artists"}
-                  aria-pressed={tunedArtistsOpen}
-                  onClick={() => setTunedArtistsOpen((open) => !open)}
-                >Tune</button>
-                <button type="button" className="dial-hero__setpanel-chev" aria-label="Forward in time — next run" disabled={pastScan.isAtLiveEdge} aria-disabled={pastScan.isAtLiveEdge} onClick={pastScan.nextRun}>›</button>
-              </div>
-              {setTabs.length > 0 ? (
-                <TabbedSetPanel
-                  tabs={setTabs}
-                  activeId={activeSetTabId}
-                  allSets={allSets}
-                  seedsLower={seedsLower}
-                  onSelect={setActiveSetTabId}
-                  onClose={closePanelTab}
-                  onScope={openSetTab}
-                  onAdd={addSeed}
-                  onRemove={removeSeed}
-                  onPlay={playSetlist}
-                  contextLabel={ctxStationName}
-                  contextBody={contextTabBody}
-                  renderArtistBody={renderArtistBody}
-                />
-              ) : null}
-          </div>
-          {/* Sort toggle moved into the time-travel (filter) strip.
-              ＋ Artists button hidden — addArtistsOpen machinery kept. */}
-          {zone1Settled && addArtistsOpen && (
-            <div className="dial-tabs-add-row">
-              <input
-                autoFocus
-                type="text"
-                className="topbar-paste-box dial-tabs-add-row__input"
-                value={addArtistsText}
-                placeholder="type or paste artist names or a screenshot…"
-                aria-label="Add artists by typing or pasting names"
-                onChange={(e) => setAddArtistsText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && addArtistsText.trim()) submitAddArtists(addArtistsText);
-                  if (e.key === "Escape") { setAddArtistsOpen(false); setAddArtistsText(""); }
-                }}
-                onPaste={(e) => {
-                  // Screenshot paste: run the existing vision extraction and
-                  // feed the artist names through the same add path as text.
-                  const files = imageFilesFrom(e.clipboardData.files);
-                  if (files.length > 0) {
-                    e.preventDefault();
-                    void extractArtistsFromImageFiles(files)
-                      .then((artists) => { if (artists.length > 0) submitAddArtists(artists.join("\n")); })
-                      .catch(() => { /* extraction failed — leave the box as-is */ });
-                    return;
-                  }
-                  const t = e.clipboardData.getData("text");
-                  if (t) { e.preventDefault(); submitAddArtists(t); }
-                }}
-              />
-            </div>
-          )}
         </div>
       ) : (
         renderTopbar()
@@ -3372,12 +2953,11 @@ export function DialView() {
                         onAddArtist={addSeed}
                         onTuneIn={(row) => {
                           scan.stop();
-                          setPinnedStationSlug(row.ds.station.slug);
                           if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
                             void radio.toggle(row.ds.station);
                           }
                         }}
-                        onSetExpand={(row) => openLiveQueue(row, popMap.get(row.ds.station.slug))}
+                        onSetExpand={(_row) => undefined}
                       />
                     )}
 
@@ -3427,7 +3007,6 @@ export function DialView() {
                           onTune={(slug) => {
                             const ds = stations.find((s) => s.station.slug === slug);
                             if (ds) {
-                              setPinnedStationSlug(slug);
                               void radio.toggle(ds.station);
                             }
                           }}
@@ -3492,7 +3071,6 @@ export function DialView() {
                               ))}
                             </div>
                           )}
-                          <SeedInput seeds={visibleSeeds} onAdd={addSeed} placeholder="Add another artist" />
                         </div>
                       </div>
                     )}
@@ -3604,7 +3182,7 @@ function Zone1Placeholder({
   liveLoading: _liveLoading,
   onAddSeed,
   onRemoveSeed: _onRemoveSeed,
-  liveSuggestions = [],
+  liveSuggestions: _liveSuggestions = [],
   stations = [],
   onTune,
 }: {
@@ -3636,13 +3214,6 @@ function Zone1Placeholder({
   if (hasSeeds) {
     return (
       <div className="z1-placeholder z1-placeholder--seeded">
-        <SeedSuggestions
-          liveSuggestions={liveSuggestions}
-          seeds={seeds}
-          onAddSeed={onAddSeed}
-        >
-          <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="Add another artist" />
-        </SeedSuggestions>
         <div className="z1-placeholder__status">
           <span className="dial-live-skeleton__pip" />
           <span className="z1-placeholder__lbl">Finding live matches for your artists…</span>
@@ -3652,7 +3223,7 @@ function Zone1Placeholder({
     );
   }
 
-  // New user — station sentences first, manual search below.
+  // New user — station sentences only, no inline add-artist entry point.
   return (
     <div className="z1-placeholder z1-placeholder--first-run">
       <FirstRunSidebar
@@ -3661,10 +3232,6 @@ function Zone1Placeholder({
         onAddSeed={onAddSeed}
         onTune={onTune ?? (() => undefined)}
       />
-      <div className="z1-placeholder__manual">
-        <span className="z1-placeholder__manual-label">Know who you're looking for?</span>
-        <SeedInput seeds={seeds} onAdd={onAddSeed} />
-      </div>
     </div>
   );
 }
