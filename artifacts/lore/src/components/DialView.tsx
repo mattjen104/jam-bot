@@ -2081,8 +2081,17 @@ export function DialView() {
   //   r=6/r=7 belong here because the station HAS played the listener's music in
   //   the last 24h — that IS a reason, even without a current attributed show.
   // Zone 3: r=0 (no now-playing data at all) or r=5 (DJ on air, no library overlap).
-  const withReason = useMemo(() => sortedRows.filter((row) => (row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7), [sortedRows]);
-  const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r === 5), [sortedRows]);
+  // The currently-playing station is owned exclusively by PinnedSetRow — exclude
+  // it from both lane arrays so it never appears as a duplicate FrontDoorRow.
+  const pinnedSlug = radio.station?.slug ?? null;
+  const withReason = useMemo(
+    () => sortedRows.filter((row) => ((row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7) && row.ds.station.slug !== pinnedSlug),
+    [sortedRows, pinnedSlug],
+  );
+  const alsoOnAir = useMemo(
+    () => sortedRows.filter((row) => (row.rz.r === 0 || row.rz.r === 5) && row.ds.station.slug !== pinnedSlug),
+    [sortedRows, pinnedSlug],
+  );
   // Merged-tab display order for the crossing rows: default (▲) keeps the
   // attribution-ladder order; flipped (▼) is its exact inverse, so the least-
   // crossed stations lead and the strongest crossings sink to the bottom.
