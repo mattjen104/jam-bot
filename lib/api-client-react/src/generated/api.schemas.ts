@@ -577,6 +577,11 @@ export interface NowPlayingRecording {
   links: RecordingLink[];
   /** MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet. */
   genres?: string[] | null;
+  /**
+   * MusicBrainz first-release year for the recording, used by the Dial age-tier (Current/Catalog/Deep) filter. Null when unknown or unresolved.
+   * @nullable
+   */
+  releaseYear?: number | null;
 }
 
 export type NowPlayingConfidence =
@@ -2633,6 +2638,11 @@ export interface StationRecentSpin {
   title: string;
   artist: string;
   playedAt: string;
+  /**
+   * MusicBrainz first-release year for the recording, used by the Dial age-tier (Current/Catalog/Deep) filter. Null when unknown or unresolved.
+   * @nullable
+   */
+  releaseYear?: number | null;
   /** True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved). */
   isFirstSpin: boolean;
   /** True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests. */

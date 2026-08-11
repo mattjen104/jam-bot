@@ -19,6 +19,7 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   useListStations,
+  getListStationsQueryKey,
   useListStationsNowPlaying,
   getListStationsNowPlayingQueryKey,
   useGetStationsSchedule,
@@ -34,6 +35,7 @@ import {
 } from "@workspace/api-client-react";
 import { useMyPickerNames, useMyDialCrossings, useMyBlendedCrossings, useMyPickerOverlap, type DialCrossing } from "../lib/meHooks";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
+import { spinAgeTier, type AgeTier } from "../lib/dialAgeFilter";
 
 // ---------------------------------------------------------------------------
 // Shared name normaliser — strips zero-width chars, trims, collapses spaces.
@@ -63,6 +65,14 @@ export interface DialSpin {
   isArtistHit: boolean;
   /** First-ever appearance of this recording (by MBID) in the archive. */
   isFirstSpin: boolean;
+  /** MusicBrainz first-release year for the recording; null when unknown/unresolved. */
+  releaseYear: number | null;
+  /**
+   * Age tier derived from releaseYear + isFirstSpin, powering the Dial's
+   * First/Current/Catalog/Deep filter. Null when the release year is unknown
+   * and the spin is not a first-play (such rows pass through the age filter).
+   */
+  ageTier: AgeTier | null;
 }
 
 export interface DialShow {
@@ -503,6 +513,8 @@ interface SseSpinEntry {
   artist: string;
   playedAt: string;
   isFirstSpin: boolean;
+  /** MusicBrainz first-release year (from the SSE payload); null when unknown. */
+  releaseYear: number | null;
   /** Server-computed hit flags — sent in the spin-changed SSE payload. */
   isLibraryHit: boolean;
   isArtistHit: boolean;
@@ -588,7 +600,18 @@ export function useBoundedPending(pending: boolean, deadlineMs: number): boolean
 export type DialDisplayMode = "personal" | "blended";
 export function useDialData(
   displayMode: DialDisplayMode = "personal",
-  opts: { sleepMode?: boolean; eraGenreMode?: boolean } = {},
+  opts: {
+    sleepMode?: boolean;
+    eraGenreMode?: boolean;
+    /**
+     * Additive station-category filter (Lore | Classics | Ambient). When
+     * provided it drives station fetching: Lore = the normal dial list,
+     * Classics = the era-genre list, Ambient = the sleep list; active
+     * categories are merged (de-duped by slug). When omitted the legacy
+     * single-mode sleepMode/eraGenreMode flags apply.
+     */
+    categories?: ReadonlySet<"lore" | "classics" | "ambient">;
+  } = {},
 ): {
   stations: DialStation[];
   isLoading: boolean;
@@ -640,6 +663,7 @@ export function useDialData(
           rawTitle?: string;
           mbid?: string | null;
           artistMbid?: string | null;
+          releaseYear?: number | null;
           isFirstSpin?: boolean;
           isLibraryHit?: boolean;
           isArtistHit?: boolean;
@@ -653,6 +677,7 @@ export function useDialData(
             title: ev.rawTitle ?? "",
             artist: ev.rawArtist ?? "",
             playedAt: new Date().toISOString(),
+            releaseYear: ev.releaseYear ?? null,
             isFirstSpin: ev.isFirstSpin ?? false,
             // Hit flags computed server-side per listener at spin-write time.
             isLibraryHit: ev.isLibraryHit ?? false,
@@ -673,6 +698,15 @@ export function useDialData(
   // the default (no-params) cache stays warm for the normal dial.
   const sleepMode = opts.sleepMode === true;
   const eraGenreMode = opts.eraGenreMode === true;
+  // Front-door category filter: the station-category menu can additively layer
+  // Classics (era-genre) and Ambient (sleep) stations on top of the normal Lore
+  // list. When `categories` is provided it drives fetching; the legacy single
+  // `sleepMode`/`eraGenreMode` flags stay supported for the hidden gesture modes.
+  const categories = opts.categories;
+  const wantLore = categories ? categories.has("lore") : !sleepMode && !eraGenreMode;
+  const wantClassics = categories ? categories.has("classics") : eraGenreMode;
+  const wantAmbient = categories ? categories.has("ambient") : sleepMode;
+
   // Hidden browse modes swap the station source. Sleep takes precedence if both
   // flags somehow arrive true (the modes are mutually exclusive upstream).
   const modeParam = sleepMode
@@ -680,8 +714,27 @@ export function useDialData(
     : eraGenreMode
     ? ({ mode: "era-genre" } as const)
     : undefined;
+  // Base list: the normal dial when Lore is wanted, else the primary mode list.
+  // (In legacy single-mode use, modeParam already carries sleep/era-genre.)
+  const baseParam = categories
+    ? (wantLore ? undefined : wantClassics ? ({ mode: "era-genre" } as const) : wantAmbient ? ({ mode: "sleep" } as const) : undefined)
+    : modeParam;
   const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations(
-    modeParam,
+    baseParam,
+  );
+
+  // Additive category lists — only enabled in the categories-driven path when a
+  // non-primary category is toggled on. Idle queries otherwise (staleTime keeps
+  // them warm; toggling off simply stops merging their data).
+  const fetchClassics = categories != null && wantClassics && wantLore;
+  const fetchAmbient = categories != null && wantAmbient && (wantLore || wantClassics);
+  const { data: classicsData } = useListStations(
+    { mode: "era-genre" },
+    { query: { queryKey: getListStationsQueryKey({ mode: "era-genre" }), enabled: fetchClassics, staleTime: 5 * 60_000 } },
+  );
+  const { data: ambientData } = useListStations(
+    { mode: "sleep" },
+    { query: { queryKey: getListStationsQueryKey({ mode: "sleep" }), enabled: fetchAmbient, staleTime: 5 * 60_000 } },
   );
 
   // ── live pulse (30s polling) ─────────────────────────────────────────────
@@ -885,6 +938,10 @@ export function useDialData(
       if (!title && !artist) continue;
       const mbid = (np as { mbid?: string | null }).mbid ?? null;
       const artistMbid = (np as { artistMbid?: string | null }).artistMbid ?? null;
+      // releaseYear lives on the resolved recording sub-object.
+      const releaseYear =
+        (np as { recording?: { releaseYear?: number | null } | null }).recording?.releaseYear ?? null;
+      const isFirstSpin = (np as { isFirstSpin?: boolean }).isFirstSpin ?? false;
       m.set(item.slug, {
         mbid,
         artistMbid,
@@ -893,7 +950,9 @@ export function useDialData(
         playedAt: new Date().toISOString(),
         isLibraryHit: (np as { isLibraryHit?: boolean }).isLibraryHit ?? false,
         isArtistHit: (np as { isArtistHit?: boolean }).isArtistHit ?? false,
-        isFirstSpin: (np as { isFirstSpin?: boolean }).isFirstSpin ?? false,
+        isFirstSpin,
+        releaseYear,
+        ageTier: spinAgeTier(isFirstSpin, releaseYear),
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
@@ -910,6 +969,8 @@ export function useDialData(
         isLibraryHit: entry.isLibraryHit,
         isArtistHit: entry.isArtistHit,
         isFirstSpin: entry.isFirstSpin,
+        releaseYear: entry.releaseYear,
+        ageTier: spinAgeTier(entry.isFirstSpin, entry.releaseYear),
       });
     }
     return m;
@@ -944,7 +1005,24 @@ export function useDialData(
 
   // ── assemble enriched stations ────────────────────────────────────────────
   const stations = useMemo((): DialStation[] => {
-    const raw = stationsData?.stations ?? [];
+    // Merge the base list with any additive category lists, de-duped by slug.
+    // Slugs from era-genre/sleep lists are tracked so they render as always-live
+    // (those stations are hidden from the now-playing pollers). In the legacy
+    // single-mode path (no categories), only the base list is present.
+    const alwaysLiveSlugs = new Set<string>();
+    const bySlugRaw = new Map<string, Station>();
+    for (const s of stationsData?.stations ?? []) bySlugRaw.set(s.slug, s);
+    if (categories) {
+      // The base list itself is a mode list when Lore is off — mark it live.
+      if (!wantLore) for (const s of stationsData?.stations ?? []) alwaysLiveSlugs.add(s.slug);
+      if (fetchClassics) {
+        for (const s of classicsData?.stations ?? []) { bySlugRaw.set(s.slug, s); alwaysLiveSlugs.add(s.slug); }
+      }
+      if (fetchAmbient) {
+        for (const s of ambientData?.stations ?? []) { bySlugRaw.set(s.slug, s); alwaysLiveSlugs.add(s.slug); }
+      }
+    }
+    const raw = [...bySlugRaw.values()];
     // Rolling 24-hour cutoff for crossings. We fetch both today's and
     // yesterday's data so that overnight shows are present, but only spins
     // within the past 24 hours count toward crossings — spins from earlier
@@ -958,7 +1036,9 @@ export function useDialData(
       // from the now-playing pollers, so the live pulse never marks them
       // recent. Treat every station in the sleep list as tunable ("live") so
       // the dial renders them through the ordinary live pipeline.
-      const isLive = sleepMode || eraGenreMode ? true : (liveBySlug.get(station.slug) ?? false);
+      const isLive = sleepMode || eraGenreMode || alwaysLiveSlugs.has(station.slug)
+        ? true
+        : (liveBySlug.get(station.slug) ?? false);
       const rawRuns = runsBySlug.get(station.slug) ?? [];
       const rawSpins = spinsBySlug.get(station.slug) ?? [];
 
@@ -986,18 +1066,24 @@ export function useDialData(
             const t = new Date(sp.playedAt).getTime();
             return t >= startMs - 60_000 && t <= endMs + 60_000;
           })
-          .map((sp) => ({
-            mbid: sp.mbid,
-            artistMbid: sp.artistMbid ?? null,
-            title: sp.title,
-            artist: sp.artist,
-            playedAt: sp.playedAt,
-            // isLibraryHit / isArtistHit computed server-side per listener;
-            // returned in the recent-spins response and consumed directly here.
-            isLibraryHit: sp.isLibraryHit,
-            isArtistHit: sp.isArtistHit,
-            isFirstSpin: sp.isFirstSpin ?? false,
-          }));
+          .map((sp) => {
+            const isFirstSpin = sp.isFirstSpin ?? false;
+            const releaseYear = sp.releaseYear ?? null;
+            return {
+              mbid: sp.mbid,
+              artistMbid: sp.artistMbid ?? null,
+              title: sp.title,
+              artist: sp.artist,
+              playedAt: sp.playedAt,
+              // isLibraryHit / isArtistHit computed server-side per listener;
+              // returned in the recent-spins response and consumed directly here.
+              isLibraryHit: sp.isLibraryHit,
+              isArtistHit: sp.isArtistHit,
+              isFirstSpin,
+              releaseYear,
+              ageTier: spinAgeTier(isFirstSpin, releaseYear),
+            };
+          });
 
         // Count only spins within the rolling 24h window so that a show that
         // aired yesterday morning doesn't inflate today's crossing count.
@@ -1125,7 +1211,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode]);
+  }, [stationsData, classicsData, ambientData, categories, wantLore, fetchClassics, fetchAmbient, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // isCoreLoading: only block until the station list arrives so the offline

@@ -210,6 +210,7 @@ async function buildNpBase(dateFilter: string | null): Promise<NpBaseCache> {
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
       genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
       showName: showsTable.name,
       showDj: showsTable.djName,
     })
@@ -710,6 +711,7 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
       genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
       showName: showsTable.name,
       showDj: showsTable.djName,
     })
@@ -1251,6 +1253,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     artist: string | null;
     raw_title: string | null;
     raw_artist: string | null;
+    release_year: number | null;
     played_at: string;
   }>(sql`
     WITH ranked AS (
@@ -1268,6 +1271,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
         r.artist,
         sp.raw_title,
         sp.raw_artist,
+        r.release_year,
         sp.played_at,
         ROW_NUMBER() OVER (PARTITION BY sp.station_id ORDER BY sp.played_at DESC) AS rn
       FROM spins sp
@@ -1276,7 +1280,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
       WHERE sp.played_at::date = ${dateFilter}::date
         AND sp.station_id IS NOT NULL
     )
-    SELECT station_slug, mbid, artist_mbid, release_group_mbid, title, artist, raw_title, raw_artist, played_at
+    SELECT station_slug, mbid, artist_mbid, release_group_mbid, title, artist, raw_title, raw_artist, release_year, played_at
     FROM ranked
     -- Over-fetch beyond the 8 we actually want to render: some stations log
     -- the same track more than once in a row (metadata re-announces, ad-break
@@ -1293,7 +1297,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
   // library crossings against the FULL show history, not just the latest 8.
   // The chip strip limits display client-side via slice(0, 28).
   const CHIPS_PER_STATION = 80;
-  const bySlug = new Map<string, { mbid: string | null; artistMbid: string | null; releaseGroupMbid: string | null; title: string; artist: string; playedAt: string }[]>();
+  const bySlug = new Map<string, { mbid: string | null; artistMbid: string | null; releaseGroupMbid: string | null; title: string; artist: string; releaseYear: number | null; playedAt: string }[]>();
   const seenBySlug = new Map<string, Set<string>>();
   for (const row of rows.rows) {
     const title = row.title ?? row.raw_title ?? "";
@@ -1319,6 +1323,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
       releaseGroupMbid: row.release_group_mbid ?? null,
       title,
       artist,
+      releaseYear: row.release_year ?? null,
       playedAt: new Date(row.played_at).toISOString(),
     };
     if (bySlug.has(row.station_slug)) arr.push(spin);

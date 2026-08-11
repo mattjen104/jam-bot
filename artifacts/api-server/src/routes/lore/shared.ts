@@ -257,6 +257,7 @@ export function toNowPlaying(row: {
   artworkUrl: string | null;
   links: unknown;
   genres?: string[] | null;
+  releaseYear?: number | null;
   showName: string | null;
   showDj: string | null;
   stationName?: string | null;
@@ -282,6 +283,7 @@ export function toNowPlaying(row: {
           artworkUrl: row.artworkUrl ?? null,
           links: row.links ?? [],
           genres: row.genres ?? null,
+          releaseYear: row.releaseYear ?? null,
         }
       : null,
     show: row.showName

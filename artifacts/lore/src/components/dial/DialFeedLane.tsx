@@ -25,6 +25,7 @@ import { useRef, useEffect, useState, useMemo, type ReactNode } from "react";
 import { type PopularCrossingArtist } from "../../lib/meHooks";
 import { type DialStation, type DialShow, type DialDisplayMode } from "../../hooks/useDialData";
 import { type StationPresence } from "../../hooks/useStationPresence";
+import { rowPassesAgeTierFilter, type AgeTier } from "../../lib/dialAgeFilter";
 import { FrontDoorRow } from "./FrontDoorRow";
 
 /** The shape shared by all sorted dial rows (reason / dj / rest bands). */
@@ -69,6 +70,13 @@ export interface DialFeedLaneProps {
   onAddArtist: (name: string) => void;
   onTuneIn: (row: DialLaneRow) => void;
   onSetExpand: (row: DialLaneRow) => void;
+  /**
+   * Active song-age tiers (First | Current | Catalog | Deep). Rows whose
+   * current track's ageTier misses every active tier are hidden BEFORE
+   * pagination. Empty/omitted set = no age filtering. Rows with unknown age
+   * (null tier) always pass.
+   */
+  activeAgeTiers?: ReadonlySet<AgeTier>;
 }
 
 interface FeedEntry {
@@ -94,15 +102,28 @@ export function DialFeedLane({
   onAddArtist,
   onTuneIn,
   onSetExpand,
+  activeAgeTiers,
 }: DialFeedLaneProps) {
   // Flat display order mirrors the scrubber: ▲ reason → dj → rest;
   // ▼ rest → dj → reason (reason rows arrive pre-inverted from DialView).
+  // The age-tier filter applies BEFORE pagination so the initial page is full
+  // of matching rows (not a filtered-down fragment of the first 12).
   const entries = useMemo<FeedEntry[]>(() => {
     const reason = reasonRows.map((row): FeedEntry => ({ row, band: "reason" }));
     const dj = djRows.map((row): FeedEntry => ({ row, band: "dj" }));
     const rest = restRows.map((row): FeedEntry => ({ row, band: "rest" }));
-    return popSortDesc ? [...reason, ...dj, ...rest] : [...rest, ...dj, ...reason];
-  }, [reasonRows, djRows, restRows, popSortDesc]);
+    const ordered = popSortDesc ? [...reason, ...dj, ...rest] : [...rest, ...dj, ...reason];
+    if (!activeAgeTiers || activeAgeTiers.size === 0) return ordered;
+    return ordered.filter(({ row }) => {
+      // The row's age identity is its station's current track (live pulse
+      // first, falling back to the live show's last spin). Stations with no
+      // current track (dark/attribution-only rows) pass through — the age
+      // filter is about what's PLAYING, not about hiding quiet stations.
+      const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
+      if (!track) return true;
+      return rowPassesAgeTierFilter(track.ageTier, activeAgeTiers);
+    });
+  }, [reasonRows, djRows, restRows, popSortDesc, activeAgeTiers]);
 
   const [visible, setVisible] = useState(FEED_INITIAL);
   const sentinelRef = useRef<HTMLDivElement | null>(null);

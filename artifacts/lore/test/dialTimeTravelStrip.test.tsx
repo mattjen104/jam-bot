@@ -179,7 +179,12 @@ describe("(a) run-navigation controls are retired from the front door", () => {
     renderDial();
 
     expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Lore" })).toBeNull();
+    // The dial filter bar renders a "Lore" CATEGORY TOGGLE (aria-pressed) —
+    // that's allowed. What must stay retired is the old nav button variant:
+    // any "Lore" button must be a toggle, not plain navigation.
+    for (const loreBtn of screen.queryAllByRole("button", { name: "Lore" })) {
+      expect(loreBtn.getAttribute("aria-pressed")).not.toBeNull();
+    }
     expect(screen.queryByRole("button", { name: "My Library" })).toBeNull();
   });
 

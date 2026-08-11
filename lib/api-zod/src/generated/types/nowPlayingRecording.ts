@@ -21,4 +21,9 @@ export interface NowPlayingRecording {
   links: RecordingLink[];
   /** MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet. */
   genres?: string[] | null;
+  /**
+   * MusicBrainz first-release year for the recording, used by the Dial age-tier (Current/Catalog/Deep) filter. Null when unknown or unresolved.
+   * @nullable
+   */
+  releaseYear?: number | null;
 }

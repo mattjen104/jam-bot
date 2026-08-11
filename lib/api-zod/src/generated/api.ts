@@ -453,6 +453,12 @@ export const ListStationsAtDateResponse = zod.object({
                           .describe(
                             "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
                           ),
+                        releaseYear: zod
+                          .number()
+                          .nullish()
+                          .describe(
+                            "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                          ),
                       })
                       .describe("The MBID-keyed recording a spin resolved to."),
                     zod.null(),
@@ -573,6 +579,12 @@ export const ListStationsNowPlayingResponse = zod.object({
                           .nullish()
                           .describe(
                             "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                          ),
+                        releaseYear: zod
+                          .number()
+                          .nullish()
+                          .describe(
+                            "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
                           ),
                       })
                       .describe("The MBID-keyed recording a spin resolved to."),
@@ -798,6 +810,12 @@ export const GetStationNowPlayingResponse = zod.object({
                     .nullish()
                     .describe(
                       "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                    ),
+                  releaseYear: zod
+                    .number()
+                    .nullish()
+                    .describe(
+                      "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
                     ),
                 })
                 .describe("The MBID-keyed recording a spin resolved to."),
@@ -1798,6 +1816,12 @@ export const GetStationSpinsResponse = zod
                     .describe(
                       "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
                     ),
+                  releaseYear: zod
+                    .number()
+                    .nullish()
+                    .describe(
+                      "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                    ),
                 })
                 .describe("The MBID-keyed recording a spin resolved to."),
               zod.null(),
@@ -1930,6 +1954,12 @@ export const GetStationRunResponse = zod.object({
                   .describe(
                     "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
                   ),
+                releaseYear: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                  ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
             zod.null(),
@@ -2053,6 +2083,12 @@ export const GetReplayManifestResponse = zod
                   .nullish()
                   .describe(
                     "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                  ),
+                releaseYear: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
                   ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
@@ -2703,6 +2739,12 @@ export const GetPickerRunResponse = zod.object({
                   .describe(
                     "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
                   ),
+                releaseYear: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                  ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
             zod.null(),
@@ -3323,6 +3365,12 @@ export const GetStationsRecentSpinsResponse = zod
               title: zod.string(),
               artist: zod.string(),
               playedAt: zod.string(),
+              releaseYear: zod
+                .number()
+                .nullish()
+                .describe(
+                  "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                ),
               isFirstSpin: zod
                 .boolean()
                 .describe(

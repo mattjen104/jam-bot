@@ -608,6 +608,8 @@ export interface SpinChangedEvent {
   artistMbid: string | null;
   /** Primary release-group MBID for the recording, used for album-level library crossing detection in SSE handlers. */
   releaseGroupMbid: string | null;
+  /** MusicBrainz first-release year for the recording, used by the Dial age-tier filter. Null when unknown/unresolved. */
+  releaseYear: number | null;
   /** True when this is the first time this recording (by MBID) has appeared in the archive. */
   isFirstSpin: boolean;
 }
@@ -738,8 +740,9 @@ export async function logSpinIfChanged(
       // the SSE event carries the same isFirstSpin flag as the REST response.
       let isFirstSpin = false;
       let releaseGroupMbid: string | null = null;
+      let releaseYear: number | null = null;
       if (r.mbid) {
-        const [prior, rgRow] = await Promise.all([
+        const [prior, rgRow, recRow] = await Promise.all([
           db.execute<{ found: number }>(sql`
             SELECT 1 AS found FROM spins
             WHERE mbid = ${r.mbid}
@@ -756,9 +759,15 @@ export async function logSpinIfChanged(
               ),
             )
             .limit(1),
+          db
+            .select({ releaseYear: recordingsTable.releaseYear })
+            .from(recordingsTable)
+            .where(eq(recordingsTable.mbid, r.mbid))
+            .limit(1),
         ]);
         isFirstSpin = prior.rows.length === 0;
         releaseGroupMbid = rgRow[0]?.rg ?? null;
+        releaseYear = recRow[0]?.releaseYear ?? null;
       }
       // MBID is fully resolved before persist, so subscribers (SSE clients)
       // get everything they need without a follow-up round-trip.
@@ -770,6 +779,7 @@ export async function logSpinIfChanged(
         mbid: r.mbid,
         artistMbid: r.artistMbid ?? null,
         releaseGroupMbid,
+        releaseYear,
         isFirstSpin,
       } satisfies SpinChangedEvent);
     }

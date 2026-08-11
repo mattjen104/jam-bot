@@ -4217,6 +4217,12 @@ components:
           description: >-
             MusicBrainz-sourced genre tags for the recording, most-relevant
             first. Null when the recording has not been enriched yet.
+        releaseYear:
+          type: ["integer", "null"]
+          description: >-
+            MusicBrainz first-release year for the recording, used by the Dial
+            age-tier (Current/Catalog/Deep) filter. Null when unknown or
+            unresolved.
       required:
         - mbid
         - title
@@ -6909,6 +6915,9 @@ components:
           type: string
         playedAt:
           type: string
+        releaseYear:
+          type: ["integer", "null"]
+          description: MusicBrainz first-release year for the recording, used by the Dial age-tier (Current/Catalog/Deep) filter. Null when unknown or unresolved.
         isFirstSpin:
           type: boolean
           description: True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved).

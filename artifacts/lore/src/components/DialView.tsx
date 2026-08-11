@@ -22,6 +22,9 @@ import { useSocialMode } from "../lib/social";
 import { useSleepMode } from "../lib/sleepMode";
 import { useEraGenreMode } from "../lib/eraGenreMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
+import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
+import { type AgeTier } from "../lib/dialAgeFilter";
+import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
 import {
   cleanLiveValue,
   nameNodes,
@@ -1537,6 +1540,24 @@ export function DialView() {
   const { enabled: eraGenreEnabled } = useEraGenreMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
+
+  // ── Dial filter menus — song-age tiers (left) + station categories (right).
+  // Age tiers are additive; empty set = no age filtering. Station categories
+  // are additive too but at least one must stay selected (toggle guard below).
+  // The hidden gesture modes (sleep / era-genre) keep priority: while either is
+  // active the filter bar is hidden and the legacy single-mode fetch applies.
+  const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
+  const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
+    () => new Set<StationCategory>(["lore"]),
+  );
+  const toggleTier = useCallback((tier: AgeTier) => {
+    setActiveTiers((prev) => toggleAgeTier(prev, tier));
+  }, []);
+  const toggleCategory = useCallback((cat: StationCategory) => {
+    setActiveCategories((prev) => toggleStationCategory(prev, cat));
+  }, []);
+  const hiddenModeActive = sleepEnabled || eraGenreEnabled;
+
   const {
     stations,
     isLoading,
@@ -1555,7 +1576,13 @@ export function DialView() {
     crossingsPhase,
     stationsError,
     refetchStations,
-  } = useDialData(displayMode, { sleepMode: sleepEnabled, eraGenreMode: eraGenreEnabled });
+  } = useDialData(displayMode, {
+    sleepMode: sleepEnabled,
+    eraGenreMode: eraGenreEnabled,
+    // Category-driven fetching only applies outside the hidden gesture modes:
+    // while sleep or era-genre is active the legacy single-mode flags win.
+    categories: hiddenModeActive ? undefined : activeCategories,
+  });
   // Defensive default keeps older mocks (which don't provide the phase) on the
   // legacy behavior; the real hook always supplies it.
   const cxPhase = crossingsPhase ?? "settled";
@@ -2372,6 +2399,8 @@ export function DialView() {
           isLibraryHit: false,
           isArtistHit: false,
           isFirstSpin: false,
+          releaseYear: null,
+          ageTier: null,
         })),
         progress: (ride.index + 1) / ride.queue.length,
       },
@@ -2677,6 +2706,7 @@ export function DialView() {
       onAddArtist={addSeed}
       onTuneIn={tuneZoneRow}
       onSetExpand={(_row) => undefined}
+      activeAgeTiers={activeTiers}
     />
   );
 
@@ -2914,6 +2944,18 @@ export function DialView() {
                         liveLoading={liveLoading}
                         onAddSeed={addSeed}
                         onRemoveSeed={removeSeed}
+                      />
+                    )}
+
+                    {/* Filter menus — song-age tiers (left) and station
+                        categories (right). Live mode only; hidden while a
+                        gesture mode (sleep / era-genre) owns the station list. */}
+                    {!inContext && !hiddenModeActive && (
+                      <DialFilterBar
+                        activeTiers={activeTiers}
+                        activeCategories={activeCategories}
+                        onToggleTier={toggleTier}
+                        onToggleCategory={toggleCategory}
                       />
                     )}
 

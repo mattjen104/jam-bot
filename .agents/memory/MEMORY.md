@@ -121,3 +121,4 @@
 - [Completion review vs pre-existing tree](task-review-preexisting-tree.md) — checkpoint auto-commits bundle stale working-tree changes into your task's review range; prove scope via diff against mainline tip + drift_reason, don't blind-revert.
 - [Icecast 400-on-HEAD probing](icecast-probe-400.md) — bare HEAD/curl -I gets 400 from healthy Icecast servers; probe with GET + Icy-MetaData:1, and try the https:// variant before assuming a stream is HTTP-only.
 - [CREATE IF NOT EXISTS PK drift](create-if-not-exists-pk-drift.md) — boot migrations never repair missing PKs on pre-existing tables; 42P10 on upserts means \d the live table and ALTER ADD PRIMARY KEY.
+- [Dial filter menus](dial-filter-menus.md) — age tiers client-derived from releaseYear (unknown always passes); categories additive w/ last-category protection; "Lore" buttons must be aria-pressed toggles, never nav.

@@ -1932,6 +1932,50 @@
   margin-left: auto;
 }
 
+/* ── Dial filter bar — song-age (left) + station-category (right) menus ── */
+.dial-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 7px 15px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.dial-filter-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.dial-filter-bar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.dial-filter-bar__btn {
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-small);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(var(--faint));
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  padding: 2px 4px 1px;
+}
+.dial-filter-bar__btn:hover { color: hsl(var(--dim)); }
+.dial-filter-bar__btn--on {
+  color: hsl(var(--foreground));
+  border-bottom-color: hsl(var(--foreground));
+}
+@media (max-width: 480px) {
+  .dial-filter-bar { gap: 6px; padding: 6px 12px; }
+  .dial-filter-bar__btn { padding: 2px 2px 1px; }
+}
+
 /* ── Scan bar ── */
 .dial-scanbar {
   display: flex;
