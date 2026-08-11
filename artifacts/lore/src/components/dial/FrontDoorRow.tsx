@@ -378,21 +378,24 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
   // Popular-crossing sentence (Also-On-Air) outranks the dim fallback reason
   // but never a personal crossing sentence — your own library evidence wins.
   const usePop = displayMode !== "blended" && !crossing && popLine != null;
-  const tier1Cls = displayMode === "blended"
-    ? rz.cls
-    : crossing ? rz.cls : usePop ? "fdrow__pop-sentence" : live ? "fdrow__live-sentence" : rz.cls;
   const fallbackTier1Node = displayMode === "blended"
     ? rz.node
     : crossing?.node ?? (usePop ? popLine : null) ?? live?.node ?? rz.node;
   // The station set workspace is retired (Task #37): the compact provenance
   // prefix is inert text now — the whole row tunes, and the pinned sentence
-  // (PinnedSetRow) carries the set once tuned.
+  // (PinnedSetRow) carries the set once tuned. Always use the bright-foreground
+  // class so the weight rung (w0/w5…) cannot dim the summary sentence.
   const tier1Node = compactSentence && compact ? (
     <>
       <span className="fdrow__provenance">{compact.provenance.join(" | ")}</span>
       {compact.artist ? <> is playing <b className="fdrow__artist">{compact.artist}</b>.</> : " is on air."}
     </>
   ) : fallbackTier1Node;
+  const tier1Cls = compactSentence && compact
+    ? "fdrow__live-sentence"
+    : displayMode === "blended"
+    ? rz.cls
+    : crossing ? rz.cls : usePop ? "fdrow__pop-sentence" : live ? "fdrow__live-sentence" : rz.cls;
   const rowCls = [
     "fdrow",
     rz.r === 1 ? "fdrow--t1" : "",
@@ -451,28 +454,6 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
 
         <span className="sr-only">{ds.station.slug}</span>
 
-        {/* Zone 3 lifetime overlap caption: shown when the reason sentence carries no
-            taste signal (r=0: no data; r=5: attributed show but no crossings yet) but
-            we do have a nonzero lifetime artist-overlap count.  Gives every row a
-            human explanation of why it surfaced instead of just a name and a number. */}
-        {(rz.r === 0 || rz.r === 5) && ov > 0 && (
-             <div className="fdrow__ov-caption">
-            <b>{ov} artists</b> {displayMode === "blended" ? "represented here" : "you know"} play here
-          </div>
-        )}
-
-        {/* Zone 3 now-playing line: when the row has no reason sentence (dim
-            fallback tier only — never over a crossing/pop/live sentence), show
-            the station's current track so every row is informative before the
-            listener has crossings. */}
-        {displayMode !== "blended" && (rz.r === 0 || rz.r === 5) && !crossing && !usePop && !live &&
-          ds.liveTrack?.artist && (
-          <div className="fdrow__np-line">
-            <span aria-hidden="true">▶ </span>
-            <b>{ds.liveTrack.artist}</b>
-            {ds.liveTrack.title ? <> — {ds.liveTrack.title}</> : null}
-          </div>
-        )}
 
         {/* Listener avatar stack — community presence below the reason sentence.
             Visible on every row that has active listeners, regardless of whether

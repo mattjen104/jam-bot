@@ -463,7 +463,8 @@ describe("FirstRunSidebar", () => {
     expect(onTune).not.toHaveBeenCalled();
   });
 
-  it("shows rung-2 dagger (†) for live shift with host not named in feed", () => {
+  it("shows the station name and current artist for a rung-2 live shift row", () => {
+    // The cite byline was removed — provenance is expressed in the sentence.
     const ds = makeStation({
       slug: "dublab",
       name: "Dublab",
@@ -473,11 +474,10 @@ describe("FirstRunSidebar", () => {
     const { container } = render(
       <FirstRunSidebar stations={[ds]} seeds={[]} onAddSeed={noop} onTune={noop} />,
     );
-    expect(container.textContent).toContain("†");
+    expect(container.textContent).toContain("Dublab");
     expect(container.textContent).toContain("Laraaji");
-    // Citation must not claim a picker name
-    const cite = container.querySelector<HTMLElement>(".frb__cite");
-    expect(cite?.textContent).toContain("host not named in feed");
+    // No cite line — only the sentence remains
+    expect(container.querySelector(".frb__cite")).toBeNull();
   });
 
   it("reveals more stations button only when blocks exceed cap", () => {

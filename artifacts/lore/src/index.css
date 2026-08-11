@@ -4942,10 +4942,10 @@
 }
 .fdrow__dj {
   font-weight: 400;
-  color: hsl(var(--foreground) / 0.85);
+  color: hsl(var(--foreground));
 }
 .fdrow__show {
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--foreground));
   font-weight: 400;
 }
 
@@ -5236,10 +5236,10 @@
   color: #fff;
   cursor: default;
 }
-/* Entity-type colours for the attribution sentence — blue selector palette */
-.fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
-.fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 400; font-style: normal; }
-.fdrow__t1 .fdrow__station { color: hsl(var(--library)); font-weight: 400; font-style: normal; }
+/* Summary sentences are uniformly bright white — provenance is in the sentence itself */
+.fdrow__t1 .fdrow__dj      { color: hsl(var(--foreground)); font-weight: 400; }
+.fdrow__t1 .fdrow__show    { color: hsl(var(--foreground)); font-weight: 400; font-style: normal; }
+.fdrow__t1 .fdrow__station { color: hsl(var(--foreground)); font-weight: 400; font-style: normal; }
 /* Inert provenance prefixes — plain text since the station workspace was
    retired; the dotted underline treatment is gone with the click affordance. */
 .fdrow__provenance,
@@ -6681,7 +6681,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .dial-addplus:hover { color: #fff; border-color: hsl(var(--foreground) / .7); }
 .gram__attribution { color: hsl(var(--foreground) / .55); }
 .gram__attr-sep { opacity: .6; }
-.fdrow__artist--other, .set-queue__artist--other { color: hsl(var(--foreground) / .6); text-decoration: none; }
+.fdrow__artist--other, .set-queue__artist--other { color: hsl(var(--foreground) / .75); text-decoration: none; }
 
 /* ── Context rail (tuned surface) ──────────────────────────────────────────── */
 .crail { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 0; }

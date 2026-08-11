@@ -203,25 +203,6 @@ function StationBlock({
       all.findIndex((other) => other.localeCompare(value, undefined, { sensitivity: "accent" }) === 0) === index);
   const currentArtist = block.currentArtist;
 
-  // ── Citation line by rung ────────────────────────────────────────────────
-  let citeText: string;
-  if (block.rung === 1) {
-    const parts = [
-      block.pickerName ? `Selected by ${block.pickerName}` : null,
-      block.showName,
-      "live now",
-    ].filter(Boolean);
-    citeText = parts.join(" · ");
-  } else if (block.rung === 2) {
-    const parts = ["† Live shift", "host not named in feed", block.location].filter(Boolean);
-    citeText = parts.join(" · ");
-  } else if (block.rung === 3) {
-    const parts = ["Schedule feed", "no agent claim", block.location].filter(Boolean);
-    citeText = parts.join(" · ");
-  } else {
-    citeText = "Automated rotation · no human on shift";
-  }
-
   return (
     <div
       className="frb__block"
@@ -244,7 +225,6 @@ function StationBlock({
           <> is playing <ArtistList artists={[currentArtist]} seedKeys={seedKeys} onKeep={onKeep} />.</>
         ) : " is on air."}
       </p>
-      <span className="frb__cite">{citeText}</span>
     </div>
   );
 }

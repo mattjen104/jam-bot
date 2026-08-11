@@ -413,9 +413,10 @@ describe("fallback and interaction", () => {
     expect(document.querySelector(".fdrow__also-block")).toBeNull();
   });
 
-  it("continues to show the lifetime overlap caption for weak-match rows", () => {
+  it("does not render a secondary byline caption for weak-match rows", () => {
+    // ov-caption and np-line were removed — provenance is in the sentence itself.
     const { container } = renderRow(makeDialStation(), null, 7);
-    expect(container.querySelector(".fdrow__ov-caption")?.textContent).toContain("7 artists you know play here");
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
   });
 
 });
