@@ -1111,10 +1111,12 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WHPK 88.5 FM",
       org: "University of Chicago",
       country: "US",
-      // Broadcast server is HTTP-only (Icecast port 8000, blocked from the
-      // Replit container). No HTTPS CDN endpoint found after investigation.
-      streamUrl: "",
-      streamQuality: "128kbps MP3",
+      // University of Chicago's own Icecast 2.4.4 server with a TLS front-end
+      // at whpk-stream.uchicago.edu — confirmed 200 audio/mpeg from the Replit
+      // container (2026-08). Returns 400 on HEAD (normal Icecast behaviour)
+      // but streams correctly on GET. 256kbps MP3.
+      streamUrl: "https://whpk-stream.uchicago.edu/stream",
+      streamQuality: "256kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://whpk.uchicago.edu",
       scheduleUrl: "https://whpk.uchicago.edu/schedule",
@@ -1127,7 +1129,12 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WESU 88.1 FM",
       org: "Wesleyan University",
       country: "US",
-      // HTTP-only Icecast on their own server. No HTTPS CDN endpoint found.
+      // Wesleyan's own Icecast server at radio.wesleyan.edu:8000/stream —
+      // HTTP-only; the host does not expose port 8443 or an HTTPS front-end.
+      // Investigation (2026-08): radio-browser confirms the HTTP URL is live
+      // (lastcheckok=1, 128kbps MP3); no HTTPS CDN or proxy found.
+      // streamUrl left empty so the browser player doesn't attempt a mixed-
+      // content load; update when an HTTPS endpoint is published.
       streamUrl: "",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -1143,8 +1150,11 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WZBC 90.3 FM",
       org: "Boston College",
       country: "US",
-      // Broadcast server is HTTP-only. No HTTPS CDN endpoint found.
-      streamUrl: "",
+      // WZBC's own Icecast server with HTTPS front-end at stream.wzbc.org —
+      // confirmed 200 audio/mpeg from the Replit container (2026-08). Returns
+      // 400 on HEAD (normal Icecast behaviour) but streams correctly on GET.
+      // 128kbps MP3.
+      streamUrl: "https://stream.wzbc.org/wzbc",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wzbc.org",
@@ -1158,8 +1168,12 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WRCT 88.3 FM",
       org: "Carnegie Mellon University",
       country: "US",
-      // Broadcast infrastructure is HTTP-only. No HTTPS CDN found.
-      streamUrl: "",
+      // Cloudflare-proxied HTTPS mirror of the Icecast origin at
+      // stream.wrct.org — WRCT's own site links both URLs; streamalt is the
+      // CDN-fronted path. Confirmed 200 audio/mpeg from the Replit container
+      // (2026-08). ICY headers present; icy-main-stream-url points to the
+      // HTTP origin. 128kbps MP3.
+      streamUrl: "https://streamalt.wrct.org/wrct-hi.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wrct.org",
@@ -1191,7 +1205,10 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WBRS 100.1 FM",
       org: "Brandeis University",
       country: "US",
-      // No confirmed HTTPS CDN stream found for Brandeis's station.
+      // Investigation (2026-08): wbrs.fm DNS does not resolve; the station
+      // is absent from radio-browser. No stream URL (HTTP or HTTPS) found via
+      // common Icecast, StreamGuys, Airtime Pro, or Brandeis-domain patterns.
+      // streamUrl left empty until a working endpoint is published.
       streamUrl: "",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -1206,12 +1223,16 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WMFO 91.5 FM",
       org: "Tufts University",
       country: "US",
-      // Broadcast server is HTTP-only (port 8000). No HTTPS CDN found.
+      // Shoutcast DNAS at new-webstream.wmfo.org — HTTP-only (port 80);
+      // the server does not expose TLS. Investigation (2026-08): 200 audio/aacp
+      // confirmed on the HTTP URL, icy-br:52 (52kbps AAC+). No HTTPS CDN
+      // or proxy found. streamUrl left empty so the player degrades gracefully;
+      // Spinitron still provides metadata. Update when HTTPS is published.
       // Spinitron fixture (test/fixtures/spinitron-wmfo.html) is already
       // captured for parseSpinitronWebPage regression testing.
       streamUrl: "",
-      streamQuality: "128kbps MP3",
-      streamFormat: "mp3",
+      streamQuality: "52kbps AAC+",
+      streamFormat: "aac",
       homepageUrl: "https://wmfo.org",
       scheduleUrl: "https://wmfo.org/schedule",
       donateUrl: "https://wmfo.org/donate",
@@ -1224,8 +1245,11 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WXDU 88.7 FM",
       org: "Duke University",
       country: "US",
-      // Duke's broadcast infrastructure is HTTP-only. No HTTPS CDN found.
-      streamUrl: "",
+      // Duke's own Icecast server at weeping.wxdu.duke.edu with TLS on port
+      // 8443 — confirmed 200 audio/mpeg from the Replit container (2026-08).
+      // 128kbps MP3. The station's site also references an HTTP mirror at
+      // 152.3.0.231:8000; the HTTPS port-8443 URL is preferred.
+      streamUrl: "https://weeping.wxdu.duke.edu:8443/wxdu128.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wxdu.duke.edu",
@@ -1239,9 +1263,12 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WRIR 97.3 FM",
       org: "WRIR",
       country: "US",
-      // WRIR (Richmond Independent Radio) is a listener-supported community
-      // station, not university-affiliated. HTTP-only stream found; no HTTPS
-      // CDN endpoint confirmed.
+      // Richmond Independent Radio — listener-supported community station, not
+      // university-affiliated. Investigation (2026-08): wrir.org is behind
+      // Cloudflare bot protection (JS challenge) which blocked direct source
+      // inspection. No entry in radio-browser; common HTTPS CDN patterns
+      // (StreamGuys, Airtime Pro, radiocult) all returned ECONNREFUSED.
+      // streamUrl left empty until a confirmed HTTPS endpoint is found.
       streamUrl: "",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -1257,8 +1284,11 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WICB 91.7 FM",
       org: "Ithaca College",
       country: "US",
-      // No confirmed HTTPS CDN stream found for Ithaca College's station.
-      streamUrl: "",
+      // Third-party Icecast hosting at icecast.do.zufall.co (DigitalOcean) —
+      // WICB's site links this as the primary stream. Both MP3 and AAC+
+      // mounts confirmed 200 from the Replit container (2026-08); MP3 used
+      // for broad player compatibility. 128kbps MP3.
+      streamUrl: "https://icecast.do.zufall.co/wicb_mp3_high",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wicb.org",
