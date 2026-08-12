@@ -37,6 +37,7 @@ import {
 } from "../lib/meHooks";
 import { ApiError } from "@workspace/api-client-react";
 import { LibraryRow } from "../components/LibraryRow";
+import { StackRow } from "../components/StackRow";
 import { AlbumAvatarPicker } from "../components/AlbumAvatarPicker";
 import {
   CheckCircle2,
@@ -1019,9 +1020,14 @@ export default function Library() {
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
-  // View mode is derived from the lens — Albums/Artists are grouped lenses.
+  // View mode is derived from the lens.
+  // Default (no lens) and "albums" both render the album-first Stack view.
+  // Lenses that scope a specific source subset ("recent", "lore", "matching",
+  // "critic") fall back to the flat track list so pagination stays meaningful.
   const viewMode: "track" | "album" | "artist" =
-    lens === "albums" ? "album" : lens === "artists" ? "artist" : "track";
+    lens === "artists" ? "artist" :
+    (lens === "recent" || lens === "lore" || lens === "matching" || lens === "critic") ? "track" :
+    "album"; // default (lens="") and lens="albums"
 
   // appConfig retained for other consumers in this file
   useAppConfig();
@@ -1098,6 +1104,8 @@ export default function Library() {
   const [openDoorMbid, setOpenDoorMbid] = useState<string | null>(null);
   // Single-open album shelf: tracks which row has its album shelf expanded
   const [openShelfMbid, setOpenShelfMbid] = useState<string | null>(null);
+  // Single-open Stack album row (album key from buildAlbumGroups)
+  const [openAlbumKey, setOpenAlbumKey] = useState<string | null>(null);
 
 
   // Sentinel for IntersectionObserver
@@ -1411,7 +1419,7 @@ export default function Library() {
       {/* Topbar */}
       <div className="dial-topbar">
         <span className="dial-topbar__wordmark">Lore</span>
-        <span className="dial-topbar__title dial-topbar__title--active">Library</span>
+        <span className="dial-topbar__title dial-topbar__title--active">Stack</span>
         {(libraryTotal ?? keptItems.length) > 0 && (
           <span className="dial-topbar__sort-chip">
             {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
@@ -1754,10 +1762,9 @@ export default function Library() {
         >
           {(
             [
-              { value: "" as const, label: "Timeline" },
-              { value: "recent" as const, label: "Recent keeps" },
-              { value: "albums" as const, label: "Albums" },
+              { value: "" as const, label: "Stack" },
               { value: "artists" as const, label: "Artists" },
+              { value: "recent" as const, label: "Recent keeps" },
               { value: "lore" as const, label: "From Lore" },
               { value: "matching" as const, label: "Needs matching" },
               ...(criticsCovItems.length > 0
@@ -1926,11 +1933,9 @@ export default function Library() {
               ? "Needs matching"
               : lens === "critic"
               ? "Critics' picks"
-              : lens === "albums"
-              ? "Albums"
               : lens === "artists"
               ? "Artists"
-              : "Timeline"
+              : "Stack"
           }
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
           hint={
@@ -2003,16 +2008,13 @@ export default function Library() {
             <div data-testid="library-album-view">
               {filteredAlbumGroups.length > 0 ? (
                 filteredAlbumGroups.map((group) => (
-                  <AlbumGroupRow
+                  <StackRow
                     key={group.key}
                     group={group}
-                    openDoorMbid={openDoorMbid}
-                    setOpenDoorMbid={setOpenDoorMbid}
-                    openShelfMbid={openShelfMbid}
-                    setOpenShelfMbid={setOpenShelfMbid}
-                    forceOpen={!!groupFilterQ}
-                    onMakeAvatar={chooseAlbumAvatar}
-                    avatarRecordingMbid={albumAvatar?.current?.recordingMbid}
+                    isOpen={groupFilterQ ? true : openAlbumKey === group.key}
+                    onToggle={() =>
+                      setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
+                    }
                   />
                 ))
               ) : (

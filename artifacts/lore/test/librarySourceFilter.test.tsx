@@ -1,21 +1,24 @@
 // @vitest-environment jsdom
 /**
- * Tests for the lens navigation and sort controls in Library.tsx.
+ * Tests for the lens navigation and sort controls in Library.tsx (the Stack).
  *
  * Lens model — URL persistence contract:
- *   - The Library header renders the five lenses (plus the default Timeline).
+ *   - The Stack header renders the five lenses (Stack default + four named).
+ *   - The default "Stack" lens shows the album-first view (no lens param).
  *   - Selecting "Recent keeps" pushes ?lens=recent to the URL.
  *   - Selecting "Needs matching" pushes ?lens=matching to the URL.
- *   - Selecting "Timeline" removes the lens param from the URL.
+ *   - Selecting "Stack" (the default) removes the lens param from the URL.
  *   - Mounting with ?lens=recent scopes the query to source=keep.
  *   - Mounting with ?lens=lore scopes the query to source=lore (server-side
  *     radio-provenance filter, so pagination/totals match the visible feed).
  *   - Mounting with ?lens=matching scopes the query to source=soft.
  *   - Mounting with ?lens=albums / ?lens=artists keeps the full mixed feed.
- *   - An unrecognised lens value is ignored (treated as Timeline).
+ *   - An unrecognised lens value is ignored (treated as Stack/default).
  *   - Empty state with an active lens shows "Show all" instead of "Open the dial".
  *
- * Sort controls — URL persistence contract (unchanged by the lens reframe):
+ * Sort controls — URL persistence contract:
+ *   - Sort controls only appear in track-view lenses (recent, lore, matching,
+ *     critic), NOT in the default album-first Stack view.
  *   - Selecting "Artist" sort pushes ?sort=artist to the URL.
  *   - Selecting "Title" sort pushes ?sort=title to the URL.
  *   - Selecting the default "Added" sort removes the sort param from the URL.
@@ -182,14 +185,16 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Lens tabs are always rendered", () => {
-  it("renders Timeline plus the five lenses", async () => {
+  it("renders Stack (default) plus the four named lenses", async () => {
     await renderLibrary();
+    // "Stack" is the default — its testid uses the fallback "timeline" key.
     expect(screen.getByTestId("library-lens-timeline")).toBeTruthy();
     expect(screen.getByTestId("library-lens-recent")).toBeTruthy();
-    expect(screen.getByTestId("library-lens-albums")).toBeTruthy();
     expect(screen.getByTestId("library-lens-artists")).toBeTruthy();
     expect(screen.getByTestId("library-lens-lore")).toBeTruthy();
     expect(screen.getByTestId("library-lens-matching")).toBeTruthy();
+    // "Albums" is no longer a named lens pill — the Stack default IS albums.
+    expect(screen.queryByTestId("library-lens-albums")).toBeNull();
   });
 });
 
@@ -333,12 +338,21 @@ describe("Empty state CTA with and without active lens", () => {
 // Sort controls — rendering
 // ---------------------------------------------------------------------------
 
-describe("Sort controls are always rendered", () => {
-  it("renders Added, Artist, and Title sort buttons", async () => {
+describe("Sort controls rendering", () => {
+  it("renders Added, Artist, and Title sort buttons in a track-view lens (e.g. recent)", async () => {
+    // Sort controls only appear when a track-list lens is active.
+    // The default Stack view is album-first and has no sort controls.
+    mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
     expect(screen.getByTestId("library-sort-added")).toBeTruthy();
     expect(screen.getByTestId("library-sort-artist")).toBeTruthy();
     expect(screen.getByTestId("library-sort-title")).toBeTruthy();
+  });
+
+  it("hides sort buttons in the default Stack (album-first) view", async () => {
+    mockUseSearch.mockReturnValue("");
+    await renderLibrary();
+    expect(screen.queryByTestId("library-sort-added")).toBeNull();
   });
 
   it("hides sort buttons in the grouped Albums lens", async () => {
@@ -352,8 +366,11 @@ describe("Sort controls are always rendered", () => {
 // Sort controls — URL writes
 // ---------------------------------------------------------------------------
 
+// Sort controls are only shown in track-view lenses (recent, lore, matching, critic).
+// All URL-write tests therefore activate lens=recent first so the sort bar renders.
 describe("Selecting a sort button updates the URL", () => {
   it("clicking 'Artist' calls setLocation with ?sort=artist", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-sort-artist"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
@@ -362,6 +379,7 @@ describe("Selecting a sort button updates the URL", () => {
   });
 
   it("clicking 'Title' calls setLocation with ?sort=title", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-sort-title"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
@@ -370,7 +388,7 @@ describe("Selecting a sort button updates the URL", () => {
   });
 
   it("clicking 'Added' (default) calls setLocation WITHOUT a sort param", async () => {
-    mockUseSearch.mockReturnValue("sort=artist");
+    mockUseSearch.mockReturnValue("lens=recent&sort=artist");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-sort-added"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
@@ -378,12 +396,14 @@ describe("Selecting a sort button updates the URL", () => {
     expect(url).not.toContain("sort=");
   });
 
-  it("'Added' navigates to the bare path when sort was the only param", async () => {
-    mockUseSearch.mockReturnValue("sort=title");
+  it("'Added' drops only the sort param when lens is still active", async () => {
+    mockUseSearch.mockReturnValue("lens=recent&sort=title");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-sort-added"));
     const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toBe("/library");
+    // lens stays; sort is dropped
+    expect(url).toContain("lens=recent");
+    expect(url).not.toContain("sort=");
   });
 
   it("preserves existing lens param when changing sort", async () => {
