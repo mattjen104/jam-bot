@@ -379,10 +379,6 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // Crossing artists line: up to 3 names with Oxford commas, then the timing
   // suffix that distinguishes a live hit from set-level crossings:
   //   "Wet Leg, now"  /  "Wet Leg, Deftones, and Weezer, this set"
-  const oxfordJoin = (names: string[]) =>
-    names.length <= 1 ? (names[0] ?? "")
-    : names.length === 2 ? `${names[0]} and ${names[1]}`
-    : `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
   const compactCrossingNode: React.ReactNode = compact && compact.crossingArtists.length > 0
     ? (() => {
         const names = compact.crossingArtists;
@@ -403,11 +399,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   const tier1Node = compactSentence && compact ? (
     <span
       className="fdrow__compact-identity"
-      aria-label={
-        compact.crossingArtists.length > 0
-          ? `${oxfordJoin(compact.crossingArtists)}${compact.crossingIsLive ? ", now" : ", this set"} · ${compact.provenanceParts.join(" | ")}`
-          : compact.text
-      }
+      aria-label={compact.text}
     >
       <span className="fdrow__compact-lead">
         {/* Crossing artists lead when present; otherwise the single best artist.
@@ -421,19 +413,8 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {(compactCrossingNode != null || compact.artist != null) && (
           <span className="fdrow__compact-separator" aria-hidden="true">·</span>
         )}
-        {/* Full provenance: DJ | Show | Station, pipe-separated. (No Fragment
-            here — the dev-metadata JSX transform injects props into Fragments,
-            which React rejects with a console error.) */}
-        <span className="fdrow__compact-provenance">
-          {compact.provenanceParts.map((part, i) => (
-            <span key={i}>
-              {i > 0 && <span className="fdrow__compact-pipe" aria-hidden="true"> | </span>}
-              <span className={i === compact.provenanceParts.length - 1 ? "fdrow__compact-station" : "fdrow__compact-prov-part"}>
-                {part}
-              </span>
-            </span>
-          ))}
-        </span>
+        {/* Station only — DJ and show belong in the expanded byline. */}
+        <span className="fdrow__compact-station">{compact.station}</span>
       </span>
       {ds.isLive && (
         <span className="fdrow__compact-live" aria-hidden="true">

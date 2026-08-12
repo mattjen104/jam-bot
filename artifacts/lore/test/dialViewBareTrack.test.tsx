@@ -195,7 +195,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Dial feed compact identity", () => {
-  it("shows the current artist with full DJ | Show | Station provenance", () => {
+  it("shows the current artist and station only (no DJ or show in compact row)", () => {
     const track = makeSpin({ title: "Gravity Falls", artist: "Pixies" });
     const show = makeShow({
       djName: "DJ Tester",
@@ -208,20 +208,17 @@ describe("Dial feed compact identity", () => {
     mockDialData([station]);
     renderDial();
 
-    // Artist leads; full provenance (DJ | Show | Station) returns between
-    // the dots. Song titles stay off this compact surface.
+    // Artist leads; station only between the dots. Song titles and DJ/show
+    // names stay off this compact surface.
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
     expect(sentence).toContain("Pixies");
     expect(sentence).toContain("Test Radio");
     expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("Pixies");
     expect(document.querySelector(".fdrow__compact-separator")?.textContent).toBe("·");
-    expect(document.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
-      "DJ Tester | Morning Show | Test Radio",
-    );
     expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
     expect(document.querySelector(".fdrow__t1")?.classList.contains("fdrow__compact-sentence")).toBe(true);
     expect(document.querySelector(".fdrow__compact-identity")?.getAttribute("aria-label")).toBe(
-      "Pixies · DJ Tester | Morning Show | Test Radio",
+      "Pixies · Test Radio",
     );
     expect(sentence).not.toMatch(/is playing|is on air/);
     // The track title must not leak into the row.
@@ -247,10 +244,7 @@ describe("Dial feed compact identity", () => {
     expect(sentence).toContain("Test Radio");
     expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("Grateful Dead");
     expect(document.querySelector(".fdrow__compact-separator")).not.toBeNull();
-    // No DJ → provenance is Show | Station.
-    expect(document.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
-      "Morning Show | Test Radio",
-    );
+    // No DJ → station only between the dots.
     expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
     expect(sentence).not.toContain("Dark Star");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
@@ -274,7 +268,7 @@ describe("Dial feed compact identity", () => {
     expect(document.querySelector(".fdrow__compact-separator")).toBeNull();
     expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
     expect(document.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
-      "DJ Tester | Morning Show | Test Radio",
+      "Test Radio",
     );
   });
 

@@ -511,15 +511,12 @@ describe("compact Dial feed identity", () => {
     expect(identity).not.toBeNull();
     expect(identity?.querySelector(".fdrow__compact-artist")?.textContent).toBe("The Long Winters");
     expect(identity?.querySelector(".fdrow__compact-separator")?.textContent).toBe("·");
-    // Full provenance returns between the dots: DJ | Show | Station.
-    expect(identity?.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
-      "DJ Test | Morning Show | KEXP",
-    );
+    // Station only between the dots — no DJ or show name in compact mode.
     expect(identity?.querySelector(".fdrow__compact-station")?.textContent).toBe("KEXP");
     expect(identity?.textContent).toContain("The Long Winters");
     expect(identity?.textContent).toContain("KEXP");
     expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
-      "The Long Winters · DJ Test | Morning Show | KEXP",
+      "The Long Winters · KEXP",
     );
     expect(identity?.textContent).not.toMatch(/is playing|is on air/);
   });
@@ -530,15 +527,10 @@ describe("compact Dial feed identity", () => {
       makeShow({ djName: "DJ Test", showName: "Morning Show", currentTrack: null }),
     );
     expect(container.querySelector(".fdrow__compact-artist")?.textContent).toBe("");
-    // No artist → no dot separator (provenance reads on its own).
+    // No artist → no dot separator (station reads on its own).
     expect(container.querySelector(".fdrow__compact-separator")).toBeNull();
-    expect(container.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
-      "DJ Test | Morning Show | KEXP",
-    );
     expect(container.querySelector(".fdrow__compact-station")?.textContent).toBe("KEXP");
-    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
-      "DJ Test | Morning Show | KEXP",
-    );
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("KEXP");
   });
 
   it("marks a live crossing hit with ', now'", () => {
@@ -552,11 +544,9 @@ describe("compact Dial feed identity", () => {
     );
     const crossing = container.querySelector(".fdrow__compact-crossing");
     expect(crossing?.textContent).toBe("Wet Leg, now");
-    expect(container.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
-      "Jane Kamikazie | The Morning Show | KCRW",
-    );
+    expect(container.querySelector(".fdrow__compact-station")?.textContent).toBe("KCRW");
     expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
-      "Wet Leg, now · Jane Kamikazie | The Morning Show | KCRW",
+      "Wet Leg, now · KCRW",
     );
   });
 
@@ -575,7 +565,7 @@ describe("compact Dial feed identity", () => {
     // Oxford comma, capped at three names, set-level suffix.
     expect(crossing?.textContent).toBe("Wet Leg, Deftones, and Weezer, this set");
     expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
-      "Wet Leg, Deftones, and Weezer, this set · Jane Kamikazie | The Morning Show | KCRW",
+      "Wet Leg, Deftones, and Weezer, this set · KCRW",
     );
   });
 

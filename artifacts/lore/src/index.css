@@ -5391,17 +5391,6 @@
   color: hsl(var(--dial-fg));
   font-weight: 600;
 }
-/* Full provenance between the dots: DJ | Show | Station, pipe-separated.
-   All parts share the secondary weight; the pipe is dimmer still. */
-#dial-feed-rows .fdrow__compact-provenance {
-  color: hsl(var(--dial-fg) / 0.62);
-}
-#dial-feed-rows .fdrow__compact-prov-part {
-  color: hsl(var(--dial-fg) / 0.62);
-}
-#dial-feed-rows .fdrow__compact-pipe {
-  color: hsl(var(--dial-fg) / 0.35);
-}
 /* Station is the secondary entity — same line, lighter weight. */
 #dial-feed-rows .fdrow__compact-station {
   color: hsl(var(--dial-fg) / 0.62);

@@ -89,27 +89,6 @@ export function liveProvenanceSummary(
   const artistCandidate = cleanLiveValue(current?.artist) ?? cleanLiveValue(fallbackArtist);
   const artist = sameLiveValue(artistCandidate, station) ? null : artistCandidate;
 
-  // Build provenance parts: DJ | Show | Station — deduplicated, station always last.
-  const djRaw = show
-    ? (() => {
-        const list = eligibleDjNames(
-          { name: show.showName ?? "", djName: show.djName ?? undefined, djNames: show.djNames },
-          { artist: current?.artist, title: current?.title, showTitle: show.showName, stationName },
-        );
-        return list.length === 1 ? cleanLiveValue(list[0]) : null;
-      })()
-    : null;
-  const rawShow = cleanLiveValue(show?.showName);
-  const showName = rawShow
-    && !MISSING_LIVE_VALUES.has(rawShow.toLowerCase())
-    && !sameLiveValue(rawShow, djRaw)
-    && !sameLiveValue(rawShow, station)
-    ? rawShow : null;
-  const parts: string[] = [];
-  if (djRaw && !sameLiveValue(djRaw, station)) parts.push(djRaw);
-  if (showName) parts.push(showName);
-  parts.push(station);
-
   // Crossing artists — the live/set distinction:
   //   live hit → just the crossing artist on air, suffixed ", now"
   //   set crossings → up to 3 artists from this set, suffixed ", this set"
@@ -129,7 +108,6 @@ export function liveProvenanceSummary(
       .slice(0, 3);
   }
 
-  const provenanceText = parts.join(" | ");
   // The plain-text mirror of the rendered row: crossing artists (with their
   // timing suffix) lead when present, else the single best artist.
   const oxford = crossingArtists.length <= 1 ? (crossingArtists[0] ?? null)
@@ -141,9 +119,9 @@ export function liveProvenanceSummary(
   return {
     station,
     artist,
-    text: lead ? `${lead} · ${provenanceText}` : provenanceText,
-    plainText: artist ? `${artist} · ${provenanceText}` : provenanceText,
-    provenanceParts: parts,
+    text: lead ? `${lead} · ${station}` : station,
+    plainText: artist ? `${artist} · ${station}` : station,
+    provenanceParts: [station],
     crossingArtists,
     crossingIsLive: isLiveHit,
   };
