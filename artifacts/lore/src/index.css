@@ -2036,7 +2036,7 @@
   line-height: 0.88;
   /* One shade darker than the current CLI color, while remaining visible
      as ambient texture behind the Dial rows. */
-  color: hsl(260 18% 80% / 0.28);
+  color: hsl(260 18% 68% / 0.28);
   white-space: nowrap;
   user-select: none;
   -webkit-user-select: none;
@@ -2056,7 +2056,7 @@
 
 /* While typing: brighten slightly so the user can read the command */
 .dial-cli-overlay__wordmark--typing {
-  color: hsl(250 28% 78% / 0.42);
+  color: hsl(250 28% 68% / 0.42);
   mix-blend-mode: screen;
 }
 
