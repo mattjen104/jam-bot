@@ -19,6 +19,9 @@
 #   - firstRunSidebarOnboarding.spec.ts (first-time visitor sees .frb__block sentences,
 #                                       NOT .z1-placeholder__seedchip chips; data-rung
 #                                       order non-decreasing)
+#   - compactCrossingLabels.spec.ts    (compact Feed row crossing-artist labels: live
+#                                       ", now" suffix, set-level ", this set" Oxford
+#                                       comma, and no DJ/show name in collapsed row)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -90,6 +93,7 @@ RUN_SPECS=(
   e2e/mobileFrontDoor.spec.ts
   e2e/firstRunSidebarOnboarding.spec.ts
   e2e/dialInfiniteScroll.spec.ts
+  e2e/compactCrossingLabels.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
