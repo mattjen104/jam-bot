@@ -240,21 +240,25 @@ test.describe("Dial infinite scroll — sentinel triggers row reveal on scroll",
     // Wait for at least one live feed row.
     await expect(page.locator(".fdrow").first()).toBeVisible({ timeout: 20_000 });
 
-    // Initial fold: at least FEED_INITIAL (12) rows, sentinel present.
+    // Initial fold: at least FEED_INITIAL (12) rows.
     const countBefore = await page.locator(".fdrow").count();
     expect(countBefore).toBeGreaterThanOrEqual(12);
-    await expect(page.locator(".dial-feed-sentinel")).toBeAttached({ timeout: 5_000 });
 
-    // Scroll the sentinel into view — fires IntersectionObserver.
-    await page.locator(".dial-feed-sentinel").scrollIntoViewIfNeeded();
+    // Since the album-art hero was removed, the feed is full-height and the
+    // sentinel can already sit inside the initial viewport — in that case the
+    // IntersectionObserver reveals the remaining rows immediately and unmounts
+    // the sentinel before we can scroll to it. Scroll if it's still attached;
+    // either path must end with every row mounted.
+    const sentinel = page.locator(".dial-feed-sentinel");
+    try {
+      await sentinel.scrollIntoViewIfNeeded({ timeout: 2_000 });
+    } catch {
+      // Sentinel already consumed — rows were revealed without a scroll.
+    }
 
-    // After scroll: all 20 live rows should mount.
+    // All 20 live rows mount.
     await expect(page.locator(".fdrow")).toHaveCount(stations.length, {
       timeout: 5_000,
     });
-
-    const countAfter = await page.locator(".fdrow").count();
-    expect(countAfter).toBeGreaterThan(countBefore);
-    expect(countAfter).toBe(stations.length);
   });
 });

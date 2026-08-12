@@ -1397,34 +1397,6 @@
   white-space: nowrap;
 }
 
-/* ── Hero container — topbar + tab strip share one stacking context so the
-   avatar album art can bleed full-width behind both rows ── */
-.dial-hero {
-  position: relative;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-/* ── Avatar album hero — maximized art with the interface fitting around it.
-   Portrait: full-width square under the topbar, slim section nav overlaid
-   across the top edge of the art, station list scrolls below.
-   Landscape / desktop: the art pins to the left edge filling the available
-   viewport height, and everything else moves into a right column.
-   Tapping the art opens the same fullscreen overlay as the moon. ── */
-.dial-hero__artwrap {
-  position: relative;
-  z-index: 0;
-}
-.dial-hero__art {
-  position: relative;
-  z-index: 0;
-  width: 100%;
-  aspect-ratio: 1;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  cursor: pointer;
-}
-
 /* ── Corner section nav — [lore] / [my library] text hyperlinks pinned to
    the bottom corners on every Lore route, front door included. The links
    sit directly above the measured bottom shell (player dock), so they never
@@ -1524,160 +1496,39 @@
 .bottom-nav__link:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
 .bottom-nav__link--active[data-section="lore"]    { color: hsl(var(--accent)); }
 .bottom-nav__link--active[data-section="library"] { color: hsl(var(--library)); }
-.dial-hero__art:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: -2px;
+/* ── Dial spine strip — 5 thin kept-track artwork panels lining the left
+   edge of the full-height Dial. Hidden on portrait; only shown in landscape.
+   Position:fixed so the strip doesn't scroll with the feed. ── */
+.dial-spine-strip {
+  display: none; /* portrait: hidden */
 }
-/* Slim utility row under the art strip: sort toggle + add-artists.
-   Opaque + raised so the clipped album art doesn't bleed through. */
-.dial-hero__toolbar {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 4px 12px;
-  background: hsl(var(--background));
-}
-.dial-hero .dial-tabs-add-row {
-  position: relative;
-  z-index: 1;
-  background: hsl(var(--background));
-}
-/* Landscape / desktop: sidebar format. The art is the largest square the
-   available space allows — full viewport height (minus the live-measured
-   shell), only ceding width when the content column would drop below a
-   readable minimum. Portrait keeps the stacked full-width-square format. */
+
 @media (orientation: landscape) {
-  :root {
-    /* Largest square that fits the height while leaving ≥ 300px of column */
-    --hero-art-size: min(calc(100dvh - var(--shell-h, 0px)), calc(100vw - 300px));
-  }
-  .dial-hero__artwrap {
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: var(--hero-art-size);
-    width: var(--hero-art-size);
-    z-index: 5;
-  }
-  .dial-hero__art {
-    width: 100%;
-    height: 100%;
-    aspect-ratio: auto;
-  }
-  /* Front door only — drill levels (station/show/DJ) have no fixed art
-     panel, so they keep the full width. */
-  .dial-root--front {
-    padding-left: var(--hero-art-size);
-  }
-  /* Fullscreen overlay: fit the art to the height instead of the width */
-  .dial-art-fullscreen img { width: auto; height: 100dvh; margin: 0 auto; }
-}
-/* Wide desktop: invert the emphasis — the album is the page, the dial is a
-   fixed-width sidebar pinned right. The art stays a square capped by the
-   viewport height, centered in the remaining left region. */
-@media (orientation: landscape) and (min-width: 1100px) {
-  :root {
-    --dial-col-w: clamp(380px, 32vw, 540px);
-    --hero-art-size: min(
-      calc(100dvh - var(--shell-h, 0px)),
-      calc(100vw - var(--dial-col-w))
-    );
-  }
-  .dial-hero__artwrap {
-    width: calc(100vw - var(--dial-col-w));
+  .dial-spine-strip {
     display: flex;
-    justify-content: center;
-    align-items: flex-start;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--spine-strip-w, 32px);
+    bottom: var(--shell-h, 0px);
+    z-index: 4; /* above the CLI overlay (z:3) */
+    pointer-events: none;
+    overflow: hidden;
   }
-  .dial-hero__art {
-    flex: none;
-    width: var(--hero-art-size);
-    height: var(--hero-art-size);
+  .dial-spine-strip__pane {
+    flex: 1;
+    background-color: hsl(var(--background));
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
   }
-  .dial-root--front {
-    padding-left: calc(100vw - var(--dial-col-w));
+  /* Front door only: reserve the strip width so feed text doesn't underlap */
+  .dial-root--front .dial-body {
+    padding-left: var(--spine-strip-w, 32px);
   }
 }
 
-/* ── Fullscreen album-art overlay ──
-   Tapping the album art opens a full-bleed overlay of the same image.
-   A close button (✕) dismisses it. */
-.dial-root > * {
-  transition: opacity 0.3s ease;
-}
-/* Fade everything except the overlay and the hero (which holds the moon) */
-.dial-root--art-open > *:not(.dial-art-fullscreen):not(.dial-hero) {
-  opacity: 0;
-  pointer-events: none;
-}
-/* Lift the hero above the overlay so the real topbar moon stays visible
-   and clickable in its usual spot — no duplicate moon, no jump. */
-.dial-root--art-open .dial-hero {
-  position: relative;
-  z-index: 10000;
-}
-/* Fade the hero art wrap and toolbar when the fullscreen overlay is open. */
-.dial-hero__artwrap,
-.dial-hero__toolbar {
-  transition: opacity 0.3s ease;
-}
-.dial-root--art-open .dial-hero__artwrap,
-.dial-root--art-open .dial-hero__toolbar {
-  opacity: 0;
-  pointer-events: none;
-}
-/* Landscape: the artwrap is position:fixed inside the z-raised hero, so it
-   would sit above the fullscreen overlay and swallow its click-to-close.
-   pointer-events:none above handles the wrapper itself; its absolutely
-   positioned children (chevrons, set panel) need it explicitly too. */
-.dial-root--art-open .dial-hero__artwrap * {
-  pointer-events: none;
-}
-@keyframes dial-art-fullscreen-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-.dial-art-fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: hsl(var(--background));
-  display: flex;
-  align-items: flex-start; /* top-anchored, matching the topbar wash */
-  justify-content: center;
-  cursor: pointer;
-  animation: dial-art-fullscreen-in 0.3s ease-out;
-}
-.dial-art-fullscreen img {
-  width: 100vw;
-  height: auto;
-  display: block;
-}
-.dial-art-fullscreen__close {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 1;
-  background: hsl(var(--background) / 0.7);
-  border: 1px solid hsl(var(--border));
-  border-radius: 50%;
-  color: hsl(var(--foreground));
-  cursor: pointer;
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--lore-size-interface);
-  line-height: 1;
-}
-.dial-art-fullscreen__close:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: 2px;
-}
 
 /* Wordmark used in Library / Selectors pages — typography only. */
 
@@ -1948,21 +1799,16 @@
 /* ── portrait: zero-height, invisible — CLI is landscape-only ── */
 /* ── CLI overlay — persistent background of the Dial region ──
    The wordmark must ALWAYS be visible behind the scrolling dial feed.
-   It uses position:fixed so it stays pinned to the Dial column's viewport
+   It uses position:fixed so it stays pinned to the Dial region's viewport
    rect regardless of how far the feed is scrolled.
 
    Dial region boundaries by breakpoint:
-   • Portrait            — full-width below the art square (top = art bottom)
-   • Landscape <1100px   — right of the art square; art width = --hero-art-size
-   • Landscape ≥1100px   — right sidebar of fixed width --dial-col-w
+   • Portrait   — lower half of the screen (wordmark is bottom-anchored)
+   • Landscape  — full width right of the spine strip (--spine-strip-w)
 
-   z-index: 2 puts it above the art (z:5) ... wait — art is higher, so we
-   must sit BELOW the art z-stack but ABOVE the background. The art is in
-   .dial-hero__artwrap (z:0 inside .dial-hero z:relative). The fixed CLI is
-   a sibling of .dial-hero, so it does not compete with hero's stacking
-   context for clicks inside the dial column. We place it at z-index:3 so
-   it is above the page background but the feed rows (not fixed) paint on
-   top naturally. mix-blend-mode:screen produces the overlap collision. */
+   z-index:3 puts it above the page background; the feed rows (not fixed)
+   paint on top naturally, and the spine strip (z:4) covers its left edge.
+   mix-blend-mode:screen produces the overlap collision. */
 
 /* Default: hidden everywhere; each breakpoint opts in */
 .dial-cli-overlay {
@@ -1971,50 +1817,38 @@
 }
 
 /* ── Portrait ────────────────────────────────────────────────────────────── */
-/* Dial column = everything below the art square.
-   Art square height = min(100vw, 50dvh) ≈ 100vw on most phones.
-   We pin to the bottom of the viewport and let the top float to leave the
-   art unobstructed. top is set to the art square's bottom edge. */
+/* Full-height Dial — the overlay covers the whole feed region below the
+   app header. The wordmark stays bottom-anchored. */
 @media (orientation: portrait) {
   .dial-cli-overlay {
     display: block;
     position: fixed;
-    /* Art square occupies a square of side min(100vw, calc(100dvh - 56px - var(--shell-h,0px)));
-       for simplicity we use 100vw as the top offset — conservative and always correct */
-    top: min(100vw, calc(100dvh - 56px - var(--shell-h, 0px)));
+    top: 56px; /* below the app header */
     left: 0;
     right: 0;
     bottom: var(--shell-h, 0px);
     z-index: 3;
-    pointer-events: auto;
-    cursor: text;
+    /* The overlay is a visual layer only — it must NEVER block taps on the
+       dial rows beneath it. Only the wordmark is a click target (see below). */
+    pointer-events: none;
     overflow: hidden;
   }
 }
 
-/* ── Landscape, narrow (art left, dial right, no fixed dial col) ─────────── */
+/* ── Landscape — full-width Dial, wordmark clears the spine strip ────────── */
 @media (orientation: landscape) {
   .dial-cli-overlay {
     display: block;
     position: fixed;
     top: 56px; /* below the app header */
-    /* Dial starts where the art ends */
-    left: var(--hero-art-size, 50vw);
+    /* Dial starts where the spine strip ends */
+    left: var(--spine-strip-w, 32px);
     right: 0;
     bottom: var(--shell-h, 0px);
     z-index: 3;
-    pointer-events: auto;
-    cursor: text;
+    /* Visual layer only — never intercept feed interactions. */
+    pointer-events: none;
     overflow: hidden;
-  }
-}
-
-/* ── Landscape, wide desktop (fixed right sidebar = --dial-col-w) ────────── */
-@media (orientation: landscape) and (min-width: 1100px) {
-  .dial-cli-overlay {
-    left: auto; /* override the art-based left */
-    right: 0;
-    width: var(--dial-col-w, 460px);
   }
 }
 
@@ -2043,7 +1877,9 @@
   /* screen blend: where rows overlap, both texts remain visible via luminance */
   mix-blend-mode: screen;
   transition: opacity 0.2s ease, color 0.2s ease;
-  pointer-events: auto;
+  /* Ambient texture only — its huge bounding box must never swallow taps on
+     dial rows scrolling over it. Focus comes from the "/" hotkey instead. */
+  pointer-events: none;
   overflow: hidden;
 }
 
@@ -6537,100 +6373,6 @@ body {
 .fdrow__artist--add,
 .fdrow__artist--lib {
   text-decoration-color: currentColor;
-}
-
-@media (orientation: landscape) {
-  :root {
-    --hero-queue-w: min(360px, 30vw);
-    --hero-queue-h: 220px;
-  }
-  /* Side mode reserves a dedicated column: the queue never covers art. */
-  .dial-hero[data-queue-layout="side"] {
-    --hero-art-size: min(
-      calc(100dvh - var(--shell-h, 0px)),
-      calc(100vw - 300px - var(--hero-queue-w))
-    );
-  }
-  .dial-hero[data-queue-layout="side"] .dial-hero__artwrap {
-    width: var(--hero-art-size);
-  }
-  .dial-hero[data-queue-layout="side"] .dial-hero__setpanel {
-    position: fixed;
-    left: var(--hero-art-size);
-    top: 0;
-    width: var(--hero-queue-w);
-    height: var(--hero-art-size);
-    max-height: var(--hero-art-size);
-    border-top: none;
-    border-left: 1px solid hsl(var(--border) / .6);
-  }
-  .dial-root--front:has(.dial-hero[data-queue-layout="side"]) {
-    padding-left: calc(var(--hero-art-size) + var(--hero-queue-w));
-  }
-
-  /* Below mode reserves a scrollable band beneath the cover. The pure layout
-     helper compares this square against side mode before selecting a marker. */
-  .dial-hero[data-queue-layout="below"] {
-    --hero-art-size: min(
-      calc(100dvh - var(--shell-h, 0px) - var(--hero-queue-h)),
-      calc(100vw - 300px)
-    );
-  }
-  .dial-hero[data-queue-layout="below"] .dial-hero__artwrap {
-    width: var(--hero-art-size);
-  }
-  .dial-hero[data-queue-layout="below"] .dial-hero__setpanel {
-    position: fixed;
-    left: 0;
-    top: var(--hero-art-size);
-    width: var(--hero-art-size);
-    height: var(--hero-queue-h);
-    max-height: var(--hero-queue-h);
-  }
-}
-
-@media (orientation: landscape) and (min-width: 1100px) {
-  .dial-hero[data-queue-layout="side"] {
-    --hero-art-size: min(
-      calc(100dvh - var(--shell-h, 0px)),
-      calc(100vw - var(--dial-col-w) - var(--hero-queue-w))
-    );
-  }
-  .dial-hero[data-queue-layout="below"] {
-    --hero-art-size: min(
-      calc(100dvh - var(--shell-h, 0px) - var(--hero-queue-h)),
-      calc(100vw - var(--dial-col-w))
-    );
-  }
-  .dial-root--front:has(.dial-hero[data-queue-layout="below"]) {
-    padding-left: var(--hero-art-size);
-  }
-}
-
-/* ── Mobile portrait front door: album art stacked above the set queue. ── */
-@media (orientation: portrait) {
-  .dial-hero {
-    display: flex;
-    flex-direction: column;
-  }
-  .dial-hero__artwrap { order: 1; }
-  .dial-hero__setpanel {
-    order: 3;
-    max-height: min(36dvh, 280px);
-  }
-}
-
-/* ── Portrait front-door art height budget for phones ─────────────────────
-   At full-width 1:1 the art consumes the entire short dimension of an
-   iPhone SE (375×667), leaving no room for five crossing rows.  Cap the
-   art wrap height so the rows remain visible without scrolling.
-   35 dvh ≈ 233 px on a 667 px phone; 295 px on an 844 px phone.
-   Landscape and tablets (>600 px wide) are unaffected. ── */
-@media (orientation: portrait) and (max-width: 600px) {
-  .dial-root--front .dial-hero__artwrap {
-    max-height: min(100vw, 35dvh);
-    overflow: hidden;
-  }
 }
 
 /* ── Typography policy: no bold, no italic, anywhere. ── */

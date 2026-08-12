@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, useRecentKeptArtwork, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
@@ -17,13 +17,13 @@ import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
-import { RUMOURS, onArtError } from "../lib/rumours";
 import { useSocialMode } from "../lib/social";
 import { useSleepMode } from "../lib/sleepMode";
 import { useEraGenreMode } from "../lib/eraGenreMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
 import { DialCliBar } from "./dial/DialCliBar";
+import { DialSpineStrip } from "./dial/DialSpineStrip";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
 import {
@@ -36,12 +36,12 @@ import {
   classifySetTimeContext,
   type SetDaypart,
 } from "./dialViewHelpers";
-import { proxyArtUrl } from "../lib/proxyArt";
+
 import { useDialSurface } from "../dial/useDialSurface";
 import { DialContextRegion } from "../dial/DialContextRegion";
 import { railHasRealContent } from "../dial/railContent";
 import { contextStationSlug } from "../dial/dialContext";
-import { heroArtCandidates } from "../lib/artRes";
+
 import { runDate, clockTime } from "../lib/format";
 
 // ---------------------------------------------------------------------------
@@ -1761,81 +1761,8 @@ export function DialView() {
   const activeArtworkUrl = activeNpData?.nowPlaying?.recording?.artworkUrl
     ?? activeNpData?.nowPlaying?.artworkUrl
     ?? null;
-  const { data: avatarData } = useMyAlbumAvatar();
-  // Rumours is the universal fallback — ensures the topbar gradient always renders
-  // even for brand-new users who haven't connected a library yet.
-  const avatarUrl = avatarData?.current?.artworkUrl ?? avatarData?.candidates?.[0]?.artworkUrl ?? RUMOURS;
-  // Pre-verified hero art. The topbar wash is a CSS background (no onError),
-  // so a dead avatar URL would silently render nothing. Start with the local
-  // RUMOURS asset (always loads), then swap to the real avatar art only once
-  // the browser has confirmed it actually loads. The fullscreen hero reuses
-  // the same resolved URL, so it's always a cached, known-good image.
-  // Dedicated hi-res pipeline for the hero cover: look the album up by
-  // artist + title on sources that serve true 1200px masters (iTunes, then
-  // Cover Art Archive by release-group), then fall back to the upscaled or
-  // original library URL, then RUMOURS. Each candidate is probed offscreen,
-  // so whichever wins is fully cached before it's ever displayed — the
-  // moon-tap hero appears instantly at full quality.
-  const avatarAlbum = avatarData?.current ?? avatarData?.candidates?.[0] ?? null;
-  const [heroArt, setHeroArt] = useState<string>(RUMOURS);
-  // When there is no usable avatar, the hero falls back to RUMOURS. Applied as
-  // a render-time reset against the previous validity (rather than a
-  // synchronous setState inside the probing effect); the effect below only
-  // performs the async candidate probing when an avatar is actually present.
-  const heroAvatarUsable = !!avatarAlbum && !!avatarUrl && avatarUrl !== RUMOURS;
-  const [prevHeroAvatarUsable, setPrevHeroAvatarUsable] = useState(heroAvatarUsable);
-  if (heroAvatarUsable !== prevHeroAvatarUsable) {
-    setPrevHeroAvatarUsable(heroAvatarUsable);
-    if (!heroAvatarUsable) setHeroArt(RUMOURS);
-  }
-  useEffect(() => {
-    if (!avatarAlbum || !avatarUrl || avatarUrl === RUMOURS) return;
-    let cancelled = false;
-    void heroArtCandidates(avatarAlbum).then((urls) => {
-      if (cancelled) return;
-      const candidates = urls.map((u) => proxyArtUrl(u) ?? u);
-      const tryLoad = (i: number) => {
-        if (cancelled) return;
-        if (i >= candidates.length) { setHeroArt(RUMOURS); return; }
-        const probe = new Image();
-        probe.onload = () => { if (!cancelled) setHeroArt(candidates[i]); };
-        probe.onerror = () => tryLoad(i + 1);
-        probe.src = candidates[i];
-      };
-      tryLoad(0);
-    });
-    return () => { cancelled = true; };
-    // avatarUrl is derived from avatarAlbum; keying on it keeps deps simple.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [avatarAlbum?.recordingMbid, avatarUrl]);
-  // Fullscreen album-art overlay, opened by tapping the moon glyph in the topbar.
-  const moonBtnRef = useRef<HTMLButtonElement>(null);
-  const artCloseBtnRef = useRef<HTMLButtonElement>(null);
-  // Whichever control opened the overlay (moon or hero art) gets focus back.
-  const artOpenerRef = useRef<HTMLElement | null>(null);
-  const [albumArtOpen, setAlbumArtOpen] = useState(false);
-  useEffect(() => {
-    if (!albumArtOpen) return;
-    // Move focus into the overlay so keyboard users can reach the close button.
-    artCloseBtnRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setAlbumArtOpen(false);
-      }
-      // Trap Tab/Shift+Tab — the only focusable element inside the overlay is
-      // the close button, so both directions stay there.
-      if (e.key === "Tab") {
-        e.preventDefault();
-        artCloseBtnRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      // Return focus to whichever control opened the overlay.
-      (artOpenerRef.current ?? moonBtnRef.current)?.focus();
-    };
-  }, [albumArtOpen]);
+  // ── Spine strip: last 5 kept-track artworks for the decorative left edge ──
+  const spineArtUrls = useRecentKeptArtwork(5);
   const _hasWeeklyRecap = weeklyRecapData != null && (
     weeklyRecapData.stationsAttended.stations.length > 0 ||
     weeklyRecapData.firstEverHeards.items.length > 0 ||
@@ -2714,7 +2641,7 @@ export function DialView() {
   );
 
   return (
-    <div className={`dial-root${albumArtOpen && avatarUrl ? " dial-root--art-open" : ""}${level === "all" ? " dial-root--front" : ""}`}>
+    <div className={`dial-root${level === "all" ? " dial-root--front" : ""}`}>
       {/* Search overlay */}
       {searchOpen && (
         <SearchOverlay
@@ -2726,8 +2653,8 @@ export function DialView() {
       )}
 
       {/* CLI overlay — position:fixed behind the Dial column viewport region.
-          Must be a direct sibling of dial-hero (not inside dial-body) so the
-          scroll container never clips or moves it. Only on the front door. */}
+          Rendered outside dial-body so the scroll container never clips or
+          moves it. Only on the front door. */}
       {level === "all" && (
         <DialCliBar
           activeTiers={activeTiers}
@@ -2737,55 +2664,12 @@ export function DialView() {
         />
       )}
 
-      {/* Avatar album hero — the art IS the front-door content.
-          Portrait: full-width square, station list scrolls below.
-          Landscape / desktop: art pins to the left, everything else right.
-          Tapping the art opens the fullscreen overlay. */}
+      {/* Front door: decorative spine strip lines the left edge of the Dial
+          column. Non-front-door levels render the normal topbar chrome. */}
       {level === "all" ? (
-        <div className="dial-hero">
-          <div className="dial-hero__artwrap">
-            <div
-              className="dial-hero__art"
-              style={{ backgroundImage: `url(${heroArt})` }}
-              role="button"
-              tabIndex={0}
-              aria-label="Open album art fullscreen"
-              onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  artOpenerRef.current = e.currentTarget;
-                  setAlbumArtOpen(true);
-                }
-              }}
-            />
-          </div>
-        </div>
+        <DialSpineStrip urls={spineArtUrls} />
       ) : (
         renderTopbar()
-      )}
-
-      {/* Fullscreen album-art overlay — toggled by the moon glyph.
-          The rest of the page fades to opacity 0 (see .dial-root--art-open);
-          the same image already loaded behind the LORE logo is shown scaled
-          to the window width. The moon stays visible as the toggle. */}
-      {albumArtOpen && avatarUrl && (
-        <div
-          className="dial-art-fullscreen"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Album art"
-          onClick={() => setAlbumArtOpen(false)}
-        >
-          <button
-            ref={artCloseBtnRef}
-            type="button"
-            className="dial-art-fullscreen__close"
-            aria-label="Close album art"
-            onClick={() => setAlbumArtOpen(false)}
-          >✕</button>
-          <img src={heroArt} alt="" onError={onArtError} />
-        </div>
       )}
 
 
@@ -2804,14 +2688,9 @@ export function DialView() {
       {/* Main scroll body */}
       <div className="dial-body">
         <AlbumAvatarPicker compact />
-        {/* Time travel lives on the hero art sidebar (chevrons + swipe);
-            the moon lives in the topbar. */}
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
-            {/* Tab strip now renders inside .dial-hero above the scroll body so
-                the album-art hero can bleed behind it. */}
-
             {/* ── Primary tab: "On the Air × Your Music Library" ─────────────────
                 Contains Zone 1 crossing rows + Zone 2 ghost stations as a
                 subsection below. */}

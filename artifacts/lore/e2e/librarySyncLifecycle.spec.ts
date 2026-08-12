@@ -1,5 +1,20 @@
 import { test, expect } from "@playwright/test";
 
+// The Library page auto-opens the ManualImportModal for first-run users
+// (empty library + no seeds + no avatar). All fixtures here stub an EMPTY
+// library, so without this flag the modal's backdrop covers the page and
+// intercepts every click (sync button, receipt toggle). Seed the
+// once-per-session sessionStorage flag so the prompt never fires.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem("lore:first-run-prompted", "1");
+    } catch {
+      /* ignore */
+    }
+  });
+});
+
 /**
  * End-to-end tests for the Library sync (export keeps → Spotify) lifecycle,
  * rewritten for the dial-style Library redesign (SyncBar in pages/Library.tsx).

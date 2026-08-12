@@ -1,27 +1,30 @@
 /**
  * DialCliBar — front-door CLI overlay.
  *
- * Paradigm: the entire album-art sidebar is a giant invisible input field.
- * The oversized Signifier "Lore" wordmark floats at the top-left of that
- * sidebar, aligned with the very top of the dial feed. Typing replaces it
- * with the slash command text in the same face and size.
+ * Paradigm: an ambient background layer behind the full-height dial feed.
+ * The oversized Signifier "Lore" wordmark anchors at the bottom-left of the
+ * Dial region; typing replaces it with the slash command text in the same
+ * face and size.
+ *
+ * The overlay itself is pointer-transparent (pointer-events: none) so it
+ * NEVER intercepts taps on the dial rows above it — the wordmark is the
+ * only click target (it focuses the invisible input). Once focused,
+ * keystrokes land in the input as usual.
  *
  * Where the wordmark overlaps scrolling dial artist names the CSS renders
  * that overlap with an intentional graphic treatment (mix-blend-mode: screen)
  * so the collision looks designed, not accidental.
  *
  * No cursor glyph. No blinking. No border. No header bar.
- * On mobile (portrait) the overlay is not shown; the hidden DialFilterBar
- * is the test-target that still exists in the DOM.
  */
 
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type FormEvent,
   type KeyboardEvent,
-  type MouseEvent,
 } from "react";
 import type { DialFilterBarProps } from "./DialFilterBar";
 
@@ -72,9 +75,20 @@ export function DialCliBar({
     executeCommand();
   }, [executeCommand]);
 
-  // Clicks anywhere on the overlay (not the input itself) focus the input.
-  const handleOverlayClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    if (event.target !== inputRef.current) focusInput();
+  // The overlay never receives pointer events (feed rows scroll over it), so
+  // the "/" key is the entry point: pressing it anywhere outside another
+  // editable field focuses the invisible input and starts the command.
+  useEffect(() => {
+    const handleGlobalKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "/") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      event.preventDefault();
+      focusInput();
+      setValue("/");
+    };
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
   }, [focusInput]);
 
   const isEmpty = value === "";
@@ -84,16 +98,14 @@ export function DialCliBar({
       className="dial-cli-overlay"
       role="search"
       aria-label="Dial commands"
-      onClick={handleOverlayClick}
     >
-      {/* The wordmark anchors at the top of the sidebar.
+      {/* The wordmark anchors at the bottom of the Dial region.
           When the user types it transitions to showing the typed command.
           mix-blend-mode: screen on this element makes overlapping dial rows
           render as an intentional light-on-light graphic merge. */}
       <span
         className={`dial-cli-overlay__wordmark${isEmpty ? "" : " dial-cli-overlay__wordmark--typing"}`}
         aria-hidden="true"
-        onClick={focusInput}
       >
         {isEmpty ? "Lore" : value}
       </span>

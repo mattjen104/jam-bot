@@ -78,7 +78,7 @@
 - [Library API total count](library-total-count.md) — GET /api/me/library omits total on pages 2+; run COUNT(*) only on first page (cursor IS NULL) and spread into response; client reads keptData.pages[0].total.
 - [Library removed/active state](library-removed-state.md) — removed_at IS NULL = active on both library tables; no central predicate, every taste query filters explicitly; deselect never unsaves on Spotify.
 - [Library artist-to-album navigation](library-artist-album-navigation.md) — tracks remain the source of truth; artist views default to the newest saved track's album and cycle other albums without autoplay or generated playlists.
-- [Dial hero maximized layout](dial-hero-maximized-layout.md) — album hero IS the Radio tab (no heading/Recent); landscape fixed-left art must scope padding to front door only; shell height is live-measured.
+- [Dial full-height & spine strip](dial-hero-maximized-layout.md) — album hero removed; feed is full-height, landscape-only decorative 5-pane kept-art strip at left edge; scope strip padding to front door only.
 - [Lore crossing row hierarchy](lore-crossing-row-hierarchy.md) — crossing artist leads; station is a stable byline; suppress titles only for crossing-driven rows, not ordinary now-playing rows.
 - [Schedule attribution withdrawals](schedule-attribution-voids.md) — void schedule evidence in place; exclude only schedule-derived bylines while preserving curated and overlapping valid attribution.
 - [Live DJ attribution eligibility](live-dj-attribution-eligibility.md) — one pure normalized rule gates generic/colliding DJ values across ingestion, APIs, picker linkage, and Dial rendering.
