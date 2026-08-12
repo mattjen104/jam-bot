@@ -1946,99 +1946,120 @@
    DialFilterBar stays in the DOM for tests, as before. */
 
 /* ── portrait: zero-height, invisible — CLI is landscape-only ── */
-/* ── CLI overlay — fullscreen background of the Dial region ──
-   The wordmark lives BEHIND the dial feed rows, anchored to the bottom-right
-   of the Dial column (opposite direction to the left-justified artist names).
-   On desktop (≥1100 px landscape) the Dial region is the right sidebar.
-   On mid-landscape and portrait the Dial region is the full-width area below
-   the album art square. The overlay is position:absolute inside .dial-body so
-   it never touches the album art. */
+/* ── CLI overlay — persistent background of the Dial region ──
+   The wordmark must ALWAYS be visible behind the scrolling dial feed.
+   It uses position:fixed so it stays pinned to the Dial column's viewport
+   rect regardless of how far the feed is scrolled.
 
-/* Default: hidden (portrait and landscape both start hidden; each breakpoint
-   opts in). On portrait the element is shown but stays inside dial-body's
-   natural flow area below the art. */
+   Dial region boundaries by breakpoint:
+   • Portrait            — full-width below the art square (top = art bottom)
+   • Landscape <1100px   — right of the art square; art width = --hero-art-size
+   • Landscape ≥1100px   — right sidebar of fixed width --dial-col-w
+
+   z-index: 2 puts it above the art (z:5) ... wait — art is higher, so we
+   must sit BELOW the art z-stack but ABOVE the background. The art is in
+   .dial-hero__artwrap (z:0 inside .dial-hero z:relative). The fixed CLI is
+   a sibling of .dial-hero, so it does not compete with hero's stacking
+   context for clicks inside the dial column. We place it at z-index:3 so
+   it is above the page background but the feed rows (not fixed) paint on
+   top naturally. mix-blend-mode:screen produces the overlap collision. */
+
+/* Default: hidden everywhere; each breakpoint opts in */
 .dial-cli-overlay {
-  /* Removed from fixed stacking — now lives inside dial-body */
   display: none;
   pointer-events: none;
 }
 
-/* Portrait — the dial body is the full-width column below the art.
-   The overlay fills the entire dial-body height, behind the rows. */
+/* ── Portrait ────────────────────────────────────────────────────────────── */
+/* Dial column = everything below the art square.
+   Art square height = min(100vw, 50dvh) ≈ 100vw on most phones.
+   We pin to the bottom of the viewport and let the top float to leave the
+   art unobstructed. top is set to the art square's bottom edge. */
 @media (orientation: portrait) {
   .dial-cli-overlay {
     display: block;
-    position: absolute;
-    inset: 0;
-    /* Invisible clickable layer behind everything */
-    z-index: 0;
+    position: fixed;
+    /* Art square occupies a square of side min(100vw, calc(100dvh - 56px - var(--shell-h,0px)));
+       for simplicity we use 100vw as the top offset — conservative and always correct */
+    top: min(100vw, calc(100dvh - 56px - var(--shell-h, 0px)));
+    left: 0;
+    right: 0;
+    bottom: var(--shell-h, 0px);
+    z-index: 3;
     pointer-events: auto;
     cursor: text;
+    overflow: hidden;
   }
 }
 
-/* Landscape (all widths) — same treatment: dial-body is the right/below column */
+/* ── Landscape, narrow (art left, dial right, no fixed dial col) ─────────── */
 @media (orientation: landscape) {
   .dial-cli-overlay {
     display: block;
-    position: absolute;
-    inset: 0;
-    z-index: 0;
+    position: fixed;
+    top: 56px; /* below the app header */
+    /* Dial starts where the art ends */
+    left: var(--hero-art-size, 50vw);
+    right: 0;
+    bottom: var(--shell-h, 0px);
+    z-index: 3;
     pointer-events: auto;
     cursor: text;
+    overflow: hidden;
+  }
+}
+
+/* ── Landscape, wide desktop (fixed right sidebar = --dial-col-w) ────────── */
+@media (orientation: landscape) and (min-width: 1100px) {
+  .dial-cli-overlay {
+    left: auto; /* override the art-based left */
+    right: 0;
+    width: var(--dial-col-w, 460px);
   }
 }
 
 /* ── Wordmark — anchored bottom-right, opposite of left-justified artist rows.
    Huge Signifier face, very faint so dial rows remain readable above it.
-   mix-blend-mode: screen at the row level creates the collision lighting. ── */
+   mix-blend-mode: screen creates the luminous collision as rows scroll over. */
 .dial-cli-overlay__wordmark {
   position: absolute;
-  /* Anchor bottom-right — the opposite corner from artist-name flow */
+  /* Anchor to bottom-right — opposite corner from the left-flowing artist names */
   bottom: 0;
   right: 0;
   left: auto;
   top: auto;
   padding: 0 8px 4px 0;
   font-family: var(--lore-font-signature, serif);
-  /* Fill the Dial column width across the baseline — 3–4 chars wide */
+  /* Large enough to nearly fill the Dial column width (4 chars ≈ column) */
   font-size: clamp(5rem, 28vw, 22rem);
   font-weight: 400;
   line-height: 0.88;
-  /* Ambient but visible: faint enough that dial rows read above it clearly,
-     present enough to register as intentional. Warm parchment + violet lean. */
+  /* Faint but intentional: readable as ambient texture, not fighting the rows */
   color: hsl(260 18% 88% / 0.28);
   white-space: nowrap;
   user-select: none;
   -webkit-user-select: none;
-  /* Where dial rows scroll over the wordmark, screen-blend creates a
-     luminous collision: the dark row bg lightens where glyphs overlap,
-     so both texts stay visible — an intentional graphic merge. */
+  /* screen blend: where rows overlap, both texts remain visible via luminance */
   mix-blend-mode: screen;
   transition: opacity 0.2s ease, color 0.2s ease;
   pointer-events: auto;
-  /* Ensure the large text clips to the overlay container */
   overflow: hidden;
 }
 
-/* Desktop (wide landscape): Dial column is narrower — fit the wordmark to it */
+/* Wide desktop: Dial column is narrower — scale to fit within it */
 @media (orientation: landscape) and (min-width: 1100px) {
   .dial-cli-overlay__wordmark {
-    /* Cap so the letters fill roughly the dial column width */
     font-size: clamp(5rem, 22vw, 18rem);
   }
 }
 
-/* While typing: the command text appears in the same face, slightly brighter
-   so the user can read what they've typed, with a subtle hue shift. */
+/* While typing: brighten slightly so the user can read the command */
 .dial-cli-overlay__wordmark--typing {
   color: hsl(250 28% 86% / 0.42);
-  /* Brighten enough to read the typed command */
   mix-blend-mode: screen;
 }
 
-/* The form and input are completely invisible — they collect keystrokes
-   while the wordmark span above is the only visible affordance. */
+/* The form and input are invisible — keystrokes land here, wordmark is the UI */
 .dial-cli-overlay__form {
   position: absolute;
   top: 0;
@@ -2233,16 +2254,9 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  /* Stacking context for the CLI overlay which sits at z-index:0 behind rows */
-  position: relative;
   /* Let summary sentences use the full page width and height now that the
      completed-library strip is intentionally absent. */
   padding: 0 0 12px;
-}
-/* Dial rows and content float above the CLI background layer */
-.dial-body > *:not(.dial-cli-overlay) {
-  position: relative;
-  z-index: 1;
 }
 .dial-loading {
   padding: 24px 15px;
