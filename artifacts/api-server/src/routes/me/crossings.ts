@@ -505,6 +505,41 @@ export async function cachePersonalCrossings(userId: number, items: CrossingsRow
  */
 const recomputeInFlight = new Map<number, Promise<void>>();
 
+// ---------------------------------------------------------------------------
+// Global recompute concurrency gate.
+//
+// Each personal-crossings compute runs TWO heavy aggregate queries in
+// parallel, holding two pool connections for seconds. The shared pg pool has
+// only ~10 connections serving the entire server (601 station pollers, all
+// HTTP routes). When the boot warm job schedules recomputes for hundreds of
+// stale users, unbounded concurrency saturates the pool and every other
+// query — including `SELECT 1` health checks and the stations list — queues
+// behind them, hanging all HTTP traffic. Capping concurrent recomputes at 2
+// bounds worst-case usage at 4 connections and leaves headroom for requests.
+// ---------------------------------------------------------------------------
+const RECOMPUTE_MAX_CONCURRENCY = 2;
+let recomputeActiveCount = 0;
+const recomputeWaiters: Array<() => void> = [];
+
+async function acquireRecomputeSlot(): Promise<void> {
+  if (recomputeActiveCount < RECOMPUTE_MAX_CONCURRENCY) {
+    recomputeActiveCount++;
+    return;
+  }
+  // Wait for a slot; the releaser hands the slot over without decrementing,
+  // so the count stays accurate across the hand-off.
+  await new Promise<void>((resolve) => recomputeWaiters.push(resolve));
+}
+
+function releaseRecomputeSlot(): void {
+  const next = recomputeWaiters.shift();
+  if (next) {
+    next(); // hand the slot to the next waiter; count unchanged
+  } else {
+    recomputeActiveCount--;
+  }
+}
+
 /**
  * Timestamp of the most recent FAILED background recompute, per user.
  * Set when a recompute throws; cleared on the next successful compute.
@@ -532,6 +567,7 @@ export function _testOnly_setComputeOverride(
 export function schedulePersonalCrossingsRecompute(userId: number): void {
   if (recomputeInFlight.has(userId)) return;
   const p = (async () => {
+    await acquireRecomputeSlot();
     try {
       console.log(`[crossings] background recompute for user=${userId} (SWR)`);
       const items = await (computeOverride ?? computePersonalCrossings)(userId);
@@ -541,6 +577,7 @@ export function schedulePersonalCrossingsRecompute(userId: number): void {
       recomputeFailedAt.set(userId, Date.now());
       console.error(`[crossings] background recompute failed for user=${userId}`, err);
     } finally {
+      releaseRecomputeSlot();
       recomputeInFlight.delete(userId);
     }
   })();
