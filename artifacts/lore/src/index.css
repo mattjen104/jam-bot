@@ -1946,75 +1946,95 @@
    DialFilterBar stays in the DOM for tests, as before. */
 
 /* ── portrait: zero-height, invisible — CLI is landscape-only ── */
+/* ── CLI overlay — fullscreen background of the Dial region ──
+   The wordmark lives BEHIND the dial feed rows, anchored to the bottom-right
+   of the Dial column (opposite direction to the left-justified artist names).
+   On desktop (≥1100 px landscape) the Dial region is the right sidebar.
+   On mid-landscape and portrait the Dial region is the full-width area below
+   the album art square. The overlay is position:absolute inside .dial-body so
+   it never touches the album art. */
+
+/* Default: hidden (portrait and landscape both start hidden; each breakpoint
+   opts in). On portrait the element is shown but stays inside dial-body's
+   natural flow area below the art. */
 .dial-cli-overlay {
+  /* Removed from fixed stacking — now lives inside dial-body */
   display: none;
   pointer-events: none;
 }
 
-/* ── landscape: fixed over the art-sidebar area ── */
+/* Portrait — the dial body is the full-width column below the art.
+   The overlay fills the entire dial-body height, behind the rows. */
+@media (orientation: portrait) {
+  .dial-cli-overlay {
+    display: block;
+    position: absolute;
+    inset: 0;
+    /* Invisible clickable layer behind everything */
+    z-index: 0;
+    pointer-events: auto;
+    cursor: text;
+  }
+}
+
+/* Landscape (all widths) — same treatment: dial-body is the right/below column */
 @media (orientation: landscape) {
   .dial-cli-overlay {
     display: block;
-    position: fixed;
-    /* Offset by the app header so the wordmark's top edge is exactly
-       parallel with the top of the dial feed column (which starts below
-       the 56px header). The Lore logo therefore lines up with the first
-       dial row's top, while the album art still bleeds up to top: 0. */
-    top: 56px;
-    left: 0;
-    /* Covers the art sidebar down to the shell, minus the header offset */
-    width: var(--hero-art-size, 50vw);
-    height: calc(var(--hero-art-size, 50vw) - 56px);
-    z-index: 6; /* just above .dial-hero__artwrap (z-index: 5) */
+    position: absolute;
+    inset: 0;
+    z-index: 0;
     pointer-events: auto;
     cursor: text;
-    /* No background: the art shows through; the wordmark floats above it */
   }
 }
 
-/* Wide desktop: sidebar on the right, art fills the left region */
-@media (orientation: landscape) and (min-width: 1100px) {
-  .dial-cli-overlay {
-    width: calc(100vw - var(--dial-col-w, 460px));
-    height: calc(var(--hero-art-size, 50vw) - 56px);
-  }
-}
-
-/* Oversized Signifier wordmark — anchored top-left of the overlay.
-   Parchment warm white with a subtle lavender shift.
-   mix-blend-mode: screen makes overlapping dial text light-merge with it
-   instead of just covering or being covered — the collision is designed. */
+/* ── Wordmark — anchored bottom-right, opposite of left-justified artist rows.
+   Huge Signifier face, very faint so dial rows remain readable above it.
+   mix-blend-mode: screen at the row level creates the collision lighting. ── */
 .dial-cli-overlay__wordmark {
   position: absolute;
-  top: 0;
-  left: 0;
-  /* Keep right edge from bleeding into the dial column */
-  max-width: 90%;
-  padding: 0;
+  /* Anchor bottom-right — the opposite corner from artist-name flow */
+  bottom: 0;
+  right: 0;
+  left: auto;
+  top: auto;
+  padding: 0 8px 4px 0;
   font-family: var(--lore-font-signature, serif);
-  /* Large: roughly the size of the sidebar width / 3 characters */
-  font-size: clamp(3.5rem, 9vw, 7rem);
+  /* Fill the Dial column width across the baseline — 3–4 chars wide */
+  font-size: clamp(5rem, 28vw, 22rem);
   font-weight: 400;
-  line-height: 0.9;
-  /* Parchment + lavender: warm HSL nudged toward 260° (blue-purple) */
-  color: hsl(260 22% 91%);
+  line-height: 0.88;
+  /* Ambient but visible: faint enough that dial rows read above it clearly,
+     present enough to register as intentional. Warm parchment + violet lean. */
+  color: hsl(260 18% 88% / 0.28);
   white-space: nowrap;
   user-select: none;
   -webkit-user-select: none;
-  /* The graphic overlap treatment: where artist rows scroll under this
-     text, screen blend lightens both — a cool luminous merge. */
+  /* Where dial rows scroll over the wordmark, screen-blend creates a
+     luminous collision: the dark row bg lightens where glyphs overlap,
+     so both texts stay visible — an intentional graphic merge. */
   mix-blend-mode: screen;
-  /* Smooth transition when switching between wordmark and command text */
-  transition: opacity 0.15s ease;
+  transition: opacity 0.2s ease, color 0.2s ease;
   pointer-events: auto;
+  /* Ensure the large text clips to the overlay container */
+  overflow: hidden;
 }
 
-/* While typing: command text appears at the same size in the same face.
-   A very slight opacity reduction distinguishes "active input" from label. */
+/* Desktop (wide landscape): Dial column is narrower — fit the wordmark to it */
+@media (orientation: landscape) and (min-width: 1100px) {
+  .dial-cli-overlay__wordmark {
+    /* Cap so the letters fill roughly the dial column width */
+    font-size: clamp(5rem, 22vw, 18rem);
+  }
+}
+
+/* While typing: the command text appears in the same face, slightly brighter
+   so the user can read what they've typed, with a subtle hue shift. */
 .dial-cli-overlay__wordmark--typing {
-  opacity: 0.9;
-  /* Slightly cooler hue while a command is in progress */
-  color: hsl(250 30% 88%);
+  color: hsl(250 28% 86% / 0.42);
+  /* Brighten enough to read the typed command */
+  mix-blend-mode: screen;
 }
 
 /* The form and input are completely invisible — they collect keystrokes
@@ -2213,9 +2233,16 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Stacking context for the CLI overlay which sits at z-index:0 behind rows */
+  position: relative;
   /* Let summary sentences use the full page width and height now that the
      completed-library strip is intentionally absent. */
   padding: 0 0 12px;
+}
+/* Dial rows and content float above the CLI background layer */
+.dial-body > *:not(.dial-cli-overlay) {
+  position: relative;
+  z-index: 1;
 }
 .dial-loading {
   padding: 24px 15px;

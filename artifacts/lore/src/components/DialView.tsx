@@ -2725,20 +2725,8 @@ export function DialView() {
         />
       )}
 
-      {/* CLI overlay — fixed over the entire art sidebar on landscape.
-          Lives outside the dial-hero flow so it can sit at position: fixed
-          flush with the top of the viewport, perfectly parallel with the top
-          edge of the dial feed. Only shown on the front door (level === "all").
-          On portrait / mobile it collapses to a zero-height element so the
-          art still starts at the top of its natural flow position. */}
-      {level === "all" && (
-        <DialCliBar
-          activeTiers={activeTiers}
-          activeCategories={activeCategories}
-          onToggleTier={toggleTier}
-          onToggleCategory={toggleCategory}
-        />
-      )}
+      {/* DialCliBar is now rendered inside dial-body below — see the comment
+          there. Removed from the fixed-sibling position above dial-hero. */}
 
       {/* Avatar album hero — the art IS the front-door content.
           Portrait: full-width square, station list scrolls below.
@@ -2806,6 +2794,17 @@ export function DialView() {
 
       {/* Main scroll body */}
       <div className="dial-body">
+        {/* CLI overlay — fullscreen background of the Dial region.
+            position:absolute inside this position:relative container so it
+            sits behind all feed rows (z-index:0) and never touches the art. */}
+        {level === "all" && (
+          <DialCliBar
+            activeTiers={activeTiers}
+            activeCategories={activeCategories}
+            onToggleTier={toggleTier}
+            onToggleCategory={toggleCategory}
+          />
+        )}
         <AlbumAvatarPicker compact />
         {/* Time travel lives on the hero art sidebar (chevrons + swipe);
             the moon lives in the topbar. */}
