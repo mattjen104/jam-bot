@@ -934,8 +934,8 @@
   --dim: 0 0% 62%;
   /* faint: barely-visible — inactive tabs, secondary hints */
   --faint: 0 0% 33%;
-  /* dial sentence body — brighter warm parchment against the dark feed */
-  --dial-fg: 36 28% 90%;
+  /* dial sentence body — shared with the Lore CLI's cool parchment tone */
+  --dial-fg: 260 18% 88%;
 
   --destructive: 0 0% 88%;
   --destructive-foreground: 0 0% 8%;
@@ -2018,24 +2018,25 @@
   }
 }
 
-/* ── Wordmark — anchored bottom-right, opposite of left-justified artist rows.
+/* ── Wordmark — anchored bottom-left, opposite of right-justified artist names.
    Huge Signifier face, very faint so dial rows remain readable above it.
    mix-blend-mode: screen creates the luminous collision as rows scroll over. */
 .dial-cli-overlay__wordmark {
   position: absolute;
-  /* Anchor to bottom-right — opposite corner from the left-flowing artist names */
+  /* Anchor to bottom-left — opposite the right-justified artist names */
   bottom: 0;
-  right: 0;
-  left: auto;
+  left: 0;
+  right: auto;
   top: auto;
-  padding: 0 8px 4px 0;
+  padding: 0 0 4px 8px;
   font-family: var(--lore-font-signature, serif);
   /* Large enough to nearly fill the Dial column width (4 chars ≈ column) */
   font-size: clamp(5rem, 28vw, 22rem);
   font-weight: 400;
   line-height: 0.88;
-  /* Faint but intentional: readable as ambient texture, not fighting the rows */
-  color: hsl(260 18% 88% / 0.28);
+  /* One shade darker than the current CLI color, while remaining visible
+     as ambient texture behind the Dial rows. */
+  color: hsl(260 18% 80% / 0.28);
   white-space: nowrap;
   user-select: none;
   -webkit-user-select: none;
@@ -2055,7 +2056,7 @@
 
 /* While typing: brighten slightly so the user can read the command */
 .dial-cli-overlay__wordmark--typing {
-  color: hsl(250 28% 86% / 0.42);
+  color: hsl(250 28% 78% / 0.42);
   mix-blend-mode: screen;
 }
 
@@ -5372,7 +5373,7 @@
   line-height: 1.4;
 }
 .fdrow__live-secondary b { font-weight: 400; font-style: normal; color: inherit; }
-.fdrow__t1-sfx { color: hsl(var(--muted-foreground) / 0.75); font-weight: 400; }
+.fdrow__t1-sfx { color: hsl(var(--dial-fg) / 0.75); font-weight: 400; }
 .fdrow__t1.w1 { color: hsl(var(--dial-fg) / 0.9); }
 .fdrow__t1.w2 { color: hsl(var(--dial-fg) / 0.9); }
 .fdrow__t1.w3 { color: hsl(var(--dial-fg) / 0.7); }
@@ -5461,7 +5462,7 @@
   text-overflow: ellipsis;
   background: hsl(var(--background) / 0.95);
   border: 1px solid hsl(var(--accent) / 0.35);
-  color: hsl(var(--foreground) / 0.9);
+  color: hsl(var(--dial-fg) / 0.9);
   font-family: var(--app-font-display);
   font-size: var(--lore-size-small);
   letter-spacing: 0.04em;
@@ -5480,7 +5481,7 @@
   font-family: var(--app-font-mono);
   font-size: 0.8em;
   line-height: 1.6;
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--dial-fg) / 0.75);
   cursor: pointer;
   vertical-align: middle;
 }
@@ -5547,15 +5548,15 @@
 }
 /* Addable state — gray to match the sentence text, dotted underline */
 .also-pill--add {
-  color: hsl(var(--foreground) / 0.85);
+  color: hsl(var(--dial-fg) / 0.85);
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 }
-.also-pill--add:hover { color: #fff; }
+.also-pill--add:hover { color: hsl(var(--dial-fg)); }
 /* Seeded / already-in-library state — bright white, inert */
 .also-pill--lib {
-  color: #fff;
+  color: hsl(var(--dial-fg));
   cursor: default;
 }
 /* Sentence tokens share the same parchment tone. */
