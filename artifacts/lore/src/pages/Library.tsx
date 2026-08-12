@@ -627,6 +627,7 @@ export function AlbumGroupRow({
   forceOpen,
   onMakeAvatar,
   avatarRecordingMbid,
+  onInvestigate,
 }: {
   group: AlbumGroup;
   openDoorMbid: string | null;
@@ -636,6 +637,7 @@ export function AlbumGroupRow({
   forceOpen?: boolean;
   onMakeAvatar?: (recordingMbid: string) => void;
   avatarRecordingMbid?: string | null;
+  onInvestigate?: (group: AlbumGroup) => void;
 }) {
   const [open, setOpen] = useState(false);
   const isOpen = forceOpen || open;
@@ -727,6 +729,20 @@ export function AlbumGroupRow({
         {group.items.some((item) => item.mbid === avatarRecordingMbid) && (
           <span style={{ color: "hsl(var(--library))", fontSize: 13 }} title="Current anonymous listener cover">●</span>
         )}
+        {group.items.find((item) => item.mbid)?.mbid && onInvestigate && (
+          <button
+            type="button"
+            className="album-inv__marker"
+            title={`Investigate ${group.albumTitle}`}
+            aria-label={`Investigate ${group.albumTitle}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onInvestigate(group);
+            }}
+          >
+            ✳
+          </button>
+        )}
         {group.items.find((item) => item.mbid)?.mbid && (
           <button
             type="button"
@@ -798,6 +814,7 @@ export function ArtistGroupRow({
   forceOpen,
   onMakeAvatar,
   avatarRecordingMbid,
+  onInvestigate,
 }: {
   group: ArtistGroup;
   openDoorMbid: string | null;
@@ -807,6 +824,7 @@ export function ArtistGroupRow({
   forceOpen?: boolean;
   onMakeAvatar?: (recordingMbid: string) => void;
   avatarRecordingMbid?: string | null;
+  onInvestigate?: (group: AlbumGroup) => void;
 }) {
   const [open, setOpen] = useState(false);
   const isOpen = forceOpen || open;
@@ -916,6 +934,17 @@ export function ArtistGroupRow({
                 >
                   {album.albumTitle}
                 </span>
+                {album.items.find((item) => item.mbid)?.mbid && onInvestigate && (
+                  <button
+                    type="button"
+                    className="album-inv__marker"
+                    title={`Investigate ${album.albumTitle}`}
+                    aria-label={`Investigate ${album.albumTitle}`}
+                    onClick={() => onInvestigate(album)}
+                  >
+                    ✳
+                  </button>
+                )}
                 {album.items.find((item) => item.mbid)?.mbid && (
                   <button
                     type="button"

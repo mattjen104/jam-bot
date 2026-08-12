@@ -4,6 +4,7 @@ import { getRecordingAlbumTracks } from "@workspace/api-client-react";
 import type { AlbumGroup } from "../pages/Library";
 import type { LibraryItem } from "../lib/meHooks";
 import { toast } from "../hooks/use-toast";
+import { AlbumInvestigationSheet } from "./AlbumInvestigationSheet";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -109,140 +110,7 @@ function TrackSubRow({ item }: { item: LibraryItem }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Album Investigation stub sheet
-// Opens a slide-up panel placeholder until Task 92 ships the real sheet.
-// ---------------------------------------------------------------------------
-
-function AlbumInvestigationStub({
-  albumTitle,
-  artist,
-  onClose,
-}: {
-  albumTitle: string;
-  artist: string;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      data-testid="album-investigation-stub"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 200,
-        display: "flex",
-        flexDirection: "column",
-        background: "hsl(var(--background))",
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "12px 15px",
-          borderBottom: "1px solid hsl(var(--border))",
-          flexShrink: 0,
-        }}
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            background: "none",
-            border: "none",
-            color: "hsl(var(--faint))",
-            fontFamily: "var(--app-font-mono)",
-            fontSize: 13,
-            cursor: "pointer",
-            padding: "2px 0",
-          }}
-          aria-label="Close investigation"
-        >
-          ←
-        </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: "var(--app-font-display)",
-              fontSize: 15,
-              fontWeight: 400,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              color: "hsl(var(--foreground))",
-            }}
-          >
-            {albumTitle}
-          </div>
-          {artist && (
-            <div
-              style={{
-                fontFamily: "var(--app-font-mono)",
-                fontSize: 11,
-                color: "hsl(var(--dim))",
-                marginTop: 2,
-              }}
-            >
-              {artist}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Body — placeholder until Task 92 ships */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 12,
-          padding: "32px 24px",
-          color: "hsl(var(--faint))",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--app-font-display)",
-            fontSize: 10,
-            fontWeight: 400,
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-          }}
-        >
-          Investigation
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--app-font-reading)",
-            fontSize: 15,
-            textAlign: "center",
-            color: "hsl(var(--muted-foreground))",
-            maxWidth: "36ch",
-            lineHeight: 1.55,
-          }}
-        >
-          Reviews, Song Exploder, Beato, Sound on Sound, and other sources will
-          appear here once indexed.
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--app-font-mono)",
-            fontSize: 11,
-            color: "hsl(var(--faint))",
-            marginTop: 4,
-          }}
-        >
-          ✳ marker will appear on the album row when sources are indexed
-        </div>
-      </div>
-    </div>
-  );
-}
+// AlbumInvestigationStub removed — AlbumInvestigationSheet (Task 92) is used directly below.
 
 // ---------------------------------------------------------------------------
 // Launch button — plays the full album via the ride player
@@ -508,12 +376,11 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
         )}
       </div>
 
-      {/* Investigation sheet (stub — Task 92 builds the real sheet) */}
+      {/* Album Investigation sheet */}
       {investigationOpen && (
-        <AlbumInvestigationStub
-          albumTitle={albumDisplay}
-          artist={artistDisplay}
-          onClose={() => setInvestigationOpen(false)}
+        <AlbumInvestigationSheet
+          group={group}
+          onDismiss={() => setInvestigationOpen(false)}
         />
       )}
     </>

@@ -735,6 +735,193 @@
   .liner-sheet { animation: none; }
   .liner-sheet__skeleton-row { animation: none; }
 }
+
+/* ── Album Investigation sheet — extends liner-sheet with provenance + source cards ── */
+
+/* Header extras */
+.album-inv__header {
+  gap: 10px;
+}
+.album-inv__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.album-inv__launch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 20px;
+  background: transparent;
+  color: hsl(var(--dim));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .07em;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.album-inv__launch-btn:hover { color: hsl(var(--foreground)); border-color: hsl(var(--foreground) / .25); }
+.album-inv__launch-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
+
+/* Provenance strip */
+.album-inv__provenance {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px 14px 8px;
+  border-bottom: 1px solid hsl(var(--border) / .4);
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .06em;
+  color: hsl(var(--faint));
+  line-height: 1.4;
+}
+.album-inv__provenance-count { color: hsl(var(--dim)); }
+.album-inv__provenance-dot { color: hsl(var(--border)); }
+.album-inv__provenance-recent { display: contents; }
+.album-inv__provenance-station {
+  color: hsl(var(--dim));
+  white-space: nowrap;
+}
+.album-inv__provenance-date { white-space: nowrap; }
+
+/* Source cards */
+.album-inv__card-list {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.album-inv__card {
+  border: 1px solid hsl(var(--border) / .6);
+  border-radius: 8px;
+  padding: 9px 12px 10px;
+  background: hsl(var(--secondary) / .25);
+}
+.album-inv__card-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.album-inv__card-label {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .1em;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+}
+.album-inv__card-sep { color: hsl(var(--border)); font-size: var(--lore-size-small); }
+.album-inv__card-type {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .08em;
+  color: hsl(var(--dim));
+  white-space: nowrap;
+}
+.album-inv__card-date {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--faint));
+  white-space: nowrap;
+  margin-left: auto;
+}
+.album-inv__card-link {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: hsl(var(--dim));
+  transition: color .15s;
+}
+.album-inv__card-link:hover { color: hsl(var(--foreground)); }
+.album-inv__card-link svg { width: 12px; height: 12px; }
+.album-inv__card-excerpt {
+  margin: 6px 0 0;
+  font-family: var(--app-font-reading);
+  font-style: normal;
+  font-size: var(--lore-size-interface);
+  line-height: 1.5;
+  color: hsl(var(--foreground) / .85);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Empty / no sources */
+.album-inv__no-sources {
+  padding-top: 4px;
+  text-align: left;
+}
+
+/* Not-yet-indexed section */
+.album-inv__pending-label { opacity: .7; }
+.album-inv__pending-list {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.album-inv__pending-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px dashed hsl(var(--border) / .6);
+  border-radius: 20px;
+  opacity: .55;
+}
+.album-inv__pending-source {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .07em;
+  color: hsl(var(--dim));
+}
+.album-inv__pending-type {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  letter-spacing: .05em;
+  color: hsl(var(--faint));
+}
+.album-inv__pending-hint {
+  margin: 8px 0 0;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .06em;
+  color: hsl(var(--faint));
+  opacity: .7;
+}
+
+/* ✳ investigate marker — on album title chips */
+.album-inv__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  color: hsl(var(--library) / .7);
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  line-height: 1;
+  transition: color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.album-inv__marker:hover { color: hsl(var(--library)); }
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./tokens/typography.css";
