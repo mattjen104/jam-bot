@@ -113,7 +113,7 @@ describe("SlimSectionNav sleep gesture", () => {
     vi.setSystemTime(new Date("2026-08-11T00:00:00Z"));
     try {
       renderNav();
-      const loreLink = screen.getByText("[lore]");
+      const loreLink = screen.getByText("Feed");
       expect(screen.queryByTestId("sleep-moon")).toBeNull();
       for (let i = 0; i < SLEEP_TAP_COUNT; i++) {
         fireEvent.click(loreLink);
@@ -131,7 +131,7 @@ describe("SlimSectionNav sleep gesture", () => {
     vi.setSystemTime(new Date("2026-08-11T00:00:00Z"));
     try {
       renderNav();
-      const loreLink = screen.getByText("[lore]");
+      const loreLink = screen.getByText("Feed");
       for (let i = 0; i < SLEEP_TAP_COUNT; i++) {
         fireEvent.click(loreLink);
         vi.advanceTimersByTime(SLEEP_TAP_WINDOW_MS); // each tap ages out the last

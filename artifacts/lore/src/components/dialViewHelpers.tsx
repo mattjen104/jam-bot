@@ -55,13 +55,25 @@ export interface CompactLiveSummary {
   station: string;
   artist: string | null;
   text: string;
+  /** Like `text` but without the crossing lead/suffix — used as the row root
+   *  aria-label on non-compact sentence rows, where a ", this set" suffix
+   *  would collide with the expand-toggle button's accessible name. */
+  plainText: string;
+  /** Ordered provenance parts for the line rendered between the dots.
+   *  Each entry is a non-empty, deduplicated label: [dj, show, station]
+   *  (any of which may be absent). The caller renders them pipe-separated. */
+  provenanceParts: string[];
+  /** Crossing artists (up to 3) and whether the match is live ("now") vs set. */
+  crossingArtists: string[];
+  crossingIsLive: boolean;
 }
 
 /**
  * Compact, truthful live identity used by the main Dial feed.
- * The compact surface intentionally contains only the best available artist
- * and the station.  Show/DJ provenance belongs to the non-compact sentence
- * surfaces and must not leak into this identity.
+ *
+ * Returns full provenance parts (DJ · Show · Station) so the row can render
+ * "Jane Kamikazie | The Morning Show | KCRW" between the dots, and up to 3
+ * crossing artists with a live/set flag for the `, now` / `, this set` suffix.
  */
 export function liveProvenanceSummary(
   stationName: string,
@@ -76,10 +88,64 @@ export function liveProvenanceSummary(
   // echoed station name is never presented as an artist.
   const artistCandidate = cleanLiveValue(current?.artist) ?? cleanLiveValue(fallbackArtist);
   const artist = sameLiveValue(artistCandidate, station) ? null : artistCandidate;
+
+  // Build provenance parts: DJ | Show | Station — deduplicated, station always last.
+  const djRaw = show
+    ? (() => {
+        const list = eligibleDjNames(
+          { name: show.showName ?? "", djName: show.djName ?? undefined, djNames: show.djNames },
+          { artist: current?.artist, title: current?.title, showTitle: show.showName, stationName },
+        );
+        return list.length === 1 ? cleanLiveValue(list[0]) : null;
+      })()
+    : null;
+  const rawShow = cleanLiveValue(show?.showName);
+  const showName = rawShow
+    && !MISSING_LIVE_VALUES.has(rawShow.toLowerCase())
+    && !sameLiveValue(rawShow, djRaw)
+    && !sameLiveValue(rawShow, station)
+    ? rawShow : null;
+  const parts: string[] = [];
+  if (djRaw && !sameLiveValue(djRaw, station)) parts.push(djRaw);
+  if (showName) parts.push(showName);
+  parts.push(station);
+
+  // Crossing artists — the live/set distinction:
+  //   live hit → just the crossing artist on air, suffixed ", now"
+  //   set crossings → up to 3 artists from this set, suffixed ", this set"
+  // Show-level evidence only: station-level 24h counts stay off this surface.
+  const hasExact = !!(current?.isLibraryHit) || (show?.crossings ?? 0) > 0;
+  const hasArtist = !!(current?.isArtistHit) || (show?.artistCrossings ?? 0) > 0;
+  const isLiveHit = !!(current?.isLibraryHit || current?.isArtistHit);
+  let crossingArtists: string[] = [];
+  if (show && (hasExact || hasArtist)) {
+    const sourceArtists = hasExact ? (show.topArtists ?? []) : (show.topArtistNames ?? []);
+    const candidates = isLiveHit && artistCandidate ? [artistCandidate] : sourceArtists;
+    crossingArtists = candidates
+      .map((a) => cleanLiveValue(a))
+      .filter((a): a is string => a != null)
+      .filter((a) => !sameLiveValue(a, station))
+      .filter((a, i, all) => all.findIndex((o) => sameLiveValue(o, a)) === i)
+      .slice(0, 3);
+  }
+
+  const provenanceText = parts.join(" | ");
+  // The plain-text mirror of the rendered row: crossing artists (with their
+  // timing suffix) lead when present, else the single best artist.
+  const oxford = crossingArtists.length <= 1 ? (crossingArtists[0] ?? null)
+    : crossingArtists.length === 2 ? `${crossingArtists[0]} and ${crossingArtists[1]}`
+    : `${crossingArtists.slice(0, -1).join(", ")}, and ${crossingArtists[crossingArtists.length - 1]}`;
+  const lead = oxford != null
+    ? `${oxford}${isLiveHit ? ", now" : ", this set"}`
+    : artist;
   return {
     station,
     artist,
-    text: artist ? `${artist} | ${station}` : station,
+    text: lead ? `${lead} · ${provenanceText}` : provenanceText,
+    plainText: artist ? `${artist} · ${provenanceText}` : provenanceText,
+    provenanceParts: parts,
+    crossingArtists,
+    crossingIsLive: isLiveHit,
   };
 }
 

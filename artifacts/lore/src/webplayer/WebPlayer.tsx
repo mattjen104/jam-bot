@@ -8,8 +8,6 @@ import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
 import {
   useLatestImportJob,
-  useMyKeepStatus,
-  useIsAuthenticated,
   useMutationKeep,
   useMyPreferences,
 } from "../lib/meHooks";
@@ -86,11 +84,6 @@ function NowPlayingCard({
 
   // nowMbid: prefer scan hop MBID when scanning, else the on-air MBID.
   const nowMbid = scanHop?.mbid ?? item?.now.mbid ?? null;
-  const isAuthenticated = useIsAuthenticated();
-  const { data: keptSet } = useMyKeepStatus(
-    isAuthenticated && nowMbid ? [nowMbid] : [],
-  );
-  const inLibrary = nowMbid != null && keptSet?.has(nowMbid) === true;
   const { data: counts } = useWpLoreCounts(nowMbid ? [nowMbid] : []);
 
   // Render when a station is playing OR when a preview scan is active.
@@ -181,28 +174,39 @@ function NowPlayingCard({
           )}
         </p>
       </div>
-      {inLibrary && (
-        <span
-          className="wp-pill"
-          style={{
-            background: "var(--wp-bg-success)",
-            color: "var(--wp-text-success)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          <Check size={13} aria-hidden="true" /> in your library
-        </span>
-      )}
       {nowMbid && (
         <LoreChip
           count={counts?.get(nowMbid)}
           onOpen={() => onOpenLore(nowMbid, scanHop?.stationName ?? showLabel ?? radio.station!.name)}
         />
       )}
-      {nowMbid && !inLibrary && !scanHop && radio.station && (
-        <WpKeep mbid={nowMbid} provenance={{ kind: "station", stationSlug: radio.station.slug }} />
+      {/* Keep button — a dedicated control beside Play and Scan, always present
+          while a station is sounding. WpKeep renders kept/unkept state
+          internally; the "in your library" pill is retired in favour of this
+          single control. While the current spin is still unresolved (no MBID)
+          the button renders disabled rather than disappearing. */}
+      {!scanHop && radio.station && (
+        nowMbid ? (
+          <WpKeep mbid={nowMbid} provenance={{ kind: "station", stationSlug: radio.station.slug }} />
+        ) : (
+          <button
+            type="button"
+            disabled
+            title="Keep becomes available once the track is identified"
+            aria-label="Keep unavailable — track not identified yet"
+            data-testid="wp-keep-button-disabled"
+            style={{
+              fontSize: 15,
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              opacity: 0.45,
+            }}
+          >
+            <Bookmark size={14} aria-hidden="true" /> Keep
+          </button>
+        )
       )}
       {/* Scan controls — on/off toggle + direction flip */}
       <div style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>

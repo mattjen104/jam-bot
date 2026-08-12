@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Browser-geometry tests confirming the shell nav links ([lore] / [my library])
+ * Browser-geometry tests confirming the shell nav links (Feed / Stack)
  * remain visible and tappable when the player dock is rendered on a small phone —
  * both portrait (360×640) and landscape (640×360).
  *
@@ -158,9 +158,9 @@ async function installRoutes(page: Page) {
 async function loadWithDock(page: Page) {
   await page.goto("/lore/");
 
-  // Wait for the live station row (compact "Artist | Station" identity).
+  // Wait for the live station row (compact "Artist · Station" identity).
   const row = page.getByRole("button", {
-    name: /Some Artist \| NTS 1/,
+    name: /Some Artist · NTS 1/,
   });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -266,7 +266,7 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       // 2. Both links accept clicks — Playwright throws when a click target is
       //    covered by another element (e.g. the mini player intercepting).
       await loreLink.click();
-      // After clicking [lore] we land back on the dial; tune back in for the
+      // After clicking Feed we land back on the dial; tune back in for the
       // library link check.
       const row = page.locator("[data-scrub-slug][role='button']").filter({
         hasText: /Some Artist/,
@@ -276,7 +276,7 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
 
       await libraryLink.click();
-      // After clicking [my library] we navigate to /library — confirm the URL changed.
+      // After clicking Stack we navigate to /library — confirm the URL changed.
       await page.waitForURL("**/library", { timeout: 5_000 });
 
       // Navigate back to the dial and re-tune to verify geometry.

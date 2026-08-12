@@ -1,0 +1,718 @@
+/* ─── Lore Grayscale — Terminal Variant ─────────────────────────────
+   Palette:
+     #000000  true black
+     #0a0a0b  near-black (surface)
+     #111113  surface-2
+     #1e1e22  surface-3 (slight lavender shift)
+     #2a2a30  border (lavender-gray)
+     #3d3d47  border-hi (lighter lavender-gray)
+     #4a4a52  dimmer border accent
+     #606068  text-dim (darker muted, ~wordmark-dark reference)
+     #838383  text-muted  ← Lore wordmark / primary-gray
+     #a8a8a8  text-highlight ← Lore radio-dial lavender-gray (replaces #fff)
+   No warm tones. System sans for interface copy; terminal mono reserved
+   for metadata, annotations, and technical labels. ASCII border characters.
+──────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: "Signifier";
+  src: url("/fonts/Signifier-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.lore-gs {
+  --gs-black:      #000000;
+  --gs-surface:    #0a0a0b;
+  --gs-surface-2:  #111113;
+  --gs-surface-3:  #1e1e22;
+  --gs-border:     #2a2a30;
+  --gs-border-hi:  #3d3d47;
+  /* Text scale — no pure white */
+  --gs-hi:         #a8a8a8;   /* dial lavender-gray — was #ffffff */
+  --gs-muted:      #838383;   /* wordmark dark gray — was #888899 */
+  --gs-dim:        #606068;   /* deeper dim for secondary annotations */
+  /* keep --gs-white as alias so nothing breaks */
+  --gs-white:      var(--gs-hi);
+  --gs-sec:        var(--gs-muted);
+
+  /* semantic roles */
+  --gs-live:    var(--gs-hi);
+  --gs-keep:    var(--gs-hi);
+  --gs-invest:  var(--gs-muted);
+  --gs-ghost:   0.42;
+
+  --gs-voice: "Signifier", Georgia, serif;
+  --gs-sans:  system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --gs-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, "Courier New", monospace;
+
+  background: var(--gs-black);
+  color: var(--gs-hi);
+  font-family: var(--gs-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Lore's interface layer: readable sans around the Signifier voice.
+   Keep the terminal face for information scent, not for prose. */
+.gs-eyebrow,
+.gs-rule-text,
+.gs-note,
+.gs-ascii-box-label,
+.gs-phase-n,
+.gs-phase-label,
+.gs-phase-arrow,
+.gs-dock-badge,
+.gs-meta,
+.gs-live-badge,
+.gs-ghost-badge,
+.gs-coverage,
+.gs-kept,
+.gs-dock-station,
+.gs-subrow-date,
+.gs-sheet-meta,
+.gs-sheet-section-head,
+.gs-source-type,
+.gs-source-date,
+.gs-oq-n,
+.gs-footer {
+  font-family: var(--gs-mono);
+}
+
+.lore-gs *, .lore-gs *::before, .lore-gs *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.gs-wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────── */
+
+.gs-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--gs-border);
+  padding-bottom: 18px;
+}
+
+/* ─── Voice class — Signifier, 2px larger than surrounding mono ──── */
+
+.gs-voice {
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  /* font-size set per context via .gs-voice-N or inline */
+}
+
+.gs-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--gs-dim);
+}
+
+.gs-title {
+  font-size: 24px;
+  font-weight: 400;
+  font-family: var(--gs-voice);
+  color: var(--gs-hi);
+  letter-spacing: -0.01em;
+}
+
+.gs-subtitle {
+  font-size: 12px;
+  color: var(--gs-muted);
+  margin-top: 2px;
+}
+.gs-subtitle code {
+  color: var(--gs-hi);
+}
+
+/* ─── Section ─────────────────────────────────────────────────────── */
+
+.gs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Horizontal rule with label ──────────────────────────────────── */
+
+.gs-rule {
+  height: 1px;
+  background: var(--gs-border);
+}
+
+.gs-rule-label {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.gs-rule-text {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--gs-muted);
+  white-space: nowrap;
+}
+
+/* ─── Note / annotation ───────────────────────────────────────────── */
+
+.gs-note {
+  font-size: 10px;
+  color: var(--gs-muted);
+  letter-spacing: 0.03em;
+}
+
+.gs-note-line {
+  display: flex;
+  align-items: center;
+}
+
+.gs-annotation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+.gs-annotation-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+/* ─── ASCII box ───────────────────────────────────────────────────── */
+
+.gs-ascii-box {
+  border: 1px solid var(--gs-border-hi);
+  background: var(--gs-surface);
+  position: relative;
+  /* ASCII-feel via square corners — no border-radius */
+}
+
+.gs-ascii-box-label {
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  background: var(--gs-black);
+  padding: 0 6px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--gs-muted);
+}
+
+/* ─── Phase loop ──────────────────────────────────────────────────── */
+
+.gs-phase-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--gs-border);
+}
+.gs-phase-row:last-child { border-bottom: none; }
+
+.gs-phase-n {
+  font-size: 10px;
+  color: var(--gs-muted);
+  min-width: 28px;
+}
+.gs-phase-label {
+  color: var(--gs-muted);
+  font-size: 11px;
+  min-width: 56px;
+}
+.gs-phase-nav {
+  font-size: 14px;           /* 2px larger than surrounding 12px mono */
+  font-weight: 400;
+  font-family: var(--gs-voice);
+  color: var(--gs-hi);
+  min-width: 72px;
+  letter-spacing: 0.01em;
+}
+.gs-phase-desc {
+  font-size: 12px;
+  color: var(--gs-sec);
+  flex: 1;
+}
+.gs-phase-arrow {
+  font-size: 12px;
+  color: var(--gs-muted);
+  margin-left: auto;
+}
+
+/* ─── Player dock ─────────────────────────────────────────────────── */
+
+.gs-dock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gs-border);
+}
+.gs-dock-thumb {
+  font-size: 20px;
+  color: var(--gs-white);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.gs-dock-track {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.gs-dock-title {
+  font-size: 15px;           /* 2px larger than surrounding 13px mono */
+  font-weight: 400;
+  font-family: var(--gs-voice);
+  color: var(--gs-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gs-dock-station {
+  font-size: 11px;
+  color: var(--gs-sec);
+}
+.gs-dock-badge {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--gs-muted);
+  border: 1px dashed var(--gs-border-hi);
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* ─── Nav ─────────────────────────────────────────────────────────── */
+
+.gs-nav {
+  display: flex;
+  border-top: none;
+}
+.gs-nav-item {
+  flex: 1;
+  text-align: center;
+  padding: 11px 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--gs-muted);
+  border-top: 1px solid var(--gs-border);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.gs-nav-item--active {
+  font-family: var(--gs-voice);
+  font-size: 13px;           /* 2px larger than inactive 11px mono */
+  letter-spacing: 0.04em;
+  color: var(--gs-hi);
+  border-top-color: var(--gs-border-hi);
+  border-bottom-color: var(--gs-hi);
+}
+
+/* ─── Row (Feed + Stack shared) ───────────────────────────────────── */
+
+.gs-row {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--gs-border);
+  cursor: pointer;
+}
+.gs-row:last-child { border-bottom: none; }
+
+/* Hover: invert a thin left bar */
+.gs-row:hover {
+  background: var(--gs-surface-2);
+  border-left: 2px solid var(--gs-border-hi);
+  padding-left: 12px;
+}
+
+.gs-row--expanded {
+  background: var(--gs-surface-2);
+}
+
+/* Ghost rows */
+.gs-row--ghost .gs-primary,
+.gs-row--ghost .gs-secondary,
+.gs-row--ghost .gs-meta,
+.gs-row--ghost .gs-byline-text {
+  opacity: var(--gs-ghost);
+}
+
+.gs-row-head {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.gs-primary {
+  font-size: 17px;           /* 2px larger than the existing 15px row lead */
+  font-weight: 400;
+  font-family: var(--gs-voice);
+  color: var(--gs-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.gs-dot {
+  color: var(--gs-muted);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.gs-secondary {
+  font-size: 12px;
+  color: var(--gs-sec);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 2;
+  min-width: 0;
+}
+
+.gs-meta {
+  margin-left: auto;
+  padding-left: 10px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--gs-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ─── Live / ghost badges ─────────────────────────────────────────── */
+
+.gs-live-badge {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--gs-hi);
+  border: 1px solid var(--gs-border-hi);
+  padding: 1px 5px;
+}
+
+.gs-ghost-badge {
+  font-size: 11px;
+  color: var(--gs-muted);
+}
+
+/* ─── Coverage mark ───────────────────────────────────────────────── */
+
+.gs-coverage {
+  font-size: 9px;
+  color: var(--gs-sec);
+  vertical-align: super;
+  cursor: help;
+  margin-left: 1px;
+}
+
+/* ─── Keep / replay count ─────────────────────────────────────────── */
+
+.gs-kept {
+  font-size: 13px;           /* 2px larger than surrounding 11px mono */
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  color: var(--gs-hi);
+  letter-spacing: 0.02em;
+}
+
+/* ─── Byline ──────────────────────────────────────────────────────── */
+
+.gs-byline {
+  display: flex;
+  align-items: baseline;
+  margin-top: 4px;
+  min-width: 0;
+}
+.gs-byline-text {
+  font-size: 11px;
+  color: var(--gs-sec);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Actions ─────────────────────────────────────────────────────── */
+
+.gs-action {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 13px;           /* 2px larger than surrounding 11px mono */
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  color: var(--gs-hi);
+  border: 1px solid var(--gs-border-hi);
+  padding: 1px 8px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.gs-action:hover { background: var(--gs-surface-3); }
+
+.gs-action--ghost {
+  color: var(--gs-dim);
+  border-color: var(--gs-border);
+}
+
+.gs-action--launch {
+  color: var(--gs-hi);
+  border-color: var(--gs-border-hi);
+  background: var(--gs-surface-3);
+}
+
+/* ─── Stack row ───────────────────────────────────────────────────── */
+
+.gs-stack-row {
+  border-bottom: 1px solid var(--gs-border);
+}
+.gs-stack-row:last-child { border-bottom: none; }
+.gs-stack-row .gs-row-head {
+  padding: 9px 14px 0;
+}
+.gs-stack-row .gs-byline {
+  padding: 0 14px 9px;
+  margin-top: 3px;
+}
+.gs-stack-row:hover { background: var(--gs-surface-2); }
+.gs-stack-row--expanded { background: var(--gs-surface-2); }
+
+/* Sub-rows */
+.gs-subrows {
+  background: var(--gs-surface-3);
+  border-top: 1px solid var(--gs-border);
+}
+
+.gs-subrow {
+  display: flex;
+  align-items: baseline;
+  padding: 4px 14px 4px 28px;
+  border-bottom: 1px solid var(--gs-border);
+}
+.gs-subrow:last-of-type { border-bottom: none; }
+
+.gs-subrow-primary {
+  font-size: 12px;
+  color: var(--gs-sec);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.gs-subrow-sec {
+  font-size: 11px;
+  color: var(--gs-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 2;
+  min-width: 0;
+}
+.gs-subrow-date {
+  margin-left: auto;
+  padding-left: 8px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--gs-muted);
+}
+
+.gs-investigate-row {
+  padding: 7px 14px 7px 28px;
+  border-top: 1px solid var(--gs-border);
+  font-size: 13px;           /* 2px larger than surrounding 11px mono */
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  color: var(--gs-hi);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.gs-investigate-row:hover { background: var(--gs-surface-2); }
+
+/* ─── Grammar note ────────────────────────────────────────────────── */
+
+.gs-grammar-caption {
+  padding: 8px 14px 2px;
+  font-size: 11px;
+  color: var(--gs-muted);
+}
+.gs-grammar-note {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--gs-muted);
+  border-top: 1px solid var(--gs-border);
+  margin-top: 4px;
+}
+
+/* ─── Album Investigation sheet ───────────────────────────────────── */
+
+.gs-sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--gs-border);
+}
+.gs-sheet-back {
+  font-size: 11px;
+  color: var(--gs-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gs-sheet-title {
+  font-size: 16px;           /* 2px larger than surrounding 14px context */
+  font-weight: 400;
+  font-family: var(--gs-voice);
+  color: var(--gs-hi);
+  flex: 1;
+}
+.gs-sheet-artist {
+  font-size: 12px;
+  color: var(--gs-sec);
+  white-space: nowrap;
+}
+.gs-sheet-launch {
+  font-size: 13px;           /* 2px larger than surrounding 11px mono */
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  color: var(--gs-hi);
+  border: 1px solid var(--gs-border-hi);
+  padding: 2px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  background: var(--gs-surface-3);
+}
+
+.gs-sheet-meta {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--gs-muted);
+  border-bottom: 1px solid var(--gs-border);
+}
+
+.gs-sheet-section-head {
+  padding: 10px 14px 4px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--gs-muted);
+  border-bottom: 1px solid var(--gs-border);
+}
+.gs-sheet-section-head--pending {
+  color: var(--gs-muted);
+  opacity: 0.6;
+}
+
+/* ─── Source cards ────────────────────────────────────────────────── */
+
+.gs-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.gs-source {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gs-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gs-source:last-child { border-bottom: none; }
+
+.gs-source--pending {
+  opacity: 0.38;
+}
+
+.gs-source-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+.gs-source-label {
+  font-size: 13px;           /* 2px larger than surrounding 11px mono */
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  color: var(--gs-hi);
+  white-space: nowrap;
+}
+.gs-source-type {
+  color: var(--gs-muted);
+}
+.gs-source-date {
+  margin-left: auto;
+  color: var(--gs-muted);
+  font-size: 10px;
+}
+.gs-source-excerpt {
+  font-size: 12px;
+  color: var(--gs-sec);
+  line-height: 1.45;
+}
+.gs-source-open {
+  font-size: 13px;           /* 2px larger than surrounding 11px mono */
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  color: var(--gs-hi);
+  align-self: flex-end;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.gs-source-open:hover { text-decoration: underline; }
+
+/* ─── Open questions ──────────────────────────────────────────────── */
+
+.gs-oq-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gs-border);
+}
+.gs-oq-row:last-child { border-bottom: none; }
+
+.gs-oq-n {
+  font-size: 11px;
+  color: var(--gs-muted);
+  flex-shrink: 0;
+  min-width: 22px;
+}
+.gs-oq-body { display: flex; flex-direction: column; gap: 2px; }
+.gs-oq-q {
+  font-size: 14px;           /* 2px larger than surrounding 12px mono */
+  font-family: var(--gs-voice);
+  font-weight: 400;
+  color: var(--gs-hi);
+}
+.gs-oq-detail {
+  font-size: 12px;
+  color: var(--gs-sec);
+  line-height: 1.45;
+}
+
+/* ─── Footer ──────────────────────────────────────────────────────── */
+
+.gs-footer {
+  padding-top: 20px;
+  border-top: 1px solid var(--gs-border);
+  font-size: 11px;
+  color: var(--gs-muted);
+}
+.gs-footer-link {
+  color: var(--gs-muted);
+  text-decoration: none;
+}
+.gs-footer-link:hover { color: var(--gs-hi); }

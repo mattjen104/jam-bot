@@ -5168,35 +5168,81 @@
 }
 .fdrow__t1 b { font-style: normal; font-weight: 400; color: inherit; }
 .fdrow__live-sentence { color: hsl(var(--dial-fg)); }
-/* Main Dial feed compact identity. The identity owns the full available row
-   width so optional site links cannot move the shared pipe boundary. */
+/* Main Dial feed compact identity — Task #89 unified interface.
+   Reads like a sentence, left to right: the artist leads (the thing you
+   seeded), a low-weight centred dot, then the station as secondary context.
+   A right-aligned live marker sits at the row edge. No centred pipe. */
 #dial-feed-rows .fdrow__compact-sentence {
   display: block;
 }
 #dial-feed-rows .fdrow__compact-identity {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   column-gap: 10px;
-  align-items: start;
   width: 100%;
   min-width: 0;
 }
-#dial-feed-rows .fdrow__compact-artist,
-#dial-feed-rows .fdrow__compact-station {
+#dial-feed-rows .fdrow__compact-lead {
+  display: inline;
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 #dial-feed-rows .fdrow__compact-artist {
-  min-height: 1.3em;
-  text-align: right;
+  color: hsl(var(--dial-fg));
 }
 #dial-feed-rows .fdrow__compact-separator {
-  color: hsl(var(--dial-fg) / 0.7);
-  text-align: center;
+  color: hsl(var(--dial-fg) / 0.55);
+  padding: 0 0.4em;
 }
+/* Crossing artists lead the sentence — full foreground weight, names bold. */
+#dial-feed-rows .fdrow__compact-crossing {
+  color: hsl(var(--dial-fg));
+}
+#dial-feed-rows .fdrow__compact-crossing-artist {
+  color: hsl(var(--dial-fg));
+  font-weight: 600;
+}
+/* Full provenance between the dots: DJ | Show | Station, pipe-separated.
+   All parts share the secondary weight; the pipe is dimmer still. */
+#dial-feed-rows .fdrow__compact-provenance {
+  color: hsl(var(--dial-fg) / 0.62);
+}
+#dial-feed-rows .fdrow__compact-prov-part {
+  color: hsl(var(--dial-fg) / 0.62);
+}
+#dial-feed-rows .fdrow__compact-pipe {
+  color: hsl(var(--dial-fg) / 0.35);
+}
+/* Station is the secondary entity — same line, lighter weight. */
 #dial-feed-rows .fdrow__compact-station {
-  text-align: left;
+  color: hsl(var(--dial-fg) / 0.62);
+}
+/* Right-edge live marker: a pulsing dot + "live" in small terminal text. */
+#dial-feed-rows .fdrow__compact-live {
+  flex-shrink: 0;
+  align-self: baseline;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--lore-size-small);
+  letter-spacing: 0.04em;
+  color: hsl(var(--live));
+}
+#dial-feed-rows .fdrow__compact-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--live));
+  animation: fdrow-live-pulse 2s ease-in-out infinite;
+}
+@keyframes fdrow-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #dial-feed-rows .fdrow__compact-live-dot { animation: none; }
 }
 #dial-feed-rows .fdrow__compact-sentence .fdrow__site-link {
   margin-top: 5px;

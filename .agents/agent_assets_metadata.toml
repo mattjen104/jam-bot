@@ -83,3 +83,10 @@ id = "WOsKN9c1QEXrCGFPAC_I6"
 uri = "file://attached_assets/lore-dial-v2.html"
 type = "unspecified"
 title = "Timeline Dial v2 — tap to open"
+
+[[outputs]]
+id = "5BIqpB5PgbjXZZHbNXfpC"
+uri = "file://artifacts/mockup-sandbox/lore-unified-architecture.jpg"
+type = "image"
+title = "Lore Unified Minimal Interface mockup"
+description = "Full annotated Feed, Stack, coverage-marker, and Album Investigation architecture mockup."

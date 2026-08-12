@@ -195,7 +195,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Dial feed compact identity", () => {
-  it("shows only the current artist and station, not DJ/show provenance", () => {
+  it("shows the current artist with full DJ | Show | Station provenance", () => {
     const track = makeSpin({ title: "Gravity Falls", artist: "Pixies" });
     const show = makeShow({
       djName: "DJ Tester",
@@ -208,17 +208,21 @@ describe("Dial feed compact identity", () => {
     mockDialData([station]);
     renderDial();
 
-    // The main feed is intentionally a two-column identity. Song titles and
-    // scheduled provenance stay off this compact surface.
+    // Artist leads; full provenance (DJ | Show | Station) returns between
+    // the dots. Song titles stay off this compact surface.
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("Pixies|Test Radio");
+    expect(sentence).toContain("Pixies");
+    expect(sentence).toContain("Test Radio");
     expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("Pixies");
-    expect(document.querySelector(".fdrow__compact-separator")?.textContent).toBe("|");
+    expect(document.querySelector(".fdrow__compact-separator")?.textContent).toBe("·");
+    expect(document.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
+      "DJ Tester | Morning Show | Test Radio",
+    );
     expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
     expect(document.querySelector(".fdrow__t1")?.classList.contains("fdrow__compact-sentence")).toBe(true);
-    expect(document.querySelector(".fdrow__compact-identity")?.getAttribute("aria-label")).toBe("Pixies | Test Radio");
-    expect(sentence).not.toContain("DJ Tester");
-    expect(sentence).not.toContain("Morning Show");
+    expect(document.querySelector(".fdrow__compact-identity")?.getAttribute("aria-label")).toBe(
+      "Pixies · DJ Tester | Morning Show | Test Radio",
+    );
     expect(sentence).not.toMatch(/is playing|is on air/);
     // The track title must not leak into the row.
     expect(sentence).not.toContain("Gravity Falls");
@@ -239,9 +243,14 @@ describe("Dial feed compact identity", () => {
     renderDial();
 
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("Grateful Dead|Test Radio");
+    expect(sentence).toContain("Grateful Dead");
+    expect(sentence).toContain("Test Radio");
     expect(document.querySelector(".fdrow__compact-artist")?.textContent).toBe("Grateful Dead");
     expect(document.querySelector(".fdrow__compact-separator")).not.toBeNull();
+    // No DJ → provenance is Show | Station.
+    expect(document.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
+      "Morning Show | Test Radio",
+    );
     expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
     expect(sentence).not.toContain("Dark Star");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
@@ -261,9 +270,12 @@ describe("Dial feed compact identity", () => {
     expect(artist).not.toBeNull();
     expect(artist?.textContent).toBe("");
     expect(artist?.getAttribute("aria-hidden")).toBe("true");
-    expect(document.querySelector(".fdrow__compact-separator")).not.toBeNull();
+    // No artist → no dot separator (provenance reads on its own).
+    expect(document.querySelector(".fdrow__compact-separator")).toBeNull();
     expect(document.querySelector(".fdrow__compact-station")?.textContent).toBe("Test Radio");
-    expect(document.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("Test Radio");
+    expect(document.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
+      "DJ Tester | Morning Show | Test Radio",
+    );
   });
 
   it("does NOT render bare-fact track for Zone 1 rows (r=1: isLibraryHit)", () => {

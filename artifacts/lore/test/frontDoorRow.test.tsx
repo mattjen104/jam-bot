@@ -510,11 +510,18 @@ describe("compact Dial feed identity", () => {
     const identity = container.querySelector(".fdrow__compact-identity");
     expect(identity).not.toBeNull();
     expect(identity?.querySelector(".fdrow__compact-artist")?.textContent).toBe("The Long Winters");
-    expect(identity?.querySelector(".fdrow__compact-separator")?.textContent).toBe("|");
+    expect(identity?.querySelector(".fdrow__compact-separator")?.textContent).toBe("·");
+    // Full provenance returns between the dots: DJ | Show | Station.
+    expect(identity?.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
+      "DJ Test | Morning Show | KEXP",
+    );
     expect(identity?.querySelector(".fdrow__compact-station")?.textContent).toBe("KEXP");
-    expect(identity?.textContent).toBe("The Long Winters|KEXP");
-    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("The Long Winters | KEXP");
-    expect(identity?.textContent).not.toMatch(/DJ Test|Morning Show|is playing|is on air/);
+    expect(identity?.textContent).toContain("The Long Winters");
+    expect(identity?.textContent).toContain("KEXP");
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
+      "The Long Winters · DJ Test | Morning Show | KEXP",
+    );
+    expect(identity?.textContent).not.toMatch(/is playing|is on air/);
   });
 
   it("preserves the compact columns without inventing an artist", () => {
@@ -523,9 +530,68 @@ describe("compact Dial feed identity", () => {
       makeShow({ djName: "DJ Test", showName: "Morning Show", currentTrack: null }),
     );
     expect(container.querySelector(".fdrow__compact-artist")?.textContent).toBe("");
-    expect(container.querySelector(".fdrow__compact-separator")).not.toBeNull();
+    // No artist → no dot separator (provenance reads on its own).
+    expect(container.querySelector(".fdrow__compact-separator")).toBeNull();
+    expect(container.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
+      "DJ Test | Morning Show | KEXP",
+    );
     expect(container.querySelector(".fdrow__compact-station")?.textContent).toBe("KEXP");
-    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("KEXP");
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
+      "DJ Test | Morning Show | KEXP",
+    );
+  });
+
+  it("marks a live crossing hit with ', now'", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KCRW" }),
+      makeShow({
+        djName: "Jane Kamikazie",
+        showName: "The Morning Show",
+        currentTrack: makeSpin({ artist: "Wet Leg", isArtistHit: true }),
+      }),
+    );
+    const crossing = container.querySelector(".fdrow__compact-crossing");
+    expect(crossing?.textContent).toBe("Wet Leg, now");
+    expect(container.querySelector(".fdrow__compact-provenance")?.textContent).toBe(
+      "Jane Kamikazie | The Morning Show | KCRW",
+    );
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
+      "Wet Leg, now · Jane Kamikazie | The Morning Show | KCRW",
+    );
+  });
+
+  it("lists up to three set-crossing artists with ', this set'", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KCRW" }),
+      makeShow({
+        djName: "Jane Kamikazie",
+        showName: "The Morning Show",
+        crossings: 4,
+        topArtists: ["Wet Leg", "Deftones", "Weezer", "Pavement"],
+        currentTrack: makeSpin({ artist: "Someone Else" }),
+      }),
+    );
+    const crossing = container.querySelector(".fdrow__compact-crossing");
+    // Oxford comma, capped at three names, set-level suffix.
+    expect(crossing?.textContent).toBe("Wet Leg, Deftones, and Weezer, this set");
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
+      "Wet Leg, Deftones, and Weezer, this set · Jane Kamikazie | The Morning Show | KCRW",
+    );
+  });
+
+  it("uses plain 'and' for two set-crossing artists", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KCRW" }),
+      makeShow({
+        showName: "The Morning Show",
+        crossings: 2,
+        topArtists: ["Wet Leg", "Deftones"],
+        currentTrack: null,
+      }),
+    );
+    expect(container.querySelector(".fdrow__compact-crossing")?.textContent).toBe(
+      "Wet Leg and Deftones, this set",
+    );
   });
 
   it("keeps tune-in and attribution-only site-link behavior on compact rows", () => {

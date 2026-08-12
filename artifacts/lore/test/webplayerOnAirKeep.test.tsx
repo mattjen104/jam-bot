@@ -298,11 +298,12 @@ const libItem = (mbid: string, title: string): LibraryItem =>
   }) as unknown as LibraryItem;
 
 describe("LibraryTab paging", () => {
-  // The OnAirKeep visibility tests above may leave useIsAuthenticated returning
-  // false (via mockReturnValueOnce that was never consumed because WebPlayer
-  // crashed before reaching the hook). Reset it explicitly for each LibraryTab
-  // test so the authenticated view renders.
+  // The OnAirKeep visibility tests above may leave useIsAuthenticated with a
+  // queued mockReturnValueOnce(false) that was never consumed (WebPlayer no
+  // longer calls the hook in its hero). mockReset drops the once-queue as
+  // well; then re-arm the authenticated default so LibraryTab renders.
   beforeEach(() => {
+    vi.mocked(useIsAuthenticated).mockReset();
     vi.mocked(useIsAuthenticated).mockReturnValue(true);
   });
 

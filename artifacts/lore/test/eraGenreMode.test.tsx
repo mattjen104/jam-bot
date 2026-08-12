@@ -149,7 +149,7 @@ describe("SlimSectionNav era/genre gesture", () => {
     vi.setSystemTime(new Date("2026-08-11T00:00:00Z"));
     try {
       renderNav();
-      const loreLink = screen.getByText("[lore]");
+      const loreLink = screen.getByText("Feed");
       expect(screen.queryByTestId("era-genre-vinyl")).toBeNull();
       fireEvent.pointerDown(loreLink);
       vi.advanceTimersByTime(ERA_GENRE_LONGPRESS_MS + 50);
@@ -166,7 +166,7 @@ describe("SlimSectionNav era/genre gesture", () => {
     vi.setSystemTime(new Date("2026-08-11T00:00:00Z"));
     try {
       renderNav();
-      const loreLink = screen.getByText("[lore]");
+      const loreLink = screen.getByText("Feed");
       fireEvent.pointerDown(loreLink);
       vi.advanceTimersByTime(150);
       fireEvent.pointerUp(loreLink);

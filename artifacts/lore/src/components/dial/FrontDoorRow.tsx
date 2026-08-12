@@ -11,7 +11,7 @@
  * DialView re-exports FrontDoorRow / PopCrossingLine / SetQueueList so
  * existing imports and tests keep working.
  */
-import { useState, useMemo, type ReactNode } from "react";
+import React, { useState, useMemo, type ReactNode } from "react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { type PopularCrossingArtist } from "../../lib/meHooks";
 import {
@@ -372,16 +372,75 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // prefix is inert text now — the whole row tunes, and the pinned sentence
   // The lane row carries the set inline. Always use the bright-foreground
   // class so the weight rung (w0/w5…) cannot dim the summary sentence.
+  // Left-to-right sentence identity: artist leads (it is the thing you
+  // seeded), then a low-weight centred dot, then the station as secondary
+  // context, with a right-aligned live marker. No centred pipe — the eye
+  // reads the row like a sentence. (Task #89 unified interface.)
+  // Crossing artists line: up to 3 names with Oxford commas, then the timing
+  // suffix that distinguishes a live hit from set-level crossings:
+  //   "Wet Leg, now"  /  "Wet Leg, Deftones, and Weezer, this set"
+  const oxfordJoin = (names: string[]) =>
+    names.length <= 1 ? (names[0] ?? "")
+    : names.length === 2 ? `${names[0]} and ${names[1]}`
+    : `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+  const compactCrossingNode: React.ReactNode = compact && compact.crossingArtists.length > 0
+    ? (() => {
+        const names = compact.crossingArtists;
+        const parts: React.ReactNode[] = [];
+        names.forEach((name, i) => {
+          if (i > 0) {
+            parts.push(i === names.length - 1
+              ? (names.length > 2 ? ", and " : " and ")
+              : ", ");
+          }
+          parts.push(<b className="fdrow__compact-crossing-artist" key={i}>{name}</b>);
+        });
+        const suffix = compact.crossingIsLive ? ", now" : ", this set";
+        return <span className="fdrow__compact-crossing">{parts}{suffix}</span>;
+      })()
+    : null;
+
   const tier1Node = compactSentence && compact ? (
     <span
       className="fdrow__compact-identity"
-      aria-label={compact.text}
+      aria-label={
+        compact.crossingArtists.length > 0
+          ? `${oxfordJoin(compact.crossingArtists)}${compact.crossingIsLive ? ", now" : ", this set"} · ${compact.provenanceParts.join(" | ")}`
+          : compact.text
+      }
     >
-      <span className="fdrow__compact-artist" aria-hidden={compact.artist == null}>
-        {compact.artist ?? ""}
+      <span className="fdrow__compact-lead">
+        {/* Crossing artists lead when present; otherwise the single best artist.
+            The artist cell stays in the DOM (empty, aria-hidden) when there is
+            no usable artist — never invented. */}
+        {compactCrossingNode ?? (
+          <span className="fdrow__compact-artist" aria-hidden={compact.artist == null}>
+            {compact.artist ?? ""}
+          </span>
+        )}
+        {(compactCrossingNode != null || compact.artist != null) && (
+          <span className="fdrow__compact-separator" aria-hidden="true">·</span>
+        )}
+        {/* Full provenance: DJ | Show | Station, pipe-separated. (No Fragment
+            here — the dev-metadata JSX transform injects props into Fragments,
+            which React rejects with a console error.) */}
+        <span className="fdrow__compact-provenance">
+          {compact.provenanceParts.map((part, i) => (
+            <span key={i}>
+              {i > 0 && <span className="fdrow__compact-pipe" aria-hidden="true"> | </span>}
+              <span className={i === compact.provenanceParts.length - 1 ? "fdrow__compact-station" : "fdrow__compact-prov-part"}>
+                {part}
+              </span>
+            </span>
+          ))}
+        </span>
       </span>
-      <span className="fdrow__compact-separator" aria-hidden="true">|</span>
-      <span className="fdrow__compact-station">{compact.station}</span>
+      {ds.isLive && (
+        <span className="fdrow__compact-live" aria-hidden="true">
+          <span className="fdrow__compact-live-dot" />
+          live
+        </span>
+      )}
     </span>
   ) : fallbackTier1Node;
   const tier1Cls = compactSentence && compact
@@ -411,7 +470,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       className={rowCls}
       data-scrub-slug={scrubSlug}
       role="button"
-      aria-label={compact?.text ?? undefined}
+      aria-label={compactSentence ? compact?.text : compact?.plainText}
       tabIndex={0}
       onClick={playable ? onTuneIn : undefined}
       onKeyDown={(e) => {

@@ -85,7 +85,7 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
       <nav className="bottom-nav" aria-label="Primary">
         {(["lore", "library"] as Section[]).map((section) => {
           const active = activeSection === section;
-          const label = section === "lore" ? "[lore]" : "[my library]";
+          const label = section === "lore" ? "Feed" : "Stack";
           return (
             <Link
               key={section}
@@ -109,7 +109,7 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
     <nav className="corner-nav" aria-label="Primary">
       {(["lore", "library"] as Section[]).map((section) => {
         const active = activeSection === section;
-        const label = section === "lore" ? "[lore]" : "[my library]";
+        const label = section === "lore" ? "Feed" : "Stack";
         return (
           <Link
             key={section}

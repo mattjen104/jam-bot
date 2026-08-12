@@ -15,7 +15,20 @@ references. Delete in this order:
 4. `station_quality` where `station_id` matches (another non-obvious
    child — discovered when `resolve-dedup-db.test.ts` hit a 23503 on
    teardown; must be cleared before step 5)
-5. `stations` itself
+5. `segue_edges` where `station_id` matches (listKey-scoped adjacency
+   built by the segue job)
+6. `scraped_shows` where `station_id` matches (schedule-scraper weekly
+   grid — a 23503 here appears only once a purged station's schedule
+   was ever scraped, so it can surface long after the purge code ships)
+7. `stations` itself
+
+Other `stations.id` children are safe: `listens` and
+`embed_resolution_metrics` use `onDelete: "set null"`; `list_sources`
+and `song_bottles`/`listen_sessions` reference stations but are not
+touched by radio_browser purges (curated/user rows, not discovered
+stations). Re-audit this list when adding a new table with a
+`station_id` FK — the purge in `radio-browser.ts` must be extended in
+the same commit.
 
 **Why:** the discovery pipeline (radio-browser.info ingestion) keeps its
 own bookkeeping row per discovered candidate in `radio_browser_stations`,

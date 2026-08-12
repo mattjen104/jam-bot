@@ -96,21 +96,79 @@ function getPreviewExamplePath(): string {
   return `${basePath}/preview/ComponentName`;
 }
 
+const MOCKUPS = [
+  {
+    path: "lore-unified-arch/UnifiedArch",
+    tag: "Annotated architecture · warm-dark",
+    title: "Lore Unified Minimal Interface",
+    desc: "Feed, Stack, row grammar, coverage marker, and Album Investigation sheet. Warm dark palette.",
+    tagColor: "#9b8cf5",
+    tagBorder: "rgba(155,140,245,0.35)",
+    border: "#504d42",
+    hoverBorder: "#9b8cf5",
+    bg: "#211f1c",
+  },
+  {
+    path: "lore-grayscale/LoreGrayscale",
+    tag: "Annotated architecture · grayscale",
+    title: "Lore Grayscale — Terminal Variant",
+    desc: "Same structure. True black / lavender-gray / bright white. ASCII borders, monospace throughout.",
+    tagColor: "#b8b8cc",
+    tagBorder: "rgba(184,184,204,0.3)",
+    border: "#2a2a30",
+    hoverBorder: "#b8b8cc",
+    bg: "#0a0a0b",
+  },
+] as const;
+
 function Gallery() {
+  const basePath = getBasePath();
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-      <div className="text-center max-w-md">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-3">
+    <div style={{ minHeight: "100vh", background: "#111113", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+      <div style={{ textAlign: "left", maxWidth: 680, width: "100%" }}>
+        <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: "#888899", marginBottom: 12 }}>
+          Lore design workspace
+        </p>
+        <h1 style={{ fontFamily: "ui-monospace, monospace", fontSize: 22, fontWeight: 700, color: "#ffffff", marginBottom: 8 }}>
           Component Preview Server
         </h1>
-        <p className="text-gray-500 mb-4">
-          This server renders individual components for the workspace canvas.
+        <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: "#b8b8cc", marginBottom: 28 }}>
+          Open an isolated preview below. Design references — not production Lore routes.
         </p>
-        <p className="text-sm text-gray-400">
-          Access component previews at{" "}
-          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
-            {getPreviewExamplePath()}
-          </code>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {MOCKUPS.map((m) => (
+            <a
+              key={m.path}
+              href={`${basePath}/preview/${m.path}`}
+              style={{
+                display: "block",
+                border: `1px solid ${m.border}`,
+                background: m.bg,
+                padding: "16px 18px",
+                textDecoration: "none",
+                color: "#ffffff",
+                transition: "border-color 0.12s",
+                fontFamily: "ui-monospace, monospace",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = m.hoverBorder; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = m.border; }}
+            >
+              <span style={{ display: "inline-block", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: m.tagColor, border: `1px solid ${m.tagBorder}`, padding: "1px 6px", marginBottom: 8 }}>
+                {m.tag}
+              </span>
+              <span style={{ display: "block", fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+                {m.title}
+              </span>
+              <span style={{ display: "block", fontSize: 12, color: "#888899", lineHeight: 1.5 }}>
+                {m.desc}
+              </span>
+            </a>
+          ))}
+        </div>
+        <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "#3d3d47", marginTop: 24 }}>
+          More previews at{" "}
+          <code style={{ color: "#888899" }}>{getPreviewExamplePath()}</code>
         </p>
       </div>
     </div>

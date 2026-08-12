@@ -13,6 +13,7 @@
 - [Song-to-song relationships shape](song-relationships-shape.md) — typed MB rels (samples/covers/remixes/interpolations) live on TrackKnowledge; required in TS but read defensively (old caches), optional in OpenAPI.
 - [Codegen → project-ref staleness](codegen-project-reference-staleness.md) — after OpenAPI codegen, run `typecheck:libs` to rebuild lib .d.ts; project-ref consumers read stale dist/, so only NEW schema members fail to resolve.
 - [Playhead "One Spine" model](playhead-one-spine-model.md) — unified interface direction (on/off-spine, liquid→crystal, Peek→Card→Dive, Lens, enqueue-never-cut); canonical demo = Fleetwood Mac "Go Your Own Way".
+- [Lore Feed/Stack migration](lore-feed-stack-migration.md) — nav labels Feed/Stack (ids stay lore/library), row grammar `primary · secondary [meta]`, dot only when artist exists; spec in INTERFACE_ARCHITECTURE.md.
 - [Mockup screenshot verification](mockup-screenshot-verification.md) — external_url screenshot shows heavy-CSS mockups as blank (paints early); verify with app_preview, which uses the real browser + returns console logs.
 - [Lore now-playing contract](lore-nowplaying-contract.md) — confidence tiers (recording_id>isrc>text>unresolved); artwork+exact links are best-effort/often absent, so UI must degrade and tests must not assert their presence.
 - [Postgres NUL in text columns](postgres-nul-in-text.md) — NUL (U+0000) is illegal in Postgres text (err 22021); never use it as a DB key separator, use U+001F. Silently-empty table + try/catch = swallowed DB error.

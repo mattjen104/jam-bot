@@ -179,12 +179,12 @@ test.describe("On-air show + DJ attribution on the dial front door", () => {
     });
     await page.goto("/lore/");
 
-    // The compact feed row reads "Some Artist | NTS 1" — attribution still
+    // The compact feed row reads "Some Artist · NTS 1" — attribution still
     // drives the row's band placement, but the DJ/show provenance sentence is
     // intentionally absent from this compact surface.
-    const row = page.getByRole("button", { name: /Some Artist \| NTS 1/ });
+    const row = page.getByRole("button", { name: /Some Artist · NTS 1/ });
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row.locator(".fdrow__compact-separator")).toHaveText("|");
+    await expect(row.locator(".fdrow__compact-separator")).toHaveText("·");
     await expect(page.getByText("DJs on air")).not.toBeVisible();
     // DJ/show provenance must be absent from the compact feed row itself.
     // (The first-run sidebar keeps its sentence treatment and may still show

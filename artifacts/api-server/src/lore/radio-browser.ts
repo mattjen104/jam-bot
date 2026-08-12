@@ -680,6 +680,13 @@ export async function purgeNonQualifyingStations(): Promise<number> {
       DELETE FROM segue_edges
       WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
     `));
+    // scraped_shows (schedule-scraper weekly grid) also references stations
+    // without CASCADE — a purged station whose schedule was ever scraped
+    // would otherwise abort the purge with a 23503.
+    await tx.execute(sql.raw(`
+      DELETE FROM scraped_shows
+      WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+    `));
     const result = await tx.execute(sql.raw(`
       DELETE FROM stations
       WHERE ${whereClause}
