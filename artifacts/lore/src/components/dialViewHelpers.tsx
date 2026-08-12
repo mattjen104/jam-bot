@@ -116,12 +116,33 @@ export function liveProvenanceSummary(
   const lead = oxford != null
     ? `${oxford}${isLiveHit ? ", now" : ", this set"}`
     : artist;
+  // Provenance parts for the expanded byline: [DJ, Show, Station], deduplicated.
+  // DJ name is resolved via eligibleDjNames so a single DJ in djNames still
+  // gets credited; two distinct DJs collapse to null (no individual credit).
+  const djListForProv = show
+    ? eligibleDjNames(
+        { name: show.showName ?? "", djName: show.djName ?? undefined, djNames: show.djNames },
+        { artist: current?.artist, title: current?.title, showTitle: show.showName, stationName: station },
+      )
+    : [];
+  const provDj = djListForProv.length === 1 ? djListForProv[0] : null;
+  const rawShowName = show ? cleanLiveValue(show.showName) : null;
+  const showOk = rawShowName
+    && !MISSING_LIVE_VALUES.has(rawShowName.toLowerCase())
+    && !sameLiveValue(rawShowName, provDj)
+    && !sameLiveValue(rawShowName, station)
+    ? rawShowName : null;
+  const provenanceParts: string[] = [];
+  if (provDj) provenanceParts.push(provDj);
+  if (showOk) provenanceParts.push(showOk);
+  provenanceParts.push(station);
+
   return {
     station,
     artist,
     text: lead ? `${lead} · ${station}` : station,
     plainText: artist ? `${artist} · ${station}` : station,
-    provenanceParts: [station],
+    provenanceParts,
     crossingArtists,
     crossingIsLive: isLiveHit,
   };

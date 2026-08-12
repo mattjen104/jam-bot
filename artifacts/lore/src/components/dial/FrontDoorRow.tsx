@@ -321,6 +321,7 @@ export interface FrontDoorRowProps {
 }
 
 export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence }: FrontDoorRowProps) {
+  const [compactExpanded, setCompactExpanded] = useState(false);
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -396,6 +397,10 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       })()
     : null;
 
+  // Provenance parts beyond station (DJ, show) that appear in the expanded byline.
+  const expandParts = compact ? compact.provenanceParts.slice(0, -1) : [];
+  const hasExpandableByline = expandParts.length > 0;
+
   const tier1Node = compactSentence && compact ? (
     <span
       className="fdrow__compact-identity"
@@ -416,12 +421,26 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {/* Station only — DJ and show belong in the expanded byline. */}
         <span className="fdrow__compact-station">{compact.station}</span>
       </span>
-      {ds.isLive && (
-        <span className="fdrow__compact-live" aria-hidden="true">
-          <span className="fdrow__compact-live-dot" />
-          live
-        </span>
-      )}
+      <span className="fdrow__compact-right">
+        {ds.isLive && (
+          <span className="fdrow__compact-live" aria-hidden="true">
+            <span className="fdrow__compact-live-dot" />
+            live
+          </span>
+        )}
+        {hasExpandableByline && (
+          <button
+            type="button"
+            className="fdrow__compact-expand"
+            aria-expanded={compactExpanded}
+            aria-label={compactExpanded ? "Hide DJ and show" : "Show DJ and show"}
+            onClick={(e) => { e.stopPropagation(); setCompactExpanded((v) => !v); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); } }}
+          >
+            {compactExpanded ? "▴" : "▾"}
+          </button>
+        )}
+      </span>
     </span>
   ) : fallbackTier1Node;
   const tier1Cls = compactSentence && compact
@@ -485,6 +504,24 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             </a>
           )}
         </div>
+
+        {/* Compact expanded byline — DJ name and show name revealed when the
+            listener taps the ▾ toggle. Clicking the byline area is inert so it
+            doesn't fire the outer tune-in handler. */}
+        {compactSentence && compact && compactExpanded && expandParts.length > 0 && (
+          <div
+            className="fdrow__compact-byline"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {expandParts.map((part, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span className="fdrow__compact-byline-sep" aria-hidden="true"> · </span>}
+                <span className="fdrow__compact-byline-part">{part}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
 
         {/* "this set:" expanded block — shows the full station setlist below the
             crossing sentence when the listener clicks "this set".

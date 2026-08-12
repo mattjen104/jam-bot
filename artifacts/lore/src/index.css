@@ -5423,6 +5423,43 @@
 #dial-feed-rows .fdrow__compact-sentence .fdrow__site-link {
   margin-top: 5px;
 }
+/* Right-side group: live marker + expand toggle, baseline-aligned and gap-separated. */
+#dial-feed-rows .fdrow__compact-right {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+/* Expand/collapse toggle button — minimal footprint, same weight as the live label. */
+#dial-feed-rows .fdrow__compact-expand {
+  all: unset;
+  cursor: pointer;
+  font-size: var(--lore-size-small);
+  line-height: 1;
+  color: hsl(var(--dial-fg) / 0.45);
+  padding: 0 2px;
+  border-radius: 2px;
+  transition: color 0.12s;
+}
+#dial-feed-rows .fdrow__compact-expand:hover,
+#dial-feed-rows .fdrow__compact-expand:focus-visible {
+  color: hsl(var(--dial-fg) / 0.8);
+  outline: 1px solid hsl(var(--dial-fg) / 0.25);
+  outline-offset: 2px;
+}
+/* Expanded byline — DJ and show name below the compact artist · station line. */
+#dial-feed-rows .fdrow__compact-byline {
+  margin-top: 3px;
+  font-size: var(--lore-size-interface);
+  color: hsl(var(--dial-fg) / 0.72);
+  line-height: 1.4;
+}
+#dial-feed-rows .fdrow__compact-byline-part {
+  color: hsl(var(--dial-fg) / 0.85);
+}
+#dial-feed-rows .fdrow__compact-byline-sep {
+  color: hsl(var(--dial-fg) / 0.4);
+}
 /* Blended-mode secondary: live DJ/track attribution below the community aggregate count */
 .fdrow__live-secondary {
   font-size: var(--lore-size-interface);
