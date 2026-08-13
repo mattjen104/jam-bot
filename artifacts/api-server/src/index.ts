@@ -99,6 +99,7 @@ import { warmPersonalCrossingsAtBoot } from "./lore/personal-crossings-warm.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
 import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js";
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
+import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
 import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
 
@@ -197,6 +198,7 @@ async function bootLore(): Promise<void> {
     // Hide confirmed dead-end stations before any pollers or lease scheduling
     // starts, so existing rows cannot briefly consume watcher slots at boot.
     await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
+    await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     try {
       await backfillStationTimezones();
     } catch (err) {

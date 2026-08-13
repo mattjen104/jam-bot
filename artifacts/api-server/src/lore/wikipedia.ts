@@ -201,6 +201,19 @@ function getInfoboxField(infobox: string, ...fields: string[]): string {
 const SONG_INFOBOX_RE = /\{\{[Ii]nfobox\s+(song|single|music track)/;
 const ALBUM_INFOBOX_RE = /\{\{[Ii]nfobox\s+album/;
 
+/** Result of an article confirmation check. */
+interface ConfirmResult {
+  /** True when the article is confirmed to be about this track/album. */
+  matched: boolean;
+  /**
+   * True when confirmation came from explicit infobox field extraction
+   * (|artist= AND |name= both present and matching MB metadata).
+   * False when the fallback token-overlap heuristic was used instead.
+   * Only meaningful when `matched` is true.
+   */
+  highConfidence: boolean;
+}
+
 /**
  * Confirm that a Wikipedia article is genuinely about this recording.
  *
@@ -208,36 +221,38 @@ const ALBUM_INFOBOX_RE = /\{\{[Ii]nfobox\s+album/;
  * 1. Reject disambiguation pages and "may refer to" pages.
  * 2. Require a song/single infobox (not album, not artist).
  * 3. Extract |artist= and |name= infobox fields and match against known MB
- *    metadata using normalized token overlap. This is the primary guard.
+ *    metadata using normalized token overlap. This is the primary guard
+ *    and yields highConfidence=true.
  * 4. When infobox fields are absent, fall back to token-overlap heuristic
- *    in the article intro (first 3000 chars).
+ *    in the article intro (first 3000 chars). highConfidence=false.
  */
 function confirmSongArticle(
   wikitext: string,
   artist: string,
   songTitle: string,
-): boolean {
+): ConfirmResult {
   if (
     /\{\{disambiguation/i.test(wikitext) ||
     /may refer to:/i.test(wikitext.slice(0, 500))
   ) {
-    return false;
+    return { matched: false, highConfidence: false };
   }
-  if (!SONG_INFOBOX_RE.test(wikitext)) return false;
+  if (!SONG_INFOBOX_RE.test(wikitext)) return { matched: false, highConfidence: false };
 
   const infobox = extractInfoboxBlock(wikitext, SONG_INFOBOX_RE);
   const ibArtist = getInfoboxField(infobox, "artist", "artists");
   const ibTitle = getInfoboxField(infobox, "name", "song", "title");
 
-  // Primary: explicit infobox field matching against MB metadata
+  // Primary: explicit infobox field matching against MB metadata (high confidence)
   if (ibArtist && ibTitle) {
-    return roughlyMatches(artist, ibArtist) && roughlyMatches(songTitle, ibTitle);
+    const matched = roughlyMatches(artist, ibArtist) && roughlyMatches(songTitle, ibTitle);
+    return { matched, highConfidence: matched };
   }
   if (ibArtist) {
-    if (!roughlyMatches(artist, ibArtist)) return false;
+    if (!roughlyMatches(artist, ibArtist)) return { matched: false, highConfidence: false };
   }
 
-  // Fallback: token-overlap heuristic in intro
+  // Fallback: token-overlap heuristic in intro (low confidence)
   const intro = wikitext.slice(0, 3000).toLowerCase();
   const artistTokens = artist
     .toLowerCase()
@@ -255,7 +270,7 @@ function confirmSongArticle(
     titleTokens.length === 0 ||
     titleTokens.filter((w) => intro.includes(w)).length >=
       Math.ceil(titleTokens.length / 2);
-  return artistHit && titleHit;
+  return { matched: artistHit && titleHit, highConfidence: false };
 }
 
 /**
@@ -263,44 +278,45 @@ function confirmSongArticle(
  *
  * Requires `{{Infobox album}}` and matches |artist= and |name= fields
  * against known MB metadata. Rejects disambiguation pages.
+ * Returns highConfidence=true only when both infobox fields matched.
  */
 function confirmAlbumArticle(
   wikitext: string,
   artist: string,
   albumTitle: string,
-): boolean {
+): ConfirmResult {
   if (
     /\{\{disambiguation/i.test(wikitext) ||
     /may refer to:/i.test(wikitext.slice(0, 500))
   ) {
-    return false;
+    return { matched: false, highConfidence: false };
   }
-  if (!ALBUM_INFOBOX_RE.test(wikitext)) return false;
+  if (!ALBUM_INFOBOX_RE.test(wikitext)) return { matched: false, highConfidence: false };
 
   const infobox = extractInfoboxBlock(wikitext, ALBUM_INFOBOX_RE);
   const ibArtist = getInfoboxField(infobox, "artist", "artists", "artist1");
   const ibTitle = getInfoboxField(infobox, "name", "album", "title");
 
+  // Primary: explicit infobox field matching (high confidence)
   if (ibArtist && ibTitle) {
-    return (
-      roughlyMatches(artist, ibArtist) && roughlyMatches(albumTitle, ibTitle)
-    );
+    const matched = roughlyMatches(artist, ibArtist) && roughlyMatches(albumTitle, ibTitle);
+    return { matched, highConfidence: matched };
   }
   if (ibArtist) {
-    if (!roughlyMatches(artist, ibArtist)) return false;
+    if (!roughlyMatches(artist, ibArtist)) return { matched: false, highConfidence: false };
   }
 
-  // Fallback: title tokens in intro
+  // Fallback: title tokens in intro (low confidence)
   const intro = wikitext.slice(0, 3000).toLowerCase();
   const titleTokens = albumTitle
     .toLowerCase()
     .split(/\s+/)
     .filter((w) => w.length > 3);
-  return (
+  const matched =
     titleTokens.length === 0 ||
     titleTokens.filter((w) => intro.includes(w)).length >=
-      Math.ceil(titleTokens.length / 2)
-  );
+      Math.ceil(titleTokens.length / 2);
+  return { matched, highConfidence: false };
 }
 
 // --------------------------------------------------------------------------
@@ -379,12 +395,13 @@ async function alreadyChecked(
 // Claim insertion helpers
 // --------------------------------------------------------------------------
 
-async function insertDraftClaims(
+async function insertClaims(
   mbid: string,
   scope: "wikipedia" | "wikipedia-album",
   pageData: { title: string },
   sections: MwSection[],
   pageTitle: string,
+  status: "published" | "draft",
 ): Promise<number> {
   let inserted = 0;
   for (const section of sections) {
@@ -403,12 +420,12 @@ async function insertDraftClaims(
           externalId,
           anchorType: "section",
           anchorValue: label,
-          status: "draft",
+          status,
         })
         .onConflictDoNothing();
       inserted++;
     } catch (err) {
-      console.warn("[lore] wikipedia draft insert failed:", externalId, err);
+      console.warn("[lore] wikipedia claim insert failed:", externalId, err);
     }
   }
   return inserted;
@@ -458,7 +475,8 @@ async function runTrackArticlePipeline(
     const pageData = await fetchPageData(candidate.pageid);
     if (!pageData) continue;
     if (pageData.sections.length < 2) continue;
-    if (!confirmSongArticle(pageData.wikitext, artist, title)) continue;
+    const songConfirm = confirmSongArticle(pageData.wikitext, artist, title);
+    if (!songConfirm.matched) continue;
 
     const pageTitle = pageData.title.replace(/ /g, "_");
     const targets = pageData.sections.filter((s) =>
@@ -470,15 +488,17 @@ async function runTrackArticlePipeline(
       return 0;
     }
 
-    const n = await insertDraftClaims(
+    const claimStatus = songConfirm.highConfidence ? "published" : "draft";
+    const n = await insertClaims(
       mbid,
       "wikipedia",
       pageData,
       targets,
       pageTitle,
+      claimStatus,
     );
     console.info(
-      `[lore] wikipedia track "${artist} – ${title}": ${n} draft(s) from "${pageData.title}"`,
+      `[lore] wikipedia track "${artist} – ${title}": ${n} ${claimStatus} claim(s) from "${pageData.title}"`,
     );
     return n;
   }
@@ -517,7 +537,8 @@ async function runAlbumArticlePipeline(
     const pageData = await fetchPageData(candidate.pageid);
     if (!pageData) continue;
     if (pageData.sections.length < 2) continue;
-    if (!confirmAlbumArticle(pageData.wikitext, artist, albumTitle)) continue;
+    const albumConfirm = confirmAlbumArticle(pageData.wikitext, artist, albumTitle);
+    if (!albumConfirm.matched) continue;
 
     const pageTitle = pageData.title.replace(/ /g, "_");
     const targets = pageData.sections.filter((s) =>
@@ -529,15 +550,17 @@ async function runAlbumArticlePipeline(
       return 0;
     }
 
-    const n = await insertDraftClaims(
+    const claimStatus = albumConfirm.highConfidence ? "published" : "draft";
+    const n = await insertClaims(
       mbid,
       "wikipedia-album",
       pageData,
       targets,
       pageTitle,
+      claimStatus,
     );
     console.info(
-      `[lore] wikipedia album "${artist} – ${albumTitle}": ${n} draft(s) from "${pageData.title}"`,
+      `[lore] wikipedia album "${artist} – ${albumTitle}": ${n} ${claimStatus} claim(s) from "${pageData.title}"`,
     );
     return n;
   }
