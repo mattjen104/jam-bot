@@ -126,3 +126,4 @@
 - [Background recompute pool saturation](crossings-recompute-pool-saturation.md) — per-user heavy computes need a global execution concurrency cap; healthz-ok + health-hang = pg Pool exhausted, not server down.
 - [Matt's starter library config](matt-starter-library-config.md) — needs MATT_LIBRARY_SOURCE_USER_ID env var or it silently reports unavailable (fails closed, no error anywhere).
 - [Book-backed knowledge conventions](book-knowledge-conventions.md) — "book" claims: "Title — Author" em-dash label split in 3 places, paraphrase-only guard, no-link ⇒ draft demotion, deterministic book:{slug}:{i} ids.
+- [Lore device-identity fork](lore-device-identity-fork.md) — "empty Stack/library" usually = forked lore_sid cookie session, not a query bug; diagnose via last_seen_at vs row ownership, fix by device_key swap.
