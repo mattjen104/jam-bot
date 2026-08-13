@@ -84,12 +84,23 @@ export function metacriticSlug(s: string): string {
 }
 
 /**
+ * Strip a leading definite/indefinite article ("The ", "A ", "An ") from an
+ * artist name, case-insensitively. Metacritic commonly indexes artists by
+ * surname/core name — e.g. "The Smashing Pumpkins" → "Smashing Pumpkins".
+ */
+export function stripLeadingArticle(s: string): string {
+  return s.replace(/^(?:the|an?)\s+/i, "");
+}
+
+/**
  * Build candidate Metacritic album page URLs to try in order.
  * Metacritic has used several URL conventions; we try the most common forms.
  *
- *   Pattern A: /music/{album-slug}/     (older, artist-less URL)
- *   Pattern B: /music/{album-slug}/{artist-slug}/  (newer)
- *   Pattern C: /music/{artist-slug}-{album-slug}/  (alternate slug form)
+ *   Pattern A: /music/{album-slug}/                      (older, artist-less URL)
+ *   Pattern B: /music/{album-slug}/{artist-slug}/        (newer, with full artist slug)
+ *   Pattern B′: /music/{album-slug}/{article-stripped}/  (Metacritic drops leading "The"/"A"/"An")
+ *   Pattern C: /music/{artist-slug}-{album-slug}/        (alternate slug form)
+ *   Pattern C′: /music/{article-stripped}-{album-slug}/  (article-stripped alternate)
  */
 export function metacriticCandidateUrls(
   artist: string,
@@ -97,11 +108,30 @@ export function metacriticCandidateUrls(
 ): string[] {
   const albumSlug = metacriticSlug(albumTitle);
   const artistSlug = metacriticSlug(artist);
-  return [
+  const artistSlugNoArticle = metacriticSlug(stripLeadingArticle(artist));
+
+  const urls: string[] = [
+    // Pattern A — artist-less (older Metacritic pages)
     `${METACRITIC_HOME}/music/${albumSlug}/`,
+    // Pattern B — newer form with full artist slug
     `${METACRITIC_HOME}/music/${albumSlug}/${artistSlug}/`,
-    `${METACRITIC_HOME}/music/${artistSlug}-${albumSlug}/`,
   ];
+
+  // Pattern B′ — article-stripped artist slug (e.g. "smashing-pumpkins" instead of
+  // "the-smashing-pumpkins"). Only add when it differs from the full slug.
+  if (artistSlugNoArticle !== artistSlug) {
+    urls.push(`${METACRITIC_HOME}/music/${albumSlug}/${artistSlugNoArticle}/`);
+  }
+
+  // Pattern C — artist-prefixed slug form
+  urls.push(`${METACRITIC_HOME}/music/${artistSlug}-${albumSlug}/`);
+
+  // Pattern C′ — article-stripped artist-prefixed form
+  if (artistSlugNoArticle !== artistSlug) {
+    urls.push(`${METACRITIC_HOME}/music/${artistSlugNoArticle}-${albumSlug}/`);
+  }
+
+  return urls;
 }
 
 // ---------------------------------------------------------------------------
