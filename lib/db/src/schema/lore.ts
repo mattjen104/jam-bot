@@ -81,6 +81,14 @@ export const recordingsTable = pgTable("recordings", {
    * re-fetched forever. Null means never attempted.
    */
   isrcCheckedAt: timestamp("isrc_checked_at"),
+  /**
+   * When a release-year lookup was last attempted for this recording. Set on
+   * every attempt that received a definitive answer from MusicBrainz — whether
+   * a year was found or MusicBrainz genuinely had none. NOT set on 5xx/network
+   * errors so transient failures are retried on the next backfill tick. Null
+   * means never attempted and is the backfill job's target set.
+   */
+  yearCheckedAt: timestamp("year_checked_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

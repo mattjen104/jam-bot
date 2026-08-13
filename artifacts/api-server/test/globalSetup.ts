@@ -80,6 +80,13 @@ export async function setup(): Promise<void> {
       "../src/lore/era-genre-stations-migration.js"
     );
     await applyEraGenreStationsMigration();
+
+    // Ensures year_checked_at column exists — required by any test that
+    // inserts into recordingsTable after the schema added this column.
+    const { applyReleaseYearMigration } = await import(
+      "../src/lore/release-year-migration.js"
+    );
+    await applyReleaseYearMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

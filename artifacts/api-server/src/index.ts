@@ -99,6 +99,8 @@ import { warmPersonalCrossingsAtBoot } from "./lore/personal-crossings-warm.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
 import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js";
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
+import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
+import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
 
 const rawPort = process.env["PORT"];
 
@@ -186,6 +188,7 @@ async function bootLore(): Promise<void> {
     // predicates. Runs unconditionally (not ledger-once) because its UPDATE
     // must also catch stations discovered after the first run. Both steps
     // are idempotent.
+    await runMigration("applyReleaseYearMigration", applyReleaseYearMigration);
     await runMigration("applySleepStationsMigration", applySleepStationsMigration);
     // Classify era-themed / single-genre stations into the hidden era/genre
     // browse mode. Runs AFTER sleep classification so sleep_mode rows are
@@ -244,6 +247,7 @@ async function bootLore(): Promise<void> {
     startRadioBrowserWorker();
     startGenreBackfillJob();
     startIsrcEnrichmentJob();
+    startReleaseYearBackfillJob();
     startHomepageScraper();
     await runMigration("applyDonateCheckerMigration", applyDonateCheckerMigration);
     startDonateChecker();

@@ -233,6 +233,16 @@ export interface IsolatedMbResolver {
    * retried forever).
    */
   fetchIsrcByMbid(mbid: string, signal?: AbortSignal): Promise<string | null>;
+  /**
+   * Fetch the first-release year for a real MusicBrainz recording id via
+   * `/recording/{mbid}?inc=genres`. Returns the year as a number, or null
+   * when MusicBrainz has no dated release for this recording.
+   *
+   * Unlike the soft-error helpers above, this throws on a MusicBrainz 5xx so
+   * callers can distinguish a transient server error (503 — don't write the
+   * "checked" sentinel) from a genuine "no data" null (do write it).
+   */
+  fetchReleaseYear(mbid: string, signal?: AbortSignal): Promise<number | null>;
 }
 
 export function createMbResolver(): IsolatedMbResolver {
@@ -300,6 +310,40 @@ export function createMbResolver(): IsolatedMbResolver {
         return parseRecordingIsrcs(body);
       } catch {
         return null;
+      }
+    },
+
+    async fetchReleaseYear(mbid: string, signal?: AbortSignal): Promise<number | null> {
+      if (!musicbrainzEnabled() || !mbid.trim()) return null;
+      // 4xx errors (404 MBID not in MB, 400 malformed) are permanent client
+      // failures — return null so the caller writes the "checked" sentinel and
+      // never retries this recording.  5xx / network errors are transient and
+      // re-thrown so the caller leaves the sentinel unset and retries later.
+      try {
+        const body = await isolatedFetch(
+          `/recording/${encodeURIComponent(mbid.trim())}?inc=genres&fmt=json`,
+          signal,
+        );
+        return parseRecordingGenreYear(body).year;
+      } catch (err) {
+        const msg = String(err);
+        // mbFetchOnChain throws `Error: MusicBrainz <status> for ...`
+        // Only well-known permanent client errors are treated as a definitive
+        // no-year result — any retryable code (429 rate-limit, 5xx, network,
+        // timeout) re-throws so the caller leaves yearCheckedAt unset.
+        //   400 — malformed/invalid MBID (will never resolve)
+        //   404 — MBID not in MusicBrainz (will never resolve)
+        //   410 — gone (removed from MusicBrainz)
+        // Everything else (429, 408, 425, 5xx, …) is treated as transient.
+        const statusMatch = msg.match(/MusicBrainz (\d{3})/);
+        const status = statusMatch ? Number(statusMatch[1]) : 0;
+        if (status === 400 || status === 404 || status === 410) {
+          // Permanent client error — treat as a definitive no-year result.
+          return null;
+        }
+        // 429 (rate-limit), 5xx, network failure, timeout — re-throw so the
+        // backfill leaves yearCheckedAt unset and retries on the next tick.
+        throw err;
       }
     },
   };
