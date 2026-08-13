@@ -164,6 +164,42 @@
 
 /* .frb__cite removed — provenance is fully expressed in the sentence */
 
+/* ── Compact identity — mirrors fdrow__compact-* from index.css but scoped
+   to .frb__sentence so the styles reach FirstRunSidebar rows, which render
+   outside #dial-feed-rows. Token names use --foreground / --muted-foreground
+   (the app palette) instead of --dial-fg (which is dial-local). ── */
+.frb__sentence .fdrow__compact-identity {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.frb__sentence .fdrow__compact-lead {
+  display: inline;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.frb__sentence .fdrow__compact-separator {
+  color: hsl(var(--muted-foreground) / 0.55);
+  padding: 0 0.4em;
+}
+
+/* Crossing artists / current artist — full foreground weight, bold. */
+.frb__sentence .fdrow__compact-crossing-artist {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+/* Station is the secondary entity — lighter weight. */
+.frb__sentence .fdrow__compact-station {
+  color: hsl(var(--muted-foreground) / 0.75);
+}
+
 /* ── More-stations reveal button ── */
 .frb__more-stations {
   display: block;

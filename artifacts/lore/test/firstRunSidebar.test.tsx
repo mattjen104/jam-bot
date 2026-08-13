@@ -29,6 +29,7 @@ function makeStation(overrides: {
   name: string;
   isLive?: boolean;
   djName?: string | null;
+  showName?: string | null;
   /** Override the inferred isPickerShow flag. Defaults to !!djName. */
   isPickerShow?: boolean;
   automationClass?: "automated" | "human" | null;
@@ -41,6 +42,7 @@ function makeStation(overrides: {
     name,
     isLive = true,
     djName = null,
+    showName = "Test Show",
     isPickerShow: isPickerShowOverride,
     automationClass = null,
     spins = [],
@@ -84,7 +86,7 @@ function makeStation(overrides: {
       ? [
           {
             runId: 1,
-            showName: "Test Show",
+            showName,
             djName: djName ?? null,
             djNames: djName ? [djName] : undefined,
             pickerId: djName ? 1 : null,
@@ -422,7 +424,7 @@ describe("FirstRunSidebar", () => {
     expect(container.querySelectorAll(".z1-placeholder__seedchip")).toHaveLength(0);
   });
 
-  it("renders provenance as inert text — the retired station workspace is unreachable", () => {
+  it("renders compact station identity as inert text — the retired station workspace is unreachable", () => {
     const onTune = vi.fn();
     const ds = makeStation({ slug: "wfmu", name: "WFMU", djName: "DJ Test" });
     const { container } = render(
@@ -435,10 +437,10 @@ describe("FirstRunSidebar", () => {
 
     // No "Open … sets" control exists anywhere — the workspace is retired.
     expect(within(container).queryByRole("button", { name: /open .* sets/i })).toBeNull();
-    // The provenance line still renders, but as plain text, not a button.
-    const provenance = container.querySelector(".frb__provenance");
-    expect(provenance).toBeTruthy();
-    expect(provenance!.tagName).not.toBe("BUTTON");
+    // The compact station identity still renders as plain text, not a button.
+    const station = container.querySelector(".fdrow__compact-station");
+    expect(station).toBeTruthy();
+    expect(station!.tagName).not.toBe("BUTTON");
   });
 
   it("keeps artist saving separate from station tuning for click, Enter, and Space", () => {
@@ -463,8 +465,7 @@ describe("FirstRunSidebar", () => {
     expect(onTune).not.toHaveBeenCalled();
   });
 
-  it("shows the station name and current artist for a rung-2 live shift row", () => {
-    // The cite byline was removed — provenance is expressed in the sentence.
+  it("shows the compact station identity and attribution for a rung-2 live shift row", () => {
     const ds = makeStation({
       slug: "dublab",
       name: "Dublab",
@@ -474,10 +475,32 @@ describe("FirstRunSidebar", () => {
     const { container } = render(
       <FirstRunSidebar stations={[ds]} seeds={[]} onAddSeed={noop} onTune={noop} />,
     );
-    expect(container.textContent).toContain("Dublab");
-    expect(container.textContent).toContain("Laraaji");
-    // No cite line — only the sentence remains
-    expect(container.querySelector(".frb__cite")).toBeNull();
+    const identity = container.querySelector(".fdrow__compact-identity");
+    expect(identity?.querySelector(".fdrow__compact-crossing-artist")?.textContent).toBe("Laraaji");
+    expect(identity?.querySelector(".fdrow__compact-separator")?.textContent).toBe("·");
+    expect(identity?.querySelector(".fdrow__compact-station")?.textContent).toBe("Dublab");
+    expect(container.querySelector(".fdrow__live-secondary")?.textContent).toBe("Test Show");
+  });
+
+  it("renders Unknown show rows as compact artist · station identities", () => {
+    const ds = makeStation({
+      slug: "chilled-out",
+      name: "181.FM - Chilled Out (USA) 128k mp3",
+      showName: "Unknown show",
+      spins: [{ artist: "Jadu Heart", artistMbid: "artist-jadu-heart" }],
+    });
+    const { container } = render(
+      <FirstRunSidebar stations={[ds]} seeds={[]} onAddSeed={noop} onTune={noop} />,
+    );
+    const identity = container.querySelector(".fdrow__compact-identity");
+    expect(identity?.querySelector(".fdrow__compact-crossing-artist")?.textContent).toBe("Jadu Heart");
+    expect(identity?.querySelector(".fdrow__compact-separator")?.textContent).toBe("·");
+    expect(identity?.querySelector(".fdrow__compact-station")?.textContent)
+      .toBe("181.FM - Chilled Out (USA) 128k mp3");
+    expect(container.querySelector(".fdrow__live-secondary")).toBeNull();
+    expect(container.textContent).not.toContain("Unknown show");
+    expect(container.textContent).not.toContain("|");
+    expect(container.textContent).not.toContain("is playing");
   });
 
   it("reveals more stations button only when blocks exceed cap", () => {

@@ -183,7 +183,7 @@ function ArtistList({
 }
 
 // ---------------------------------------------------------------------------
-// Station block — sentence + citation
+// Station block — compact identity + attribution
 // ---------------------------------------------------------------------------
 
 function StationBlock({
@@ -197,10 +197,16 @@ function StationBlock({
   onKeep: (name: string) => void;
   onTune: (slug: string) => void;
 }) {
-  const provenance = [block.pickerName, block.showName, block.name]
-    .filter((value): value is string => !!value?.trim())
-    .filter((value, index, all) =>
-      all.findIndex((other) => other.localeCompare(value, undefined, { sensitivity: "accent" }) === 0) === index);
+  const rawShow = block.showName?.trim() ?? "";
+  const cleanShow = rawShow
+    && rawShow.toLowerCase() !== "unknown show"
+    && rawShow.toLowerCase() !== "continuous"
+    && rawShow.localeCompare(block.name, undefined, { sensitivity: "accent" }) !== 0
+    && rawShow.localeCompare(block.pickerName?.trim() ?? "", undefined, { sensitivity: "accent" }) !== 0
+    ? rawShow
+    : null;
+  const pickerName = block.pickerName?.trim() || null;
+  const attribution = pickerName ?? cleanShow;
   const currentArtist = block.currentArtist;
 
   return (
@@ -214,17 +220,24 @@ function StationBlock({
         aria-label={`Tune ${block.name}`}
         onClick={() => onTune(block.slug)}
       />
-      <p className="frb__sentence">
-        {/* Provenance is inert text: the station workspace is retired — the
-            row's tune target is the only station-level interaction, and the
-            pinned dial sentence carries the set once tuned. */}
-        <span className="frb__provenance frb__station-name">
-          {provenance.join(" | ")}
+      <div className="frb__sentence">
+        <span className="fdrow__compact-identity">
+          <span className="fdrow__compact-lead">
+            {currentArtist && (
+              <>
+                <b className="fdrow__compact-crossing-artist">
+                  <ArtistList artists={[currentArtist]} seedKeys={seedKeys} onKeep={onKeep} />
+                </b>
+                <span className="fdrow__compact-separator" aria-hidden="true">·</span>
+              </>
+            )}
+            <span className="fdrow__compact-station">{block.name}</span>
+          </span>
         </span>
-        {currentArtist ? (
-          <> is playing <ArtistList artists={[currentArtist]} seedKeys={seedKeys} onKeep={onKeep} />.</>
-        ) : " is on air."}
-      </p>
+        {attribution && (
+          <div className="fdrow__live-secondary">{attribution}</div>
+        )}
+      </div>
     </div>
   );
 }
