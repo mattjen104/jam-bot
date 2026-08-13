@@ -276,6 +276,56 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
     expect(mockDbUpdate).not.toHaveBeenCalled();
   });
 
+  it("DOES call db.update with yearCheckedAt (but no releaseYear) when MB returns null (genuine no-date)", async () => {
+    const { backfillReleaseYearBatch } = await import(
+      "../src/lore/release-year-backfill.js"
+    );
+
+    const mockSet = vi.fn().mockReturnValue({ where: () => Promise.resolve() });
+    mockDbUpdate.mockReturnValue({ set: mockSet });
+
+    mockDbSelect
+      // First select: one row to process
+      .mockReturnValueOnce({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: () => Promise.resolve([{ mbid: "test-ryh-nodate-unit" }]),
+            }),
+          }),
+        }),
+      })
+      // Second select: remaining count — must still run after the null case
+      .mockReturnValueOnce({
+        from: () => ({
+          where: () => Promise.resolve([{ count: 5 }]),
+        }),
+      });
+
+    // Genuine MB "no date" — not an error, resolver resolved with null.
+    mockFetchReleaseYear.mockResolvedValueOnce(null);
+
+    const result = await backfillReleaseYearBatch(10);
+
+    // Sentinel must be stamped — db.update called once.
+    expect(mockDbUpdate).toHaveBeenCalledTimes(1);
+
+    const setPayload = mockSet.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+    expect(setPayload).toBeDefined();
+
+    // yearCheckedAt MUST be set so the row is never re-queried.
+    expect(setPayload).toHaveProperty("yearCheckedAt");
+
+    // releaseYear must NOT be present — MB confirmed there is no date.
+    expect(setPayload).not.toHaveProperty("releaseYear");
+
+    // found counter stays 0 because no year was discovered.
+    expect(result.found).toBe(0);
+
+    // The remaining-count query must have run — result.remaining reflects it.
+    expect(result.remaining).toBe(5);
+  });
+
   it("DOES call db.update when MB resolver returns a definitive year", async () => {
     const { backfillReleaseYearBatch } = await import(
       "../src/lore/release-year-backfill.js"
