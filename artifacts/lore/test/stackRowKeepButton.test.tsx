@@ -87,14 +87,14 @@ function makeGroup(items: LibraryItem[]): AlbumGroup {
   };
 }
 
-function renderRow(group: AlbumGroup) {
+function renderRow(group: AlbumGroup, opts: { isOpen?: boolean; onToggle?: () => void } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <StackRow
         group={group}
-        isOpen={true}
-        onToggle={vi.fn()}
+        isOpen={opts.isOpen ?? true}
+        onToggle={opts.onToggle ?? vi.fn()}
       />
     </QueryClientProvider>,
   );
@@ -181,16 +181,19 @@ describe("TrackSubRow keep button", () => {
 });
 
 describe("StackRow header (feed-parallel)", () => {
-  it("shows artist · album in the collapsed header", () => {
+  it("shows album · artist in the collapsed header (album-first grammar)", () => {
     const item = makeItem({ provenance: { kind: "keep", stationName: "KEXP" } });
     renderRow(makeGroup([item]));
 
     const albumRow = screen.getByTestId("stack-album-row");
-    // New format: "artist · album" — no byline, no keep count.
-    expect(albumRow.textContent).toContain("Test Artist");
+    // New format: "album · artist" — album name first, no byline, no keep count.
     expect(albumRow.textContent).toContain("Test Album");
-    expect(albumRow.textContent).not.toContain("kept on KEXP");
-    expect(albumRow.textContent).not.toContain("imported from spotify");
+    expect(albumRow.textContent).toContain("Test Artist");
+    // Album name should appear before artist name in the text content.
+    const text = albumRow.textContent ?? "";
+    expect(text.indexOf("Test Album")).toBeLessThan(text.indexOf("Test Artist"));
+    expect(text).not.toContain("kept on KEXP");
+    expect(text).not.toContain("imported from spotify");
   });
 
   it("shows the station name in the track sub-row secondary slot (not the header)", () => {
@@ -211,5 +214,93 @@ describe("StackRow header (feed-parallel)", () => {
     // Album header should NOT contain the verbose "imported from spotify" byline.
     const albumRow = screen.getByTestId("stack-album-row");
     expect(albumRow.textContent).not.toContain("imported from spotify");
+  });
+
+  it("collapsed header text is exactly `album · artist` plus the chevron", () => {
+    const item = makeItem();
+    renderRow(makeGroup([item]), { isOpen: false });
+
+    const header = screen.getByTestId("stack-album-header");
+    // Full text: identity line + closed chevron. No counts, no markers.
+    expect(header.textContent).toBe("Test Album·Test Artist▾");
+  });
+
+  it("shows only the album when the artist is missing (no dangling separator)", () => {
+    const item = makeItem();
+    const group = { ...makeGroup([item]), artist: "" };
+    renderRow(group, { isOpen: false });
+
+    const header = screen.getByTestId("stack-album-header");
+    expect(header.textContent).toBe("Test Album▾");
+  });
+
+  it("shows only the artist when the album title is missing (no dangling separator)", () => {
+    const item = makeItem();
+    const group = { ...makeGroup([item]), albumTitle: "" };
+    renderRow(group, { isOpen: false });
+
+    const header = screen.getByTestId("stack-album-header");
+    expect(header.textContent).toBe("Test Artist▾");
+  });
+
+  it("falls back to 'Unknown album' when both album and artist are missing", () => {
+    const item = makeItem();
+    const group = { ...makeGroup([item]), albumTitle: "", artist: "" };
+    renderRow(group, { isOpen: false });
+
+    const header = screen.getByTestId("stack-album-header");
+    expect(header.textContent).toBe("Unknown album▾");
+  });
+});
+
+describe("StackRow collapsed affordances & expansion", () => {
+  it("hides track rows and footer actions while collapsed; chevron is the only affordance", () => {
+    const item = makeItem();
+    renderRow(makeGroup([item]), { isOpen: false });
+
+    expect(screen.queryByTestId("stack-album-expanded")).toBeNull();
+    expect(screen.queryByTestId("stack-track-row")).toBeNull();
+    expect(screen.queryByTestId("stack-launch-btn")).toBeNull();
+    expect(screen.queryByTestId("stack-investigate-btn")).toBeNull();
+    // No collapsed investigation marker or keep-count chip remains.
+    expect(screen.getByTestId("stack-album-header").textContent).not.toContain("✳");
+    // Collapsed state is announced accessibly.
+    expect(screen.getByTestId("stack-album-header").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("reveals track rows and footer actions when open", () => {
+    const item = makeItem();
+    renderRow(makeGroup([item]), { isOpen: true });
+
+    expect(screen.getByTestId("stack-album-expanded")).toBeTruthy();
+    expect(screen.getAllByTestId("stack-track-row").length).toBe(1);
+    expect(screen.getByTestId("stack-launch-btn")).toBeTruthy();
+    expect(screen.getByTestId("stack-investigate-btn")).toBeTruthy();
+    expect(screen.getByTestId("stack-album-header").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("calls onToggle on click", () => {
+    const onToggle = vi.fn();
+    renderRow(makeGroup([makeItem()]), { isOpen: false, onToggle });
+
+    fireEvent.click(screen.getByTestId("stack-album-header"));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onToggle on Enter and Space keydown (keyboard expansion)", () => {
+    const onToggle = vi.fn();
+    renderRow(makeGroup([makeItem()]), { isOpen: false, onToggle });
+
+    const header = screen.getByTestId("stack-album-header");
+    expect(header.getAttribute("role")).toBe("button");
+    expect(header.getAttribute("tabindex")).toBe("0");
+
+    fireEvent.keyDown(header, { key: "Enter" });
+    fireEvent.keyDown(header, { key: " " });
+    expect(onToggle).toHaveBeenCalledTimes(2);
+
+    // Other keys do nothing.
+    fireEvent.keyDown(header, { key: "Escape" });
+    expect(onToggle).toHaveBeenCalledTimes(2);
   });
 });

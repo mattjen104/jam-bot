@@ -184,10 +184,44 @@ afterEach(() => {
 // Lens rendering
 // ---------------------------------------------------------------------------
 
-describe("Lens tabs are always rendered", () => {
-  it("renders Stack (default) plus the four named lenses", async () => {
+describe("Lens tabs are only rendered in non-default views", () => {
+  it("does NOT render lens pills in the default Stack view (album-first full-screen list)", async () => {
+    // The default Stack surface strips all dashboard chrome including lens controls.
+    mockUseSearch.mockReturnValue("");
     await renderLibrary();
-    // "Stack" is the default — its testid uses the fallback "timeline" key.
+    expect(screen.queryByTestId("library-lens-timeline")).toBeNull();
+    expect(screen.queryByTestId("library-lens-recent")).toBeNull();
+    expect(screen.queryByTestId("library-lens-artists")).toBeNull();
+    expect(screen.queryByTestId("library-lens-lore")).toBeNull();
+    expect(screen.queryByTestId("library-lens-matching")).toBeNull();
+  });
+
+  it("strips all dashboard chrome in the default Stack view (full-screen list)", async () => {
+    mockUseSearch.mockReturnValue("");
+    const { container } = await renderLibrary();
+    // Hero / stat cards
+    expect(container.querySelector(".lib-hero")).toBeNull();
+    // Week card and avatar picker
+    expect(screen.queryByTestId("your-week-card")).toBeNull();
+    expect(container.querySelector(".album-avatar-picker")).toBeNull();
+    // Sort + group-filter bars
+    expect(screen.queryByTestId("library-sort-controls")).toBeNull();
+    expect(screen.queryByTestId("library-group-filter-bar")).toBeNull();
+    // Grouped partial-load notice
+    expect(screen.queryByTestId("library-grouped-partial-notice")).toBeNull();
+  });
+
+  it("keeps essential operational entry points in the default Stack view", async () => {
+    mockUseSearch.mockReturnValue("");
+    await renderLibrary();
+    // Import (Add music) access must survive the chrome removal.
+    expect(screen.getByTestId("library-import-open")).toBeTruthy();
+  });
+
+  it("renders all lens pills when a non-default lens is active (e.g. lens=recent)", async () => {
+    mockUseSearch.mockReturnValue("lens=recent");
+    await renderLibrary();
+    // When not in the default Stack, all lens options are shown.
     expect(screen.getByTestId("library-lens-timeline")).toBeTruthy();
     expect(screen.getByTestId("library-lens-recent")).toBeTruthy();
     expect(screen.getByTestId("library-lens-artists")).toBeTruthy();
@@ -203,7 +237,10 @@ describe("Lens tabs are always rendered", () => {
 // ---------------------------------------------------------------------------
 
 describe("Selecting a lens updates the URL", () => {
+  // Lens pills are only rendered when a non-default (non-Stack) lens is active.
+  // Start from lens=artists (a non-track-list lens that always renders all pills).
   it("clicking 'Recent keeps' calls setLocation with ?lens=recent", async () => {
+    mockUseSearch.mockReturnValue("lens=artists");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-lens-recent"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
@@ -212,6 +249,7 @@ describe("Selecting a lens updates the URL", () => {
   });
 
   it("clicking 'Needs matching' calls setLocation with ?lens=matching", async () => {
+    mockUseSearch.mockReturnValue("lens=artists");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-lens-matching"));
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
@@ -220,6 +258,7 @@ describe("Selecting a lens updates the URL", () => {
   });
 
   it("clicking 'From Lore' calls setLocation with ?lens=lore", async () => {
+    mockUseSearch.mockReturnValue("lens=artists");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-lens-lore"));
     const [url] = mockSetLocation.mock.calls[0] as [string];
@@ -236,7 +275,7 @@ describe("Selecting a lens updates the URL", () => {
   });
 
   it("'Timeline' navigates to the bare path when the only param was lens", async () => {
-    mockUseSearch.mockReturnValue("lens=albums");
+    mockUseSearch.mockReturnValue("lens=artists");
     await renderLibrary();
     fireEvent.click(screen.getByTestId("library-lens-timeline"));
     const [url] = mockSetLocation.mock.calls[0] as [string];

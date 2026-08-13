@@ -27,9 +27,24 @@ station is secondary context; centered pipe made the eye hunt mid-row.
 the same grammar: `primary · secondary  [right-edge metadata]`, byline below on
 expand. Album leads in the Stack; artist leads in the Feed.
 
+## Landed (Stack full-screen slice)
+- Default `/library` (no `?lens=` param) is a chrome-free full-height album
+  list: no hero/stats, week card, avatar picker, lens pills, sort bar, group
+  filter, tier headers, sync/export section, or footer. Collapsed row grammar
+  is `album · artist` (album leads), single value with no dangling dot when
+  one is missing, "Unknown album" when both absent; chevron is the ONLY
+  collapsed affordance (no keep counts / ✳ markers).
+- Non-default lenses (`?lens=recent|artists|…`) still render the full
+  dashboard chrome. **Any test (unit or e2e) that needs hero stats, sync bar,
+  reconnect prompt, lens/sort controls, or ledger-adjacent dashboard cards
+  must mount with a lens param** (e.g. `?lens=recent`) — mounting bare
+  `/library` silently renders none of that chrome and the test times out.
+- Exception kept in Stack: the transient ledger consent prompt and the
+  Add-music entry (`library-import-open`, now in the Stack top bar) — these
+  are operational flows, not dashboard chrome.
+
 ## Still separate tasks (do not duplicate in spike task)
 - Expand-then-keep Feed row behavior + byline (own task)
-- Album-first Stack surface (own task)
 - Album Investigation / entity sheets + route collapse (own tasks)
 
 ## Test/e2e touchpoints when changing row grammar or nav labels

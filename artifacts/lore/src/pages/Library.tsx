@@ -1059,6 +1059,10 @@ export default function Library() {
     lens === "artists" ? "artist" :
     (lens === "recent" || lens === "lore" || lens === "matching" || lens === "critic") ? "track" :
     "album"; // default (lens="") and lens="albums"
+  // True when the default full-screen Stack is the active surface.
+  // Other lenses (artists, recent, lore, matching, critic) use the
+  // dashboard shell; only the plain album Stack strips it.
+  const isStackView = viewMode === "album";
 
   // appConfig retained for other consumers in this file
   useAppConfig();
@@ -1381,19 +1385,8 @@ export default function Library() {
   }
   const groupFilterQ = groupFilter.trim().toLowerCase();
 
-  const filteredAlbumGroups = useMemo(() => {
-    if (!groupFilterQ) return albumGroups;
-    return albumGroups.filter((g) =>
-      g.albumTitle.toLowerCase().includes(groupFilterQ) ||
-      g.artist.toLowerCase().includes(groupFilterQ) ||
-      g.items.some(
-        (item) =>
-          (item.recording?.title ?? "").toLowerCase().includes(groupFilterQ) ||
-          (item.recording?.artist ?? "").toLowerCase().includes(groupFilterQ),
-      ),
-    );
-  }, [albumGroups, groupFilterQ]);
-
+  // Note: the album (Stack) view is a chrome-free full-screen list with no
+  // inline group filter, so only artist groups are filterable now.
   const filteredArtistGroups = useMemo(() => {
     if (!groupFilterQ) return artistGroups;
     return artistGroups.filter((g) =>
@@ -1467,12 +1460,25 @@ export default function Library() {
       <div className="dial-topbar">
         <span className="dial-topbar__wordmark">Lore</span>
         <span className="dial-topbar__title dial-topbar__title--active">Stack</span>
-        {(libraryTotal ?? keptItems.length) > 0 && (
+        {isStackView ? (
+          /* Stack view: compact import button replaces the track-count chip */
+          <button
+            type="button"
+            onClick={openImportModal}
+            className="dial-topbar__sort-chip"
+            style={{ cursor: "pointer", border: "none", background: "none" }}
+            aria-label="Add music"
+            data-testid="library-import-open"
+          >
+            <Music2 style={{ display: "inline", width: 10, height: 10, marginRight: 3, verticalAlign: "middle" }} />
+            Add music
+          </button>
+        ) : (libraryTotal ?? keptItems.length) > 0 ? (
           <span className="dial-topbar__sort-chip">
             {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
             {(libraryTotal ?? keptItems.length).toLocaleString()}
           </span>
-        )}
+        ) : null}
         <button
           type="button"
           className="dial-topbar__search"
@@ -1482,7 +1488,7 @@ export default function Library() {
           <Search size={14} />
         </button>
       </div>
-      <AlbumAvatarPicker showCurrent />
+      {!isStackView && <AlbumAvatarPicker showCurrent />}
 
       {/* Import banner — shown while import is running and for 60s after done */}
       {showImportBanner && jobData && (
@@ -1618,90 +1624,91 @@ export default function Library() {
       {/* Body */}
       <div className="dial-body">
 
-        {/* ── Hero ── */}
-        <div className="lib-hero">
-          <div className="lib-hero__kicker">◆ Your library</div>
-          <div className="lib-hero__headline">
-            <b>{(libraryTotal ?? keptItems.length).toLocaleString()} tracks</b>
-            {keepCount > 0 && `, ${keepCount} of them found on air`}
-          </div>
-          <div className="lib-hero__stats">
-            {keepCount > 0 && (
-              <button
-                type="button"
-                className={`lib-hero__stat${lens === "recent" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
-                style={{ cursor: "pointer", border: "none" }}
-                onClick={() => setLens(lens === "recent" ? "" : "recent")}
-                title="Filter to tracks saved from radio"
-              >
-                <b>{keepCount}</b> kept from radio
-              </button>
-            )}
-            {jobData?.status === "done" && sourceFilter !== "keep" && importStats != null && importStats.total > 0 && (
-              // importStats is always scoped to source=import, so these numbers
-              // are stable regardless of the active sourceFilter.  jobData is
-              // only used to gate visibility (an import has run); the counts
-              // come from the live library so retry-pass resolutions show up.
-              <span className="lib-hero__stat">
-                <b>{(importStats.total - importStats.softCount).toLocaleString()}</b> of {importStats.total.toLocaleString()} from Spotify matched
-              </span>
-            )}
-            {(() => {
-              // Use the live soft-row count from the library response (page 1).
-              // The import-job totals are frozen at import time; retry passes
-              // resolve more tracks later and would leave the button showing a
-              // stale non-zero number while the list is actually empty.
-              const liveSoftCount = keptData?.pages[0]?.softCount;
-              const showSoftBtn = liveSoftCount != null
-                ? liveSoftCount > 0
-                : (jobData?.status === "done" && jobData.total > jobData.resolved);
-              const softLabel = liveSoftCount != null
-                ? liveSoftCount.toLocaleString()
-                : (jobData ? jobData.total - jobData.resolved : 0).toLocaleString();
-              return showSoftBtn && sourceFilter !== "keep" ? (
+        {/* ── Hero ── (non-Stack lenses only) */}
+        {!isStackView && (
+          <div className="lib-hero">
+            <div className="lib-hero__kicker">◆ Your library</div>
+            <div className="lib-hero__headline">
+              <b>{(libraryTotal ?? keptItems.length).toLocaleString()} tracks</b>
+              {keepCount > 0 && `, ${keepCount} of them found on air`}
+            </div>
+            <div className="lib-hero__stats">
+              {keepCount > 0 && (
                 <button
                   type="button"
-                  className={`lib-hero__stat${lens === "matching" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                  className={`lib-hero__stat${lens === "recent" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
                   style={{ cursor: "pointer", border: "none" }}
-                  onClick={() => setLens(lens === "matching" ? "" : "matching")}
-                  title="Filter to tracks Spotify has but MusicBrainz doesn't"
+                  onClick={() => setLens(lens === "recent" ? "" : "recent")}
+                  title="Filter to tracks saved from radio"
                 >
-                  {softLabel} not in MusicBrainz
+                  <b>{keepCount}</b> kept from radio
                 </button>
-              ) : null;
-            })()}
-            {criticCount > 0 && (
+              )}
+              {jobData?.status === "done" && sourceFilter !== "keep" && importStats != null && importStats.total > 0 && (
+                // importStats is always scoped to source=import, so these numbers
+                // are stable regardless of the active sourceFilter.  jobData is
+                // only used to gate visibility (an import has run); the counts
+                // come from the live library so retry-pass resolutions show up.
+                <span className="lib-hero__stat">
+                  <b>{(importStats.total - importStats.softCount).toLocaleString()}</b> of {importStats.total.toLocaleString()} from Spotify matched
+                </span>
+              )}
+              {(() => {
+                // Use the live soft-row count from the library response (page 1).
+                // The import-job totals are frozen at import time; retry passes
+                // resolve more tracks later and would leave the button showing a
+                // stale non-zero number while the list is actually empty.
+                const liveSoftCount = keptData?.pages[0]?.softCount;
+                const showSoftBtn = liveSoftCount != null
+                  ? liveSoftCount > 0
+                  : (jobData?.status === "done" && jobData.total > jobData.resolved);
+                const softLabel = liveSoftCount != null
+                  ? liveSoftCount.toLocaleString()
+                  : (jobData ? jobData.total - jobData.resolved : 0).toLocaleString();
+                return showSoftBtn && sourceFilter !== "keep" ? (
+                  <button
+                    type="button"
+                    className={`lib-hero__stat${lens === "matching" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                    style={{ cursor: "pointer", border: "none" }}
+                    onClick={() => setLens(lens === "matching" ? "" : "matching")}
+                    title="Filter to tracks Spotify has but MusicBrainz doesn't"
+                  >
+                    {softLabel} not in MusicBrainz
+                  </button>
+                ) : null;
+              })()}
+              {criticCount > 0 && (
+                <button
+                  type="button"
+                  className={`lib-hero__stat${lens === "critic" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                  style={{ cursor: "pointer", border: "none" }}
+                  onClick={() => setLens(lens === "critic" ? "" : "critic")}
+                  title="Filter to tracks from critically listed albums"
+                >
+                  <b>{criticCount}</b> critics' pick{criticCount === 1 ? "" : "s"}
+                </button>
+              )}
+              {selectorCount > 0 && (
+                <Link href="/selectors" className="lib-hero__stat lib-hero__stat--warm">
+                  <b>{selectorCount}</b> selector{selectorCount === 1 ? "" : "s"} fed it
+                </Link>
+              )}
+              {/* Import action — always visible so returning users can add more music */}
               <button
                 type="button"
-                className={`lib-hero__stat${lens === "critic" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                onClick={openImportModal}
+                className="lib-hero__stat lib-hero__stat--warm"
                 style={{ cursor: "pointer", border: "none" }}
-                onClick={() => setLens(lens === "critic" ? "" : "critic")}
-                title="Filter to tracks from critically listed albums"
               >
-                <b>{criticCount}</b> critics' pick{criticCount === 1 ? "" : "s"}
+                <Music2 style={{ width: 10, height: 10 }} />
+                Add music
               </button>
-            )}
-            {selectorCount > 0 && (
-              <Link href="/selectors" className="lib-hero__stat lib-hero__stat--warm">
-                <b>{selectorCount}</b> selector{selectorCount === 1 ? "" : "s"} fed it
-              </Link>
-            )}
-            {/* Import action — always visible so returning users can add more music */}
-            <button
-              type="button"
-              onClick={openImportModal}
-              className="lib-hero__stat lib-hero__stat--warm"
-              style={{ cursor: "pointer", border: "none" }}
-              data-testid="library-import-open"
-            >
-              <Music2 style={{ width: 10, height: 10 }} />
-              Add music
-            </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* ── Your Week ── */}
-        <YourWeekCard />
+        {/* ── Your Week ── (non-Stack lenses only) */}
+        {!isStackView && <YourWeekCard />}
 
         {/* ── Live strip (stub — wired when /me/library/live endpoint ships) ── */}
         {/* TODO: replace false with liveItems.length > 0 */}
@@ -1714,8 +1721,8 @@ export default function Library() {
           </a>
         )}
 
-        {/* ── Reconnect prompt (has library, lost Spotify) ── */}
-        {showReconnectPrompt && (
+        {/* ── Reconnect prompt (has library, lost Spotify) — non-Stack only ── */}
+        {!isStackView && showReconnectPrompt && (
           <div
             style={{ padding: "14px 15px", borderBottom: "1px solid hsl(var(--border))" }}
             data-testid="library-reconnect-prompt"
@@ -1743,7 +1750,7 @@ export default function Library() {
           </div>
         )}
 
-        {/* ── Ledger consent ── */}
+        {/* ── Ledger consent ── (transient consent prompt; kept in Stack too) */}
         {ledgerPromptVisible && !ledgerEnabled && (
           <div
             style={{ borderBottom: "1px solid hsl(var(--border))", padding: "12px 15px", background: "hsl(var(--card))" }}
@@ -1796,99 +1803,35 @@ export default function Library() {
           </div>
         )}
 
-        {/* ── Lenses ── */}
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            padding: "10px 15px",
-            borderBottom: "1px solid hsl(var(--border) / 0.5)",
-            flexWrap: "wrap",
-          }}
-          data-testid="library-lenses"
-        >
-          {(
-            [
-              { value: "" as const, label: "Stack" },
-              { value: "artists" as const, label: "Artists" },
-              { value: "recent" as const, label: "Recent keeps" },
-              { value: "lore" as const, label: "From Lore" },
-              { value: "matching" as const, label: "Needs matching" },
-              ...(criticsCovItems.length > 0
-                ? [{ value: "critic" as const, label: "Critics' picks" }]
-                : []),
-            ] as const
-          ).map(({ value, label }) => (
-            <button
-              key={value || "timeline"}
-              type="button"
-              onClick={() => setLens(value)}
+        {/* ── Lenses + Sort + Filter controls (non-Stack lenses only) ── */}
+        {!isStackView && (
+          <>
+            <div
               style={{
-                fontFamily: "var(--app-font-display)",
-                fontSize: 10,
-                fontWeight: 400,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                padding: "4px 10px",
-                borderRadius: 3,
-                border: lens === value
-                  ? "1px solid hsl(var(--library))"
-                  : "1px solid hsl(var(--border))",
-                background: lens === value
-                  ? "hsl(var(--library) / 0.12)"
-                  : "transparent",
-                color: lens === value
-                  ? "hsl(var(--library))"
-                  : "hsl(var(--dim))",
-                cursor: "pointer",
-                transition: "color 0.15s, border-color 0.15s, background 0.15s",
+                display: "flex",
+                gap: 6,
+                padding: "10px 15px",
+                borderBottom: "1px solid hsl(var(--border) / 0.5)",
+                flexWrap: "wrap",
               }}
-              data-testid={`library-lens-${value || "timeline"}`}
+              data-testid="library-lenses"
             >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Sort + View controls ── */}
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            padding: "8px 15px",
-            borderBottom: "1px solid hsl(var(--border) / 0.5)",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-          data-testid="library-sort-controls"
-        >
-          {/* Sort buttons — hidden in grouped views (grouping implies its own order) */}
-          {viewMode === "track" && (
-            <>
-              <span
-                style={{
-                  fontFamily: "var(--app-font-display)",
-                  fontSize: 10,
-                  fontWeight: 400,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  color: "hsl(var(--dim))",
-                  marginRight: 2,
-                }}
-              >
-                Sort
-              </span>
               {(
                 [
-                  { value: "added" as const, label: "Added" },
-                  { value: "artist" as const, label: "Artist" },
-                  { value: "title" as const, label: "Title" },
+                  { value: "" as const, label: "Stack" },
+                  { value: "artists" as const, label: "Artists" },
+                  { value: "recent" as const, label: "Recent keeps" },
+                  { value: "lore" as const, label: "From Lore" },
+                  { value: "matching" as const, label: "Needs matching" },
+                  ...(criticsCovItems.length > 0
+                    ? [{ value: "critic" as const, label: "Critics' picks" }]
+                    : []),
                 ] as const
               ).map(({ value, label }) => (
                 <button
-                  key={value}
+                  key={value || "timeline"}
                   type="button"
-                  onClick={() => setSortFilter(value)}
+                  onClick={() => setLens(value)}
                   style={{
                     fontFamily: "var(--app-font-display)",
                     fontSize: 10,
@@ -1897,143 +1840,207 @@ export default function Library() {
                     letterSpacing: "0.07em",
                     padding: "4px 10px",
                     borderRadius: 3,
-                    border: sortFilter === value
+                    border: lens === value
                       ? "1px solid hsl(var(--library))"
                       : "1px solid hsl(var(--border))",
-                    background: sortFilter === value
+                    background: lens === value
                       ? "hsl(var(--library) / 0.12)"
                       : "transparent",
-                    color: sortFilter === value
+                    color: lens === value
                       ? "hsl(var(--library))"
                       : "hsl(var(--dim))",
                     cursor: "pointer",
                     transition: "color 0.15s, border-color 0.15s, background 0.15s",
                   }}
-                  data-testid={`library-sort-${value}`}
+                  data-testid={`library-lens-${value || "timeline"}`}
                 >
                   {label}
                 </button>
               ))}
-            </>
-          )}
-        </div>
+            </div>
 
-        {/* ── Inline group filter (album / artist views) ── */}
-        {(viewMode === "album" || viewMode === "artist") && !libLoading && keptItems.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 15px",
-              borderBottom: "1px solid hsl(var(--border) / 0.5)",
-            }}
-            data-testid="library-group-filter-bar"
-          >
-            <Search style={{ width: 11, height: 11, color: "hsl(var(--faint))", flexShrink: 0 }} aria-hidden="true" />
-            <input
-              type="search"
-              value={groupFilter}
-              onChange={(e) => setGroupFilter(e.target.value)}
-              placeholder={viewMode === "album" ? "Filter albums…" : "Filter artists…"}
+            {/* ── Sort + View controls ── */}
+            <div
               style={{
-                flex: 1,
-                background: "none",
-                border: "none",
-                outline: "none",
-                fontFamily: "var(--app-font-mono)",
-                fontSize: 13,
-                color: "hsl(var(--foreground))",
+                display: "flex",
+                gap: 6,
+                padding: "8px 15px",
+                borderBottom: "1px solid hsl(var(--border) / 0.5)",
+                alignItems: "center",
+                flexWrap: "wrap",
               }}
-              aria-label={viewMode === "album" ? "Filter albums" : "Filter artists"}
-              data-testid="library-group-filter"
-            />
-            {groupFilter && (
-              <button
-                type="button"
-                onClick={() => setGroupFilter("")}
-                aria-label="Clear filter"
+              data-testid="library-sort-controls"
+            >
+              {/* Sort buttons — hidden in grouped views (grouping implies its own order) */}
+              {viewMode === "track" && (
+                <>
+                  <span
+                    style={{
+                      fontFamily: "var(--app-font-display)",
+                      fontSize: 10,
+                      fontWeight: 400,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.07em",
+                      color: "hsl(var(--dim))",
+                      marginRight: 2,
+                    }}
+                  >
+                    Sort
+                  </span>
+                  {(
+                    [
+                      { value: "added" as const, label: "Added" },
+                      { value: "artist" as const, label: "Artist" },
+                      { value: "title" as const, label: "Title" },
+                    ] as const
+                  ).map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setSortFilter(value)}
+                      style={{
+                        fontFamily: "var(--app-font-display)",
+                        fontSize: 10,
+                        fontWeight: 400,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
+                        padding: "4px 10px",
+                        borderRadius: 3,
+                        border: sortFilter === value
+                          ? "1px solid hsl(var(--library))"
+                          : "1px solid hsl(var(--border))",
+                        background: sortFilter === value
+                          ? "hsl(var(--library) / 0.12)"
+                          : "transparent",
+                        color: sortFilter === value
+                          ? "hsl(var(--library))"
+                          : "hsl(var(--dim))",
+                        cursor: "pointer",
+                        transition: "color 0.15s, border-color 0.15s, background 0.15s",
+                      }}
+                      data-testid={`library-sort-${value}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+
+            {/* ── Inline group filter (artist view) ── */}
+            {viewMode === "artist" && !libLoading && keptItems.length > 0 && (
+              <div
                 style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
                   display: "flex",
-                  color: "hsl(var(--faint))",
-                  flexShrink: 0,
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "7px 15px",
+                  borderBottom: "1px solid hsl(var(--border) / 0.5)",
+                }}
+                data-testid="library-group-filter-bar"
+              >
+                <Search style={{ width: 11, height: 11, color: "hsl(var(--faint))", flexShrink: 0 }} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={groupFilter}
+                  onChange={(e) => setGroupFilter(e.target.value)}
+                  placeholder="Filter artists…"
+                  style={{
+                    flex: 1,
+                    background: "none",
+                    border: "none",
+                    outline: "none",
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 13,
+                    color: "hsl(var(--foreground))",
+                  }}
+                  aria-label="Filter artists"
+                  data-testid="library-group-filter"
+                />
+                {groupFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setGroupFilter("")}
+                    aria-label="Clear filter"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                      display: "flex",
+                      color: "hsl(var(--faint))",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <X style={{ width: 11, height: 11 }} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ── Kept tracks section header ── */}
+            <TierHd
+              label={
+                lens === "recent"
+                  ? "Recent keeps"
+                  : lens === "lore"
+                  ? "From Lore"
+                  : lens === "matching"
+                  ? "Needs matching"
+                  : lens === "critic"
+                  ? "Critics' picks"
+                  : lens === "artists"
+                  ? "Artists"
+                  : "Stack"
+              }
+              count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
+              hint={
+                viewMode === "artist"
+                  ? groupFilterQ
+                    ? `${filteredArtistGroups.length} of ${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
+                    : `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
+                  : sortFilter === "artist"
+                  ? "A → Z by artist"
+                  : sortFilter === "title"
+                  ? "A → Z by title"
+                  : "most recent first"
+              }
+            />
+
+            {/* ── Grouped-view partial-load notice (artist view) ── */}
+            {viewMode === "artist" && hasNextPage && (
+              <div
+                data-testid="library-grouped-partial-notice"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 15px",
+                  borderBottom: "1px solid hsl(var(--border) / 0.5)",
+                  background: "hsl(var(--secondary) / 0.4)",
                 }}
               >
-                <X style={{ width: 11, height: 11 }} />
-              </button>
+                <Loader2
+                  style={{
+                    width: 9,
+                    height: 9,
+                    flexShrink: 0,
+                    color: "hsl(var(--faint))",
+                    animation: "lore-eq 1s linear infinite",
+                  }}
+                />
+                <span
+                  style={{
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 10,
+                    color: "hsl(var(--faint))",
+                  }}
+                >
+                  Groups based on loaded tracks — scroll to load more
+                </span>
+              </div>
             )}
-          </div>
-        )}
-
-        {/* ── Kept tracks ── */}
-        <TierHd
-          label={
-            lens === "recent"
-              ? "Recent keeps"
-              : lens === "lore"
-              ? "From Lore"
-              : lens === "matching"
-              ? "Needs matching"
-              : lens === "critic"
-              ? "Critics' picks"
-              : lens === "artists"
-              ? "Artists"
-              : "Stack"
-          }
-          count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
-          hint={
-            viewMode === "album"
-              ? groupFilterQ
-                ? `${filteredAlbumGroups.length} of ${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
-                : `${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
-              : viewMode === "artist"
-              ? groupFilterQ
-                ? `${filteredArtistGroups.length} of ${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
-                : `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
-              : sortFilter === "artist"
-              ? "A → Z by artist"
-              : sortFilter === "title"
-              ? "A → Z by title"
-              : "most recent first"
-          }
-        />
-
-        {/* ── Grouped-view partial-load notice ── */}
-        {(viewMode === "album" || viewMode === "artist") && hasNextPage && (
-          <div
-            data-testid="library-grouped-partial-notice"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 15px",
-              borderBottom: "1px solid hsl(var(--border) / 0.5)",
-              background: "hsl(var(--secondary) / 0.4)",
-            }}
-          >
-            <Loader2
-              style={{
-                width: 9,
-                height: 9,
-                flexShrink: 0,
-                color: "hsl(var(--faint))",
-                animation: "lore-eq 1s linear infinite",
-              }}
-            />
-            <span
-              style={{
-                fontFamily: "var(--app-font-mono)",
-                fontSize: 10,
-                color: "hsl(var(--faint))",
-              }}
-            >
-              Groups based on loaded tracks — scroll to load more
-            </span>
-          </div>
+          </>
         )}
 
         {libLoading ? (
@@ -2051,36 +2058,22 @@ export default function Library() {
             ))}
           </div>
         ) : (viewMode === "album" && albumGroups.length > 0) ? (
+          /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */
           <>
             <div data-testid="library-album-view">
-              {filteredAlbumGroups.length > 0 ? (
-                filteredAlbumGroups.map((group) => (
-                  <StackRow
-                    key={group.key}
-                    group={group}
-                    hasInvestigation={group.items.some(
-                      (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
-                    )}
-                    isOpen={groupFilterQ ? true : openAlbumKey === group.key}
-                    onToggle={() =>
-                      setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
-                    }
-                  />
-                ))
-              ) : (
-                <div
-                  style={{
-                    padding: "20px 15px",
-                    textAlign: "center",
-                    fontFamily: "var(--app-font-mono)",
-                    fontSize: 13,
-                    color: "hsl(var(--faint))",
-                  }}
-                  data-testid="library-group-filter-empty"
-                >
-                  No albums match <em>"{groupFilter.trim()}"</em>
-                </div>
-              )}
+              {albumGroups.map((group) => (
+                <StackRow
+                  key={group.key}
+                  group={group}
+                  hasInvestigation={group.items.some(
+                    (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
+                  )}
+                  isOpen={openAlbumKey === group.key}
+                  onToggle={() =>
+                    setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
+                  }
+                />
+              ))}
             </div>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
             {isFetchingNextPage && (
@@ -2088,23 +2081,6 @@ export default function Library() {
                 <Loader2
                   style={{ width: 16, height: 16, animation: "lore-eq 1s linear infinite", color: "hsl(var(--muted-foreground))" }}
                 />
-              </div>
-            )}
-            {!hasNextPage && keptItems.length > 0 && (
-              <div
-                style={{
-                  padding: "14px 0",
-                  textAlign: "center",
-                  fontFamily: "var(--app-font-mono)",
-                  fontSize: 12,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  color: "hsl(var(--faint))",
-                }}
-              >
-                {groupFilterQ
-                  ? `${filteredAlbumGroups.length} of ${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
-                  : `${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"} · ${keptItems.length} track${keptItems.length === 1 ? "" : "s"}`}
               </div>
             )}
           </>
@@ -2349,8 +2325,8 @@ export default function Library() {
         )}
 
 
-        {/* ── In critics' lists ── */}
-        {criticsCovItems.length > 0 && (
+        {/* ── In critics' lists (non-Stack only) ── */}
+        {!isStackView && criticsCovItems.length > 0 && (
           <>
             <div
               role="button"
@@ -2462,179 +2438,183 @@ export default function Library() {
           </>
         )}
 
-        {/* ── Sync & export receipts ── */}
-        <TierHd label="Sync & export" hint="receipts, not content" />
-
-        {/* Sync receipt rows (unavailable / search-matched) */}
-        {syncReceiptOpen && unavailableItems.length > 0 && syncJobData && (
+        {/* ── Sync & export receipts (non-Stack only) ── */}
+        {!isStackView && (
           <>
-            <TierHd
-              label="Not on Spotify"
-              count={syncJobData.results?.unavailable ?? unavailableItems.length}
-            />
-            {unavailableItems.map((item) => (
-              <UnavailableRow key={item.mbid} item={item} />
-            ))}
-            {(syncJobData.results?.unavailable ?? 0) > 200 && (
-              <div style={{ padding: "8px 15px" }}>
-                <a
-                  href={`/api/me/library/sync/${syncJobData.jobId}/unavailable?format=csv`}
-                  download
-                  style={{
-                    fontFamily: "var(--app-font-mono)",
-                    fontSize: 10,
-                    color: "hsl(var(--library))",
-                    textDecoration: "none",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.07em",
-                  }}
-                  data-testid="library-sync-unavailable-download"
-                >
-                  Download all ({syncJobData.results?.unavailable}) ↓
-                </a>
-              </div>
+            <TierHd label="Sync & export" hint="receipts, not content" />
+
+            {/* Sync receipt rows (unavailable / search-matched) */}
+            {syncReceiptOpen && unavailableItems.length > 0 && syncJobData && (
+              <>
+                <TierHd
+                  label="Not on Spotify"
+                  count={syncJobData.results?.unavailable ?? unavailableItems.length}
+                />
+                {unavailableItems.map((item) => (
+                  <UnavailableRow key={item.mbid} item={item} />
+                ))}
+                {(syncJobData.results?.unavailable ?? 0) > 200 && (
+                  <div style={{ padding: "8px 15px" }}>
+                    <a
+                      href={`/api/me/library/sync/${syncJobData.jobId}/unavailable?format=csv`}
+                      download
+                      style={{
+                        fontFamily: "var(--app-font-mono)",
+                        fontSize: 10,
+                        color: "hsl(var(--library))",
+                        textDecoration: "none",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
+                      }}
+                      data-testid="library-sync-unavailable-download"
+                    >
+                      Download all ({syncJobData.results?.unavailable}) ↓
+                    </a>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-        {syncReceiptOpen && searchMatchedItems.length > 0 && syncJobData && (
-          <>
-            <TierHd
-              label="Matched by search"
-              count={syncJobData.results?.searchMatched ?? searchMatchedItems.length}
-            />
-            {searchMatchedItems.map((item) => (
-              <SearchMatchedRow key={item.mbid} item={item} />
-            ))}
-          </>
-        )}
+            {syncReceiptOpen && searchMatchedItems.length > 0 && syncJobData && (
+              <>
+                <TierHd
+                  label="Matched by search"
+                  count={syncJobData.results?.searchMatched ?? searchMatchedItems.length}
+                />
+                {searchMatchedItems.map((item) => (
+                  <SearchMatchedRow key={item.mbid} item={item} />
+                ))}
+              </>
+            )}
 
-        {/* Sync to Spotify */}
-        {isAuthenticated && hasSpotify && (
-          <SyncBar
-            syncJobData={syncJobData}
-            syncBusy={syncBusy}
-            isSyncActive={isSyncActive}
-            syncError={syncError}
-            syncNeedsReconnect={syncNeedsReconnect}
-            syncReceiptOpen={syncReceiptOpen}
-            reconnectBusy={reconnectBusy}
-            onSync={() => void handleSync()}
-            onReconnect={() => void handleReconnect()}
-            onToggleReceipt={() => setSyncReceiptOpen((v) => !v)}
-          />
-        )}
+            {/* Sync to Spotify */}
+            {isAuthenticated && hasSpotify && (
+              <SyncBar
+                syncJobData={syncJobData}
+                syncBusy={syncBusy}
+                isSyncActive={isSyncActive}
+                syncError={syncError}
+                syncNeedsReconnect={syncNeedsReconnect}
+                syncReceiptOpen={syncReceiptOpen}
+                reconnectBusy={reconnectBusy}
+                onSync={() => void handleSync()}
+                onReconnect={() => void handleReconnect()}
+                onToggleReceipt={() => setSyncReceiptOpen((v) => !v)}
+              />
+            )}
 
-        {/* Export */}
-        <div style={{ padding: "10px 15px" }} data-testid="library-export">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {(["csv", "json", "m3u8", "txt"] as const).map((fmt) => (
-              <a
-                key={fmt}
-                href={`/api/me/library/export?format=${fmt}`}
-                download
-                className="dial-ctabtn"
-                style={{ textDecoration: "none" }}
-                data-testid={`library-export-${fmt}`}
+            {/* Export */}
+            <div style={{ padding: "10px 15px" }} data-testid="library-export">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {(["csv", "json", "m3u8", "txt"] as const).map((fmt) => (
+                  <a
+                    key={fmt}
+                    href={`/api/me/library/export?format=${fmt}`}
+                    download
+                    className="dial-ctabtn"
+                    style={{ textDecoration: "none" }}
+                    data-testid={`library-export-${fmt}`}
+                  >
+                    {fmt === "m3u8" ? "M3U8" : fmt.toUpperCase()}
+                  </a>
+                ))}
+                <Link
+                  href="/sets"
+                  className="dial-ctabtn"
+                  style={{ textDecoration: "none" }}
+                  data-testid="library-imported-sets-link"
+                >
+                  Imported Sets
+                </Link>
+              </div>
+              <div
+                style={{ marginTop: 12, borderTop: "1px solid hsl(var(--border) / 0.5)", paddingTop: 10 }}
+                data-testid="library-import-file"
               >
-                {fmt === "m3u8" ? "M3U8" : fmt.toUpperCase()}
-              </a>
-            ))}
-            <Link
-              href="/sets"
-              className="dial-ctabtn"
-              style={{ textDecoration: "none" }}
-              data-testid="library-imported-sets-link"
-            >
-              Imported Sets
-            </Link>
-          </div>
-          <div
-            style={{ marginTop: 12, borderTop: "1px solid hsl(var(--border) / 0.5)", paddingTop: 10 }}
-            data-testid="library-import-file"
-          >
+                <div
+                  style={{
+                    fontFamily: "var(--app-font-display)",
+                    fontSize: 10,
+                    fontWeight: 400,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: "hsl(var(--dim))",
+                    marginBottom: 6,
+                  }}
+                >
+                  Bring it back
+                </div>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  style={{ display: "none" }}
+                  data-testid="library-import-file-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleImportFile(file);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={importingFile}
+                  onClick={() => importFileRef.current?.click()}
+                  className="dial-ctabtn"
+                  data-testid="library-import-file-button"
+                >
+                  {importingFile ? "Importing…" : "Import JSON file"}
+                </button>
+                {fileImportError && (
+                  <p
+                    style={{
+                      marginTop: 6,
+                      fontFamily: "var(--app-font-mono)",
+                      fontSize: 12,
+                      color: "hsl(var(--destructive))",
+                    }}
+                    data-testid="library-import-file-error"
+                  >
+                    {fileImportError}
+                  </p>
+                )}
+                {fileImportSummary && (
+                  <p
+                    style={{ marginTop: 6, fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--dim))" }}
+                    data-testid="library-import-file-summary"
+                  >
+                    Imported {fileImportSummary.imported} · skipped {fileImportSummary.skipped} · rejected {fileImportSummary.rejected}
+                  </p>
+                )}
+                <p style={{ marginTop: 8, fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--faint))" }}>
+                  To move to another streaming service, use{" "}
+                  <a href="https://soundiiz.com" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
+                    Soundiiz
+                  </a>{" "}
+                  or{" "}
+                  <a href="https://www.tunemymusic.com" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
+                    TuneMyMusic
+                  </a>
+                  .
+                </p>
+              </div>
+            </div>
+
+            {/* Footer note */}
             <div
               style={{
-                fontFamily: "var(--app-font-display)",
-                fontSize: 10,
-                fontWeight: 400,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: "hsl(var(--dim))",
-                marginBottom: 6,
+                padding: "14px 15px",
+                borderTop: "1px solid hsl(var(--border) / 0.4)",
+                marginTop: 8,
               }}
             >
-              Bring it back
+              <p style={{ fontFamily: "var(--app-font-reading)", fontStyle: "normal", fontSize: 14, color: "hsl(var(--faint))", lineHeight: 1.6 }}>
+                <b style={{ fontStyle: "normal", fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>One song is enough.</b>{" "}
+                A keep is an entry point, not a collectible. Where Lore doesn't know who picked
+                something, it says less rather than guessing.
+              </p>
             </div>
-            <input
-              ref={importFileRef}
-              type="file"
-              accept="application/json,.json"
-              style={{ display: "none" }}
-              data-testid="library-import-file-input"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleImportFile(file);
-                e.target.value = "";
-              }}
-            />
-            <button
-              type="button"
-              disabled={importingFile}
-              onClick={() => importFileRef.current?.click()}
-              className="dial-ctabtn"
-              data-testid="library-import-file-button"
-            >
-              {importingFile ? "Importing…" : "Import JSON file"}
-            </button>
-            {fileImportError && (
-              <p
-                style={{
-                  marginTop: 6,
-                  fontFamily: "var(--app-font-mono)",
-                  fontSize: 12,
-                  color: "hsl(var(--destructive))",
-                }}
-                data-testid="library-import-file-error"
-              >
-                {fileImportError}
-              </p>
-            )}
-            {fileImportSummary && (
-              <p
-                style={{ marginTop: 6, fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--dim))" }}
-                data-testid="library-import-file-summary"
-              >
-                Imported {fileImportSummary.imported} · skipped {fileImportSummary.skipped} · rejected {fileImportSummary.rejected}
-              </p>
-            )}
-            <p style={{ marginTop: 8, fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--faint))" }}>
-              To move to another streaming service, use{" "}
-              <a href="https://soundiiz.com" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
-                Soundiiz
-              </a>{" "}
-              or{" "}
-              <a href="https://www.tunemymusic.com" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
-                TuneMyMusic
-              </a>
-              .
-            </p>
-          </div>
-        </div>
-
-        {/* Footer note */}
-        <div
-          style={{
-            padding: "14px 15px",
-            borderTop: "1px solid hsl(var(--border) / 0.4)",
-            marginTop: 8,
-          }}
-        >
-          <p style={{ fontFamily: "var(--app-font-reading)", fontStyle: "normal", fontSize: 14, color: "hsl(var(--faint))", lineHeight: 1.6 }}>
-            <b style={{ fontStyle: "normal", fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>One song is enough.</b>{" "}
-            A keep is an entry point, not a collectible. Where Lore doesn't know who picked
-            something, it says less rather than guessing.
-          </p>
-        </div>
+          </>
+        )}
 
         <div style={{ height: 60 }} />
       </div>

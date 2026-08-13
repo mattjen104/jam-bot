@@ -161,11 +161,12 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
   const [investigationOpen, setInvestigationOpen] = useState(false);
   const { launch, busy, canLaunch } = useLaunchAlbum(group);
 
-  // Feed-parallel header: "artist · album" — same dot grammar as FrontDoorRow.
-  // When only one of the two is available show that one alone.
-  const artistDisplay = group.artist ?? "";
-  const albumDisplay = group.albumTitle || group.artist || "Unknown album";
-  const hasArtistLead = artistDisplay !== "" && group.albumTitle != null && group.albumTitle !== "";
+  // Stack identity is album-first. When only one value is available, show it
+  // without a dangling separator.
+  const albumDisplay = group.albumTitle || "";
+  const artistDisplay = group.artist || "";
+  const identityParts = [albumDisplay, artistDisplay].filter(Boolean);
+  const identity = identityParts.length > 0 ? identityParts : ["Unknown album"];
 
   return (
     <>
@@ -173,10 +174,16 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
       <div data-testid="stack-album-row">
         {/* Collapsed header */}
         <div
+          data-testid="stack-album-header"
           role="button"
           tabIndex={0}
           onClick={onToggle}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onToggle(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggle();
+            }
+          }}
           aria-expanded={isOpen}
           style={{
             display: "flex",
@@ -192,7 +199,7 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
             userSelect: "none",
           }}
         >
-          {/* Single-line feed-parallel identity: artist · album */}
+            {/* Single-line Stack identity: album · artist */}
           <div
             style={{
               flex: 1,
@@ -205,46 +212,16 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
               whiteSpace: "nowrap",
             }}
           >
-            {/* Artist lead */}
-            {hasArtistLead && (
-              <span>{artistDisplay}</span>
-            )}
-
-            {/* ✳ coverage marker — only when investigation sources are indexed */}
-            {hasInvestigation && (
-              <button
-                type="button"
-                title="Album investigation sources available"
-                aria-label="Open album investigation"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setInvestigationOpen(true);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontFamily: "var(--app-font-mono)",
-                  fontSize: 11,
-                  color: "hsl(var(--library))",
-                  padding: "0 2px",
-                  verticalAlign: "super",
-                  lineHeight: 1,
-                }}
-              >
-                ✳
-              </button>
-            )}
-
-            {/* · separator before album */}
-            {hasArtistLead && (
-              <span style={{ color: "hsl(var(--faint))", margin: "0 5px" }}>·</span>
-            )}
-
-            {/* Album title (secondary, dimmed) */}
-            <span style={{ color: hasArtistLead ? "hsl(var(--dim))" : "hsl(var(--foreground))" }}>
-              {albumDisplay}
-            </span>
+            {identity.map((part, index) => (
+              <span key={`${part}-${index}`}>
+                {index > 0 && (
+                  <span style={{ color: "hsl(var(--faint))", margin: "0 5px" }}>·</span>
+                )}
+                <span style={{ color: index === 0 ? "hsl(var(--foreground))" : "hsl(var(--dim))" }}>
+                  {part}
+                </span>
+              </span>
+            ))}
           </div>
 
           {/* Chevron indicator */}

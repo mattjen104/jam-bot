@@ -27,7 +27,11 @@ vi.mock("wouter", () => ({
     <a href={href}>{children}</a>
   ),
   useLocation: vi.fn(() => ["/library", vi.fn()]),
-  useSearch: vi.fn(() => ""),
+  // The hero (and its matched-count stat) only renders on non-Stack lenses —
+  // the default album Stack is a chrome-free full-screen list. Mount on the
+  // "artists" lens (full mixed feed, so sourceFilter !== "keep") so the hero
+  // and the import stat are present for these assertions.
+  useSearch: vi.fn(() => "lens=artists"),
 }));
 
 vi.mock("../src/player/PlayerProvider", async (importOriginal) => {

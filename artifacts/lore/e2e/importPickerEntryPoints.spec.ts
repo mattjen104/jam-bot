@@ -195,8 +195,10 @@ test.describe("import picker entry point: reconnect prompt", () => {
   }) => {
     // showReconnectPrompt = isAuthenticated && !hasSpotify && !isEmpty
     // → connections empty (no Spotify) + library has items
+    // The reconnect prompt only renders on non-Stack lenses (the default
+    // album Stack is chrome-free), so mount with ?lens=recent.
     await installRoutes(page, { library: LIBRARY_WITH_ITEMS });
-    await page.goto("/lore/library");
+    await page.goto("/lore/library?lens=recent");
 
     const prompt = page.getByTestId("library-reconnect-prompt");
     await expect(prompt).toBeVisible({ timeout: 15_000 });
