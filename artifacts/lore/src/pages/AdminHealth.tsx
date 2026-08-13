@@ -149,6 +149,7 @@ function HealthPanel({
   const [feedFreshness, setFeedFreshness] = useState<FeedFreshnessResponse | null>(null);
   const [spiWeb, setSpiWeb] = useState<SpinitronWebResponse | null>(null);
   const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
+  const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -159,12 +160,14 @@ function HealthPanel({
     async (opts?: { silent?: boolean }) => {
       if (!opts?.silent) setRefreshing(true);
       setLoadError(null);
-      try {
-        const headers = { "x-admin-token": token };
-        const [ffRes, swRes, ryRes] = await Promise.all([
+
+      const headers = { "x-admin-token": token };
+
+      // ── Feed-freshness + Spinitron-web (shared error path) ──────────────
+      const corePromise = (async () => {
+        const [ffRes, swRes] = await Promise.all([
           fetch("/api/admin/feed-freshness-health", { headers }),
           fetch("/api/admin/spinitron-web-health", { headers }),
-          fetch("/api/admin/release-year-health", { headers }),
         ]);
 
         if (!ffRes.ok || !swRes.ok) {
@@ -181,14 +184,46 @@ function HealthPanel({
 
         setFeedFreshness(ff);
         setSpiWeb(sw);
+      })().catch((err: unknown) => {
+        setLoadError(err instanceof Error ? err.message : "Failed to load health data");
+      });
+
+      // ── Release-year health (independent: never poisons the core sections) ─
+      const ryPromise = (async () => {
+        let ryRes: Response;
+        try {
+          ryRes = await fetch("/api/admin/release-year-health", { headers });
+        } catch (err) {
+          // Network-level failure (no response at all).
+          setRyError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setRyHealth(null);
+          return;
+        }
 
         if (ryRes.ok) {
           setRyHealth((await ryRes.json()) as ReleaseYearHealth);
+          setRyError(null);
+        } else {
+          const body = (await ryRes.json().catch(() => ({}))) as { error?: string };
+          const isAuth = ryRes.status === 401;
+          setRyError({
+            kind: isAuth ? "auth" : "server",
+            message:
+              body.error ??
+              (isAuth
+                ? "check your admin token"
+                : "unable to load release year counts"),
+          });
+          setRyHealth(null);
         }
+      })();
 
+      try {
+        await Promise.all([corePromise, ryPromise]);
         setLastRefreshed(new Date());
-      } catch (err) {
-        setLoadError(err instanceof Error ? err.message : "Failed to load health data");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -319,6 +354,9 @@ function HealthPanel({
         {/* Release year enrichment health */}
         {!loading && !loadError && ryHealth !== null && (
           <ReleaseYearHealthSection health={ryHealth} token={token} onRunComplete={() => void fetchAll({ silent: true })} />
+        )}
+        {!loading && !loadError && ryError !== null && (
+          <ReleaseYearErrorBanner kind={ryError.kind} message={ryError.message} />
         )}
 
         {/* Healthy sub-sections when one is OK but not both */}
@@ -493,6 +531,42 @@ function DataRow({ label, value }: { label: string; value: string }) {
 }
 
 // ─── Release year enrichment health ───────────────────────────────────────
+
+function ReleaseYearErrorBanner({
+  kind,
+  message,
+}: {
+  kind: "auth" | "server";
+  message: string;
+}) {
+  return (
+    <section className="mt-10">
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-500">
+          <Tag className="h-4 w-4" />
+        </span>
+        <h2 className="font-normal text-foreground">Release year enrichment</h2>
+      </div>
+      <div
+        className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4"
+        role="alert"
+        data-testid="ry-error-banner"
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="text-base font-normal text-destructive">
+              {kind === "auth"
+                ? "Authentication error — could not load release year health"
+                : "Server error — could not load release year health"}
+            </p>
+            <p className="mt-1 text-sm text-destructive/80">{message}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 interface RunBatchResult {
   scanned: number;
