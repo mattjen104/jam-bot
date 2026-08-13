@@ -47,6 +47,7 @@ import { wireSongEnrichment } from "../../song/wire.js";
 import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
 import { fetchAudioDbReview } from "../../lore/audiodb.js";
 import { fetchAllMusicReview } from "../../lore/allmusic.js";
+import { fetchPitchforkReview } from "../../lore/pitchfork.js";
 import { resolvePickRunAnchors } from "../../lore/runs.js";
 import { pickerNotOptedOut } from "./shared.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -331,6 +332,20 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     } catch (err) {
       console.warn("[lore] release-group MBID lookup failed", rec.mbid, err);
     }
+  }
+
+  // Pitchfork review — fire-and-forget, off the hot path. Passes the album
+  // name from Spotify context when available so the search is more accurate.
+  // The background pre-fetch job (pitchfork-job.ts) handles the common case;
+  // this inline call catches the narrow window between a new keep and the
+  // next nightly job run. Uses the same in-memory cooldown as Wikipedia so a
+  // repeatedly-opened investigation sheet doesn't hammer Pitchfork.
+  const hasPitchforkClaim = claimRows.some((c) => c.sourceHandle === "pitchfork");
+  if (!hasPitchforkClaim) {
+    const albumHintForPitchfork = album?.name ?? null;
+    fetchPitchforkReview(rec.mbid, albumHintForPitchfork).catch((err) =>
+      console.warn("[lore] pitchfork fire-and-forget failed", rec.mbid, err),
+    );
   }
 
   // TheAudioDB review — attempt synchronously with a 3 s ceiling so the

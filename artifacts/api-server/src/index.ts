@@ -102,6 +102,7 @@ import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migrat
 import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
 import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
+import { startPitchforkJob } from "./lore/pitchfork-job.js";
 
 const rawPort = process.env["PORT"];
 
@@ -250,6 +251,7 @@ async function bootLore(): Promise<void> {
     startGenreBackfillJob();
     startIsrcEnrichmentJob();
     startReleaseYearBackfillJob();
+    startPitchforkJob();
     startHomepageScraper();
     await runMigration("applyDonateCheckerMigration", applyDonateCheckerMigration);
     startDonateChecker();
