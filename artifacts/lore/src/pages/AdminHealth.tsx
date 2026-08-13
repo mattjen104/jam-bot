@@ -147,7 +147,9 @@ function HealthPanel({
   onClearToken: () => void;
 }) {
   const [feedFreshness, setFeedFreshness] = useState<FeedFreshnessResponse | null>(null);
+  const [ffError, setFfError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [spiWeb, setSpiWeb] = useState<SpinitronWebResponse | null>(null);
+  const [swError, setSwError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
   const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,30 +165,59 @@ function HealthPanel({
 
       const headers = { "x-admin-token": token };
 
-      // ── Feed-freshness + Spinitron-web (shared error path) ──────────────
-      const corePromise = (async () => {
-        const [ffRes, swRes] = await Promise.all([
-          fetch("/api/admin/feed-freshness-health", { headers }),
-          fetch("/api/admin/spinitron-web-health", { headers }),
-        ]);
-
-        if (!ffRes.ok || !swRes.ok) {
-          const badRes = !ffRes.ok ? ffRes : swRes;
-          const body = (await badRes.json().catch(() => ({}))) as { error?: string };
-          setLoadError(body.error ?? `HTTP ${badRes.status}`);
-          return;
+      // ── Feed-freshness (independent error path) ─────────────────────────
+      const ffPromise = (async () => {
+        let ffRes: Response;
+        try {
+          ffRes = await fetch("/api/admin/feed-freshness-health", { headers });
+        } catch (err) {
+          setFfError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setFeedFreshness(null);
+          return false;
         }
+        if (ffRes.ok) {
+          setFeedFreshness((await ffRes.json()) as FeedFreshnessResponse);
+          setFfError(null);
+          return true;
+        }
+        const body = (await ffRes.json().catch(() => ({}))) as { error?: string };
+        setFfError({
+          kind: ffRes.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${ffRes.status}`,
+        });
+        setFeedFreshness(null);
+        return false;
+      })();
 
-        const [ff, sw] = await Promise.all([
-          ffRes.json() as Promise<FeedFreshnessResponse>,
-          swRes.json() as Promise<SpinitronWebResponse>,
-        ]);
-
-        setFeedFreshness(ff);
-        setSpiWeb(sw);
-      })().catch((err: unknown) => {
-        setLoadError(err instanceof Error ? err.message : "Failed to load health data");
-      });
+      // ── Spinitron-web (independent error path) ──────────────────────────
+      const swPromise = (async () => {
+        let swRes: Response;
+        try {
+          swRes = await fetch("/api/admin/spinitron-web-health", { headers });
+        } catch (err) {
+          setSwError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setSpiWeb(null);
+          return false;
+        }
+        if (swRes.ok) {
+          setSpiWeb((await swRes.json()) as SpinitronWebResponse);
+          setSwError(null);
+          return true;
+        }
+        const body = (await swRes.json().catch(() => ({}))) as { error?: string };
+        setSwError({
+          kind: swRes.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${swRes.status}`,
+        });
+        setSpiWeb(null);
+        return false;
+      })();
 
       // ── Release-year health (independent: never poisons the core sections) ─
       const ryPromise = (async () => {
@@ -200,12 +231,13 @@ function HealthPanel({
             message: err instanceof Error ? err.message : "Network error",
           });
           setRyHealth(null);
-          return;
+          return false;
         }
 
         if (ryRes.ok) {
           setRyHealth((await ryRes.json()) as ReleaseYearHealth);
           setRyError(null);
+          return true;
         } else {
           const body = (await ryRes.json().catch(() => ({}))) as { error?: string };
           const isAuth = ryRes.status === 401;
@@ -218,11 +250,18 @@ function HealthPanel({
                 : "unable to load release year counts"),
           });
           setRyHealth(null);
+          return false;
         }
       })();
 
       try {
-        await Promise.all([corePromise, ryPromise]);
+        const [ffOk, swOk, ryOk] = await Promise.all([ffPromise, swPromise, ryPromise]);
+        // Only show the top-level error when every endpoint fails at once.
+        // Each section already renders its own per-section banner; the shared
+        // top-level banner is a last-resort "nothing works at all" indicator.
+        if (!ffOk && !swOk && !ryOk) {
+          setLoadError("All health endpoints failed — check server logs");
+        }
         setLastRefreshed(new Date());
       } finally {
         setLoading(false);
@@ -243,7 +282,9 @@ function HealthPanel({
   }, [fetchAll]);
 
   const totalStale = (feedFreshness?.staleCount ?? 0) + (spiWeb?.staleCount ?? 0);
-  const allHealthy = !loading && !loadError && totalStale === 0;
+  // "All healthy" only when both feed sections loaded without error and report no stale stations.
+  const allHealthy =
+    !loading && !loadError && !ffError && !swError && !ryError && totalStale === 0;
 
   return (
     <div className="min-h-screen">
@@ -288,7 +329,7 @@ function HealthPanel({
         <AdminNav token={token} />
 
         {/* Monitoring-since banner */}
-        {!loading && !loadError && feedFreshness && (
+        {!loading && feedFreshness && (
           <MonitoringBanner monitoringSince={feedFreshness.monitoringSince} />
         )}
 
@@ -299,7 +340,7 @@ function HealthPanel({
           </div>
         )}
 
-        {/* Error */}
+        {/* Top-level error — only when all three endpoints fail simultaneously */}
         {!loading && loadError && (
           <div className="mt-8 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4 text-base text-destructive">
             <span className="font-normal">Error loading health data:</span> {loadError}
@@ -317,8 +358,17 @@ function HealthPanel({
           </div>
         )}
 
-        {/* Feed freshness section */}
-        {!loading && !loadError && feedFreshness && feedFreshness.staleCount > 0 && (
+        {/* Feed freshness section — error or data, independent of spinitron-web */}
+        {!loading && ffError && (
+          <SectionErrorBanner
+            icon={<Clock className="h-4 w-4" />}
+            title="Silent feeds"
+            kind={ffError.kind}
+            message={ffError.message}
+            data-testid="ff-error-banner"
+          />
+        )}
+        {!loading && !ffError && feedFreshness && feedFreshness.staleCount > 0 && (
           <section className="mt-10">
             <SectionHeading
               icon={<Clock className="h-4 w-4" />}
@@ -334,8 +384,17 @@ function HealthPanel({
           </section>
         )}
 
-        {/* Spinitron web section */}
-        {!loading && !loadError && spiWeb && spiWeb.staleCount > 0 && (
+        {/* Spinitron web section — error or data, independent of feed-freshness */}
+        {!loading && swError && (
+          <SectionErrorBanner
+            icon={<Wifi className="h-4 w-4" />}
+            title="Spinitron scraper failures"
+            kind={swError.kind}
+            message={swError.message}
+            data-testid="sw-error-banner"
+          />
+        )}
+        {!loading && !swError && spiWeb && spiWeb.staleCount > 0 && (
           <section className="mt-10">
             <SectionHeading
               icon={<Wifi className="h-4 w-4" />}
@@ -351,16 +410,16 @@ function HealthPanel({
           </section>
         )}
 
-        {/* Release year enrichment health */}
-        {!loading && !loadError && ryHealth !== null && (
+        {/* Release year enrichment health — always independent */}
+        {!loading && ryHealth !== null && (
           <ReleaseYearHealthSection health={ryHealth} token={token} onRunComplete={() => void fetchAll({ silent: true })} />
         )}
-        {!loading && !loadError && ryError !== null && (
+        {!loading && ryError !== null && (
           <ReleaseYearErrorBanner kind={ryError.kind} message={ryError.message} />
         )}
 
-        {/* Healthy sub-sections when one is OK but not both */}
-        {!loading && !loadError && totalStale > 0 && (
+        {/* Healthy sub-sections when one section is OK but the other is stale */}
+        {!loading && !ffError && !swError && totalStale > 0 && (
           <div className="mt-8 flex flex-col gap-2">
             {feedFreshness && feedFreshness.staleCount === 0 && (
               <HealthyRow label="Feed freshness" detail="BBC and SomaFM feeds are on schedule." />
@@ -531,6 +590,43 @@ function DataRow({ label, value }: { label: string; value: string }) {
 }
 
 // ─── Release year enrichment health ───────────────────────────────────────
+
+function SectionErrorBanner({
+  icon,
+  title,
+  kind,
+  message,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  kind: "auth" | "server";
+  message: string;
+}) {
+  return (
+    <section className="mt-10">
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-500">{icon}</span>
+        <h2 className="font-normal text-foreground">{title}</h2>
+      </div>
+      <div
+        className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4"
+        role="alert"
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="text-base font-normal text-destructive">
+              {kind === "auth"
+                ? "Authentication error — could not load this section"
+                : "Server error — could not load this section"}
+            </p>
+            <p className="mt-1 text-sm text-destructive/80">{message}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function ReleaseYearErrorBanner({
   kind,
