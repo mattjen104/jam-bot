@@ -7,7 +7,8 @@
  *      Drizzle is mocked so no real DB is needed.
  *
  *   2. backfillReleaseYearBatch — verifies that a transient MB 5xx / network
- *      error does NOT advance year_checked_at (the retry-sentinel stays NULL).
+ *      error does NOT advance year_checked_at (the retry-sentinel stays NULL),
+ *      and that a genuine MB "no date" (null) DOES stamp yearCheckedAt.
  *      Both drizzle and the MB resolver are mocked so no real DB is needed.
  *
  * DB state modelled by the endpoint assertions:
@@ -434,6 +435,26 @@ describe("startReleaseYearBackfillJob — tick scheduling", () => {
     expect(tickCalls).toHaveLength(2);
     // The second (reschedule) call must use ACTIVE_TICK_MS because remaining > 0.
     expect(tickCalls[1]?.[1]).toBe(15_000); // ACTIVE_TICK_MS
+  });
+
+  it("does not schedule a second loop when called twice (running guard)", async () => {
+    vi.useFakeTimers();
+
+    // Fresh module import so 'running = false'. Call the starter twice in a
+    // row — the second call must be a synchronous no-op because 'running' is
+    // set to true by the first call before any timers fire.
+    const { startReleaseYearBackfillJob } = await import(
+      "../src/lore/release-year-backfill.js"
+    );
+
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
+
+    startReleaseYearBackfillJob(); // first call — registers the boot delay
+    startReleaseYearBackfillJob(); // second call — must be a no-op
+
+    // Only a single setTimeout should have been registered (the boot delay).
+    // A broken guard would allow a second loop to register its own timer here.
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
   });
 
   it("reschedules at IDLE_TICK_MS (10 min) when remaining === 0", async () => {
