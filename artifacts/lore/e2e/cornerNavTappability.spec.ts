@@ -164,8 +164,10 @@ async function loadWithDock(page: Page) {
   });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
-  // Click the row to tune in — this mounts the player bar inside .bottom-shell.
-  await row.click();
+  // Compact Feed rows use expand-then-keep: first click expands the byline,
+  // second click commits to tune-in (mounts the player bar inside .bottom-shell).
+  await row.click(); // expand
+  await row.click(); // tune in
 
   // The player bar becomes visible once the station is active.
   await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
@@ -272,7 +274,8 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
         hasText: /Some Artist/,
       }).first();
       await expect(row).toBeVisible({ timeout: 10_000 });
-      await row.click();
+      await row.click(); // expand
+      await row.click(); // tune in
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
 
       await libraryLink.click();
@@ -285,7 +288,8 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
         hasText: /Some Artist/,
       }).first();
       await expect(row2).toBeVisible({ timeout: 15_000 });
-      await row2.click();
+      await row2.click(); // expand
+      await row2.click(); // tune in
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
 
       // 3. Geometry: Spotify-style stack — mini player above, nav row below,

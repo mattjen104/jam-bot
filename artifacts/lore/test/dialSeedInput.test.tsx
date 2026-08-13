@@ -234,7 +234,10 @@ describe("Minimal front door — no pinned overlay, no set panel", () => {
 
     const row = document.querySelector(".fdrow");
     expect(row, "station row rendered").toBeTruthy();
-    fireEvent.click(row!);
+    // Compact Feed rows use expand-then-keep: first click expands (shows byline),
+    // second click commits to playback.
+    fireEvent.click(row!); // expand
+    fireEvent.click(row!); // tune in
 
     // Row click is the playback interaction…
     expect(radioToggle).toHaveBeenCalledTimes(1);

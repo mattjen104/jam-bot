@@ -199,12 +199,18 @@ function renderDial() {
   );
 }
 
-/** Click the Zone-1 row for a station (the row itself is the tune target). */
+/**
+ * Click a Zone-1 row to tune in.
+ * Compact Feed rows use expand-then-keep: first click expands (reveals byline),
+ * second click commits to tune-in. Both clicks are fired here so callers don't
+ * need to know about the expand step.
+ */
 function clickRow(slug: string) {
   const row = Array.from(document.querySelectorAll(".fdrow")).find((el) =>
     el.textContent?.includes(slug));
   expect(row, `row for ${slug}`).toBeTruthy();
-  fireEvent.click(row!);
+  fireEvent.click(row!); // expand
+  fireEvent.click(row!); // tune in
 }
 
 function ctxParam(): string | null {
@@ -300,7 +306,9 @@ describe("front-door tune and workspace semantics", () => {
     mockDialData([makeZone1Station("kexp")]);
     renderDial();
     const row = document.querySelector<HTMLElement>('[data-feed-band="reason"] .fdrow')!;
-    fireEvent.keyDown(row, { key: " " });
+    // Compact rows use expand-then-keep: first Space expands, second tunes.
+    fireEvent.keyDown(row, { key: " " }); // expand
+    fireEvent.keyDown(row, { key: " " }); // tune in
     expect(radioMock.toggle).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("tab")).toBeNull();
     expect(document.querySelector(".dial-context-region")).toBeNull();

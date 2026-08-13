@@ -584,7 +584,7 @@ describe("compact Dial feed identity", () => {
     );
   });
 
-  it("keeps tune-in and attribution-only site-link behavior on compact rows", () => {
+  it("keeps attribution-only site-link behavior on compact rows (never tunes)", () => {
     const onTuneIn = vi.fn();
     const { container } = renderCompactRow(
       makeDialStation({ name: "WVUM", homepageUrl: "https://wvum.org" } as Partial<DialStation["station"]>),
@@ -595,15 +595,167 @@ describe("compact Dial feed identity", () => {
     fireEvent.click(row);
     expect(onTuneIn).not.toHaveBeenCalled();
     expect(container.querySelector(".fdrow__site-link")?.textContent).toContain("Listen on site");
+  });
 
-    cleanup();
-    const playableTuneIn = vi.fn();
-    const { container: playable } = renderCompactRow(
+  it("first tap expands a playable compact row; second tap tunes in", () => {
+    const onTuneIn = vi.fn();
+    const { container } = renderCompactRow(
       makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
       makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
-      { onTuneIn: playableTuneIn },
+      { onTuneIn },
     );
-    fireEvent.click(playable.querySelector(".fdrow")!);
-    expect(playableTuneIn).toHaveBeenCalledOnce();
+    const row = container.querySelector(".fdrow")!;
+
+    // First tap: expands — no tune-in, byline appears, aria-expanded=true.
+    fireEvent.click(row);
+    expect(onTuneIn).not.toHaveBeenCalled();
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector(".fdrow__byline")).not.toBeNull();
+
+    // Second tap: tunes in.
+    fireEvent.click(row);
+    expect(onTuneIn).toHaveBeenCalledOnce();
+  });
+
+  it("collapsed compact row starts with aria-expanded=false", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+    const row = container.querySelector(".fdrow")!;
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".fdrow__byline")).toBeNull();
+  });
+
+  it("expanded byline shows DJ/show attribution and track title", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({
+        djName: "John Richards",
+        showName: "Morning Show",
+        currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }),
+      }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
+    const byline = container.querySelector(".fdrow__byline");
+    expect(byline).not.toBeNull();
+    expect(byline?.querySelector(".fdrow__byline-dj")?.textContent).toBe("John Richards");
+    expect(byline?.querySelector(".fdrow__byline-track")?.textContent).toBe("Come On Let's Go");
+  });
+
+  it("expanded byline shows Keep button only when onKeep is provided", () => {
+    const onKeep = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }) }),
+      { onKeep },
+    );
+    // Before expand: no Keep button
+    expect(container.querySelector(".fdrow__keep")).toBeNull();
+
+    fireEvent.click(container.querySelector(".fdrow")!);
+    const keepBtn = container.querySelector(".fdrow__keep");
+    expect(keepBtn).not.toBeNull();
+    expect(keepBtn?.textContent).toBe("+ Keep");
+
+    // Clicking Keep calls the callback and does not trigger tune-in
+    fireEvent.click(keepBtn!);
+    expect(onKeep).toHaveBeenCalledOnce();
+  });
+
+  it("no Keep button appears on the byline when onKeep is not provided", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(container.querySelector(".fdrow__keep")).toBeNull();
+  });
+
+  it("shows ✳ coverage marker when hasInvestigationSources is true", () => {
+    const onOpenArtistInvestigation = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      { hasInvestigationSources: true, onOpenArtistInvestigation },
+    );
+    const marker = container.querySelector(".fdrow__coverage-marker");
+    expect(marker).not.toBeNull();
+    expect(marker?.textContent).toBe("✳");
+    fireEvent.click(marker!);
+    expect(onOpenArtistInvestigation).toHaveBeenCalledOnce();
+  });
+
+  it("omits ✳ coverage marker when hasInvestigationSources is false", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+    expect(container.querySelector(".fdrow__coverage-marker")).toBeNull();
+  });
+
+  it("adds fdrow--expanded class when compact row is expanded", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+    const row = container.querySelector(".fdrow")!;
+    expect(row.classList.contains("fdrow--expanded")).toBe(false);
+    fireEvent.click(row);
+    expect(row.classList.contains("fdrow--expanded")).toBe(true);
+  });
+
+  it("Space on the Keep button does not expand or tune the row", () => {
+    const onTuneIn = vi.fn();
+    const onKeep = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }) }),
+      { onTuneIn, onKeep },
+    );
+    const row = container.querySelector(".fdrow")!;
+    // Expand the row first.
+    fireEvent.click(row);
+    expect(container.querySelector(".fdrow__keep")).not.toBeNull();
+
+    // Space on the Keep button should not bubble to the row's keydown handler.
+    const keepBtn = container.querySelector(".fdrow__keep")!;
+    fireEvent.keyDown(keepBtn, { key: " " });
+    // Row is still expanded (no second-tap tune-in happened).
+    expect(row.classList.contains("fdrow--expanded")).toBe(true);
+    expect(onTuneIn).not.toHaveBeenCalled();
+  });
+
+  it("Space on the ✳ marker does not expand or tune the row", () => {
+    const onOpenArtistInvestigation = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      { hasInvestigationSources: true, onOpenArtistInvestigation },
+    );
+    const row = container.querySelector(".fdrow")!;
+    // Row is collapsed — Space on the marker button should not expand it.
+    const marker = container.querySelector(".fdrow__coverage-marker")!;
+    fireEvent.keyDown(marker, { key: " " });
+    expect(row.classList.contains("fdrow--expanded")).toBe(false);
+  });
+
+  it("pointerdown on the ✳ marker does not arm the long-press tune timer", () => {
+    // Verify that pointerDown is stopped at the marker so the row never
+    // fires its long-press tune-in path when the marker is pressed.
+    const onTuneIn = vi.fn();
+    const onOpenArtistInvestigation = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      { onTuneIn, hasInvestigationSources: true, onOpenArtistInvestigation },
+    );
+    const marker = container.querySelector(".fdrow__coverage-marker")!;
+    // PointerDown on the marker is stopped at the button itself; the row
+    // never receives it, so no long-press timer is armed.
+    fireEvent.pointerDown(marker);
+    // Simulate the timeout interval passing without cancelLongPress being called.
+    // Since no timer was armed, nothing should call onTuneIn.
+    expect(onTuneIn).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,7 @@
  * DialView re-exports FrontDoorRow / PopCrossingLine / SetQueueList so
  * existing imports and tests keep working.
  */
-import React, { useState, useMemo, type ReactNode } from "react";
+import React, { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { type PopularCrossingArtist } from "../../lib/meHooks";
 import {
@@ -313,15 +313,27 @@ export interface FrontDoorRowProps {
   /** Opens the persistent player queue for this station's complete set. */
   onSetExpand?: () => void;
   /**
-   * Renders the compact pipe-separated artist/station identity as tier 1.
-   * Dial lanes pass this; without
-   * it the row falls back to the full crossing/reason sentence machinery.
+   * Renders the compact left-to-right artist · station identity as tier 1.
+   * Dial lanes pass this; without it the row falls back to the full
+   * crossing/reason sentence machinery.
+   *
+   * When compactSentence is true, the row uses expand-then-keep interaction:
+   * first tap expands and reveals the byline + Keep affordance; second tap
+   * (or long-press on collapsed) tunes in.
    */
   compactSentence?: boolean;
+  /**
+   * When true, a ✳ superscript marker appears after the artist lead to
+   * indicate that artist investigation sources are available.
+   */
+  hasInvestigationSources?: boolean;
+  /** Called when the listener keeps the current track from the expanded byline. */
+  onKeep?: () => void;
+  /** Called when the ✳ marker is tapped — opens the Artist Investigation sheet. */
+  onOpenArtistInvestigation?: () => void;
 }
 
-export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence }: FrontDoorRowProps) {
-  const [compactExpanded, setCompactExpanded] = useState(false);
+export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -332,6 +344,29 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     : show;
   const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode, ds.topArtistNames);
   const compact = liveProvenanceSummary(ds.station.name, safeShow, ds.liveTrack?.artist);
+
+  // Expand-then-keep: first tap expands the row to show the byline + Keep
+  // affordance; second tap (or long-press on collapsed) tunes in.
+  // Only active in compact mode — legacy sentence rows still tune on first tap.
+  const [expanded, setExpanded] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    };
+  }, []);
+
+  // Byline content — visible when expanded in compact mode.
+  // Attribution: DJ name if available, else show name (with same filtering as
+  // liveSentence so placeholder/echo values don't surface).
+  const bylineAttribution: string | null = usableDj ?? (() => {
+    const rawShow = cleanLiveValue(show?.showName);
+    if (!rawShow || sameLiveValue(rawShow, ds.station.name)) return null;
+    return rawShow;
+  })();
+  const bylineTrack = cleanLiveValue(show?.currentTrack?.title ?? null);
 
   // Clickable-"and" expansion: probe the sentence first to learn which artist
   // names it already shows, derive the rest of the set (setlist order, library
@@ -397,9 +432,8 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       })()
     : null;
 
-  // Provenance parts beyond station (DJ, show) that appear in the expanded byline.
-  const expandParts = compact ? compact.provenanceParts.slice(0, -1) : [];
-  const hasExpandableByline = expandParts.length > 0;
+  // Whether there is a visible artist lead (crossing or single artist)
+  const hasArtistLead = compactCrossingNode != null || (compact?.artist != null);
 
   const tier1Node = compactSentence && compact ? (
     <span
@@ -415,32 +449,31 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             {compact.artist ?? ""}
           </span>
         )}
-        {(compactCrossingNode != null || compact.artist != null) && (
+        {/* ✳ coverage marker — superscript after the artist lead when investigation
+            sources are available. Tapping opens the Artist Investigation sheet.
+            Never shown when there is no artist to anchor it to. */}
+        {hasInvestigationSources && hasArtistLead && (
+          <button
+            type="button"
+            className="fdrow__coverage-marker"
+            title="Artist investigation sources available"
+            aria-label="Open artist investigation"
+            onClick={(e) => { e.stopPropagation(); onOpenArtistInvestigation?.(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >✳</button>
+        )}
+        {hasArtistLead && (
           <span className="fdrow__compact-separator" aria-hidden="true">·</span>
         )}
         {/* Station only — DJ and show belong in the expanded byline. */}
         <span className="fdrow__compact-station">{compact.station}</span>
       </span>
-      <span className="fdrow__compact-right">
-        {ds.isLive && (
-          <span className="fdrow__compact-live" aria-hidden="true">
-            <span className="fdrow__compact-live-dot" />
-            live
-          </span>
-        )}
-        {hasExpandableByline && (
-          <button
-            type="button"
-            className="fdrow__compact-expand"
-            aria-expanded={compactExpanded}
-            aria-label={compactExpanded ? "Hide DJ and show" : "Show DJ and show"}
-            onClick={(e) => { e.stopPropagation(); setCompactExpanded((v) => !v); }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); } }}
-          >
-            {compactExpanded ? "▴" : "▾"}
-          </button>
-        )}
-      </span>
+      {ds.isLive && (
+        <span className="fdrow__compact-live" aria-hidden="true">
+          <span className="fdrow__compact-live-dot" />
+          live
+        </span>
+      )}
     </span>
   ) : fallbackTier1Node;
   const tier1Cls = compactSentence && compact
@@ -456,6 +489,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     rz.r === 0 || rz.r === 5 ? "fdrow--dim" : "",
     isSampling ? "fdrow--sampling" : "",
     isActive ? "fdrow--playing" : "",
+    compactSentence && expanded ? "fdrow--expanded" : "",
   ].filter(Boolean).join(" ");
 
   // Attribution-only stations (no direct stream, no relay) cannot be played
@@ -465,20 +499,82 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   const playable = resolvePlaybackSource(ds.station) != null;
   const siteHref = playable ? null : safeHttpUrl(ds.station.homepageUrl);
 
+  // Expand-then-keep click handler:
+  //   compact + collapsed → expand (reveal byline)
+  //   compact + expanded  → tune in
+  //   non-compact         → tune in immediately (legacy behaviour)
+  const handleClick = () => {
+    if (!playable) return;
+    if (compactSentence) {
+      if (longPressFired.current) {
+        // Long-press already triggered tune-in; swallow the synthetic click.
+        longPressFired.current = false;
+        return;
+      }
+      if (expanded) {
+        setExpanded(false);
+        onTuneIn();
+      } else {
+        setExpanded(true);
+      }
+    } else {
+      onTuneIn();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Only activate on the row root itself — not on bubbled events from child
+    // interactive elements (Keep button, coverage marker). On those elements
+    // the browser handles Space/Enter natively; intercepting here would prevent
+    // their default activation and trigger the row's expand/tune logic instead.
+    if (e.target !== e.currentTarget) return;
+    if (!playable) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleClick();
+    }
+  };
+
+  // Long-press on a collapsed compact row: tune in directly without expanding.
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Child interactive elements (Keep button, coverage marker) stop propagation
+    // so this handler only fires when the user presses on the row surface itself.
+    if (!playable || !compactSentence || expanded) return;
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+      onTuneIn();
+    }, 600);
+    // Prevent text selection during long-press on touch.
+    e.preventDefault();
+  };
+
+  /** Cancel the long-press timer — shared by pointerup, pointerleave, pointercancel. */
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
   return (
     <div
       className={rowCls}
       data-scrub-slug={scrubSlug}
       role="button"
+      aria-expanded={compactSentence ? expanded : undefined}
       aria-label={compactSentence ? compact?.text : compact?.plainText}
       tabIndex={0}
-      onClick={playable ? onTuneIn : undefined}
-      onKeyDown={(e) => {
-        if (playable && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          onTuneIn();
-        }
-      }}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
+      onPointerUp={cancelLongPress}
+      onPointerLeave={cancelLongPress}
+      onPointerCancel={cancelLongPress}
     >
       {isActive && artworkUrl && (
         <div
@@ -505,21 +601,33 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
           )}
         </div>
 
-        {/* Compact expanded byline — DJ name and show name revealed when the
-            listener taps the ▾ toggle. Clicking the byline area is inert so it
-            doesn't fire the outer tune-in handler. */}
-        {compactSentence && compact && compactExpanded && expandParts.length > 0 && (
-          <div
-            className="fdrow__compact-byline"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            {expandParts.map((part, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span className="fdrow__compact-byline-sep" aria-hidden="true"> · </span>}
-                <span className="fdrow__compact-byline-part">{part}</span>
-              </React.Fragment>
-            ))}
+        {/* Expanded byline — visible on compact rows after first tap.
+            Shows: [DJ · Show]  ·  [now-playing title]     [+ Keep]
+            Byline uses system-sans at small size; Keep is a soft bordered
+            pill at the right edge. Click propagation stopped so the tune-in
+            handler (on the row root) is not re-triggered by the Keep button. */}
+        {compactSentence && compact && expanded && (
+          <div className="fdrow__byline" onClick={(e) => e.stopPropagation()}>
+            <span className="fdrow__byline-text">
+              {bylineAttribution && (
+                <span className="fdrow__byline-dj">{bylineAttribution}</span>
+              )}
+              {bylineAttribution && bylineTrack && (
+                <span className="fdrow__byline-sep" aria-hidden="true"> · </span>
+              )}
+              {bylineTrack && (
+                <span className="fdrow__byline-track">{bylineTrack}</span>
+              )}
+            </span>
+            {onKeep && (
+              <button
+                type="button"
+                className="fdrow__keep"
+                aria-label="Keep this track"
+                onClick={(e) => { e.stopPropagation(); onKeep(); }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >+ Keep</button>
+            )}
           </div>
         )}
 
