@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- pre-lint file: migrate logging to the structured logger on touch */
 import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
-import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones, seedRollingStone500List } from "./lore/seed.js";
+import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones, seedRollingStone500List, getRollingStone500EntryCount } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startLeaseScheduler } from "./lore/socket-leases.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
@@ -58,6 +58,8 @@ import { applySpotifyLibraryItemsMigration } from "./lore/spotify-library-items-
 import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { wireImageExtractor } from "./lore/image-wire.js";
+import { wireListExtractor } from "./lore/list-wire.js";
+import { scrapeAndPopulateList } from "./lore/list-scraper.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
 import { markOrphanedImportJobsAsError, markOrphanedSyncJobsAsError, startPhase3RetryScheduler } from "./routes/me/index.js";
 import { applyDeviceIdentityMigration } from "./lore/device-identity-migration.js";
@@ -214,10 +216,51 @@ async function bootLore(): Promise<void> {
       console.error("[lore] Spinitron roster seed failed", err);
     }
     await seedPickers();
+    let rs500ListInfo: { listId: number; url: string } | null = null;
     try {
-      await seedRollingStone500List();
+      rs500ListInfo = await seedRollingStone500List();
     } catch (err) {
       console.error("[lore] Rolling Stone 500 list seed failed", err);
+    }
+    // Auto-scrape the Rolling Stone 500 list on first boot (or after a partial
+    // run) if it doesn't yet have ≥90% of its declared entries. Fire-and-forget
+    // so boot doesn't block on the long MB-resolution pass (~500 entries × 1.1s).
+    // The scraper uses multi-pass chunked LLM extraction so all 500 albums are
+    // captured even though a single LLM call can only return a subset. Entries
+    // already in the DB are skipped via onConflictDoNothing, making resumed runs
+    // safe and idempotent.
+    if (rs500ListInfo) {
+      void (async () => {
+        try {
+          const { entryCount, listLength } = await getRollingStone500EntryCount(rs500ListInfo.listId);
+          // Consider the list complete when ≥90% of declared entries are present.
+          const completionThreshold = listLength != null ? Math.floor(listLength * 0.9) : 10;
+          if (entryCount >= completionThreshold) return; // already substantially populated
+          const contact = process.env["MUSICBRAINZ_CONTACT"]?.trim();
+          if (!contact) {
+            console.info("[lore] RS500 auto-scrape skipped: MUSICBRAINZ_CONTACT not set");
+            return;
+          }
+          const ready = await wireListExtractor();
+          if (!ready) {
+            console.info("[lore] RS500 auto-scrape skipped: Anthropic AI integration unavailable");
+            return;
+          }
+          console.info(
+            `[lore] RS500 auto-scrape: starting population (${entryCount} of ${listLength ?? "?"} entries present)`,
+          );
+          const result = await scrapeAndPopulateList(rs500ListInfo.listId, rs500ListInfo.url, contact);
+          if (result.error) {
+            console.warn("[lore] RS500 auto-scrape finished with error:", result.error);
+          } else {
+            console.info(
+              `[lore] RS500 auto-scrape done: ${result.resolved} exact + ${result.fuzzy} fuzzy + ${result.unresolved} unresolved of ${result.total}`,
+            );
+          }
+        } catch (err) {
+          console.error("[lore] RS500 auto-scrape failed", err);
+        }
+      })();
     }
     try {
       await backfillRadioBrowserIcyEnrollment();

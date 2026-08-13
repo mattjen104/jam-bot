@@ -7,9 +7,10 @@ import {
   showsTable,
   listSourcesTable,
   listsTable,
+  listEntriesTable,
   type InsertStation,
 } from "@workspace/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { upsertPicker } from "./picks.js";
 import { inferTimezone } from "./timezone.js";
 
@@ -2591,7 +2592,7 @@ export async function seedPickers(): Promise<void> {
  * This is additive/idempotent — safe to call on every boot. The actual album
  * entries are populated by the admin-triggered LLM scrape, not here.
  */
-export async function seedRollingStone500List(): Promise<void> {
+export async function seedRollingStone500List(): Promise<{ listId: number; url: string } | null> {
   try {
     // Find or create the Rolling Stone publication list source.
     // list_sources has no unique index on `name`, so we use select-then-insert.
@@ -2615,7 +2616,7 @@ export async function seedRollingStone500List(): Promise<void> {
 
     if (!source) {
       console.warn("[lore] seedRollingStone500List: failed to find or create list source");
-      return;
+      return null;
     }
 
     // Find or create the list record.
@@ -2625,6 +2626,8 @@ export async function seedRollingStone500List(): Promise<void> {
     const RS_LIST_TITLE = "500 Greatest Albums of All Time";
     const RS_LIST_URL =
       "https://www.rollingstone.com/music/music-lists/best-albums-500-greatest-albums-of-all-time-156826/";
+
+    let listId: number;
 
     const [existingList] = await db
       .select({ id: listsTable.id })
@@ -2637,8 +2640,10 @@ export async function seedRollingStone500List(): Promise<void> {
       )
       .limit(1);
 
-    if (!existingList) {
-      await db.insert(listsTable).values({
+    if (existingList) {
+      listId = existingList.id;
+    } else {
+      const [inserted] = await db.insert(listsTable).values({
         sourceId: source.id,
         title: RS_LIST_TITLE,
         year: null,
@@ -2647,11 +2652,43 @@ export async function seedRollingStone500List(): Promise<void> {
         listLength: 500,
         url: RS_LIST_URL,
         retrievedAt: new Date(),
-      });
+      }).returning({ id: listsTable.id });
+      if (!inserted) {
+        console.warn("[lore] seedRollingStone500List: failed to insert list row");
+        return null;
+      }
+      listId = inserted.id;
     }
 
-    console.info("[lore] Rolling Stone 500 list seeded (admin scrape trigger available)");
+    console.info("[lore] Rolling Stone 500 list seeded (auto-scrape runs at boot when entries are incomplete)");
+    return { listId, url: RS_LIST_URL };
   } catch (err) {
     console.error("[lore] seedRollingStone500List failed", err);
+    return null;
   }
+}
+
+/**
+ * Return the current entry count and expected list length for the Rolling Stone
+ * 500 list. Used at boot to decide whether a first-pass scrape is needed.
+ * Returns listLength=null when the list row is not found.
+ */
+export async function getRollingStone500EntryCount(
+  listId: number,
+): Promise<{ entryCount: number; listLength: number | null }> {
+  const [[countRow], [listRow]] = await Promise.all([
+    db
+      .select({ n: count() })
+      .from(listEntriesTable)
+      .where(eq(listEntriesTable.listId, listId)),
+    db
+      .select({ listLength: listsTable.listLength })
+      .from(listsTable)
+      .where(eq(listsTable.id, listId))
+      .limit(1),
+  ]);
+  return {
+    entryCount: countRow?.n ?? 0,
+    listLength: listRow?.listLength ?? null,
+  };
 }

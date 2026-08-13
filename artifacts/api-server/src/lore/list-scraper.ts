@@ -24,9 +24,15 @@ import { requireSourceUrl } from "./schedule-scraper.js";
 const MB_BASE = "https://musicbrainz.org/ws/2";
 const MB_MIN_INTERVAL_MS = 1100;
 const FETCH_TIMEOUT_MS = 15_000;
-// Generous cap: a 50-album Pitchfork/Stereogum list with blurbs easily runs
-// past 24k chars of plain text; truncating mid-list silently drops entries.
-const MAX_PAGE_CHARS = 60_000;
+// Allow up to 400k chars of stripped plain text so large lists (e.g. RS 500)
+// are not silently truncated mid-list. Multi-pass extraction then handles
+// anything too long for a single LLM call.
+const MAX_PAGE_CHARS = 400_000;
+// Each LLM chunk is at most this many characters of plain text.
+const LLM_CHUNK_SIZE = 40_000;
+// Overlap between successive chunks so entries that straddle a boundary are
+// not missed. Duplicates are deduplicated after merging.
+const LLM_CHUNK_OVERLAP = 2_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -321,11 +327,74 @@ Rules:
 - Only include albums/EPs. Skip tracks, artists without albums, or unclear entries.
 - Use the artist's most common name (e.g. "Radiohead" not "Radiohead, The").
 - If ranks are clearly present (1., 2., etc.) include them; otherwise set to null.
-- Return at most 100 entries.
+- Return at most 500 entries.
 - If no list is found, return [].
 
 Page text:
 `;
+
+/**
+ * Extract entries from potentially very long page text using multi-pass chunked
+ * LLM extraction. Splits the text into overlapping windows, runs the extraction
+ * prompt on each, then merges and deduplicates by rank (ranked lists) or by
+ * normalised artist+album identity (unranked lists).
+ *
+ * A single LLM pass is used when the text fits within one chunk.
+ */
+export async function extractEntriesMultiPass(
+  pageText: string,
+): Promise<ExtractedEntry[]> {
+  if (pageText.length <= LLM_CHUNK_SIZE) {
+    const rawJson = await extractListRaw(LIST_EXTRACTION_PROMPT + pageText);
+    return parseExtractedEntries(rawJson) ?? [];
+  }
+
+  // Build overlapping chunks so entries that straddle a boundary are not lost.
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < pageText.length) {
+    chunks.push(pageText.slice(start, start + LLM_CHUNK_SIZE));
+    start += LLM_CHUNK_SIZE - LLM_CHUNK_OVERLAP;
+  }
+
+  const merged: ExtractedEntry[] = [];
+  // Rank-keyed dedup (primary): covers ranked lists (RS 500, Pitchfork, etc.)
+  const seenRanks = new Set<number>();
+  // Identity-keyed dedup (fallback): covers unranked or overlap-boundary dups.
+  const seenIdentity = new Set<string>();
+
+  for (const chunk of chunks) {
+    let entries: ExtractedEntry[];
+    try {
+      const rawJson = await extractListRaw(LIST_EXTRACTION_PROMPT + chunk);
+      entries = parseExtractedEntries(rawJson) ?? [];
+    } catch {
+      // A single chunk failure is non-fatal; skip and continue.
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.rank != null) {
+        if (seenRanks.has(entry.rank)) continue;
+        seenRanks.add(entry.rank);
+      } else {
+        const key = `${entry.artist.toLowerCase().replace(/\s+/g, " ")}|${entry.album.toLowerCase().replace(/\s+/g, " ")}`;
+        if (seenIdentity.has(key)) continue;
+        seenIdentity.add(key);
+      }
+      merged.push(entry);
+    }
+  }
+
+  // Sort ranked entries ascending; unranked entries trail in insertion order.
+  merged.sort((a, b) => {
+    if (a.rank != null && b.rank != null) return a.rank - b.rank;
+    if (a.rank != null) return -1;
+    if (b.rank != null) return 1;
+    return 0;
+  });
+
+  return merged;
+}
 
 /**
  * Fetch a list URL, extract entries via LLM, resolve each to a MB release group,
@@ -366,16 +435,15 @@ export async function scrapeAndPopulateList(
 
   const pageText = htmlToPlainText(html).slice(0, MAX_PAGE_CHARS);
 
-  let rawEntries: ExtractedEntry[] | null;
+  let rawEntries: ExtractedEntry[];
   try {
-    const rawJson = await extractListRaw(LIST_EXTRACTION_PROMPT + pageText);
-    rawEntries = parseExtractedEntries(rawJson);
+    rawEntries = await extractEntriesMultiPass(pageText);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { total: 0, resolved: 0, fuzzy: 0, unresolved: 0, entries: [], error: `LLM extraction failed: ${msg}` };
   }
 
-  if (!rawEntries || rawEntries.length === 0) {
+  if (rawEntries.length === 0) {
     return { total: 0, resolved: 0, fuzzy: 0, unresolved: 0, entries: [], error: "No entries extracted from page" };
   }
 
