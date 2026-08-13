@@ -46,6 +46,7 @@ import { enrichRecording, peekEnrichedKnowledge } from "@workspace/song-enrichme
 import { wireSongEnrichment } from "../../song/wire.js";
 import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
 import { fetchAudioDbReview } from "../../lore/audiodb.js";
+import { fetchAllMusicReview } from "../../lore/allmusic.js";
 import { resolvePickRunAnchors } from "../../lore/runs.js";
 import { pickerNotOptedOut } from "./shared.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -365,6 +366,19 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     }
   }
 
+  // Fire-and-forget AllMusic rating check — off the hot path. The scraper
+  // stores a draft miss-sentinel on failure so the same recording is not
+  // re-scraped on every request. Only attempted when an album title is
+  // available from Spotify context.
+  if (album?.name) {
+    const allMusicAlbumTitle = album.name;
+    setImmediate(() => {
+      fetchAllMusicReview(rec.mbid, allMusicAlbumTitle).catch((err) =>
+        console.warn("[lore] allmusic fire-and-forget failed", rec.mbid, err),
+      );
+    });
+  }
+
   // Derive `sources` from the published claims — one entry per unique
   // sourceHandle. This gives the knowledge object the `sources` field that
   // the openapi schema declares on TrackKnowledge.
@@ -375,6 +389,7 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     "wikipedia": "Critical summary",
     "wikipedia-album": "Album overview",
     "audiodb": "Review",
+    "allmusic": "Review",
   };
 
   const sourcesByHandle = new Map<string, { label: string; type: string; excerpt: string; url: string | null }>();
