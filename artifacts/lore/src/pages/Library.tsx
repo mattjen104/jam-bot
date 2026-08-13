@@ -1098,7 +1098,7 @@ export default function Library() {
     // libraryTotal is populated from the first-page COUNT query (no cursor).
     // Subsequent pages omit it; we keep the first-page value for display.
     hasNextPage,
-  } = useMyLibraryInfinite({ source: sourceFilter || undefined, sort: sortFilter }, 50);
+  } = useMyLibraryInfinite({ source: sourceFilter || undefined, sort: sortFilter }, 100);
   // Every lens is fully server-scoped (including From Lore via source=lore),
   // so rows arrive deduplicated, dual-source-labeled, and pre-filtered —
   // pagination and totals always describe exactly the visible feed.

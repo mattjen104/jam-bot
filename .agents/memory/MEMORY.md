@@ -124,3 +124,4 @@
 - [CREATE IF NOT EXISTS PK drift](create-if-not-exists-pk-drift.md) — boot migrations never repair missing PKs on pre-existing tables; 42P10 on upserts means \d the live table and ALTER ADD PRIMARY KEY.
 - [Dial filter menus](dial-filter-menus.md) — age tiers client-derived from releaseYear (unknown always passes); categories additive w/ last-category protection; "Lore" buttons must be aria-pressed toggles, never nav.
 - [Background recompute pool saturation](crossings-recompute-pool-saturation.md) — per-user heavy computes need a global execution concurrency cap; healthz-ok + health-hang = pg Pool exhausted, not server down.
+- [Matt's starter library config](matt-starter-library-config.md) — needs MATT_LIBRARY_SOURCE_USER_ID env var or it silently reports unavailable (fails closed, no error anywhere).
