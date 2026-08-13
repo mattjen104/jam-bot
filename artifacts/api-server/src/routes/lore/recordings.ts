@@ -45,6 +45,7 @@ import { getLyrics } from "../../lore/lrclib.js";
 import { enrichRecording, peekEnrichedKnowledge } from "@workspace/song-enrichment";
 import { wireSongEnrichment } from "../../song/wire.js";
 import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
+import { fetchAudioDbReview } from "../../lore/audiodb.js";
 import { resolvePickRunAnchors } from "../../lore/runs.js";
 import { pickerNotOptedOut } from "./shared.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -331,9 +332,70 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     }
   }
 
+  // TheAudioDB review — attempt synchronously with a 3 s ceiling so the
+  // first investigation visit receives real data. We only run when:
+  //  (a) a canonical album name is available from Spotify context, and
+  //  (b) there is no existing audiodb claim in claimRows.
+  // If the fetch stores a new claim we re-read so it appears in this response.
+  const albumTitleForAudioDb = album?.name ?? null;
+  const hasAudioDbClaim = claimRows.some((c) => c.sourceHandle === "audiodb");
+  if (albumTitleForAudioDb && !hasAudioDbClaim) {
+    try {
+      const stored = await Promise.race([
+        fetchAudioDbReview(rec.mbid, albumTitleForAudioDb),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 3_000)),
+      ]);
+      if (stored) {
+        // Re-read claims to include the newly persisted row.
+        const refreshed = await db
+          .select()
+          .from(trackClaimsTable)
+          .where(
+            and(
+              eq(trackClaimsTable.mbid, rec.mbid),
+              eq(trackClaimsTable.status, "published"),
+            ),
+          )
+          .orderBy(trackClaimsTable.id);
+        claimRows.length = 0;
+        claimRows.push(...refreshed);
+      }
+    } catch (err) {
+      console.warn("[lore] audiodb inline fetch failed", rec.mbid, err);
+    }
+  }
+
+  // Derive `sources` from the published claims — one entry per unique
+  // sourceHandle. This gives the knowledge object the `sources` field that
+  // the openapi schema declares on TrackKnowledge.
+  const KNOWN_SOURCE_TYPES: Record<string, string> = {
+    "song-exploder": "Podcast interview",
+    "classic-albums": "Documentary",
+    "genius": "Lyrics & annotations",
+    "wikipedia": "Critical summary",
+    "wikipedia-album": "Album overview",
+    "audiodb": "Review",
+  };
+
+  const sourcesByHandle = new Map<string, { label: string; type: string; excerpt: string; url: string | null }>();
+  for (const c of claimRows) {
+    if (sourcesByHandle.has(c.sourceHandle)) continue;
+    sourcesByHandle.set(c.sourceHandle, {
+      label: c.sourceLabel.replace(/\s+—.*$/, ""), // strip episode/article suffix
+      type: KNOWN_SOURCE_TYPES[c.sourceHandle] ?? "Source",
+      excerpt: c.text,
+      url: c.sourceUrl ?? null,
+    });
+  }
+  const sources = [...sourcesByHandle.entries()].map(([id, s]) => ({ id, ...s }));
+
+  const knowledgeWithSources = knowledge
+    ? { ...knowledge, sources }
+    : null;
+
   return res.json(
     GetRecordingKnowledgeResponse.parse({
-      knowledge: knowledge ?? null,
+      knowledge: knowledgeWithSources ?? null,
       album,
       claims: claimRows.map((c) => ({
         id: c.id,

@@ -31,6 +31,7 @@ export const ALL_KNOWN_SOURCES: KnownSource[] = [
   { id: "wikipedia-album",label: "Wikipedia",          type: "Album overview"      },
   { id: "beato",          label: "Rick Beato",         type: "Video essay"         },
   { id: "sound-on-sound", label: "Sound on Sound",     type: "Production profile"  },
+  { id: "audiodb",        label: "TheAudioDB",           type: "Community review"    },
   { id: "pitchfork",      label: "Pitchfork",          type: "Review"              },
   { id: "allmusic",       label: "AllMusic",           type: "Review"              },
   { id: "rym",            label: "Rate Your Music",    type: "Community rating"    },

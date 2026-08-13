@@ -1,5 +1,5 @@
 import { db, pickersTable, songExploderEpisodesTable, trackClaimsTable } from "@workspace/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, like } from "drizzle-orm";
 import { parseFeedItems } from "./blog.js";
 import { upsertPicker, persistPick } from "./picks.js";
 
@@ -225,6 +225,9 @@ export async function syncSongExploderEpisodes(): Promise<SongExploderIngestResu
         console.info(
           `[lore] song-exploder: resolved "${ep.title}" → ${resolution.mbid} (${resolution.confidence})`,
         );
+
+        // Auto-publish a claim so the Album Investigation sheet surfaces this source.
+        await upsertEpisodeClaim(resolution.mbid, ep);
       }
     } catch (err) {
       console.error("[lore] song-exploder: resolution failed for", ep.title, err);
@@ -232,6 +235,66 @@ export async function syncSongExploderEpisodes(): Promise<SongExploderIngestResu
   }
 
   return result;
+}
+
+// ---- Auto-claim helpers ---------------------------------------------------
+
+/**
+ * Upsert the auto-published investigation-sheet claim for a resolved episode.
+ * Idempotent: keyed on `se:{externalId}:source`.
+ */
+async function upsertEpisodeClaim(
+  mbid: string,
+  ep: { externalId: string; title: string; episodeUrl: string | null; publishedAt: Date | null },
+): Promise<void> {
+  const externalId = `se:${ep.externalId}:source`;
+  try {
+    await db
+      .insert(trackClaimsTable)
+      .values({
+        mbid,
+        text: `${ep.title} — the artist deconstructs this track in detail.`,
+        sourceLabel: `Song Exploder — ${ep.title}`,
+        sourceUrl: ep.episodeUrl ?? EPISODE_HOME,
+        sourceHandle: SONG_EXPLODER_HANDLE,
+        externalId,
+        status: "published",
+      })
+      .onConflictDoNothing({ target: trackClaimsTable.externalId });
+  } catch (err) {
+    console.warn("[lore] song-exploder: auto-claim upsert failed", externalId, err);
+  }
+}
+
+/**
+ * Backfill auto-published claims for episodes that resolved before this
+ * feature was added. Safe to call once at boot (idempotent per episode).
+ */
+export async function backfillSongExploderClaims(): Promise<number> {
+  // Episodes that are resolved but have no source-level claim yet.
+  const resolved = await db
+    .select()
+    .from(songExploderEpisodesTable)
+    .where(isNotNull(songExploderEpisodesTable.mbid));
+
+  let count = 0;
+  for (const ep of resolved) {
+    if (!ep.mbid) continue;
+    const externalId = `se:${ep.externalId}:source`;
+    // Quick idempotency check — skip if claim already exists.
+    const probe = await db
+      .select({ id: trackClaimsTable.id })
+      .from(trackClaimsTable)
+      .where(like(trackClaimsTable.externalId, externalId))
+      .limit(1);
+    if (probe.length > 0) continue;
+    await upsertEpisodeClaim(ep.mbid, ep);
+    count++;
+  }
+  if (count > 0) {
+    console.info(`[lore] song-exploder: backfilled ${count} auto-claim(s)`);
+  }
+  return count;
 }
 
 // ---- Admin claim entry (called from route layer) --------------------------
@@ -329,10 +392,20 @@ async function tick(): Promise<void> {
 /**
  * Start the Song Exploder feed poller. Idempotent — safe to call once at
  * boot. Polls every 6 hours after an initial warmup delay.
+ * Also schedules a one-time backfill of auto-claims for previously-resolved
+ * episodes (idempotent — skips episodes that already have a source claim).
  */
 export function startSongExploderPoller(): void {
   if (started) return;
   started = true;
+  // Backfill auto-claims for already-resolved episodes shortly after boot.
+  const backfill = setTimeout(
+    () => void backfillSongExploderClaims().catch((err) =>
+      console.warn("[lore] song-exploder: backfill failed", err),
+    ),
+    WARMUP_MS + 10_000,
+  );
+  timers.push(backfill);
   const kickoff = setTimeout(() => {
     void tick();
     const interval = setInterval(() => void tick(), POLL_MS);

@@ -27,7 +27,7 @@ export interface TrackClaim {
   /** Review status. Only 'published' claims are surfaced to end users on the song page. 'draft' = awaiting admin review (Wikipedia candidates). 'rejected' = discarded by admin.
    */
   status?: TrackClaimStatus;
-  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims.
+  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims. 'song-exploder' for auto-published Song Exploder episode claims. 'audiodb' for TheAudioDB community review and score claims.
    */
   sourceHandle: string;
   /** True for artist-verified Genius annotations. */

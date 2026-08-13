@@ -7,6 +7,7 @@
  */
 import type { Credit } from "./credit";
 import type { DiscogsPressing } from "./discogsPressing";
+import type { KnowledgeSource } from "./knowledgeSource";
 import type { SongRelationship } from "./songRelationship";
 
 export interface TrackKnowledge {
@@ -21,6 +22,9 @@ export interface TrackKnowledge {
   relationships?: SongRelationship[];
   /** @nullable */
   summary?: string | null;
+  /** Indexed review and documentary sources derived from published claims for this recording. One entry per unique sourceHandle. Populated when the knowledge endpoint has claims to draw from.
+   */
+  sources?: KnowledgeSource[];
   approximate: boolean;
   fetchedAtMs: number;
 }

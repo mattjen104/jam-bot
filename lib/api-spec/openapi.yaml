@@ -3680,6 +3680,37 @@ components:
         - targetType
         - targetId
         - mbUrl
+    KnowledgeSource:
+      type: object
+      description: >
+        An indexed review or documentary source for an album or recording.
+        Derived from published track_claims for the recording — one entry per
+        unique sourceHandle. `excerpt` is a short, factual summary (never
+        verbatim prose). `url` deep-links to the source.
+      properties:
+        id:
+          type: string
+          description: Matches the claim sourceHandle (e.g. 'pitchfork', 'song-exploder').
+        label:
+          type: string
+          description: Human-readable source name (e.g. 'Pitchfork', 'Song Exploder').
+        type:
+          type: string
+          description: Source category (e.g. 'Review', 'Podcast interview').
+        excerpt:
+          type: string
+          description: Short factual text, never verbatim prose.
+        url:
+          type: ["string", "null"]
+          description: Deep link to the review or episode.
+        date:
+          type: ["string", "null"]
+          description: Publication date in ISO 8601 format, when known.
+      required:
+        - id
+        - label
+        - type
+        - excerpt
     TrackKnowledge:
       type: object
       properties:
@@ -3703,6 +3734,14 @@ components:
             $ref: "#/components/schemas/SongRelationship"
         summary:
           type: ["string", "null"]
+        sources:
+          type: array
+          description: >
+            Indexed review and documentary sources derived from published claims
+            for this recording. One entry per unique sourceHandle. Populated
+            when the knowledge endpoint has claims to draw from.
+          items:
+            $ref: "#/components/schemas/KnowledgeSource"
         approximate:
           type: boolean
         fetchedAtMs:
@@ -4507,6 +4546,8 @@ components:
             claims. 'wikipedia-album' for album-level Wikipedia section claims
             (sourced from the recording's canonical album article).
             'genius' for Genius annotation-derived claims.
+            'song-exploder' for auto-published Song Exploder episode claims.
+            'audiodb' for TheAudioDB community review and score claims.
         verified:
           type: boolean
           description: True for artist-verified Genius annotations.

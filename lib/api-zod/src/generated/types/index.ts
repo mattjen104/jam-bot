@@ -112,6 +112,7 @@ export * from "./importedSetRecordingLinksItemKind";
 export * from "./importedSetStatus";
 export * from "./importedSetUploadRequest";
 export * from "./ingestResult";
+export * from "./knowledgeSource";
 export * from "./labelSeedRequest";
 export * from "./libraryCoverageAlbum";
 export * from "./libraryCoverageList";

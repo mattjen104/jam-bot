@@ -111,6 +111,45 @@ export const GetSongContextResponse = zod.object({
           )
           .optional(),
         summary: zod.string().nullish(),
+        sources: zod
+          .array(
+            zod
+              .object({
+                id: zod
+                  .string()
+                  .describe(
+                    "Matches the claim sourceHandle (e.g. 'pitchfork', 'song-exploder').",
+                  ),
+                label: zod
+                  .string()
+                  .describe(
+                    "Human-readable source name (e.g. 'Pitchfork', 'Song Exploder').",
+                  ),
+                type: zod
+                  .string()
+                  .describe(
+                    "Source category (e.g. 'Review', 'Podcast interview').",
+                  ),
+                excerpt: zod
+                  .string()
+                  .describe("Short factual text, never verbatim prose."),
+                url: zod
+                  .string()
+                  .nullish()
+                  .describe("Deep link to the review or episode."),
+                date: zod
+                  .string()
+                  .nullish()
+                  .describe("Publication date in ISO 8601 format, when known."),
+              })
+              .describe(
+                "An indexed review or documentary source for an album or recording. Derived from published track_claims for the recording — one entry per unique sourceHandle. `excerpt` is a short, factual summary (never verbatim prose). `url` deep-links to the source.\n",
+              ),
+          )
+          .optional()
+          .describe(
+            "Indexed review and documentary sources derived from published claims for this recording. One entry per unique sourceHandle. Populated when the knowledge endpoint has claims to draw from.\n",
+          ),
         approximate: zod.boolean(),
         fetchedAtMs: zod.number(),
       }),
@@ -1022,6 +1061,45 @@ export const GetRecordingKnowledgeResponse = zod.object({
         )
         .optional(),
       summary: zod.string().nullish(),
+      sources: zod
+        .array(
+          zod
+            .object({
+              id: zod
+                .string()
+                .describe(
+                  "Matches the claim sourceHandle (e.g. 'pitchfork', 'song-exploder').",
+                ),
+              label: zod
+                .string()
+                .describe(
+                  "Human-readable source name (e.g. 'Pitchfork', 'Song Exploder').",
+                ),
+              type: zod
+                .string()
+                .describe(
+                  "Source category (e.g. 'Review', 'Podcast interview').",
+                ),
+              excerpt: zod
+                .string()
+                .describe("Short factual text, never verbatim prose."),
+              url: zod
+                .string()
+                .nullish()
+                .describe("Deep link to the review or episode."),
+              date: zod
+                .string()
+                .nullish()
+                .describe("Publication date in ISO 8601 format, when known."),
+            })
+            .describe(
+              "An indexed review or documentary source for an album or recording. Derived from published track_claims for the recording — one entry per unique sourceHandle. `excerpt` is a short, factual summary (never verbatim prose). `url` deep-links to the source.\n",
+            ),
+        )
+        .optional()
+        .describe(
+          "Indexed review and documentary sources derived from published claims for this recording. One entry per unique sourceHandle. Populated when the knowledge endpoint has claims to draw from.\n",
+        ),
       approximate: zod.boolean(),
       fetchedAtMs: zod.number(),
     }),
@@ -1081,7 +1159,7 @@ export const GetRecordingKnowledgeResponse = zod.object({
           sourceHandle: zod
             .string()
             .describe(
-              "Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims.\n",
+              "Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims. 'song-exploder' for auto-published Song Exploder episode claims. 'audiodb' for TheAudioDB community review and score claims.\n",
             ),
           verified: zod
             .boolean()

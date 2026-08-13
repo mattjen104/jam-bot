@@ -182,6 +182,31 @@ export interface SongRelationship {
   mbUrl: string;
 }
 
+/**
+ * An indexed review or documentary source for an album or recording. Derived from published track_claims for the recording — one entry per unique sourceHandle. `excerpt` is a short, factual summary (never verbatim prose). `url` deep-links to the source.
+
+ */
+export interface KnowledgeSource {
+  /** Matches the claim sourceHandle (e.g. 'pitchfork', 'song-exploder'). */
+  id: string;
+  /** Human-readable source name (e.g. 'Pitchfork', 'Song Exploder'). */
+  label: string;
+  /** Source category (e.g. 'Review', 'Podcast interview'). */
+  type: string;
+  /** Short factual text, never verbatim prose. */
+  excerpt: string;
+  /**
+   * Deep link to the review or episode.
+   * @nullable
+   */
+  url?: string | null;
+  /**
+   * Publication date in ISO 8601 format, when known.
+   * @nullable
+   */
+  date?: string | null;
+}
+
 export interface TrackKnowledge {
   /** @nullable */
   recordingId?: string | null;
@@ -194,6 +219,9 @@ export interface TrackKnowledge {
   relationships?: SongRelationship[];
   /** @nullable */
   summary?: string | null;
+  /** Indexed review and documentary sources derived from published claims for this recording. One entry per unique sourceHandle. Populated when the knowledge endpoint has claims to draw from.
+   */
+  sources?: KnowledgeSource[];
   approximate: boolean;
   fetchedAtMs: number;
 }
@@ -799,7 +827,7 @@ export interface TrackClaim {
   /** Review status. Only 'published' claims are surfaced to end users on the song page. 'draft' = awaiting admin review (Wikipedia candidates). 'rejected' = discarded by admin.
    */
   status?: TrackClaimStatus;
-  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims.
+  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims. 'song-exploder' for auto-published Song Exploder episode claims. 'audiodb' for TheAudioDB community review and score claims.
    */
   sourceHandle: string;
   /** True for artist-verified Genius annotations. */
