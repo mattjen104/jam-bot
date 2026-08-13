@@ -413,6 +413,12 @@ export async function fetchMetacriticScore(
     const page = await fetchMetacriticPage(candidates);
 
     if (!page) {
+      // Store a DB sentinel (same as ld+json parse failure) so the 24-hour
+      // cooldown survives server restarts — 403 bot-detection blocks would
+      // otherwise be retried on every restart because recentMisses is cleared.
+      const firstUrl =
+        candidates[0] ?? `${METACRITIC_HOME}/music/`;
+      await storeMissSentinel(recordingMbid, missId, firstUrl);
       if (recentMisses.size > MISS_COOLDOWN_MAX) recentMisses.clear();
       recentMisses.set(releaseGroupMbid, Date.now());
       return false;
