@@ -242,36 +242,38 @@ describe("Library timeline dual-source flag", () => {
 });
 
 describe("From Lore lens (source=lore)", () => {
-  it("returns radio-provenance keeps even when they sit behind pages of plain keeps", async () => {
+  it("returns all keeps (plain and radio) ordered by addedAt desc", async () => {
     if (!dbAvailable) return;
-    // Sanity: with the generic keep feed at limit=2, page 1 is the two PLAIN
-    // keeps — a client-side provenance filter would render an empty page
-    // with no scroll sentinel and strand the radio keeps behind it.
-    const generic = await getLibrary({ q: loreRun, limit: "2", source: "keep" });
-    expect(generic.status).toBe(200);
-    expect(generic.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([
+    // source=lore now returns every kind='keep' row — both direct keeps
+    // (no station/picker) and radio-provenance keeps — ordered newest first.
+    // The plain keeps are newer, so page 1 at limit=2 is the two plain rows.
+    const p1 = await getLibrary({ q: loreRun, limit: "2", source: "lore" });
+    expect(p1.status).toBe(200);
+    expect(p1.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([
       LORE_MBIDS.plainNew1,
       LORE_MBIDS.plainNew2,
     ]);
+    // Page-1 total reflects all four keeps in the scoped feed.
+    expect(p1.body.total).toBe(4);
+    expect(p1.body.nextCursor).toBeTruthy();
 
-    // The scoped feed returns ONLY radio-provenance keeps, first page.
-    const scoped = await getLibrary({ q: loreRun, limit: "2", source: "lore" });
-    expect(scoped.status).toBe(200);
-    expect(scoped.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([
+    // Page 2 contains the two older radio-provenance keeps.
+    const p2 = await getLibrary({ q: loreRun, limit: "2", source: "lore", cursor: p1.body.nextCursor });
+    expect(p2.status).toBe(200);
+    expect(p2.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([
       LORE_MBIDS.radioStation,
       LORE_MBIDS.radioPicker,
     ]);
-    // Page-1 total reflects the scoped feed, not the generic keep count.
-    expect(scoped.body.total).toBe(2);
-    expect(scoped.body.nextCursor).toBeNull();
+    expect(p2.body.nextCursor).toBeNull();
   });
 
   it("pages the scoped feed with the keyset cursor", async () => {
     if (!dbAvailable) return;
+    // Plain keeps are newest so page 1 at limit=1 yields the first plain keep.
     const p1 = await getLibrary({ q: loreRun, limit: "1", source: "lore" });
-    expect(p1.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([LORE_MBIDS.radioStation]);
+    expect(p1.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([LORE_MBIDS.plainNew1]);
     expect(p1.body.nextCursor).toBeTruthy();
     const p2 = await getLibrary({ q: loreRun, limit: "1", source: "lore", cursor: p1.body.nextCursor });
-    expect(p2.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([LORE_MBIDS.radioPicker]);
+    expect(p2.body.items.map((i: { mbid: string }) => i.mbid)).toEqual([LORE_MBIDS.plainNew2]);
   });
 });

@@ -3,6 +3,7 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks } from "@workspace/api-client-react";
 import type { AlbumGroup } from "../pages/Library";
 import type { LibraryItem } from "../lib/meHooks";
+import { useMutationKeep } from "../lib/meHooks";
 import { AlbumInvestigationSheet } from "./AlbumInvestigationSheet";
 
 // ---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ function albumByline(items: LibraryItem[]): string | null {
     if (picker && station) return `via ${picker} · ${station}`;
     if (picker) return `via ${picker}`;
     if (station) return `kept on ${station}`;
-    return "kept from Lore";
+    return "kept directly";
   }
   if (prov.kind === "import") {
     return prov.service ? `imported from ${prov.service}` : "imported";
@@ -66,11 +67,15 @@ function TrackSubRow({ item }: { item: LibraryItem }) {
     if (stationName && pickerName) provPart = `${stationName} · ${pickerName}`;
     else if (stationName) provPart = stationName;
     else if (pickerName) provPart = pickerName;
+    else provPart = "kept directly";
   } else if (prov.kind === "import" && prov.service) {
     provPart = prov.service;
   }
 
   const date = formatDate(item.addedAt);
+  // Show a Keep affordance for tracks that are resolved but not yet explicitly
+  // kept (i.e. came from an import and have an MBID to act on).
+  const showKeep = item.mbid != null && prov.kind !== "keep" && !isSoft && !isRemoved;
 
   return (
     <div
@@ -105,7 +110,45 @@ function TrackSubRow({ item }: { item: LibraryItem }) {
       <span style={{ color: "hsl(var(--faint))", fontSize: 10, flexShrink: 0, marginLeft: 8 }}>
         {date}
       </span>
+      {showKeep && <TrackKeepBtn mbid={item.mbid!} />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline keep button for import-kind tracks inside TrackSubRow
+// ---------------------------------------------------------------------------
+
+function TrackKeepBtn({ mbid }: { mbid: string }) {
+  const keep = useMutationKeep();
+  return (
+    <button
+      type="button"
+      disabled={keep.isPending || keep.isSuccess}
+      onClick={(e) => {
+        e.stopPropagation();
+        keep.mutate({ mbid });
+      }}
+      data-testid="track-keep-button"
+      title="Keep this track in your Lore library"
+      aria-label="Keep this track in your Lore library"
+      style={{
+        fontFamily: "var(--app-font-mono)",
+        fontSize: 10,
+        color: keep.isSuccess ? "hsl(var(--library))" : "hsl(var(--dim))",
+        background: "none",
+        border: `1px solid hsl(var(--border) / ${keep.isSuccess ? "0.6" : "0.4"})`,
+        borderRadius: 3,
+        padding: "1px 6px",
+        cursor: keep.isPending || keep.isSuccess ? "default" : "pointer",
+        flexShrink: 0,
+        marginLeft: 6,
+        opacity: keep.isPending ? 0.6 : 1,
+        transition: "color 0.12s, border-color 0.12s",
+      }}
+    >
+      {keep.isPending ? "…" : keep.isSuccess ? "✓ kept" : "keep"}
+    </button>
   );
 }
 

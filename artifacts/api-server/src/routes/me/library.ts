@@ -2771,18 +2771,13 @@ router.get("/me/library", h(async (req, res) => {
     );
   }
   if (source === "lore") {
-    // "From Lore" lens: keeps that carry radio provenance (kept off a picker
-    // or station spin). Scoped server-side so pagination and the page-1
-    // total reflect exactly this feed — a client-side filter over the
-    // generic keep feed can render an empty first page with no scroll
-    // sentinel and strand later matching rows.
+    // "From Lore" lens: any explicit keep — whether kept off a radio spin
+    // or saved directly from the Stack without station/picker attribution.
+    // Scoped server-side so pagination and the page-1 total reflect exactly
+    // this feed — a client-side filter over the generic keep feed can render
+    // an empty first page with no scroll sentinel and strand later rows.
     conditions.push(
-      sql`(${libraryItemsTable.provenance}->>'kind' = 'keep' AND (
-        ${libraryItemsTable.provenance}->>'pickerHandle' IS NOT NULL OR
-        ${libraryItemsTable.provenance}->>'pickerName' IS NOT NULL OR
-        ${libraryItemsTable.provenance}->>'stationSlug' IS NOT NULL OR
-        ${libraryItemsTable.provenance}->>'stationName' IS NOT NULL
-      ))`,
+      sql`${libraryItemsTable.provenance}->>'kind' = 'keep'`,
     );
   }
   if (source === "critic") {

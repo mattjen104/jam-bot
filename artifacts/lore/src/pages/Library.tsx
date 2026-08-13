@@ -529,9 +529,10 @@ export const LENS_SOURCE: Record<Lens, "keep" | "soft" | "critic" | "lore" | und
   recent: "keep",
   albums: undefined,
   artists: undefined,
-  // Scoped server-side (keeps with radio provenance) so pagination and the
-  // page-1 total reflect exactly the From Lore feed — client filtering over
-  // the generic keep feed can strand matching rows behind an empty page 1.
+  // Scoped server-side (all explicit keeps: radio provenance or direct) so
+  // pagination and the page-1 total reflect exactly the From Lore feed —
+  // client filtering over the generic keep feed can strand matching rows
+  // behind an empty page 1.
   lore: "lore",
   matching: "soft",
   critic: "critic",
