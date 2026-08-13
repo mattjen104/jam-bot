@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, useRecentKeptArtwork, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
@@ -23,7 +23,6 @@ import { useEraGenreMode } from "../lib/eraGenreMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
 import { DialCliBar } from "./dial/DialCliBar";
-import { DialSpineStrip } from "./dial/DialSpineStrip";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
 import {
@@ -1761,8 +1760,6 @@ export function DialView() {
   const activeArtworkUrl = activeNpData?.nowPlaying?.recording?.artworkUrl
     ?? activeNpData?.nowPlaying?.artworkUrl
     ?? null;
-  // ── Spine strip: last 5 kept-track artworks for the decorative left edge ──
-  const spineArtUrls = useRecentKeptArtwork(5);
   const _hasWeeklyRecap = weeklyRecapData != null && (
     weeklyRecapData.stationsAttended.stations.length > 0 ||
     weeklyRecapData.firstEverHeards.items.length > 0 ||
@@ -2664,13 +2661,8 @@ export function DialView() {
         />
       )}
 
-      {/* Front door: decorative spine strip lines the left edge of the Dial
-          column. Non-front-door levels render the normal topbar chrome. */}
-      {level === "all" ? (
-        <DialSpineStrip urls={spineArtUrls} />
-      ) : (
-        renderTopbar()
-      )}
+      {/* Non-front-door levels render the normal topbar chrome. */}
+      {level !== "all" && renderTopbar()}
 
 
       {/* Scan bar — station / show / dj levels only */}

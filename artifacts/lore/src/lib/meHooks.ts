@@ -881,20 +881,6 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
 }
 
 /**
- * The last N kept-track artwork URLs, newest first.
- * Used for the decorative album spine strip on the Dial front door.
- * Nulls are preserved in place (a keep without artwork renders as a dark
- * fallback pane); returns [] when the user has no keeps.
- */
-export function useRecentKeptArtwork(count = 5): (string | null)[] {
-  const result = useMyLibraryInfinite({ source: "keep" }, count);
-  const items = result.data?.pages[0]?.items ?? [];
-  return items
-    .map((item) => item.recording?.artworkUrl ?? null)
-    .slice(0, count);
-}
-
-/**
  * Stable import-scoped counts for the "X of Y from Spotify matched" stat.
  * Always scoped to source=import so the numbers don't change with whatever
  * filter the user has active in the Library view.

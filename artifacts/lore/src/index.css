@@ -1690,39 +1690,6 @@
 .bottom-nav__link:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
 .bottom-nav__link--active[data-section="lore"]    { color: hsl(var(--accent)); }
 .bottom-nav__link--active[data-section="library"] { color: hsl(var(--library)); }
-/* ── Dial spine strip — 5 thin kept-track artwork panels lining the left
-   edge of the full-height Dial. Hidden on portrait; only shown in landscape.
-   Position:fixed so the strip doesn't scroll with the feed. ── */
-.dial-spine-strip {
-  display: none; /* portrait: hidden */
-}
-
-@media (orientation: landscape) {
-  .dial-spine-strip {
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: var(--spine-strip-w, 32px);
-    bottom: var(--shell-h, 0px);
-    z-index: 4; /* above the CLI overlay (z:3) */
-    pointer-events: none;
-    overflow: hidden;
-  }
-  .dial-spine-strip__pane {
-    flex: 1;
-    background-color: hsl(var(--background));
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-  }
-  /* Front door only: reserve the strip width so feed text doesn't underlap */
-  .dial-root--front .dial-body {
-    padding-left: var(--spine-strip-w, 32px);
-  }
-}
-
 
 /* Wordmark used in Library / Selectors pages — typography only. */
 
@@ -1998,10 +1965,10 @@
 
    Dial region boundaries by breakpoint:
    • Portrait   — lower half of the screen (wordmark is bottom-anchored)
-   • Landscape  — full width right of the spine strip (--spine-strip-w)
+   • Landscape  — full width of the Dial region
 
    z-index:3 puts it above the page background; the feed rows (not fixed)
-   paint on top naturally, and the spine strip (z:4) covers its left edge.
+   paint on top naturally.
    mix-blend-mode:screen produces the overlap collision. */
 
 /* Default: hidden everywhere; each breakpoint opts in */
@@ -2029,14 +1996,13 @@
   }
 }
 
-/* ── Landscape — full-width Dial, wordmark clears the spine strip ────────── */
+/* ── Landscape — full-width Dial ─────────────────────────────────────────── */
 @media (orientation: landscape) {
   .dial-cli-overlay {
     display: block;
     position: fixed;
     top: 56px; /* below the app header */
-    /* Dial starts where the spine strip ends */
-    left: var(--spine-strip-w, 32px);
+    left: 0;
     right: 0;
     bottom: var(--shell-h, 0px);
     z-index: 3;

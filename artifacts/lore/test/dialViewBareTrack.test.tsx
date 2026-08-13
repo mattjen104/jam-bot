@@ -347,7 +347,25 @@ describe("FrontDoorRow — 'Unknown' text suppression", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. OfflineRow — showName and track-title rendering
+// 3. Feed front door — no artwork shelf
+// ---------------------------------------------------------------------------
+
+describe("Feed front door — no artwork shelf", () => {
+  it("never renders a dial-spine-strip element on the front door", () => {
+    const track = makeSpin({ title: "Boredom", artist: "Buzzcocks" });
+    const show = makeShow({ currentTrack: track });
+    const station = makeStation({ isLive: true, shows: [show] });
+    mockDialData([station]);
+
+    const { container } = renderDial();
+
+    // The decorative kept-art strip must not appear in the rendered output.
+    expect(container.querySelector(".dial-spine-strip")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. OfflineRow — showName and track-title rendering
 // ---------------------------------------------------------------------------
 
 describe("Offline stations — not rendered as front-door rows", () => {
