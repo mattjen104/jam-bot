@@ -3,7 +3,6 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks } from "@workspace/api-client-react";
 import type { AlbumGroup } from "../pages/Library";
 import type { LibraryItem } from "../lib/meHooks";
-import { toast } from "../hooks/use-toast";
 import { AlbumInvestigationSheet } from "./AlbumInvestigationSheet";
 
 // ---------------------------------------------------------------------------
@@ -122,8 +121,8 @@ function useLaunchAlbum(group: AlbumGroup) {
 
   const firstMbid = group.items.find((i) => i.mbid != null)?.mbid ?? null;
 
-  const launch = useCallback(async () => {
-    if (!firstMbid) return;
+  const launch = useCallback(async (): Promise<boolean> => {
+    if (!firstMbid) return false;
     setBusy(true);
     try {
       const data = await getRecordingAlbumTracks(firstMbid);
@@ -141,8 +140,9 @@ function useLaunchAlbum(group: AlbumGroup) {
       // itself resolves to Spotify, preview, or YouTube depending on the
       // listener's preferred service — consistent with ghost-set replay.
       ride.startReplay(seeds, label, { timeOrientation: "curated", context: "library" });
+      return true;
     } catch {
-      toast({ title: "Couldn't load album — try again" });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -327,7 +327,9 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
                 disabled={!canLaunch || busy}
                 onClick={(e) => {
                   e.stopPropagation();
-                  void launch();
+                  void launch().then((ok) => {
+                    if (!ok) setInvestigationOpen(true);
+                  });
                 }}
                 style={{
                   fontFamily: "var(--app-font-mono)",
@@ -381,6 +383,7 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
         <AlbumInvestigationSheet
           group={group}
           onDismiss={() => setInvestigationOpen(false)}
+          onLaunch={canLaunch ? launch : undefined}
         />
       )}
     </>

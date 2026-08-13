@@ -5,10 +5,10 @@
  * Confirms:
  *  - Launch button calls getRecordingAlbumTracks with the first resolved mbid
  *    and passes the complete track list to ride.startReplay.
- *  - When getRecordingAlbumTracks returns zero tracks the launch shows a toast
- *    but does NOT call ride.startReplay.
- *  - When getRecordingAlbumTracks rejects, a toast is shown and startReplay is
- *    never called.
+ *  - When getRecordingAlbumTracks returns zero tracks the investigation sheet
+ *    opens and startReplay is NOT called.
+ *  - When getRecordingAlbumTracks rejects, the investigation sheet opens and
+ *    startReplay is never called.
  *  - When the group has no resolved mbid (all soft rows) the Launch button is
  *    disabled.
  */
@@ -25,7 +25,6 @@ import type { LibraryItem } from "../src/lib/meHooks";
 // ---------------------------------------------------------------------------
 
 const mockStartReplay = vi.fn();
-const mockToast = vi.fn();
 
 vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
   const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
@@ -42,8 +41,15 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   return makeApiClientMock(importOriginal, {});
 });
 
-vi.mock("../src/hooks/use-toast", () => ({
-  toast: (...args: unknown[]) => mockToast(...args),
+// Stub the investigation sheet to avoid needing a full QueryClient provider.
+// We only need to confirm it mounts when a launch fails.
+vi.mock("../src/components/AlbumInvestigationSheet", () => ({
+  AlbumInvestigationSheet: ({ group, onDismiss }: { group: { albumTitle: string }; onDismiss: () => void }) => (
+    <div data-testid="album-investigation-sheet">
+      <span>{group.albumTitle}</span>
+      <button onClick={onDismiss}>close</button>
+    </div>
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -161,11 +167,11 @@ describe("StackRow launch — full album ride", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Launch — empty track list
+// Launch — empty track list opens investigation sheet
 // ---------------------------------------------------------------------------
 
 describe("StackRow launch — empty track list", () => {
-  it("shows a toast and does NOT call startReplay when tracks is empty", async () => {
+  it("opens the investigation sheet and does NOT call startReplay when tracks is empty", async () => {
     const { getRecordingAlbumTracks } = await import("@workspace/api-client-react");
     vi.mocked(getRecordingAlbumTracks).mockResolvedValueOnce({ rgTitle: "Rumours", tracks: [] });
 
@@ -173,18 +179,19 @@ describe("StackRow launch — empty track list", () => {
     renderRow(group, true);
     fireEvent.click(screen.getByTestId("stack-launch-btn"));
 
-    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByTestId("album-investigation-sheet")).toBeDefined(),
+    );
     expect(mockStartReplay).not.toHaveBeenCalled();
-    expect(mockToast.mock.calls[0]?.[0]).toMatchObject({ title: expect.stringContaining("load album") });
   });
 });
 
 // ---------------------------------------------------------------------------
-// Launch — API error
+// Launch — API error opens investigation sheet
 // ---------------------------------------------------------------------------
 
 describe("StackRow launch — API error", () => {
-  it("shows a toast and does NOT call startReplay when getRecordingAlbumTracks rejects", async () => {
+  it("opens the investigation sheet and does NOT call startReplay when getRecordingAlbumTracks rejects", async () => {
     const { getRecordingAlbumTracks } = await import("@workspace/api-client-react");
     vi.mocked(getRecordingAlbumTracks).mockRejectedValueOnce(new Error("network error"));
 
@@ -192,7 +199,9 @@ describe("StackRow launch — API error", () => {
     renderRow(group, true);
     fireEvent.click(screen.getByTestId("stack-launch-btn"));
 
-    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByTestId("album-investigation-sheet")).toBeDefined(),
+    );
     expect(mockStartReplay).not.toHaveBeenCalled();
   });
 });
