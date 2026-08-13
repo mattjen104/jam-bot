@@ -318,7 +318,7 @@ function HealthPanel({
 
         {/* Release year enrichment health */}
         {!loading && !loadError && ryHealth !== null && (
-          <ReleaseYearHealthSection health={ryHealth} />
+          <ReleaseYearHealthSection health={ryHealth} token={token} onRunComplete={() => void fetchAll({ silent: true })} />
         )}
 
         {/* Healthy sub-sections when one is OK but not both */}
@@ -494,8 +494,51 @@ function DataRow({ label, value }: { label: string; value: string }) {
 
 // ─── Release year enrichment health ───────────────────────────────────────
 
-function ReleaseYearHealthSection({ health }: { health: ReleaseYearHealth }) {
+interface RunBatchResult {
+  scanned: number;
+  found: number;
+  remaining: number;
+}
+
+function ReleaseYearHealthSection({
+  health,
+  token,
+  onRunComplete,
+}: {
+  health: ReleaseYearHealth;
+  token: string;
+  onRunComplete: () => void;
+}) {
   const { totalNull, inQueue, permMiss, ineligible, lastCheckedAt } = health;
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<RunBatchResult | string | null>(null);
+  const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleRunBatch = useCallback(async () => {
+    setRunning(true);
+    setRunResult(null);
+    try {
+      const res = await fetch("/api/admin/release-year-backfill/run", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setRunResult(body.error ?? `HTTP ${res.status}`);
+      } else {
+        const data = (await res.json()) as RunBatchResult;
+        setRunResult(data);
+        onRunComplete();
+      }
+    } catch (err) {
+      setRunResult(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setRunning(false);
+      // Clear the inline result after 8 s so it doesn't linger.
+      if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = setTimeout(() => setRunResult(null), 8_000);
+    }
+  }, [token, onRunComplete]);
 
   const queueDone = inQueue === 0;
 
@@ -558,41 +601,71 @@ function ReleaseYearHealthSection({ health }: { health: ReleaseYearHealth }) {
           </div>
         </dl>
 
-        <p className="mt-4 border-t border-border pt-3 text-sm text-muted-foreground">
-          {totalNull === 0 && (
-            <span className="text-zinc-500">All recordings have a release year ✓</span>
-          )}
-          {totalNull > 0 && queueDone && lastCheckedAt && (
-            <>
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+          <p className="flex-1 text-sm text-muted-foreground">
+            {totalNull === 0 && (
+              <span className="text-zinc-500">All recordings have a release year ✓</span>
+            )}
+            {totalNull > 0 && queueDone && lastCheckedAt && (
+              <>
+                <span className="text-zinc-500">
+                  Queue exhausted — no eligible work remaining.
+                </span>
+                <span className="ml-2">
+                  Last MB lookup:{" "}
+                  <span className="font-mono text-foreground">
+                    {formatTimestamp(lastCheckedAt)}
+                  </span>
+                </span>
+              </>
+            )}
+            {totalNull > 0 && !queueDone && lastCheckedAt && (
+              <>
+                <span className="text-zinc-500">Backfill in progress.</span>
+                <span className="ml-2">
+                  Last MB lookup:{" "}
+                  <span className="font-mono text-foreground">
+                    {formatTimestamp(lastCheckedAt)}
+                  </span>
+                </span>
+              </>
+            )}
+            {totalNull > 0 && !queueDone && !lastCheckedAt && (
               <span className="text-zinc-500">
-                Queue exhausted — no eligible work remaining.
+                Backfill not yet started — will begin after a short delay on
+                server boot.
               </span>
-              <span className="ml-2">
-                Last MB lookup:{" "}
-                <span className="font-mono text-foreground">
-                  {formatTimestamp(lastCheckedAt)}
-                </span>
+            )}
+          </p>
+
+          <div className="flex shrink-0 items-center gap-3">
+            {runResult !== null && (
+              <span className="text-sm text-muted-foreground">
+                {typeof runResult === "string" ? (
+                  <span className="text-destructive">{runResult}</span>
+                ) : (
+                  <span>
+                    found{" "}
+                    <span className="font-mono text-foreground">{runResult.found}</span>
+                    {" of "}
+                    <span className="font-mono text-foreground">{runResult.scanned}</span>
+                    {" scanned · "}
+                    <span className="font-mono text-foreground">{runResult.remaining}</span>
+                    {" remaining"}
+                  </span>
+                )}
               </span>
-            </>
-          )}
-          {totalNull > 0 && !queueDone && lastCheckedAt && (
-            <>
-              <span className="text-zinc-500">Backfill in progress.</span>
-              <span className="ml-2">
-                Last MB lookup:{" "}
-                <span className="font-mono text-foreground">
-                  {formatTimestamp(lastCheckedAt)}
-                </span>
-              </span>
-            </>
-          )}
-          {totalNull > 0 && !queueDone && !lastCheckedAt && (
-            <span className="text-zinc-500">
-              Backfill not yet started — will begin after a short delay on
-              server boot.
-            </span>
-          )}
-        </p>
+            )}
+            <button
+              onClick={() => void handleRunBatch()}
+              disabled={running || inQueue === 0}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+            >
+              <RefreshCw className={`h-3 w-3 ${running ? "animate-spin" : ""}`} />
+              {running ? "Running…" : "Run batch now"}
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );

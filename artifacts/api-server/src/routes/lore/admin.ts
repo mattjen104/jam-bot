@@ -109,6 +109,7 @@ import { stampSpinShowIds } from "../../lore/scraped-shows-sync.js";
 import { clearAutomationClassCache } from "../../lore/scraped-shows-sync.js";
 import { clearPlayerScheduleCache } from "../player.js";
 import { toPicker } from "./shared.js";
+import { backfillReleaseYearBatch } from "../../lore/release-year-backfill.js";
 
 const router: IRouter = Router();
 
@@ -1459,6 +1460,17 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
     ineligible: totals?.ineligible ?? 0,
     lastCheckedAt: totals?.lastCheckedAt ?? null,
   });
+}));
+
+// POST /api/admin/release-year-backfill/run — trigger one backfill batch
+// immediately. Returns the same { scanned, found, remaining } summary that the
+// scheduled job produces. The button on the admin health page calls this so
+// operators can flush the queue faster during maintenance without restarting.
+router.post("/admin/release-year-backfill/run", h(async (_req, res) => {
+  const result = await backfillReleaseYearBatch().catch((err) => {
+    throw new HttpError(500, err instanceof Error ? err.message : "Backfill batch failed");
+  });
+  return res.json(result);
 }));
 
 // GET /api/admin/feed-freshness-health — stations whose fixed-size feed
