@@ -87,9 +87,12 @@ describe("DialCliBar", () => {
   });
 
   it.each([
-    ["/lore", "lore"],
-    ["/classics", "classics"],
-    ["/ambient", "ambient"],
+    ["/lore",      "lore"      ],
+    ["/classics",  "classics"  ],
+    ["/ambient",   "ambient"   ],
+    ["/spinitron", "spinitron" ],
+    ["/college",   "college"   ],
+    ["/longtail",  "longtail"  ],
   ] as const)("routes %s to onToggleCategory and clears the field", (command, cat) => {
     const { props, input } = renderCli();
     type(input, command);

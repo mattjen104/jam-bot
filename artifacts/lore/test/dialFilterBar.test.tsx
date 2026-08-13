@@ -36,9 +36,12 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof DialFilterBar>
 }
 
 describe("DialFilterBar", () => {
-  it("renders both menus with every label", () => {
+  it("renders both menus with every label including new categories", () => {
     renderBar();
-    for (const label of ["First", "Current", "Catalog", "Deep", "Lore", "Classics", "Ambient"]) {
+    for (const label of [
+      "First", "Current", "Catalog", "Deep",
+      "Lore", "Classics", "Ambient", "Spinitron", "College", "Long-tail",
+    ]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
     }
     // Grouped for a11y: song-age group + station-category group.
@@ -49,7 +52,7 @@ describe("DialFilterBar", () => {
   it("marks active buttons with aria-pressed and the --on class", () => {
     renderBar({
       activeTiers: new Set<AgeTier>(["current", "deep"]),
-      activeCategories: new Set<StationCategory>(["lore", "ambient"]),
+      activeCategories: new Set<StationCategory>(["lore", "ambient", "college"]),
     });
     const pressed = (name: string) =>
       screen.getByRole("button", { name }).getAttribute("aria-pressed");
@@ -60,6 +63,9 @@ describe("DialFilterBar", () => {
     expect(pressed("Lore")).toBe("true");
     expect(pressed("Ambient")).toBe("true");
     expect(pressed("Classics")).toBe("false");
+    expect(pressed("Spinitron")).toBe("false");
+    expect(pressed("College")).toBe("true");
+    expect(pressed("Long-tail")).toBe("false");
     expect(screen.getByRole("button", { name: "Current" }).className).toContain("dial-filter-bar__btn--on");
     expect(screen.getByRole("button", { name: "Classics" }).className).not.toContain("--on");
   });
@@ -70,5 +76,11 @@ describe("DialFilterBar", () => {
     expect(props.onToggleTier).toHaveBeenCalledWith("catalog");
     fireEvent.click(screen.getByRole("button", { name: "Ambient" }));
     expect(props.onToggleCategory).toHaveBeenCalledWith("ambient");
+    fireEvent.click(screen.getByRole("button", { name: "Spinitron" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("spinitron");
+    fireEvent.click(screen.getByRole("button", { name: "College" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("college");
+    fireEvent.click(screen.getByRole("button", { name: "Long-tail" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("longtail");
   });
 });

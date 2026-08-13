@@ -13,7 +13,13 @@
 import type { AgeTier } from "../../lib/dialAgeFilter";
 
 export type { AgeTier };
-export type StationCategory = "lore" | "classics" | "ambient";
+export type StationCategory =
+  | "lore"
+  | "classics"
+  | "ambient"
+  | "spinitron"
+  | "college"
+  | "longtail";
 
 export interface DialFilterBarProps {
   activeTiers: Set<AgeTier>;
@@ -31,9 +37,12 @@ const AGE_LABELS: { tier: AgeTier; label: string; title: string }[] = [
 ];
 
 const CAT_LABELS: { cat: StationCategory; label: string; title: string }[] = [
-  { cat: "lore", label: "Lore", title: "The normal curated Dial" },
-  { cat: "classics", label: "Classics", title: "Era/genre stations — decade radio, oldies, genre channels" },
-  { cat: "ambient", label: "Ambient", title: "Sleep, nature, and ambient stations" },
+  { cat: "lore",      label: "Lore",      title: "The normal curated Dial" },
+  { cat: "classics",  label: "Classics",  title: "Era/genre stations — decade radio, oldies, genre channels" },
+  { cat: "ambient",   label: "Ambient",   title: "Sleep, nature, and ambient stations" },
+  { cat: "spinitron", label: "Spinitron", title: "Stations that use Spinitron for now-playing data" },
+  { cat: "college",   label: "College",   title: "Confirmed campus and college radio stations" },
+  { cat: "longtail",  label: "Long-tail", title: "Radio Browser and other long-tail community stations" },
 ];
 
 export function DialFilterBar({

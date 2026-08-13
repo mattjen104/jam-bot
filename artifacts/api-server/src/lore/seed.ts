@@ -312,6 +312,7 @@ function canadianCampusStations(): InsertStation[] {
       nowPlayingConfig: { streamUrl: "http://ais-sa1.streamon.fm/7132_64k.aac" },
       source: "curated",
       stationClass: "community",
+      tags: ["college"],
       favorite: true,
       sortOrder: 900,
     },
@@ -347,6 +348,7 @@ function canadianCampusStations(): InsertStation[] {
       nowPlayingConfig: {},
       source: "curated",
       stationClass: "community",
+      tags: ["college"],
       favorite: true,
       hidden: true,
       sortOrder: 901,
@@ -385,6 +387,7 @@ function canadianCampusStations(): InsertStation[] {
       nowPlayingConfig: {},
       source: "curated",
       stationClass: "community",
+      tags: ["college"],
       favorite: true,
       hidden: true,
       sortOrder: 902,
@@ -407,6 +410,7 @@ function canadianCampusStations(): InsertStation[] {
       nowPlayingConfig: { streamUrl: "http://ais-sa1.streamon.fm/7093_24k.aac" },
       source: "curated",
       stationClass: "community",
+      tags: ["college"],
       favorite: true,
       sortOrder: 903,
     },
@@ -428,6 +432,7 @@ function canadianCampusStations(): InsertStation[] {
       ...spinSource("CKCU"),
       source: "curated",
       stationClass: "community",
+      tags: ["college"],
       favorite: true,
       sortOrder: 904,
     },
@@ -453,6 +458,7 @@ function canadianCampusStations(): InsertStation[] {
       },
       source: "curated",
       stationClass: "community",
+      tags: ["college"],
       favorite: true,
       sortOrder: 905,
     },
@@ -820,6 +826,10 @@ function spinSource(
  * KXLU uses streamguys1 CDN (same as WPRB/WKCR, confirmed for LMU's setup).
  */
 function spinitronCollegeStations(): InsertStation[] {
+  /** Safe public tag marking confirmed campus/college stations.
+   *  Detection is explicit (opt-in per station), never inferred from the
+   *  station name, so classification never silently mis-fires. */
+  const COLLEGE: InsertStation["tags"] = ["college"];
 
   return [
     // ── WEDGE CORE ─────────────────────────────────────────────────────────
@@ -841,6 +851,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wprb.com/support",
       ...spinSource("WPRB"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 300,
     },
     {
@@ -861,6 +872,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wnur.northwestern.edu/donate",
       ...spinSource("WNUR"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 310,
     },
     {
@@ -880,6 +892,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wrek.org/donate",
       ...spinSource("WREK"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 320,
     },
     {
@@ -898,6 +911,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://kdvs.org/donate",
       ...spinSource("KDVS"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 330,
     },
     {
@@ -916,6 +930,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://whrb.org/support",
       ...spinSource("WHRB"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 340,
     },
     {
@@ -935,6 +950,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wkcr.org/donate",
       ...spinSource("WKCR"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 350,
     },
 
@@ -974,6 +990,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wxyc.org/support",
       ...spinSource("WXYC"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 410,
     },
     {
@@ -995,6 +1012,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://kalx.berkeley.edu/support",
       ...spinSource("KALX"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 420,
     },
     {
@@ -1014,6 +1032,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://kvrx.org/donate",
       ...spinSource("KVRX"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 430,
     },
 
@@ -1037,6 +1056,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wmbr.org/donate",
       ...spinSource("WMBR"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 500,
     },
     {
@@ -1055,6 +1075,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wusb.fm/support",
       ...spinSource("WUSB"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 510,
     },
     {
@@ -1073,6 +1094,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wuog.org/donate",
       ...spinSource("WUOG"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 520,
     },
     {
@@ -1091,6 +1113,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wvum.org/donate",
       ...spinSource("WVUM"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 530,
     },
     {
@@ -1111,6 +1134,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://www.kvsc.org/pledge",
       ...spinSource("KVSC"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 540,
     },
 
@@ -1140,6 +1164,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://whpk.uchicago.edu/schedule",
       ...spinSource("WHPK"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 600,
     },
     {
@@ -1161,6 +1186,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wesufm.org/support",
       ...spinSource("WESU"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 605,
     },
     {
@@ -1181,6 +1207,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://wzbc.org/schedule",
       ...spinSource("WZBC"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 610,
     },
     {
@@ -1204,6 +1231,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wrct.org/donate",
       ...spinSource("WRCT"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 615,
     },
     {
@@ -1221,6 +1249,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://kxlu.com/donate",
       ...spinSource("KXLU"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 620,
     },
     {
@@ -1239,6 +1268,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://wbrs.fm/schedule",
       ...spinSource("WBRS"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 625,
     },
     {
@@ -1262,6 +1292,7 @@ function spinitronCollegeStations(): InsertStation[] {
       donateUrl: "https://wmfo.org/donate",
       ...spinSource("WMFO"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 630,
     },
     {
@@ -1284,6 +1315,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://wxdu.duke.edu/schedule",
       ...spinSource("WXDU"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 635,
     },
     {
@@ -1326,6 +1358,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://wicb.org/schedule",
       ...spinSource("WICB"),
       stationClass: "community",
+      tags: COLLEGE,
       sortOrder: 645,
     },
   ];
@@ -1379,6 +1412,7 @@ function spinitronJazzStations(): InsertStation[] {
       donateUrl: "https://kcsm.org/donate",
       ...spinSource("KCSM"),
       stationClass: "community",
+      tags: ["college"],
       sortOrder: 705,
     },
     {
@@ -1469,6 +1503,7 @@ function spinitronCanadianAdditions(): InsertStation[] {
       donateUrl: "https://www.cjsf.ca/support",
       ...spinSource("CJSF"),
       stationClass: "community",
+      tags: ["college"],
       sortOrder: 907,
     },
     {
@@ -1487,6 +1522,7 @@ function spinitronCanadianAdditions(): InsertStation[] {
       donateUrl: "https://www.chuo.fm/donate",
       ...spinSource("CHUO"),
       stationClass: "community",
+      tags: ["college"],
       sortOrder: 908,
     },
   ];
@@ -2028,6 +2064,18 @@ export async function seedStations(): Promise<void> {
           // Propagate the favorite flag so hand-verified ICY stations get
           // persistent watcher sockets without a manual DB edit.
           favorite: s.favorite ?? false,
+          // Merge seed tags into existing tags (set union) instead of
+          // overwriting: seed-declared classification tags (e.g. "college")
+          // must reach already-deployed rows on restart, but operator-added
+          // tags in the DB must survive. When the seed declares no tags, the
+          // stored value is kept untouched (NULL stays NULL).
+          tags: sql`CASE WHEN EXCLUDED.tags IS NULL THEN ${stationsTable.tags} ELSE (
+            SELECT COALESCE(jsonb_agg(DISTINCT t), '[]'::jsonb) FROM (
+              SELECT jsonb_array_elements_text(COALESCE(${stationsTable.tags}, '[]'::jsonb)) AS t
+              UNION
+              SELECT jsonb_array_elements_text(EXCLUDED.tags) AS t
+            ) merged
+          ) END`,
           sortOrder: s.sortOrder ?? 0,
           updatedAt: sql`now()`,
         },

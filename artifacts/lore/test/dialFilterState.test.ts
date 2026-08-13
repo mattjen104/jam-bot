@@ -40,11 +40,22 @@ describe("toggleAgeTier", () => {
 });
 
 describe("toggleStationCategory", () => {
-  it("adds an inactive category (all three can be active together)", () => {
+  it("adds an inactive category (all original three can be active together)", () => {
     let s = new Set<StationCategory>(["lore"]);
     s = toggleStationCategory(s, "classics");
     s = toggleStationCategory(s, "ambient");
     expect(s.size).toBe(3);
+  });
+
+  it("adds the three new metadata categories", () => {
+    let s = new Set<StationCategory>(["lore"]);
+    s = toggleStationCategory(s, "spinitron");
+    s = toggleStationCategory(s, "college");
+    s = toggleStationCategory(s, "longtail");
+    expect(s.has("spinitron")).toBe(true);
+    expect(s.has("college")).toBe(true);
+    expect(s.has("longtail")).toBe(true);
+    expect(s.size).toBe(4);
   });
 
   it("removes an active category while at least one other remains", () => {
@@ -58,6 +69,12 @@ describe("toggleStationCategory", () => {
     const next = toggleStationCategory(prev, "classics");
     expect(next).toBe(prev);
     expect(next.has("classics")).toBe(true);
+  });
+
+  it("refuses to deselect the last active new-category too", () => {
+    const prev = new Set<StationCategory>(["spinitron"]);
+    const next = toggleStationCategory(prev, "spinitron");
+    expect(next).toBe(prev);
   });
 
   it("does not mutate the previous set on a normal toggle", () => {

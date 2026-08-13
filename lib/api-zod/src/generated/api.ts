@@ -363,6 +363,11 @@ export const ListStationsResponse = zod.object({
           .describe(
             'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
           ),
+        stationCategories: zod
+          .array(zod.string())
+          .describe(
+            'Safe, non-secret category labels derived from the station\'s metadata. Possible values: \"spinitron\" (now-playing comes from Spinitron or the Spinitron web adapter), \"college\" (confirmed campus\/college station), \"longtail\" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values.',
+          ),
       })
       .describe("A curated radio station in the public directory."),
   ),
@@ -805,6 +810,11 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
+        ),
+      stationCategories: zod
+        .array(zod.string())
+        .describe(
+          'Safe, non-secret category labels derived from the station\'s metadata. Possible values: \"spinitron\" (now-playing comes from Spinitron or the Spinitron web adapter), \"college\" (confirmed campus\/college station), \"longtail\" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values.',
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -1723,6 +1733,11 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
+        ),
+      stationCategories: zod
+        .array(zod.string())
+        .describe(
+          'Safe, non-secret category labels derived from the station\'s metadata. Possible values: \"spinitron\" (now-playing comes from Spinitron or the Spinitron web adapter), \"college\" (confirmed campus\/college station), \"longtail\" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values.',
         ),
     })
     .describe("A curated radio station in the public directory."),

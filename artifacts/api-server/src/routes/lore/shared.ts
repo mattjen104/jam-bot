@@ -178,6 +178,36 @@ export async function isPickerOptedOut(pickerId: number): Promise<boolean> {
   return !!row;
 }
 
+/**
+ * Derive safe, non-secret category labels from existing station metadata.
+ *
+ * Labels:
+ *  - "spinitron"  — now-playing is sourced from Spinitron (authenticated) or
+ *                   the Spinitron web scraper.  Never exposes API keys.
+ *  - "college"    — confirmed campus/college station, explicitly tagged in the
+ *                   seed.  Detection is opt-in (tag-based), never inferred from
+ *                   the station name alone, so it can't silently mis-classify.
+ *  - "longtail"   — station is in the radio-browser long-tail tier (source or
+ *                   tier metadata, not any secret config).
+ *
+ * All inputs come from already-public station fields; no nowPlayingConfig
+ * values or Spinitron API keys are read or exposed.
+ */
+export function deriveStationCategories(s: Station): string[] {
+  const cats: string[] = [];
+  if (s.nowPlayingSource === "spinitron" || s.nowPlayingSource === "spinitron_web") {
+    cats.push("spinitron");
+  }
+  const tags = Array.isArray(s.tags) ? (s.tags as string[]) : [];
+  if (tags.includes("college")) {
+    cats.push("college");
+  }
+  if (s.source === "radio_browser" || s.tier === "longtail") {
+    cats.push("longtail");
+  }
+  return cats;
+}
+
 /** Shape a DB station row into the public Station payload.
  *  `qualityTier` comes from a LEFT JOIN on station_quality and is null until
  *  the first nightly recompute has run.
@@ -224,6 +254,7 @@ export function toStation(
       isRelayAllowed(s.slug) && s.streamUrl?.startsWith("http://")
         ? relayUrlPath(s.slug)
         : null,
+    stationCategories: deriveStationCategories(s),
   };
 }
 

@@ -83,4 +83,6 @@ export interface Station {
    * @nullable
    */
   relayUrl?: string | null;
+  /** Safe, non-secret category labels derived from the station's metadata. Possible values: "spinitron" (now-playing comes from Spinitron or the Spinitron web adapter), "college" (confirmed campus/college station), "longtail" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values. */
+  stationCategories: string[];
 }

@@ -29,13 +29,16 @@ import {
 import type { DialFilterBarProps } from "./DialFilterBar";
 
 const COMMANDS = {
-  "/current":  { kind: "tier",     value: "current"  },
-  "/catalog":  { kind: "tier",     value: "catalog"  },
-  "/deep":     { kind: "tier",     value: "deep"     },
-  "/first":    { kind: "tier",     value: "first"    },
-  "/lore":     { kind: "category", value: "lore"     },
-  "/classics": { kind: "category", value: "classics" },
-  "/ambient":  { kind: "category", value: "ambient"  },
+  "/current":   { kind: "tier",     value: "current"   },
+  "/catalog":   { kind: "tier",     value: "catalog"   },
+  "/deep":      { kind: "tier",     value: "deep"      },
+  "/first":     { kind: "tier",     value: "first"     },
+  "/lore":      { kind: "category", value: "lore"      },
+  "/classics":  { kind: "category", value: "classics"  },
+  "/ambient":   { kind: "category", value: "ambient"   },
+  "/spinitron": { kind: "category", value: "spinitron" },
+  "/college":   { kind: "category", value: "college"   },
+  "/longtail":  { kind: "category", value: "longtail"  },
 } as const;
 
 export function DialCliBar({

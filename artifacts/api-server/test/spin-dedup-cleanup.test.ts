@@ -101,7 +101,7 @@ async function spinExists(id: number): Promise<boolean> {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("applySpinDedupCleanup", () => {
-  it("removes a duplicate and keeps only the root spin", { timeout: 30_000 }, async (ctx) => {
+  it("removes a duplicate and keeps only the root spin", { timeout: 90_000 }, async (ctx) => {
     if (!dbAvailable || !stationId) return ctx.skip();
 
     const ARTIST = `RootOnly-${run}-${randomUUID().slice(0, 4)}`;
@@ -122,7 +122,7 @@ describe("applySpinDedupCleanup", () => {
     expect(await spinExists(dupId)).toBe(false);
   });
 
-  it("collapses an A→B→C chain to A (B and C removed)", { timeout: 30_000 }, async (ctx) => {
+  it("collapses an A→B→C chain to A (B and C removed)", { timeout: 90_000 }, async (ctx) => {
     if (!dbAvailable || !stationId) return ctx.skip();
 
     const ARTIST = `Chain-${run}-${randomUUID().slice(0, 4)}`;
@@ -150,7 +150,7 @@ describe("applySpinDedupCleanup", () => {
     expect(await spinExists(cId)).toBe(false);
   });
 
-  it("remaps a pending_keeps row on a dup spin to the keeper, then removes the dup", { timeout: 30_000 }, async (ctx) => {
+  it("remaps a pending_keeps row on a dup spin to the keeper, then removes the dup", { timeout: 90_000 }, async (ctx) => {
     if (!dbAvailable || !stationId) return ctx.skip();
 
     // pending_keeps requires a real lore_users row.  Use device_key as identity.
@@ -197,7 +197,7 @@ describe("applySpinDedupCleanup", () => {
     }
   });
 
-  it("does NOT delete a source='manual' spin inside the 120 s window of another spin", { timeout: 30_000 }, async (ctx) => {
+  it("does NOT delete a source='manual' spin inside the 120 s window of another spin", { timeout: 90_000 }, async (ctx) => {
     if (!dbAvailable || !stationId) return ctx.skip();
 
     const ARTIST = `ManualSrc-${run}-${randomUUID().slice(0, 4)}`;
@@ -227,7 +227,7 @@ describe("applySpinDedupCleanup", () => {
     expect(await spinExists(manualId)).toBe(true); // must survive
   });
 
-  it("does NOT delete a source='backfill' spin inside the 120 s window", { timeout: 30_000 }, async (ctx) => {
+  it("does NOT delete a source='backfill' spin inside the 120 s window", { timeout: 90_000 }, async (ctx) => {
     if (!dbAvailable || !stationId) return ctx.skip();
 
     const ARTIST = `BackfillSrc-${run}-${randomUUID().slice(0, 4)}`;

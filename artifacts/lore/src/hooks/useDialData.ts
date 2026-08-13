@@ -598,19 +598,38 @@ export function useBoundedPending(pending: boolean, deadlineMs: number): boolean
 }
 
 export type DialDisplayMode = "personal" | "blended";
+
+/**
+ * All possible station-category values:
+ *  - "lore"      — the normal curated dial (default)
+ *  - "classics"  — era/genre stations (era-genre server mode)
+ *  - "ambient"   — sleep/ambient stations (sleep server mode)
+ *  - "spinitron" — stations using Spinitron or Spinitron-web for now-playing
+ *  - "college"   — confirmed campus/college stations (tag-derived)
+ *  - "longtail"  — Radio Browser and other long-tail community stations
+ *
+ * The first three drive distinct server fetches; the last three are applied
+ * as client-side metadata filters on the merged Lore station list.
+ */
+export type DialStationCategory = "lore" | "classics" | "ambient" | "spinitron" | "college" | "longtail";
+
 export function useDialData(
   displayMode: DialDisplayMode = "personal",
   opts: {
     sleepMode?: boolean;
     eraGenreMode?: boolean;
     /**
-     * Additive station-category filter (Lore | Classics | Ambient). When
-     * provided it drives station fetching: Lore = the normal dial list,
-     * Classics = the era-genre list, Ambient = the sleep list; active
-     * categories are merged (de-duped by slug). When omitted the legacy
-     * single-mode sleepMode/eraGenreMode flags apply.
+     * Additive station-category filter. When provided it drives station
+     * fetching and/or client-side filtering:
+     *  - Lore = normal dial list (server default)
+     *  - Classics = era-genre server mode list
+     *  - Ambient = sleep server mode list
+     *  - Spinitron/College/Longtail = client-side metadata filter on the
+     *    normal Lore list (no extra server fetch needed)
+     * Active categories are merged and de-duped by slug. When omitted the
+     * legacy single-mode sleepMode/eraGenreMode flags apply.
      */
-    categories?: ReadonlySet<"lore" | "classics" | "ambient">;
+    categories?: ReadonlySet<DialStationCategory>;
   } = {},
 ): {
   stations: DialStation[];
@@ -706,6 +725,15 @@ export function useDialData(
   const wantLore = categories ? categories.has("lore") : !sleepMode && !eraGenreMode;
   const wantClassics = categories ? categories.has("classics") : eraGenreMode;
   const wantAmbient = categories ? categories.has("ambient") : sleepMode;
+  // Metadata-only category flags: applied client-side to the already-fetched
+  // Lore station list using the server-supplied `stationCategories` array.
+  // No extra server fetches are needed for these.
+  const wantSpinitrion = categories ? categories.has("spinitron") : false;
+  const wantCollege    = categories ? categories.has("college")   : false;
+  const wantLongtail   = categories ? categories.has("longtail")  : false;
+  // True when only metadata filters are active (no Lore/Classics/Ambient).
+  // In this case we still fetch the full Lore list and apply the client filter.
+  const onlyMetaFilter = categories != null && !wantLore && !wantClassics && !wantAmbient && (wantSpinitrion || wantCollege || wantLongtail);
 
   // Hidden browse modes swap the station source. Sleep takes precedence if both
   // flags somehow arrive true (the modes are mutually exclusive upstream).
@@ -716,8 +744,10 @@ export function useDialData(
     : undefined;
   // Base list: the normal dial when Lore is wanted, else the primary mode list.
   // (In legacy single-mode use, modeParam already carries sleep/era-genre.)
+  // When only metadata filters are active (spinitron/college/longtail without
+  // Lore), still fetch the full Lore list so the metadata filter has data.
   const baseParam = categories
-    ? (wantLore ? undefined : wantClassics ? ({ mode: "era-genre" } as const) : wantAmbient ? ({ mode: "sleep" } as const) : undefined)
+    ? (wantLore || onlyMetaFilter ? undefined : wantClassics ? ({ mode: "era-genre" } as const) : wantAmbient ? ({ mode: "sleep" } as const) : undefined)
     : modeParam;
   const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations(
     baseParam,
@@ -1013,8 +1043,9 @@ export function useDialData(
     const bySlugRaw = new Map<string, Station>();
     for (const s of stationsData?.stations ?? []) bySlugRaw.set(s.slug, s);
     if (categories) {
-      // The base list itself is a mode list when Lore is off — mark it live.
-      if (!wantLore) for (const s of stationsData?.stations ?? []) alwaysLiveSlugs.add(s.slug);
+      // The base list itself is a mode list when Lore is off (and no metadata
+      // filter is active) — mark it live so those mode-only stations render.
+      if (!wantLore && !onlyMetaFilter) for (const s of stationsData?.stations ?? []) alwaysLiveSlugs.add(s.slug);
       if (fetchClassics) {
         for (const s of classicsData?.stations ?? []) { bySlugRaw.set(s.slug, s); alwaysLiveSlugs.add(s.slug); }
       }
@@ -1022,7 +1053,23 @@ export function useDialData(
         for (const s of ambientData?.stations ?? []) { bySlugRaw.set(s.slug, s); alwaysLiveSlugs.add(s.slug); }
       }
     }
-    const raw = [...bySlugRaw.values()];
+    // Client-side metadata filter: when spinitron/college/longtail categories are
+    // active, restrict to stations that carry those labels in their
+    // server-supplied `stationCategories` array. Multiple metadata filters are
+    // additive (union), so "/spinitron /college" shows stations that have either.
+    // This filter is skipped entirely when no metadata categories are requested.
+    const hasMetaFilter = categories != null && (wantSpinitrion || wantCollege || wantLongtail);
+    const filteredBySlug = hasMetaFilter
+      ? new Map(
+          [...bySlugRaw].filter(([, s]) => {
+            const cats = (s.stationCategories ?? []) as string[];
+            return (wantSpinitrion && cats.includes("spinitron"))
+              || (wantCollege    && cats.includes("college"))
+              || (wantLongtail   && cats.includes("longtail"));
+          }),
+        )
+      : bySlugRaw;
+    const raw = [...filteredBySlug.values()];
     // Rolling 24-hour cutoff for crossings. We fetch both today's and
     // yesterday's data so that overnight shows are present, but only spins
     // within the past 24 hours count toward crossings — spins from earlier
@@ -1211,7 +1258,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, classicsData, ambientData, categories, wantLore, fetchClassics, fetchAmbient, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode]);
+  }, [stationsData, classicsData, ambientData, categories, wantLore, onlyMetaFilter, fetchClassics, fetchAmbient, wantSpinitrion, wantCollege, wantLongtail, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // isCoreLoading: only block until the station list arrives so the offline
