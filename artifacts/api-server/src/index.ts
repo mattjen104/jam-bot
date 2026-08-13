@@ -107,6 +107,7 @@ import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
 import { startPitchforkJob } from "./lore/pitchfork-job.js";
 import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
 import { ingestAllBookSources } from "./lore/book-knowledge.js";
+import { applyMetacriticMissCleanupMigration } from "./lore/metacritic-miss-cleanup-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -204,6 +205,7 @@ async function bootLore(): Promise<void> {
     // starts, so existing rows cannot briefly consume watcher slots at boot.
     await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
+    await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     try {
       await backfillStationTimezones();
     } catch (err) {
