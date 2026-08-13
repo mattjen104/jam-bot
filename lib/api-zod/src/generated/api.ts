@@ -141,6 +141,12 @@ export const GetSongContextResponse = zod.object({
                   .string()
                   .nullish()
                   .describe("Publication date in ISO 8601 format, when known."),
+                bookAuthor: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Author(s) of a book-backed source (sourceHandle 'book'), e.g. \"Ken Caillat & Steven Stiefel\". Null for non-book sources.\n",
+                  ),
               })
               .describe(
                 "An indexed review or documentary source for an album or recording. Derived from published track_claims for the recording — one entry per unique sourceHandle. `excerpt` is a short, factual summary (never verbatim prose). `url` deep-links to the source.\n",
@@ -1091,6 +1097,12 @@ export const GetRecordingKnowledgeResponse = zod.object({
                 .string()
                 .nullish()
                 .describe("Publication date in ISO 8601 format, when known."),
+              bookAuthor: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Author(s) of a book-backed source (sourceHandle 'book'), e.g. \"Ken Caillat & Steven Stiefel\". Null for non-book sources.\n",
+                ),
             })
             .describe(
               "An indexed review or documentary source for an album or recording. Derived from published track_claims for the recording — one entry per unique sourceHandle. `excerpt` is a short, factual summary (never verbatim prose). `url` deep-links to the source.\n",
@@ -1159,7 +1171,7 @@ export const GetRecordingKnowledgeResponse = zod.object({
           sourceHandle: zod
             .string()
             .describe(
-              "Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims. 'song-exploder' for auto-published Song Exploder episode claims. 'audiodb' for TheAudioDB community review and score claims.\n",
+              "Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims. 'song-exploder' for auto-published Song Exploder episode claims. 'audiodb' for TheAudioDB community review and score claims. 'book' for curated book-backed facts — the claim text is an original curator-written summary (never verbatim book prose) and sourceUrl points to the book's publisher\/library landing page.\n",
             ),
           verified: zod
             .boolean()
@@ -4239,6 +4251,90 @@ export const GetWikipediaDraftsResponse = zod.object({
       })
       .describe(
         "A Wikipedia draft track claim awaiting admin review. The admin fills in `text` (a paraphrase of the section's key fact) before publishing. No Wikipedia prose is stored — only the section URL pointer and the admin-written paraphrase.\n",
+      ),
+  ),
+});
+
+/**
+ * Runs the curated classic-artist book catalogue through the idempotent claim ingest. Each fact is an original curator-written summary (never verbatim book prose) grounded to a publisher/library landing URL. Facts whose recording MBID is not already on the spine are skipped; facts without a grounding link are demoted to draft; re-runs are safe (externalId dedup). Token-guarded.
+
+ * @summary Admin-only idempotent ingest of the curated book-knowledge catalogue
+ */
+export const IngestBookKnowledgeHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const IngestBookKnowledgeResponse = zod
+  .object({
+    totalAttempted: zod.number(),
+    totalInserted: zod.number(),
+    totalSkipped: zod.number(),
+    totalNotOnSpine: zod.number(),
+    totalRejectedSummary: zod
+      .number()
+      .describe("Facts rejected by the original-summary guard — never stored."),
+    sources: zod.record(
+      zod.string(),
+      zod.object({
+        attempted: zod.number(),
+        inserted: zod.number(),
+        skipped: zod.number(),
+        notOnSpine: zod.number(),
+        rejectedSummary: zod.number(),
+        demotedNoLink: zod
+          .number()
+          .describe(
+            "Published-intent facts demoted to draft because the book link was unavailable — a book fact is never published without its grounding URL.\n",
+          ),
+      }),
+    ),
+  })
+  .describe(
+    "Summary of one idempotent curated book-knowledge ingest run. `sources` maps each book slug to its per-source result.\n",
+  );
+
+/**
+ * Returns all draft track claims with source_handle='book'. The admin verifies each summary against the linked book landing page, then uses PATCH /admin/claims/:id to publish or reject it — the same review semantics as Wikipedia drafts. Token-guarded.
+
+ * @summary Pending book-backed draft claims awaiting admin review
+ */
+export const ListBookDraftsHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const ListBookDraftsResponse = zod.object({
+  claims: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        mbid: zod.string(),
+        trackTitle: zod
+          .string()
+          .nullish()
+          .describe("Recording title from the recordings table, if available."),
+        trackArtist: zod
+          .string()
+          .nullish()
+          .describe(
+            "Recording artist from the recordings table, if available.",
+          ),
+        text: zod.string(),
+        sourceLabel: zod
+          .string()
+          .describe(
+            '\"Book title — Author\", e.g. \"Making Rumours — Ken Caillat & Steven Stiefel\".',
+          ),
+        sourceUrl: zod
+          .string()
+          .describe(
+            "Book publisher\/library landing page (empty when unavailable).",
+          ),
+        externalId: zod.string(),
+        status: zod.enum(["draft", "published", "rejected"]),
+        createdAt: zod.string(),
+      })
+      .describe(
+        "A book-backed draft claim awaiting admin review. `text` is the curator-written original summary (never verbatim book prose); `sourceUrl` is the book's publisher\/library landing page.\n",
       ),
   ),
 });

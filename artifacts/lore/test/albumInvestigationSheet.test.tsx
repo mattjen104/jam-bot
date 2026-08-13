@@ -168,6 +168,66 @@ describe("buildInvestigationCards", () => {
     expect(indexed[0]!.excerpt).not.toContain("Third");
   });
 
+  it("book claim produces a Book / biography card with title and author split out", () => {
+    const claim = makeClaim({
+      sourceHandle: "book",
+      sourceLabel: "Making Rumours — Ken Caillat & Steven Stiefel",
+      sourceUrl: "https://www.worldcat.org/title/making-rumours",
+      text: '"The Chain" was assembled from separate pieces recorded at different sessions.',
+    });
+    const { indexed, notIndexed } = buildInvestigationCards([claim]);
+
+    expect(indexed).toHaveLength(1);
+    const card = indexed[0] as IndexedSourceCard;
+    expect(card.id).toBe("book");
+    expect(card.type).toBe("Book / biography");
+    expect(card.label).toBe("Making Rumours");
+    expect(card.bookAuthor).toBe("Ken Caillat & Steven Stiefel");
+    expect(card.url).toBe("https://www.worldcat.org/title/making-rumours");
+    expect(notIndexed.map((s) => s.id)).not.toContain("book");
+  });
+
+  it("book claim without a link degrades to url=null (no fabricated link)", () => {
+    const claim = makeClaim({
+      sourceHandle: "book",
+      sourceLabel: "Chronicles: Volume One — Bob Dylan",
+      sourceUrl: "",
+    });
+    const { indexed } = buildInvestigationCards([claim]);
+    expect(indexed).toHaveLength(1);
+    expect(indexed[0]!.url).toBeNull();
+  });
+
+  it("book sourceLabel without an author suffix keeps full label and null author", () => {
+    const claim = makeClaim({
+      sourceHandle: "book",
+      sourceLabel: "Revolution in the Head",
+    });
+    const { indexed } = buildInvestigationCards([claim]);
+    expect(indexed[0]!.label).toBe("Revolution in the Head");
+    expect(indexed[0]!.bookAuthor).toBeNull();
+  });
+
+  it("draft book claims are excluded from cards", () => {
+    const claim = makeClaim({
+      sourceHandle: "book",
+      sourceLabel: "Making Rumours — Ken Caillat & Steven Stiefel",
+      status: "draft",
+    });
+    const { indexed } = buildInvestigationCards([claim]);
+    expect(indexed).toHaveLength(0);
+  });
+
+  it("non-book claims keep bookAuthor null even with an em-dash in the label", () => {
+    const claim = makeClaim({
+      sourceHandle: "song-exploder",
+      sourceLabel: "Song Exploder — Episode 123",
+    });
+    const { indexed } = buildInvestigationCards([claim]);
+    expect(indexed[0]!.bookAuthor).toBeNull();
+    expect(indexed[0]!.label).toBe("Song Exploder — Episode 123");
+  });
+
   it("claims from different sourceHandles each get their own card", () => {
     const claims = [
       makeClaim({ sourceHandle: "song-exploder", sourceLabel: "Song Exploder" }),
@@ -235,6 +295,64 @@ describe("AlbumInvestigationSheet — component render", () => {
     if (pending) {
       expect(pending.textContent).not.toContain("Song Exploder");
     }
+  });
+
+  it("book claim renders a card with title, author byline, type, and external link", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const group = makeGroup(["mbid-book"]);
+
+    const claim = makeClaim({
+      sourceHandle: "book",
+      sourceLabel: "Making Rumours — Ken Caillat & Steven Stiefel",
+      sourceUrl: "https://www.worldcat.org/title/making-rumours",
+      text: "The bassline was extracted from an abandoned outtake.",
+    });
+    qc.setQueryData(["/api/recordings/mbid-book/knowledge"], {
+      knowledge: null,
+      claims: [claim],
+    });
+
+    renderSheet(group, qc);
+
+    expect(screen.getByText("Making Rumours").textContent).toBe("Making Rumours");
+    expect(
+      screen.getByText("Ken Caillat & Steven Stiefel").textContent,
+    ).toBe("Ken Caillat & Steven Stiefel");
+    expect(screen.getByText("Book / biography").textContent).toBe("Book / biography");
+    expect(
+      screen.getByText(/abandoned outtake/i).textContent,
+    ).toMatch(/abandoned outtake/i);
+
+    const link = screen.getByRole("link", { name: /open making rumours/i });
+    expect(link.getAttribute("href")).toBe(
+      "https://www.worldcat.org/title/making-rumours",
+    );
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+
+  it("book claim without a link renders the card but no external link", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const group = makeGroup(["mbid-book-nolink"]);
+
+    const claim = makeClaim({
+      sourceHandle: "book",
+      sourceLabel: "Chronicles: Volume One — Bob Dylan",
+      sourceUrl: "",
+      text: "The song began as a long stream-of-consciousness piece.",
+    });
+    qc.setQueryData(["/api/recordings/mbid-book-nolink/knowledge"], {
+      knowledge: null,
+      claims: [claim],
+    });
+
+    renderSheet(group, qc);
+
+    expect(screen.getByText("Chronicles: Volume One").textContent).toBe(
+      "Chronicles: Volume One",
+    );
+    expect(
+      screen.queryByRole("link", { name: /open chronicles/i }),
+    ).toBeNull();
   });
 
   it("close button calls onDismiss", () => {

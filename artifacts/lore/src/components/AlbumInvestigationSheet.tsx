@@ -36,6 +36,7 @@ export const ALL_KNOWN_SOURCES: KnownSource[] = [
   { id: "allmusic",       label: "AllMusic",           type: "Review"              },
   { id: "metacritic",     label: "Metacritic",         type: "Critic aggregate"    },
   { id: "rym",            label: "Rate Your Music",    type: "Community rating"    },
+  { id: "book",           label: "Books",              type: "Book / biography"    },
 ];
 
 const KNOWN_SOURCE_BY_ID = new Map(ALL_KNOWN_SOURCES.map((s) => [s.id, s]));
@@ -51,6 +52,8 @@ export interface IndexedSourceCard {
   /** Up to two claim texts joined by space — never fabricated. */
   excerpt: string;
   url: string | null;
+  /** Author byline for book-backed sources (sourceHandle 'book'); null otherwise. */
+  bookAuthor: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,9 +85,18 @@ export function buildInvestigationCards(claims: TrackClaim[]): {
   for (const [handle, handleClaims] of byHandle) {
     const first = handleClaims[0]!;
     const knownSrc = KNOWN_SOURCE_BY_ID.get(handle);
+    // Book claims store "Book title — Author" in sourceLabel; split so the
+    // card can show the title as label and the author as a byline.
+    const isBook = handle === "book";
+    const bookAuthor = isBook
+      ? (first.sourceLabel.match(/\s+—\s+(.+)$/)?.[1] ?? null)
+      : null;
+    const label = isBook
+      ? first.sourceLabel.replace(/\s+—.*$/, "")
+      : first.sourceLabel;
     indexed.push({
       id: handle,
-      label: first.sourceLabel,
+      label,
       type: knownSrc?.type ?? "Source",
       // Two sentences max from the claims for this source
       excerpt: handleClaims
@@ -92,6 +104,7 @@ export function buildInvestigationCards(claims: TrackClaim[]): {
         .map((c) => c.text)
         .join(" "),
       url: first.sourceUrl || null,
+      bookAuthor,
     });
   }
 
@@ -344,6 +357,12 @@ export function AlbumInvestigationSheet({
                       <li key={src.id} className="album-inv__card">
                         <div className="album-inv__card-header">
                           <span className="album-inv__card-label">{src.label}</span>
+                          {src.bookAuthor && (
+                            <>
+                              <span className="album-inv__card-sep" aria-hidden="true">·</span>
+                              <span className="album-inv__card-author">{src.bookAuthor}</span>
+                            </>
+                          )}
                           <span className="album-inv__card-sep" aria-hidden="true">·</span>
                           <span className="album-inv__card-type">{src.type}</span>
                           {src.url && (

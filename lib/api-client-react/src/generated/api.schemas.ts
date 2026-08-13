@@ -205,6 +205,12 @@ export interface KnowledgeSource {
    * @nullable
    */
   date?: string | null;
+  /**
+   * Author(s) of a book-backed source (sourceHandle 'book'), e.g. "Ken Caillat & Steven Stiefel". Null for non-book sources.
+
+   * @nullable
+   */
+  bookAuthor?: string | null;
 }
 
 export interface TrackKnowledge {
@@ -827,7 +833,7 @@ export interface TrackClaim {
   /** Review status. Only 'published' claims are surfaced to end users on the song page. 'draft' = awaiting admin review (Wikipedia candidates). 'rejected' = discarded by admin.
    */
   status?: TrackClaimStatus;
-  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims. 'song-exploder' for auto-published Song Exploder episode claims. 'audiodb' for TheAudioDB community review and score claims.
+  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims. 'song-exploder' for auto-published Song Exploder episode claims. 'audiodb' for TheAudioDB community review and score claims. 'book' for curated book-backed facts — the claim text is an original curator-written summary (never verbatim book prose) and sourceUrl points to the book's publisher/library landing page.
    */
   sourceHandle: string;
   /** True for artist-verified Genius annotations. */
@@ -872,6 +878,75 @@ export interface AllDraftClaim {
 
 export interface AllDraftClaimsList {
   claims: AllDraftClaim[];
+}
+
+export interface BookSourceIngestResult {
+  attempted: number;
+  inserted: number;
+  skipped: number;
+  notOnSpine: number;
+  rejectedSummary: number;
+  /** Published-intent facts demoted to draft because the book link was unavailable — a book fact is never published without its grounding URL.
+   */
+  demotedNoLink: number;
+}
+
+export type BookIngestResponseSources = {
+  [key: string]: BookSourceIngestResult;
+};
+
+/**
+ * Summary of one idempotent curated book-knowledge ingest run. `sources` maps each book slug to its per-source result.
+
+ */
+export interface BookIngestResponse {
+  totalAttempted: number;
+  totalInserted: number;
+  totalSkipped: number;
+  totalNotOnSpine: number;
+  /** Facts rejected by the original-summary guard — never stored. */
+  totalRejectedSummary: number;
+  sources: BookIngestResponseSources;
+}
+
+export type BookDraftClaimStatus =
+  (typeof BookDraftClaimStatus)[keyof typeof BookDraftClaimStatus];
+
+export const BookDraftClaimStatus = {
+  draft: "draft",
+  published: "published",
+  rejected: "rejected",
+} as const;
+
+/**
+ * A book-backed draft claim awaiting admin review. `text` is the curator-written original summary (never verbatim book prose); `sourceUrl` is the book's publisher/library landing page.
+
+ */
+export interface BookDraftClaim {
+  id: number;
+  mbid: string;
+  /**
+   * Recording title from the recordings table, if available.
+   * @nullable
+   */
+  trackTitle?: string | null;
+  /**
+   * Recording artist from the recordings table, if available.
+   * @nullable
+   */
+  trackArtist?: string | null;
+  text: string;
+  /** "Book title — Author", e.g. "Making Rumours — Ken Caillat & Steven Stiefel". */
+  sourceLabel: string;
+  /** Book publisher/library landing page (empty when unavailable). */
+  sourceUrl: string;
+  externalId: string;
+  status: BookDraftClaimStatus;
+  createdAt: string;
+}
+
+export interface BookDraftList {
+  claims: BookDraftClaim[];
 }
 
 export type WikipediaDraftClaimStatus =

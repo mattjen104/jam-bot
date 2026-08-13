@@ -29,6 +29,8 @@ import type {
   ArtistResult,
   ArtistRunSearch,
   BlogIngestRequest,
+  BookDraftList,
+  BookIngestResponse,
   DiscogsListRequest,
   DjShows,
   EntryResult,
@@ -6717,6 +6719,166 @@ export function useGetWikipediaDrafts<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetWikipediaDraftsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Runs the curated classic-artist book catalogue through the idempotent claim ingest. Each fact is an original curator-written summary (never verbatim book prose) grounded to a publisher/library landing URL. Facts whose recording MBID is not already on the spine are skipped; facts without a grounding link are demoted to draft; re-runs are safe (externalId dedup). Token-guarded.
+
+ * @summary Admin-only idempotent ingest of the curated book-knowledge catalogue
+ */
+export const getIngestBookKnowledgeUrl = () => {
+  return `/api/admin/book-knowledge/ingest`;
+};
+
+export const ingestBookKnowledge = async (
+  options?: RequestInit,
+): Promise<BookIngestResponse> => {
+  return customFetch<BookIngestResponse>(getIngestBookKnowledgeUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getIngestBookKnowledgeMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestBookKnowledge>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof ingestBookKnowledge>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["ingestBookKnowledge"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof ingestBookKnowledge>>,
+    void
+  > = () => {
+    return ingestBookKnowledge(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IngestBookKnowledgeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof ingestBookKnowledge>>
+>;
+
+export type IngestBookKnowledgeMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only idempotent ingest of the curated book-knowledge catalogue
+ */
+export const useIngestBookKnowledge = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestBookKnowledge>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof ingestBookKnowledge>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getIngestBookKnowledgeMutationOptions(options));
+};
+
+/**
+ * Returns all draft track claims with source_handle='book'. The admin verifies each summary against the linked book landing page, then uses PATCH /admin/claims/:id to publish or reject it — the same review semantics as Wikipedia drafts. Token-guarded.
+
+ * @summary Pending book-backed draft claims awaiting admin review
+ */
+export const getListBookDraftsUrl = () => {
+  return `/api/admin/book-drafts`;
+};
+
+export const listBookDrafts = async (
+  options?: RequestInit,
+): Promise<BookDraftList> => {
+  return customFetch<BookDraftList>(getListBookDraftsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListBookDraftsQueryKey = () => {
+  return [`/api/admin/book-drafts`] as const;
+};
+
+export const getListBookDraftsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listBookDrafts>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBookDrafts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListBookDraftsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listBookDrafts>>> = ({
+    signal,
+  }) => listBookDrafts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listBookDrafts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListBookDraftsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listBookDrafts>>
+>;
+export type ListBookDraftsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Pending book-backed draft claims awaiting admin review
+ */
+
+export function useListBookDrafts<
+  TData = Awaited<ReturnType<typeof listBookDrafts>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listBookDrafts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListBookDraftsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

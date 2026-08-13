@@ -2249,6 +2249,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/book-knowledge/ingest:
+    post:
+      operationId: ingestBookKnowledge
+      tags: [admin]
+      summary: Admin-only idempotent ingest of the curated book-knowledge catalogue
+      description: >
+        Runs the curated classic-artist book catalogue through the idempotent
+        claim ingest. Each fact is an original curator-written summary (never
+        verbatim book prose) grounded to a publisher/library landing URL.
+        Facts whose recording MBID is not already on the spine are skipped;
+        facts without a grounding link are demoted to draft; re-runs are safe
+        (externalId dedup). Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ingest summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookIngestResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/book-drafts:
+    get:
+      operationId: listBookDrafts
+      tags: [admin]
+      summary: Pending book-backed draft claims awaiting admin review
+      description: >
+        Returns all draft track claims with source_handle='book'. The admin
+        verifies each summary against the linked book landing page, then uses
+        PATCH /admin/claims/:id to publish or reject it — the same review
+        semantics as Wikipedia drafts. Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pending book draft claims
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookDraftList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/genius-drafts:
     get:
       operationId: listGeniusDrafts
@@ -3706,6 +3778,11 @@ components:
         date:
           type: ["string", "null"]
           description: Publication date in ISO 8601 format, when known.
+        bookAuthor:
+          type: ["string", "null"]
+          description: >
+            Author(s) of a book-backed source (sourceHandle 'book'), e.g.
+            "Ken Caillat & Steven Stiefel". Null for non-book sources.
       required:
         - id
         - label
@@ -4548,6 +4625,9 @@ components:
             'genius' for Genius annotation-derived claims.
             'song-exploder' for auto-published Song Exploder episode claims.
             'audiodb' for TheAudioDB community review and score claims.
+            'book' for curated book-backed facts — the claim text is an
+            original curator-written summary (never verbatim book prose) and
+            sourceUrl points to the book's publisher/library landing page.
         verified:
           type: boolean
           description: True for artist-verified Genius annotations.
@@ -4601,6 +4681,110 @@ components:
         - anchorValue
         - sourceLabel
         - sourceUrl
+        - status
+        - createdAt
+    BookIngestResponse:
+      type: object
+      description: >
+        Summary of one idempotent curated book-knowledge ingest run.
+        `sources` maps each book slug to its per-source result.
+      properties:
+        totalAttempted:
+          type: integer
+        totalInserted:
+          type: integer
+        totalSkipped:
+          type: integer
+        totalNotOnSpine:
+          type: integer
+        totalRejectedSummary:
+          type: integer
+          description: Facts rejected by the original-summary guard — never stored.
+        sources:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/BookSourceIngestResult"
+      required:
+        - totalAttempted
+        - totalInserted
+        - totalSkipped
+        - totalNotOnSpine
+        - totalRejectedSummary
+        - sources
+    BookSourceIngestResult:
+      type: object
+      properties:
+        attempted:
+          type: integer
+        inserted:
+          type: integer
+        skipped:
+          type: integer
+        notOnSpine:
+          type: integer
+        rejectedSummary:
+          type: integer
+        demotedNoLink:
+          type: integer
+          description: >
+            Published-intent facts demoted to draft because the book link was
+            unavailable — a book fact is never published without its grounding
+            URL.
+      required:
+        - attempted
+        - inserted
+        - skipped
+        - notOnSpine
+        - rejectedSummary
+        - demotedNoLink
+    BookDraftList:
+      type: object
+      properties:
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookDraftClaim"
+      required:
+        - claims
+    BookDraftClaim:
+      type: object
+      description: >
+        A book-backed draft claim awaiting admin review. `text` is the
+        curator-written original summary (never verbatim book prose);
+        `sourceUrl` is the book's publisher/library landing page.
+      properties:
+        id:
+          type: integer
+        mbid:
+          type: string
+        trackTitle:
+          type: ["string", "null"]
+          description: Recording title from the recordings table, if available.
+        trackArtist:
+          type: ["string", "null"]
+          description: Recording artist from the recordings table, if available.
+        text:
+          type: string
+        sourceLabel:
+          type: string
+          description: '"Book title — Author", e.g. "Making Rumours — Ken Caillat & Steven Stiefel".'
+        sourceUrl:
+          type: string
+          description: Book publisher/library landing page (empty when unavailable).
+        externalId:
+          type: string
+        status:
+          type: string
+          enum: ["draft", "published", "rejected"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - mbid
+        - text
+        - sourceLabel
+        - sourceUrl
+        - externalId
         - status
         - createdAt
     WikipediaDraftList:

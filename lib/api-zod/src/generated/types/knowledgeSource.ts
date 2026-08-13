@@ -29,4 +29,10 @@ export interface KnowledgeSource {
    * @nullable
    */
   date?: string | null;
+  /**
+   * Author(s) of a book-backed source (sourceHandle 'book'), e.g. "Ken Caillat & Steven Stiefel". Null for non-book sources.
+
+   * @nullable
+   */
+  bookAuthor?: string | null;
 }

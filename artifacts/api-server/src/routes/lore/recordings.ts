@@ -459,16 +459,23 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     "sound-on-sound": "Production profile",
     "rym": "Community rating",
     "pitchfork": "Review",
+    "book": "Book / biography",
   };
 
-  const sourcesByHandle = new Map<string, { label: string; type: string; excerpt: string; url: string | null }>();
+  const sourcesByHandle = new Map<string, { label: string; type: string; excerpt: string; url: string | null; bookAuthor: string | null }>();
   for (const c of claimRows) {
     if (sourcesByHandle.has(c.sourceHandle)) continue;
+    // Book claims store "Book title — Author" in sourceLabel; surface the
+    // author separately so UIs can render title/author context.
+    const suffix = c.sourceHandle === "book"
+      ? (c.sourceLabel.match(/\s+—\s+(.+)$/)?.[1] ?? null)
+      : null;
     sourcesByHandle.set(c.sourceHandle, {
-      label: c.sourceLabel.replace(/\s+—.*$/, ""), // strip episode/article suffix
+      label: c.sourceLabel.replace(/\s+—.*$/, ""), // strip episode/article/author suffix
       type: KNOWN_SOURCE_TYPES[c.sourceHandle] ?? "Source",
       excerpt: c.text,
-      url: c.sourceUrl ?? null,
+      url: c.sourceUrl || null,
+      bookAuthor: suffix,
     });
   }
   const sources = [...sourcesByHandle.entries()].map(([id, s]) => ({ id, ...s }));

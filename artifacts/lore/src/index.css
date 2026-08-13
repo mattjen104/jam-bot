@@ -820,6 +820,13 @@
   white-space: nowrap;
 }
 .album-inv__card-sep { color: hsl(var(--border)); font-size: var(--lore-size-small); }
+.album-inv__card-author {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .06em;
+  color: hsl(var(--dim));
+  white-space: nowrap;
+}
 .album-inv__card-type {
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);

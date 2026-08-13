@@ -106,6 +106,7 @@ import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
 import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
 import { startPitchforkJob } from "./lore/pitchfork-job.js";
 import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
+import { ingestAllBookSources } from "./lore/book-knowledge.js";
 
 const rawPort = process.env["PORT"];
 
@@ -277,6 +278,11 @@ async function bootLore(): Promise<void> {
       console.error("[lore] classic-albums picker seed failed", err);
     }
     startClassicAlbumsPoller();
+    try {
+      await ingestAllBookSources();
+    } catch (err) {
+      console.error("[lore] book-knowledge ingest failed", err);
+    }
     try {
       await seedSongExploderPicker();
     } catch (err) {

@@ -78,13 +78,30 @@ export function buildLinerGroups(
   const publishedClaims = claims.filter(
     (c) => !c.status || c.status === "published",
   );
-  if (publishedClaims.length > 0) {
+  // Book-backed facts render as their own BOOKS section with title/author
+  // context; everything else stays in the CLAIMS section.
+  const bookClaims = publishedClaims.filter((c) => c.sourceHandle === "book");
+  const otherClaims = publishedClaims.filter((c) => c.sourceHandle !== "book");
+  if (otherClaims.length > 0) {
     groups.push({
       label: "CLAIMS",
-      rows: publishedClaims.map((claim, i) => ({
+      rows: otherClaims.map((claim, i) => ({
         id: `claim-${i}-${claim.sourceHandle}`,
         text: claim.text,
         sourceLabel: claim.sourceLabel,
+        sourceUrl: claim.sourceUrl || undefined,
+      })),
+    });
+  }
+  if (bookClaims.length > 0) {
+    groups.push({
+      label: "BOOKS",
+      rows: bookClaims.map((claim, i) => ({
+        id: `book-${i}`,
+        text: claim.text,
+        // sourceLabel already carries "Book title — Author" context.
+        sourceLabel: claim.sourceLabel,
+        // Honest degradation: no link chip when the book URL is unavailable.
         sourceUrl: claim.sourceUrl || undefined,
       })),
     });

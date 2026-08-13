@@ -52,6 +52,8 @@ import {
   GetEmbedResolutionResponse,
   PostEmbedResolutionRequeueParams,
   PostEmbedResolutionRequeueResponse,
+  IngestBookKnowledgeResponse,
+  ListBookDraftsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -85,6 +87,7 @@ import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } fr
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
 import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
+import { ingestAllBookSources, BOOK_SOURCE_HANDLE } from "../../lore/book-knowledge.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, getFeedFreshnessStaleStations, coverageClassFor } from "../../lore/poller.js";
 import { monitoringSince } from "../../lore/feed-freshness-health.js";
@@ -572,6 +575,58 @@ router.patch("/admin/claims/:id", h(async (req, res) => {
       sourceUrl: updated.sourceUrl,
       status: updated.status,
       createdAt: updated.createdAt.toISOString(),
+    }),
+  );
+}));
+
+// POST /api/admin/book-knowledge/ingest — idempotent curated book-catalogue ingest.
+router.post("/admin/book-knowledge/ingest", h(async (_req, res) => {
+  const result = await ingestAllBookSources();
+  return res.json(IngestBookKnowledgeResponse.parse(result));
+}));
+
+// GET /api/admin/book-drafts — book-backed draft claims pending admin review.
+// Review continues through PATCH /admin/claims/:id (same semantics as
+// Wikipedia drafts): the admin verifies each summary against the linked book
+// landing page, then publishes or rejects.
+router.get("/admin/book-drafts", h(async (_req, res) => {
+  const rows = await db
+    .select({
+      id: trackClaimsTable.id,
+      mbid: trackClaimsTable.mbid,
+      text: trackClaimsTable.text,
+      sourceLabel: trackClaimsTable.sourceLabel,
+      sourceUrl: trackClaimsTable.sourceUrl,
+      externalId: trackClaimsTable.externalId,
+      status: trackClaimsTable.status,
+      createdAt: trackClaimsTable.createdAt,
+      trackTitle: recordingsTable.title,
+      trackArtist: recordingsTable.artist,
+    })
+    .from(trackClaimsTable)
+    .leftJoin(recordingsTable, eq(trackClaimsTable.mbid, recordingsTable.mbid))
+    .where(
+      and(
+        eq(trackClaimsTable.sourceHandle, BOOK_SOURCE_HANDLE),
+        eq(trackClaimsTable.status, "draft"),
+      ),
+    )
+    .orderBy(desc(trackClaimsTable.createdAt));
+
+  return res.json(
+    ListBookDraftsResponse.parse({
+      claims: rows.map((r) => ({
+        id: r.id,
+        mbid: r.mbid,
+        trackTitle: r.trackTitle ?? null,
+        trackArtist: r.trackArtist ?? null,
+        text: r.text,
+        sourceLabel: r.sourceLabel,
+        sourceUrl: r.sourceUrl,
+        externalId: r.externalId,
+        status: r.status,
+        createdAt: r.createdAt.toISOString(),
+      })),
     }),
   );
 }));
