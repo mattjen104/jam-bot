@@ -596,11 +596,13 @@ function SectionErrorBanner({
   title,
   kind,
   message,
+  "data-testid": testId,
 }: {
   icon: React.ReactNode;
   title: string;
   kind: "auth" | "server";
   message: string;
+  "data-testid"?: string;
 }) {
   return (
     <section className="mt-10">
@@ -611,6 +613,7 @@ function SectionErrorBanner({
       <div
         className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4"
         role="alert"
+        data-testid={testId}
       >
         <div className="flex items-start gap-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
