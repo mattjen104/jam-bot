@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- pre-lint file: migrate logging to the structured logger on touch */
 import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
-import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones } from "./lore/seed.js";
+import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones, seedRollingStone500List } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startLeaseScheduler } from "./lore/socket-leases.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
@@ -103,6 +103,7 @@ import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migrati
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
 import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
 import { startPitchforkJob } from "./lore/pitchfork-job.js";
+import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
 
 const rawPort = process.env["PORT"];
 
@@ -214,6 +215,11 @@ async function bootLore(): Promise<void> {
     }
     await seedPickers();
     try {
+      await seedRollingStone500List();
+    } catch (err) {
+      console.error("[lore] Rolling Stone 500 list seed failed", err);
+    }
+    try {
       await backfillRadioBrowserIcyEnrollment();
     } catch (err) {
       console.error("[lore] radio-browser ICY backfill failed", err);
@@ -252,6 +258,12 @@ async function bootLore(): Promise<void> {
     startIsrcEnrichmentJob();
     startReleaseYearBackfillJob();
     startPitchforkJob();
+    // NOTE: startBeatoJob() is NOT called here until the BEATO_EPISODES video
+    // IDs have been verified against https://www.youtube.com/@RickBeato/videos.
+    // See Task #136 — publishing claims with unverified YouTube links is
+    // unsupported provenance. Activate by importing and calling startBeatoJob()
+    // once all seed entries are confirmed.
+    startSoundOnSoundClaimsJob();
     startHomepageScraper();
     await runMigration("applyDonateCheckerMigration", applyDonateCheckerMigration);
     startDonateChecker();

@@ -34,6 +34,7 @@ export const ALL_KNOWN_SOURCES: KnownSource[] = [
   { id: "audiodb",        label: "TheAudioDB",           type: "Community review"    },
   { id: "pitchfork",      label: "Pitchfork",          type: "Review"              },
   { id: "allmusic",       label: "AllMusic",           type: "Review"              },
+  { id: "metacritic",     label: "Metacritic",         type: "Critic aggregate"    },
   { id: "rym",            label: "Rate Your Music",    type: "Community rating"    },
 ];
 

@@ -6,6 +6,7 @@ import {
   picksTable,
   showsTable,
   listSourcesTable,
+  listsTable,
   type InsertStation,
 } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
@@ -2376,6 +2377,19 @@ const SEED_BLOG_PICKERS: ReadonlyArray<{
     // rather than routing them through the list-candidates queue.
     feedUrl: "https://www.soundonsound.com/feed",
   },
+  // --- Alt-press / critical canon ------------------------------------------
+  {
+    handle: "consequence-of-sound",
+    name: "Consequence of Sound",
+    homeUrl: "https://consequenceofsound.net",
+    feedUrl: "https://consequenceofsound.net/feed",
+  },
+  {
+    handle: "avclub-music",
+    name: "A.V. Club — Music",
+    homeUrl: "https://www.avclub.com",
+    feedUrl: "https://www.avclub.com/tag/music/rss",
+  },
   // --- Deliberately NOT enrolled (per task spec) -----------------------------
   // Boomkat          — no RSS at all; scrape-only (out of scope).
   // JazzTimes        — feed unstable/dead since the 2023 ownership collapse.
@@ -2562,5 +2576,82 @@ export async function seedPickers(): Promise<void> {
     } catch (err) {
       console.error("[lore] seedPickers failed for", n.handle, err);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rolling Stone 500 Greatest Albums list seed
+// ---------------------------------------------------------------------------
+
+/**
+ * Seed the Rolling Stone "500 Greatest Albums of All Time" list into the
+ * list_sources + lists tables so it shows up in the admin list-scrape UI and
+ * can be triggered via POST /api/admin/lists/scrape.
+ *
+ * This is additive/idempotent — safe to call on every boot. The actual album
+ * entries are populated by the admin-triggered LLM scrape, not here.
+ */
+export async function seedRollingStone500List(): Promise<void> {
+  try {
+    // Find or create the Rolling Stone publication list source.
+    // list_sources has no unique index on `name`, so we use select-then-insert.
+    let [source] = await db
+      .select({ id: listSourcesTable.id })
+      .from(listSourcesTable)
+      .where(and(eq(listSourcesTable.kind, "publication"), eq(listSourcesTable.name, "Rolling Stone")))
+      .limit(1);
+
+    if (!source) {
+      const [inserted] = await db
+        .insert(listSourcesTable)
+        .values({
+          kind: "publication",
+          name: "Rolling Stone",
+          homepageUrl: "https://www.rollingstone.com",
+        })
+        .returning({ id: listSourcesTable.id });
+      source = inserted;
+    }
+
+    if (!source) {
+      console.warn("[lore] seedRollingStone500List: failed to find or create list source");
+      return;
+    }
+
+    // Find or create the list record.
+    // The unique index on (sourceId, title, year) uses standard NULL semantics:
+    // year=null values are considered distinct, so onConflictDoUpdate would
+    // never fire for all-time lists. Use select-then-insert instead.
+    const RS_LIST_TITLE = "500 Greatest Albums of All Time";
+    const RS_LIST_URL =
+      "https://www.rollingstone.com/music/music-lists/best-albums-500-greatest-albums-of-all-time-156826/";
+
+    const [existingList] = await db
+      .select({ id: listsTable.id })
+      .from(listsTable)
+      .where(
+        and(
+          eq(listsTable.sourceId, source.id),
+          eq(listsTable.title, RS_LIST_TITLE),
+        ),
+      )
+      .limit(1);
+
+    if (!existingList) {
+      await db.insert(listsTable).values({
+        sourceId: source.id,
+        title: RS_LIST_TITLE,
+        year: null,
+        kind: "all_time",
+        isRanked: true,
+        listLength: 500,
+        url: RS_LIST_URL,
+        retrievedAt: new Date(),
+      });
+    }
+
+    console.info("[lore] Rolling Stone 500 list seeded (admin scrape trigger available)");
+  } catch (err) {
+    console.error("[lore] seedRollingStone500List failed", err);
   }
 }

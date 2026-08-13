@@ -48,6 +48,7 @@ import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
 import { fetchAudioDbReview } from "../../lore/audiodb.js";
 import { fetchAllMusicReview } from "../../lore/allmusic.js";
 import { fetchPitchforkReview } from "../../lore/pitchfork.js";
+import { fetchMetacriticScore } from "../../lore/metacritic.js";
 import { resolvePickRunAnchors } from "../../lore/runs.js";
 import { pickerNotOptedOut } from "./shared.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -394,6 +395,54 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     });
   }
 
+  // Fire-and-forget Metacritic critic score — keyed on release-group MBID so
+  // the same album score surfaces for every kept track on the album.
+  // Only attempted when both an album title and release-group MBID are available.
+  if (album?.name && album?.releaseGroupMbid) {
+    const metaAlbumTitle = album.name;
+    const metaArtist = rec.artist ?? "";
+    const metaReleaseGroupMbid = album.releaseGroupMbid;
+    setImmediate(() => {
+      fetchMetacriticScore(
+        rec.mbid,
+        metaArtist,
+        metaAlbumTitle,
+        metaReleaseGroupMbid,
+      ).catch((err) =>
+        console.warn("[lore] metacritic fire-and-forget failed", rec.mbid, err),
+      );
+    });
+  }
+
+  // Fire-and-forget RYM link-out claim — generates a Rate Your Music search
+  // URL for the album so the RYM card appears as an "indexed" source in the
+  // Album Investigation sheet. No scraping; no ToS risk (link-out only).
+  const hasRymClaim = claimRows.some((c) => c.sourceHandle === "rym");
+  if (!hasRymClaim && album?.name && rec.artist) {
+    const rymArtist = rec.artist;
+    const rymAlbum = album.name;
+    const rymMbid = rec.mbid;
+    setImmediate(() => {
+      const searchTerm = encodeURIComponent(`${rymArtist} ${rymAlbum}`);
+      const rymUrl = `https://rateyourmusic.com/search?searchterm=${searchTerm}&searchtype=l`;
+      const externalId = `rym:link:${rymMbid}`;
+      db.insert(trackClaimsTable)
+        .values({
+          mbid: rymMbid,
+          text: "Community ratings and reviews on Rate Your Music",
+          sourceLabel: "Rate Your Music",
+          sourceUrl: rymUrl,
+          sourceHandle: "rym",
+          externalId,
+          status: "published",
+        })
+        .onConflictDoNothing({ target: trackClaimsTable.externalId })
+        .catch((err) =>
+          console.warn("[lore] rym link-out insert failed", rymMbid, err),
+        );
+    });
+  }
+
   // Derive `sources` from the published claims — one entry per unique
   // sourceHandle. This gives the knowledge object the `sources` field that
   // the openapi schema declares on TrackKnowledge.
@@ -405,6 +454,11 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     "wikipedia-album": "Album overview",
     "audiodb": "Review",
     "allmusic": "Review",
+    "metacritic": "Critic aggregate",
+    "beato": "YouTube breakdown",
+    "sound-on-sound": "Production profile",
+    "rym": "Community rating",
+    "pitchfork": "Review",
   };
 
   const sourcesByHandle = new Map<string, { label: string; type: string; excerpt: string; url: string | null }>();
