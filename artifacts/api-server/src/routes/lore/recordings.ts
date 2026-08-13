@@ -335,6 +335,40 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     }
   }
 
+  // Fallback album context from recording_release_groups when Spotify did not
+  // provide an exact match (e.g. tracks that arrived via ICY/Spinitron polling
+  // without Spotify enrichment). This allows AllMusic, Metacritic, and RYM
+  // fire-and-forget to fire for those recordings too.
+  if (!album) {
+    try {
+      const [rrgRow] = await db
+        .select({
+          title: recordingReleaseGroupsTable.title,
+          releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+        })
+        .from(recordingReleaseGroupsTable)
+        .where(
+          and(
+            eq(recordingReleaseGroupsTable.recordingMbid, rec.mbid),
+            eq(recordingReleaseGroupsTable.isPrimary, true),
+            isNotNull(recordingReleaseGroupsTable.title),
+          ),
+        )
+        .limit(1);
+      if (rrgRow?.title) {
+        album = {
+          name: rrgRow.title,
+          year: knowledge?.pressing?.year ?? null,
+          spotifyAlbumId: null,
+          releaseGroupMbid: rrgRow.releaseGroupMbid,
+          tracks: [],
+        };
+      }
+    } catch (err) {
+      console.warn("[lore] rrg fallback album context failed", rec.mbid, err);
+    }
+  }
+
   // Pitchfork review — fire-and-forget, off the hot path. Passes the album
   // name from Spotify context when available so the search is more accurate.
   // The background pre-fetch job (pitchfork-job.ts) handles the common case;
