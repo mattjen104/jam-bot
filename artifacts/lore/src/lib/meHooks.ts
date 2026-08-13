@@ -1154,6 +1154,32 @@ export function useLatestImportJob() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Investigation coverage — which of the user's library recordings have
+// published track-knowledge claims (powers the ✳ marker on Stack rows)
+// ---------------------------------------------------------------------------
+
+export const ME_INVESTIGATION_COVERAGE_KEY = ["me", "library", "investigation-coverage"] as const;
+
+/**
+ * Returns a Set of recording MBIDs (from the authenticated listener's
+ * library) that have at least one published track-knowledge claim.
+ * Used by Library.tsx to light up the ✳ marker on Stack / album rows.
+ * Returns an empty Set when unauthenticated or no library exists.
+ */
+export function useMyInvestigationCoverage(): Set<string> {
+  const { data } = useQuery({
+    queryKey: ME_INVESTIGATION_COVERAGE_KEY,
+    queryFn: () =>
+      fetchOrNull<{ mbids: string[] }>("/api/me/library/investigation-coverage").then(
+        (d) => d?.mbids ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  return new Set(data ?? []);
+}
+
 /** Pickers whose picks overlap the user's library. Empty when unauthenticated. */
 export function useMyOverlapPickers() {
   return useQuery({

@@ -21,6 +21,7 @@ import {
   listensTable,
   pickersTable,
   loreSettingsTable,
+  trackClaimsTable,
   type LibraryItemProvenance,
   type ImportBufferEntry,
   type ImportItem,
@@ -3396,6 +3397,43 @@ router.get("/me/library/list-coverage", h(async (req, res) => {
   }
 
   return res.json({ items: Array.from(listMap.values()) });
+}));
+
+// ---------------------------------------------------------------------------
+// Investigation coverage — recording MBIDs with published track-knowledge claims
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/me/library/investigation-coverage
+ *
+ * Returns the set of recording MBIDs (from the authenticated listener's
+ * library) for which at least one published track_claim exists.  The client
+ * uses this to light up the ✳ marker on Stack rows without fetching full
+ * knowledge payloads.
+ *
+ * Response: { mbids: string[] }
+ */
+router.get("/me/library/investigation-coverage", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const rows = await db
+    .selectDistinct({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .innerJoin(
+      trackClaimsTable,
+      and(
+        eq(trackClaimsTable.mbid, libraryItemsTable.mbid),
+        eq(trackClaimsTable.status, "published"),
+      ),
+    )
+    .where(
+      and(
+        eq(libraryItemsTable.userId, user.id),
+        isNotNull(libraryItemsTable.mbid),
+      ),
+    );
+
+  return res.json({ mbids: rows.map((r) => r.mbid).filter(Boolean) });
 }));
 
 // ---------------------------------------------------------------------------

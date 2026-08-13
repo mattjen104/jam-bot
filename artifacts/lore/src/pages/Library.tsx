@@ -30,6 +30,7 @@ import {
   useMyAlbumAvatar,
   useSetAlbumAvatar,
   ME_LIBRARY_COVERAGE_KEY,
+  useMyInvestigationCoverage,
   type LibraryCoverageList,
   type FileImportSummary,
   type LibraryItem,
@@ -1341,6 +1342,10 @@ export default function Library() {
   const isEmpty = !libLoading && keptItems.length === 0;
   void radio; // suppress unused lint
 
+  // Investigation coverage — recording MBIDs with published track-knowledge claims
+  // (powers the ✳ marker on Stack rows; empty when unauthenticated)
+  const investigationCoveredMbids = useMyInvestigationCoverage();
+
   // Grouped views — computed only when the relevant view is active
   const albumGroups = useMemo(
     () => (viewMode === "album" ? buildAlbumGroups(keptItems) : []),
@@ -2040,6 +2045,9 @@ export default function Library() {
                   <StackRow
                     key={group.key}
                     group={group}
+                    hasInvestigation={group.items.some(
+                      (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
+                    )}
                     isOpen={groupFilterQ ? true : openAlbumKey === group.key}
                     onToggle={() =>
                       setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
