@@ -51,76 +51,83 @@ export interface BeatoEpisode {
  * Hand-maintained episode seed — public record of Beato's "What Makes This
  * Song Great?" catalogue.
  *
- * Seeded with Smashing Pumpkins / Mellon Collie entries as the primary
- * smoke-test for the Task 135 metadata expansion (30th anniversary).
- * Add episodes by copying the YouTube video id and official title.
+ * All video IDs verified against @RickBeato YouTube channel on 2026-08-13
+ * using the fan-maintained playlist (PL54ggFZMKOzQn72ZzPO3hnUVIj78Zuuee),
+ * videodb.org episode index, and the Rosetta episode database.
  *
- * NOTE: video IDs should be verified against the @RickBeato YouTube channel
- * before updating this seed. The artist+songTitle pairs are the canonical
- * facts; the videoId only affects the watch link in the stored claim.
+ * NOTE: The original approximate IDs were all incorrect (pointing to
+ * unrelated videos). Only add entries whose IDs have been confirmed against
+ * the official @RickBeato upload. The artist+songTitle pairs are the
+ * canonical facts; the videoId only affects the watch link in the stored
+ * claim.
+ *
+ * Songs removed because no WMTSG episode was found:
+ *   - "Bullet with Butterfly Wings" (Smashing Pumpkins) — no episode exists
+ *   - "Billie Jean" (Michael Jackson) — no episode exists
+ *   - "Hotel California" (Eagles) — no episode exists
+ *   - "The Chain" (Fleetwood Mac) — Beato covered "Go Your Own Way" instead
+ *   - "Karma Police" (Radiohead) — Beato covered "Paranoid Android" instead
  */
 export const BEATO_EPISODES: BeatoEpisode[] = [
   // ---- Smashing Pumpkins — Mellon Collie 30th smoke tests ----
+  // Verified 2026-08-13: GVDWSTCKgng confirmed via Rosetta episode page and
+  // fan playlist (PL54ggFZMKOzQn72ZzPO3hnUVIj78Zuuee index 23).
   {
-    videoId: "C4nK3t9CJl4",
-    artist: "The Smashing Pumpkins",
-    songTitle: "Bullet with Butterfly Wings",
-    youtubeUrl: "https://www.youtube.com/watch?v=C4nK3t9CJl4",
-  },
-  {
-    videoId: "wr5uYYfqSXQ",
+    videoId: "GVDWSTCKgng",
     artist: "The Smashing Pumpkins",
     songTitle: "1979",
-    youtubeUrl: "https://www.youtube.com/watch?v=wr5uYYfqSXQ",
+    youtubeUrl: "https://www.youtube.com/watch?v=GVDWSTCKgng",
   },
-  // ---- Additional well-documented episodes ----
+  // ---- Additional verified episodes ----
+  // Verified 2026-08-13: l1ZnWc-sFd0 confirmed via videodb.org
+  // (Ep.90 "Smells Like Teen Spirit" Nirvana) and fan playlist index 89.
   {
-    videoId: "4vHCNKBfTTw",
+    videoId: "l1ZnWc-sFd0",
     artist: "Nirvana",
     songTitle: "Smells Like Teen Spirit",
-    youtubeUrl: "https://www.youtube.com/watch?v=4vHCNKBfTTw",
+    youtubeUrl: "https://www.youtube.com/watch?v=l1ZnWc-sFd0",
   },
+  // Verified 2026-08-13: WpNFcfPQcYQ confirmed via fan playlist.
+  // Note: Beato has no WMTSG episode for "Karma Police"; "Paranoid Android"
+  // is the Radiohead episode in the series.
   {
-    videoId: "UmGjxpWYW5g",
+    videoId: "WpNFcfPQcYQ",
     artist: "Radiohead",
-    songTitle: "Karma Police",
-    youtubeUrl: "https://www.youtube.com/watch?v=UmGjxpWYW5g",
+    songTitle: "Paranoid Android",
+    youtubeUrl: "https://www.youtube.com/watch?v=WpNFcfPQcYQ",
   },
+  // Verified 2026-08-13: mGhTkgDYzfk confirmed via Rosetta episode page
+  // (slug: new-what-makes-this-song-great-led-zeppelin; Rosetta confirms
+  // the episode covers "Stairway to Heaven" — Fender Rhodes hidden track).
   {
-    videoId: "9YkGnTNWkBQ",
+    videoId: "mGhTkgDYzfk",
     artist: "Led Zeppelin",
     songTitle: "Stairway to Heaven",
-    youtubeUrl: "https://www.youtube.com/watch?v=9YkGnTNWkBQ",
+    youtubeUrl: "https://www.youtube.com/watch?v=mGhTkgDYzfk",
   },
+  // Verified 2026-08-13: 5-gF-tmblA8 confirmed via videodb.org
+  // (Ep.104 "Comfortably Numb" Pink Floyd) and YouTube title match.
   {
-    videoId: "lbwgbYMZs2w",
+    videoId: "5-gF-tmblA8",
     artist: "Pink Floyd",
     songTitle: "Comfortably Numb",
-    youtubeUrl: "https://www.youtube.com/watch?v=lbwgbYMZs2w",
+    youtubeUrl: "https://www.youtube.com/watch?v=5-gF-tmblA8",
   },
+  // Verified 2026-08-13: 4ylXt4DsB24 confirmed via fan playlist index 12.
+  // Note: Beato has no WMTSG episode for "The Chain"; "Go Your Own Way" is
+  // the Fleetwood Mac episode in the series.
   {
-    videoId: "GgTZKKn2OFo",
+    videoId: "4ylXt4DsB24",
     artist: "Fleetwood Mac",
-    songTitle: "The Chain",
-    youtubeUrl: "https://www.youtube.com/watch?v=GgTZKKn2OFo",
+    songTitle: "Go Your Own Way",
+    youtubeUrl: "https://www.youtube.com/watch?v=4ylXt4DsB24",
   },
+  // Verified 2026-08-13: 6VKucZreGwI confirmed via fan playlist index 34.
   {
-    videoId: "8kqANgCeHCc",
+    videoId: "6VKucZreGwI",
     artist: "The Police",
     songTitle: "Every Breath You Take",
-    youtubeUrl: "https://www.youtube.com/watch?v=8kqANgCeHCc",
-  },
-  {
-    videoId: "Hs6Q8o4NYNM",
-    artist: "Michael Jackson",
-    songTitle: "Billie Jean",
-    youtubeUrl: "https://www.youtube.com/watch?v=Hs6Q8o4NYNM",
-  },
-  {
-    videoId: "k2RnGsRYKr8",
-    artist: "Eagles",
-    songTitle: "Hotel California",
-    youtubeUrl: "https://www.youtube.com/watch?v=k2RnGsRYKr8",
+    youtubeUrl: "https://www.youtube.com/watch?v=6VKucZreGwI",
   },
 ];
 
