@@ -16,7 +16,7 @@
  *   - Row C: release_year NULL + year_checked_at set   → appears in permMiss
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import express from "express";
@@ -310,5 +310,117 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
     expect(setCall).toBeDefined();
     expect(setCall).toHaveProperty("releaseYear", 1977);
     expect(setCall).toHaveProperty("yearCheckedAt");
+  });
+});
+
+// ===========================================================================
+// startReleaseYearBackfillJob — tick scheduling
+// ===========================================================================
+
+describe("startReleaseYearBackfillJob — tick scheduling", () => {
+  // Each test uses fake timers so we never wait for real 15s / 10min intervals.
+  // vi.resetModules() ensures 'running' is reset to false between tests so
+  // startReleaseYearBackfillJob() actually starts the loop each time.
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it("reschedules at ACTIVE_TICK_MS (15 s) when remaining > 0", async () => {
+    vi.useFakeTimers();
+
+    // --- DB mock for backfillReleaseYearBatch when remaining > 0 ---
+    // Tick 1 — first select: one row to process, second select: 3 still remaining.
+    const mockSet = vi.fn().mockReturnValue({ where: () => Promise.resolve() });
+    mockDbUpdate.mockReturnValue({ set: mockSet });
+
+    mockDbSelect
+      // select rows to process
+      .mockReturnValueOnce({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: () => Promise.resolve([{ mbid: "test-sched-active" }]),
+            }),
+          }),
+        }),
+      })
+      // remaining count after the loop → still work to do
+      .mockReturnValueOnce({
+        from: () => ({
+          where: () => Promise.resolve([{ count: 3 }]),
+        }),
+      });
+
+    mockFetchReleaseYear.mockResolvedValueOnce(1984);
+
+    // Fresh module import so 'running = false' and the scheduler starts cleanly.
+    const { startReleaseYearBackfillJob } = await import(
+      "../src/lore/release-year-backfill.js"
+    );
+
+    // Spy on setTimeout to capture the delay used for the NEXT tick after
+    // backfillReleaseYearBatch resolves inside the first scheduled tick.
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
+
+    startReleaseYearBackfillJob();
+
+    // Capture the tick function from the very first setTimeout call (the boot
+    // delay). The job creates tick once and reuses the same reference for every
+    // reschedule, whereas AbortSignal.timeout() registers a different internal
+    // callback. Matching by function identity therefore proves a real reschedule
+    // rather than an abort-signal timer.
+    const tickFn = setTimeoutSpy.mock.calls[0]?.[0];
+    expect(tickFn).toBeTypeOf("function");
+
+    // Advance past the initial ACTIVE_TICK_MS boot delay so the first tick runs.
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    // Filter all setTimeout calls to those that used the tick function.
+    // There must be exactly 2: the boot delay and the active reschedule.
+    const tickCalls = setTimeoutSpy.mock.calls.filter((c) => c[0] === tickFn);
+    expect(tickCalls).toHaveLength(2);
+    // The second (reschedule) call must use ACTIVE_TICK_MS because remaining > 0.
+    expect(tickCalls[1]?.[1]).toBe(15_000); // ACTIVE_TICK_MS
+  });
+
+  it("reschedules at IDLE_TICK_MS (10 min) when remaining === 0", async () => {
+    vi.useFakeTimers();
+
+    // Tick 1 — no rows to process, remaining = 0.
+    mockDbSelect
+      // select rows: empty batch
+      .mockReturnValueOnce({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: () => Promise.resolve([]),
+            }),
+          }),
+        }),
+      })
+      // remaining count → queue is empty
+      .mockReturnValueOnce({
+        from: () => ({
+          where: () => Promise.resolve([{ count: 0 }]),
+        }),
+      });
+
+    const { startReleaseYearBackfillJob } = await import(
+      "../src/lore/release-year-backfill.js"
+    );
+
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
+
+    startReleaseYearBackfillJob();
+
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    const delays = setTimeoutSpy.mock.calls.map((c) => c[1] as number);
+    const rescheduleDelay = delays.at(-1);
+    // remaining === 0 → job should idle at 10 minutes (600 000 ms)
+    expect(rescheduleDelay).toBe(10 * 60_000); // IDLE_TICK_MS
   });
 });
