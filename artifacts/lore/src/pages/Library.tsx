@@ -1138,9 +1138,21 @@ export default function Library() {
   const [openAlbumKey, setOpenAlbumKey] = useState<string | null>(null);
 
 
-  // Sentinel for IntersectionObserver
+  // Sentinel for IntersectionObserver — used in track-view lenses only.
+  // In the album-first Stack view (viewMode === "album") we eagerly pre-fetch
+  // all pages so buildAlbumGroups sees the complete library (including all
+  // historical Spotify imports), rather than only the first N scrolled rows.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    // Album view: fire next-page fetches without waiting for scroll.
+    // We gate on !isFetchingNextPage so we don't queue concurrent fetches.
+    if (viewMode === "album" && hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [viewMode, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  useEffect(() => {
+    // Track-view lenses: use IntersectionObserver as before.
+    if (viewMode === "album") return;
     const el = sentinelRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -1151,7 +1163,7 @@ export default function Library() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [viewMode, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Import job
   const { data: jobData } = useLatestImportJob();
