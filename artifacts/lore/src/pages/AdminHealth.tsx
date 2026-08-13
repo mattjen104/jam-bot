@@ -10,6 +10,7 @@ import {
   Loader2,
   Radio,
   RefreshCw,
+  Tag,
   Wifi,
 } from "lucide-react";
 
@@ -47,6 +48,17 @@ interface SpinitronWebStation {
 interface SpinitronWebResponse {
   staleCount: number;
   stations: SpinitronWebStation[];
+}
+
+interface ReleaseYearHealth {
+  totalNull: number;
+  /** Eligible work: null year, null checked_at, has spins, non-synthetic MBID. */
+  inQueue: number;
+  /** Checked by backfill but MB returned no date — won't be retried. */
+  permMiss: number;
+  /** Null year, null checked_at, but synthetic (sp:) or never aired — backfill skips these. */
+  ineligible: number;
+  lastCheckedAt: string | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -136,6 +148,7 @@ function HealthPanel({
 }) {
   const [feedFreshness, setFeedFreshness] = useState<FeedFreshnessResponse | null>(null);
   const [spiWeb, setSpiWeb] = useState<SpinitronWebResponse | null>(null);
+  const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -148,9 +161,10 @@ function HealthPanel({
       setLoadError(null);
       try {
         const headers = { "x-admin-token": token };
-        const [ffRes, swRes] = await Promise.all([
+        const [ffRes, swRes, ryRes] = await Promise.all([
           fetch("/api/admin/feed-freshness-health", { headers }),
           fetch("/api/admin/spinitron-web-health", { headers }),
+          fetch("/api/admin/release-year-health", { headers }),
         ]);
 
         if (!ffRes.ok || !swRes.ok) {
@@ -167,6 +181,11 @@ function HealthPanel({
 
         setFeedFreshness(ff);
         setSpiWeb(sw);
+
+        if (ryRes.ok) {
+          setRyHealth((await ryRes.json()) as ReleaseYearHealth);
+        }
+
         setLastRefreshed(new Date());
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : "Failed to load health data");
@@ -295,6 +314,11 @@ function HealthPanel({
               ))}
             </div>
           </section>
+        )}
+
+        {/* Release year enrichment health */}
+        {!loading && !loadError && ryHealth !== null && (
+          <ReleaseYearHealthSection health={ryHealth} />
         )}
 
         {/* Healthy sub-sections when one is OK but not both */}
@@ -465,5 +489,111 @@ function DataRow({ label, value }: { label: string; value: string }) {
       <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="font-mono text-sm text-foreground">{value}</dd>
     </div>
+  );
+}
+
+// ─── Release year enrichment health ───────────────────────────────────────
+
+function ReleaseYearHealthSection({ health }: { health: ReleaseYearHealth }) {
+  const { totalNull, inQueue, permMiss, ineligible, lastCheckedAt } = health;
+
+  const queueDone = inQueue === 0;
+
+  return (
+    <section className="mt-10">
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-500">
+          <Tag className="h-4 w-4" />
+        </span>
+        <h2 className="font-normal text-foreground">Release year enrichment</h2>
+        {totalNull > 0 && (
+          <span className="rounded-full bg-zinc-500/15 px-2 py-0.5 text-sm font-normal text-zinc-600 dark:text-zinc-400">
+            {totalNull.toLocaleString()} unknown
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-base text-muted-foreground">
+        Recordings without a release year pass through the age filter unchecked
+        (First/Current/Catalog/Deep). The backfill job queries MusicBrainz for
+        aired, non-synthetic recordings continuously to fill the gap.
+      </p>
+
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-base sm:grid-cols-4">
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Total missing
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {totalNull.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">release_year IS NULL</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              In backfill queue
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {inQueue.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">aired, eligible, not yet checked</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Permanent MB miss
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {permMiss.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">checked, no date on MB</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Ineligible
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {ineligible.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">synthetic or never aired</dd>
+          </div>
+        </dl>
+
+        <p className="mt-4 border-t border-border pt-3 text-sm text-muted-foreground">
+          {totalNull === 0 && (
+            <span className="text-zinc-500">All recordings have a release year ✓</span>
+          )}
+          {totalNull > 0 && queueDone && lastCheckedAt && (
+            <>
+              <span className="text-zinc-500">
+                Queue exhausted — no eligible work remaining.
+              </span>
+              <span className="ml-2">
+                Last MB lookup:{" "}
+                <span className="font-mono text-foreground">
+                  {formatTimestamp(lastCheckedAt)}
+                </span>
+              </span>
+            </>
+          )}
+          {totalNull > 0 && !queueDone && lastCheckedAt && (
+            <>
+              <span className="text-zinc-500">Backfill in progress.</span>
+              <span className="ml-2">
+                Last MB lookup:{" "}
+                <span className="font-mono text-foreground">
+                  {formatTimestamp(lastCheckedAt)}
+                </span>
+              </span>
+            </>
+          )}
+          {totalNull > 0 && !queueDone && !lastCheckedAt && (
+            <span className="text-zinc-500">
+              Backfill not yet started — will begin after a short delay on
+              server boot.
+            </span>
+          )}
+        </p>
+      </div>
+    </section>
   );
 }

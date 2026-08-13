@@ -26,9 +26,34 @@ import { eq, and } from "drizzle-orm";
 export const ALLMUSIC_HANDLE = "allmusic";
 const ALLMUSIC_HOME = "https://www.allmusic.com";
 const ALLMUSIC_SEARCH_BASE = "https://www.allmusic.com/search/albums/";
+const ALLMUSIC_ALLOWED_HOST = "www.allmusic.com";
 const FETCH_TIMEOUT_MS = 10_000;
 const MISS_EXTERNAL_ID_PREFIX = `${ALLMUSIC_HANDLE}:miss:`;
 const HIT_EXTERNAL_ID_PREFIX = `${ALLMUSIC_HANDLE}:review:`;
+
+/**
+ * SSRF guard: convert a raw href from scraped HTML to a safe AllMusic URL.
+ * - Root-relative paths (/album/…) are resolved against the AllMusic origin.
+ * - Absolute URLs are only accepted when the protocol is exactly `https:` and
+ *   the host is exactly `www.allmusic.com`.
+ * Returns null for anything that doesn't meet these criteria.
+ */
+function toSafeAllMusicUrl(rawHref: string): string | null {
+  const trimmed = rawHref.trim();
+  if (!trimmed) return null;
+  try {
+    // Root-relative paths are safe to resolve — they always land on ALLMUSIC_HOME.
+    const resolved = trimmed.startsWith("/")
+      ? new URL(trimmed, ALLMUSIC_HOME)
+      : new URL(trimmed);
+    if (resolved.protocol !== "https:" || resolved.hostname !== ALLMUSIC_ALLOWED_HOST) {
+      return null;
+    }
+    return resolved.toString();
+  } catch {
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Token-overlap matching (same pattern as audiodb.ts)
@@ -96,7 +121,8 @@ export function parseSearchResults(
 
     if (!rawHref || !rawTitle) continue;
 
-    const url = rawHref.startsWith("http") ? rawHref : `${ALLMUSIC_HOME}${rawHref}`;
+    const url = toSafeAllMusicUrl(rawHref);
+    if (!url) continue; // reject off-host or non-https hrefs
     results.push({ url, title: rawTitle.trim(), artist: rawArtist.trim() });
   }
 
@@ -181,6 +207,12 @@ export async function fetchAlbumPage(
   url: string,
   fetchFn: FetchFn = fetch,
 ): Promise<string | null> {
+  // Defense-in-depth: reject any URL that isn't HTTPS on www.allmusic.com,
+  // even if the caller somehow bypassed parseSearchResults validation.
+  if (toSafeAllMusicUrl(url) === null) {
+    console.warn("[allmusic] fetchAlbumPage: rejected off-host URL", url);
+    return null;
+  }
   try {
     const res = await fetchFn(url, {
       headers: {

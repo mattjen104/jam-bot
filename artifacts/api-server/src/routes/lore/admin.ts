@@ -57,6 +57,7 @@ import {
   db,
   stationsTable,
   recordingsTable,
+  spinsTable,
   pickersTable,
   trackClaimsTable,
   geniusAnnotationDraftsTable,
@@ -1405,6 +1406,58 @@ router.get("/admin/spinitron-web-health", h(async (_req, res) => {
       consecutiveNulls: s.consecutiveNulls,
       staleSinceMs: s.staleSinceMs,
     })),
+  });
+}));
+
+// GET /api/admin/release-year-health — live counts of recordings whose
+// release_year is still unknown, split into:
+//   - inQueue    : year_checked_at IS NULL (not yet attempted by the backfill)
+//   - permMiss   : year_checked_at IS NOT NULL AND release_year IS NULL (MB has
+//                  no date for this recording — won't be retried)
+//   - totalNull  : sum of both buckets (release_year IS NULL)
+// The counts query the live DB on every request so they update without a
+// restart. Response also carries the timestamp of the latest year_checked_at
+// so operators can see whether the backfill job is making progress.
+router.get("/admin/release-year-health", h(async (_req, res) => {
+  // Mirror the exact eligibility predicate from backfillReleaseYearBatch:
+  //   - release_year IS NULL
+  //   - year_checked_at IS NULL (not yet attempted)
+  //   - mbid NOT LIKE 'sp:%' (synthetic Spotify-only MBIDs can't be looked up)
+  //   - EXISTS a spin (only recordings that have actually aired are targeted)
+  //
+  // Recordings that are null-year + null-checked + ineligible (synthetic or
+  // never aired) are surfaced as a separate `ineligible` bucket so the UI
+  // doesn't falsely report "Backfill in progress" once the real queue is done.
+  const [totals] = await db
+    .select({
+      totalNull: sql<number>`count(*) filter (where ${recordingsTable.releaseYear} is null)::int`,
+      inQueue: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseYear} is null
+          and ${recordingsTable.yearCheckedAt} is null
+          and ${recordingsTable.mbid} not like 'sp:%'
+          and exists (select 1 from ${spinsTable} where ${spinsTable.mbid} = ${recordingsTable.mbid})
+      )::int`,
+      permMiss: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseYear} is null
+          and ${recordingsTable.yearCheckedAt} is not null
+      )::int`,
+      ineligible: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseYear} is null
+          and ${recordingsTable.yearCheckedAt} is null
+          and (
+            ${recordingsTable.mbid} like 'sp:%'
+            or not exists (select 1 from ${spinsTable} where ${spinsTable.mbid} = ${recordingsTable.mbid})
+          )
+      )::int`,
+      lastCheckedAt: sql<string | null>`max(${recordingsTable.yearCheckedAt})::text`,
+    })
+    .from(recordingsTable);
+  return res.json({
+    totalNull: totals?.totalNull ?? 0,
+    inQueue: totals?.inQueue ?? 0,
+    permMiss: totals?.permMiss ?? 0,
+    ineligible: totals?.ineligible ?? 0,
+    lastCheckedAt: totals?.lastCheckedAt ?? null,
   });
 }));
 
