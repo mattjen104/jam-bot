@@ -129,6 +129,135 @@ export const BEATO_EPISODES: BeatoEpisode[] = [
     songTitle: "Every Breath You Take",
     youtubeUrl: "https://www.youtube.com/watch?v=6VKucZreGwI",
   },
+  // ---- Additional verified episodes from videodb.org / fan playlist ----
+  // Verified 2026-08-13: ZavJLr5Otq4 confirmed via videodb.org
+  // (Ep.2 "Every Little Thing She Does Is Magic" The Police).
+  {
+    videoId: "ZavJLr5Otq4",
+    artist: "The Police",
+    songTitle: "Every Little Thing She Does Is Magic",
+    youtubeUrl: "https://www.youtube.com/watch?v=ZavJLr5Otq4",
+  },
+  // Verified 2026-08-13: xKIC9zbSJoE confirmed via videodb.org
+  // (Ep.3 "Kid Charlemagne" Steely Dan).
+  {
+    videoId: "xKIC9zbSJoE",
+    artist: "Steely Dan",
+    songTitle: "Kid Charlemagne",
+    youtubeUrl: "https://www.youtube.com/watch?v=xKIC9zbSJoE",
+  },
+  // Verified 2026-08-13: SFisOTDzGuE confirmed via videodb.org
+  // (Ep.36 "Roundabout" Yes).
+  {
+    videoId: "SFisOTDzGuE",
+    artist: "Yes",
+    songTitle: "Roundabout",
+    youtubeUrl: "https://www.youtube.com/watch?v=SFisOTDzGuE",
+  },
+  // Verified 2026-08-13: WcI3bNSgP_Y confirmed via videodb.org
+  // (Ep.43 "Whole Lotta Love" Led Zeppelin).
+  {
+    videoId: "WcI3bNSgP_Y",
+    artist: "Led Zeppelin",
+    songTitle: "Whole Lotta Love",
+    youtubeUrl: "https://www.youtube.com/watch?v=WcI3bNSgP_Y",
+  },
+  // Verified 2026-08-13: KXlBA-98i5w confirmed via videodb.org
+  // (Ep.69 "Don't Stop Believin'" Journey).
+  {
+    videoId: "KXlBA-98i5w",
+    artist: "Journey",
+    songTitle: "Don't Stop Believin'",
+    youtubeUrl: "https://www.youtube.com/watch?v=KXlBA-98i5w",
+  },
+  // Verified 2026-08-13: M7d7AL5Tvn4 confirmed via videodb.org
+  // (Ep.81 "Superstition" Stevie Wonder).
+  {
+    videoId: "M7d7AL5Tvn4",
+    artist: "Stevie Wonder",
+    songTitle: "Superstition",
+    youtubeUrl: "https://www.youtube.com/watch?v=M7d7AL5Tvn4",
+  },
+  // Verified 2026-08-13: PWp417CF7fY confirmed via videodb.org
+  // (Ep.82 "Rocket Man" Elton John).
+  {
+    videoId: "PWp417CF7fY",
+    artist: "Elton John",
+    songTitle: "Rocket Man (I Think It's Going to Be a Long, Long Time)",
+    youtubeUrl: "https://www.youtube.com/watch?v=PWp417CF7fY",
+  },
+  // Verified 2026-08-13: lCN97ZS7Ax4 confirmed via videodb.org
+  // (Ep.87 "Ramble On" Led Zeppelin — second Zeppelin WMTSG episode).
+  {
+    videoId: "lCN97ZS7Ax4",
+    artist: "Led Zeppelin",
+    songTitle: "Ramble On",
+    youtubeUrl: "https://www.youtube.com/watch?v=lCN97ZS7Ax4",
+  },
+  // Verified 2026-08-13: r45L38Eyhpw confirmed via videodb.org
+  // (Ep.91 "Amelia" Joni Mitchell).
+  {
+    videoId: "r45L38Eyhpw",
+    artist: "Joni Mitchell",
+    songTitle: "Amelia",
+    youtubeUrl: "https://www.youtube.com/watch?v=r45L38Eyhpw",
+  },
+  // Verified 2026-08-13: X33YyowZZxQ confirmed via videodb.org
+  // (Ep.94 "If You Could Read My Mind" Gordon Lightfoot).
+  {
+    videoId: "X33YyowZZxQ",
+    artist: "Gordon Lightfoot",
+    songTitle: "If You Could Read My Mind",
+    youtubeUrl: "https://www.youtube.com/watch?v=X33YyowZZxQ",
+  },
+  // Verified 2026-08-13: 44NUPu7cVfI confirmed via videodb.org
+  // (Ep.99 "Just What I Needed" The Cars).
+  {
+    videoId: "44NUPu7cVfI",
+    artist: "The Cars",
+    songTitle: "Just What I Needed",
+    youtubeUrl: "https://www.youtube.com/watch?v=44NUPu7cVfI",
+  },
+  // Verified 2026-08-13: 6ZkpF_CQpSY confirmed via videodb.org
+  // (Ep.101 "Since U Been Gone" Kelly Clarkson).
+  {
+    videoId: "6ZkpF_CQpSY",
+    artist: "Kelly Clarkson",
+    songTitle: "Since U Been Gone",
+    youtubeUrl: "https://www.youtube.com/watch?v=6ZkpF_CQpSY",
+  },
+  // Verified 2026-08-13: sxhefSeDZag confirmed via videodb.org
+  // (Ep.103 "G.O.A.T." Polyphia).
+  {
+    videoId: "sxhefSeDZag",
+    artist: "Polyphia",
+    songTitle: "G.O.A.T.",
+    youtubeUrl: "https://www.youtube.com/watch?v=sxhefSeDZag",
+  },
+  // Verified 2026-08-13: Hhgoli8klLA confirmed via videodb.org
+  // (Ep.105 "Kiss From A Rose" Seal).
+  {
+    videoId: "Hhgoli8klLA",
+    artist: "Seal",
+    songTitle: "Kiss From a Rose",
+    youtubeUrl: "https://www.youtube.com/watch?v=Hhgoli8klLA",
+  },
+  // Verified 2026-08-13: 3Ym7X_wCsPQ confirmed via videodb.org
+  // (Ep.107 "Bohemian Rhapsody" Queen — feat. Brian May).
+  {
+    videoId: "3Ym7X_wCsPQ",
+    artist: "Queen",
+    songTitle: "Bohemian Rhapsody",
+    youtubeUrl: "https://www.youtube.com/watch?v=3Ym7X_wCsPQ",
+  },
+  // Verified 2026-08-13: 6bU4R04fH4U confirmed via videodb.org
+  // (Ep.112 "Everybody Wants to Rule the World" Tears For Fears).
+  {
+    videoId: "6bU4R04fH4U",
+    artist: "Tears For Fears",
+    songTitle: "Everybody Wants to Rule the World",
+    youtubeUrl: "https://www.youtube.com/watch?v=6bU4R04fH4U",
+  },
 ];
 
 // ---------------------------------------------------------------------------
