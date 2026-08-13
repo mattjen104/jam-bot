@@ -48,25 +48,28 @@ function type(input: HTMLInputElement, value: string) {
 }
 
 describe("DialCliBar", () => {
-  it("renders the wordmark and command input, with no cursor glyph", () => {
+  it("renders the command input with no wordmark when idle, and no cursor glyph", () => {
     renderCli();
     const bar = document.querySelector(".dial-cli-overlay");
     expect(bar).toBeTruthy();
-    expect(bar?.querySelector(".dial-cli-overlay__wordmark")?.textContent).toBe("Lore");
-    // Redesign removed the blinking pipe cursor entirely.
+    // Wordmark is hidden when idle (the "Lore" text is suppressed).
+    expect(bar?.querySelector(".dial-cli-overlay__wordmark")).toBeNull();
     expect(bar?.querySelector(".dial-cli-bar__cursor")).toBeNull();
     expect(screen.getByRole("textbox", { name: "Dial command" })).toBeTruthy();
   });
 
-  it("replaces the wordmark with the typed command text", () => {
+  it("shows the typed command text in the wordmark slot, hides again when cleared", () => {
     const { input } = renderCli();
-    const wordmark = document.querySelector(".dial-cli-overlay__wordmark");
-    expect(wordmark?.textContent).toBe("Lore");
+    // Idle: no wordmark element in the DOM.
+    expect(document.querySelector(".dial-cli-overlay__wordmark")).toBeNull();
     type(input, "/classics");
+    // Typing: wordmark appears with the command text.
+    const wordmark = document.querySelector(".dial-cli-overlay__wordmark");
     expect(wordmark?.textContent).toBe("/classics");
     expect(wordmark?.className).toContain("dial-cli-overlay__wordmark--typing");
+    // Clearing: wordmark disappears again.
     type(input, "");
-    expect(wordmark?.textContent).toBe("Lore");
+    expect(document.querySelector(".dial-cli-overlay__wordmark")).toBeNull();
   });
 
   it.each([

@@ -100,15 +100,17 @@ export function DialCliBar({
       aria-label="Dial commands"
     >
       {/* The wordmark anchors at the bottom of the Dial region.
-          When the user types it transitions to showing the typed command.
-          mix-blend-mode: screen on this element makes overlapping dial rows
-          render as an intentional light-on-light graphic merge. */}
-      <span
-        className={`dial-cli-overlay__wordmark${isEmpty ? "" : " dial-cli-overlay__wordmark--typing"}`}
-        aria-hidden="true"
-      >
-        {isEmpty ? "Lore" : value}
-      </span>
+          While idle it is hidden; once the user starts typing the command
+          text appears in its place. mix-blend-mode: screen on this element
+          makes overlapping dial rows render as an intentional graphic merge. */}
+      {!isEmpty && (
+        <span
+          className="dial-cli-overlay__wordmark dial-cli-overlay__wordmark--typing"
+          aria-hidden="true"
+        >
+          {value}
+        </span>
+      )}
 
       {/* Invisible input — completely transparent; the wordmark above is the
           only visible affordance. The caret is hidden; the wordmark replaces

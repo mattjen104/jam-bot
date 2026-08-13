@@ -166,40 +166,50 @@ describe("TrackSubRow keep button", () => {
     expect(mockMutate).toHaveBeenCalledWith({ mbid: "test-mbid-click-abc" });
   });
 
-  it("shows provenance text 'kept directly' for a kept item with no station or picker", () => {
-    // Expand the row and check the provPart text in TrackSubRow
+  it("shows no secondary text for a kept item with no station or picker (minimal presentation)", () => {
+    // The new minimal TrackSubRow shows only a dot separator + value when secondary is non-empty.
+    // A keep with no station or picker produces an empty secondary — no text appended.
     const item = makeItem({ provenance: { kind: "keep" } });
     renderRow(makeGroup([item]));
 
     const rows = screen.getAllByTestId("stack-track-row");
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0]!.textContent).toContain("kept directly");
+    // Only the track title should appear — no provenance filler text.
+    expect(rows[0]!.textContent).toContain("Test Track");
+    expect(rows[0]!.textContent).not.toContain("kept directly");
   });
 });
 
-describe("albumByline", () => {
-  it("shows 'kept directly' in the album header byline when kind=keep but no station or picker", () => {
-    const item = makeItem({ provenance: { kind: "keep" } });
-    renderRow(makeGroup([item]));
-
-    // The album row header should include "kept directly" byline
-    const albumRow = screen.getByTestId("stack-album-row");
-    expect(albumRow.textContent).toContain("kept directly");
-  });
-
-  it("shows station name in byline when kind=keep with station", () => {
+describe("StackRow header (feed-parallel)", () => {
+  it("shows artist · album in the collapsed header", () => {
     const item = makeItem({ provenance: { kind: "keep", stationName: "KEXP" } });
     renderRow(makeGroup([item]));
 
     const albumRow = screen.getByTestId("stack-album-row");
-    expect(albumRow.textContent).toContain("kept on KEXP");
+    // New format: "artist · album" — no byline, no keep count.
+    expect(albumRow.textContent).toContain("Test Artist");
+    expect(albumRow.textContent).toContain("Test Album");
+    expect(albumRow.textContent).not.toContain("kept on KEXP");
+    expect(albumRow.textContent).not.toContain("imported from spotify");
   });
 
-  it("shows 'imported from spotify' byline for import-kind items", () => {
+  it("shows the station name in the track sub-row secondary slot (not the header)", () => {
+    const item = makeItem({ provenance: { kind: "keep", stationName: "KEXP" } });
+    renderRow(makeGroup([item]));
+
+    // Secondary appears in the track row, not the album header byline.
+    const rows = screen.getAllByTestId("stack-track-row");
+    expect(rows[0]!.textContent).toContain("KEXP");
+  });
+
+  it("shows service name in the track sub-row secondary slot for import-kind items", () => {
     const item = makeItem({ provenance: { kind: "import", service: "spotify" } });
     renderRow(makeGroup([item]));
 
+    const rows = screen.getAllByTestId("stack-track-row");
+    expect(rows[0]!.textContent).toContain("spotify");
+    // Album header should NOT contain the verbose "imported from spotify" byline.
     const albumRow = screen.getByTestId("stack-album-row");
-    expect(albumRow.textContent).toContain("imported from spotify");
+    expect(albumRow.textContent).not.toContain("imported from spotify");
   });
 });

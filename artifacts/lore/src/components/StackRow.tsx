@@ -10,46 +10,6 @@ import { AlbumInvestigationSheet } from "./AlbumInvestigationSheet";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return "today";
-    if (diffDays === 1) return "yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
-    return "";
-  }
-}
-
-/** Derive the most informative provenance phrase for an album header byline. */
-function albumByline(items: LibraryItem[]): string | null {
-  const item = items[0];
-  if (!item) return null;
-  const prov = item.provenance;
-  if (prov.kind === "keep") {
-    const station = prov.stationName ?? prov.stationSlug ?? null;
-    const picker = prov.pickerName ?? prov.pickerHandle ?? null;
-    // When multiple sources, note ambiguity
-    const sources = new Set(
-      items.map((i) => i.provenance.stationSlug ?? i.provenance.stationName ?? i.provenance.pickerHandle),
-    );
-    const hasMany = sources.size > 1;
-    if (hasMany) return "kept from multiple sources";
-    if (picker && station) return `via ${picker} · ${station}`;
-    if (picker) return `via ${picker}`;
-    if (station) return `kept on ${station}`;
-    return "kept directly";
-  }
-  if (prov.kind === "import") {
-    return prov.service ? `imported from ${prov.service}` : "imported";
-  }
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Track sub-row
 // ---------------------------------------------------------------------------
@@ -57,24 +17,20 @@ function albumByline(items: LibraryItem[]): string | null {
 function TrackSubRow({ item }: { item: LibraryItem }) {
   const title = item.recording?.title ?? (item.mbid ? item.mbid.slice(0, 8) : "Unknown track");
   const prov = item.provenance;
-  const stationName = prov.stationName ?? prov.stationSlug ?? null;
-  const pickerName = prov.pickerName ?? prov.pickerHandle ?? null;
   const isSoft = item.soft === true;
   const isRemoved = item.removed === true;
 
-  let provPart = "";
+  // Minimal secondary: station or service name only — no date, no "kept directly" filler.
+  const stationName = prov.stationName ?? prov.stationSlug ?? null;
+  const pickerName = prov.pickerName ?? prov.pickerHandle ?? null;
+  let secondary = "";
   if (prov.kind === "keep") {
-    if (stationName && pickerName) provPart = `${stationName} · ${pickerName}`;
-    else if (stationName) provPart = stationName;
-    else if (pickerName) provPart = pickerName;
-    else provPart = "kept directly";
+    secondary = stationName ?? pickerName ?? "";
   } else if (prov.kind === "import" && prov.service) {
-    provPart = prov.service;
+    secondary = prov.service;
   }
 
-  const date = formatDate(item.addedAt);
-  // Show a Keep affordance for tracks that are resolved but not yet explicitly
-  // kept (i.e. came from an import and have an MBID to act on).
+  // Keep button only for resolved import tracks (not yet explicitly kept).
   const showKeep = item.mbid != null && prov.kind !== "keep" && !isSoft && !isRemoved;
 
   return (
@@ -84,7 +40,7 @@ function TrackSubRow({ item }: { item: LibraryItem }) {
       style={{
         display: "flex",
         alignItems: "baseline",
-        padding: "5px 15px 5px 55px",
+        padding: "5px 15px 5px 30px",
         gap: 6,
         opacity: isRemoved ? 0.38 : isSoft ? 0.6 : 1,
         borderBottom: "1px solid hsl(var(--border) / 0.25)",
@@ -97,18 +53,12 @@ function TrackSubRow({ item }: { item: LibraryItem }) {
         <span style={{ color: isRemoved ? "hsl(var(--faint))" : "hsl(var(--foreground))" }}>
           {title}
         </span>
-        {provPart && (
+        {secondary && (
           <>
             <span style={{ color: "hsl(var(--faint))", margin: "0 4px" }}>·</span>
-            <span style={{ color: "hsl(var(--dim))" }}>{provPart}</span>
+            <span style={{ color: "hsl(var(--dim))" }}>{secondary}</span>
           </>
         )}
-        {isRemoved && (
-          <span style={{ color: "hsl(var(--faint))", marginLeft: 6, fontSize: 10 }}>removed</span>
-        )}
-      </span>
-      <span style={{ color: "hsl(var(--faint))", fontSize: 10, flexShrink: 0, marginLeft: 8 }}>
-        {date}
       </span>
       {showKeep && <TrackKeepBtn mbid={item.mbid!} />}
     </div>
@@ -211,13 +161,11 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
   const [investigationOpen, setInvestigationOpen] = useState(false);
   const { launch, busy, canLaunch } = useLaunchAlbum(group);
 
-  const byline = albumByline(group.items);
-  const keepCount = group.items.filter((i) => !i.removed).length;
-  const totalCount = group.items.length;
-
-  // Display label: prefer album title; fall back to "artist — unknown album"
+  // Feed-parallel header: "artist · album" — same dot grammar as FrontDoorRow.
+  // When only one of the two is available show that one alone.
+  const artistDisplay = group.artist ?? "";
   const albumDisplay = group.albumTitle || group.artist || "Unknown album";
-  const artistDisplay = group.artist && group.albumTitle ? group.artist : "";
+  const hasArtistLead = artistDisplay !== "" && group.albumTitle != null && group.albumTitle !== "";
 
   return (
     <>
@@ -244,89 +192,60 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
             userSelect: "none",
           }}
         >
-          {/* Primary line */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontFamily: "var(--app-font-mono)",
-                fontSize: 13,
-                color: "hsl(var(--foreground))",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {/* Album title */}
-              <span>{albumDisplay}</span>
-
-              {/* ✳ coverage marker — only when investigation sources are indexed */}
-              {hasInvestigation && (
-                <button
-                  type="button"
-                  title="Album investigation sources available"
-                  aria-label="Open album investigation"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setInvestigationOpen(true);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    fontFamily: "var(--app-font-mono)",
-                    fontSize: 11,
-                    color: "hsl(var(--library))",
-                    padding: "0 2px",
-                    verticalAlign: "super",
-                    lineHeight: 1,
-                  }}
-                >
-                  ✳
-                </button>
-              )}
-
-              {/* · artist */}
-              {artistDisplay && (
-                <>
-                  <span style={{ color: "hsl(var(--faint))", margin: "0 6px" }}>·</span>
-                  <span style={{ color: "hsl(var(--dim))" }}>{artistDisplay}</span>
-                </>
-              )}
-            </div>
-
-            {/* Byline */}
-            {byline && (
-              <div
-                style={{
-                  fontFamily: "var(--app-font-mono)",
-                  fontSize: 10,
-                  color: "hsl(var(--faint))",
-                  marginTop: 3,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {byline}
-              </div>
-            )}
-          </div>
-
-          {/* Keep count */}
-          <span
+          {/* Single-line feed-parallel identity: artist · album */}
+          <div
             style={{
+              flex: 1,
+              minWidth: 0,
               fontFamily: "var(--app-font-mono)",
-              fontSize: 10,
-              color: "hsl(var(--dim))",
-              flexShrink: 0,
-              marginLeft: 12,
-              marginRight: 6,
+              fontSize: 13,
+              color: "hsl(var(--foreground))",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}
           >
-            {keepCount < totalCount
-              ? `${keepCount}/${totalCount}`
-              : totalCount}
-          </span>
+            {/* Artist lead */}
+            {hasArtistLead && (
+              <span>{artistDisplay}</span>
+            )}
+
+            {/* ✳ coverage marker — only when investigation sources are indexed */}
+            {hasInvestigation && (
+              <button
+                type="button"
+                title="Album investigation sources available"
+                aria-label="Open album investigation"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInvestigationOpen(true);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "var(--app-font-mono)",
+                  fontSize: 11,
+                  color: "hsl(var(--library))",
+                  padding: "0 2px",
+                  verticalAlign: "super",
+                  lineHeight: 1,
+                }}
+              >
+                ✳
+              </button>
+            )}
+
+            {/* · separator before album */}
+            {hasArtistLead && (
+              <span style={{ color: "hsl(var(--faint))", margin: "0 5px" }}>·</span>
+            )}
+
+            {/* Album title (secondary, dimmed) */}
+            <span style={{ color: hasArtistLead ? "hsl(var(--dim))" : "hsl(var(--foreground))" }}>
+              {albumDisplay}
+            </span>
+          </div>
 
           {/* Chevron indicator */}
           <span
@@ -336,6 +255,7 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
               fontSize: 10,
               color: "hsl(var(--faint))",
               flexShrink: 0,
+              marginLeft: 8,
             }}
           >
             {isOpen ? "▴" : "▾"}
