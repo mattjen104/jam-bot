@@ -1,5 +1,5 @@
 import { db, recordingsTable, trackClaimsTable } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, not, inArray } from "drizzle-orm";
 
 /**
  * Rick Beato "What Makes This Song Great?" → track claim pipeline.
@@ -340,6 +340,50 @@ export async function storeBeatoClaim(
 
 
 // ---------------------------------------------------------------------------
+// Stale-claim retraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete every `track_claims` row whose `sourceHandle` is "beato" but whose
+ * `externalId` no longer corresponds to any video ID in `BEATO_EPISODES`.
+ *
+ * This covers both hit rows (`beato:{videoId}`) and miss-sentinel rows
+ * (`beato:{videoId}:checked`) for retired video IDs.  Call this before
+ * `runPass()` after a seed correction so the next pass can re-insert the
+ * correct claims without hitting the idempotency guard on the stale key.
+ *
+ * Returns the number of rows deleted.
+ */
+export async function retractSupersededBeatoClaims(): Promise<number> {
+  // Build the complete set of externalId values that are still valid.
+  const validExternalIds: string[] = BEATO_EPISODES.flatMap((ep) => [
+    `beato:${ep.videoId}`,
+    `beato:${ep.videoId}:checked`,
+  ]);
+
+  try {
+    const result = await db
+      .delete(trackClaimsTable)
+      .where(
+        and(
+          eq(trackClaimsTable.sourceHandle, BEATO_HANDLE),
+          not(inArray(trackClaimsTable.externalId, validExternalIds)),
+        ),
+      );
+    const deleted = result.rowCount ?? 0;
+    if (deleted > 0) {
+      console.info(
+        `[lore] beato: retracted ${deleted} superseded claim row(s)`,
+      );
+    }
+    return deleted;
+  } catch (err) {
+    console.warn("[lore] beato: retractSupersededBeatoClaims failed", err);
+    return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // In-memory miss cooldown (avoids repeated MB lookups for unresolvable entries)
 // ---------------------------------------------------------------------------
 
@@ -456,4 +500,19 @@ export function stopBeatoJob(): void {
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
   started = false;
+}
+
+/**
+ * Admin reset: retract all superseded Beato claims (those whose videoId is no
+ * longer in the seed), clear the in-memory miss cache, and immediately trigger
+ * a fresh pass so corrected claims are re-inserted without waiting 24 h.
+ *
+ * Returns the number of stale rows deleted.
+ */
+export async function triggerBeatoReset(): Promise<number> {
+  const deleted = await retractSupersededBeatoClaims();
+  // Clear the in-memory miss cache so the upcoming pass re-checks every episode.
+  missedEpisodes.clear();
+  void runPass();
+  return deleted;
 }

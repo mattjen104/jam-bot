@@ -113,6 +113,7 @@ import { clearAutomationClassCache } from "../../lore/scraped-shows-sync.js";
 import { clearPlayerScheduleCache } from "../player.js";
 import { toPicker } from "./shared.js";
 import { backfillReleaseYearBatch } from "../../lore/release-year-backfill.js";
+import { triggerBeatoReset } from "../../lore/beato.js";
 
 const router: IRouter = Router();
 
@@ -2845,6 +2846,25 @@ router.put("/admin/settings/:key", h(async (req, res) => {
   bustConfigCache();
 
   return res.json({ key, value, source: "db" });
+}));
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/beato/reset
+// Retract every track_claims row whose externalId no longer matches the
+// current BEATO_EPISODES seed, clear the in-memory miss cache, and
+// immediately trigger a fresh background pass so corrected claims are
+// re-inserted without waiting for the 24-hour interval.
+// ---------------------------------------------------------------------------
+router.post("/admin/beato/reset", h(async (_req, res) => {
+  const deleted = await triggerBeatoReset();
+  return res.json({
+    ok: true,
+    supersededClaimsDeleted: deleted,
+    message:
+      deleted > 0
+        ? `Retracted ${deleted} stale claim row(s); fresh pass started.`
+        : "No superseded claims found; fresh pass started.",
+  });
 }));
 
 export default router;
