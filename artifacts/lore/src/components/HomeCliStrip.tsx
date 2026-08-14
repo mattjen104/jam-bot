@@ -20,10 +20,10 @@ import { DialCliBar, type DialCliBarProps } from "./dial/DialCliBar";
 
 export type ScanOffset = 0 | 5 | 10;
 
-const SCANS: { label: string; command: string; offset: ScanOffset }[] = [
-  { label: "scan 1", command: "/scan1", offset: 0 },
-  { label: "scan 2", command: "/scan2", offset: 5 },
-  { label: "scan 3", command: "/scan3", offset: 10 },
+const SCANS: { command: string; offset: ScanOffset }[] = [
+  { command: "/scan1", offset: 0 },
+  { command: "/scan2", offset: 5 },
+  { command: "/scan3", offset: 10 },
 ];
 
 export interface HomeCliStripProps extends Pick<DialCliBarProps,
@@ -58,7 +58,7 @@ export function HomeCliStrip({
     <div className="home-cli-strip">
       {/* Dial-side: scan buttons hang down toward the input */}
       <div className="home-cli-strip__row home-cli-strip__row--dial" role="group" aria-label="Dial scan windows">
-        {SCANS.map(({ label, command, offset }) => {
+        {SCANS.map(({ command, offset }) => {
           const active = scanOffset === offset;
           return (
             <button
@@ -68,8 +68,10 @@ export function HomeCliStrip({
               aria-pressed={active}
               onClick={() => onScan(offset)}
             >
-              <span className="home-cli-strip__btn-label">{label}</span>
-              <span className="home-cli-strip__btn-cmd">{command}</span>
+              <span className="home-cli-strip__scan-command">
+                <span className="home-cli-strip__scan-slash" aria-hidden="true">/</span>
+                <span>{command.slice(1)}</span>
+              </span>
             </button>
           );
         })}

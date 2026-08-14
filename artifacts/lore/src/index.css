@@ -7263,7 +7263,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: stretch;
   border-top: 1px solid hsl(var(--border) / 0.6);
   border-bottom: 1px solid hsl(var(--border) / 0.6);
-  background: hsl(var(--background));
+   background: #000;
   padding: 0 10px;
 }
 .home-cli-strip__row {
@@ -7311,6 +7311,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   opacity: 0.55;
   font-family: var(--lore-font-terminal);
   font-size: 0.9em;
+}
+.home-cli-strip__scan-command {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--lore-font-terminal);
+  font-size: 0.9em;
+  color: hsl(var(--foreground));
+}
+.home-cli-strip__scan-slash {
+  color: hsl(var(--muted-foreground));
 }
 
 /* The strip variant of the CLI overlay: a real inline input row (not the
