@@ -7256,62 +7256,52 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
      actually overflows and scrolls. */
   min-width: 0;
   max-width: 100%;
-  /* The hanging button rows extend into the neighbouring bands via negative
-     margins — the strip must paint above both bands or those buttons become
-     unclickable where they overlap. */
+  /* Keep the whole seam inside one quiet, thin console outline. Commands no
+     longer hang into either neighbouring band. */
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  border-top: 1px solid hsl(var(--border) / 0.6);
-  border-bottom: 1px solid hsl(var(--border) / 0.6);
-   background: hsl(var(--card));
-  padding: 0 10px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  /* Keep the spaces around controls black; only the controls themselves
+     carry the lighter key surface. */
+  background: hsl(var(--background));
+  padding: 0;
 }
 .home-cli-strip__row {
   display: flex;
-  gap: 8px;
+  gap: 0;
   justify-content: center;
 }
-/* The combined filter rail hangs DOWN from the Dial band into the strip.
-   overflow-x:auto + overflow-y:visible is invalid — browsers coerce both to
-   auto, which clips the strip height and hides children below the rail.
-   Solution: the rail is just a sizing shell (no overflow set); the inner
-   .filter-row is the actual scroller so height is always intrinsic. */
+/* The filter rail is the top line of the console. It stays bounded so the
+   max-content row remains horizontally scrollable on narrow screens. */
 .home-cli-strip__filter-rail {
-  margin-top: -14px;
-  /* bleed past the parent's 10px side padding */
-  margin-left: -10px;
-  margin-right: -10px;
-  /* The rail is the scroller: it must have a bounded width (stretched by the
-     flex column) while the row inside carries the intrinsic content width.
-     Putting overflow on the max-content row itself makes a scroller that
-     never overflows — nothing scrolls. */
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
-  /* allow horizontal pan gestures to reach the scroller on touch devices */
   touch-action: pan-x pan-y;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
 }
 .home-cli-strip__filter-rail::-webkit-scrollbar { display: none; }
 .home-cli-strip__filter-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
+  min-height: 29px;
   /* intrinsic width so chips never wrap; the rail scrolls over this */
   width: max-content;
-  padding: 3px 10px 7px;
+  padding: 0 8px;
 }
 .home-cli-strip__filter-chip {
   appearance: none;
   flex: 0 0 auto;
-  min-height: 30px;
-  padding: 4px 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  background: hsl(var(--background));
+  height: 27px;
+  padding: 0 10px;
+  border: 1px solid hsl(var(--border) / 0.85);
+  border-radius: 2px;
+  background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   font-family: var(--lore-font-terminal);
@@ -7320,6 +7310,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   white-space: nowrap;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   -webkit-tap-highlight-color: transparent;
+}
+/* Touching keys share one divider instead of creating a double-width seam.
+   The row's padding remains black, so only actual buttons are gray. */
+.home-cli-strip__filter-chip + .home-cli-strip__filter-chip {
+  margin-left: -1px;
 }
 .home-cli-strip__filter-chip:hover,
 .home-cli-strip__filter-chip:focus-visible {
@@ -7336,23 +7331,25 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-color: hsl(var(--foreground) / 0.45);
   background: hsl(var(--secondary));
 }
-/* Stack-side buttons extend UP from the Stack band into the strip. */
+/* The Stack-side command is the bottom line of the same console outline. */
 .home-cli-strip__row--stack {
-  margin-bottom: -14px;
-  padding-top: 4px;
+  min-height: 29px;
+  align-items: center;
+  padding: 0 8px;
 }
 .home-cli-strip__btn {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  padding: 4px 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  background: hsl(var(--background));
+  height: 27px;
+  padding: 0 10px;
+  border: 1px solid hsl(var(--border) / 0.85);
+  border-radius: 2px;
+  background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
   font-size: var(--lore-size-small);
   font-family: var(--lore-font-display);
-  line-height: 1.4;
+  line-height: 1.2;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
@@ -7398,7 +7395,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    fixed ambient layer) with a Signifier /lore ghost placeholder. */
 .home-cli-strip__input-row {
   position: relative;
-  height: 52px;
+  height: 34px;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
 }
 .home-cli-strip__input-row .dial-cli-overlay--strip {
   display: block;
