@@ -10,16 +10,17 @@
  * Pure presentational: filter state is managed by DialView.
  */
 
-import type { AgeTier } from "../../lib/dialAgeFilter";
+import {
+  AGE_TIER_DEFINITIONS,
+  type AgeTier,
+} from "../../lib/dialAgeFilter";
+import {
+  STATION_CATEGORY_DEFINITIONS,
+  type StationCategory,
+} from "../../lib/dialCategories";
 
 export type { AgeTier };
-export type StationCategory =
-  | "lore"
-  | "classics"
-  | "ambient"
-  | "spinitron"
-  | "college"
-  | "longtail";
+export type { StationCategory };
 
 export interface DialFilterBarProps {
   activeTiers: Set<AgeTier>;
@@ -28,22 +29,6 @@ export interface DialFilterBarProps {
   onToggleCategory: (cat: StationCategory) => void;
   className?: string;
 }
-
-const AGE_LABELS: { tier: AgeTier; label: string; title: string }[] = [
-  { tier: "first", label: "First", title: "First-ever play of this recording on any Lore station" },
-  { tier: "current", label: "Current", title: "Released within the last 18 months" },
-  { tier: "catalog", label: "Catalog", title: "Released 18–60 months ago" },
-  { tier: "deep", label: "Deep", title: "Released 60+ months ago" },
-];
-
-const CAT_LABELS: { cat: StationCategory; label: string; title: string }[] = [
-  { cat: "lore",      label: "Lore",      title: "The normal curated Dial" },
-  { cat: "classics",  label: "Classics",  title: "Era/genre stations — decade radio, oldies, genre channels" },
-  { cat: "ambient",   label: "Ambient",   title: "Sleep, nature, and ambient stations" },
-  { cat: "spinitron", label: "Spinitron", title: "Stations that use Spinitron for now-playing data" },
-  { cat: "college",   label: "College",   title: "Confirmed campus and college radio stations" },
-  { cat: "longtail",  label: "Long-tail", title: "Radio Browser and other long-tail community stations" },
-];
 
 export function DialFilterBar({
   activeTiers,
@@ -56,7 +41,7 @@ export function DialFilterBar({
     <div className={`dial-filter-bar${className ? ` ${className}` : ""}`} role="group" aria-label="Dial filters">
       {/* Left: song-age filters */}
       <div className="dial-filter-bar__group" role="group" aria-label="Song age">
-        {AGE_LABELS.map(({ tier, label, title }, i) => (
+        {AGE_TIER_DEFINITIONS.map(({ tier, label, title }, i) => (
           <span key={tier} className="dial-filter-bar__item">
             {i > 0 && <span className="dial-topbar__sep" aria-hidden="true">|</span>}
             <button
@@ -74,7 +59,7 @@ export function DialFilterBar({
 
       {/* Right: station-category filters */}
       <div className="dial-filter-bar__group dial-filter-bar__group--right" role="group" aria-label="Station category">
-        {CAT_LABELS.map(({ cat, label, title }, i) => (
+        {STATION_CATEGORY_DEFINITIONS.map(({ cat, label, title }, i) => (
           <span key={cat} className="dial-filter-bar__item">
             {i > 0 && <span className="dial-topbar__sep" aria-hidden="true">|</span>}
             <button

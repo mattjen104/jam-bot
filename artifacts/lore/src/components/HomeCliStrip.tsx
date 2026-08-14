@@ -17,7 +17,8 @@
 import { useCallback, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DialCliBar, type DialCliBarProps, type MattCliStatus } from "./dial/DialCliBar";
-
+import { AGE_TIER_DEFINITIONS } from "../lib/dialAgeFilter";
+import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 export type ScanOffset = 0 | 5 | 10;
 
 const SCANS: { command: string; offset: ScanOffset }[] = [
@@ -84,6 +85,28 @@ export function HomeCliStrip({
         })}
       </div>
 
+      {/* Song-age discovery chips sit above the command input. */}
+      <div className="home-cli-strip__tier-rail" aria-label="Song age filters">
+        <div className="home-cli-strip__tier-row" role="group" aria-label="Song age">
+          {AGE_TIER_DEFINITIONS.map(({ tier, command, label, chipLabel, title }) => {
+            const active = activeTiers.has(tier);
+            return (
+              <button
+                key={tier}
+                type="button"
+                className={`home-cli-strip__tier-chip${active ? " home-cli-strip__tier-chip--active" : ""}`}
+                aria-pressed={active}
+                title={title}
+                onClick={() => onToggleTier(tier)}
+              >
+                <span>{chipLabel ?? label}</span>
+                <span className="home-cli-strip__tier-command">{command}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* The CLI seam itself */}
       <div className="home-cli-strip__input-row">
         <DialCliBar
@@ -101,6 +124,27 @@ export function HomeCliStrip({
           inputRef={inputRef}
           prefill={prefill}
         />
+      </div>
+
+      {/* Category discovery chips — one per slash command, horizontally scrollable */}
+      <div className="home-cli-strip__category-rail" aria-label="Station category filters">
+        <div className="home-cli-strip__category-row" role="group" aria-label="Station categories">
+          {STATION_CATEGORY_DEFINITIONS.map(({ cat, command, title }) => {
+            const active = activeCategories.has(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                className={`home-cli-strip__category-chip${active ? " home-cli-strip__category-chip--active" : ""}`}
+                aria-pressed={active}
+                title={title}
+                onClick={() => onToggleCategory(cat)}
+              >
+                {command}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Stack-side: primary add-artists affordance extends up from the Stack */}

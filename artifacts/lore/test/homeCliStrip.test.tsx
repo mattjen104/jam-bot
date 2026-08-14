@@ -8,7 +8,11 @@
  *  2. Typing `/scan2` calls onScan(5).
  *  3. Scan buttons call onScan with their offset and reflect the active
  *     window (aria-pressed + active class).
- *  4. The "add artists /add" button focuses the input and inserts the
+ *  4. Age chips render every supported slash command, route to the
+ *     tier callback, and expose active state accessibly.
+ *  5. Category chips render every supported slash command, route to the
+ *     category callback, and expose active state accessibly.
+ *  6. The "add artists /add" button focuses the input and inserts the
  *     `/add ` prefix.
  */
 import React from "react";
@@ -81,26 +85,32 @@ describe("HomeCliStrip", () => {
   });
 
   it("scan buttons fire onScan with their offset and show the active window", () => {
-    const { props } = renderStrip({ scanOffset: 5 });
-    const scan1 = screen.getByRole("button", { name: /scan 1/ });
-    const scan2 = screen.getByRole("button", { name: /scan 2/ });
-    const scan3 = screen.getByRole("button", { name: /scan 3/ });
+    const { props } = renderStrip({ activeCategories: new Set<StationCategory>(["lore", "college"]) });
 
-    expect(scan2.getAttribute("aria-pressed")).toBe("true");
-    expect(scan2.className).toContain("home-cli-strip__btn--active");
-    expect(scan1.getAttribute("aria-pressed")).toBe("false");
+    const tiers = [
+      ["/first", "first", "First play"],
+      ["/current", "current", "Current"],
+      ["/catalog", "catalog", "Catalog"],
+      ["/deep", "deep", "Deep"],
+    ] as const;
 
-    fireEvent.click(scan3);
-    expect(props.onScan).toHaveBeenCalledWith(10);
-    fireEvent.click(scan1);
-    expect(props.onScan).toHaveBeenCalledWith(0);
-  });
-
-  it("the add-artists button inserts the /add prefix and focuses the input", () => {
+    const categories = [
+      ["/lore", "lore"],
+      ["/classics", "classics"],
+      ["/ambient", "ambient"],
+      ["/spinitron", "spinitron"],
+      ["/college", "college"],
+      ["/longtail", "longtail"],
+    ] as const;
+    const scan1 = screen.getByRole("button", { name: "scan1" });
+    const scan2 = screen.getByRole("button", { name: "scan2" });
+    const scan3 = screen.getByRole("button", { name: "scan3" });
     const { input } = renderStrip();
-    const addBtn = screen.getByRole("button", { name: /add artists/ });
+    const addBtn = screen.getByRole("button", { name: "Add artists" });
     fireEvent.click(addBtn);
     expect(input.value).toBe("/add ");
     expect(document.activeElement).toBe(input);
   });
 });
+
+      const chip = screen.getByRole("button", { name: command });

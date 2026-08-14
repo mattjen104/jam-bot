@@ -37,19 +37,11 @@ import {
   type RefObject,
 } from "react";
 import type { DialFilterBarProps } from "./DialFilterBar";
-
-const COMMANDS = {
-  "/current":   { kind: "tier",     value: "current"   },
-  "/catalog":   { kind: "tier",     value: "catalog"   },
-  "/deep":      { kind: "tier",     value: "deep"      },
-  "/first":     { kind: "tier",     value: "first"     },
-  "/lore":      { kind: "category", value: "lore"      },
-  "/classics":  { kind: "category", value: "classics"  },
-  "/ambient":   { kind: "category", value: "ambient"   },
-  "/spinitron": { kind: "category", value: "spinitron" },
-  "/college":   { kind: "category", value: "college"   },
-  "/longtail":  { kind: "category", value: "longtail"  },
-} as const;
+import { AGE_TIER_DEFINITIONS, type AgeTier } from "../../lib/dialAgeFilter";
+import {
+  STATION_CATEGORY_DEFINITIONS,
+  type StationCategory,
+} from "../../lib/dialCategories";
 
 /**
  * Split the `/add` remainder into artist names.
@@ -171,15 +163,13 @@ export function DialCliBar({
       return;
     }
 
-    const key = lower as keyof typeof COMMANDS;
-    const cmd = COMMANDS[key];
+    const tier = TIER_BY_COMMAND.get(lower);
 
-    if (cmd) {
-      if (cmd.kind === "tier") {
-        onToggleTier(cmd.value as Parameters<typeof onToggleTier>[0]);
-      } else {
-        onToggleCategory(cmd.value as Parameters<typeof onToggleCategory>[0]);
-      }
+    if (tier) {
+      onToggleTier(tier);
+    } else {
+      const category = CATEGORY_BY_COMMAND.get(lower);
+      if (category) onToggleCategory(category);
     }
     // Unrecognised commands are silently cleared.
     setValue("");
@@ -269,3 +259,12 @@ export function DialCliBar({
     </div>
   );
 }
+
+
+const CATEGORY_BY_COMMAND = new Map<string, StationCategory>(
+  STATION_CATEGORY_DEFINITIONS.map(({ command, cat }) => [command, cat]),
+);
+
+const TIER_BY_COMMAND = new Map<string, AgeTier>(
+  AGE_TIER_DEFINITIONS.map(({ command, tier }) => [command, tier]),
+);

@@ -18,6 +18,21 @@
 
 export type AgeTier = "first" | "current" | "catalog" | "deep";
 
+export const AGE_TIER_DEFINITIONS: {
+  tier: AgeTier;
+  command: `/${AgeTier}`;
+  /** Compact label used by the full-Dial filter bar's pipe-separated menu. */
+  label: string;
+  /** Longer discovery label for the SplitHome console chips (falls back to label). */
+  chipLabel?: string;
+  title: string;
+}[] = [
+  { tier: "first",   command: "/first",   label: "First",   chipLabel: "First play", title: "First-ever play of this recording on any Lore station" },
+  { tier: "current", command: "/current", label: "Current", title: "Released within the last 18 months" },
+  { tier: "catalog", command: "/catalog", label: "Catalog", title: "Released 18–60 months ago" },
+  { tier: "deep",    command: "/deep",    label: "Deep",    title: "Released 60+ months ago" },
+];
+
 /**
  * Return the age tier for a spin, or null when the release year is unknown.
  *
