@@ -1139,8 +1139,12 @@ export default function Library() {
   const [openDoorMbid, setOpenDoorMbid] = useState<string | null>(null);
   // Single-open album shelf: tracks which row has its album shelf expanded
   const [openShelfMbid, setOpenShelfMbid] = useState<string | null>(null);
-  // Single-open Stack album row (album key from buildAlbumGroups)
-  const [openAlbumKey, setOpenAlbumKey] = useState<string | null>(null);
+  // Single-open Stack album row (album key from buildAlbumGroups).
+  // Seeded from the ?openAlbum= URL param so CompactStack rows can deep-link
+  // straight to a specific album without a separate routing layer.
+  const [openAlbumKey, setOpenAlbumKey] = useState<string | null>(
+    () => new URLSearchParams(search).get("openAlbum"),
+  );
 
 
   // Sentinel for IntersectionObserver — used in track-view lenses only.
@@ -1372,6 +1376,20 @@ export default function Library() {
     () => (viewMode === "artist" ? buildArtistGroups(keptItems) : []),
     [viewMode, keptItems],
   );
+
+  // Scroll to the album row targeted by the ?openAlbum= URL param once
+  // albumGroups have been built (data loads asynchronously after mount).
+  useEffect(() => {
+    if (!openAlbumKey || albumGroups.length === 0) return;
+    const t = setTimeout(() => {
+      const el = document.querySelector(
+        `[data-album-key="${CSS.escape(openAlbumKey)}"]`,
+      );
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openAlbumKey, albumGroups.length]);
 
   // Inline group filter (album / artist views only)
   const [groupFilter, setGroupFilter] = useState("");
@@ -2062,17 +2080,18 @@ export default function Library() {
           <>
             <div data-testid="library-album-view">
               {albumGroups.map((group) => (
-                <StackRow
-                  key={group.key}
-                  group={group}
-                  hasInvestigation={group.items.some(
-                    (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
-                  )}
-                  isOpen={openAlbumKey === group.key}
-                  onToggle={() =>
-                    setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
-                  }
-                />
+                <div key={group.key} data-album-key={group.key}>
+                  <StackRow
+                    group={group}
+                    hasInvestigation={group.items.some(
+                      (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
+                    )}
+                    isOpen={openAlbumKey === group.key}
+                    onToggle={() =>
+                      setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
+                    }
+                  />
+                </div>
               ))}
             </div>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />

@@ -30,8 +30,19 @@ export function CompactStack() {
     <div className="compact-stack" aria-label="Recent keeps">
       {groups.map((group) => {
         const art = proxyArtUrl(group.artworkUrl);
+        const label = group.artist
+          ? `${group.albumTitle} · ${group.artist}`
+          : group.albumTitle;
         return (
-          <div key={group.key} className="compact-stack__row">
+          <button
+            key={group.key}
+            type="button"
+            className="compact-stack__row"
+            aria-label={`Open ${label} in your Stack`}
+            onClick={() =>
+              setLocation(`/library?openAlbum=${encodeURIComponent(group.key)}`)
+            }
+          >
             {/* Cassette-spine background: blurred/darkened album art.
                 An <img> (not background-image) so onArtError retry/fallback
                 works; the overlay div keeps the text legible. */}
@@ -55,7 +66,7 @@ export function CompactStack() {
                 </>
               )}
             </span>
-          </div>
+          </button>
         );
       })}
       {!isLoading && groups.length === 0 && (

@@ -7307,12 +7307,31 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
 }
 .compact-stack__row {
+  /* Button reset */
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  /* Layout */
   position: relative;
   min-height: 0;
   display: flex;
   align-items: center;
   overflow: hidden;
   border-bottom: 1px solid hsl(var(--border) / 0.35);
+  transition: filter 0.12s;
+}
+.compact-stack__row:hover {
+  filter: brightness(1.12);
+}
+.compact-stack__row:focus-visible {
+  outline: 2px solid hsl(var(--keep));
+  outline-offset: -2px;
+  filter: brightness(1.12);
 }
 /* Full-bleed blurred album art behind the row text. Slight scale-up hides
    the blur's soft edges. */
