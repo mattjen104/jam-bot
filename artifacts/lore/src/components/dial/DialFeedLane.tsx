@@ -77,6 +77,13 @@ export interface DialFeedLaneProps {
    * (null tier) always pass.
    */
   activeAgeTiers?: ReadonlySet<AgeTier>;
+  /**
+   * The /radio blank-radio mode: every row (reason band included) renders
+   * through the non-reason branch, so the live now-playing sentence fills
+   * tier 1 and no crossing sentence or popular-crossing setlist appears.
+   * Row membership and order are unchanged — the same flat feed.
+   */
+  suppressCrossings?: boolean;
 }
 
 interface FeedEntry {
@@ -103,6 +110,7 @@ export function DialFeedLane({
   onTuneIn,
   onSetExpand,
   activeAgeTiers,
+  suppressCrossings = false,
 }: DialFeedLaneProps) {
   // Flat display order mirrors the scrubber: ▲ reason → dj → rest;
   // ▼ rest → dj → reason (reason rows arrive pre-inverted from DialView).
@@ -185,9 +193,14 @@ export function DialFeedLane({
 
   return (
     <div id="dial-feed-rows">
-      {shown.map(({ row, band }) => (
+      {shown.map(({ row, band }) => {
+        // Blank-radio mode: reason rows render through the non-reason branch
+        // so the live now-playing sentence leads instead of the crossing
+        // sentence (and the popular-crossing setlist stays hidden).
+        const asReason = band === "reason" && !suppressCrossings;
+        return (
         <div key={row.ds.station.slug} data-feed-band={band}>
-          {band === "reason" ? (
+          {asReason ? (
             <FrontDoorRow
               ds={row.ds}
               show={row.show}
@@ -216,12 +229,14 @@ export function DialFeedLane({
               displayMode={displayMode}
               presence={presenceMap.get(row.ds.station.id)}
               artworkUrl={artworkUrl}
-              popLine={popLineFor(row.ds.station.slug)}
+              popLine={suppressCrossings ? null : popLineFor(row.ds.station.slug)}
               compactSentence
+              suppressCrossings={suppressCrossings}
             />
           )}
         </div>
-      ))}
+        );
+      })}
       {/* Sentinel — triggers the next page load when scrolled into view. */}
       {hasObserver && visible < entries.length && (
         <div ref={sentinelRef} className="dial-feed-sentinel" aria-hidden="true" />

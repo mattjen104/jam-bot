@@ -243,4 +243,57 @@ describe("DialCliBar", () => {
     const ghost = document.querySelector(".dial-cli-overlay__wordmark--ghost");
     expect(ghost?.textContent).toBe(">_");
   });
+
+  describe("/radio and /crossings mode commands", () => {
+    it("routes /radio to onRadioMode(true) and clears the field", () => {
+      const onRadioMode = vi.fn();
+      const { props, input } = renderCli({ onRadioMode });
+      type(input, "/radio");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onRadioMode).toHaveBeenCalledWith(true);
+      expect(props.onToggleTier).not.toHaveBeenCalled();
+      expect(props.onToggleCategory).not.toHaveBeenCalled();
+      expect(input.value).toBe("");
+    });
+
+    it("routes /crossings to onRadioMode(false) and clears the field", () => {
+      const onRadioMode = vi.fn();
+      const { props, input } = renderCli({ onRadioMode });
+      type(input, "/crossings");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onRadioMode).toHaveBeenCalledWith(false);
+      expect(props.onToggleTier).not.toHaveBeenCalled();
+      expect(props.onToggleCategory).not.toHaveBeenCalled();
+      expect(input.value).toBe("");
+    });
+
+    it("accepts the mode commands case-insensitively with surrounding whitespace", () => {
+      const onRadioMode = vi.fn();
+      const { input } = renderCli({ onRadioMode });
+      type(input, "  /RADIO  ");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onRadioMode).toHaveBeenCalledWith(true);
+      type(input, "  /Crossings  ");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onRadioMode).toHaveBeenCalledWith(false);
+    });
+
+    it("executes /radio on form submit (mobile enter/tap path)", () => {
+      const onRadioMode = vi.fn();
+      const { input } = renderCli({ onRadioMode });
+      type(input, "/radio");
+      fireEvent.submit(document.querySelector(".dial-cli-overlay__form") as HTMLFormElement);
+      expect(onRadioMode).toHaveBeenCalledWith(true);
+      expect(input.value).toBe("");
+    });
+
+    it("clears silently without a callback when onRadioMode is not wired", () => {
+      const { props, input } = renderCli();
+      type(input, "/radio");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(props.onToggleTier).not.toHaveBeenCalled();
+      expect(props.onToggleCategory).not.toHaveBeenCalled();
+      expect(input.value).toBe("");
+    });
+  });
 });

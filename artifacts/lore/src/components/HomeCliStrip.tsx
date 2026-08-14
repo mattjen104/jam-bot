@@ -34,6 +34,12 @@ export interface HomeCliStripProps extends Pick<DialCliBarProps,
   onMatt?: () => void;
   mattPending?: boolean;
   mattStatus?: MattCliStatus | null;
+  /**
+   * `/radio` / `/crossings` feed-mode commands. Optional — SplitHome leaves
+   * this undefined because radioMode only applies to the full DialView feed
+   * at /feed (the CompactDial keeps the crossing sort regardless).
+   */
+  onRadioMode?: (on: boolean) => void;
 }
 
 export function HomeCliStrip({
@@ -47,6 +53,7 @@ export function HomeCliStrip({
   onMatt,
   mattPending,
   mattStatus,
+  onRadioMode,
 }: HomeCliStripProps) {
   const [, setLocation] = useLocation();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -130,6 +137,7 @@ export function HomeCliStrip({
             onScan={onScan}
             onLibrary={goLibrary}
             onMatt={onMatt}
+            onRadioMode={onRadioMode}
             mattPending={mattPending}
             mattStatus={mattStatus}
             inputRef={inputRef}

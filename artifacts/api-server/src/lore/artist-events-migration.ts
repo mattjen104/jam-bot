@@ -18,6 +18,16 @@ export async function applyArtistEventsMigration(): Promise<void> {
     )
   `);
 
+  // Drift repair: CREATE TABLE IF NOT EXISTS never adds the UNIQUE constraint
+  // to a table that pre-existed without it, and the fetcher's
+  // ON CONFLICT (artist_key) upsert then fails with 42P10. A unique index
+  // serves as the conflict arbiter; IF NOT EXISTS keeps this a no-op once
+  // present.
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS artist_events_cache_artist_key_uq
+      ON artist_events_cache (artist_key)
+  `);
+
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS artist_events (
       id              serial  PRIMARY KEY,

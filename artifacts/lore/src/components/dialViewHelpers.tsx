@@ -79,6 +79,7 @@ export function liveProvenanceSummary(
   stationName: string,
   show: DialShow | null,
   fallbackArtist?: string | null,
+  opts?: { suppressCrossings?: boolean },
 ): CompactLiveSummary | null {
   const station = cleanLiveValue(stationName);
   if (!station) return null;
@@ -93,9 +94,12 @@ export function liveProvenanceSummary(
   //   live hit → just the crossing artist on air, suffixed ", now"
   //   set crossings → up to 3 artists from this set, suffixed ", this set"
   // Show-level evidence only: station-level 24h counts stay off this surface.
-  const hasExact = !!(current?.isLibraryHit) || (show?.crossings ?? 0) > 0;
-  const hasArtist = !!(current?.isArtistHit) || (show?.artistCrossings ?? 0) > 0;
-  const isLiveHit = !!(current?.isLibraryHit || current?.isArtistHit);
+  // suppressCrossings (the /radio blank-radio mode) skips this entirely so the
+  // row leads with the plain live identity instead of the crossing lead.
+  const suppressCrossings = opts?.suppressCrossings === true;
+  const hasExact = !suppressCrossings && (!!(current?.isLibraryHit) || (show?.crossings ?? 0) > 0);
+  const hasArtist = !suppressCrossings && (!!(current?.isArtistHit) || (show?.artistCrossings ?? 0) > 0);
+  const isLiveHit = !suppressCrossings && !!(current?.isLibraryHit || current?.isArtistHit);
   let crossingArtists: string[] = [];
   if (show && (hasExact || hasArtist)) {
     const sourceArtists = hasExact ? (show.topArtists ?? []) : (show.topArtistNames ?? []);

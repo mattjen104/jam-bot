@@ -22,7 +22,14 @@
  *   /scan1 /scan2 /scan3                → compact-dial window offset 0/5/10
  *   /library                            → navigate to the Stack (when wired)
  *   /matt                               → copy the configured Matt starter library
+ *   /radio                              → blank radio mode: crossings suppressed,
+ *                                         every row leads with the live sentence
+ *   /crossings                          → crossing-ranked feed (the default)
  * Unknown commands are silently cleared.
+ *
+ * /radio and /crossings are handled BEFORE the tier/category maps and are
+ * never registered in CATEGORY_BY_COMMAND / TIER_BY_COMMAND, so they can
+ * never fall through to a filter toggle.
  *
  * No cursor glyph. No blinking. No border. No header bar.
  */
@@ -85,6 +92,11 @@ export interface DialCliBarProps extends DialFilterBarProps {
   onLibrary?: () => void;
   /** Called when `/matt` is submitted. The source library is server-configured. */
   onMatt?: () => void;
+  /**
+   * Called when `/radio` (on=true — crossings suppressed) or `/crossings`
+   * (on=false — crossing-ranked feed, the default) is submitted.
+   */
+  onRadioMode?: (on: boolean) => void;
   /** Prevents a second `/matt` submission while the copy is in flight. */
   mattPending?: boolean;
   /** Accessible feedback for the `/matt` action. */
@@ -114,6 +126,7 @@ export function DialCliBar({
   onScan,
   onLibrary,
   onMatt,
+  onRadioMode,
   mattPending = false,
   mattStatus = null,
   inputRef: externalInputRef,
@@ -163,6 +176,11 @@ export function DialCliBar({
       return;
     }
 
+    // Feed-mode commands — handled before the tier/category maps so they can
+    // never fall through to a filter toggle.
+    if (lower === "/radio") { onRadioMode?.(true); setValue(""); return; }
+    if (lower === "/crossings") { onRadioMode?.(false); setValue(""); return; }
+
     const tier = TIER_BY_COMMAND.get(lower);
 
     if (tier) {
@@ -173,7 +191,7 @@ export function DialCliBar({
     }
     // Unrecognised commands are silently cleared.
     setValue("");
-  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, onMatt, mattPending, value]);
+  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, onMatt, onRadioMode, mattPending, value]);
 
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

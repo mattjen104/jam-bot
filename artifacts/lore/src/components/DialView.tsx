@@ -29,6 +29,7 @@ import { ShowsFeedLane } from "./dial/ShowsFeedLane";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
 import { readDialLens, writeDialLens, readShowsCity, writeShowsCity, type DialLens } from "../lib/dialLensState";
+import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import {
   cleanLiveValue,
   nameNodes,
@@ -1572,6 +1573,20 @@ export function DialView() {
     writeDialLens(lens);
   }, []);
 
+  // ── Radio mode — the /radio CLI command's "blank radio" sub-state of the
+  // Radio lens: crossings suppressed, every row leads with the live
+  // now-playing sentence, and the crossing skeleton/nudges stay hidden.
+  // Local-first like the lens but under a separate key (lore:radioMode) so
+  // existing lens state is untouched. Turning it on forces the lens to
+  // "radio" — the mode only exists on that lens; /crossings turns it off
+  // and leaves the lens wherever the listener had it.
+  const [radioMode, setRadioModeState] = useState<boolean>(() => readRadioMode());
+  const setRadioMode = useCallback((on: boolean) => {
+    setRadioModeState(on);
+    writeRadioMode(on);
+    if (on) setDialLens("radio");
+  }, [setDialLens]);
+
   const {
     stations,
     isLoading,
@@ -2674,7 +2689,7 @@ export function DialView() {
   // so a slow crossings compute never blanks live stations.
   const feedSection = sortedRows.length > 0 && (
     <DialFeedLane
-      reasonRows={crossingsLoading ? [] : zone1Display}
+      reasonRows={crossingsLoading && !radioMode ? [] : zone1Display}
       djRows={djBand}
       restRows={restBand}
       popSortDesc={popSortDesc}
@@ -2696,6 +2711,7 @@ export function DialView() {
       onTuneIn={tuneZoneRow}
       onSetExpand={(_row) => undefined}
       activeAgeTiers={activeTiers}
+      suppressCrossings={radioMode}
     />
   );
 
@@ -2721,6 +2737,7 @@ export function DialView() {
           onToggleTier={toggleTier}
           onToggleCategory={toggleCategory}
           onMatt={startMattLibrary}
+          onRadioMode={setRadioMode}
           mattPending={mattStarterMutation.isPending}
           mattStatus={mattCliStatus}
         />
@@ -2883,7 +2900,7 @@ export function DialView() {
                         same feed surface. Hidden in context mode and while a
                         gesture mode owns the station list. */}
                     {!inContext && !hiddenModeActive && (
-                      <DialLensBar lens={dialLens} onSetLens={setDialLens} />
+                      <DialLensBar lens={dialLens} onSetLens={setDialLens} radioMode={radioMode} />
                     )}
 
                     {/* ── Press lens: taste × scraped-metadata mentions ──── */}
@@ -2953,8 +2970,10 @@ export function DialView() {
                         slot shows a context-sensitive skeleton — strict mutual
                         exclusion with reason rows (the feed withholds them via
                         reasonRows=[] while crossingsLoading). The rest of the
-                        feed and the offline section render regardless. */}
-                    {!inContext && showSkeleton && (
+                        feed and the offline section render regardless. In
+                        radioMode the crossing slot never exists, so the
+                        skeleton is suppressed too. */}
+                    {!inContext && showSkeleton && !radioMode && (
                       <Zone1Placeholder
                         isSpotifyConnected={isSpotifyConnected}
                         hasLibrary={hasLibrary}
@@ -2986,7 +3005,7 @@ export function DialView() {
                     {/* Skeleton deadline expired but the server is still computing —
                         honest in-progress copy; live rows keep rendering below.
                         The 4s repoll keeps running; rows replace this when they land. */}
-                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "computing" && (
+                    {!inContext && !radioMode && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "computing" && (
                       <div className="z1-placeholder z1-placeholder--computing">
                         <div className="z1-placeholder__body">
                           <p className="z1-placeholder__pitch">
@@ -2998,7 +3017,7 @@ export function DialView() {
 
                     {/* Compute failed or stalled far past reasonable bounds —
                         honest terminal copy; background retries continue. */}
-                    {!inContext && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (cxPhase === "failed" || cxPhase === "stalled") && (
+                    {!inContext && !radioMode && !crossingsLoading && withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (cxPhase === "failed" || cxPhase === "stalled") && (
                       <div className="z1-placeholder z1-placeholder--cross-error">
                         <div className="z1-placeholder__body">
                           <p className="z1-placeholder__pitch">
@@ -3010,8 +3029,9 @@ export function DialView() {
 
                     {/* No crossing rows, no library or seeds — onboarding placeholder.
                         The prominent CTA lives inside Zone1Placeholder for this state.
-                        The live feed still renders below it. */}
-                    {!inContext && !crossingsLoading && withReason.length === 0 &&
+                        The live feed still renders below it. Radio mode has no
+                        onboarding nudge — pure station discovery. */}
+                    {!inContext && !radioMode && !crossingsLoading && withReason.length === 0 &&
                       !hasLibrary &&
                       !hasSeeds &&
                       visibleSeeds.length === 0 &&
@@ -3063,7 +3083,7 @@ export function DialView() {
                         the feed itself is the answer: matched rows lead, everything
                         else still shows). Only the settled phase may claim "none
                         played" — see CrossingsPhase. */}
-                    {!inContext && !crossingsLoading && withReason.length === 0 && sortedRows.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "settled" && (
+                    {!inContext && !radioMode && !crossingsLoading && withReason.length === 0 && sortedRows.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && cxPhase === "settled" && (
                       <div className="z1-placeholder z1-placeholder--no-cross z1-placeholder--compact">
                         <div className="z1-placeholder__body">
                           <p className="z1-placeholder__pitch">

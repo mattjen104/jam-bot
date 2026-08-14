@@ -331,9 +331,15 @@ export interface FrontDoorRowProps {
   onKeep?: () => void;
   /** Called when the ✳ marker is tapped — opens the Artist Investigation sheet. */
   onOpenArtistInvestigation?: () => void;
+  /**
+   * The /radio blank-radio mode: crossing evidence is withheld from the
+   * compact identity, so the row leads with the plain live now-playing
+   * sentence (artist · station) instead of a crossing lead.
+   */
+  suppressCrossings?: boolean;
 }
 
-export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -343,7 +349,12 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     ? { ...show, djName: usableDj }
     : show;
   const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode, ds.topArtistNames);
-  const compact = liveProvenanceSummary(ds.station.name, safeShow, ds.liveTrack?.artist);
+  const compact = liveProvenanceSummary(
+    ds.station.name,
+    safeShow,
+    ds.liveTrack?.artist,
+    suppressCrossings ? { suppressCrossings: true } : undefined,
+  );
 
   // Expand-then-keep: first tap expands the row to show the byline + Keep
   // affordance; second tap (or long-press on collapsed) tunes in.

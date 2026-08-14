@@ -17,6 +17,12 @@ export interface DialLensBarProps {
   lens: DialLens;
   onSetLens: (lens: DialLens) => void;
   className?: string;
+  /**
+   * The /radio blank-radio sub-state of the Radio lens (crossings
+   * suppressed). No new button — when active, the Radio label carries a
+   * dimmed "· pure" suffix so the mode is visible where the lens is.
+   */
+  radioMode?: boolean;
 }
 
 const LENS_LABELS: { lens: DialLens; label: string; title: string }[] = [
@@ -25,7 +31,7 @@ const LENS_LABELS: { lens: DialLens; label: string; title: string }[] = [
   { lens: "shows", label: "Shows", title: "Upcoming concerts for artists in your Stack" },
 ];
 
-export function DialLensBar({ lens, onSetLens, className }: DialLensBarProps) {
+export function DialLensBar({ lens, onSetLens, className, radioMode = false }: DialLensBarProps) {
   return (
     <div
       className={`dial-filter-bar dial-lens-bar${className ? ` ${className}` : ""}`}
@@ -44,6 +50,9 @@ export function DialLensBar({ lens, onSetLens, className }: DialLensBarProps) {
               onClick={() => onSetLens(l)}
             >
               {label}
+              {l === "radio" && lens === "radio" && radioMode && (
+                <span className="dial-lens-bar__pure" aria-hidden="true"> · pure</span>
+              )}
             </button>
           </span>
         ))}
