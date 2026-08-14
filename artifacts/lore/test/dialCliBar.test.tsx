@@ -137,4 +137,72 @@ describe("DialCliBar", () => {
     expect(props.onToggleTier).not.toHaveBeenCalled();
     expect(input.value).toBe("/deep");
   });
+
+  describe("/add command", () => {
+    it("splits comma-separated names, trims, and calls onAddArtists", () => {
+      const onAddArtists = vi.fn();
+      const { input } = renderCli({ onAddArtists });
+      type(input, "/add Radiohead,  Portishead , Wet Leg");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onAddArtists).toHaveBeenCalledWith(["Radiohead", "Portishead", "Wet Leg"]);
+      expect(input.value).toBe("");
+    });
+
+    it("splits on whitespace when no commas are present", () => {
+      const onAddArtists = vi.fn();
+      const { input } = renderCli({ onAddArtists });
+      type(input, "/add Radiohead Portishead");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onAddArtists).toHaveBeenCalledWith(["Radiohead", "Portishead"]);
+    });
+
+    it("deduplicates names case-insensitively (first spelling wins)", () => {
+      const onAddArtists = vi.fn();
+      const { input } = renderCli({ onAddArtists });
+      type(input, "/add Radiohead, radiohead, Portishead");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onAddArtists).toHaveBeenCalledWith(["Radiohead", "Portishead"]);
+    });
+
+    it("clears silently with no callback when /add has no names", () => {
+      const onAddArtists = vi.fn();
+      const { input } = renderCli({ onAddArtists });
+      type(input, "/add");
+      fireEvent.keyDown(input, { key: "Enter" });
+      type(input, "/add   ");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onAddArtists).not.toHaveBeenCalled();
+      expect(input.value).toBe("");
+    });
+  });
+
+  describe("/scan commands", () => {
+    it.each([
+      ["/scan1", 0],
+      ["/scan2", 5],
+      ["/scan3", 10],
+    ] as const)("routes %s to onScan(%i) and clears the field", (command, offset) => {
+      const onScan = vi.fn();
+      const { input } = renderCli({ onScan });
+      type(input, command);
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onScan).toHaveBeenCalledWith(offset);
+      expect(input.value).toBe("");
+    });
+  });
+
+  it("routes /library to onLibrary", () => {
+    const onLibrary = vi.fn();
+    const { input } = renderCli({ onLibrary });
+    type(input, "/library");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onLibrary).toHaveBeenCalled();
+    expect(input.value).toBe("");
+  });
+
+  it("strip variant renders the /lore Signifier ghost placeholder when idle", () => {
+    renderCli({ variant: "strip" });
+    const ghost = document.querySelector(".dial-cli-overlay__wordmark--ghost");
+    expect(ghost?.textContent).toBe("/lore");
+  });
 });

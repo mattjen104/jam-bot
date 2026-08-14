@@ -1,19 +1,27 @@
 /**
- * DialCliBar — front-door CLI overlay.
+ * DialCliBar — the Lore slash-command input, in two skins:
  *
- * Paradigm: an ambient background layer behind the full-height dial feed.
- * The oversized Signifier "Lore" wordmark anchors at the bottom-left of the
- * Dial region; typing replaces it with the slash command text in the same
- * face and size.
+ * variant="overlay" (default) — the front-door ambient background layer
+ * behind the full-height dial feed. The oversized Signifier wordmark anchors
+ * at the bottom-left of the Dial region; typing replaces it with the slash
+ * command text in the same face and size. The overlay is pointer-transparent
+ * (pointer-events: none) so it NEVER intercepts taps on the dial rows above
+ * it; the "/" hotkey is the entry point.
  *
- * The overlay itself is pointer-transparent (pointer-events: none) so it
- * NEVER intercepts taps on the dial rows above it — the wordmark is the
- * only click target (it focuses the invisible input). Once focused,
- * keystrokes land in the input as usual.
+ * variant="strip" — the SplitHome CLI seam: a single-line centred input with
+ * a `/lore` ghost-text placeholder in the same Signifier wordmark style.
+ * Pointer events are live (the strip is a real input row, not an ambient
+ * layer); the "/" hotkey works here too.
  *
- * Where the wordmark overlaps scrolling dial artist names the CSS renders
- * that overlap with an intentional graphic treatment (mix-blend-mode: screen)
- * so the collision looks designed, not accidental.
+ * Commands:
+ *   /first /current /catalog /deep      → age-tier toggles
+ *   /lore /classics /ambient /spinitron
+ *   /college /longtail                  → station-category toggles
+ *   /add <names>                        → seed artists (comma/newline split;
+ *                                         whitespace split when no commas)
+ *   /scan1 /scan2 /scan3                → compact-dial window offset 0/5/10
+ *   /library                            → navigate to the Stack (when wired)
+ * Unknown commands are silently cleared.
  *
  * No cursor glyph. No blinking. No border. No header bar.
  */
@@ -25,6 +33,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type RefObject,
 } from "react";
 import type { DialFilterBarProps } from "./DialFilterBar";
 
@@ -41,19 +50,108 @@ const COMMANDS = {
   "/longtail":  { kind: "category", value: "longtail"  },
 } as const;
 
+/**
+ * Split the `/add` remainder into artist names.
+ * Commas/newlines are the explicit separators (preserving multi-word names
+ * like "Wet Leg"); when none are present, whitespace splits instead so
+ * `/add Radiohead Portishead` still works. Tokens are trimmed and deduped
+ * (case-insensitive, first spelling wins).
+ */
+export function parseAddArtists(remainder: string): string[] {
+  const hasExplicitSeparator = /[,\n]/.test(remainder);
+  const tokens = hasExplicitSeparator
+    ? remainder.split(/[,\n]+/)
+    : remainder.split(/\s+/);
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const token of tokens) {
+    const name = token.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+export interface DialCliBarProps extends DialFilterBarProps {
+  /** Visual skin: front-door ambient overlay (default) or SplitHome strip. */
+  variant?: "overlay" | "strip";
+  /**
+   * Called when `/add <artist names>` is submitted with the parsed,
+   * trimmed, deduplicated artist list.
+   */
+  onAddArtists?: (names: string[]) => void;
+  /**
+   * Called when `/scan1`, `/scan2`, or `/scan3` is submitted.
+   * Receives the zero-based station offset: 0, 5, or 10.
+   */
+  onScan?: (offset: number) => void;
+  /** Called when `/library` is submitted (SplitHome wires this to navigate). */
+  onLibrary?: () => void;
+  /**
+   * External ref to the command input, so a parent (HomeCliStrip) can focus
+   * it and insert a command prefix.
+   */
+  inputRef?: RefObject<HTMLInputElement | null>;
+  /**
+   * One-shot prefill: when `token` changes, the input is focused and its
+   * value replaced with `text` (e.g. "/add " from the add-artists button).
+   */
+  prefill?: { token: number; text: string } | null;
+}
+
 export function DialCliBar({
   onToggleTier,
   onToggleCategory,
-}: DialFilterBarProps) {
+  variant = "overlay",
+  onAddArtists,
+  onScan,
+  onLibrary,
+  inputRef: externalInputRef,
+  prefill,
+}: DialCliBarProps) {
   const [value, setValue] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const internalInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = externalInputRef ?? internalInputRef;
 
   const focusInput = useCallback(() => {
     inputRef.current?.focus();
-  }, []);
+  }, [inputRef]);
+
+  // One-shot prefill from a parent button (e.g. "add artists" → "/add ").
+  const lastPrefillToken = useRef<number | null>(null);
+  useEffect(() => {
+    if (!prefill || prefill.token === lastPrefillToken.current) return;
+    lastPrefillToken.current = prefill.token;
+    setValue(prefill.text);
+    focusInput();
+  }, [prefill, focusInput]);
 
   const executeCommand = useCallback(() => {
-    const key = value.trim().toLowerCase() as keyof typeof COMMANDS;
+    const trimmed = value.trim();
+    const lower = trimmed.toLowerCase();
+
+    // /add command — parse the remainder into artist names.
+    if (lower === "/add" || lower.startsWith("/add ")) {
+      const remainder = trimmed.slice(4).trim();
+      if (remainder && onAddArtists) {
+        const names = parseAddArtists(remainder);
+        if (names.length > 0) onAddArtists(names);
+      }
+      setValue("");
+      return;
+    }
+
+    // /scan commands — compact-dial window offset.
+    if (lower === "/scan1") { onScan?.(0); setValue(""); return; }
+    if (lower === "/scan2") { onScan?.(5); setValue(""); return; }
+    if (lower === "/scan3") { onScan?.(10); setValue(""); return; }
+
+    if (lower === "/library") { onLibrary?.(); setValue(""); return; }
+
+    const key = lower as keyof typeof COMMANDS;
     const cmd = COMMANDS[key];
 
     if (cmd) {
@@ -65,7 +163,7 @@ export function DialCliBar({
     }
     // Unrecognised commands are silently cleared.
     setValue("");
-  }, [onToggleCategory, onToggleTier, value]);
+  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, value]);
 
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -78,9 +176,8 @@ export function DialCliBar({
     executeCommand();
   }, [executeCommand]);
 
-  // The overlay never receives pointer events (feed rows scroll over it), so
-  // the "/" key is the entry point: pressing it anywhere outside another
-  // editable field focuses the invisible input and starts the command.
+  // The "/" hotkey focuses the input from anywhere on the page (outside
+  // another editable field) and starts the command.
   useEffect(() => {
     const handleGlobalKey = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "/") return;
@@ -95,23 +192,31 @@ export function DialCliBar({
   }, [focusInput]);
 
   const isEmpty = value === "";
+  const isStrip = variant === "strip";
 
   return (
     <div
-      className="dial-cli-overlay"
+      className={`dial-cli-overlay${isStrip ? " dial-cli-overlay--strip" : ""}`}
       role="search"
       aria-label="Dial commands"
     >
-      {/* The wordmark anchors at the bottom of the Dial region.
-          While idle it is hidden; once the user starts typing the command
-          text appears in its place. mix-blend-mode: screen on this element
-          makes overlapping dial rows render as an intentional graphic merge. */}
+      {/* Overlay: wordmark appears only while typing (ambient layer stays
+          clean when idle). Strip: a `/lore` Signifier ghost placeholder fills
+          the idle state, replaced by the typed command text. */}
       {!isEmpty && (
         <span
           className="dial-cli-overlay__wordmark dial-cli-overlay__wordmark--typing"
           aria-hidden="true"
         >
           {value}
+        </span>
+      )}
+      {isEmpty && isStrip && (
+        <span
+          className="dial-cli-overlay__wordmark dial-cli-overlay__wordmark--ghost"
+          aria-hidden="true"
+        >
+          /lore
         </span>
       )}
 

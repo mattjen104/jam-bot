@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
+import Feed from "@/pages/Feed";
 import Song from "@/pages/Song";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
@@ -83,6 +84,10 @@ function Router() {
       <Switch>
         <Route path="/">
           {() => <ErrorBoundary><Home /></ErrorBoundary>}
+        </Route>
+        {/* Full scrollable Dial — the pre-split front door */}
+        <Route path="/feed">
+          {() => <ErrorBoundary><Feed /></ErrorBoundary>}
         </Route>
         <Route path="/song/:mbid" component={Song} />
         <Route path="/artist/:mbid" component={Artist} />

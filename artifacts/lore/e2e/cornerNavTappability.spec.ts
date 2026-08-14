@@ -156,7 +156,7 @@ async function installRoutes(page: Page) {
  * player dock (bottom-shell-wrap > bottom-shell > player-bar-block) is shown.
  */
 async function loadWithDock(page: Page) {
-  await page.goto("/lore/");
+  await page.goto("/lore/feed");
 
   // Wait for the live station row (compact "Artist · Station" identity).
   const row = page.getByRole("button", {
@@ -247,6 +247,12 @@ async function readShellNavGeometry(page: Page): Promise<Geometry> {
 // ---------------------------------------------------------------------------
 
 test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
+  // These specs navigate twice (split home → /feed) and re-tune the player;
+  // under the merge-validation run the suite shares the box with typecheck +
+  // two vitest suites, so a cold vite transform can push a single page.goto
+  // past the default 30s. Give the whole spec contention headroom.
+  test.setTimeout(90_000);
+
   for (const [label, width, height] of [
     ["portrait 360×640", 360, 640],
     ["landscape 640×360", 640, 360],
@@ -283,7 +289,7 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       await page.waitForURL("**/library", { timeout: 5_000 });
 
       // Navigate back to the dial and re-tune to verify geometry.
-      await page.goto("/lore/");
+      await page.goto("/lore/feed");
       const row2 = page.locator("[data-scrub-slug][role='button']").filter({
         hasText: /Some Artist/,
       }).first();

@@ -7134,3 +7134,242 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   height: 40px;
   flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SplitHome — the three-band 50/50 front door with the CLI seam
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Full-viewport, non-scrolling three-band grid: the two halves flex evenly
+   and the CLI strip sizes to content in the middle. */
+.split-home {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  height: calc(100vh - var(--shell-h, 0px));
+  height: calc(100dvh - var(--shell-h, 0px));
+  overflow: hidden;
+  background: hsl(var(--background));
+}
+
+.split-home__band {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Compact Dial (top band) ─────────────────────────────────────────────── */
+.compact-dial {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+}
+.compact-dial__row {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* flex-start, not center: centering an over-tall .fdrow inside a short
+     grid cell pushes its top above the cell (top < 0), which reads as a
+     clipped/invisible row on small viewports. */
+  justify-content: flex-start;
+  overflow: hidden;
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
+}
+/* Slim the row padding in the compact dial so five rows fit the half-band
+   even on short phone viewports (375×667). */
+.compact-dial .fdrow {
+  padding: 8px 15px 10px;
+}
+.compact-dial__row--empty {
+  border-bottom-color: hsl(var(--border) / 0.15);
+}
+
+/* ── CLI strip (middle seam) ─────────────────────────────────────────────── */
+.home-cli-strip {
+  position: relative;
+  /* The hanging button rows extend into the neighbouring bands via negative
+     margins — the strip must paint above both bands or those buttons become
+     unclickable where they overlap. */
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-top: 1px solid hsl(var(--border) / 0.6);
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--background));
+  padding: 0 10px;
+}
+.home-cli-strip__row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+/* Dial-side buttons hang DOWN from the Dial band into the strip. */
+.home-cli-strip__row--dial {
+  margin-top: -14px;
+  padding-bottom: 4px;
+}
+/* Stack-side buttons extend UP from the Stack band into the strip. */
+.home-cli-strip__row--stack {
+  margin-bottom: -14px;
+  padding-top: 4px;
+}
+.home-cli-strip__btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-small);
+  font-family: var(--lore-font-display);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.home-cli-strip__btn:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.4);
+}
+.home-cli-strip__btn--active,
+.home-cli-strip__btn--primary {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.35);
+}
+.home-cli-strip__btn-label { font-weight: 600; }
+.home-cli-strip__btn-cmd {
+  opacity: 0.55;
+  font-family: var(--lore-font-terminal);
+  font-size: 0.9em;
+}
+
+/* The strip variant of the CLI overlay: a real inline input row (not the
+   fixed ambient layer) with a Signifier /lore ghost placeholder. */
+.home-cli-strip__input-row {
+  position: relative;
+  height: 52px;
+}
+.home-cli-strip__input-row .dial-cli-overlay--strip {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  overflow: hidden;
+}
+.home-cli-strip__input-row .dial-cli-overlay--strip .dial-cli-overlay__wordmark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: var(--lore-font-signature, serif);
+  font-size: var(--lore-size-signature);
+  line-height: 1;
+  color: hsl(260 18% 68% / 0.5);
+  mix-blend-mode: normal;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.home-cli-strip__input-row .dial-cli-overlay--strip .dial-cli-overlay__wordmark--typing {
+  color: hsl(250 28% 78% / 0.85);
+}
+.home-cli-strip__input-row .dial-cli-overlay--strip .dial-cli-overlay__wordmark--ghost {
+  color: hsl(260 18% 68% / 0.35);
+}
+.home-cli-strip__input-row .dial-cli-overlay--strip .dial-cli-overlay__form,
+.home-cli-strip__input-row .dial-cli-overlay--strip .dial-cli-overlay__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.home-cli-strip__input-row .dial-cli-overlay--strip .dial-cli-overlay__input {
+  opacity: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: text;
+  font-size: 16px;
+  text-align: center;
+}
+
+/* ── Compact Stack (bottom band) — cassette-spine rows ───────────────────── */
+.compact-stack {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+}
+.compact-stack__row {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
+}
+/* Full-bleed blurred album art behind the row text. Slight scale-up hides
+   the blur's soft edges. */
+.compact-stack__spine-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(14px) saturate(0.8) brightness(0.6);
+  transform: scale(1.15);
+}
+.compact-stack__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    hsl(var(--background) / 0.82),
+    hsl(var(--background) / 0.55) 45%,
+    hsl(var(--background) / 0.72)
+  );
+}
+.compact-stack__text {
+  position: relative;
+  z-index: 1;
+  padding: 0 16px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--lore-size-interface);
+  font-family: var(--lore-font-display);
+  color: hsl(var(--foreground));
+}
+.compact-stack__album { font-weight: 600; }
+.compact-stack__sep { opacity: 0.5; }
+.compact-stack__artist { color: hsl(var(--muted-foreground)); }
+.compact-stack__empty {
+  grid-row: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-small);
+  font-family: var(--lore-font-display);
+  cursor: pointer;
+  padding: 12px;
+}
+
+.compact-dial--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.compact-dial__empty-msg {
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-small);
+  font-family: var(--lore-font-display);
+}

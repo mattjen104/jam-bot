@@ -225,7 +225,7 @@ test.describe("First-run sidebar — station sentences for new visitors", () => 
     page,
   }) => {
     await installFirstRunRoutes(page);
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
 
     // Wait for the first sentence block to appear — indicates FirstRunSidebar
     // has rendered and the station data has loaded.
@@ -245,7 +245,7 @@ test.describe("First-run sidebar — station sentences for new visitors", () => 
     page,
   }) => {
     await installFirstRunRoutes(page);
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
 
     // Wait for blocks to settle.
     await expect(page.locator(".frb__block").first()).toBeVisible({
@@ -269,7 +269,7 @@ test.describe("First-run sidebar — station sentences for new visitors", () => 
     page,
   }) => {
     await installFirstRunRoutes(page);
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
 
     await expect(page.locator(".frb__block").first()).toBeVisible({
       timeout: 20_000,

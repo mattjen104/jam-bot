@@ -39,6 +39,10 @@ export function sectionFor(location: string): Section {
 export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "bottom" }) {
   const [location] = useLocation();
   const activeSection = sectionFor(location);
+  // On the split homepage the Feed label expands the Dial to the full
+  // scrollable view (/feed); from anywhere else it returns home as before.
+  const onSplitHome = location === "/" || location === "";
+  const loreHref = onSplitHome ? "/feed" : "/";
   const { enabled: sleepEnabled, toggle: toggleSleep } = useSleepMode();
   const { enabled: eraGenreEnabled, toggle: toggleEraGenre } = useEraGenreMode();
   const moon = sleepEnabled ? (
@@ -89,7 +93,7 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
           return (
             <Link
               key={section}
-              href={section === "lore" ? "/" : "/library"}
+              href={section === "lore" ? loreHref : "/library"}
               className={`bottom-nav__link${active ? " bottom-nav__link--active" : ""}`}
               data-section={section}
               aria-current={active ? "page" : undefined}
@@ -113,7 +117,7 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
         return (
           <Link
             key={section}
-            href={section === "lore" ? "/" : "/library"}
+            href={section === "lore" ? loreHref : "/library"}
             className={`corner-nav__link corner-nav__link--${section === "lore" ? "left" : "right"}${active ? " corner-nav__link--active" : ""}`}
             data-section={section}
             aria-current={active ? "page" : undefined}

@@ -1,5 +1,5 @@
-import { DialView } from "../components/DialView";
+import SplitHome from "./SplitHome";
 
 export default function Home() {
-  return <DialView />;
+  return <SplitHome />;
 }

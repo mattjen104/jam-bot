@@ -57,7 +57,15 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     expect(nav.querySelectorAll("button").length).toBe(0);
   });
 
-  it("links Feed to the front door and Stack to the library", () => {
+  it("links Feed to the full Dial (/feed) from the split homepage", () => {
+    mockLocation.value = "/";
+    render(<SlimSectionNav />);
+    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/feed");
+    expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
+  });
+
+  it("links Feed back to the front door from any other page", () => {
+    mockLocation.value = "/library";
     render(<SlimSectionNav />);
     expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
@@ -103,13 +111,15 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
   });
 
   it("renders the same two links inside a .bottom-nav row", () => {
+    // On the split homepage the Feed label targets the full Dial at /feed.
+    mockLocation.value = "/";
     render(<SlimSectionNav variant="bottom" />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(nav.className).toContain("bottom-nav");
     expect(nav.className).not.toContain("corner-nav");
     const links = Array.from(nav.querySelectorAll("a"));
     expect(links.map((a) => a.textContent)).toEqual(["Feed", "Stack"]);
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/", "/library"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/feed", "/library"]);
   });
 
   it("uses bottom-nav link classes with the same data-section hooks", () => {

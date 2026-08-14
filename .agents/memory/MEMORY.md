@@ -128,3 +128,4 @@
 - [Book-backed knowledge conventions](book-knowledge-conventions.md) — "book" claims: "Title — Author" em-dash label split in 3 places, paraphrase-only guard, no-link ⇒ draft demotion, deterministic book:{slug}:{i} ids.
 - [Lore device-identity fork](lore-device-identity-fork.md) — "empty Stack/library" usually = forked lore_sid cookie session, not a query bug; diagnose via last_seen_at vs row ownership, fix by device_key swap.
 - [Seed upsert field propagation](seed-upsert-field-propagation.md) — new seed-declared fields must join seedStations' onConflictDoUpdate set (merge, don't overwrite jsonb like tags) or existing deployments never get them.
+- [Split homepage vs full Dial routing](split-home-layout.md) — `/` is the three-band split view, full Dial is `/feed`; full-Dial specs must target /feed, and split-home CLI commands must be wired into its own render path.

@@ -198,7 +198,7 @@ test.describe("Dial infinite scroll — sentinel triggers row reveal on scroll",
       route.fulfill({ json: { stations: ghosts } }),
     );
 
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
 
     // Wait for at least one ghost row to render.
     await expect(page.locator(".ghost-row").first()).toBeVisible({ timeout: 20_000 });
@@ -235,7 +235,7 @@ test.describe("Dial infinite scroll — sentinel triggers row reveal on scroll",
       route.fulfill({ json: { stations: [] } }),
     );
 
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
 
     // Wait for at least one live feed row.
     await expect(page.locator(".fdrow").first()).toBeVisible({ timeout: 20_000 });
