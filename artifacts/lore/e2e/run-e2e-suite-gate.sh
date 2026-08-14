@@ -94,6 +94,7 @@ RUN_SPECS=(
   e2e/firstRunSidebarOnboarding.spec.ts
   e2e/dialInfiniteScroll.spec.ts
   e2e/compactCrossingLabels.spec.ts
+  e2e/dialCategoryFilters.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
