@@ -3474,6 +3474,48 @@ export interface StationSocialPresenceResponse {
   avatars: StationSocialPresenceResponseAvatars;
 }
 
+/**
+ * One upcoming concert event for a taste artist.
+ */
+export interface MeShowsEvent {
+  /** Stable event identifier (artistKey:eventId). */
+  id: string;
+  /** Display artist name from the listener's taste set. */
+  artistName: string;
+  /** UTC event start time (ISO 8601). */
+  eventDatetime: string;
+  /** Venue-local date string (YYYY-MM-DD) from Bandsintown. */
+  eventDate: string;
+  /** Venue display name, or null when not provided. */
+  venueName: string | null;
+  /** Venue city. */
+  venueCity: string;
+  /** State / province / region, or null. */
+  venueRegion: string | null;
+  /** Country, or null. */
+  venueCountry: string | null;
+  /** Bandsintown event page or direct ticket URL, or null. */
+  ticketUrl: string | null;
+  /** True when the event venue city/region matches the ?city parameter. Always false when no city parameter was supplied.
+   */
+  nearCity: boolean;
+}
+
+/**
+ * Shows lens response — upcoming concerts for the listener's taste set.
+ */
+export interface MeShowsResponse {
+  /** Upcoming events soonest-first. When a city was supplied, nearCity:true events sort before nearCity:false events, then soonest-first within each band.
+   */
+  events: MeShowsEvent[];
+  /** True on the first response after a stale cache (background fetches just enqueued). Poll at ~5 s until false. Subsequent requests within the 15-minute cooldown return false even while fetches are in-flight.
+   */
+  computing: boolean;
+  /** False when the listener has no library items, taste seeds, or unresolved Spotify imports. When false, the client should show a taste-seeding nudge instead of an empty-shows message.
+   */
+  hasTaste: boolean;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1
@@ -3632,6 +3674,14 @@ export type GetMyPressCrossingsParams = {
 
  */
   cursor?: string;
+};
+
+export type GetMyShowsParams = {
+  /**
+ * Listener's city for proximity sorting (free-text, e.g. "Portland, OR"). Events whose venue city or region contains this string (case-insensitive, punctuation-tolerant) get nearCity:true and sort before other events. Omit to receive all upcoming events globally, soonest-first.
+
+ */
+  city?: string;
 };
 
 export type GetMyRecentSetsParams = {

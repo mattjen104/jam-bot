@@ -56,7 +56,7 @@ describe("DialLensBar", () => {
   it("uses the filter bar's button anatomy (same pipe-separated style)", () => {
     const { container } = renderBar();
     expect(container.querySelector(".dial-filter-bar")).toBeTruthy();
-    expect(container.querySelectorAll(".dial-filter-bar__btn")).toHaveLength(2);
+    expect(container.querySelectorAll(".dial-filter-bar__btn")).toHaveLength(3);
     expect(container.querySelector(".dial-topbar__sep")?.textContent).toBe("|");
   });
 });

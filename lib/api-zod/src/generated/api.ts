@@ -4808,6 +4808,82 @@ export const GetMyPressCrossingsResponse = zod.object({
 });
 
 /**
+ * Returns upcoming Bandsintown events for artists in the listener's taste set (library items, taste seeds, unresolved Spotify artists), soonest-first. When `city` is supplied, events at venues in that city sort first (the "near you" band); a simple normalized string match against the venue city and region — no geocoding. Returns `computing: true` while background event fetches are in progress (poll at ~5 s until false). Returns `hasTaste: false` when the listener has no taste sources, so the client can show a seeding nudge. Clients must display Bandsintown attribution wherever event rows appear, per Bandsintown API terms.
+
+ * @summary Shows lens — upcoming concerts for the listener's taste artists
+ */
+export const GetMyShowsQueryParams = zod.object({
+  city: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      'Listener\'s city for proximity sorting (free-text, e.g. \"Portland, OR\"). Events whose venue city or region contains this string (case-insensitive, punctuation-tolerant) get nearCity:true and sort before other events. Omit to receive all upcoming events globally, soonest-first.\n',
+    ),
+});
+
+export const GetMyShowsResponse = zod
+  .object({
+    events: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe("Stable event identifier (artistKey:eventId)."),
+            artistName: zod
+              .string()
+              .describe("Display artist name from the listener's taste set."),
+            eventDatetime: zod
+              .date()
+              .describe("UTC event start time (ISO 8601)."),
+            eventDate: zod
+              .string()
+              .describe(
+                "Venue-local date string (YYYY-MM-DD) from Bandsintown.",
+              ),
+            venueName: zod
+              .string()
+              .nullable()
+              .describe("Venue display name, or null when not provided."),
+            venueCity: zod.string().describe("Venue city."),
+            venueRegion: zod
+              .string()
+              .nullable()
+              .describe("State \/ province \/ region, or null."),
+            venueCountry: zod.string().nullable().describe("Country, or null."),
+            ticketUrl: zod
+              .string()
+              .nullable()
+              .describe(
+                "Bandsintown event page or direct ticket URL, or null.",
+              ),
+            nearCity: zod
+              .boolean()
+              .describe(
+                "True when the event venue city\/region matches the ?city parameter. Always false when no city parameter was supplied.\n",
+              ),
+          })
+          .describe("One upcoming concert event for a taste artist."),
+      )
+      .describe(
+        "Upcoming events soonest-first. When a city was supplied, nearCity:true events sort before nearCity:false events, then soonest-first within each band.\n",
+      ),
+    computing: zod
+      .boolean()
+      .describe(
+        "True on the first response after a stale cache (background fetches just enqueued). Poll at ~5 s until false. Subsequent requests within the 15-minute cooldown return false even while fetches are in-flight.\n",
+      ),
+    hasTaste: zod
+      .boolean()
+      .describe(
+        "False when the listener has no library items, taste seeds, or unresolved Spotify imports. When false, the client should show a taste-seeding nudge instead of an empty-shows message.\n",
+      ),
+  })
+  .describe(
+    "Shows lens response — upcoming concerts for the listener's taste set.",
+  );
+
+/**
  * Returns paginated completed runs (station + show/DJ + date) from the ghost radio archive, augmented with per-artist crossing data relative to the authenticated listener's library, soft Spotify artists, and taste seeds. Each run carries a list of artists played in that set, each flagged with `inLibrary` (matches the listener's library) and `popular` (Lore-wide top-100 by 180-day spin count). Powers the "Recent" tab on the Dial front door. Cursor-based pagination via `cursor`; 30 runs per page ordered by `endedAt DESC, runId DESC`. Returns an empty list for unauthenticated requests.
 
  * @summary Completed show runs from the archive with per-artist crossing data

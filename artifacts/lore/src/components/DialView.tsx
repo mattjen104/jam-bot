@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyPressCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyPressCrossings, useMyShows, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
@@ -25,9 +25,10 @@ import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
 import { DialCliBar, type MattCliStatus } from "./dial/DialCliBar";
 import { DialLensBar } from "./dial/DialLensBar";
 import { PressFeedLane } from "./dial/PressFeedLane";
+import { ShowsFeedLane } from "./dial/ShowsFeedLane";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
-import { readDialLens, writeDialLens, type DialLens } from "../lib/dialLensState";
+import { readDialLens, writeDialLens, readShowsCity, writeShowsCity, type DialLens } from "../lib/dialLensState";
 import {
   cleanLiveValue,
   nameNodes,
@@ -1706,6 +1707,18 @@ export function DialView() {
     void seedWriteRef.current.catch(() => undefined);
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
 
+  // ── Shows lens — city state (localStorage) and event data. ─────────────
+  const [showsCity, setShowsCityState] = useState<string | null>(() => readShowsCity());
+  const setShowsCity = useCallback((city: string | null) => {
+    setShowsCityState(city);
+    writeShowsCity(city);
+  }, []);
+  const showsQuery = useMyShows(showsCity, dialLens === "shows");
+  const showsData = showsQuery.data;
+  const showsEvents = showsData?.events ?? [];
+  const showsComputing = showsData?.computing === true || showsQuery.isLoading;
+  const showsHasTaste = showsData?.hasTaste ?? true;
+
   // ── Press lens data — only fetched while the Press lens is active. ──────
   const pressQuery = useMyPressCrossings(dialLens === "press");
   const pressPages = pressQuery.data?.pages;
@@ -2889,6 +2902,35 @@ export function DialView() {
                         {/* Empty-taste nudge — same onboarding surface Radio
                             uses, so seeding taste fixes both lenses at once. */}
                         {!pressHasTaste && !pressLoading && (
+                          <Zone1Placeholder
+                            isSpotifyConnected={isSpotifyConnected}
+                            hasLibrary={hasLibrary}
+                            hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                            seeds={visibleSeeds}
+                            liveLoading={liveLoading}
+                            onAddSeed={addSeed}
+                            onRemoveSeed={removeSeed}
+                            liveSuggestions={liveArtistSuggestions}
+                            stations={stations}
+                          />
+                        )}
+                      </>
+                    )}
+
+                    {/* ── Shows lens: upcoming concerts for taste artists ── */}
+                    {!inContext && dialLens === "shows" && (
+                      <>
+                        <ShowsFeedLane
+                          events={showsEvents}
+                          isLoading={showsComputing}
+                          hasTaste={showsHasTaste}
+                          city={showsCity}
+                          onSetCity={setShowsCity}
+                          onArtistClick={(name) => openArtistTab(name, null)}
+                        />
+                        {/* Empty-taste nudge — same onboarding surface as Radio
+                            and Press, so seeding taste fixes all lenses at once. */}
+                        {!showsHasTaste && !showsComputing && (
                           <Zone1Placeholder
                             isSpotifyConnected={isSpotifyConnected}
                             hasLibrary={hasLibrary}

@@ -2976,6 +2976,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/shows:
+    get:
+      operationId: getMyShows
+      tags: [me]
+      summary: Shows lens — upcoming concerts for the listener's taste artists
+      description: >
+        Returns upcoming Bandsintown events for artists in the listener's taste
+        set (library items, taste seeds, unresolved Spotify artists), soonest-first.
+        When `city` is supplied, events at venues in that city sort first (the
+        "near you" band); a simple normalized string match against the venue city
+        and region — no geocoding. Returns `computing: true` while background
+        event fetches are in progress (poll at ~5 s until false). Returns
+        `hasTaste: false` when the listener has no taste sources, so the client
+        can show a seeding nudge. Clients must display Bandsintown attribution
+        wherever event rows appear, per Bandsintown API terms.
+      parameters:
+        - name: city
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Listener's city for proximity sorting (free-text, e.g. "Portland, OR").
+            Events whose venue city or region contains this string (case-insensitive,
+            punctuation-tolerant) get nearCity:true and sort before other events.
+            Omit to receive all upcoming events globally, soonest-first.
+      responses:
+        "200":
+          description: Upcoming show events for the listener's taste artists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeShowsResponse"
   /me/recent-sets:
     get:
       operationId: getMyRecentSets
@@ -8332,3 +8365,83 @@ components:
             items:
               $ref: "#/components/schemas/AnonymousAlbumCover"
       required: [presence, avatars]
+    MeShowsEvent:
+      type: object
+      description: One upcoming concert event for a taste artist.
+      properties:
+        id:
+          type: string
+          description: Stable event identifier (artistKey:eventId).
+        artistName:
+          type: string
+          description: Display artist name from the listener's taste set.
+        eventDatetime:
+          type: string
+          format: date-time
+          description: UTC event start time (ISO 8601).
+        eventDate:
+          type: string
+          description: Venue-local date string (YYYY-MM-DD) from Bandsintown.
+        venueName:
+          type: string
+          nullable: true
+          description: Venue display name, or null when not provided.
+        venueCity:
+          type: string
+          description: Venue city.
+        venueRegion:
+          type: string
+          nullable: true
+          description: State / province / region, or null.
+        venueCountry:
+          type: string
+          nullable: true
+          description: Country, or null.
+        ticketUrl:
+          type: string
+          nullable: true
+          description: Bandsintown event page or direct ticket URL, or null.
+        nearCity:
+          type: boolean
+          description: >
+            True when the event venue city/region matches the ?city parameter.
+            Always false when no city parameter was supplied.
+      required:
+        - id
+        - artistName
+        - eventDatetime
+        - eventDate
+        - venueName
+        - venueCity
+        - venueRegion
+        - venueCountry
+        - ticketUrl
+        - nearCity
+    MeShowsResponse:
+      type: object
+      description: Shows lens response — upcoming concerts for the listener's taste set.
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeShowsEvent"
+          description: >
+            Upcoming events soonest-first. When a city was supplied, nearCity:true
+            events sort before nearCity:false events, then soonest-first within
+            each band.
+        computing:
+          type: boolean
+          description: >
+            True on the first response after a stale cache (background fetches just
+            enqueued). Poll at ~5 s until false. Subsequent requests within the
+            15-minute cooldown return false even while fetches are in-flight.
+        hasTaste:
+          type: boolean
+          description: >
+            False when the listener has no library items, taste seeds, or unresolved
+            Spotify imports. When false, the client should show a taste-seeding nudge
+            instead of an empty-shows message.
+      required:
+        - events
+        - computing
+        - hasTaste

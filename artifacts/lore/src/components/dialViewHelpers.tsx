@@ -672,6 +672,117 @@ export function pressSentence(mention: PressMentionLike, now: Date = new Date())
 }
 
 // ---------------------------------------------------------------------------
+// Shows lens sentence and date grammar
+// ---------------------------------------------------------------------------
+
+/**
+ * Natural-language date for an upcoming concert event, relative to `now`.
+ *
+ *   today (before midnight)    → "tonight" / "today"
+ *   tomorrow                   → "tomorrow"
+ *   within next 7 days         → weekday name, e.g. "Thursday"
+ *   this calendar year         → "March 14"
+ *   future year                → "March 14, 2026"
+ *   invalid/null               → null
+ *
+ * Uses UTC dates from the eventDate (YYYY-MM-DD) rather than the full
+ * event_datetime so the label matches the venue's local calendar date that
+ * Bandsintown publishes, not a UTC-converted time.
+ */
+export function showsDateLabel(
+  eventDate: string | null,
+  now: Date = new Date(),
+): string | null {
+  if (!eventDate) return null;
+  // Parse the YYYY-MM-DD date string directly so we work with the venue's
+  // local calendar date, not a UTC timestamp conversion.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(eventDate);
+  if (!m) return null;
+  const year = parseInt(m[1]!, 10);
+  const month = parseInt(m[2]!, 10) - 1; // 0-indexed
+  const day = parseInt(m[3]!, 10);
+
+  // Comparisons use the *local* calendar date of the viewer's browser clock.
+  const todayY = now.getFullYear();
+  const todayM = now.getMonth();
+  const todayD = now.getDate();
+
+  // Days-from-today using calendar date arithmetic (not ms diff)
+  function dateDiff(ey: number, em: number, ed: number): number {
+    // Build midnight local dates for comparison
+    const today0 = new Date(todayY, todayM, todayD);
+    const event0 = new Date(ey, em, ed);
+    return Math.round((event0.getTime() - today0.getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  const diff = dateDiff(year, month, day);
+  if (diff < 0) return null; // past event — skip
+  if (diff === 0) return "tonight";
+  if (diff === 1) return "tomorrow";
+  if (diff < 7) {
+    return new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date(year, month, day));
+  }
+  // Near-future: "March 14" — always include year when it differs from today
+  const sameYear = year === todayY;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  }).format(new Date(year, month, day));
+}
+
+/** Minimal shows event shape the sentence helper needs. */
+export interface ShowsEventLike {
+  artistName: string;
+  eventDate: string | null;
+  venueName: string | null;
+  venueCity: string;
+  venueRegion: string | null;
+  ticketUrl: string | null;
+}
+
+/**
+ * Shows row sentence — same row grammar as the live feed: the artist leads at
+ * full weight; venue+date is the byline. The sentence answers "who from your
+ * Stack plays where and when."
+ *
+ *   "[Artist], from your Stack, plays the Crystal Ballroom Thursday."
+ *   "[Artist], from your Stack, plays Portland, OR tonight."
+ *
+ * Returns null when the event has no usable date (past or unparseable) or no
+ * artist name — never fabricate partial sentences.
+ */
+export function showsSentence(
+  event: ShowsEventLike,
+  now: Date = new Date(),
+): { node: import("react").ReactNode; dateLabel: string } | null {
+  const artist = cleanLiveValue(event.artistName);
+  if (!artist) return null;
+  const dateLabel = showsDateLabel(event.eventDate, now);
+  if (!dateLabel) return null;
+
+  const venue = event.venueName?.trim() || null;
+  // Venue phrase: "the Crystal Ballroom" when named; else "Portland, OR".
+  const venuePhrase = venue
+    ? `the ${venue}`
+    : event.venueRegion
+      ? `${event.venueCity}, ${event.venueRegion}`
+      : event.venueCity;
+
+  const node = (
+    <>
+      <b className="fdrow__artist">{artist}</b>
+      {", from your Stack, plays "}
+      <span className="fdrow__show">{venuePhrase}</span>
+      {" "}
+      {dateLabel}
+      {"."}
+    </>
+  );
+  return { node, dateLabel };
+}
+
+// ---------------------------------------------------------------------------
 // Reason ladder
 // ---------------------------------------------------------------------------
 

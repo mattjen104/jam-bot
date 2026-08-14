@@ -721,6 +721,63 @@ export function useMyPressCrossings(enabled = true) {
 }
 
 // ---------------------------------------------------------------------------
+// Shows lens — upcoming concerts for taste artists (Bandsintown-powered)
+// ---------------------------------------------------------------------------
+
+export interface ShowsEvent {
+  id: string;
+  artistName: string;
+  eventDatetime: string;
+  eventDate: string;
+  venueName: string | null;
+  venueCity: string;
+  venueRegion: string | null;
+  venueCountry: string | null;
+  ticketUrl: string | null;
+  nearCity: boolean;
+}
+
+export interface ShowsResult {
+  events: ShowsEvent[];
+  computing: boolean;
+  hasTaste: boolean;
+}
+
+export const ME_SHOWS_KEY = (city: string | null) =>
+  ["me", "shows", city ?? ""] as const;
+
+/**
+ * Upcoming concerts for the listener's taste artists, powered by Bandsintown.
+ * Returns `computing:true` while background fetches are in progress (poll at
+ * ~5 s). Returns `hasTaste:false` when the listener has no taste sources.
+ *
+ * @param city - Optional city string for proximity sorting (e.g. "Portland, OR").
+ * @param enabled - Set false to pause fetching (e.g. while another lens is active).
+ */
+export function useMyShows(city: string | null, enabled = true) {
+  return useQuery<ShowsResult>({
+    queryKey: ME_SHOWS_KEY(city),
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (city) params.set("city", city);
+      const qs = params.toString();
+      return fetchOrNull<ShowsResult>(
+        `/api/me/shows${qs ? `?${qs}` : ""}`,
+      ).then((d) => d ?? { events: [], computing: false, hasTaste: true });
+    },
+    staleTime: 5 * 60_000,
+    // While computing, poll every 5 s so rows appear when the background
+    // fetches land. Once settled, the 5-min staleTime takes over.
+    refetchInterval: (query) => {
+      const data = query.state.data as ShowsResult | undefined;
+      return data?.computing === true ? 5_000 : false;
+    },
+    enabled,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Popular crossings — Also-On-Air "onboarding crossing sort"
 // ---------------------------------------------------------------------------
 

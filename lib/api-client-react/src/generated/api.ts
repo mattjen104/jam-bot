@@ -43,6 +43,7 @@ import type {
   GetMyOverlapSpineParams,
   GetMyPressCrossingsParams,
   GetMyRecentSetsParams,
+  GetMyShowsParams,
   GetMyWeeklyRecapParams,
   GetOembedParams,
   GetRecordingsAvailabilityParams,
@@ -79,6 +80,7 @@ import type {
   MePickerOverlapResult,
   MePressCrossingsResponse,
   MeRecentSetsResponse,
+  MeShowsResponse,
   OEmbed,
   OverlapSpineResponse,
   PatchClaimRequest,
@@ -8418,6 +8420,102 @@ export function useGetMyPressCrossings<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyPressCrossingsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns upcoming Bandsintown events for artists in the listener's taste set (library items, taste seeds, unresolved Spotify artists), soonest-first. When `city` is supplied, events at venues in that city sort first (the "near you" band); a simple normalized string match against the venue city and region — no geocoding. Returns `computing: true` while background event fetches are in progress (poll at ~5 s until false). Returns `hasTaste: false` when the listener has no taste sources, so the client can show a seeding nudge. Clients must display Bandsintown attribution wherever event rows appear, per Bandsintown API terms.
+
+ * @summary Shows lens — upcoming concerts for the listener's taste artists
+ */
+export const getGetMyShowsUrl = (params?: GetMyShowsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/shows?${stringifiedParams}`
+    : `/api/me/shows`;
+};
+
+export const getMyShows = async (
+  params?: GetMyShowsParams,
+  options?: RequestInit,
+): Promise<MeShowsResponse> => {
+  return customFetch<MeShowsResponse>(getGetMyShowsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyShowsQueryKey = (params?: GetMyShowsParams) => {
+  return [`/api/me/shows`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyShowsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyShows>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyShowsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyShows>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyShowsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyShows>>> = ({
+    signal,
+  }) => getMyShows(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyShows>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyShowsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyShows>>
+>;
+export type GetMyShowsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Shows lens — upcoming concerts for the listener's taste artists
+ */
+
+export function useGetMyShows<
+  TData = Awaited<ReturnType<typeof getMyShows>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyShowsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyShows>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyShowsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

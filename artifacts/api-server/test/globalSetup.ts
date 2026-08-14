@@ -87,6 +87,13 @@ export async function setup(): Promise<void> {
       "../src/lore/release-year-migration.js"
     );
     await applyReleaseYearMigration();
+
+    // Ensures artist_events / artist_events_cache exist — required by the
+    // Shows lens read-model tests (me-shows-db).
+    const { applyArtistEventsMigration } = await import(
+      "../src/lore/artist-events-migration.js"
+    );
+    await applyArtistEventsMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

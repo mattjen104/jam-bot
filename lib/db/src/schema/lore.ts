@@ -2558,6 +2558,71 @@ export type TasteSeed = typeof tasteSeedsTable.$inferSelect;
 export type InsertTasteSeed = typeof tasteSeedsTable.$inferInsert;
 
 /**
+ * Per-artist fetch-tracking for the Shows lens (Bandsintown events cache).
+ *
+ * One row per normalized artist key records WHEN we last fetched from
+ * Bandsintown and HOW MANY upcoming events were returned.  Zero means a
+ * negative cache (artist known but no upcoming events); null means never
+ * fetched.  TTL logic lives in the route — positive results expire in 6 h,
+ * negative results expire in 1 h, so we avoid hammering the API for artists
+ * with no tour dates while still catching newly-announced shows quickly.
+ */
+export const artistEventsCacheTable = pgTable(
+  "artist_events_cache",
+  {
+    id: serial("id").primaryKey(),
+    /** Normalized artist key (lowercase, ASCII-folded, punctuation-stripped). */
+    artistKey: text("artist_key").notNull().unique(),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+    /** 0 = negative cache (no upcoming events found). */
+    eventCount: integer("event_count").notNull().default(0),
+  },
+);
+
+export type ArtistEventsCache = typeof artistEventsCacheTable.$inferSelect;
+export type InsertArtistEventsCache = typeof artistEventsCacheTable.$inferInsert;
+
+/**
+ * Upcoming concert events for artists in listeners' taste sets, sourced from
+ * Bandsintown.  Keyed by (artistKey, eventId) — a full replace-on-fetch
+ * approach: old rows for an artist are deleted before the new batch is
+ * inserted, so stale events never linger.
+ *
+ * Only future events are kept; past events are naturally excluded by the route's
+ * `event_datetime >= now()` filter and optionally pruned by a cleanup job later.
+ */
+export const artistEventsTable = pgTable(
+  "artist_events",
+  {
+    id: serial("id").primaryKey(),
+    /** Normalized artist key — join key back to artistEventsCacheTable. */
+    artistKey: text("artist_key").notNull(),
+    /** Bandsintown event id — stable for the lifetime of the event listing. */
+    eventId: text("event_id").notNull(),
+    /** UTC event start time.  Used for soonest-first ordering. */
+    eventDatetime: timestamp("event_datetime").notNull(),
+    /** YYYY-MM-DD date string from the Bandsintown response (venue-local). */
+    eventDate: text("event_date").notNull(),
+    venueName: text("venue_name"),
+    venueCity: text("venue_city").notNull(),
+    /** State / province (e.g. "OR", "England"). */
+    venueRegion: text("venue_region"),
+    venueCountry: text("venue_country"),
+    /** Bandsintown event page or direct ticket URL. */
+    ticketUrl: text("ticket_url"),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("artist_events_key_id_uq").on(t.artistKey, t.eventId),
+    index("artist_events_key_idx").on(t.artistKey),
+    index("artist_events_datetime_idx").on(t.eventDatetime),
+  ],
+);
+
+export type ArtistEvent = typeof artistEventsTable.$inferSelect;
+export type InsertArtistEvent = typeof artistEventsTable.$inferInsert;
+
+/**
  * Song Bottles — message-in-a-bottle annotations anchored to a recording MBID.
  *
  * A bottle is a short note (≤280 chars) left by a listener while a specific

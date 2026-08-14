@@ -112,6 +112,7 @@ import { applyMetacriticMissCleanupMigration } from "./lore/metacritic-miss-clea
 import { applyJobTimestampsMigration } from "./lore/job-timestamps-migration.js";
 import { applyBeatoMissSentinelMigration } from "./lore/beato-miss-sentinel-migration.js";
 import { startBeatoJob } from "./lore/beato.js";
+import { applyArtistEventsMigration } from "./lore/artist-events-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -217,6 +218,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     await runMigration("applyBeatoMissSentinelMigration", applyBeatoMissSentinelMigration);
     await runMigration("applyJobTimestampsMigration", applyJobTimestampsMigration);
+    await runMigration("applyArtistEventsMigration", applyArtistEventsMigration);
     try {
       await backfillStationTimezones();
     } catch (err) {
