@@ -2,13 +2,11 @@
  * HomeCliStrip — the CLI seam of the SplitHome three-band layout.
  *
  * Structure (top → bottom):
- *   1. Dial-side scan buttons — `scan 1 /scan1` … `scan 3 /scan3`, hanging
- *      down from the Dial band. The active scan window renders filled.
+ *   1. Three command-only filter rows — scan windows, song-age tiers, and
+ *      station categories, directly under the station rows.
  *   2. The DialCliBar (strip variant) — a single-line input with a `/lore`
  *      Signifier ghost placeholder. All slash commands work here.
- *   3. Stack-side buttons — `add artists /add` (focuses the input and inserts
- *      the `/add ` prefix) and `library /library` (navigates to the Stack),
- *      extending up from the Stack band.
+ *   3. The `/add artists` affordance below the input, extending up from Stack.
  *
  * Every button is labeled with its CLI equivalent so the affordance is
  * self-documenting for power users.
@@ -85,10 +83,10 @@ export function HomeCliStrip({
         })}
       </div>
 
-      {/* Song-age discovery chips sit above the command input. */}
+      {/* Song-age filter commands sit directly under the station rows. */}
       <div className="home-cli-strip__tier-rail" aria-label="Song age filters">
         <div className="home-cli-strip__tier-row" role="group" aria-label="Song age">
-          {AGE_TIER_DEFINITIONS.map(({ tier, command, label, chipLabel, title }) => {
+          {AGE_TIER_DEFINITIONS.map(({ tier, command, title }) => {
             const active = activeTiers.has(tier);
             return (
               <button
@@ -99,8 +97,28 @@ export function HomeCliStrip({
                 title={title}
                 onClick={() => onToggleTier(tier)}
               >
-                <span>{chipLabel ?? label}</span>
                 <span className="home-cli-strip__tier-command">{command}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Station-category filter commands complete the three filter rows. */}
+      <div className="home-cli-strip__category-rail" aria-label="Station category filters">
+        <div className="home-cli-strip__category-row" role="group" aria-label="Station categories">
+          {STATION_CATEGORY_DEFINITIONS.map(({ cat, command, title }) => {
+            const active = activeCategories.has(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                className={`home-cli-strip__category-chip${active ? " home-cli-strip__category-chip--active" : ""}`}
+                aria-pressed={active}
+                title={title}
+                onClick={() => onToggleCategory(cat)}
+              >
+                {command}
               </button>
             );
           })}
@@ -124,27 +142,6 @@ export function HomeCliStrip({
           inputRef={inputRef}
           prefill={prefill}
         />
-      </div>
-
-      {/* Category discovery chips — one per slash command, horizontally scrollable */}
-      <div className="home-cli-strip__category-rail" aria-label="Station category filters">
-        <div className="home-cli-strip__category-row" role="group" aria-label="Station categories">
-          {STATION_CATEGORY_DEFINITIONS.map(({ cat, command, title }) => {
-            const active = activeCategories.has(cat);
-            return (
-              <button
-                key={cat}
-                type="button"
-                className={`home-cli-strip__category-chip${active ? " home-cli-strip__category-chip--active" : ""}`}
-                aria-pressed={active}
-                title={title}
-                onClick={() => onToggleCategory(cat)}
-              >
-                {command}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Stack-side: primary add-artists affordance extends up from the Stack */}
