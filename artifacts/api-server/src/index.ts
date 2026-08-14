@@ -108,6 +108,7 @@ import { startPitchforkJob } from "./lore/pitchfork-job.js";
 import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
 import { ingestAllBookSources } from "./lore/book-knowledge.js";
 import { applyMetacriticMissCleanupMigration } from "./lore/metacritic-miss-cleanup-migration.js";
+import { applyJobTimestampsMigration } from "./lore/job-timestamps-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -206,6 +207,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
+    await runMigration("applyJobTimestampsMigration", applyJobTimestampsMigration);
     try {
       await backfillStationTimezones();
     } catch (err) {
