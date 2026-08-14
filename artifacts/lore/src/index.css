@@ -7341,7 +7341,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .home-cli-strip__row--stack {
   min-height: 29px;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   padding: 0;
 }
 .home-cli-strip__btn {
@@ -7349,13 +7349,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: baseline;
   gap: 6px;
   height: 27px;
-  padding: 0 10px;
+  padding: 0 7px;
   border: 1px solid hsl(var(--foreground) / 0.68);
   border-radius: 2px;
   background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
   font-size: var(--lore-size-small);
-  font-family: var(--lore-font-display);
+  font-family: var(--lore-font-terminal);
   line-height: 1.2;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
@@ -7391,7 +7391,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: baseline;
   gap: 0;
   font-family: var(--lore-font-terminal);
-  font-size: 0.9em;
+  font-size: inherit;
   color: hsl(var(--foreground));
 }
 .home-cli-strip__command-hint {
@@ -7403,22 +7403,34 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    fixed ambient layer) with a left-aligned command prompt. */
 .home-cli-strip__command-row {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
   min-width: 0;
   min-height: 34px;
   border-bottom: 1px solid hsl(var(--border) / 0.6);
 }
 .home-cli-strip__home-btn {
   flex: 0 0 auto;
-  border: 0;
-  border-right: 1px solid hsl(var(--foreground) / 0.68);
-  border-radius: 0;
-  height: 34px;
+  height: 27px;
+  padding: 0 7px;
+  border: 1px solid hsl(var(--foreground) / 0.68);
+  border-radius: 2px;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.2;
+}
+.home-cli-strip__home-btn + .home-cli-strip__input-row {
+  margin-left: -1px;
 }
 .home-cli-strip__input-row {
   position: relative;
-  height: 34px;
-  flex: 1 1 auto;
+  flex: 0 0 3.2rem;
+  height: 27px;
   min-width: 0;
+  border: 1px solid hsl(var(--foreground) / 0.68);
+  border-radius: 2px;
+  z-index: 0;
 }
 .home-cli-strip__input-row .dial-cli-overlay--strip {
   display: block;
@@ -7433,9 +7445,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0 10px;
+  padding: 0 7px;
   font-family: var(--lore-font-terminal);
-  font-size: var(--lore-size-interface);
+  font-size: var(--lore-size-small);
   line-height: 1;
   color: hsl(260 18% 68% / 0.5);
   mix-blend-mode: normal;
