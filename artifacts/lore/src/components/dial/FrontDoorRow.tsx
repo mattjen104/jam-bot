@@ -410,8 +410,8 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // class so the weight rung (w0/w5…) cannot dim the summary sentence.
   // Left-to-right sentence identity: artist leads (it is the thing you
   // seeded), then a low-weight centred dot, then the station as secondary
-  // context, with a right-aligned live marker. No centred pipe — the eye
-  // reads the row like a sentence. (Task #89 unified interface.)
+  // context. No centred pipe — the eye reads the row like a sentence.
+  // (Task #89 unified interface.)
   // Crossing artists line: up to 3 names with Oxford commas, then the timing
   // suffix that distinguishes a live hit from set-level crossings:
   //   "Wet Leg, now"  /  "Wet Leg, Deftones, and Weezer, this set"
@@ -468,12 +468,6 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {/* Station only — DJ and show belong in the expanded byline. */}
         <span className="fdrow__compact-station">{compact.station}</span>
       </span>
-      {ds.isLive && (
-        <span className="fdrow__compact-live" aria-hidden="true">
-          <span className="fdrow__compact-live-dot" />
-          live
-        </span>
-      )}
     </span>
   ) : fallbackTier1Node;
   const tier1Cls = compactSentence && compact

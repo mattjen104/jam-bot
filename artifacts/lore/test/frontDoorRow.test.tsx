@@ -519,6 +519,9 @@ describe("compact Dial feed identity", () => {
       "The Long Winters · KEXP",
     );
     expect(identity?.textContent).not.toMatch(/is playing|is on air/);
+    expect(identity?.textContent).not.toMatch(/\blive\b/i);
+    expect(identity?.querySelector(".fdrow__compact-live")).toBeNull();
+    expect(identity?.querySelector(".fdrow__compact-live-dot")).toBeNull();
   });
 
   it("preserves the compact columns without inventing an artist", () => {

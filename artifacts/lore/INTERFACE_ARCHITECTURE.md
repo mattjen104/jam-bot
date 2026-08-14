@@ -92,18 +92,17 @@ byline line (smaller, system-sans)             [right action]
 
 **Collapsed — live crossing:**
 ```
-[artist name]  ·  [station name]              [● live]
+[artist name]  ·  [station name]
 ```
 - Artist: full weight, the lead (it is the thing you seeded)
 - Separator: `·` centred dot — lower visual weight than a pipe
 - Station: secondary weight (muted colour, same line)
-- Right: pulsing dot when actively live; elapsed time otherwise
 - Monospace/terminal font throughout
 - No artwork in the collapsed row — text-first surface
 
 **Expanded — live crossing:**
 ```
-[artist name]  ·  [station name]              [● live]
+[artist name]  ·  [station name]
 [show / DJ name]  ·  [now-playing title]      [+ Keep]
 ```
 - Byline line: system-sans interface weight, smaller size
@@ -113,7 +112,7 @@ byline line (smaller, system-sans)             [right action]
 
 **Crossing row with metadata coverage marker:**
 ```
-[artist name]✳  ·  [station name]             [● live]
+[artist name]✳  ·  [station name]
 [show / DJ name]  ·  [now-playing title]      [+ Keep]
 ```
 - `✳` superscript appears only when Lore has catalogued metadata for this artist (reviews, episodes, production articles, etc.)

@@ -5380,15 +5380,12 @@
 /* Main Dial feed compact identity — Task #89 unified interface.
    Reads like a sentence, left to right: the artist leads (the thing you
    seeded), a low-weight centred dot, then the station as secondary context.
-   A right-aligned live marker sits at the row edge. No centred pipe. */
+   No centred pipe. */
 #dial-feed-rows .fdrow__compact-sentence {
   display: block;
 }
 #dial-feed-rows .fdrow__compact-identity {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  column-gap: 10px;
+  display: block;
   width: 100%;
   min-width: 0;
 }
@@ -5416,31 +5413,6 @@
 /* Station is the secondary entity — same line, lighter weight. */
 #dial-feed-rows .fdrow__compact-station {
   color: hsl(var(--dial-fg) / 0.62);
-}
-/* Right-edge live marker: a pulsing dot + "live" in small terminal text. */
-#dial-feed-rows .fdrow__compact-live {
-  flex-shrink: 0;
-  align-self: baseline;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--lore-size-small);
-  letter-spacing: 0.04em;
-  color: hsl(var(--live));
-}
-#dial-feed-rows .fdrow__compact-live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: hsl(var(--live));
-  animation: fdrow-live-pulse 2s ease-in-out infinite;
-}
-@keyframes fdrow-live-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-@media (prefers-reduced-motion: reduce) {
-  #dial-feed-rows .fdrow__compact-live-dot { animation: none; }
 }
 #dial-feed-rows .fdrow__compact-sentence .fdrow__site-link {
   margin-top: 5px;
