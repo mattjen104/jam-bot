@@ -19,6 +19,7 @@ import { type AuthedRequest } from "./auth.js";
 import {
   scheduleLifetimeCrossingsRefresh,
 } from "../../lore/lifetime-crossings-job.js";
+import { bustPressCache } from "./press-crossings.js";
 
 const router: IRouter = Router();
 
@@ -139,6 +140,9 @@ export async function hasActiveSocialUsers(): Promise<boolean> {
  */
 export function bustCrossingsCache(userId: number): void {
   crossingsCache.delete(userId);
+  // The Press lens reads the same taste set — bust it in lockstep so a Stack
+  // change is reflected in Press mentions without waiting out the TTL.
+  bustPressCache(userId);
   // Order the delete AFTER any in-flight fire-and-forget L2 write for this
   // user, so a slow write cannot land after the delete and resurrect a stale
   // row (observed under parallel test / high-latency DB load).

@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyPressCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
@@ -23,8 +23,11 @@ import { useEraGenreMode } from "../lib/eraGenreMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
 import { DialCliBar } from "./dial/DialCliBar";
+import { DialLensBar } from "./dial/DialLensBar";
+import { PressFeedLane } from "./dial/PressFeedLane";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
+import { readDialLens, writeDialLens, type DialLens } from "../lib/dialLensState";
 import {
   cleanLiveValue,
   nameNodes,
@@ -1558,6 +1561,16 @@ export function DialView() {
   }, []);
   const hiddenModeActive = sleepEnabled || eraGenreEnabled;
 
+  // ── Dial lens — Radio | Press exclusive views over the feed surface.
+  // Local-first: persisted in localStorage like pins/journal, never on the
+  // server. Radio is the default and renders the feed exactly as today; the
+  // Radio filter menus stay Radio-only (they render inside the radio branch).
+  const [dialLens, setDialLensState] = useState<DialLens>(() => readDialLens());
+  const setDialLens = useCallback((lens: DialLens) => {
+    setDialLensState(lens);
+    writeDialLens(lens);
+  }, []);
+
   const {
     stations,
     isLoading,
@@ -1668,6 +1681,18 @@ export function DialView() {
     });
     void seedWriteRef.current.catch(() => undefined);
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
+
+  // ── Press lens data — only fetched while the Press lens is active. ──────
+  const pressQuery = useMyPressCrossings(dialLens === "press");
+  const pressPages = pressQuery.data?.pages;
+  const pressItems = useMemo(() => (pressPages ?? []).flatMap((p) => p.items), [pressPages]);
+  const pressFirstPage = pressPages?.[0];
+  // hasTaste comes from the server's own fast-path check — the same taste
+  // sources the crossings fast-path reads, so Press and Radio agree on
+  // whether the listener has anything seeded.
+  const pressHasTaste = pressFirstPage?.hasTaste ?? true;
+  const pressFailed = pressFirstPage?.failed === true || pressQuery.isError;
+  const pressLoading = pressQuery.isLoading || pressFirstPage?.computing === true;
 
   // Popular crossings — Also-On-Air sentences + sort order.
   const { data: popCrossings = [] } = useMyPopularCrossings();
@@ -2814,6 +2839,47 @@ export function DialView() {
                 {/* ── Live mode: the unified live feed ────────────────────── */}
                 {effectiveTtMode === "live" && (
                   <>
+                    {/* Lens toggle — Radio | Press. Exclusive views over the
+                        same feed surface. Hidden in context mode and while a
+                        gesture mode owns the station list. */}
+                    {!inContext && !hiddenModeActive && (
+                      <DialLensBar lens={dialLens} onSetLens={setDialLens} />
+                    )}
+
+                    {/* ── Press lens: taste × scraped-metadata mentions ──── */}
+                    {!inContext && dialLens === "press" && (
+                      <>
+                        <PressFeedLane
+                          items={pressItems}
+                          isLoading={pressLoading}
+                          isFailed={pressFailed}
+                          hasTaste={pressHasTaste}
+                          hasNextPage={pressQuery.hasNextPage === true}
+                          isFetchingNextPage={pressQuery.isFetchingNextPage}
+                          onLoadMore={() => { void pressQuery.fetchNextPage(); }}
+                          onArtistClick={(name) => openArtistTab(name, null)}
+                        />
+                        {/* Empty-taste nudge — same onboarding surface Radio
+                            uses, so seeding taste fixes both lenses at once. */}
+                        {!pressHasTaste && !pressLoading && (
+                          <Zone1Placeholder
+                            isSpotifyConnected={isSpotifyConnected}
+                            hasLibrary={hasLibrary}
+                            hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                            seeds={visibleSeeds}
+                            liveLoading={liveLoading}
+                            onAddSeed={addSeed}
+                            onRemoveSeed={removeSeed}
+                            liveSuggestions={liveArtistSuggestions}
+                            stations={stations}
+                          />
+                        )}
+                      </>
+                    )}
+
+                    {/* ── Radio lens: the live feed exactly as today ─────── */}
+                    {dialLens === "radio" && (
+                  <>
                     {/* While crossing scores are pending, the crossing rows'
                         slot shows a context-sensitive skeleton — strict mutual
                         exclusion with reason rows (the feed withholds them via
@@ -2951,6 +3017,8 @@ export function DialView() {
                           )}
                         </div>
                       </div>
+                    )}
+                  </>
                     )}
                   </>
                 )}

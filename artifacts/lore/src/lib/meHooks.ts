@@ -670,6 +670,57 @@ export function useMyDialCrossings(date: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Press crossings — the Dial's Press lens (taste × scraped-metadata mentions)
+// ---------------------------------------------------------------------------
+
+export interface PressMentionItem {
+  /** Stable kind-prefixed mention id, also the pagination cursor anchor. */
+  id: string;
+  artistName: string | null;
+  kind: "pick" | "list_entry" | "track_claim";
+  sourceLabel: string;
+  context: string | null;
+  sourceUrl: string | null;
+  /** ISO timestamp; null when the mention is undated. */
+  occurredAt: string | null;
+}
+
+interface PressCrossingsPage {
+  items: PressMentionItem[];
+  nextCursor: string | null;
+  computing: boolean;
+  failed: boolean;
+  hasTaste: boolean;
+}
+
+export const ME_PRESS_CROSSINGS_KEY = ["me", "press-crossings"] as const;
+
+/**
+ * Infinite-scrolling Press mentions — scraped-metadata coverage of the
+ * listener's taste set (blog picks, year-end lists, published track claims),
+ * newest-first. Server-cached per user; the cache busts with the same
+ * bustCrossingsCache() that clears the radio crossings when the Stack changes.
+ */
+export function useMyPressCrossings(enabled = true) {
+  return useInfiniteQuery({
+    queryKey: ME_PRESS_CROSSINGS_KEY,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      if (pageParam) params.set("cursor", pageParam);
+      const qs = params.toString();
+      return fetchOrNull<PressCrossingsPage>(
+        `/api/me/press-crossings${qs ? `?${qs}` : ""}`,
+      ).then((d) => d ?? { items: [], nextCursor: null, computing: false, failed: true, hasTaste: true });
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? null,
+    staleTime: 5 * 60_000,
+    enabled,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Popular crossings — Also-On-Air "onboarding crossing sort"
 // ---------------------------------------------------------------------------
 

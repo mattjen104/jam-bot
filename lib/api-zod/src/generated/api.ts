@@ -4754,6 +4754,60 @@ export const GetMyPickerOverlapResponse = zod.object({
 });
 
 /**
+ * Returns scraped-metadata mentions of the listener's taste set (library items, taste seeds, unresolved Spotify artists) from picks (blog posts, curated lists), list entries (year-end / best-of lists), and published track claims. Ordered newest-first. Cursor-based pagination via `cursor`; 30 items per page. Returns `hasTaste: false` when the listener has no library or seeds, so the client can show a taste-seeding nudge instead of an empty state. Returns `computing: true` during cold-cache computes (rare; Press is cheap). Returns `failed: true` when the compute crashes.
+
+ * @summary Press lens — listener taste × scraped-metadata mentions
+ */
+export const GetMyPressCrossingsQueryParams = zod.object({
+  cursor: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Opaque pagination cursor. Omit for the first page; pass the `nextCursor` value from the previous response to fetch the next page. An invalid value returns 400.\n",
+    ),
+});
+
+export const GetMyPressCrossingsResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        id: zod
+          .string()
+          .describe(
+            "Stable mention id (kind-prefixed), used as the pagination cursor anchor.",
+          ),
+        artistName: zod.string().nullable(),
+        kind: zod.enum(["pick", "list_entry", "track_claim"]),
+        sourceLabel: zod
+          .string()
+          .describe(
+            "Human-readable source name (publication, blog, or claim source).",
+          ),
+        context: zod
+          .string()
+          .nullable()
+          .describe(
+            "Headline-ish context for the mention (list rank, claim excerpt, pick context).",
+          ),
+        sourceUrl: zod.string().nullable(),
+        occurredAt: zod
+          .string()
+          .nullable()
+          .describe(
+            "ISO timestamp of when the mention occurred\/was published; null when undated.",
+          ),
+      })
+      .describe(
+        "One scraped-metadata mention of an artist\/release in the listener's taste set.",
+      ),
+  ),
+  nextCursor: zod.string().nullable(),
+  computing: zod.boolean(),
+  failed: zod.boolean(),
+  hasTaste: zod.boolean(),
+});
+
+/**
  * Returns paginated completed runs (station + show/DJ + date) from the ghost radio archive, augmented with per-artist crossing data relative to the authenticated listener's library, soft Spotify artists, and taste seeds. Each run carries a list of artists played in that set, each flagged with `inLibrary` (matches the listener's library) and `popular` (Lore-wide top-100 by 180-day spin count). Powers the "Recent" tab on the Dial front door. Cursor-based pagination via `cursor`; 30 runs per page ordered by `endedAt DESC, runId DESC`. Returns an empty list for unauthenticated requests.
 
  * @summary Completed show runs from the archive with per-artist crossing data

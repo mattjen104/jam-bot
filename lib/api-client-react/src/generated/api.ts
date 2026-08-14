@@ -41,6 +41,7 @@ import type {
   GetGuidedReplayQueueParams,
   GetMyOverlapRunsParams,
   GetMyOverlapSpineParams,
+  GetMyPressCrossingsParams,
   GetMyRecentSetsParams,
   GetMyWeeklyRecapParams,
   GetOembedParams,
@@ -76,6 +77,7 @@ import type {
   MeBlendedCrossingsResult,
   MeOverlapRunsResponse,
   MePickerOverlapResult,
+  MePressCrossingsResponse,
   MeRecentSetsResponse,
   OEmbed,
   OverlapSpineResponse,
@@ -8311,6 +8313,111 @@ export function useGetMyPickerOverlap<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyPickerOverlapQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns scraped-metadata mentions of the listener's taste set (library items, taste seeds, unresolved Spotify artists) from picks (blog posts, curated lists), list entries (year-end / best-of lists), and published track claims. Ordered newest-first. Cursor-based pagination via `cursor`; 30 items per page. Returns `hasTaste: false` when the listener has no library or seeds, so the client can show a taste-seeding nudge instead of an empty state. Returns `computing: true` during cold-cache computes (rare; Press is cheap). Returns `failed: true` when the compute crashes.
+
+ * @summary Press lens — listener taste × scraped-metadata mentions
+ */
+export const getGetMyPressCrossingsUrl = (
+  params?: GetMyPressCrossingsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/press-crossings?${stringifiedParams}`
+    : `/api/me/press-crossings`;
+};
+
+export const getMyPressCrossings = async (
+  params?: GetMyPressCrossingsParams,
+  options?: RequestInit,
+): Promise<MePressCrossingsResponse> => {
+  return customFetch<MePressCrossingsResponse>(
+    getGetMyPressCrossingsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyPressCrossingsQueryKey = (
+  params?: GetMyPressCrossingsParams,
+) => {
+  return [`/api/me/press-crossings`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyPressCrossingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyPressCrossings>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetMyPressCrossingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyPressCrossings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyPressCrossingsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyPressCrossings>>
+  > = ({ signal }) =>
+    getMyPressCrossings(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPressCrossings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyPressCrossingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyPressCrossings>>
+>;
+export type GetMyPressCrossingsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Press lens — listener taste × scraped-metadata mentions
+ */
+
+export function useGetMyPressCrossings<
+  TData = Awaited<ReturnType<typeof getMyPressCrossings>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetMyPressCrossingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyPressCrossings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyPressCrossingsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

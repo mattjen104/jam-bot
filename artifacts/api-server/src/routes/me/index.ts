@@ -25,6 +25,7 @@ import avatarRouter from "./avatar.js";
 import presenceRouter from "./presence.js";
 import popularCrossingsRouter from "./popular-crossings.js";
 import recentSetsRouter from "./recent-sets.js";
+import pressCrossingsRouter from "./press-crossings.js";
 
 export {
   startPhase3RetryScheduler,
@@ -62,5 +63,6 @@ router.use(avatarRouter);
 router.use(presenceRouter);
 router.use(popularCrossingsRouter);
 router.use(recentSetsRouter);
+router.use(pressCrossingsRouter);
 
 export default router;

@@ -2939,6 +2939,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MePickerOverlapResult"
+  /me/press-crossings:
+    get:
+      operationId: getMyPressCrossings
+      tags: [me]
+      summary: Press lens — listener taste × scraped-metadata mentions
+      description: >
+        Returns scraped-metadata mentions of the listener's taste set (library
+        items, taste seeds, unresolved Spotify artists) from picks (blog posts,
+        curated lists), list entries (year-end / best-of lists), and published
+        track claims. Ordered newest-first. Cursor-based pagination via `cursor`;
+        30 items per page. Returns `hasTaste: false` when the listener has no
+        library or seeds, so the client can show a taste-seeding nudge instead
+        of an empty state. Returns `computing: true` during cold-cache computes
+        (rare; Press is cheap). Returns `failed: true` when the compute crashes.
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Opaque pagination cursor. Omit for the first page; pass the
+            `nextCursor` value from the previous response to fetch the next
+            page. An invalid value returns 400.
+      responses:
+        "200":
+          description: Press mention items (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MePressCrossingsResponse"
+        "400":
+          description: Invalid cursor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /me/recent-sets:
     get:
       operationId: getMyRecentSets
@@ -7269,6 +7306,51 @@ components:
           items:
             $ref: "#/components/schemas/PickerOverlapItem"
       required: [items]
+    PressMentionItem:
+      type: object
+      description: One scraped-metadata mention of an artist/release in the listener's taste set.
+      properties:
+        id:
+          type: string
+          description: Stable mention id (kind-prefixed), used as the pagination cursor anchor.
+        artistName:
+          type: string
+          nullable: true
+        kind:
+          type: string
+          enum: [pick, list_entry, track_claim]
+        sourceLabel:
+          type: string
+          description: Human-readable source name (publication, blog, or claim source).
+        context:
+          type: string
+          nullable: true
+          description: Headline-ish context for the mention (list rank, claim excerpt, pick context).
+        sourceUrl:
+          type: string
+          nullable: true
+        occurredAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of when the mention occurred/was published; null when undated.
+      required: [id, artistName, kind, sourceLabel, context, sourceUrl, occurredAt]
+    MePressCrossingsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PressMentionItem"
+        nextCursor:
+          type: string
+          nullable: true
+        computing:
+          type: boolean
+        failed:
+          type: boolean
+        hasTaste:
+          type: boolean
+      required: [items, nextCursor, computing, failed, hasTaste]
     MeBlendedCrossingsResult:
       type: object
       properties:

@@ -2809,6 +2809,40 @@ export interface MePickerOverlapResult {
   items: PickerOverlapItem[];
 }
 
+export type PressMentionItemKind =
+  (typeof PressMentionItemKind)[keyof typeof PressMentionItemKind];
+
+export const PressMentionItemKind = {
+  pick: "pick",
+  list_entry: "list_entry",
+  track_claim: "track_claim",
+} as const;
+
+/**
+ * One scraped-metadata mention of an artist/release in the listener's taste set.
+ */
+export interface PressMentionItem {
+  /** Stable mention id (kind-prefixed), used as the pagination cursor anchor. */
+  id: string;
+  artistName: string | null;
+  kind: PressMentionItemKind;
+  /** Human-readable source name (publication, blog, or claim source). */
+  sourceLabel: string;
+  /** Headline-ish context for the mention (list rank, claim excerpt, pick context). */
+  context: string | null;
+  sourceUrl: string | null;
+  /** ISO timestamp of when the mention occurred/was published; null when undated. */
+  occurredAt: string | null;
+}
+
+export interface MePressCrossingsResponse {
+  items: PressMentionItem[];
+  nextCursor: string | null;
+  computing: boolean;
+  failed: boolean;
+  hasTaste: boolean;
+}
+
 export interface DialCrossingItem {
   stationSlug: string;
   crossings: number;
@@ -3590,6 +3624,14 @@ export type GetSpotifySavedParams = {
    * @minLength 1
    */
   mbid: string;
+};
+
+export type GetMyPressCrossingsParams = {
+  /**
+ * Opaque pagination cursor. Omit for the first page; pass the `nextCursor` value from the previous response to fetch the next page. An invalid value returns 400.
+
+ */
+  cursor?: string;
 };
 
 export type GetMyRecentSetsParams = {

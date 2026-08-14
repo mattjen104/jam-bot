@@ -602,6 +602,76 @@ export interface PastContext {
 }
 
 // ---------------------------------------------------------------------------
+// Press lens sentence grammar
+// ---------------------------------------------------------------------------
+
+/**
+ * Natural-language date for a Press mention, relative to `now`:
+ *   < 24h          → "today"
+ *   < 7 days       → "this week"
+ *   < 31 days      → "this month"
+ *   same year      → "in March" (month name)
+ *   older          → "in 2023"
+ *   null/invalid   → null (caller omits the clause)
+ */
+export function pressDateLabel(occurredAt: string | null, now: Date = new Date()): string | null {
+  if (!occurredAt) return null;
+  const d = new Date(occurredAt);
+  if (Number.isNaN(d.getTime())) return null;
+  const ageMs = now.getTime() - d.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (ageMs < dayMs) return "today";
+  if (ageMs < 7 * dayMs) return "this week";
+  if (ageMs < 31 * dayMs) return "this month";
+  if (d.getUTCFullYear() === now.getUTCFullYear()) {
+    return `in ${new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(d)}`;
+  }
+  return `in ${d.getUTCFullYear()}`;
+}
+
+/** Minimal mention shape the Press sentence needs (mirrors PressMentionItem). */
+export interface PressMentionLike {
+  artistName: string | null;
+  kind: "pick" | "list_entry" | "track_claim";
+  sourceLabel: string;
+  context: string | null;
+  occurredAt: string | null;
+}
+
+/**
+ * Press row sentence — same row grammar as the live feed: the artist leads at
+ * full weight, the source is the byline, the date reads naturally. No song
+ * titles (artist-level crossing). The verb varies by mention kind:
+ *
+ *   pick        → "[Artist], from your Stack, picked by [Source] this week."
+ *   list_entry  → "[Artist], from your Stack, made [Source] in 2023."
+ *   track_claim → "[Artist], from your Stack, covered by [Source] this month."
+ *
+ * Returns null when the mention has no artist — a Press sentence without a
+ * subject can't be rendered honestly.
+ */
+export function pressSentence(mention: PressMentionLike, now: Date = new Date()): ReactNode | null {
+  const artist = cleanLiveValue(mention.artistName);
+  if (!artist) return null;
+  const dateLabel = pressDateLabel(mention.occurredAt, now);
+  const verb =
+    mention.kind === "pick" ? "picked by"
+    : mention.kind === "list_entry" ? "made"
+    : "covered by";
+  return (
+    <>
+      <b className="fdrow__artist">{artist}</b>
+      {", from your Stack, "}
+      {verb}
+      {" "}
+      <span className="fdrow__show">{mention.sourceLabel}</span>
+      {dateLabel ? ` ${dateLabel}` : ""}
+      {"."}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Reason ladder
 // ---------------------------------------------------------------------------
 
