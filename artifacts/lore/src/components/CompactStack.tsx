@@ -20,13 +20,14 @@
  * release-group front image derived from the recording's releaseGroupMbid.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueries } from "@tanstack/react-query";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import {
   getRecordingKnowledge,
   getGetRecordingKnowledgeQueryKey,
+  getRecordingAlbumTracks,
   type TrackKnowledge,
   type TrackClaim,
 } from "@workspace/api-client-react";
@@ -35,6 +36,8 @@ import { buildAlbumGroups, type AlbumGroup } from "../pages/Library";
 import { buildLinerGroups, type LinerGroup } from "../lib/linerNotes";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
+import { usePlayer, type RideSeed } from "../player/PlayerProvider";
+import { CompactPlayButton } from "./CompactPlayButton";
 
 const COMPACT_STACK_SIZE = 5;
 
@@ -129,6 +132,147 @@ export function buildAlbumLinerGroups(
     }
   }
   return buildLinerGroups(best, claims);
+}
+
+/**
+ * Album replay controls for the compact Stack row. This intentionally mirrors
+ * StackRow's full-album launch path, while retaining the resolved label so
+ * replay labels supplied by MusicBrainz still identify this row as active.
+ */
+export function useAlbumPlay(group: AlbumGroup) {
+  const { ride } = usePlayer();
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
+  const mbid = primaryMbid(group);
+  const sessionLabels = [group.albumTitle, resolvedLabel].filter(
+    (label): label is string => label != null,
+  );
+  const isThisAlbum = ride.active && sessionLabels.includes(ride.replayLabel ?? "");
+
+  const launch = useCallback(async () => {
+    if (!mbid) return false;
+    // Single-flight: never fire a second album-tracks request (and a second
+    // startReplay) while one is already in flight for this row.
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const data = await getRecordingAlbumTracks(mbid);
+      const seeds: RideSeed[] = data.tracks.map((track) => ({
+        mbid: track.mbid,
+        title: track.title,
+        artist: track.artist,
+        artworkUrl: null,
+        links: [],
+      }));
+      if (seeds.length === 0) throw new Error("no tracks");
+      const label = data.rgTitle ?? group.albumTitle;
+      setResolvedLabel(label);
+      ride.startReplay(seeds, label, {
+        timeOrientation: "curated",
+        context: "library",
+      });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [group.albumTitle, mbid, ride]);
+
+  const isPlaying = isThisAlbum && ride.status === "playing";
+  // Loading covers both this row's own in-flight album-tracks request (busy)
+  // and the provider-reported buffering of this album's replay session.
+  const isLoading = busy || (isThisAlbum && ride.status === "loading");
+  const togglePause = useCallback(() => {
+    ride.togglePause();
+  }, [ride]);
+
+  return {
+    launch,
+    busy,
+    canLaunch: mbid != null,
+    /** True when this album is the active ride session (any status). */
+    isActive: isThisAlbum,
+    isPlaying,
+    isLoading,
+    togglePause,
+  };
+}
+
+function CompactStackRow({
+  group,
+  credit,
+  renderSpine,
+  onExpand,
+}: {
+  group: AlbumGroup;
+  credit: string | null;
+  renderSpine: (group: AlbumGroup) => React.ReactNode;
+  onExpand: () => void;
+}) {
+  const { launch, isActive, isPlaying, isLoading, canLaunch, togglePause } =
+    useAlbumPlay(group);
+  const label = group.artist
+    ? `${group.albumTitle} · ${group.artist}`
+    : group.albumTitle;
+
+  return (
+    <div
+      className="compact-stack__row"
+      role="button"
+      tabIndex={0}
+      aria-expanded="false"
+      aria-label={`Expand ${label}`}
+      onClick={onExpand}
+      onKeyDown={(event) => {
+        // Only expand when the event originates on the row itself — interactive
+        // descendants (e.g. the play button) stop propagation on their own
+        // keydown before it reaches here.
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onExpand();
+        }
+      }}
+    >
+      {canLaunch && (
+        <CompactPlayButton
+          title={group.albumTitle}
+          isPlaying={isPlaying}
+          isLoading={isLoading}
+          onClick={() => {
+            // Loading: no-op — never restart an in-flight replay.
+            if (isLoading) return;
+            // Active (playing or paused): toggle pause/resume without relaunch.
+            if (isActive) {
+              togglePause();
+            } else {
+              void launch();
+            }
+          }}
+          testId={`compact-stack-play-${group.key}`}
+        />
+      )}
+      {renderSpine(group)}
+      <span className="compact-stack__text">
+        <span className="compact-stack__album">{group.albumTitle}</span>
+        {group.artist && (
+          <>
+            <span className="compact-stack__sep" aria-hidden="true">·</span>
+            <span className="compact-stack__artist">{group.artist}</span>
+          </>
+        )}
+        {credit && (
+          <>
+            <span className="compact-stack__sep" aria-hidden="true">·</span>
+            <span className="compact-stack__credit">{credit}</span>
+          </>
+        )}
+      </span>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -303,35 +447,14 @@ export function CompactStack() {
       {ordered.map((group) => {
         const mbid = primaryMbid(group);
         const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
-        const label = group.artist
-          ? `${group.albumTitle} · ${group.artist}`
-          : group.albumTitle;
         return (
-          <button
+          <CompactStackRow
             key={group.key}
-            type="button"
-            className="compact-stack__row"
-            aria-expanded="false"
-            aria-label={`Expand ${label}`}
-            onClick={() => setExpandedKey(group.key)}
-          >
-            {renderSpine(group)}
-            <span className="compact-stack__text">
-              <span className="compact-stack__album">{group.albumTitle}</span>
-              {group.artist && (
-                <>
-                  <span className="compact-stack__sep" aria-hidden="true">·</span>
-                  <span className="compact-stack__artist">{group.artist}</span>
-                </>
-              )}
-              {credit && (
-                <>
-                  <span className="compact-stack__sep" aria-hidden="true">·</span>
-                  <span className="compact-stack__credit">{credit}</span>
-                </>
-              )}
-            </span>
-          </button>
+            group={group}
+            credit={credit}
+            renderSpine={renderSpine}
+            onExpand={() => setExpandedKey(group.key)}
+          />
         );
       })}
       {!isLoading && groups.length === 0 && (

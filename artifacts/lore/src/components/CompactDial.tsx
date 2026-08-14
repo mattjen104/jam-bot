@@ -8,6 +8,9 @@
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationPresence } from "../hooks/useStationPresence";
 import { FrontDoorRow } from "./dial/FrontDoorRow";
+import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
+import type { PlayerStatus } from "../hooks/useRadioPlayer";
+import { CompactPlayButton } from "./CompactPlayButton";
 
 const COMPACT_DIAL_SIZE = 5;
 
@@ -15,16 +18,20 @@ export interface CompactDialProps {
   rows: DialLaneRow[];
   offset: number;
   activeSlug: string | null;
+  playerStatus: PlayerStatus;
   presenceMap: Map<number, StationPresence>;
   onTuneIn: (row: DialLaneRow) => void;
+  onPlay: (row: DialLaneRow) => void;
 }
 
 export function CompactDial({
   rows,
   offset,
   activeSlug,
+  playerStatus,
   presenceMap,
   onTuneIn,
+  onPlay,
 }: CompactDialProps) {
   const slice = rows.slice(offset, offset + COMPACT_DIAL_SIZE);
 
@@ -41,8 +48,23 @@ export function CompactDial({
       {slice.map((row) => (
         <div
           key={row.ds.station.slug}
-          className="compact-dial__row"
+          className={`compact-dial__row${resolvePlaybackSource(row.ds.station) != null ? " compact-dial__row--playable" : ""}`}
         >
+          {resolvePlaybackSource(row.ds.station) != null && (
+            <CompactPlayButton
+              title={row.ds.station.name}
+              isPlaying={
+                row.ds.station.slug === activeSlug &&
+                playerStatus === "playing"
+              }
+              isLoading={
+                row.ds.station.slug === activeSlug &&
+                playerStatus === "loading"
+              }
+              onClick={() => onPlay(row)}
+              testId={`compact-dial-play-${row.ds.station.slug}`}
+            />
+          )}
           <FrontDoorRow
             ds={row.ds}
             show={row.show}

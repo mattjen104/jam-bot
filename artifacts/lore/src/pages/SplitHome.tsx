@@ -140,6 +140,10 @@ export default function SplitHome() {
       void radio.toggle(row.ds.station);
     }
   }, [radio]);
+  const playRow = useCallback((row: DialLaneRow) => {
+    if (resolvePlaybackSource(row.ds.station) == null) return;
+    void radio.toggle(row.ds.station);
+  }, [radio]);
 
   const handleAddArtists = useCallback((names: string[]) => {
     for (const name of names) addSeed(name);
@@ -180,8 +184,10 @@ export default function SplitHome() {
           rows={filteredRows}
           offset={scanOffset}
           activeSlug={radio.station?.slug ?? null}
+          playerStatus={radio.status}
           presenceMap={presenceMap}
           onTuneIn={tuneRow}
+          onPlay={playRow}
         />
       </section>
 

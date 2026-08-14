@@ -7231,6 +7231,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
   /* flex-start, not center: centering an over-tall .fdrow inside a short
      grid cell pushes its top above the cell (top < 0), which reads as a
      clipped/invisible row on small viewports. */
@@ -7238,10 +7239,60 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   border-bottom: 1px solid hsl(var(--border) / 0.35);
 }
+.compact-dial__row--playable .fdrow {
+  /* left = button left (8px) + button width (18px) + gap (10px) = 36px */
+  padding-left: 36px;
+}
+.compact-play-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 1.1em;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  z-index: 2;
+}
+.compact-play-btn svg {
+  width: 0.85em;
+  height: 0.85em;
+  fill: currentColor;
+  /* Remove all stroke so lucide's rounded linecap/linejoin are invisible;
+     fill-only triangles have perfectly hard edges. */
+  stroke: none;
+  stroke-width: 0;
+}
+.compact-play-btn:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: 2px;
+}
+/* Loading: muted, inert affordance — activation is a no-op while the
+   session buffers, so signal that visually without hiding the control. */
+.compact-play-btn[data-loading] {
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+}
+.compact-dial .compact-play-btn {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.compact-dial .compact-play-btn[aria-pressed="false"] {
+  color: hsl(var(--foreground));
+}
 /* Slim the row padding in the compact dial so five rows fit the half-band
-   even on short phone viewports (375×667). */
+   even on short phone viewports (375×667).
+   Left padding = button left (8px) + button width (18px) + gap (10px) = 36px */
 .compact-dial .fdrow {
-  padding: 8px 15px 10px;
+  padding: 8px 15px 10px 36px;
 }
 .compact-dial__row--empty {
   border-bottom-color: hsl(var(--border) / 0.15);
@@ -7630,6 +7681,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   border-bottom: 1px solid hsl(var(--border) / 0.35);
   transition: filter 0.12s;
+}
+.compact-stack .compact-play-btn {
+  /* button left edge (10px) + button width (18px) + gap (10px) = text starts at 38px */
+  margin-left: 10px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+.compact-stack .compact-play-btn[aria-pressed="false"] {
+  color: hsl(var(--foreground));
 }
 /* No edge highlighting: rows don't brighten on hover and never draw an
    outline ring. Keyboard focus is indicated inside the row instead — an

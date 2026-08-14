@@ -18,6 +18,11 @@
  *     link; other albums' rows are gone
  *   - clicking the expanded header collapses back to the five-row order
  *   - CAA fallback art is used for imported albums without artwork
+ *  Play controls (Task 216):
+ *   - ▶ button hidden when primaryMbid is null
+ *   - clicking ▶ launches the album and does NOT expand the row
+ *   - ▶ switches to ⏸ when that album is the active ride + playing
+ *   - clicking ⏸ calls ride.togglePause, not expansion
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -68,6 +73,17 @@ const knowledgeByMbid = new Map<
   string,
   { knowledge: TrackKnowledge | null; claims: TrackClaim[] }
 >();
+
+// Track album-track fetches — keyed by MBID, set per test.
+const albumTracksByMbid = new Map<string, { tracks: Array<{ mbid: string; title: string; artist: string }>; rgTitle?: string }>();
+
+// Optional per-test override for getRecordingAlbumTracks — lets a test hand
+// back a deferred promise to exercise the in-flight (busy) launch state.
+let albumTracksOverride:
+  | ((mbid: string) => Promise<{ tracks: Array<{ mbid: string; title: string; artist: string }>; rgTitle?: string }>)
+  | null = null;
+const albumTracksCalls: string[] = [];
+
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
@@ -78,6 +94,36 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
     getRecordingKnowledge: vi.fn(async (mbid: string) =>
       knowledgeByMbid.get(mbid) ?? { knowledge: null, claims: [] },
     ),
+    getRecordingAlbumTracks: vi.fn(async (mbid: string) => {
+      albumTracksCalls.push(mbid);
+      if (albumTracksOverride) return albumTracksOverride(mbid);
+      return albumTracksByMbid.get(mbid) ?? { tracks: [], rgTitle: undefined };
+    }),
+  };
+});
+
+// Player provider mock — ride state controlled per test.
+let rideActive = false;
+let rideStatus: string = "idle";
+let rideReplayLabel: string | null = null;
+const startReplay = vi.fn();
+const togglePause = vi.fn();
+
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    usePlayer: vi.fn(() => ({
+      radio: { station: null, status: "idle", toggle: vi.fn() },
+      ride: {
+        active: rideActive,
+        status: rideStatus,
+        replayLabel: rideReplayLabel,
+        startReplay,
+        togglePause,
+      },
+      scan: { active: false },
+    })),
   };
 });
 
@@ -86,6 +132,12 @@ afterEach(() => {
   vi.clearAllMocks();
   libraryItems = [];
   knowledgeByMbid.clear();
+  albumTracksByMbid.clear();
+  albumTracksOverride = null;
+  albumTracksCalls.length = 0;
+  rideActive = false;
+  rideStatus = "idle";
+  rideReplayLabel = null;
 });
 
 // ---------------------------------------------------------------------------
@@ -394,5 +446,196 @@ describe("CompactStack expansion", () => {
       await screen.findByRole("button", { name: "Expand Quiet Album · C" }),
     );
     await screen.findByText("No liner notes available for this album yet.");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Play controls (Task 216)
+// ---------------------------------------------------------------------------
+
+describe("CompactStack play controls", () => {
+  it("hides the play button when primaryMbid is null (unresolved album)", async () => {
+    libraryItems = [
+      // mbid: null → no resolved recording → no play button
+      makeItem({ mbid: null, albumTitle: "Ghost Album", artist: "Unknown" }),
+    ];
+    renderStack();
+    await screen.findByRole("button", { name: "Expand Ghost Album · Unknown" });
+    expect(screen.queryByRole("button", { name: /Play Ghost Album/ })).toBeNull();
+  });
+
+  it("shows the play button for a resolved album", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-play", albumTitle: "Blue Lines", artist: "Massive Attack" }),
+    ];
+    renderStack();
+    await screen.findByRole("button", { name: "Play Blue Lines" });
+  });
+
+  it("clicking play does NOT expand the row", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-iso", albumTitle: "Isolation Test", artist: "Band" }),
+    ];
+    albumTracksByMbid.set("m-iso", {
+      tracks: [{ mbid: "t1", title: "Track One", artist: "Band" }],
+    });
+    renderStack();
+    const playBtn = await screen.findByRole("button", { name: "Play Isolation Test" });
+    fireEvent.click(playBtn);
+    // The expand button (role=button aria-expanded=false) should still be in the DOM
+    const expandBtn = screen.getByRole("button", { name: "Expand Isolation Test · Band" });
+    expect(expandBtn.getAttribute("aria-expanded")).toBe("false");
+    // Collapsed liner-notes region must NOT be present
+    expect(screen.queryByRole("region")).toBeNull();
+  });
+
+  it("clicking play calls ride.startReplay with the correct seeds", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-launch", albumTitle: "Dummy", artist: "Portishead" }),
+    ];
+    albumTracksByMbid.set("m-launch", {
+      tracks: [
+        { mbid: "t-roads", title: "Roads", artist: "Portishead" },
+        { mbid: "t-glory", title: "Glory Box", artist: "Portishead" },
+      ],
+      rgTitle: "Dummy",
+    });
+    renderStack();
+    const playBtn = await screen.findByRole("button", { name: "Play Dummy" });
+    fireEvent.click(playBtn);
+    // Wait for the async launch to complete
+    await vi.waitFor(() => expect(startReplay).toHaveBeenCalledTimes(1));
+    const [seeds, label, opts] = startReplay.mock.calls[0] as Parameters<typeof startReplay>;
+    expect(label).toBe("Dummy");
+    expect(opts).toMatchObject({ timeOrientation: "curated", context: "library" });
+    expect(seeds).toHaveLength(2);
+    expect(seeds[0]).toMatchObject({ mbid: "t-roads", title: "Roads", artist: "Portishead" });
+    expect(seeds[1]).toMatchObject({ mbid: "t-glory", title: "Glory Box", artist: "Portishead" });
+  });
+
+  it("shows ⏸ (Pause button) when ride is active with matching label and playing", async () => {
+    rideActive = true;
+    rideStatus = "playing";
+    rideReplayLabel = "Active Album";
+    libraryItems = [
+      makeItem({ mbid: "m-active", albumTitle: "Active Album", artist: "Artist" }),
+    ];
+    renderStack();
+    // Should show pause button, not play button
+    await screen.findByRole("button", { name: "Pause Active Album" });
+    expect(screen.queryByRole("button", { name: "Play Active Album" })).toBeNull();
+  });
+
+  it("clicking ⏸ calls ride.togglePause and does NOT expand the row", async () => {
+    rideActive = true;
+    rideStatus = "playing";
+    rideReplayLabel = "Paused Album";
+    libraryItems = [
+      makeItem({ mbid: "m-pause", albumTitle: "Paused Album", artist: "Artist" }),
+    ];
+    renderStack();
+    const pauseBtn = await screen.findByRole("button", { name: "Pause Paused Album" });
+    fireEvent.click(pauseBtn);
+    expect(togglePause).toHaveBeenCalledTimes(1);
+    expect(startReplay).not.toHaveBeenCalled();
+    // Row must NOT have expanded
+    expect(screen.queryByRole("region")).toBeNull();
+  });
+
+  it("shows muted ▶ (Play button) when ride is loading for this album", async () => {
+    rideActive = true;
+    rideStatus = "loading";
+    rideReplayLabel = "Loading Album";
+    libraryItems = [
+      makeItem({ mbid: "m-loading", albumTitle: "Loading Album", artist: "Artist" }),
+    ];
+    renderStack();
+    // Shows Play (not Pause) when loading — icon is muted but still present
+    await screen.findByRole("button", { name: "Play Loading Album" });
+  });
+
+  it("is muted/inert while the album-tracks request is in flight — only one request and one startReplay", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-flight", albumTitle: "Inflight Album", artist: "Band" }),
+    ];
+    let resolveTracks!: (v: { tracks: Array<{ mbid: string; title: string; artist: string }>; rgTitle?: string }) => void;
+    albumTracksOverride = () =>
+      new Promise((resolve) => {
+        resolveTracks = resolve;
+      });
+    renderStack();
+    const playBtn = await screen.findByRole("button", { name: "Play Inflight Album" });
+    fireEvent.click(playBtn);
+    // While the request is pending the button is muted/inert…
+    await vi.waitFor(() => {
+      expect(playBtn.getAttribute("data-loading")).toBe("true");
+      expect(playBtn.getAttribute("aria-disabled")).toBe("true");
+    });
+    // …and hammering it fires no extra requests
+    fireEvent.click(playBtn);
+    fireEvent.click(playBtn);
+    expect(albumTracksCalls).toHaveLength(1);
+    // Resolve the deferred request — exactly one replay starts
+    resolveTracks({
+      tracks: [{ mbid: "t1", title: "Track One", artist: "Band" }],
+      rgTitle: "Inflight Album",
+    });
+    await vi.waitFor(() => expect(startReplay).toHaveBeenCalledTimes(1));
+    expect(albumTracksCalls).toHaveLength(1);
+  });
+
+  it("clicking ▶ while album is loading is a no-op (does not call startReplay or togglePause)", async () => {
+    rideActive = true;
+    rideStatus = "loading";
+    rideReplayLabel = "Loading Album";
+    libraryItems = [
+      makeItem({ mbid: "m-noop", albumTitle: "Loading Album", artist: "Artist" }),
+    ];
+    renderStack();
+    const playBtn = await screen.findByRole("button", { name: "Play Loading Album" });
+    fireEvent.click(playBtn);
+    expect(startReplay).not.toHaveBeenCalled();
+    expect(togglePause).not.toHaveBeenCalled();
+  });
+
+  it("clicking ▶ on a paused album calls togglePause, not startReplay", async () => {
+    rideActive = true;
+    rideStatus = "paused";
+    rideReplayLabel = "Paused Album";
+    libraryItems = [
+      makeItem({ mbid: "m-paused", albumTitle: "Paused Album", artist: "Artist" }),
+    ];
+    renderStack();
+    // Paused → shows ▶ (Play icon) but clicking resumes via togglePause
+    const playBtn = await screen.findByRole("button", { name: "Play Paused Album" });
+    fireEvent.click(playBtn);
+    expect(togglePause).toHaveBeenCalledTimes(1);
+    expect(startReplay).not.toHaveBeenCalled();
+  });
+
+  it("pressing Enter on the play button does NOT expand the row", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-key", albumTitle: "Keyboard Test", artist: "Band" }),
+    ];
+    renderStack();
+    const playBtn = await screen.findByRole("button", { name: "Play Keyboard Test" });
+    fireEvent.keyDown(playBtn, { key: "Enter" });
+    // Row must NOT have expanded
+    expect(screen.queryByRole("region")).toBeNull();
+    const expandBtn = screen.getByRole("button", { name: "Expand Keyboard Test · Band" });
+    expect(expandBtn.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("pressing Space on the play button does NOT expand the row", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-space", albumTitle: "Space Test", artist: "Band" }),
+    ];
+    renderStack();
+    const playBtn = await screen.findByRole("button", { name: "Play Space Test" });
+    fireEvent.keyDown(playBtn, { key: " " });
+    // Row must NOT have expanded
+    expect(screen.queryByRole("region")).toBeNull();
+    const expandBtn = screen.getByRole("button", { name: "Expand Space Test · Band" });
+    expect(expandBtn.getAttribute("aria-expanded")).toBe("false");
   });
 });
