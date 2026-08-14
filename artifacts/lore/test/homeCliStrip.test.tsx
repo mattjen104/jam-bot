@@ -6,13 +6,10 @@
  *  1. Typing `/add …` in the strip's input calls onAddArtists with
  *     correctly split/trimmed artist names.
  *  2. Typing `/scan2` calls onScan(5).
- *  3. Scan buttons call onScan with their offset and reflect the active
- *     window (aria-pressed + active class).
- *  4. Age chips render every supported slash command, route to the
- *     tier callback, and expose active state accessibly.
- *  5. Category chips render every supported slash command, route to the
- *     category callback, and expose active state accessibly.
- *  6. The "add artists /add" button focuses the input and inserts the
+ *  3. The unified filter rail renders scan, age-tier, and category chips in
+ *     one row, all as uniform chips that route to their callbacks and expose
+ *     active state accessibly (aria-pressed).
+ *  4. The "add artists /add" button focuses the input and inserts the
  *     `/add ` prefix.
  */
 import React from "react";
@@ -84,15 +81,48 @@ describe("HomeCliStrip", () => {
     expect(screen.getByRole("status").textContent).toContain("Adding Matt’s starter library");
   });
 
-  it("scan buttons fire onScan with their offset and show the active window", () => {
-    const { props } = renderStrip({ activeCategories: new Set<StationCategory>(["lore", "college"]) });
+  it("renders scan chips in the unified rail that fire onScan and show the active window", () => {
+    const { props } = renderStrip();
+
+    const scan1 = screen.getByRole("button", { name: "scan 1 /scan1" });
+    const scan2 = screen.getByRole("button", { name: "scan 2 /scan2" });
+    const scan3 = screen.getByRole("button", { name: "scan 3 /scan3" });
+
+    // scanOffset=0 → /scan1 is the active window.
+    expect(scan1.getAttribute("aria-pressed")).toBe("true");
+    expect(scan1.className).toContain("home-cli-strip__filter-chip--active");
+    expect(scan2.getAttribute("aria-pressed")).toBe("false");
+    expect(scan3.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(scan2);
+    expect(props.onScan).toHaveBeenCalledWith(5);
+    fireEvent.click(scan3);
+    expect(props.onScan).toHaveBeenCalledWith(10);
+  });
+
+  it("renders every age-tier chip, routes toggles, and exposes active state", () => {
+    const { props } = renderStrip({ activeTiers: new Set<AgeTier>(["first"]) });
 
     const tiers = [
-      ["/first", "first", "First play"],
-      ["/current", "current", "Current"],
-      ["/catalog", "catalog", "Catalog"],
-      ["/deep", "deep", "Deep"],
+      ["/first", "first"],
+      ["/current", "current"],
+      ["/catalog", "catalog"],
+      ["/deep", "deep"],
     ] as const;
+
+    for (const [command, tier] of tiers) {
+      const chip = screen.getByRole("button", { name: command });
+      expect(chip.className).toContain("home-cli-strip__filter-chip");
+      expect(chip.getAttribute("aria-pressed")).toBe(tier === "first" ? "true" : "false");
+      fireEvent.click(chip);
+      expect(props.onToggleTier).toHaveBeenCalledWith(tier);
+    }
+  });
+
+  it("renders every category chip, routes toggles, and exposes active state", () => {
+    const { props } = renderStrip({
+      activeCategories: new Set<StationCategory>(["lore", "college"]),
+    });
 
     const categories = [
       ["/lore", "lore"],
@@ -102,15 +132,34 @@ describe("HomeCliStrip", () => {
       ["/college", "college"],
       ["/longtail", "longtail"],
     ] as const;
-    const scan1 = screen.getByRole("button", { name: "scan1" });
-    const scan2 = screen.getByRole("button", { name: "scan2" });
-    const scan3 = screen.getByRole("button", { name: "scan3" });
+
+    for (const [command, cat] of categories) {
+      const chip = screen.getByRole("button", { name: command });
+      expect(chip.className).toContain("home-cli-strip__filter-chip");
+      expect(chip.getAttribute("aria-pressed")).toBe(
+        cat === "lore" || cat === "college" ? "true" : "false",
+      );
+      fireEvent.click(chip);
+      expect(props.onToggleCategory).toHaveBeenCalledWith(cat);
+    }
+  });
+
+  it("all filter chips share the same rail and uniform chip class", () => {
+    renderStrip();
+    const row = screen.getByRole("group", { name: "Filter commands" });
+    const chips = Array.from(row.querySelectorAll("button"));
+    // 3 scans + 4 age tiers + 6 categories
+    expect(chips.length).toBe(13);
+    for (const chip of chips) {
+      expect(chip.className).toContain("home-cli-strip__filter-chip");
+    }
+  });
+
+  it("add-artists button focuses the input and inserts the /add prefix", () => {
     const { input } = renderStrip();
-    const addBtn = screen.getByRole("button", { name: "Add artists" });
+    const addBtn = screen.getByRole("button", { name: "add artists /add" });
     fireEvent.click(addBtn);
     expect(input.value).toBe("/add ");
     expect(document.activeElement).toBe(input);
   });
 });
-
-      const chip = screen.getByRole("button", { name: command });

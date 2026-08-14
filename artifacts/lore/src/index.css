@@ -7243,6 +7243,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 /* ── CLI strip (middle seam) ─────────────────────────────────────────────── */
 .home-cli-strip {
   position: relative;
+  /* Grid items default to min-width:auto, so the max-content chip row would
+     blow the strip out to its intrinsic width (no overflow → no scrolling).
+     min-width:0 keeps the strip at the grid track width so the filter rail
+     actually overflows and scrolls. */
+  min-width: 0;
+  max-width: 100%;
   /* The hanging button rows extend into the neighbouring bands via negative
      margins — the strip must paint above both bands or those buttons become
      unclickable where they overlap. */
@@ -7260,10 +7266,68 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 8px;
   justify-content: center;
 }
-/* Dial-side buttons hang DOWN from the Dial band into the strip. */
-.home-cli-strip__row--dial {
+/* The combined filter rail hangs DOWN from the Dial band into the strip.
+   overflow-x:auto + overflow-y:visible is invalid — browsers coerce both to
+   auto, which clips the strip height and hides children below the rail.
+   Solution: the rail is just a sizing shell (no overflow set); the inner
+   .filter-row is the actual scroller so height is always intrinsic. */
+.home-cli-strip__filter-rail {
   margin-top: -14px;
-  padding-bottom: 4px;
+  /* bleed past the parent's 10px side padding */
+  margin-left: -10px;
+  margin-right: -10px;
+  /* The rail is the scroller: it must have a bounded width (stretched by the
+     flex column) while the row inside carries the intrinsic content width.
+     Putting overflow on the max-content row itself makes a scroller that
+     never overflows — nothing scrolls. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  /* allow horizontal pan gestures to reach the scroller on touch devices */
+  touch-action: pan-x pan-y;
+}
+.home-cli-strip__filter-rail::-webkit-scrollbar { display: none; }
+.home-cli-strip__filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* intrinsic width so chips never wrap; the rail scrolls over this */
+  width: max-content;
+  padding: 3px 10px 7px;
+}
+.home-cli-strip__filter-chip {
+  appearance: none;
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-cli-strip__filter-chip:hover,
+.home-cli-strip__filter-chip:focus-visible {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.5);
+  background: hsl(var(--secondary));
+}
+.home-cli-strip__filter-chip:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.home-cli-strip__filter-chip--active {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.45);
+  background: hsl(var(--secondary));
 }
 /* Stack-side buttons extend UP from the Stack band into the strip. */
 .home-cli-strip__row--stack {

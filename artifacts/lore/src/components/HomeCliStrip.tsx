@@ -2,8 +2,8 @@
  * HomeCliStrip — the CLI seam of the SplitHome three-band layout.
  *
  * Structure (top → bottom):
- *   1. Three command-only filter rows — scan windows, song-age tiers, and
- *      station categories, directly under the station rows.
+ *   1. One horizontally scrollable, command-only filter rail — scan windows,
+ *      song-age tiers, and station categories, directly under station rows.
  *   2. The DialCliBar (strip variant) — a single-line input with a `/lore`
  *      Signifier ghost placeholder. All slash commands work here.
  *   3. The `/add artists` affordance below the input, extending up from Stack.
@@ -61,67 +61,55 @@ export function HomeCliStrip({
 
   return (
     <div className="home-cli-strip">
-      {/* Dial-side: scan buttons hang down toward the input */}
-      <div className="home-cli-strip__row home-cli-strip__row--dial" role="group" aria-label="Dial scan windows">
+      {/* All filter commands share one scrollable rail in the scan-button
+          position. The active state remains specific to each filter type. */}
+      <div className="home-cli-strip__filter-rail" aria-label="Station and song filters">
+        <div className="home-cli-strip__filter-row" role="group" aria-label="Filter commands">
         {SCANS.map(({ command, offset }) => {
           const active = scanOffset === offset;
           return (
             <button
               key={command}
               type="button"
-              className={`home-cli-strip__btn${active ? " home-cli-strip__btn--active" : ""}`}
+              className={`home-cli-strip__filter-chip${active ? " home-cli-strip__filter-chip--active" : ""}`}
               aria-pressed={active}
               aria-label={`scan ${offset / 5 + 1} ${command}`}
               onClick={() => onScan(offset)}
             >
-              <span className="home-cli-strip__scan-command">
-                <span className="home-cli-strip__scan-slash" aria-hidden="true">/</span>
-                <span>{command.slice(1)}</span>
-              </span>
+              {command}
             </button>
           );
         })}
-      </div>
-
-      {/* Song-age filter commands sit directly under the station rows. */}
-      <div className="home-cli-strip__tier-rail" aria-label="Song age filters">
-        <div className="home-cli-strip__tier-row" role="group" aria-label="Song age">
-          {AGE_TIER_DEFINITIONS.map(({ tier, command, title }) => {
-            const active = activeTiers.has(tier);
-            return (
-              <button
-                key={tier}
-                type="button"
-                className={`home-cli-strip__tier-chip${active ? " home-cli-strip__tier-chip--active" : ""}`}
-                aria-pressed={active}
-                title={title}
-                onClick={() => onToggleTier(tier)}
-              >
-                <span className="home-cli-strip__tier-command">{command}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Station-category filter commands complete the three filter rows. */}
-      <div className="home-cli-strip__category-rail" aria-label="Station category filters">
-        <div className="home-cli-strip__category-row" role="group" aria-label="Station categories">
-          {STATION_CATEGORY_DEFINITIONS.map(({ cat, command, title }) => {
-            const active = activeCategories.has(cat);
-            return (
-              <button
-                key={cat}
-                type="button"
-                className={`home-cli-strip__category-chip${active ? " home-cli-strip__category-chip--active" : ""}`}
-                aria-pressed={active}
-                title={title}
-                onClick={() => onToggleCategory(cat)}
-              >
-                {command}
-              </button>
-            );
-          })}
+        {AGE_TIER_DEFINITIONS.map(({ tier, command, title }) => {
+          const active = activeTiers.has(tier);
+          return (
+            <button
+              key={tier}
+              type="button"
+              className={`home-cli-strip__filter-chip${active ? " home-cli-strip__filter-chip--active" : ""}`}
+              aria-pressed={active}
+              title={title}
+              onClick={() => onToggleTier(tier)}
+            >
+              {command}
+            </button>
+          );
+        })}
+        {STATION_CATEGORY_DEFINITIONS.map(({ cat, command, title }) => {
+          const active = activeCategories.has(cat);
+          return (
+            <button
+              key={cat}
+              type="button"
+              className={`home-cli-strip__filter-chip${active ? " home-cli-strip__filter-chip--active" : ""}`}
+              aria-pressed={active}
+              title={title}
+              onClick={() => onToggleCategory(cat)}
+            >
+              {command}
+            </button>
+          );
+        })}
         </div>
       </div>
 
