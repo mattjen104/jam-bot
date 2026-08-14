@@ -16,7 +16,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DialCliBar, type DialCliBarProps } from "./dial/DialCliBar";
+import { DialCliBar, type DialCliBarProps, type MattCliStatus } from "./dial/DialCliBar";
 
 export type ScanOffset = 0 | 5 | 10;
 
@@ -31,6 +31,9 @@ export interface HomeCliStripProps extends Pick<DialCliBarProps,
   scanOffset: ScanOffset;
   onScan: (offset: number) => void;
   onAddArtists: (names: string[]) => void;
+  onMatt?: () => void;
+  mattPending?: boolean;
+  mattStatus?: MattCliStatus | null;
 }
 
 export function HomeCliStrip({
@@ -41,6 +44,9 @@ export function HomeCliStrip({
   scanOffset,
   onScan,
   onAddArtists,
+  onMatt,
+  mattPending,
+  mattStatus,
 }: HomeCliStripProps) {
   const [, setLocation] = useLocation();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -66,6 +72,7 @@ export function HomeCliStrip({
               type="button"
               className={`home-cli-strip__btn${active ? " home-cli-strip__btn--active" : ""}`}
               aria-pressed={active}
+              aria-label={`scan ${offset / 5 + 1} ${command}`}
               onClick={() => onScan(offset)}
             >
               <span className="home-cli-strip__scan-command">
@@ -88,6 +95,9 @@ export function HomeCliStrip({
           onAddArtists={onAddArtists}
           onScan={onScan}
           onLibrary={goLibrary}
+          onMatt={onMatt}
+          mattPending={mattPending}
+          mattStatus={mattStatus}
           inputRef={inputRef}
           prefill={prefill}
         />
@@ -98,7 +108,7 @@ export function HomeCliStrip({
         <button
           type="button"
           className="home-cli-strip__btn home-cli-strip__btn--primary"
-          aria-label="Add artists"
+          aria-label="add artists /add"
           onClick={insertAddPrefix}
         >
           <span className="home-cli-strip__add-command">

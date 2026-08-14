@@ -22,7 +22,7 @@ import { useSleepMode } from "../lib/sleepMode";
 import { useEraGenreMode } from "../lib/eraGenreMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
-import { DialCliBar } from "./dial/DialCliBar";
+import { DialCliBar, type MattCliStatus } from "./dial/DialCliBar";
 import { DialLensBar } from "./dial/DialLensBar";
 import { PressFeedLane } from "./dial/PressFeedLane";
 import { type AgeTier } from "../lib/dialAgeFilter";
@@ -1633,9 +1633,33 @@ export function DialView() {
   // prevents a fast click from looking unselected until the round trip ends.
   const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
   const visibleSeeds = optimisticSeeds ?? seedArtists;
-  const _startMattLibrary = useCallback(() => {
+  const startMattLibrary = useCallback(() => {
+    if (mattStarterMutation.isPending) return;
     mattStarterMutation.mutate();
   }, [mattStarterMutation]);
+  const mattCliStatus: MattCliStatus | null = mattStarterMutation.isPending
+    ? { kind: "pending", message: "Adding Matt’s starter library…" }
+    : mattStarterMutation.error
+      ? {
+          kind: "error",
+          message: mattStarterMutation.error instanceof Error
+            ? mattStarterMutation.error.message
+            : "We couldn’t add Matt’s starter library. Try again.",
+        }
+      : mattStarterMutation.data
+        ? mattStarterMutation.data.available
+          ? {
+              kind: "success",
+              message: mattStarterMutation.data.addedCount > 0
+                ? `Added ${mattStarterMutation.data.addedCount} album${mattStarterMutation.data.addedCount === 1 ? "" : "s"} from Matt’s starter library.`
+                : "Matt’s starter library is already in your Stack.",
+            }
+          : {
+              kind: "error",
+              message: mattStarterMutation.data.error
+                ?? "Matt’s starter library is not available right now.",
+            }
+        : null;
 
   const addSeed = useCallback((artist: string) => {
     const trimmed = artist.trim();
@@ -2683,6 +2707,9 @@ export function DialView() {
           activeCategories={activeCategories}
           onToggleTier={toggleTier}
           onToggleCategory={toggleCategory}
+          onMatt={startMattLibrary}
+          mattPending={mattStarterMutation.isPending}
+          mattStatus={mattCliStatus}
         />
       )}
 

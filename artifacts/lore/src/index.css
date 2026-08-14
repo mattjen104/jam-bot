@@ -2079,6 +2079,23 @@
   cursor: text;
   font-size: 16px; /* prevents iOS zoom on focus */
 }
+.dial-cli-overlay__status {
+  position: absolute;
+  top: 10px;
+  left: 8px;
+  max-width: min(92vw, 34rem);
+  padding: 5px 8px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 4px;
+  background: hsl(var(--background) / 0.9);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.dial-cli-overlay__status--success { color: hsl(145 55% 68%); }
+.dial-cli-overlay__status--error { color: hsl(0 68% 72%); }
 
 .dial-filter-bar--hidden { display: none !important; }
 .dial-filter-bar {
@@ -7383,6 +7400,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   cursor: text;
   font-size: 16px;
   text-align: center;
+}
+.home-cli-strip__input-row .dial-cli-overlay--strip .dial-cli-overlay__status {
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 /* ── Compact Stack (bottom band) — cassette-spine rows ───────────────────── */

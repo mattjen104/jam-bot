@@ -30,6 +30,10 @@ vi.mock("../src/components/CompactStack", () => ({
   CompactStack: () => <div data-testid="compact-stack-stub" />,
 }));
 
+vi.mock("../src/lib/meHooks", () => ({
+  useStartMattLibrary: () => ({ mutate: vi.fn(), isPending: false, data: undefined, error: null }),
+}));
+
 vi.mock("../src/components/dialViewHelpers", () => ({
   reason: () => ({ r: 0, cls: "w0", node: "on air" }),
 }));

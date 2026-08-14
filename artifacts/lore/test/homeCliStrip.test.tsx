@@ -56,6 +56,30 @@ describe("HomeCliStrip", () => {
     expect(props.onScan).toHaveBeenCalledWith(5);
   });
 
+  it("routes /matt through the mobile strip and clears after form submission", () => {
+    const onMatt = vi.fn();
+    const { input, props } = renderStrip({ onMatt });
+    fireEvent.change(input, { target: { value: "/matt" } });
+    fireEvent.submit(input.form as HTMLFormElement);
+    expect(onMatt).toHaveBeenCalledTimes(1);
+    expect(input.value).toBe("");
+    expect(props.onAddArtists).not.toHaveBeenCalled();
+  });
+
+  it("forwards pending Matt status and blocks duplicate submissions", () => {
+    const onMatt = vi.fn();
+    renderStrip({
+      onMatt,
+      mattPending: true,
+      mattStatus: { kind: "pending", message: "Adding Matt’s starter library…" },
+    });
+    const input = screen.getByRole("textbox", { name: "Dial command" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "/matt" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onMatt).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).toContain("Adding Matt’s starter library");
+  });
+
   it("scan buttons fire onScan with their offset and show the active window", () => {
     const { props } = renderStrip({ scanOffset: 5 });
     const scan1 = screen.getByRole("button", { name: /scan 1/ });

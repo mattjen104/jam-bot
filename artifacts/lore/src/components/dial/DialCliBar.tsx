@@ -21,6 +21,7 @@
  *                                         whitespace split when no commas)
  *   /scan1 /scan2 /scan3                → compact-dial window offset 0/5/10
  *   /library                            → navigate to the Stack (when wired)
+ *   /matt                               → copy the configured Matt starter library
  * Unknown commands are silently cleared.
  *
  * No cursor glyph. No blinking. No border. No header bar.
@@ -90,6 +91,12 @@ export interface DialCliBarProps extends DialFilterBarProps {
   onScan?: (offset: number) => void;
   /** Called when `/library` is submitted (SplitHome wires this to navigate). */
   onLibrary?: () => void;
+  /** Called when `/matt` is submitted. The source library is server-configured. */
+  onMatt?: () => void;
+  /** Prevents a second `/matt` submission while the copy is in flight. */
+  mattPending?: boolean;
+  /** Accessible feedback for the `/matt` action. */
+  mattStatus?: MattCliStatus | null;
   /**
    * External ref to the command input, so a parent (HomeCliStrip) can focus
    * it and insert a command prefix.
@@ -102,6 +109,11 @@ export interface DialCliBarProps extends DialFilterBarProps {
   prefill?: { token: number; text: string } | null;
 }
 
+export interface MattCliStatus {
+  kind: "pending" | "success" | "error";
+  message: string;
+}
+
 export function DialCliBar({
   onToggleTier,
   onToggleCategory,
@@ -109,6 +121,9 @@ export function DialCliBar({
   onAddArtists,
   onScan,
   onLibrary,
+  onMatt,
+  mattPending = false,
+  mattStatus = null,
   inputRef: externalInputRef,
   prefill,
 }: DialCliBarProps) {
@@ -150,6 +165,11 @@ export function DialCliBar({
     if (lower === "/scan3") { onScan?.(10); setValue(""); return; }
 
     if (lower === "/library") { onLibrary?.(); setValue(""); return; }
+    if (lower === "/matt") {
+      if (!mattPending) onMatt?.();
+      setValue("");
+      return;
+    }
 
     const key = lower as keyof typeof COMMANDS;
     const cmd = COMMANDS[key];
@@ -163,7 +183,7 @@ export function DialCliBar({
     }
     // Unrecognised commands are silently cleared.
     setValue("");
-  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, value]);
+  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, onMatt, mattPending, value]);
 
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -237,6 +257,15 @@ export function DialCliBar({
           spellCheck={false}
         />
       </form>
+      {mattStatus && (
+        <div
+          className={`dial-cli-overlay__status dial-cli-overlay__status--${mattStatus.kind}`}
+          role={mattStatus.kind === "error" ? "alert" : "status"}
+          aria-live={mattStatus.kind === "error" ? "assertive" : "polite"}
+        >
+          {mattStatus.message}
+        </div>
+      )}
     </div>
   );
 }

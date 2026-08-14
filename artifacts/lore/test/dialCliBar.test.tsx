@@ -200,6 +200,44 @@ describe("DialCliBar", () => {
     expect(input.value).toBe("");
   });
 
+  it("routes /matt case-insensitively, clears the field, and does not pass a source user", () => {
+    const onMatt = vi.fn();
+    const { input } = renderCli({ onMatt });
+    type(input, "  /MATT  ");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onMatt).toHaveBeenCalledTimes(1);
+    expect(onMatt).toHaveBeenCalledWith();
+    expect(input.value).toBe("");
+  });
+
+  it("does not invoke /matt twice while the starter copy is pending", () => {
+    const onMatt = vi.fn();
+    const { input } = renderCli({ onMatt, mattPending: true });
+    type(input, "/matt");
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "/matt");
+    fireEvent.submit(document.querySelector(".dial-cli-overlay__form") as HTMLFormElement);
+    expect(onMatt).not.toHaveBeenCalled();
+    expect(input.value).toBe("");
+  });
+
+  it("renders accessible Matt pending and error feedback", () => {
+    const { input, rerender, props } = renderCli({
+      mattPending: true,
+      mattStatus: { kind: "pending", message: "Adding Matt’s starter library…" },
+    });
+    expect(screen.getByRole("status").textContent).toContain("Adding Matt’s starter library");
+    type(input, "/matt");
+    fireEvent.keyDown(input, { key: "Enter" });
+    rerender(
+      <DialCliBar
+        {...props}
+        mattStatus={{ kind: "error", message: "Matt’s starter library is unavailable." }}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain("Matt’s starter library is unavailable.");
+  });
+
   it("strip variant renders the /lore Signifier ghost placeholder when idle", () => {
     renderCli({ variant: "strip" });
     const ghost = document.querySelector(".dial-cli-overlay__wordmark--ghost");

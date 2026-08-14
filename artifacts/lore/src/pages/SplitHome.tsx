@@ -34,6 +34,8 @@ import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
 import { HomeCliStrip, type ScanOffset } from "../components/HomeCliStrip";
+import { useStartMattLibrary } from "../lib/meHooks";
+import type { MattCliStatus } from "../components/dial/DialCliBar";
 
 export default function SplitHome() {
   // CLI filter state — same semantics as the full Dial (additive tiers,
@@ -142,6 +144,34 @@ export default function SplitHome() {
   const handleAddArtists = useCallback((names: string[]) => {
     for (const name of names) addSeed(name);
   }, [addSeed]);
+  const mattStarterMutation = useStartMattLibrary();
+  const startMattLibrary = useCallback(() => {
+    if (mattStarterMutation.isPending) return;
+    mattStarterMutation.mutate();
+  }, [mattStarterMutation]);
+  const mattCliStatus: MattCliStatus | null = mattStarterMutation.isPending
+    ? { kind: "pending", message: "Adding Matt’s starter library…" }
+    : mattStarterMutation.error
+      ? {
+          kind: "error",
+          message: mattStarterMutation.error instanceof Error
+            ? mattStarterMutation.error.message
+            : "We couldn’t add Matt’s starter library. Try again.",
+        }
+      : mattStarterMutation.data
+        ? mattStarterMutation.data.available
+          ? {
+              kind: "success",
+              message: mattStarterMutation.data.addedCount > 0
+                ? `Added ${mattStarterMutation.data.addedCount} album${mattStarterMutation.data.addedCount === 1 ? "" : "s"} from Matt’s starter library.`
+                : "Matt’s starter library is already in your Stack.",
+            }
+          : {
+              kind: "error",
+              message: mattStarterMutation.data.error
+                ?? "Matt’s starter library is not available right now.",
+            }
+        : null;
 
   return (
     <div className="split-home">
@@ -163,6 +193,9 @@ export default function SplitHome() {
         scanOffset={scanOffset}
         onScan={handleScan}
         onAddArtists={handleAddArtists}
+        onMatt={startMattLibrary}
+        mattPending={mattStarterMutation.isPending}
+        mattStatus={mattCliStatus}
       />
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
