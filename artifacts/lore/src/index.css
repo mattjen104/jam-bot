@@ -6725,8 +6725,8 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   font-family: var(--lore-font-display);
 }
 
-/* Feed + homepage artist names match Stack's bright primary text. Keep
-   station, show, DJ, and other secondary tokens on their existing colors. */
+/* Feed + homepage identity: left side matches Stack's bold bright primary,
+   right side (station) matches Stack's muted artist gray exactly. */
 .dial-root--front .fdrow__artist,
 .dial-root--front .fdrow__compact-artist,
 .dial-root--front .fdrow__compact-crossing-artist,
@@ -6736,6 +6736,14 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
 .split-home .fdrow__compact-artist,
 .split-home .fdrow__compact-crossing-artist {
   color: hsl(var(--foreground));
+  font-weight: 600;
+}
+/* Station text (right of dot) — same shade as Stack's artist gray */
+.dial-root--front .fdrow__compact-station,
+.dial-root--front #dial-feed-rows .fdrow__compact-station,
+.split-home .fdrow__compact-station {
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
 }
 
 /* ── Tabbed set panel — provenance browsing & export (task: set-panel tabs) ── */
