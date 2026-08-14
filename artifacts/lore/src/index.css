@@ -7299,7 +7299,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex: 0 0 auto;
   height: 27px;
   padding: 0 10px;
-  border: 1px solid hsl(var(--border) / 0.85);
+  /* White key outlines are part of the idle state, not a hover affordance. */
+  border: 1px solid hsl(var(--foreground) / 0.68);
   border-radius: 2px;
   background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
@@ -7346,7 +7347,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 6px;
   height: 27px;
   padding: 0 10px;
-  border: 1px solid hsl(var(--border) / 0.85);
+  border: 1px solid hsl(var(--foreground) / 0.68);
   border-radius: 2px;
   background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
@@ -7406,7 +7407,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .home-cli-strip__home-btn {
   flex: 0 0 auto;
   border: 0;
-  border-right: 1px solid hsl(var(--border) / 0.85);
+  border-right: 1px solid hsl(var(--foreground) / 0.68);
   border-radius: 0;
   height: 34px;
 }
