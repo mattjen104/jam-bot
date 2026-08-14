@@ -48,7 +48,7 @@ export function CompactDial({
       {slice.map((row) => (
         <div
           key={row.ds.station.slug}
-          className={`compact-dial__row${resolvePlaybackSource(row.ds.station) != null ? " compact-dial__row--playable" : ""}`}
+          className="compact-dial__row"
         >
           {resolvePlaybackSource(row.ds.station) != null && (
             <CompactPlayButton

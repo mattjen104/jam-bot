@@ -7236,18 +7236,19 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-dial__row {
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  /* Same row grammar as the mini Stack below: triangle in flow, content
+     vertically centred, one shared row height from the 5-row grid. */
+  align-items: center;
   position: relative;
-  /* flex-start, not center: centering an over-tall .fdrow inside a short
-     grid cell pushes its top above the cell (top < 0), which reads as a
-     clipped/invisible row on small viewports. */
-  justify-content: flex-start;
   overflow: hidden;
   border-bottom: 1px solid hsl(var(--border) / 0.35);
 }
-.compact-dial__row--playable .fdrow {
-  /* left = button left (8px) + button width (18px) + gap (10px) = 36px */
-  padding-left: 36px;
+/* No playing edge in the mini feed: the base .fdrow left bar (accent when
+   playing, library/gray zone bars otherwise) is suppressed here — the
+   triangle's ▶/⏸ state is the only playback indicator, matching the Stack. */
+.compact-dial .fdrow::before {
+  content: none;
 }
 .compact-play-btn {
   appearance: none;
@@ -7265,6 +7266,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding: 0;
   position: relative;
   z-index: 2;
+  /* Lock the em base so the 0.85em triangle renders at the identical size
+     in both homepage bands (Feed rows and Stack rows). */
+  font-size: var(--lore-size-interface);
 }
 .compact-play-btn svg {
   width: 0.85em;
@@ -7285,20 +7289,25 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--muted-foreground));
   cursor: default;
 }
+/* The triangle sits in flow with the Stack's exact spacing: 10px margins
+   around the 18px button, then 16px before the text. */
+.compact-stack .compact-play-btn,
 .compact-dial .compact-play-btn {
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  margin-left: 10px;
+  margin-right: 10px;
+  flex-shrink: 0;
 }
 .compact-dial .compact-play-btn[aria-pressed="false"] {
   color: hsl(var(--foreground));
 }
-/* Slim the row padding in the compact dial so five rows fit the half-band
-   even on short phone viewports (375×667).
-   Left padding = button left (8px) + button width (18px) + gap (10px) = 36px */
+/* Mini-feed rows centre their content like mini-Stack rows: no vertical
+   padding asymmetry, text starts 16px after the button gap on both bands. */
 .compact-dial .fdrow {
-  padding: 8px 15px 10px 36px;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  align-items: center;
+  padding: 0 16px;
 }
 .compact-dial__row--empty {
   border-bottom-color: hsl(var(--border) / 0.15);
@@ -7723,12 +7732,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-bottom: 1px solid hsl(var(--border) / 0.35);
   z-index: 1;
   transition: filter 0.12s;
-}
-.compact-stack .compact-play-btn {
-  /* button left edge (10px) + button width (18px) + gap (10px) = text starts at 38px */
-  margin-left: 10px;
-  margin-right: 10px;
-  flex-shrink: 0;
 }
 .compact-stack .compact-play-btn[aria-pressed="false"] {
   color: hsl(var(--foreground));

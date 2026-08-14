@@ -747,3 +747,88 @@ describe("CompactStack play controls", () => {
     expect(expandBtn.getAttribute("aria-expanded")).toBe("false");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Expanded-header play control (Task 219)
+// ---------------------------------------------------------------------------
+
+describe("CompactStack expanded-header play control", () => {
+  it("offers ▶ in the expanded header; clicking it launches the album and does NOT collapse", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-hdr", albumTitle: "Header Album", artist: "Band" }),
+    ];
+    albumTracksByMbid.set("m-hdr", {
+      tracks: [{ mbid: "t1", title: "Track One", artist: "Band" }],
+      rgTitle: "Header Album",
+    });
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Header Album · Band" }),
+    );
+    // The collapse affordance and the play control coexist in the header.
+    await screen.findByRole("button", { name: "Collapse Header Album" });
+    const playBtn = await screen.findByRole("button", {
+      name: "Play Header Album",
+    });
+    fireEvent.click(playBtn);
+    await vi.waitFor(() => expect(startReplay).toHaveBeenCalledTimes(1));
+    const [seeds, label, opts] = startReplay.mock.calls[0] as Parameters<typeof startReplay>;
+    expect(label).toBe("Header Album");
+    expect(opts).toMatchObject({ timeOrientation: "curated", context: "library" });
+    expect(seeds[0]).toMatchObject({ mbid: "t1" });
+    // The band stays expanded — playing never dismisses the investigation view.
+    screen.getByRole("button", { name: "Collapse Header Album" });
+    expect(screen.getByRole("region")).not.toBeNull();
+  });
+
+  it("shows ⏸ in the expanded header while this album is playing", async () => {
+    rideActive = true;
+    rideStatus = "playing";
+    rideReplayLabel = "Hero Playing";
+    libraryItems = [
+      makeItem({ mbid: "m-hplay", albumTitle: "Hero Playing", artist: "Artist" }),
+    ];
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Hero Playing · Artist" }),
+    );
+    const pauseBtn = await screen.findByRole("button", {
+      name: "Pause Hero Playing",
+    });
+    fireEvent.click(pauseBtn);
+    expect(togglePause).toHaveBeenCalledTimes(1);
+    expect(startReplay).not.toHaveBeenCalled();
+    // Still expanded after toggling pause.
+    screen.getByRole("button", { name: "Collapse Hero Playing" });
+  });
+
+  it("omits the header play control for an unresolved album", async () => {
+    libraryItems = [
+      makeItem({ mbid: null, albumTitle: "Unresolved LP", artist: "Nobody" }),
+    ];
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Unresolved LP · Nobody" }),
+    );
+    await screen.findByRole("button", { name: "Collapse Unresolved LP" });
+    expect(
+      screen.queryByRole("button", { name: /Play Unresolved LP/ }),
+    ).toBeNull();
+  });
+
+  it("pressing Enter on the header play button does NOT collapse the band", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m-hkey", albumTitle: "Keyboard Header", artist: "Band" }),
+    ];
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Keyboard Header · Band" }),
+    );
+    const playBtn = await screen.findByRole("button", {
+      name: "Play Keyboard Header",
+    });
+    fireEvent.keyDown(playBtn, { key: "Enter" });
+    screen.getByRole("button", { name: "Collapse Keyboard Header" });
+    expect(screen.getByRole("region")).not.toBeNull();
+  });
+});

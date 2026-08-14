@@ -252,6 +252,69 @@ export function useAlbumPlay(group: AlbumGroup) {
   };
 }
 
+/**
+ * The expanded album's header row: tapping it collapses back to the list,
+ * and it carries the same triangle play control as the collapsed rows so the
+ * listener can start the album straight from the investigation view. This is
+ * a div[role=button] (like CompactStackRow), not a native <button>, so the
+ * nested play control is valid markup.
+ */
+function ExpandedStackHeader({
+  group,
+  onCollapse,
+}: {
+  group: AlbumGroup;
+  onCollapse: () => void;
+}) {
+  const { launch, isActive, isPlaying, isLoading, canLaunch, togglePause } =
+    useAlbumPlay(group);
+  return (
+    <div
+      className="compact-stack__row compact-stack__row--expanded-header"
+      role="button"
+      tabIndex={0}
+      aria-expanded="true"
+      aria-label={`Collapse ${group.albumTitle}`}
+      onClick={onCollapse}
+      onKeyDown={(event) => {
+        // The play button stops Enter/Space propagation on its own keydown,
+        // so only presses that originate on the header itself collapse.
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onCollapse();
+        }
+      }}
+    >
+      <div className="compact-stack__overlay" aria-hidden="true" />
+      {canLaunch && (
+        <CompactPlayButton
+          title={group.albumTitle}
+          isPlaying={isPlaying}
+          isLoading={isLoading}
+          onClick={() => {
+            if (isLoading) return;
+            if (isActive) {
+              togglePause();
+            } else {
+              void launch();
+            }
+          }}
+          testId={`compact-stack-play-${group.key}`}
+        />
+      )}
+      <span className="compact-stack__text">
+        <span className="compact-stack__album">{group.albumTitle}</span>
+        {group.artist && (
+          <>
+            <span className="compact-stack__sep" aria-hidden="true">·</span>
+            <span className="compact-stack__artist">{group.artist}</span>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
 function CompactStackRow({
   group,
   credit,
@@ -451,24 +514,10 @@ export function CompactStack({ onExpandedChange }: CompactStackProps = {}) {
         aria-label="Recent keeps"
       >
         <CompactStackBackdrop key={expandedArt ?? "no-art"} art={expandedArt} />
-        <button
-          type="button"
-          className="compact-stack__row compact-stack__row--expanded-header"
-          aria-expanded="true"
-          aria-label={`Collapse ${expandedGroup.albumTitle}`}
-          onClick={() => setExpandedKey(null)}
-        >
-          <div className="compact-stack__overlay" aria-hidden="true" />
-          <span className="compact-stack__text">
-            <span className="compact-stack__album">{expandedGroup.albumTitle}</span>
-            {expandedGroup.artist && (
-              <>
-                <span className="compact-stack__sep" aria-hidden="true">·</span>
-                <span className="compact-stack__artist">{expandedGroup.artist}</span>
-              </>
-            )}
-          </span>
-        </button>
+        <ExpandedStackHeader
+          group={expandedGroup}
+          onCollapse={() => setExpandedKey(null)}
+        />
         <div className="compact-stack__cards" role="region" aria-label={`${expandedGroup.albumTitle} liner notes`}>
           {expandedLoading ? (
             <div className="compact-stack__card compact-stack__card--muted">

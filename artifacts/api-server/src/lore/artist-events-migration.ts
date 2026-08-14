@@ -7,6 +7,12 @@ import { sql } from "drizzle-orm";
  *
  * All statements use IF NOT EXISTS so the migration is safe to re-run on
  * every boot — it is a no-op once the tables exist.
+ *
+ * The two CREATE UNIQUE INDEX statements below also REPAIR drifted
+ * environments: CREATE TABLE IF NOT EXISTS never retrofits constraints onto
+ * a pre-existing table, so a database whose tables predate the UNIQUE
+ * clauses would 42P10 on every cache upsert. The IF NOT EXISTS indexes
+ * double as the upsert arbiters, closing that gap on the next boot.
  */
 export async function applyArtistEventsMigration(): Promise<void> {
   await db.execute(sql`
@@ -43,6 +49,16 @@ export async function applyArtistEventsMigration(): Promise<void> {
       fetched_at      timestamptz NOT NULL DEFAULT now(),
       CONSTRAINT artist_events_key_id_uq UNIQUE (artist_key, event_id)
     )
+  `);
+
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS artist_events_cache_artist_key_uq
+      ON artist_events_cache (artist_key)
+  `);
+
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS artist_events_key_id_uq
+      ON artist_events (artist_key, event_id)
   `);
 
   await db.execute(sql`
