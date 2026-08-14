@@ -6719,6 +6719,19 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   font-family: var(--lore-font-display);
 }
 
+/* Feed + homepage artist names match Stack's bright primary text. Keep
+   station, show, DJ, and other secondary tokens on their existing colors. */
+.dial-root--front .fdrow__artist,
+.dial-root--front .fdrow__compact-artist,
+.dial-root--front .fdrow__compact-crossing-artist,
+.dial-root--front #dial-feed-rows .fdrow__compact-artist,
+.dial-root--front #dial-feed-rows .fdrow__compact-crossing-artist,
+.split-home .fdrow__artist,
+.split-home .fdrow__compact-artist,
+.split-home .fdrow__compact-crossing-artist {
+  color: hsl(var(--foreground));
+}
+
 /* ── Tabbed set panel — provenance browsing & export (task: set-panel tabs) ── */
 .set-tabs {
   display: flex;
