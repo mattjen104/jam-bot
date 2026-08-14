@@ -7290,15 +7290,18 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   gap: 0;
   min-height: 29px;
+  min-width: 100%;
+  justify-content: center;
   /* intrinsic width so chips never wrap; the rail scrolls over this */
   width: max-content;
-  padding: 0 8px 0 0;
+  padding: 0 8px;
+  box-sizing: border-box;
 }
 .home-cli-strip__filter-chip {
   appearance: none;
   flex: 0 0 auto;
   height: 27px;
-  padding: 0 10px;
+  padding: 0 7px;
   /* White key outlines are part of the idle state, not a hover affordance. */
   border: 1px solid hsl(var(--foreground) / 0.68);
   border-radius: 2px;

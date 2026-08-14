@@ -125,7 +125,6 @@ describe("HomeCliStrip", () => {
     });
 
     const categories = [
-      ["/lore", "lore"],
       ["/classics", "classics"],
       ["/ambient", "ambient"],
       ["/spinitron", "spinitron"],
@@ -137,19 +136,29 @@ describe("HomeCliStrip", () => {
       const chip = screen.getByRole("button", { name: command });
       expect(chip.className).toContain("home-cli-strip__filter-chip");
       expect(chip.getAttribute("aria-pressed")).toBe(
-        cat === "lore" || cat === "college" ? "true" : "false",
+        cat === "college" ? "true" : "false",
       );
       fireEvent.click(chip);
       expect(props.onToggleCategory).toHaveBeenCalledWith(cat);
     }
   });
 
-  it("all filter chips share the same rail and uniform chip class", () => {
+  it("renders the filter remote as three centered button rows", () => {
     renderStrip();
-    const row = screen.getByRole("group", { name: "Filter commands" });
-    const chips = Array.from(row.querySelectorAll("button"));
-    // 3 scans + 4 age tiers + 6 categories
-    expect(chips.length).toBe(13);
+    const scanRow = screen.getByRole("group", { name: "Scan commands" });
+    const ageRow = screen.getByRole("group", { name: "Age commands" });
+    const categoryRow = screen.getByRole("group", { name: "Station category commands" });
+    expect(scanRow.querySelectorAll("button")).toHaveLength(3);
+    expect(ageRow.querySelectorAll("button")).toHaveLength(4);
+    expect(categoryRow.querySelectorAll("button")).toHaveLength(5);
+
+    const chips = [
+      ...scanRow.querySelectorAll("button"),
+      ...ageRow.querySelectorAll("button"),
+      ...categoryRow.querySelectorAll("button"),
+    ];
+    // 3 scans + 4 age tiers + 5 station categories; /lore is the home button.
+    expect(chips.length).toBe(12);
     for (const chip of chips) {
       expect(chip.className).toContain("home-cli-strip__filter-chip");
     }
