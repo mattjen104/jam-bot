@@ -110,6 +110,8 @@ import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
 import { ingestAllBookSources } from "./lore/book-knowledge.js";
 import { applyMetacriticMissCleanupMigration } from "./lore/metacritic-miss-cleanup-migration.js";
 import { applyJobTimestampsMigration } from "./lore/job-timestamps-migration.js";
+import { applyBeatoMissSentinelMigration } from "./lore/beato-miss-sentinel-migration.js";
+import { startBeatoJob } from "./lore/beato.js";
 
 const rawPort = process.env["PORT"];
 
@@ -213,6 +215,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyCollegeTagMigration", applyCollegeTagMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
+    await runMigration("applyBeatoMissSentinelMigration", applyBeatoMissSentinelMigration);
     await runMigration("applyJobTimestampsMigration", applyJobTimestampsMigration);
     try {
       await backfillStationTimezones();
@@ -317,11 +320,9 @@ async function bootLore(): Promise<void> {
     startIsrcEnrichmentJob();
     startReleaseYearBackfillJob();
     startPitchforkJob();
-    // NOTE: startBeatoJob() is NOT called here until the BEATO_EPISODES video
-    // IDs have been verified against https://www.youtube.com/@RickBeato/videos.
-    // See Task #136 — publishing claims with unverified YouTube links is
-    // unsupported provenance. Activate by importing and calling startBeatoJob()
-    // once all seed entries are confirmed.
+    // All BEATO_EPISODES video IDs verified 2026-08-13 against the official
+    // @RickBeato channel via videodb.org, fan playlist, and Rosetta episode db.
+    startBeatoJob();
     startSoundOnSoundClaimsJob();
     startHomepageScraper();
     await runMigration("applyDonateCheckerMigration", applyDonateCheckerMigration);

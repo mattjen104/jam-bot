@@ -1,5 +1,6 @@
 import { db, recordingsTable, trackClaimsTable } from "@workspace/db";
 import { and, eq, not, inArray } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 /**
  * Rick Beato "What Makes This Song Great?" → track claim pipeline.
@@ -13,7 +14,16 @@ import { and, eq, not, inArray } from "drizzle-orm";
  *   2. For each unchecked episode: search MusicBrainz for the recording MBID
  *      using artist + song title.
  *   3. On a confident match: store a published `track_claims` row.
- *   4. Miss sentinel prevents re-checking on every pass.
+ *   4. Miss sentinel (in `beato_miss_sentinels`) prevents re-checking after
+ *      MAX_MISS_ATTEMPTS failed passes.
+ *
+ * Fallback lookup strategy (two-pass):
+ *   Pass 1 — query with the full title, accept any of the top-3 MB results
+ *             with score ≥ 85.
+ *   Pass 2 — strip parenthetical suffixes from the title (e.g. "(Remastered
+ *             2011)", "(Live)") and retry.  This catches cases where MB ranks
+ *             a live recording above the studio version when the exact
+ *             parenthetical is included in the query.
  *
  * Policy:
  * - Claim text is a fixed one-liner citing the episode title — no transcript
@@ -31,6 +41,13 @@ const MB_RATE_LIMIT_MS = 1_500; // polite 1 req / 1.5 s
 
 const WARMUP_MS = 15 * 60 * 1_000; // 15 min after boot
 const RUN_EVERY_MS = 24 * 60 * 60 * 1_000; // 24 hours
+
+/**
+ * After this many failed MB resolution attempts (across separate 24-hour
+ * passes) an episode is written to `beato_miss_sentinels` and permanently
+ * skipped so we stop wasting MB quota on it.
+ */
+export const MAX_MISS_ATTEMPTS = 3;
 
 /** One episode in the hand-curated seed. */
 export interface BeatoEpisode {
@@ -274,34 +291,125 @@ async function mbSleep(): Promise<void> {
 }
 
 /**
+ * Strip trailing parenthetical suffixes from a song title so that MB can
+ * find the studio recording even when the seed title includes qualifiers like
+ * "(Remastered 2011)", "(Live)", "(Single Version)", etc.
+ *
+ * Examples:
+ *   "Rocket Man (I Think It's Going to Be a Long, Long Time)" → unchanged
+ *     (parenthetical is part of the canonical title, not a suffix)
+ *   "Comfortably Numb (Remastered)" → "Comfortably Numb"
+ *   "Paranoid Android (2016 Remaster)" → "Paranoid Android"
+ *
+ * Only the last parenthetical group is stripped (one level only).
+ */
+export function normalizeTitleForFallback(title: string): string {
+  // Only strip if the parenthetical looks like a production/release qualifier,
+  // not if it appears to be part of the song's name.
+  // Heuristic: the suffix must start with a common qualifier keyword.
+  const qualifierRe =
+    /\s*\(((?:re)?master(?:ed)?|remaster|live|single\s+version|radio\s+edit|album\s+version|mono|stereo|\d{4}\s+remaster|\d{4}\s+remix)[^)]*\)\s*$/i;
+  return title.replace(qualifierRe, "").trim();
+}
+
+/**
+ * Discriminated result from a single MusicBrainz recording search:
+ * - `hit`   — a result with score ≥ 85 was found; `mbid` is the recording ID.
+ * - `miss`  — the search completed successfully but no result met the threshold.
+ * - `error` — the HTTP request failed or a network exception occurred; the
+ *             caller should NOT count this as a resolution attempt.
+ */
+export type MbSearchResult =
+  | { kind: "hit"; mbid: string }
+  | { kind: "miss" }
+  | { kind: "error" };
+
+/**
  * Search MusicBrainz for a recording MBID by artist + title.
- * Returns the best match when MB score ≥ 85, null otherwise.
- * Never throws — returns null on any failure.
+ * Scans the top 3 results and returns the first one with MB score ≥ 85.
+ *
+ * Returns a discriminated `MbSearchResult` so callers can tell the difference
+ * between a definitive no-match ("miss") and a transient request failure
+ * ("error"). Only "miss" results should be counted toward the persistent
+ * sentinel; "error" results should be silently retried on the next pass.
+ *
+ * The `fetchFn` parameter is injected for unit tests (no real network calls).
+ */
+async function searchMbRecordings(
+  artist: string,
+  title: string,
+  fetchFn: typeof fetch,
+): Promise<MbSearchResult> {
+  try {
+    await mbSleep();
+    const query = `recording:"${title.replace(/"/g, "")}" AND artist:"${artist.replace(/"/g, "")}"`;
+    const url = `${MB_API}/recording?query=${encodeURIComponent(query)}&limit=3&fmt=json`;
+    const res = await fetchFn(url, {
+      headers: { "User-Agent": MB_UA, Accept: "application/json" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    // Non-OK HTTP response (rate-limit, server error, etc.) — treat as a
+    // transient error so we don't permanently suppress this episode.
+    if (!res.ok) return { kind: "error" };
+    const body = (await res.json()) as {
+      recordings?: Array<{ id?: string; score?: number }>;
+    };
+    const recordings = body.recordings ?? [];
+    // Accept the first result from the top-3 that has score ≥ 85.
+    for (const rec of recordings) {
+      if (rec.id && (rec.score ?? 0) >= 85) return { kind: "hit", mbid: rec.id };
+    }
+    // Search succeeded but no result was confident enough — definitive miss.
+    return { kind: "miss" };
+  } catch {
+    // Network exception (timeout, DNS failure, etc.) — transient error.
+    return { kind: "error" };
+  }
+}
+
+/**
+ * Resolve a recording MBID by artist + song title using a two-pass strategy:
+ *
+ * 1. Full title — scans top-3 MB results for score ≥ 85.
+ * 2. Normalized title (parenthetical qualifier stripped) — retried only when
+ *    the normalized form differs from the original title.
+ *
+ * Returns the `MbSearchResult` of the best attempt:
+ * - If either pass finds a confident hit, returns `{ kind: "hit", mbid }`.
+ * - If both passes complete with no confident match, returns `{ kind: "miss" }`.
+ * - If both passes fail with request errors, returns `{ kind: "error" }`.
+ * - If the first pass errors and the second is skipped (identical title),
+ *   returns `{ kind: "error" }`.
+ *
+ * Never throws. The `fetchFn` parameter is injected for unit tests.
  */
 export async function resolveRecordingMbid(
   artist: string,
   songTitle: string,
-): Promise<string | null> {
-  try {
-    await mbSleep();
-    const query = `recording:"${songTitle.replace(/"/g, "")}" AND artist:"${artist.replace(/"/g, "")}"`;
-    const url = `${MB_API}/recording?query=${encodeURIComponent(query)}&limit=3&fmt=json`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": MB_UA, Accept: "application/json" },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as {
-      recordings?: Array<{ id?: string; score?: number }>;
-    };
-    const hit = body.recordings?.[0];
-    if (!hit?.id) return null;
-    // Only accept high-confidence matches (MB score ≥ 85).
-    if ((hit.score ?? 0) < 85) return null;
-    return hit.id;
-  } catch {
-    return null;
+  fetchFn: typeof fetch = fetch,
+): Promise<MbSearchResult> {
+  // Pass 1: full title
+  const primary = await searchMbRecordings(artist, songTitle, fetchFn);
+  if (primary.kind === "hit") return primary;
+
+  // Pass 2: normalized title (strip parenthetical release qualifiers).
+  // Only attempt if the normalized form differs from the original.
+  const normalized = normalizeTitleForFallback(songTitle);
+  if (normalized === songTitle) {
+    // No normalization possible — return the primary result as-is.
+    return primary;
   }
+  const fallback = await searchMbRecordings(artist, normalized, fetchFn);
+  if (fallback.kind === "hit") return fallback;
+
+  // Return `miss` ONLY when every attempted search completed successfully
+  // (no HTTP/network errors) and none found a confident result.  Any error in
+  // either pass means we cannot assert the recording is unresolvable, so we
+  // return `error` so the caller skips the sentinel increment and retries.
+  if (primary.kind === "miss" && fallback.kind === "miss") {
+    return { kind: "miss" };
+  }
+  return { kind: "error" };
 }
 
 // ---------------------------------------------------------------------------
@@ -337,7 +445,6 @@ export async function storeBeatoClaim(
     return false;
   }
 }
-
 
 // ---------------------------------------------------------------------------
 // Stale-claim retraction
@@ -384,10 +491,66 @@ export async function retractSupersededBeatoClaims(): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory miss cooldown (avoids repeated MB lookups for unresolvable entries)
+// Miss sentinel helpers (beato_miss_sentinels table)
 // ---------------------------------------------------------------------------
 
-const missedEpisodes = new Set<string>(); // videoId values that missed on last pass
+/**
+ * Return the number of failed resolution attempts recorded for this episode,
+ * or null if no sentinel row exists yet.
+ */
+async function getMissAttempts(videoId: string): Promise<number | null> {
+  try {
+    const rows = await db.execute<{ attempts: number }>(sql`
+      SELECT attempts FROM beato_miss_sentinels WHERE video_id = ${videoId}
+    `);
+    if (rows.rows.length === 0) return null;
+    return rows.rows[0]!.attempts;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Upsert a miss attempt for the given episode.
+ * Increments the attempt counter and updates `last_attempt_at`.
+ * Returns the new attempt count, or null on failure.
+ */
+async function recordMissAttempt(videoId: string): Promise<number | null> {
+  try {
+    const rows = await db.execute<{ attempts: number }>(sql`
+      INSERT INTO beato_miss_sentinels (video_id, attempts, last_attempt_at)
+      VALUES (${videoId}, 1, now())
+      ON CONFLICT (video_id) DO UPDATE
+        SET attempts        = beato_miss_sentinels.attempts + 1,
+            last_attempt_at = now()
+      RETURNING attempts
+    `);
+    return rows.rows[0]?.attempts ?? null;
+  } catch (err) {
+    console.warn("[lore] beato: recordMissAttempt failed", videoId, err);
+    return null;
+  }
+}
+
+/**
+ * Delete the miss sentinel for a video ID.
+ * Called by the admin reset so a corrected seed entry can be retried cleanly.
+ */
+async function clearMissSentinel(videoId: string): Promise<void> {
+  try {
+    await db.execute(sql`
+      DELETE FROM beato_miss_sentinels WHERE video_id = ${videoId}
+    `);
+  } catch {
+    // Non-fatal; the pass will just re-record a miss if the sentinel is gone.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// In-memory miss cooldown (avoids repeated MB lookups within one server run)
+// ---------------------------------------------------------------------------
+
+const missedEpisodes = new Set<string>(); // videoId values permanently skipped this run
 
 // ---------------------------------------------------------------------------
 // Per-pass runner
@@ -398,46 +561,61 @@ async function runPass(): Promise<void> {
   let resolved = 0;
 
   for (const ep of BEATO_EPISODES) {
-    // Skip episodes that already had a miss on this server run.
+    // Skip episodes that are permanently exhausted for this server run.
     if (missedEpisodes.has(ep.videoId)) continue;
 
     try {
-      // Idempotency: skip if any beato claim (hit or miss) already exists for this video.
+      // Idempotency: skip if a published claim already exists.
       const existing = await db
         .select({ id: trackClaimsTable.id })
         .from(trackClaimsTable)
         .where(
           and(
             eq(trackClaimsTable.sourceHandle, BEATO_HANDLE),
-            // Match either the hit key or the miss-sentinel key.
             eq(trackClaimsTable.externalId, `beato:${ep.videoId}`),
           ),
         )
         .limit(1);
       if (existing.length > 0) continue;
 
-      // Also check the miss sentinel.
-      const existingMiss = await db
-        .select({ id: trackClaimsTable.id })
-        .from(trackClaimsTable)
-        .where(eq(trackClaimsTable.externalId, `beato:${ep.videoId}:checked`))
-        .limit(1);
-      if (existingMiss.length > 0) {
+      // Check the persistent miss sentinel: skip permanently exhausted episodes.
+      const attempts = await getMissAttempts(ep.videoId);
+      if (attempts !== null && attempts >= MAX_MISS_ATTEMPTS) {
         missedEpisodes.add(ep.videoId);
         continue;
       }
 
       attempted++;
-      const mbid = await resolveRecordingMbid(ep.artist, ep.songTitle);
+      const result = await resolveRecordingMbid(ep.artist, ep.songTitle);
 
-      if (!mbid) {
-        missedEpisodes.add(ep.videoId);
+      if (result.kind === "error") {
+        // Transient network/HTTP failure — do NOT count this as a miss attempt.
+        // The episode will be retried on the next 24-hour pass.
         console.info(
-          `[lore] beato: no MB match for "${ep.artist} — ${ep.songTitle}"`,
+          `[lore] beato: MB request failed for "${ep.artist} — ${ep.songTitle}", will retry next pass`,
         );
-        // Don't store a sentinel — no valid mbid to reference.
         continue;
       }
+
+      if (result.kind === "miss") {
+        // Definitive no-match: MB returned results but none met the confidence
+        // threshold. Count this as a resolution attempt and update the sentinel.
+        const newAttempts = await recordMissAttempt(ep.videoId);
+        const exhausted = newAttempts !== null && newAttempts >= MAX_MISS_ATTEMPTS;
+        if (exhausted) {
+          missedEpisodes.add(ep.videoId);
+          console.info(
+            `[lore] beato: permanently skipping "${ep.artist} — ${ep.songTitle}" after ${newAttempts} failed attempts`,
+          );
+        } else {
+          console.info(
+            `[lore] beato: no MB match for "${ep.artist} — ${ep.songTitle}" (attempt ${newAttempts ?? "?"}/${MAX_MISS_ATTEMPTS})`,
+          );
+        }
+        continue;
+      }
+
+      const { mbid } = result;
 
       // Verify the recording row exists in our spine before inserting claim.
       const [rec] = await db
@@ -448,6 +626,7 @@ async function runPass(): Promise<void> {
 
       if (!rec) {
         // Recording not yet on the spine — skip for now, retry next pass.
+        // Do NOT count this as a miss: the spine will eventually catch up.
         console.info(
           `[lore] beato: resolved MBID ${mbid} for "${ep.songTitle}" but not on spine yet`,
         );
@@ -504,8 +683,9 @@ export function stopBeatoJob(): void {
 
 /**
  * Admin reset: retract all superseded Beato claims (those whose videoId is no
- * longer in the seed), clear the in-memory miss cache, and immediately trigger
- * a fresh pass so corrected claims are re-inserted without waiting 24 h.
+ * longer in the seed), clear the in-memory miss cache, clear persistent miss
+ * sentinels for all current seed episodes, and immediately trigger a fresh
+ * pass so corrected claims are re-inserted without waiting 24 h.
  *
  * Returns the number of stale rows deleted.
  */
@@ -513,6 +693,9 @@ export async function triggerBeatoReset(): Promise<number> {
   const deleted = await retractSupersededBeatoClaims();
   // Clear the in-memory miss cache so the upcoming pass re-checks every episode.
   missedEpisodes.clear();
+  // Clear persistent miss sentinels for all current seed episodes so they
+  // get a fresh retry cycle.
+  await Promise.all(BEATO_EPISODES.map((ep) => clearMissSentinel(ep.videoId)));
   void runPass();
   return deleted;
 }
