@@ -825,6 +825,31 @@ function spinSource(
  * WPRB (streamguys1), WKCR (streamguys1), KALX (berkeley.edu:8443).
  * KXLU uses streamguys1 CDN (same as WPRB/WKCR, confirmed for LMU's setup).
  */
+/**
+ * HOW TO TAG NEW LONGTAIL-SOURCED COLLEGE STATIONS
+ * -------------------------------------------------
+ * Stations discovered via the Radio Browser auto-discovery pipeline
+ * (source="radio_browser") are tagged as "college" automatically:
+ *   - at ingest time, when `isCollegeStation(name)` matches a university/
+ *     college name pattern (e.g. "WVUM University of Miami Radio")
+ *   - at boot, by the `applyCollegeTagMigration` backfill, which catches
+ *     rows stored before ingest-time detection was added
+ * No manual action is required for those stations.
+ *
+ * If a Radio Browser station is a college station but its `org` field is
+ * ambiguous (e.g. just the callsign with no institutional suffix), add it here
+ * with an explicit `tags: ["college"]` and `source: "curated"` to pin it out
+ * of the auto-discovery purge cycle.  Use the `spinSource(callsign)` helper
+ * to activate its Spinitron feed if one exists.
+ *
+ * The "longtail" category in `deriveStationCategories` treats curated longtail
+ * stations (source="curated", tier="longtail") unconditionally, and promotes
+ * radio_browser rows only when they carry a quality signal (proven/promising/
+ * raw qualityTier OR a non-null discoveryScore).  A station tagged "college"
+ * but without a quality signal will surface in /college but NOT in /longtail —
+ * which is the correct separation: campus stations are their own category, not
+ * a discovery-tier proxy.
+ */
 function spinitronCollegeStations(): InsertStation[] {
   /** Safe public tag marking confirmed campus/college stations.
    *  Detection is explicit (opt-in per station), never inferred from the

@@ -184,16 +184,26 @@ export async function isPickerOptedOut(pickerId: number): Promise<boolean> {
  * Labels:
  *  - "spinitron"  — now-playing is sourced from Spinitron (authenticated) or
  *                   the Spinitron web scraper.  Never exposes API keys.
- *  - "college"    — confirmed campus/college station, explicitly tagged in the
- *                   seed.  Detection is opt-in (tag-based), never inferred from
- *                   the station name alone, so it can't silently mis-classify.
- *  - "longtail"   — station is in the radio-browser long-tail tier (source or
- *                   tier metadata, not any secret config).
+ *  - "college"    — confirmed campus/college station, tagged via the curated
+ *                   seed OR auto-tagged by the college-tag boot migration for
+ *                   radio_browser stations whose name matches a university/
+ *                   college pattern.  Detection is tag-based; the migration
+ *                   and ingest-time classifier are the source of truth.
+ *  - "longtail"   — curated discovery stations (source="curated", tier=
+ *                   "longtail") always qualify; radio_browser-sourced stations
+ *                   only qualify when they carry a meaningful quality signal:
+ *                   a scored qualityTier of "proven", "promising", or "raw"
+ *                   (not "unscored"/"silent"), OR a non-null discoveryScore.
+ *                   Unscored/silent radio_browser rows are too noisy to be
+ *                   useful in the discovery category surface.
  *
  * All inputs come from already-public station fields; no nowPlayingConfig
  * values or Spinitron API keys are read or exposed.
+ *
+ * @param s          - DB station row.
+ * @param qualityTier - Joined from station_quality; null when not yet scored.
  */
-export function deriveStationCategories(s: Station): string[] {
+export function deriveStationCategories(s: Station, qualityTier?: string | null): string[] {
   const cats: string[] = [];
   if (s.nowPlayingSource === "spinitron" || s.nowPlayingSource === "spinitron_web") {
     cats.push("spinitron");
@@ -202,7 +212,18 @@ export function deriveStationCategories(s: Station): string[] {
   if (tags.includes("college")) {
     cats.push("college");
   }
-  if (s.source === "radio_browser" || s.tier === "longtail") {
+  // Curated longtail stations (hand-picked discoveries like KCHUNG, Radio
+  // AlHara, Radio Nopal) always surface in the longtail category regardless
+  // of quality scoring — they are known-good by editorial decision.
+  const isCuratedLongtail = s.source === "curated" && s.tier === "longtail";
+  // Radio Browser auto-discovered stations only qualify when they have
+  // accumulated enough spin data to be scored above the noise floor.
+  const hasQualitySignal =
+    (qualityTier != null &&
+      qualityTier !== "unscored" &&
+      qualityTier !== "silent") ||
+    s.discoveryScore != null;
+  if (isCuratedLongtail || (s.source === "radio_browser" && hasQualitySignal)) {
     cats.push("longtail");
   }
   return cats;
@@ -254,7 +275,7 @@ export function toStation(
       isRelayAllowed(s.slug) && s.streamUrl?.startsWith("http://")
         ? relayUrlPath(s.slug)
         : null,
-    stationCategories: deriveStationCategories(s),
+    stationCategories: deriveStationCategories(s, qualityTier),
   };
 }
 

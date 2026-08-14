@@ -33,6 +33,7 @@ import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { applyShowDjNamesMigration } from "./lore/show-djnames-migration.js";
+import { applyCollegeTagMigration } from "./lore/college-tag-migration.js";
 import { runMigration } from "./lore/boot-migrations.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startIsrcEnrichmentJob } from "./lore/isrc-enrichment.js";
@@ -205,6 +206,11 @@ async function bootLore(): Promise<void> {
     // Hide confirmed dead-end stations before any pollers or lease scheduling
     // starts, so existing rows cannot briefly consume watcher slots at boot.
     await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
+    // Tag radio_browser stations whose name matches a university/college pattern
+    // as "college". Runs unconditionally at boot to backfill stations that were
+    // discovered before ingest-time detection was added. Idempotent (jsonb
+    // containment guard skips already-tagged rows).
+    await runMigration("applyCollegeTagMigration", applyCollegeTagMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     await runMigration("applyJobTimestampsMigration", applyJobTimestampsMigration);

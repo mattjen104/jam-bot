@@ -165,6 +165,35 @@ function isNameBlocked(name: string | null | undefined): boolean {
 }
 
 /**
+ * Heuristic: does a station name suggest a university or college campus station?
+ *
+ * Radio Browser doesn't supply an org/affiliation field, so we classify from
+ * the station name alone.  Patterns cover the most common English and Romance/
+ * Germanic university naming conventions seen in the radio-browser corpus.
+ *
+ * Used in `upsertRadioBrowserStations` to derive the "college" tag for stations
+ * that radio-browser itself doesn't label as "college" in their tags field.
+ * Intentionally conservative (word-boundary / suffix anchored) to avoid false
+ * positives — a mis-tag is worse than a miss here.
+ */
+export function isCollegeStation(name: string | null | undefined): boolean {
+  if (!name) return false;
+  // Regex: case-insensitive, word-boundary or suffix anchored where possible.
+  return (
+    /\buniversity\b/i.test(name) ||
+    /\buniversit[éèê]\b/i.test(name) ||
+    /\buniversidade\b/i.test(name) ||
+    /\buniversidad\b/i.test(name) ||
+    /\buniversit[äa]t\b/i.test(name) ||
+    /\buniversit[àá]\b/i.test(name) ||
+    // "college" as a standalone word — avoids "College de France" being a
+    // false-negative while still catching "Boston College Radio" etc.
+    /\bcollege\b/i.test(name) ||
+    /\bcampus\s+(?:radio|fm|station)\b/i.test(name)
+  );
+}
+
+/**
  * Era/decade name patterns (case-insensitive, word-boundary matched):
  * decades (40s–00s and German 40er–90er forms), oldies, retro, revival,
  * decade, gen x, flower power, classic hits, classic rock, plus "80s80s".
@@ -424,6 +453,12 @@ export async function upsertRadioBrowserStations(
         if (trimmed && !tags.includes(trimmed)) tags.push(trimmed);
       }
     }
+    // Derive "college" from the station name when radio-browser doesn't supply
+    // it in their tags field. Radio Browser provides no org/affiliation field,
+    // so the name is the only reliable signal available at ingest time.
+    if (!tags.includes("college") && isCollegeStation(baseName)) {
+      tags.push("college");
+    }
 
     // Classify as sleep station before upsert.
     const sleepStation = isSleepStation(baseName, slug);
@@ -466,7 +501,20 @@ export async function upsertRadioBrowserStations(
         .onConflictDoUpdate({
           target: stationsTable.slug,
           set: {
-            tags: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.tags")} ELSE ${stationsTable.tags} END`,
+            // For radio_browser rows: use the freshly-computed tags from this
+            // discovery pass, but preserve the "college" tag if the existing
+            // row already carries it and the new pass didn't re-derive it.
+            // This guards against the case where a station is re-discovered
+            // under a different genre tag whose tags array doesn't include
+            // "college", which would otherwise silently wipe the classification.
+            tags: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN
+              CASE
+                WHEN COALESCE(${stationsTable.tags}, '[]'::jsonb) @> '["college"]'::jsonb
+                 AND NOT ${sql.raw("EXCLUDED.tags")} @> '["college"]'::jsonb
+                THEN ${sql.raw("EXCLUDED.tags")} || '["college"]'::jsonb
+                ELSE ${sql.raw("EXCLUDED.tags")}
+              END
+            ELSE ${stationsTable.tags} END`,
             clickcount: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.clickcount")} ELSE ${stationsTable.clickcount} END`,
             votes: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.votes")} ELSE ${stationsTable.votes} END`,
             bitrate: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.bitrate")} ELSE ${stationsTable.bitrate} END`,
