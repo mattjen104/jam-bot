@@ -2931,6 +2931,7 @@ router.get("/me/library", h(async (req, res) => {
     mbid: string; provenance: LibraryItemProvenance; addedAt: Date; removedAt: Date | null;
     title: string | null; artist: string | null; artworkUrl: string | null;
     links: Array<{ url: string }> | null; sortKey: string; albumTitle: string | null;
+    releaseGroupMbid: string | null;
   };
   let resolvedRows: ResolvedRow[] = [];
   if (includeResolved) resolvedRows = await db
@@ -2946,6 +2947,14 @@ router.get("/me/library", h(async (req, res) => {
       sortKey: sortKeyExpr.as("sort_key"),
       albumTitle: sql<string | null>`(
         SELECT title FROM recording_release_groups
+        WHERE recording_mbid = ${libraryItemsTable.mbid} AND is_primary = true
+        LIMIT 1
+      )`,
+      // Lets the client derive Cover Art Archive fallback artwork
+      // (release-group front image) when the recording has no artworkUrl —
+      // common for imported albums whose art was never resolved.
+      releaseGroupMbid: sql<string | null>`(
+        SELECT release_group_mbid FROM recording_release_groups
         WHERE recording_mbid = ${libraryItemsTable.mbid} AND is_primary = true
         LIMIT 1
       )`,
@@ -3053,6 +3062,7 @@ router.get("/me/library", h(async (req, res) => {
       artworkUrl: r.artworkUrl,
       links: r.links as Array<{ url: string }> | null,
       albumTitle: r.albumTitle,
+      releaseGroupMbid: r.releaseGroupMbid,
       sortKey: r.sortKey,
     })),
     ...softRows.map((s) => ({
@@ -3067,6 +3077,7 @@ router.get("/me/library", h(async (req, res) => {
       artworkUrl: s.artworkUrl,
       links: null as Array<{ url: string }> | null,
       albumTitle: s.albumName,
+      releaseGroupMbid: null as string | null,
       sortKey: s.sortKey,
     })),
   ];
@@ -3111,6 +3122,7 @@ router.get("/me/library", h(async (req, res) => {
             artist: r.artist,
             artworkUrl: r.artworkUrl ?? null,
             albumTitle: r.albumTitle ?? null,
+            releaseGroupMbid: r.releaseGroupMbid ?? null,
             spotifyUrl:
               r.links?.find((l) => l.url.includes("open.spotify.com"))?.url ?? null,
           }

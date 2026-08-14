@@ -28,6 +28,12 @@ export interface LibraryRecording {
   artist: string;
   artworkUrl: string | null;
   albumTitle: string | null;
+  /**
+   * Primary release-group MBID, when the recording has one. Lets the client
+   * derive Cover Art Archive fallback artwork for albums whose art was never
+   * resolved (common on imports). Absent on soft rows and older responses.
+   */
+  releaseGroupMbid?: string | null;
   /** Spotify track URL from Odesli resolution, when available. */
   spotifyUrl: string | null;
 }
