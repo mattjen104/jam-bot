@@ -5201,8 +5201,14 @@
 .fdrow--z1::before { background: hsl(var(--library) / 0.38); }
 .fdrow--playing::before { background: hsl(var(--accent)); }
 .fdrow--dim { opacity: 0.55; }
+/* Front-door and split-home rows: never dim the whole row — secondary contrast
+   is carried by per-element color rules on station/separator, not opacity. */
+.dial-root--front .fdrow--dim,
+.split-home .fdrow--dim { opacity: 1; }
 /* 24h-lookback rows (r=6/7): in Zone 1 but history, not live — cooler bar + mild fade */
 .fdrow--hist { opacity: 0.72; }
+.dial-root--front .fdrow--hist,
+.split-home .fdrow--hist { opacity: 0.72; }
 .fdrow--hist::before { background: hsl(var(--muted-foreground) / 0.35); }
 .fdrow--sampling {
   background: hsl(var(--live) / 0.07);
