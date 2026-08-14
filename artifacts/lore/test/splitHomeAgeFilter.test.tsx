@@ -25,9 +25,19 @@ vi.mock("../src/components/dial/FrontDoorRow", () => ({
   ),
 }));
 
-// CompactStack pulls in meHooks/Library — stub it out entirely.
+// CompactStack pulls in meHooks/Library — stub it out entirely, but keep
+// the onExpandedChange seam so the hide-feed-and-remote behavior is testable.
 vi.mock("../src/components/CompactStack", () => ({
-  CompactStack: () => <div data-testid="compact-stack-stub" />,
+  CompactStack: ({ onExpandedChange }: { onExpandedChange?: (e: boolean) => void }) => (
+    <div data-testid="compact-stack-stub">
+      <button type="button" onClick={() => onExpandedChange?.(true)}>
+        stub-expand
+      </button>
+      <button type="button" onClick={() => onExpandedChange?.(false)}>
+        stub-collapse
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../src/lib/meHooks", () => ({
@@ -181,6 +191,30 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(screen.getByTestId("fdrow-premieres")).toBeTruthy();
     expect(screen.getByTestId("fdrow-catalog-fm")).toBeTruthy();
     expect(screen.queryByTestId("fdrow-new-music")).toBeNull();
+  });
+
+  it("hides the mini feed and CLI remote while a Stack album is expanded", () => {
+    mockStations.value = [makeStation("deep-cuts", "deep")];
+    const { container } = render(<SplitHome />);
+
+    // Collapsed: dial band + CLI remote are visible.
+    expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Dial command" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "stub-expand" }));
+
+    // Expanded: the mini feed and the remote are unmounted; the split-home
+    // root carries the expansion modifier so the Stack band takes over.
+    expect(screen.queryByTestId("fdrow-deep-cuts")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Dial command" })).toBeNull();
+    expect(
+      container.querySelector(".split-home--stack-expanded"),
+    ).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "stub-collapse" }));
+    expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Dial command" })).toBeTruthy();
+    expect(container.querySelector(".split-home--stack-expanded")).toBeNull();
   });
 
   it("filtering happens before scan windowing: /scan2 pages within the filtered set", () => {

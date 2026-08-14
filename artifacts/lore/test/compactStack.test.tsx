@@ -18,6 +18,11 @@
  *     link; other albums' rows are gone
  *   - clicking the expanded header collapses back to the five-row order
  *   - CAA fallback art is used for imported albums without artwork
+ *   - collapsed rows each render their OWN stationary spine art (no shared
+ *     backdrop, no pan class anywhere while collapsed)
+ *   - expanded state applies the hero layout modifier, renders the album's
+ *     backdrop art, and only pans once loaded art overflows the band
+ *   - onExpandedChange reports expansion up to the home view
  *  Play controls (Task 216):
  *   - ▶ button hidden when primaryMbid is null
  *   - clicking ▶ launches the album and does NOT expand the row
@@ -73,7 +78,6 @@ const knowledgeByMbid = new Map<
   string,
   { knowledge: TrackKnowledge | null; claims: TrackClaim[] }
 >();
-
 // Track album-track fetches — keyed by MBID, set per test.
 const albumTracksByMbid = new Map<string, { tracks: Array<{ mbid: string; title: string; artist: string }>; rgTitle?: string }>();
 
@@ -252,7 +256,7 @@ describe("spineArtUrl", () => {
       ],
     });
     expect(spineArtUrl(group)).toBe(
-      "https://coverartarchive.org/release-group/aaaa-bbbb/front-500",
+      "https://coverartarchive.org/release-group/aaaa-bbbb/front-1200",
     );
   });
 
@@ -373,8 +377,29 @@ describe("CompactStack collapsed rows", () => {
     const { container } = renderStack();
     const img = container.querySelector("img.compact-stack__spine-art");
     expect(img?.getAttribute("src")).toBe(
-      "https://coverartarchive.org/release-group/rg-42/front-500",
+      "https://coverartarchive.org/release-group/rg-42/front-1200",
     );
+  });
+
+  it("gives each collapsed row its own stationary spine art — no shared backdrop, no pan", () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "One", artist: "A", artworkUrl: "https://example.com/one.jpg" }),
+      makeItem({ mbid: "m2", albumTitle: "Two", artist: "B", artworkUrl: "https://example.com/two.jpg" }),
+      makeItem({ mbid: "m3", albumTitle: "Three", artist: "C", artworkUrl: "https://example.com/three.jpg" }),
+    ];
+    const { container } = renderStack();
+    const spines = container.querySelectorAll("img.compact-stack__spine-art");
+    expect(spines).toHaveLength(3);
+    expect(
+      [...spines].map((img) => img.getAttribute("src")),
+    ).toEqual([
+      "https://example.com/one.jpg",
+      "https://example.com/two.jpg",
+      "https://example.com/three.jpg",
+    ]);
+    // Collapsed rows never carry the hero backdrop or the pan animation.
+    expect(container.querySelectorAll("img.compact-stack__backdrop-art")).toHaveLength(0);
+    expect(container.querySelector(".compact-stack__backdrop-art--pan")).toBeNull();
   });
 });
 
@@ -382,7 +407,7 @@ describe("CompactStack expansion", () => {
   it("expands a non-top row into the top slot with metadata cards and a Stack link, then collapses", async () => {
     libraryItems = [
       makeItem({ mbid: "m1", albumTitle: "First Album", artist: "A", addedAt: "2026-08-03T00:00:00Z" }),
-      makeItem({ mbid: "m2", albumTitle: "Second Album", artist: "B", addedAt: "2026-08-02T00:00:00Z" }),
+      makeItem({ mbid: "m2", albumTitle: "Second Album", artist: "B", artworkUrl: "https://example.com/second.jpg", addedAt: "2026-08-02T00:00:00Z" }),
     ];
     knowledgeByMbid.set("m2", {
       knowledge: makeKnowledge({
@@ -413,8 +438,23 @@ describe("CompactStack expansion", () => {
     });
     expect(header.getAttribute("aria-expanded")).toBe("true");
     expect(
+      header.closest(".compact-stack")?.classList.contains(
+        "compact-stack--expanded-hero",
+      ),
+    ).toBe(true);
+    expect(
       screen.queryByRole("button", { name: "Expand First Album · A" }),
     ).toBeNull();
+
+    // The expanded view renders the album's hero backdrop; fitting art
+    // (jsdom reports zero natural size) never gains the pan class.
+    const stackEl = header.closest(".compact-stack")!;
+    const backdrop = stackEl.querySelector("img.compact-stack__backdrop-art");
+    expect(backdrop).not.toBeNull();
+    fireEvent.load(backdrop!);
+    expect(
+      backdrop?.classList.contains("compact-stack__backdrop-art--pan"),
+    ).toBe(false);
 
     // Metadata cards render per row: pressing, relationship, claim + source link
     await screen.findByText("Island · 1994 · UK");
@@ -446,6 +486,74 @@ describe("CompactStack expansion", () => {
       await screen.findByRole("button", { name: "Expand Quiet Album · C" }),
     );
     await screen.findByText("No liner notes available for this album yet.");
+  });
+
+  it("reports expansion up through onExpandedChange for the home view", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Hero Album", artist: "D" }),
+    ];
+    const onExpandedChange = vi.fn();
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <CompactStack onExpandedChange={onExpandedChange} />
+      </QueryClientProvider>,
+    );
+
+    // Mount reports collapsed.
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Hero Album · D" }),
+    );
+    expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Collapse Hero Album" }),
+    );
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("drops a stale expansion when the album leaves the library groups", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Vanishing Album", artist: "E", addedAt: "2026-08-02T00:00:00Z" }),
+      makeItem({ mbid: "m2", albumTitle: "Staying Album", artist: "F", addedAt: "2026-08-01T00:00:00Z" }),
+    ];
+    const onExpandedChange = vi.fn();
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={qc}>
+        <CompactStack onExpandedChange={onExpandedChange} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Vanishing Album · E" }),
+    );
+    await screen.findByRole("button", { name: "Collapse Vanishing Album" });
+    expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+
+    // A refetch removes the expanded album from the top five. The stale key
+    // must be dropped: the collapsed strip returns and the home view is told
+    // the hero is gone (so the mini feed and remote come back).
+    libraryItems = [
+      makeItem({ mbid: "m2", albumTitle: "Staying Album", artist: "F", addedAt: "2026-08-01T00:00:00Z" }),
+    ];
+    view.rerender(
+      <QueryClientProvider client={qc}>
+        <CompactStack onExpandedChange={onExpandedChange} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("button", { name: "Expand Staying Album · F" });
+    expect(
+      screen.queryByRole("button", { name: "Collapse Vanishing Album" }),
+    ).toBeNull();
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
   });
 });
 

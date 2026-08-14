@@ -63,6 +63,10 @@ export default function SplitHome() {
   const { addSeed } = useSeedManager();
   const { radio } = usePlayer();
 
+  // While a Stack row is expanded into its album-art hero, the mini feed
+  // and the CLI remote are hidden so the cover gets the whole viewport.
+  const [stackExpanded, setStackExpanded] = useState(false);
+
   // Scan window: which 5-station slice of the sorted feed is shown.
   const [scanOffset, setScanOffset] = useState<ScanOffset>(0);
   const handleScan = useCallback((offset: number) => {
@@ -178,34 +182,40 @@ export default function SplitHome() {
         : null;
 
   return (
-    <div className="split-home">
-      <section className="split-home__band split-home__band--dial" aria-label="Live stations">
-        <CompactDial
-          rows={filteredRows}
-          offset={scanOffset}
-          activeSlug={radio.station?.slug ?? null}
-          playerStatus={radio.status}
-          presenceMap={presenceMap}
-          onTuneIn={tuneRow}
-          onPlay={playRow}
-        />
-      </section>
+    <div className={`split-home${stackExpanded ? " split-home--stack-expanded" : ""}`}>
+      {/* While a Stack album is expanded into its art hero, the mini feed and
+          the CLI remote unmount so the cover owns the whole viewport. */}
+      {!stackExpanded && (
+        <section className="split-home__band split-home__band--dial" aria-label="Live stations">
+          <CompactDial
+            rows={filteredRows}
+            offset={scanOffset}
+            activeSlug={radio.station?.slug ?? null}
+            playerStatus={radio.status}
+            presenceMap={presenceMap}
+            onTuneIn={tuneRow}
+            onPlay={playRow}
+          />
+        </section>
+      )}
 
-      <HomeCliStrip
-        activeTiers={activeTiers}
-        activeCategories={activeCategories}
-        onToggleTier={toggleTier}
-        onToggleCategory={toggleCategory}
-        scanOffset={scanOffset}
-        onScan={handleScan}
-        onAddArtists={handleAddArtists}
-        onMatt={startMattLibrary}
-        mattPending={mattStarterMutation.isPending}
-        mattStatus={mattCliStatus}
-      />
+      {!stackExpanded && (
+        <HomeCliStrip
+          activeTiers={activeTiers}
+          activeCategories={activeCategories}
+          onToggleTier={toggleTier}
+          onToggleCategory={toggleCategory}
+          scanOffset={scanOffset}
+          onScan={handleScan}
+          onAddArtists={handleAddArtists}
+          onMatt={startMattLibrary}
+          mattPending={mattStarterMutation.isPending}
+          mattStatus={mattCliStatus}
+        />
+      )}
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
-        <CompactStack />
+        <CompactStack onExpandedChange={setStackExpanded} />
       </section>
     </div>
   );

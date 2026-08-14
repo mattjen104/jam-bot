@@ -4,23 +4,34 @@
  * Shows the 5 newest kept album groups from the listener's combined
  * kept + Spotify-imported library (first page of useMyLibraryInfinite,
  * grouped with buildAlbumGroups). Each collapsed row is a single line —
- * `album title · artist · <relationship credit>` — over a full-bleed
- * cassette-spine strip (blurred/darkened album art). The third segment is
- * the album's MusicBrainz relationship line (samples / covers / remixes),
- * the most crucial piece of liner-note metadata, omitted cleanly when the
- * knowledge layer has none.
+ * `album title · artist · <relationship credit>` — over that album's own
+ * STATIONARY full-bleed cover art (no motion while collapsed). The third
+ * segment is the album's MusicBrainz relationship line (samples / covers /
+ * remixes), the most crucial piece of liner-note metadata, omitted cleanly
+ * when the knowledge layer has none.
  *
- * Tapping a row expands it in place: the album moves to the top slot and
- * its liner-notes metadata (pressing, credits, relationships, claims,
- * books) fills the band as individual card rows, covering the other four
- * rows. A `→ Stack` link jumps to the album in the full Stack. Tapping the
- * expanded header collapses back to the five-row list.
+ * Tapping a row expands it in place: the album's full cover becomes a large
+ * hero backdrop (top ~¾ of the band) and — once the image has loaded and is
+ * larger than the band — begins a very slow cinematic pan. The liner-notes
+ * metadata (pressing, credits, relationships, claims, books) fills the
+ * remaining strip as individual card rows. Expansion is reported upward via
+ * `onExpandedChange` so the home view can hide the mini feed and the CLI
+ * remote while the art plays. A `→ Stack` link jumps to the album in the
+ * full Stack. Tapping the expanded header collapses back to the five-row
+ * list (and the art freezes again).
  *
  * Albums imported without artwork fall back to the Cover Art Archive
  * release-group front image derived from the recording's releaseGroupMbid.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from "react";
 import { useLocation } from "wouter";
 import { useQueries } from "@tanstack/react-query";
 import { ArrowRight, ExternalLink } from "lucide-react";
@@ -71,7 +82,7 @@ export function spineArtUrl(group: AlbumGroup): string | null {
   if (group.artworkUrl) return group.artworkUrl;
   for (const item of group.items) {
     const rg = item.recording?.releaseGroupMbid;
-    if (rg) return `https://coverartarchive.org/release-group/${rg}/front-500`;
+    if (rg) return `https://coverartarchive.org/release-group/${rg}/front-1200`;
   }
   return null;
 }
@@ -132,6 +143,45 @@ export function buildAlbumLinerGroups(
     }
   }
   return buildLinerGroups(best, claims);
+}
+
+function CompactStackBackdrop({ art }: { art: string | null }) {
+  const [canPan, setCanPan] = useState(false);
+
+  const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    const container = image.parentElement?.getBoundingClientRect();
+    if (!container) return;
+
+    // The class is only added from onLoad, so an image can never animate
+    // while it is still loading. object-position can then reveal the portions
+    // of the high-resolution cover that overflow the hero window, one very
+    // slow corner-to-corner round trip at a time.
+    setCanPan(
+      image.naturalWidth > container.width ||
+        image.naturalHeight > container.height,
+    );
+  };
+
+  const handleError = (event: SyntheticEvent<HTMLImageElement>) => {
+    setCanPan(false);
+    onArtError(event);
+  };
+
+  if (!art) return null;
+
+  return (
+    <img
+      key={art}
+      className={`compact-stack__backdrop-art${canPan ? " compact-stack__backdrop-art--pan" : ""}`}
+      src={art}
+      alt=""
+      aria-hidden="true"
+      loading="eager"
+      onLoad={handleLoad}
+      onError={handleError}
+    />
+  );
 }
 
 /**
@@ -279,7 +329,16 @@ function CompactStackRow({
 // Component
 // ---------------------------------------------------------------------------
 
-export function CompactStack() {
+export interface CompactStackProps {
+  /**
+   * Reports expansion state upward so the home view can hide the mini feed
+   * and CLI remote while the album-art hero plays. Called with `true` when a
+   * row expands and `false` when it collapses.
+   */
+  onExpandedChange?: (expanded: boolean) => void;
+}
+
+export function CompactStack({ onExpandedChange }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { data, isLoading } = useMyLibraryInfinite({}, 100);
@@ -292,9 +351,26 @@ export function CompactStack() {
   const expandedGroup = expandedKey
     ? (groups.find((g) => g.key === expandedKey) ?? null)
     : null;
-  const ordered = useMemo(
-    () => orderForExpansion(groups, expandedKey),
-    [groups, expandedKey],
+
+  // A library refetch can remove or reorder the expanded album out of the
+  // top five. Drop the stale key during render (the derived-state pattern)
+  // so the collapsed strip, the upward report, and any future reappearance
+  // of the album all stay consistent.
+  if (expandedKey && !expandedGroup) {
+    setExpandedKey(null);
+  }
+
+  // Expansion is only "real" when the key resolves to a live group — the
+  // home view must never keep the feed and remote hidden without a hero.
+  const isExpanded = expandedGroup !== null;
+  useEffect(() => {
+    onExpandedChange?.(isExpanded);
+  }, [isExpanded, onExpandedChange]);
+  // Cheap over ≤5 groups; the React Compiler memoizes it (a manual useMemo
+  // here can't be preserved by the compiler and forces a skip).
+  const ordered = orderForExpansion(groups, expandedKey);
+  const expandedArt = proxyArtUrl(
+    expandedGroup ? spineArtUrl(expandedGroup) : null,
   );
 
   // Knowledge for the collapsed inline credit — one query per album (its
@@ -323,10 +399,9 @@ export function CompactStack() {
   // Expanded album: fetch every resolved recording so claims from all kept
   // tracks on the album are aggregated (same pattern as the investigation
   // sheet).
-  const expandedMbids = useMemo(
-    () => (expandedGroup ? groupMbids(expandedGroup) : []),
-    [expandedGroup],
-  );
+  // Cheap over one small group; the React Compiler memoizes it (a manual
+  // useMemo here can't be preserved by the compiler and forces a skip).
+  const expandedMbids = expandedGroup ? groupMbids(expandedGroup) : [];
   const expandedResults = useQueries({
     queries: expandedMbids.map((mbid) => ({
       queryKey: getGetRecordingKnowledgeQueryKey(mbid),
@@ -345,13 +420,13 @@ export function CompactStack() {
       )
     : [];
 
+  // Collapsed rows: each album gets its OWN stationary full-size cover
+  // behind its row (an <img> so onArtError retry/fallback works). No motion
+  // while collapsed — the cinematic pan is reserved for the expanded hero.
   const renderSpine = (group: AlbumGroup) => {
     const art = proxyArtUrl(spineArtUrl(group));
     return (
       <>
-        {/* Cassette-spine background: blurred/darkened album art.
-            An <img> (not background-image) so onArtError retry/fallback
-            works; the overlay div keeps the text legible. */}
         {art && (
           <img
             className="compact-stack__spine-art"
@@ -371,7 +446,11 @@ export function CompactStack() {
   if (expandedGroup) {
     const stackHref = `/library?openAlbum=${encodeURIComponent(expandedGroup.key)}`;
     return (
-      <div className="compact-stack compact-stack--expanded" aria-label="Recent keeps">
+      <div
+        className="compact-stack compact-stack--expanded compact-stack--expanded-hero"
+        aria-label="Recent keeps"
+      >
+        <CompactStackBackdrop key={expandedArt ?? "no-art"} art={expandedArt} />
         <button
           type="button"
           className="compact-stack__row compact-stack__row--expanded-header"
@@ -379,7 +458,7 @@ export function CompactStack() {
           aria-label={`Collapse ${expandedGroup.albumTitle}`}
           onClick={() => setExpandedKey(null)}
         >
-          {renderSpine(expandedGroup)}
+          <div className="compact-stack__overlay" aria-hidden="true" />
           <span className="compact-stack__text">
             <span className="compact-stack__album">{expandedGroup.albumTitle}</span>
             {expandedGroup.artist && (

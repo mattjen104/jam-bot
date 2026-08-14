@@ -7219,6 +7219,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-direction: column;
 }
 
+/* A Stack album expanded into its art hero: the mini feed and the CLI
+   remote are unmounted, so the Stack band takes the whole viewport. */
+.split-home--stack-expanded {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 /* ── Compact Dial (top band) ─────────────────────────────────────────────── */
 .compact-dial {
   flex: 1;
@@ -7661,7 +7667,42 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 0;
   display: grid;
   grid-template-rows: repeat(5, minmax(0, 1fr));
+  position: relative;
   overflow: hidden;
+}
+/* Expanded-hero backdrop: the tapped album's full cover. Stationary until
+   the image has loaded AND overflows the band; then the cinematic pan.
+   The composition starts in the middle of the record, lingers there, eases
+   toward a far corner, eases back, and lingers again. The 720 s loop keeps
+   the motion exceptionally slow while the holds make it feel intentional
+   instead of like a screensaver. */
+.compact-stack__backdrop-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  pointer-events: none;
+  filter: brightness(0.55) saturate(0.8);
+  transition: height 0.35s ease, object-position 0.35s ease;
+}
+@keyframes cs-art-pan {
+  0%, 12% {
+    object-position: 50% 50%;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  }
+  50% {
+    object-position: 100% 100%;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  }
+  88%, 100% {
+    object-position: 50% 50%;
+  }
+}
+.compact-stack__backdrop-art--pan {
+  animation: cs-art-pan 720s linear infinite;
 }
 .compact-stack__row {
   /* Button reset */
@@ -7680,6 +7721,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   overflow: hidden;
   border-bottom: 1px solid hsl(var(--border) / 0.35);
+  z-index: 1;
   transition: filter 0.12s;
 }
 .compact-stack .compact-play-btn {
@@ -7702,20 +7744,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-/* Full-bleed blurred album art behind the row text. Slight scale-up hides
-   the blur's soft edges. */
+/* Collapsed rows: each album's own STATIONARY full-size cover behind its
+   row. object-position centers the visible band; no animation ever runs on
+   collapsed rows — motion is reserved for the expanded hero. */
 .compact-stack__spine-art {
   position: absolute;
   inset: 0;
+  z-index: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
+  pointer-events: none;
   filter: saturate(0.85) brightness(0.58);
-  transform: scale(1.03);
 }
 .compact-stack__overlay {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background: linear-gradient(
     to right,
     hsl(var(--background) / 0.82),
@@ -7759,10 +7805,25 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   /* Header keeps one row-height slot; the card region absorbs the other 4. */
   grid-template-rows: minmax(0, 1fr) minmax(0, 4fr);
 }
+.compact-stack--expanded-hero {
+  grid-template-rows: minmax(0, 3fr) minmax(0, 1fr);
+}
+.compact-stack--expanded-hero .compact-stack__backdrop-art {
+  height: 75%;
+}
 .compact-stack__row--expanded-header {
   border-bottom: 1px solid hsl(var(--border) / 0.6);
 }
+.compact-stack--expanded-hero .compact-stack__row--expanded-header {
+  align-self: end;
+  min-height: 54px;
+  height: 54px;
+  background: hsl(var(--background) / 0.38);
+  backdrop-filter: blur(3px);
+}
 .compact-stack__cards {
+  position: relative;
+  z-index: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
@@ -7843,6 +7904,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-family: var(--lore-font-display);
   cursor: pointer;
   padding: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-stack__backdrop-art--pan {
+    animation: none;
+    object-position: center center;
+  }
 }
 
 /* Full Stack album headers use the same full-row cover treatment as the
