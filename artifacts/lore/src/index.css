@@ -6706,6 +6706,19 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
   padding-bottom: 11px;
 }
 
+/* Front-door Feed + split-home rows use the same interface sans as Stack.
+   Keep the existing size scale above; this changes only the face, not density. */
+.dial-root--front .fdrow__t1,
+.dial-root--front .fdrow__t1 *,
+.dial-root--front .fdrow__t3,
+.dial-root--front .fdrow__station-chip,
+.split-home .fdrow__t1,
+.split-home .fdrow__t1 *,
+.split-home .fdrow__t3,
+.split-home .fdrow__station-chip {
+  font-family: var(--lore-font-display);
+}
+
 /* ── Tabbed set panel — provenance browsing & export (task: set-panel tabs) ── */
 .set-tabs {
   display: flex;
