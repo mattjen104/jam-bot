@@ -1,8 +1,9 @@
 /**
  * CompactStack — the bottom band of the SplitHome layout.
  *
- * Shows up to 5 album groups, newest-first, from the listener's kept library
- * (first page of useMyLibraryInfinite, grouped with buildAlbumGroups). Each
+ * Shows up to 5 album groups, newest-first, from the listener's combined
+ * kept + Spotify-imported library (first page of useMyLibraryInfinite,
+ * grouped with buildAlbumGroups). Each
  * row is a read-only summary — `album title · artist` — over a full-bleed
  * cassette-spine strip: the album artwork as a blurred/darkened background
  * so the text stays legible. No expand/collapse, no scrolling.
@@ -19,7 +20,7 @@ const COMPACT_STACK_SIZE = 5;
 
 export function CompactStack() {
   const [, setLocation] = useLocation();
-  const { data, isLoading } = useMyLibraryInfinite({ source: "keep" }, 100);
+  const { data, isLoading } = useMyLibraryInfinite({}, 100);
 
   const groups = useMemo<AlbumGroup[]>(() => {
     const items = data?.pages[0]?.items ?? [];
