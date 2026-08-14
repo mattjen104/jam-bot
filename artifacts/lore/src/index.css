@@ -7263,7 +7263,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: stretch;
   border-top: 1px solid hsl(var(--border) / 0.6);
   border-bottom: 1px solid hsl(var(--border) / 0.6);
-   background: #000;
+   background: hsl(var(--card));
   padding: 0 10px;
 }
 .home-cli-strip__row {
@@ -7320,6 +7320,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--foreground));
 }
 .home-cli-strip__scan-slash {
+  color: hsl(var(--muted-foreground));
+}
+.home-cli-strip__add-command {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  font-family: var(--lore-font-terminal);
+  font-size: 0.9em;
+  color: hsl(var(--foreground));
+}
+.home-cli-strip__command-hint {
   color: hsl(var(--muted-foreground));
 }
 

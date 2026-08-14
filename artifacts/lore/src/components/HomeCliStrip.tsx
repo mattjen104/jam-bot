@@ -98,18 +98,14 @@ export function HomeCliStrip({
         <button
           type="button"
           className="home-cli-strip__btn home-cli-strip__btn--primary"
+          aria-label="Add artists"
           onClick={insertAddPrefix}
         >
-          <span className="home-cli-strip__btn-label">add artists</span>
-          <span className="home-cli-strip__btn-cmd">/add</span>
-        </button>
-        <button
-          type="button"
-          className="home-cli-strip__btn"
-          onClick={goLibrary}
-        >
-          <span className="home-cli-strip__btn-label">library</span>
-          <span className="home-cli-strip__btn-cmd">/library</span>
+          <span className="home-cli-strip__add-command">
+            <span className="home-cli-strip__scan-slash" aria-hidden="true">/</span>
+            <span>add</span>
+            <span className="home-cli-strip__command-hint">artists</span>
+          </span>
         </button>
       </div>
     </div>
