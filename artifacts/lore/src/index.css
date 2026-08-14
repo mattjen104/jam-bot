@@ -7407,8 +7407,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: blur(14px) saturate(0.8) brightness(0.6);
-  transform: scale(1.15);
+  filter: saturate(0.85) brightness(0.58);
+  transform: scale(1.03);
 }
 .compact-stack__overlay {
   position: absolute;
@@ -7454,6 +7454,41 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-family: var(--lore-font-display);
   cursor: pointer;
   padding: 12px;
+}
+
+/* Full Stack album headers use the same full-row cover treatment as the
+   homepage's compact Stack rows. Keep the small swatch as a visual anchor,
+   while the cover fills the entire title/artist row behind it. */
+.lib-album-group__header {
+  position: relative;
+  overflow: hidden;
+}
+.lib-album-group__header > * {
+  position: relative;
+  z-index: 1;
+}
+.lib-album-group__bg-art,
+.lib-album-group__bg-overlay {
+  position: absolute !important;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.lib-album-group__bg-art {
+  z-index: 0 !important;
+  object-fit: cover;
+  filter: saturate(0.85) brightness(0.58);
+  transform: scale(1.03);
+}
+.lib-album-group__bg-overlay {
+  z-index: 0 !important;
+  background: linear-gradient(
+    to right,
+    hsl(var(--background) / 0.76),
+    hsl(var(--background) / 0.48) 48%,
+    hsl(var(--background) / 0.68)
+  );
 }
 
 .compact-dial--empty {

@@ -649,6 +649,7 @@ export function AlbumGroupRow({
       <div
         role="button"
         tabIndex={0}
+        className="lib-album-group__header"
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen((v) => !v); }}
         style={{
@@ -663,6 +664,19 @@ export function AlbumGroupRow({
         }}
         aria-expanded={isOpen}
       >
+        {group.artworkUrl && (
+          <>
+            <img
+              className="lib-album-group__bg-art"
+              src={proxyArtUrl(group.artworkUrl) ?? group.artworkUrl}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              onError={onArtError}
+            />
+            <span className="lib-album-group__bg-overlay" aria-hidden="true" />
+          </>
+        )}
         {/* Artwork swatch */}
         <span
           style={{
