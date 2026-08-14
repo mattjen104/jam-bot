@@ -4,9 +4,9 @@
  * Structure (top → bottom):
  *   1. One horizontally scrollable, command-only filter rail — scan windows,
  *      song-age tiers, and station categories, directly under station rows.
- *   2. The DialCliBar (strip variant) — a single-line input with a `/lore`
- *      Signifier ghost placeholder. All slash commands work here.
- *   3. The `/add artists` affordance below the input, extending up from Stack.
+ *   2. A `/lore` home button beside the DialCliBar (strip variant), whose
+ *      prompt is left-aligned so the field reads like a command line.
+ *   3. The `/add artists` affordance below the input, aligned to the left.
  *
  * Every button is labeled with its CLI equivalent so the affordance is
  * self-documenting for power users.
@@ -53,6 +53,7 @@ export function HomeCliStrip({
   const prefillToken = useRef(0);
 
   const goLibrary = useCallback(() => setLocation("/library"), [setLocation]);
+  const goHome = useCallback(() => setLocation("/"), [setLocation]);
 
   const insertAddPrefix = useCallback(() => {
     prefillToken.current += 1;
@@ -113,26 +114,37 @@ export function HomeCliStrip({
         </div>
       </div>
 
-      {/* The CLI seam itself */}
-      <div className="home-cli-strip__input-row">
-        <DialCliBar
-          variant="strip"
-          activeTiers={activeTiers}
-          activeCategories={activeCategories}
-          onToggleTier={onToggleTier}
-          onToggleCategory={onToggleCategory}
-          onAddArtists={onAddArtists}
-          onScan={onScan}
-          onLibrary={goLibrary}
-          onMatt={onMatt}
-          mattPending={mattPending}
-          mattStatus={mattStatus}
-          inputRef={inputRef}
-          prefill={prefill}
-        />
+      {/* Home command + CLI field. The home command sits below /scan1 and
+          keeps the entry prompt to its right, like one console line. */}
+      <div className="home-cli-strip__command-row">
+        <button
+          type="button"
+          className="home-cli-strip__btn home-cli-strip__home-btn"
+          aria-label="homepage /lore"
+          onClick={goHome}
+        >
+          /lore
+        </button>
+        <div className="home-cli-strip__input-row">
+          <DialCliBar
+            variant="strip"
+            activeTiers={activeTiers}
+            activeCategories={activeCategories}
+            onToggleTier={onToggleTier}
+            onToggleCategory={onToggleCategory}
+            onAddArtists={onAddArtists}
+            onScan={onScan}
+            onLibrary={goLibrary}
+            onMatt={onMatt}
+            mattPending={mattPending}
+            mattStatus={mattStatus}
+            inputRef={inputRef}
+            prefill={prefill}
+          />
+        </div>
       </div>
 
-      {/* Stack-side: primary add-artists affordance extends up from the Stack */}
+      {/* Stack-side: primary add-artists affordance stays at the left edge. */}
       <div className="home-cli-strip__row home-cli-strip__row--stack">
         <button
           type="button"

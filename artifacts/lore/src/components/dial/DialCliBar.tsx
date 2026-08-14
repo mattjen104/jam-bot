@@ -8,8 +8,8 @@
  * (pointer-events: none) so it NEVER intercepts taps on the dial rows above
  * it; the "/" hotkey is the entry point.
  *
- * variant="strip" — the SplitHome CLI seam: a single-line centred input with
- * a `/lore` ghost-text placeholder in the same Signifier wordmark style.
+ * variant="strip" — the SplitHome CLI seam: a single-line input with a
+ * left-aligned `>_` prompt.
  * Pointer events are live (the strip is a real input row, not an ambient
  * layer); the "/" hotkey works here too.
  *
@@ -211,8 +211,8 @@ export function DialCliBar({
       aria-label="Dial commands"
     >
       {/* Overlay: wordmark appears only while typing (ambient layer stays
-          clean when idle). Strip: a `/lore` Signifier ghost placeholder fills
-          the idle state, replaced by the typed command text. */}
+          clean when idle). Strip: a left-aligned `>_` prompt fills the idle
+          state, replaced by the typed command text. */}
       {!isEmpty && (
         <span
           className="dial-cli-overlay__wordmark dial-cli-overlay__wordmark--typing"
@@ -226,7 +226,7 @@ export function DialCliBar({
           className="dial-cli-overlay__wordmark dial-cli-overlay__wordmark--ghost"
           aria-hidden="true"
         >
-          /lore
+          &gt;_
         </span>
       )}
 

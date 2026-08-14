@@ -7292,7 +7292,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 29px;
   /* intrinsic width so chips never wrap; the rail scrolls over this */
   width: max-content;
-  padding: 0 8px;
+  padding: 0 8px 0 0;
 }
 .home-cli-strip__filter-chip {
   appearance: none;
@@ -7318,6 +7318,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .home-cli-strip__filter-chip:hover,
 .home-cli-strip__filter-chip:focus-visible {
+  position: relative;
+  z-index: 1;
   color: hsl(var(--foreground));
   border-color: hsl(var(--foreground) / 0.5);
   background: hsl(var(--secondary));
@@ -7335,7 +7337,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .home-cli-strip__row--stack {
   min-height: 29px;
   align-items: center;
-  padding: 0 8px;
+  justify-content: flex-start;
+  padding: 0;
 }
 .home-cli-strip__btn {
   display: inline-flex;
@@ -7382,21 +7385,36 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .home-cli-strip__add-command {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.3em;
+  gap: 0;
   font-family: var(--lore-font-terminal);
   font-size: 0.9em;
   color: hsl(var(--foreground));
 }
 .home-cli-strip__command-hint {
   color: hsl(var(--muted-foreground));
+  margin-left: 0.3em;
 }
 
 /* The strip variant of the CLI overlay: a real inline input row (not the
-   fixed ambient layer) with a Signifier /lore ghost placeholder. */
+   fixed ambient layer) with a left-aligned command prompt. */
+.home-cli-strip__command-row {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+}
+.home-cli-strip__home-btn {
+  flex: 0 0 auto;
+  border: 0;
+  border-right: 1px solid hsl(var(--border) / 0.85);
+  border-radius: 0;
+  height: 34px;
+}
 .home-cli-strip__input-row {
   position: relative;
   height: 34px;
-  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .home-cli-strip__input-row .dial-cli-overlay--strip {
   display: block;
@@ -7410,10 +7428,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   inset: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0;
-  font-family: var(--lore-font-signature, serif);
-  font-size: var(--lore-size-signature);
+  justify-content: flex-start;
+  padding: 0 10px;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-interface);
   line-height: 1;
   color: hsl(260 18% 68% / 0.5);
   mix-blend-mode: normal;

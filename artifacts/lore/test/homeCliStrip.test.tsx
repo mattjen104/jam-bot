@@ -162,4 +162,10 @@ describe("HomeCliStrip", () => {
     expect(input.value).toBe("/add ");
     expect(document.activeElement).toBe(input);
   });
+
+  it("renders the /lore homepage control beside the command field", () => {
+    renderStrip();
+    expect(screen.getByRole("button", { name: "homepage /lore" })).toBeTruthy();
+    expect(screen.getByText(">_")).toBeTruthy();
+  });
 });

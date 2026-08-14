@@ -238,9 +238,9 @@ describe("DialCliBar", () => {
     expect(screen.getByRole("alert").textContent).toContain("Matt’s starter library is unavailable.");
   });
 
-  it("strip variant renders the /lore Signifier ghost placeholder when idle", () => {
+  it("strip variant renders the left-aligned >_ prompt when idle", () => {
     renderCli({ variant: "strip" });
     const ghost = document.querySelector(".dial-cli-overlay__wordmark--ghost");
-    expect(ghost?.textContent).toBe("/lore");
+    expect(ghost?.textContent).toBe(">_");
   });
 });
