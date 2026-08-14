@@ -5851,9 +5851,9 @@
 }
 .fdrow__first-spin { color: hsl(var(--library) / 0.8); font-style: normal; }
 
-@media (max-width: 420px) {
-  .fdrow__t1 { font-size: var(--lore-size-interface); }
-}
+/* fdrow__t1 size is pinned to --lore-size-interface on all front-door and
+   split-home contexts via the explicit selectors above; no media-query
+   viewport override needed (it caused text to "grow" at wider sizes). */
 
 /* Zone 3 lifetime overlap caption — "N artists you know play here" */
 .fdrow__ov-caption {
@@ -6678,25 +6678,32 @@ b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
    The global type treatment keeps Lore expressive, but the dial is a dense
    scan surface. Keep its summaries and controls compact without changing the
    type direction used elsewhere in the app. */
-.dial-root--front .fdrow__t1 {
+.dial-root--front .fdrow__t1,
+.split-home .fdrow__t1 {
   font-size: var(--lore-size-interface);
   line-height: 1.3;
 }
 .dial-root--front .fdrow__live-secondary,
-.dial-root--front .fdrow__ov-caption {
+.dial-root--front .fdrow__ov-caption,
+.split-home .fdrow__live-secondary,
+.split-home .fdrow__ov-caption {
   font-size: var(--lore-size-small);
   line-height: 1.35;
 }
 .dial-root--front .fdrow__t3,
 .dial-root--front .fdrow__station-chip,
-.dial-root--front .fdrow__run-sub {
+.dial-root--front .fdrow__run-sub,
+.split-home .fdrow__t3,
+.split-home .fdrow__station-chip,
+.split-home .fdrow__run-sub {
   font-size: var(--lore-size-small);
 }
 .dial-root--front .dial-tab {
   font-size: var(--lore-size-small);
   letter-spacing: 0.05em;
 }
-.dial-root--front .fdrow {
+.dial-root--front .fdrow,
+.split-home .fdrow {
   padding-top: 8px;
   padding-bottom: 11px;
 }
