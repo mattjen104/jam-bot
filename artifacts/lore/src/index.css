@@ -7419,7 +7419,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--foreground));
 }
 .compact-stack__album { font-weight: 600; }
-.compact-stack__sep { opacity: 0.5; }
+.split-home .fdrow__compact-separator,
+.compact-stack__sep {
+  display: inline-block;
+  padding: 0 0.65em;
+  color: hsl(var(--foreground) / 0.72);
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1;
+}
 .compact-stack__artist { color: hsl(var(--muted-foreground)); }
 .compact-stack__empty {
   grid-row: 1 / -1;

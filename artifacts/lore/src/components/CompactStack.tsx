@@ -61,7 +61,7 @@ export function CompactStack() {
               <span className="compact-stack__album">{group.albumTitle}</span>
               {group.artist && (
                 <>
-                  <span className="compact-stack__sep" aria-hidden="true"> · </span>
+                  <span className="compact-stack__sep" aria-hidden="true">·</span>
                   <span className="compact-stack__artist">{group.artist}</span>
                 </>
               )}
