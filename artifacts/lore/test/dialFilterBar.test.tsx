@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 /**
- * DialFilterBar — the Dial's two additive toggle menus.
+ * DialFilterBar — the Dial's two filter menus.
  *
  * Covers:
  *  1. Renders both groups with all labels and pipe separators.
  *  2. aria-pressed reflects the active sets.
  *  3. Clicking a button fires the matching toggle callback.
  *
- * The additive-set semantics themselves (toggle on/off, last-category
- * protection) live in DialView state and are exercised in
- * dialFilterBehavior.test.tsx.
+ * The selection semantics themselves (additive age tiers, radio-style
+ * single-select categories) live in dialFilterState and are exercised in
+ * dialFilterState.test.ts.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -26,7 +26,7 @@ afterEach(() => {
 function renderBar(overrides: Partial<React.ComponentProps<typeof DialFilterBar>> = {}) {
   const props = {
     activeTiers: new Set<AgeTier>(),
-    activeCategories: new Set<StationCategory>(["lore"]),
+    activeCategories: new Set<StationCategory>(["anchor"]),
     onToggleTier: vi.fn(),
     onToggleCategory: vi.fn(),
     ...overrides,
@@ -36,11 +36,12 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof DialFilterBar>
 }
 
 describe("DialFilterBar", () => {
-  it("renders both menus with every label including new categories", () => {
+  it("renders both menus with every label of the editorial taxonomy", () => {
     renderBar();
     for (const label of [
       "First", "Current", "Catalog", "Deep",
-      "Lore", "Genre", "Ambient", "Spinitron", "College", "Flagship", "Discovery",
+      "Ambient & Sleep", "Campus Radio", "Specialist Radio", "Anchor Stations",
+      "Public & Community", "Independent DJ", "Discovery",
     ]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
     }
@@ -49,10 +50,10 @@ describe("DialFilterBar", () => {
     expect(screen.getByRole("group", { name: "Station category" })).toBeTruthy();
   });
 
-  it("marks active buttons with aria-pressed and the --on class", () => {
+  it("marks the single active category with aria-pressed and the --on class", () => {
     renderBar({
       activeTiers: new Set<AgeTier>(["current", "deep"]),
-      activeCategories: new Set<StationCategory>(["lore", "ambient", "college"]),
+      activeCategories: new Set<StationCategory>(["campus"]),
     });
     const pressed = (name: string) =>
       screen.getByRole("button", { name }).getAttribute("aria-pressed");
@@ -60,29 +61,34 @@ describe("DialFilterBar", () => {
     expect(pressed("Deep")).toBe("true");
     expect(pressed("First")).toBe("false");
     expect(pressed("Catalog")).toBe("false");
-    expect(pressed("Lore")).toBe("true");
-    expect(pressed("Ambient")).toBe("true");
-    expect(pressed("Genre")).toBe("false");
-    expect(pressed("Spinitron")).toBe("false");
-    expect(pressed("College")).toBe("true");
-    expect(pressed("Flagship")).toBe("false");
+    expect(pressed("Campus Radio")).toBe("true");
+    expect(pressed("Ambient & Sleep")).toBe("false");
+    expect(pressed("Specialist Radio")).toBe("false");
+    expect(pressed("Anchor Stations")).toBe("false");
+    expect(pressed("Public & Community")).toBe("false");
+    expect(pressed("Independent DJ")).toBe("false");
     expect(pressed("Discovery")).toBe("false");
     expect(screen.getByRole("button", { name: "Current" }).className).toContain("dial-filter-bar__btn--on");
-    expect(screen.getByRole("button", { name: "Genre" }).className).not.toContain("--on");
+    expect(screen.getByRole("button", { name: "Campus Radio" }).className).toContain("dial-filter-bar__btn--on");
+    expect(screen.getByRole("button", { name: "Discovery" }).className).not.toContain("--on");
   });
 
   it("fires onToggleTier / onToggleCategory with the clicked value", () => {
     const { props } = renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Catalog" }));
     expect(props.onToggleTier).toHaveBeenCalledWith("catalog");
-    fireEvent.click(screen.getByRole("button", { name: "Ambient" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ambient & Sleep" }));
     expect(props.onToggleCategory).toHaveBeenCalledWith("ambient");
-    fireEvent.click(screen.getByRole("button", { name: "Spinitron" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("spinitron");
-    fireEvent.click(screen.getByRole("button", { name: "College" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("college");
-    fireEvent.click(screen.getByRole("button", { name: "Flagship" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("flagship");
+    fireEvent.click(screen.getByRole("button", { name: "Campus Radio" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("campus");
+    fireEvent.click(screen.getByRole("button", { name: "Specialist Radio" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("specialist");
+    fireEvent.click(screen.getByRole("button", { name: "Anchor Stations" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("anchor");
+    fireEvent.click(screen.getByRole("button", { name: "Public & Community" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("public");
+    fireEvent.click(screen.getByRole("button", { name: "Independent DJ" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("indie");
     fireEvent.click(screen.getByRole("button", { name: "Discovery" }));
     expect(props.onToggleCategory).toHaveBeenCalledWith("discovery");
   });

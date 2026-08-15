@@ -14,7 +14,7 @@
  *  6. Form submit (mobile "go"/tap path) executes like Enter.
  *  7. Typing replaces the wordmark text with the typed command.
  *
- * Toggle semantics themselves (additive tiers, last-category protection)
+ * Toggle semantics themselves (additive tiers, single-select categories)
  * stay in dialFilterState and are tested there.
  */
 import React from "react";
@@ -22,7 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { DialCliBar } from "../src/components/dial/DialCliBar";
-import type { StationCategory } from "../src/components/dial/DialFilterBar";
+import type { StationCategory } from "../src/lib/dialCategories";
 import type { AgeTier } from "../src/lib/dialAgeFilter";
 
 afterEach(() => {
@@ -33,7 +33,7 @@ afterEach(() => {
 function renderCli(overrides: Partial<React.ComponentProps<typeof DialCliBar>> = {}) {
   const props = {
     activeTiers: new Set<AgeTier>(),
-    activeCategories: new Set<StationCategory>(["lore"]),
+    activeCategories: new Set<StationCategory>(["anchor"]),
     onToggleTier: vi.fn(),
     onToggleCategory: vi.fn(),
     ...overrides,
@@ -87,13 +87,13 @@ describe("DialCliBar", () => {
   });
 
   it.each([
-    ["/lore",      "lore"      ],
-    ["/genre",     "genre"     ],
-    ["/ambient",   "ambient"   ],
-    ["/spinitron", "spinitron" ],
-    ["/college",   "college"   ],
-    ["/flagship",  "flagship"  ],
-    ["/discovery", "discovery" ],
+    ["/ambient",    "ambient"    ],
+    ["/campus",     "campus"     ],
+    ["/specialist", "specialist" ],
+    ["/anchor",     "anchor"     ],
+    ["/public",     "public"     ],
+    ["/indie",      "indie"      ],
+    ["/discovery",  "discovery"  ],
   ] as const)("routes %s to onToggleCategory and clears the field", (command, cat) => {
     const { props, input } = renderCli();
     type(input, command);
@@ -103,11 +103,29 @@ describe("DialCliBar", () => {
     expect(input.value).toBe("");
   });
 
+  it("routes /lore to onHome (home navigation, not a category toggle)", () => {
+    const onHome = vi.fn();
+    const { props, input } = renderCli({ onHome });
+    type(input, "/lore");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onHome).toHaveBeenCalled();
+    expect(props.onToggleCategory).not.toHaveBeenCalled();
+    expect(input.value).toBe("");
+  });
+
   it("silently ignores unrecognised input on Enter", () => {
     const { props, input } = renderCli();
     type(input, "/nonsense");
     fireEvent.keyDown(input, { key: "Enter" });
-    type(input, "genre"); // missing slash — not a command
+    type(input, "campus"); // missing slash — not a command
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "/genre"); // retired command — silently ignored
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "/spinitron"); // retired command — silently ignored
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "/college"); // retired command — silently ignored
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "/flagship"); // retired command — silently ignored
     fireEvent.keyDown(input, { key: "Enter" });
     type(input, "/classics"); // retired command — silently ignored
     fireEvent.keyDown(input, { key: "Enter" });
@@ -119,9 +137,9 @@ describe("DialCliBar", () => {
 
   it("accepts commands case-insensitively with surrounding whitespace", () => {
     const { props, input } = renderCli();
-    type(input, "  /GENRE  ");
+    type(input, "  /CAMPUS  ");
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(props.onToggleCategory).toHaveBeenCalledWith("genre");
+    expect(props.onToggleCategory).toHaveBeenCalledWith("campus");
   });
 
   it("executes on form submit (mobile enter/tap path)", () => {

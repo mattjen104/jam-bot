@@ -1,34 +1,34 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * End-to-end tests confirming that the /spinitron, /college, and /discovery
- * CLI commands (and the matching DialFilterBar toggle buttons) correctly
- * narrow the dial to stations whose server-supplied `stationCategories` array
- * contains the requested label.
+ * End-to-end tests confirming that the /campus, /indie, and /discovery CLI
+ * commands (and the matching DialFilterBar buttons) correctly narrow the dial
+ * to stations whose server-supplied `stationCategories` array contains the
+ * requested editorial label.
  *
  * All API routes are intercepted so the tests are fully deterministic:
  *
- *  - spinitron-fm   → stationCategories: ["spinitron"]
- *  - college-wkrp   → stationCategories: ["college"]
- *  - discovery-rb   → stationCategories: ["discovery"]
- *  - lore-flagship  → stationCategories: []  (normal curated station)
+ *  - campus-wkrp   → stationCategories: ["campus"]
+ *  - indie-fm      → stationCategories: ["indie"]
+ *  - discovery-rb  → stationCategories: ["discovery"]
+ *  - anchor-kexp   → stationCategories: ["anchor"]
  *
  * All four stations are live (recent now-playing) and carry enough crossings
  * to be Zone-1 rows in the feed, so the initial unfiltered state shows all
- * four rows. Each filter then removes the non-matching ones.
+ * four rows. Categories are radio-style single-select: each selection then
+ * shows exactly the matching stations, and picking a new category REPLACES
+ * the previous one (no union, no empty state).
  *
  * CLI mechanics:
  *   1. Press "/" globally — the DialCliBar listener intercepts it, focuses
  *      the invisible input, and sets its value to "/".
- *   2. Type the rest of the command ("spinitron", "college", "discovery").
+ *   2. Type the rest of the command ("campus", "indie", "discovery").
  *   3. Press Enter — executeCommand() dispatches the category toggle.
  *
  * Filter-bar mechanics:
- *   The DialFilterBar renders at the front door with className
- *   "dial-filter-bar--hidden" (display:none), so its buttons are not
- *   visually accessible but ARE in the DOM and wired to the same toggle
- *   callbacks as the CLI bar. Tests use { force: true } to click them,
- *   confirming the shared wiring produces the same filter effect.
+ *   The DialFilterBar is now visible on the full DialView (/lore/feed), so
+ *   its buttons can be clicked directly and their aria-pressed state
+ *   validated against CLI-driven selections.
  */
 
 // ---------------------------------------------------------------------------
@@ -64,16 +64,16 @@ function makeStation(
     tier: "flagship",
     qualityTier: "proven",
     automationClass: "human",
-    nowPlayingSource: stationCategories.includes("spinitron") ? "spinitron" : "nts_live",
+    nowPlayingSource: "nts_live",
     stationCategories,
   };
 }
 
 const STATIONS = [
-  makeStation("spinitron-fm",  "Spinitron FM",   ["spinitron"], 0),
-  makeStation("college-wkrp",  "College WKRP",   ["college"],   1),
-  makeStation("discovery-rb",  "Discovery RB",   ["discovery"], 2),
-  makeStation("lore-flagship", "Lore Flagship",  [],            3),
+  makeStation("campus-wkrp",  "Campus WKRP",  ["campus"],    0),
+  makeStation("indie-fm",     "Indie FM",     ["indie"],     1),
+  makeStation("discovery-rb", "Discovery RB", ["discovery"], 2),
+  makeStation("anchor-kexp",  "Anchor KEXP",  ["anchor"],    3),
 ];
 
 function makeNowPlaying(slug: string, idx: number) {
@@ -222,15 +222,11 @@ async function installRoutes(page: import("@playwright/test").Page) {
  *
  * NOTE: we blur the active element first so the focus lands outside any
  * existing editable element (the DialCliBar listener only fires when the
- * active element is NOT an input / textarea / contenteditable). Do NOT use
- * a positional `body.click()` here: Playwright clicks the center of the
- * body, which is the HomeCliStrip's middle row — a layout reorder turns
- * that click into a filter-chip toggle and silently corrupts the test's
- * category state.
+ * active element is NOT an input / textarea / contenteditable).
  */
 async function sendCliCommand(
   page: import("@playwright/test").Page,
-  cmd: "/spinitron" | "/college" | "/discovery",
+  cmd: "/campus" | "/indie" | "/discovery" | "/anchor",
 ) {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("/");
@@ -250,10 +246,6 @@ async function waitForAllStations(page: import("@playwright/test").Page) {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // CLI tests — run against /lore/ (the split homepage, which surfaces the CLI
 // strip and applies the same stationCategories filter to its station list).
 // ---------------------------------------------------------------------------
@@ -265,60 +257,56 @@ test.describe("Dial category filters — CLI commands", () => {
     await waitForAllStations(page);
   });
 
-  test("/spinitron shows only spinitron-tagged stations", async ({ page }) => {
-    await sendCliCommand(page, "/spinitron");
+  test("/campus shows only campus-labeled stations", async ({ page }) => {
+    await sendCliCommand(page, "/campus");
 
-    await expect(page.getByText("Spinitron FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("College WKRP")).not.toBeVisible();
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Indie FM")).not.toBeVisible();
     await expect(page.getByText("Discovery RB")).not.toBeVisible();
-    await expect(page.getByText("Lore Flagship")).not.toBeVisible();
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
   });
 
-  test("/college shows only college-tagged stations", async ({ page }) => {
-    await sendCliCommand(page, "/college");
+  test("/indie shows only indie-labeled stations", async ({ page }) => {
+    await sendCliCommand(page, "/indie");
 
-    await expect(page.getByText("College WKRP").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Spinitron FM")).not.toBeVisible();
+    await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
     await expect(page.getByText("Discovery RB")).not.toBeVisible();
-    await expect(page.getByText("Lore Flagship")).not.toBeVisible();
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
   });
 
-  test("/discovery shows only discovery-tagged stations", async ({ page }) => {
+  test("/discovery shows only discovery-labeled stations", async ({ page }) => {
     await sendCliCommand(page, "/discovery");
 
     await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Spinitron FM")).not.toBeVisible();
-    await expect(page.getByText("College WKRP")).not.toBeVisible();
-    await expect(page.getByText("Lore Flagship")).not.toBeVisible();
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
+    await expect(page.getByText("Indie FM")).not.toBeVisible();
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
   });
 
-  test("/spinitron then /college unions the two sets", async ({ page }) => {
-    await sendCliCommand(page, "/spinitron");
-    await expect(page.getByText("Spinitron FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("College WKRP")).not.toBeVisible();
+  test("/campus then /indie replaces the selection (single-select, no union)", async ({
+    page,
+  }) => {
+    await sendCliCommand(page, "/campus");
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Indie FM")).not.toBeVisible();
 
-    await sendCliCommand(page, "/college");
+    await sendCliCommand(page, "/indie");
 
-    await expect(page.getByText("Spinitron FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("College WKRP").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
     await expect(page.getByText("Discovery RB")).not.toBeVisible();
-    await expect(page.getByText("Lore Flagship")).not.toBeVisible();
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
   });
 });
 
 // ---------------------------------------------------------------------------
 // Filter bar button tests — run against /lore/feed (the full DialView), which
-// renders DialFilterBar and its aria-pressed toggle buttons.  The split
-// homepage at /lore/ uses a different layout that does not include the filter
-// bar, so these tests need the dedicated feed route.
-//
-// The DialFilterBar renders with className="dial-filter-bar--hidden"
-// (display:none), so its buttons are off-screen.  Direct clicks on
-// display:none elements do not reliably fire React synthetic events in
-// Chromium, so we validate shared wiring through the aria-pressed attribute:
-// a CLI command activates a category → the corresponding DialFilterBar button
-// must switch to aria-pressed="true".  A second CLI command deactivates it →
-// aria-pressed must revert to "false".
+// renders the now-visible DialFilterBar with aria-pressed toggle buttons.
+// A CLI command activates a category → the corresponding DialFilterBar button
+// must switch to aria-pressed="true"; selecting a different category must
+// revert it to "false" (single-select), and re-selecting the active category
+// must keep it pressed (no empty state).
 // ---------------------------------------------------------------------------
 
 test.describe("Dial category filters — filter bar button wiring at /lore/feed", () => {
@@ -328,48 +316,57 @@ test.describe("Dial category filters — filter bar button wiring at /lore/feed"
     await waitForAllStations(page);
   });
 
-  test("Spinitron filter bar button reflects aria-pressed after /spinitron CLI", async ({
+  test("Campus filter bar button reflects aria-pressed after /campus CLI", async ({
     page,
   }) => {
-    const spinBtn = page.locator(".dial-filter-bar__btn", { hasText: "Spinitron" }).first();
-    await expect(spinBtn).toHaveAttribute("aria-pressed", "false");
+    const campusBtn = page
+      .locator(".dial-filter-bar__btn", { hasText: "Campus Radio" })
+      .first();
+    await expect(campusBtn).toHaveAttribute("aria-pressed", "false");
 
-    await sendCliCommand(page, "/spinitron");
-    await expect(page.getByText("Spinitron FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(spinBtn).toHaveAttribute("aria-pressed", "true");
+    await sendCliCommand(page, "/campus");
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+    await expect(campusBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Toggle off — "lore" remains active so the last-category guard allows it.
-    await sendCliCommand(page, "/spinitron");
-    await expect(spinBtn).toHaveAttribute("aria-pressed", "false");
+    // Re-selecting the active category keeps it active — no empty state.
+    await sendCliCommand(page, "/campus");
+    await expect(campusBtn).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("College filter bar button reflects aria-pressed after /college CLI", async ({
+  test("Selecting a new category replaces the old one (single-select)", async ({
     page,
   }) => {
-    const collegeBtn = page.locator(".dial-filter-bar__btn", { hasText: "College" }).first();
-    await expect(collegeBtn).toHaveAttribute("aria-pressed", "false");
+    const campusBtn = page
+      .locator(".dial-filter-bar__btn", { hasText: "Campus Radio" })
+      .first();
+    const indieBtn = page
+      .locator(".dial-filter-bar__btn", { hasText: "Independent DJ" })
+      .first();
 
-    await sendCliCommand(page, "/college");
-    await expect(page.getByText("College WKRP").first()).toBeVisible({ timeout: 10_000 });
-    await expect(collegeBtn).toHaveAttribute("aria-pressed", "true");
+    await sendCliCommand(page, "/campus");
+    await expect(campusBtn).toHaveAttribute("aria-pressed", "true");
 
-    await sendCliCommand(page, "/college");
-    await expect(collegeBtn).toHaveAttribute("aria-pressed", "false");
+    await sendCliCommand(page, "/indie");
+    await expect(indieBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(campusBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
   });
 
-  test("Discovery filter bar button reflects aria-pressed after /discovery CLI", async ({
+  test("Discovery filter bar button can be clicked directly (visible bar)", async ({
     page,
   }) => {
     const discoveryBtn = page
       .locator(".dial-filter-bar__btn", { hasText: "Discovery" })
       .first();
+    await expect(discoveryBtn).toBeVisible();
     await expect(discoveryBtn).toHaveAttribute("aria-pressed", "false");
 
-    await sendCliCommand(page, "/discovery");
-    await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
+    await discoveryBtn.click();
     await expect(discoveryBtn).toHaveAttribute("aria-pressed", "true");
-
-    await sendCliCommand(page, "/discovery");
-    await expect(discoveryBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
+    await expect(page.getByText("Indie FM")).not.toBeVisible();
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
   });
 });

@@ -1534,7 +1534,7 @@ function _OfflineRow({
 
 
 export function DialView() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [level, setLevel] = useState<Level>("all");
   const [currentStationSlug, setCurrentStationSlug] = useState<string | null>(null);
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
@@ -1548,12 +1548,16 @@ export function DialView() {
 
   // ── Dial filter menus — song-age tiers (left) + station categories (right).
   // Age tiers are additive; empty set = no age filtering. Station categories
-  // are additive too but at least one must stay selected (toggle guard below).
+  // are a radio-style single-select: exactly one editorial category is active
+  // at all times (Anchor is the default front-door view).
   // The hidden gesture modes (sleep / era-genre) keep priority: while either is
   // active the filter bar is hidden and the legacy single-mode fetch applies.
   const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
+  // No category selected initially — the dial starts unfiltered. Once a
+  // listener picks a category the selection is radio-style single-select and
+  // can never return to the empty (unfiltered) state.
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
-    () => new Set<StationCategory>(["lore"]),
+    () => new Set<StationCategory>(),
   );
   const toggleTier = useCallback((tier: AgeTier) => {
     setActiveTiers((prev) => toggleAgeTier(prev, tier));
@@ -2736,6 +2740,7 @@ export function DialView() {
           activeCategories={activeCategories}
           onToggleTier={toggleTier}
           onToggleCategory={toggleCategory}
+          onHome={() => navigate("/")}
           onMatt={startMattLibrary}
           onRadioMode={setRadioMode}
           mattPending={mattStarterMutation.isPending}
@@ -2990,7 +2995,6 @@ export function DialView() {
                         gesture mode (sleep / era-genre) owns the station list. */}
                     {!inContext && !hiddenModeActive && (
                       <DialFilterBar
-                        className="dial-filter-bar--hidden"
                         activeTiers={activeTiers}
                         activeCategories={activeCategories}
                         onToggleTier={toggleTier}

@@ -15,8 +15,10 @@
  *
  * Commands:
  *   /first /current /catalog /deep      → age-tier toggles
- *   /lore /genre /ambient /spinitron
- *   /college /flagship /discovery       → station-category toggles
+ *   /ambient /campus /specialist /anchor
+ *   /public /indie /discovery           → station-category select (radio-style
+ *                                         single-select — one active at a time)
+ *   /lore                               → navigate home (NOT a category)
  *   /add <names>                        → seed artists (comma/newline split;
  *                                         whitespace split when no commas)
  *   /scan1 /scan2 … /scanN              → compact-dial window offset (N-1)*5
@@ -90,6 +92,12 @@ export interface DialCliBarProps extends DialFilterBarProps {
   onScan?: (offset: number) => void;
   /** Called when `/library` is submitted (SplitHome wires this to navigate). */
   onLibrary?: () => void;
+  /**
+   * Called when `/lore` is submitted — the home command. Navigation, not a
+   * category toggle: the categories are a mutually exclusive taxonomy that
+   * no longer includes "lore".
+   */
+  onHome?: () => void;
   /** Called when `/matt` is submitted. The source library is server-configured. */
   onMatt?: () => void;
   /**
@@ -125,6 +133,7 @@ export function DialCliBar({
   onAddArtists,
   onScan,
   onLibrary,
+  onHome,
   onMatt,
   onRadioMode,
   mattPending = false,
@@ -175,6 +184,9 @@ export function DialCliBar({
     }
 
     if (lower === "/library") { onLibrary?.(); setValue(""); return; }
+    // Home command — navigation, handled before the category map so it can
+    // never be mistaken for a filter toggle.
+    if (lower === "/lore") { onHome?.(); setValue(""); return; }
     if (lower === "/matt") {
       if (!mattPending) onMatt?.();
       setValue("");
@@ -196,7 +208,7 @@ export function DialCliBar({
     }
     // Unrecognised commands are silently cleared.
     setValue("");
-  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, onMatt, onRadioMode, mattPending, value]);
+  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, onHome, onMatt, onRadioMode, mattPending, value]);
 
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

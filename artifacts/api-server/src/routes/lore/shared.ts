@@ -179,65 +179,76 @@ export async function isPickerOptedOut(pickerId: number): Promise<boolean> {
 }
 
 /**
- * Derive safe, non-secret category labels from existing station metadata.
- *
- * Labels:
- *  - "spinitron"  — now-playing is sourced from Spinitron (authenticated) or
- *                   the Spinitron web scraper.  Never exposes API keys.
- *  - "college"    — confirmed campus/college station, tagged via the curated
- *                   seed OR auto-tagged by the college-tag boot migration for
- *                   radio_browser stations whose name matches a university/
- *                   college pattern.  Detection is tag-based; the migration
- *                   and ingest-time classifier are the source of truth.
- *  - "discovery"  — curated discovery stations (tier="longtail") always
- *                   qualify regardless of source (curated rows AND hand-seeded
- *                   source=null rows are known-good by editorial decision);
- *                   radio_browser-sourced stations only qualify when they
- *                   carry a meaningful quality signal: a scored qualityTier of
- *                   "proven", "promising", or "raw" (not "unscored"/"silent"),
- *                   OR a non-null discoveryScore. Unscored/silent
- *                   radio_browser rows are too noisy to be useful in the
- *                   discovery category surface.
- *  - "flagship"   — the ~12 anchor stations (KEXP, NTS, BBC 6 Music, FIP,
- *                   Dublab, Rinse FM, ...), derived read-only from
- *                   tier="flagship".
- *
- * All inputs come from already-public station fields; no nowPlayingConfig
- * values or Spinitron API keys are read or exposed.
- *
- * @param s          - DB station row.
- * @param qualityTier - Joined from station_quality; null when not yet scored.
+ * The seven mutually exclusive editorial station categories, in precedence
+ * order (strongest wins for ambiguous stations).
  */
-export function deriveStationCategories(s: Station, qualityTier?: string | null): string[] {
-  const cats: string[] = [];
-  if (s.nowPlayingSource === "spinitron" || s.nowPlayingSource === "spinitron_web") {
-    cats.push("spinitron");
-  }
+const ANCHOR_STATION_SLUGS = new Set([
+  "kexp",
+  "nts-1",
+  "nts-2",
+  "bbc-6music",
+  "fip-main",
+  "dublab",
+  "rinse-fm",
+]);
+
+const PUBLIC_STATION_SLUGS = new Set([
+  "kcrw-eclectic24",
+  "wbgo",
+  "wpfw",
+  "wdiy",
+  "ckua",
+]);
+
+const INDIE_STATION_SLUGS = new Set([
+  "worldwide-fm",
+  "refuge-worldwide",
+  "balamii",
+  "the-lot-radio",
+  "radio-nopal",
+  "lookout-fm",
+]);
+
+/**
+ * Derive the station's single primary editorial category.
+ *
+ * The seven labels form a mutually exclusive taxonomy answering "what kind of
+ * station is this?", assigned with the precedence:
+ *
+ *   1. "ambient"    — Ambient & Sleep utility channels (sleep_mode flag or an
+ *                     `ambient` seed tag).
+ *   2. "campus"     — college/university-operated stations (`college` tag from
+ *                     the curated seed or the college-tag boot migration).
+ *   3. "specialist" — genre/era/format-focused channels (era_genre_mode flag
+ *                     or a `specialist` seed tag; e.g. FIP sub-channels,
+ *                     decade radio).
+ *   4. "anchor"     — broadly-programmed flagship stations (`anchor` tag or
+ *                     slug allowlist: KEXP, NTS 1/2, BBC 6 Music, FIP main,
+ *                     Dublab, Rinse FM).
+ *   5. "public"     — non-campus terrestrial/nonprofit community stations
+ *                     (`public` tag or slug allowlist: KCRW, WBGO, WPFW, …).
+ *   6. "indie"      — web-native DJ/selector stations (`indie` tag or slug
+ *                     allowlist: Worldwide FM, Refuge Worldwide, Balamii, …).
+ *   7. "discovery"  — everything else (Radio Browser and uncategorized
+ *                     longtail).
+ *
+ * Always returns exactly one category. All inputs come from already-public
+ * station fields; no nowPlayingConfig values or API keys are read or exposed.
+ *
+ * @param s           - DB station row.
+ * @param _qualityTier - Joined from station_quality; retained for call-site
+ *                       compatibility (no longer affects classification —
+ *                       discovery is the unconditional fallback).
+ */
+export function deriveStationCategories(s: Station, _qualityTier?: string | null): string[] {
   const tags = Array.isArray(s.tags) ? (s.tags as string[]) : [];
-  if (tags.includes("college")) {
-    cats.push("college");
-  }
-  // Curated longtail-tier stations (hand-picked discoveries like KCHUNG,
-  // Radio AlHara, Radio Nopal — and hand-seeded source=null rows like ByteFM
-  // or Cashmere Radio) always surface in the discovery category regardless of
-  // source or quality scoring — they are known-good by editorial decision.
-  const isCuratedLongtail = s.tier === "longtail" && s.source !== "radio_browser";
-  // Radio Browser auto-discovered stations only qualify when they have
-  // accumulated enough spin data to be scored above the noise floor.
-  const hasQualitySignal =
-    (qualityTier != null &&
-      qualityTier !== "unscored" &&
-      qualityTier !== "silent") ||
-    s.discoveryScore != null;
-  if (isCuratedLongtail || (s.source === "radio_browser" && hasQualitySignal)) {
-    cats.push("discovery");
-  }
-  // Flagship anchors are derived read-only from the tier; the tier itself is
-  // curated upstream and never modified here.
-  if (s.tier === "flagship") {
-    cats.push("flagship");
-  }
-  return cats;
+  if (s.sleepMode === true || tags.includes("ambient")) return ["ambient"];
+  if (tags.includes("college")) return ["campus"];
+  if (s.eraGenreMode === true || tags.includes("specialist")) return ["specialist"];
+  if (tags.includes("anchor") || ANCHOR_STATION_SLUGS.has(s.slug)) return ["anchor"];
+  if (tags.includes("public") || PUBLIC_STATION_SLUGS.has(s.slug)) return ["public"];
+  if (tags.includes("indie") || INDIE_STATION_SLUGS.has(s.slug)) return ["indie"];
+  return ["discovery"];
 }
 
 /** Shape a DB station row into the public Station payload.

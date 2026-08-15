@@ -2,12 +2,17 @@
  * deriveStationCategories — server-side per-station category derivation for
  * the `stationCategories` array emitted by /api/stations.
  *
+ * The seven categories form a mutually exclusive editorial taxonomy with the
+ * precedence: ambient > campus > specialist > anchor > public > indie >
+ * discovery.
+ *
  * Contract under test:
- *  - source=null (hand-seeded) longtail-tier stations surface in "discovery"
- *  - source="curated" longtail-tier stations surface in "discovery"
- *  - radio_browser stations need a quality signal to surface in "discovery"
- *  - tier="flagship" stations always carry "flagship"
- *  - the retired "classics"/"longtail" ids are never emitted
+ *  - exactly ONE category is emitted per station
+ *  - each rung is reachable via its tag/flag/allowlist input
+ *  - precedence resolves ambiguous stations (e.g. campus beats specialist)
+ *  - discovery is the unconditional fallback (no quality gating)
+ *  - retired ids ("spinitron", "flagship", "genre", "lore", "college",
+ *    "classics", "longtail") are never emitted
  */
 import { describe, expect, it } from "vitest";
 import { deriveStationCategories } from "../src/routes/lore/shared.js";
@@ -45,6 +50,8 @@ function makeStation(overrides: Partial<Station> = {}): Station {
     active: true,
     hidden: false,
     favorite: false,
+    sleepMode: false,
+    eraGenreMode: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -52,61 +59,100 @@ function makeStation(overrides: Partial<Station> = {}): Station {
 }
 
 describe("deriveStationCategories", () => {
-  it("tags source=null longtail-tier stations as discovery (hand-seeded manual rows)", () => {
-    const cats = deriveStationCategories(
-      makeStation({ source: null, tier: "longtail" }),
-    );
-    expect(cats).toContain("discovery");
-    expect(cats).not.toContain("longtail");
+  it("always emits exactly one category", () => {
+    const fixtures = [
+      makeStation(),
+      makeStation({ sleepMode: true, tags: ["college"] }),
+      makeStation({ slug: "kexp", tier: "flagship" }),
+      makeStation({ source: "radio_browser", tier: "longtail" }),
+      makeStation({ tags: ["college", "specialist", "anchor"] }),
+    ];
+    for (const station of fixtures) {
+      expect(deriveStationCategories(station)).toHaveLength(1);
+    }
   });
 
-  it("tags curated longtail-tier stations as discovery", () => {
-    const cats = deriveStationCategories(
-      makeStation({ source: "curated", tier: "longtail" }),
-    );
-    expect(cats).toContain("discovery");
+  it("classifies sleep-mode or ambient-tagged stations as ambient", () => {
+    expect(deriveStationCategories(makeStation({ sleepMode: true }))).toEqual(["ambient"]);
+    expect(deriveStationCategories(makeStation({ tags: ["ambient"] }))).toEqual(["ambient"]);
   });
 
-  it("tags radio_browser stations as discovery only with a quality signal", () => {
-    // No quality signal: excluded (too noisy).
+  it("classifies college-tagged stations as campus", () => {
+    expect(deriveStationCategories(makeStation({ tags: ["college"] }))).toEqual(["campus"]);
+  });
+
+  it("classifies era-genre-mode or specialist-tagged stations as specialist", () => {
+    expect(deriveStationCategories(makeStation({ eraGenreMode: true }))).toEqual(["specialist"]);
+    expect(deriveStationCategories(makeStation({ tags: ["specialist"] }))).toEqual(["specialist"]);
+  });
+
+  it("classifies anchor stations by tag or slug allowlist", () => {
+    expect(deriveStationCategories(makeStation({ tags: ["anchor"] }))).toEqual(["anchor"]);
+    for (const slug of ["kexp", "nts-1", "nts-2", "bbc-6music", "fip-main", "dublab", "rinse-fm"]) {
+      expect(deriveStationCategories(makeStation({ slug }))).toEqual(["anchor"]);
+    }
+  });
+
+  it("classifies public/community stations by tag or slug allowlist", () => {
+    expect(deriveStationCategories(makeStation({ tags: ["public"] }))).toEqual(["public"]);
+    for (const slug of ["kcrw-eclectic24", "wbgo", "wpfw", "wdiy", "ckua"]) {
+      expect(deriveStationCategories(makeStation({ slug }))).toEqual(["public"]);
+    }
+  });
+
+  it("classifies independent DJ stations by tag or slug allowlist", () => {
+    expect(deriveStationCategories(makeStation({ tags: ["indie"] }))).toEqual(["indie"]);
+    for (const slug of [
+      "worldwide-fm", "refuge-worldwide", "balamii",
+      "the-lot-radio", "radio-nopal", "lookout-fm",
+    ]) {
+      expect(deriveStationCategories(makeStation({ slug }))).toEqual(["indie"]);
+    }
+  });
+
+  it("falls back to discovery for everything else, with no quality gating", () => {
+    // Curated longtail rows.
+    expect(deriveStationCategories(makeStation({ source: "curated", tier: "longtail" }))).toEqual(["discovery"]);
+    // Hand-seeded source=null rows.
+    expect(deriveStationCategories(makeStation({ source: null, tier: "longtail" }))).toEqual(["discovery"]);
+    // Radio Browser rows now qualify even when unscored — discovery is the
+    // unconditional fallback in the mutually exclusive taxonomy.
     expect(
-      deriveStationCategories(
-        makeStation({ source: "radio_browser", tier: "longtail" }),
-        "unscored",
-      ),
-    ).not.toContain("discovery");
-    // Scored above the noise floor: included.
-    expect(
-      deriveStationCategories(
-        makeStation({ source: "radio_browser" }),
-        "proven",
-      ),
-    ).toContain("discovery");
-    // A non-null discoveryScore alone is also a signal.
-    expect(
-      deriveStationCategories(
-        makeStation({ source: "radio_browser", discoveryScore: 42 }),
-        null,
-      ),
-    ).toContain("discovery");
+      deriveStationCategories(makeStation({ source: "radio_browser" }), "unscored"),
+    ).toEqual(["discovery"]);
   });
 
-  it("tags flagship-tier stations as flagship", () => {
-    const cats = deriveStationCategories(makeStation({ tier: "flagship" }));
-    expect(cats).toContain("flagship");
+  it("resolves ambiguous stations by precedence (ambient > campus > specialist > anchor > public > indie)", () => {
+    expect(
+      deriveStationCategories(makeStation({ sleepMode: true, tags: ["college"] })),
+    ).toEqual(["ambient"]);
+    expect(
+      deriveStationCategories(makeStation({ tags: ["college", "specialist"] })),
+    ).toEqual(["campus"]);
+    expect(
+      deriveStationCategories(makeStation({ slug: "kexp", eraGenreMode: true })),
+    ).toEqual(["specialist"]);
+    expect(
+      deriveStationCategories(makeStation({ slug: "kexp", tags: ["public"] })),
+    ).toEqual(["anchor"]);
+    expect(
+      deriveStationCategories(makeStation({ tags: ["public", "indie"] })),
+    ).toEqual(["public"]);
   });
 
-  it("never emits the retired classics/longtail ids", () => {
+  it("never emits retired category ids", () => {
     const fixtures = [
       makeStation({ source: "curated", tier: "longtail" }),
       makeStation({ source: "radio_browser", tier: "longtail", discoveryScore: 10 }),
       makeStation({ source: null, tier: "flagship" }),
       makeStation({ nowPlayingSource: "spinitron", tags: ["college"] }),
+      makeStation({ slug: "kexp", tier: "flagship" }),
     ];
     for (const station of fixtures) {
       const cats = deriveStationCategories(station, "proven");
-      expect(cats).not.toContain("classics");
-      expect(cats).not.toContain("longtail");
+      for (const retired of ["spinitron", "flagship", "genre", "lore", "college", "classics", "longtail"]) {
+        expect(cats).not.toContain(retired);
+      }
     }
   });
 });

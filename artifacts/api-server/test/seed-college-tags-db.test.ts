@@ -23,7 +23,7 @@ import { deriveStationCategories, toStation } from "../src/routes/lore/shared.js
  */
 
 const COLLEGE_SLUG = "wprb"; // seeded with tags: ["college"]
-const NO_TAG_SLUG = "kexp"; // seed entry declares no tags
+const NO_TAG_SLUG = "wfmu"; // seed entry declares no tags
 
 let dbAvailable = false;
 
@@ -59,10 +59,11 @@ describe("college tag propagation to existing rows", () => {
       expect(row).toBeTruthy();
       expect(row!.tags).toContain("college");
 
-      // The public payload must now carry the college category label.
+      // The public payload must now carry the campus category label (the
+      // editorial taxonomy classifies college-tagged stations as "campus").
       const cats = deriveStationCategories(row!);
-      expect(cats).toContain("college");
-      expect(toStation(row!).stationCategories).toContain("college");
+      expect(cats).toContain("campus");
+      expect(toStation(row!).stationCategories).toContain("campus");
     },
   );
 

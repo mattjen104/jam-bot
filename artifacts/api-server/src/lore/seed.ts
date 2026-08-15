@@ -23,6 +23,7 @@ import { inferTimezone } from "./timezone.js";
 export const SEED_STATIONS: InsertStation[] = [
   {
     slug: "kexp",
+    tags: ["anchor"],
     name: "KEXP 90.3 FM",
     org: "KEXP",
     country: "US",
@@ -39,6 +40,7 @@ export const SEED_STATIONS: InsertStation[] = [
   },
   {
     slug: "kcrw-eclectic24",
+    tags: ["public"],
     name: "KCRW — Eclectic 24",
     org: "KCRW",
     country: "US",
@@ -63,6 +65,7 @@ export const SEED_STATIONS: InsertStation[] = [
   // ingests via the BBC segments API.
   {
     slug: "bbc-6music",
+    tags: ["anchor"],
     name: "BBC 6 Music",
     org: "BBC",
     country: "GB",
@@ -133,6 +136,7 @@ function indieInternetStations(): InsertStation[] {
     // ICY health row: synthetic UUID "manual-dublab" (not in radio-browser).
     {
       slug: "dublab",
+      tags: ["anchor"],
       name: "Dublab",
       org: "Dublab",
       country: "US",
@@ -155,6 +159,7 @@ function indieInternetStations(): InsertStation[] {
     // to icy_unsupported gracefully and the stream still plays in-browser.
     {
       slug: "rinse-fm",
+      tags: ["anchor"],
       name: "Rinse FM",
       org: "Rinse FM",
       country: "GB",
@@ -180,6 +185,7 @@ function indieInternetStations(): InsertStation[] {
     // ICY health row: synthetic UUID "manual-worldwide-fm".
     {
       slug: "worldwide-fm",
+      tags: ["indie"],
       name: "Worldwide FM",
       org: "Worldwide FM",
       country: "GB",
@@ -207,6 +213,7 @@ function indieInternetStations(): InsertStation[] {
     // no ICY metadata the server can poll.
     {
       slug: "the-lot-radio",
+      tags: ["indie"],
       name: "The Lot Radio",
       org: "The Lot Radio",
       country: "US",
@@ -232,6 +239,7 @@ function indieInternetStations(): InsertStation[] {
     // the ICY adapter parses them on a best-effort basis.
     {
       slug: "refuge-worldwide",
+      tags: ["indie"],
       name: "Refuge Worldwide",
       org: "Refuge Worldwide",
       country: "DE",
@@ -255,6 +263,7 @@ function indieInternetStations(): InsertStation[] {
     // "manual-balamii" (not in radio-browser).
     {
       slug: "balamii",
+      tags: ["indie"],
       name: "Balamii",
       org: "Balamii",
       country: "GB",
@@ -469,6 +478,7 @@ function nprListStations(): InsertStation[] {
   return [
     {
       slug: "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f",
+      tags: ["indie"],
       name: "KCHUNG Radio",
       org: "KCHUNG",
       country: "US",
@@ -488,6 +498,7 @@ function nprListStations(): InsertStation[] {
     },
     {
       slug: "rb-308a9f58-fb54-44dc-b95d-bb40fe4f3631",
+      tags: ["indie"],
       name: "Radio AlHara",
       org: "Radio AlHara",
       country: "PS",
@@ -505,6 +516,7 @@ function nprListStations(): InsertStation[] {
     },
     {
       slug: "radio-nopal",
+      tags: ["indie"],
       name: "Radio Nopal",
       org: "Radio Nopal",
       country: "MX",
@@ -523,6 +535,7 @@ function nprListStations(): InsertStation[] {
     },
     {
       slug: "lookout-fm",
+      tags: ["indie"],
       name: "Lookout.FM",
       org: "Lookout.FM",
       country: "US",
@@ -654,6 +667,7 @@ function ntsliveStations(): InsertStation[] {
   return [
     {
       slug: "nts-1",
+      tags: ["anchor"],
       name: "NTS 1",
       org: "NTS",
       country: "GB",
@@ -670,6 +684,7 @@ function ntsliveStations(): InsertStation[] {
     },
     {
       slug: "nts-2",
+      tags: ["anchor"],
       name: "NTS 2",
       org: "NTS",
       country: "GB",
@@ -746,6 +761,9 @@ function fipStations(): InsertStation[] {
     nowPlayingConfig: { stationId },
     stationClass: "curated",
     crossingEligible: CROSSING_ELIGIBLE_SLUGS.has(slug),
+    // Editorial taxonomy: FIP Main is an anchor station; the thematic
+    // sub-channels are specialist (genre/format-focused) radio.
+    tags: slug === "fip-main" ? ["anchor"] : ["specialist"],
     sortOrder,
   }));
 }
@@ -1406,6 +1424,7 @@ function spinitronJazzStations(): InsertStation[] {
   return [
     {
       slug: "wbgo",
+      tags: ["public"],
       name: "WBGO 88.3 FM",
       org: "Newark Public Radio",
       country: "US",
@@ -1442,6 +1461,7 @@ function spinitronJazzStations(): InsertStation[] {
     },
     {
       slug: "wpfw",
+      tags: ["public"],
       name: "WPFW 89.3 FM",
       org: "Pacifica Foundation",
       country: "US",
@@ -1461,6 +1481,7 @@ function spinitronJazzStations(): InsertStation[] {
     },
     {
       slug: "wdiy",
+      tags: ["public"],
       name: "WDIY 88.1 FM",
       org: "WDIY",
       country: "US",
@@ -1498,6 +1519,7 @@ function spinitronCanadianAdditions(): InsertStation[] {
   return [
     {
       slug: "ckua",
+      tags: ["public"],
       name: "CKUA Radio",
       org: "CKUA Radio Network",
       country: "CA",

@@ -1,8 +1,9 @@
 /**
- * DialFilterBar — two additive toggle menus above the Dial's live feed.
+ * DialFilterBar — two filter menus above the Dial's live feed.
  *
- * Left menu: song-age filters (First | Current | Catalog | Deep)
- * Right menu: station-category filters (Lore | Genre | Ambient | …)
+ * Left menu: song-age filters (First | Current | Catalog | Deep) — additive.
+ * Right menu: station categories (Ambient & Sleep | Campus Radio | …) —
+ * radio-style single-select (exactly one active at a time).
  *
  * Both menus use the same pipe-separated button style as the rest of the Dial
  * topbar. Active buttons get a solid 1px bottom underline.

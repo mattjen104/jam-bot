@@ -5,7 +5,7 @@
  *   1. Centered scan buttons — one per 5-station page of the filtered list
  *      (/scan1 … /scanN, driven by the pageCount prop).
  *   2. Four centered song-age buttons.
- *   3. Six centered station-category buttons (lore is the home control).
+ *   3. Seven centered station-category buttons (lore is the home control).
  *   4. `/crossings`, `/radio`, and `/lore` controls beside the DialCliBar
  *      (strip variant), whose prompt is left-aligned so the field reads like
  *      a command line.
@@ -118,7 +118,7 @@ export function HomeCliStrip({
 
         <div className="home-cli-strip__filter-rail">
           <div className="home-cli-strip__filter-row" role="group" aria-label="Station category commands">
-            {STATION_CATEGORY_DEFINITIONS.filter(({ cat }) => cat !== "lore").map(({ cat, command, title }) => {
+            {STATION_CATEGORY_DEFINITIONS.map(({ cat, command, title }) => {
               const active = activeCategories.has(cat);
               return (
                 <button
@@ -175,6 +175,7 @@ export function HomeCliStrip({
             onAddArtists={onAddArtists}
             onScan={onScan}
             onLibrary={goLibrary}
+            onHome={goHome}
             onMatt={onMatt}
             onRadioMode={onRadioMode}
             mattPending={mattPending}

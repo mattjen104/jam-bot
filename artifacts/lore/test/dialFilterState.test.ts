@@ -1,15 +1,17 @@
 /**
- * dialFilterState — additive toggle semantics for the Dial filter menus.
+ * dialFilterState — toggle semantics for the Dial filter menus.
  *
  * Covers:
  *  1. Age tiers toggle on/off additively; the empty set is allowed.
- *  2. Station categories toggle additively; deselecting the LAST active
+ *  2. Station categories are a radio-style single-select: selecting a new
+ *     category REPLACES the previous one, and re-selecting the active
  *     category is a no-op (same reference back, so React skips the render).
+ *     There is never an empty state.
  */
 import { describe, expect, it } from "vitest";
 import { toggleAgeTier, toggleStationCategory } from "../src/lib/dialFilterState";
 import type { AgeTier } from "../src/lib/dialAgeFilter";
-import type { StationCategory } from "../src/components/dial/DialFilterBar";
+import type { StationCategory } from "../src/lib/dialCategories";
 
 describe("toggleAgeTier", () => {
   it("adds an inactive tier", () => {
@@ -39,49 +41,42 @@ describe("toggleAgeTier", () => {
   });
 });
 
-describe("toggleStationCategory", () => {
-  it("adds an inactive category (all original three can be active together)", () => {
-    let s = new Set<StationCategory>(["lore"]);
-    s = toggleStationCategory(s, "genre");
+describe("toggleStationCategory (single-select)", () => {
+  it("selecting a new category replaces the previous one", () => {
+    let s = new Set<StationCategory>(["anchor"]);
+    s = toggleStationCategory(s, "campus");
+    expect([...s]).toEqual(["campus"]);
     s = toggleStationCategory(s, "ambient");
-    expect(s.size).toBe(3);
-  });
-
-  it("adds the four metadata categories", () => {
-    let s = new Set<StationCategory>(["lore"]);
-    s = toggleStationCategory(s, "spinitron");
-    s = toggleStationCategory(s, "college");
-    s = toggleStationCategory(s, "flagship");
-    s = toggleStationCategory(s, "discovery");
-    expect(s.has("spinitron")).toBe(true);
-    expect(s.has("college")).toBe(true);
-    expect(s.has("flagship")).toBe(true);
-    expect(s.has("discovery")).toBe(true);
-    expect(s.size).toBe(5);
-  });
-
-  it("removes an active category while at least one other remains", () => {
-    let s = new Set<StationCategory>(["lore", "ambient"]);
-    s = toggleStationCategory(s, "lore");
     expect([...s]).toEqual(["ambient"]);
   });
 
-  it("refuses to deselect the last active category (returns prev unchanged)", () => {
-    const prev = new Set<StationCategory>(["genre"]);
-    const next = toggleStationCategory(prev, "genre");
-    expect(next).toBe(prev);
-    expect(next.has("genre")).toBe(true);
+  it("exactly one category is active after any sequence of selections", () => {
+    let s = new Set<StationCategory>(["anchor"]);
+    for (const cat of ["ambient", "campus", "specialist", "public", "indie", "discovery"] as const) {
+      s = toggleStationCategory(s, cat);
+      expect(s.size).toBe(1);
+      expect(s.has(cat)).toBe(true);
+    }
   });
 
-  it("refuses to deselect the last active new-category too", () => {
-    const prev = new Set<StationCategory>(["spinitron"]);
-    const next = toggleStationCategory(prev, "spinitron");
+  it("re-selecting the active category is a no-op (returns prev unchanged — no empty state)", () => {
+    const prev = new Set<StationCategory>(["specialist"]);
+    const next = toggleStationCategory(prev, "specialist");
     expect(next).toBe(prev);
+    expect(next.has("specialist")).toBe(true);
   });
 
-  it("does not mutate the previous set on a normal toggle", () => {
-    const prev = new Set<StationCategory>(["lore", "genre"]);
-    toggleStationCategory(prev, "genre");
-    expect(prev.size).toBe(2);
+  it("does not mutate the previous set on a replacement", () => {
+    const prev = new Set<StationCategory>(["anchor"]);
+    const next = toggleStationCategory(prev, "indie");
+    expect(prev.has("anchor")).toBe(true);
+    expect(prev.size).toBe(1);
+    expect([...next]).toEqual(["indie"]);
+  });
+
+  it("collapses a (legacy) multi-member set down to the newly selected category", () => {
+    const prev = new Set<StationCategory>(["anchor", "campus"]);
+    const next = toggleStationCategory(prev, "campus");
+    expect([...next]).toEqual(["campus"]);
   });
 });

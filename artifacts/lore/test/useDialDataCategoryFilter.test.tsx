@@ -1,19 +1,17 @@
 // @vitest-environment jsdom
 /**
- * useDialData — metadata-category filtering (/spinitron, /college,
- * /flagship, /discovery).
+ * useDialData — metadata-category filtering (/anchor, /campus, /public,
+ * /indie, /discovery).
  *
  * These categories don't trigger extra server fetches: the hook filters the
  * already-fetched Lore station list client-side using the server-supplied
- * `stationCategories` array on each station.
+ * single-value `stationCategories` array on each station.
  *
- * Contract under test:
- *  - lore-only (default): no filtering, every station renders
- *  - a single metadata category restricts to stations carrying that label
- *  - multiple metadata categories union their matches
- *  - metadata categories WITHOUT lore still fetch the base list and filter it
+ * Contract under test (single-select taxonomy):
+ *  - each metadata category restricts to stations carrying exactly that label
  *  - stations with stationCategories: [] (or absent) never match a metadata
- *    filter but always pass when no metadata filter is active
+ *    filter
+ *  - an empty categories set applies no filter (legacy/no-filter path)
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
@@ -26,18 +24,21 @@ const makeStation = (slug: string, stationCategories: string[]): Partial<Station
   stationCategories,
   tags: null,
   automationClass: null,
-  // flagship stations always pass the dial's surface filter (no live signal
-  // or schedule data in this mock), keeping the test focused on the
+  // flagship-tier stations always pass the dial's surface filter (no live
+  // signal or schedule data in this mock), keeping the test focused on the
   // metadata-category filter itself.
   tier: "flagship",
 });
 
 const STATIONS = [
-  makeStation("wprb", ["spinitron", "college"]),
-  makeStation("kexp", ["flagship"]),
+  makeStation("wprb", ["campus"]),
+  makeStation("kexp", ["anchor"]),
   makeStation("rb-discovery", ["discovery"]),
-  makeStation("cfuv", ["college"]),
-  makeStation("nts-1", ["flagship"]),
+  makeStation("cfuv", ["campus"]),
+  makeStation("nts-1", ["anchor"]),
+  makeStation("wbgo", ["public"]),
+  makeStation("balamii", ["indie"]),
+  makeStation("no-cats", []),
 ];
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
@@ -67,41 +68,35 @@ function slugsFor(categories: Set<DialStationCategory>): string[] {
 }
 
 describe("useDialData metadata-category filter", () => {
-  it("lore alone shows every station (no metadata filter)", () => {
-    expect(slugsFor(new Set(["lore"]))).toEqual(
-      ["cfuv", "kexp", "nts-1", "rb-discovery", "wprb"],
+  it("an empty categories set applies no filter (every station renders)", () => {
+    expect(slugsFor(new Set())).toEqual(
+      ["balamii", "cfuv", "kexp", "no-cats", "nts-1", "rb-discovery", "wbgo", "wprb"],
     );
   });
 
-  it("/spinitron restricts to stations labeled spinitron", () => {
-    expect(slugsFor(new Set(["lore", "spinitron"]))).toEqual(["wprb"]);
+  it("/anchor restricts to stations labeled anchor", () => {
+    expect(slugsFor(new Set(["anchor"]))).toEqual(["kexp", "nts-1"]);
   });
 
-  it("/college restricts to stations labeled college", () => {
-    expect(slugsFor(new Set(["lore", "college"]))).toEqual(["cfuv", "wprb"]);
+  it("/campus restricts to stations labeled campus", () => {
+    expect(slugsFor(new Set(["campus"]))).toEqual(["cfuv", "wprb"]);
   });
 
-  it("/flagship restricts to stations labeled flagship", () => {
-    expect(slugsFor(new Set(["lore", "flagship"]))).toEqual(["kexp", "nts-1"]);
+  it("/public restricts to stations labeled public", () => {
+    expect(slugsFor(new Set(["public"]))).toEqual(["wbgo"]);
+  });
+
+  it("/indie restricts to stations labeled indie", () => {
+    expect(slugsFor(new Set(["indie"]))).toEqual(["balamii"]);
   });
 
   it("/discovery restricts to stations labeled discovery", () => {
-    expect(slugsFor(new Set(["lore", "discovery"]))).toEqual(["rb-discovery"]);
-  });
-
-  it("multiple metadata categories union their matches", () => {
-    expect(slugsFor(new Set(["lore", "college", "discovery"]))).toEqual(
-      ["cfuv", "rb-discovery", "wprb"],
-    );
-  });
-
-  it("metadata category without lore still filters the base list", () => {
-    expect(slugsFor(new Set(["college"]))).toEqual(["cfuv", "wprb"]);
+    expect(slugsFor(new Set(["discovery"]))).toEqual(["rb-discovery"]);
   });
 
   it("stations with empty stationCategories never match a metadata filter", () => {
-    const slugs = slugsFor(new Set(["lore", "spinitron", "college", "discovery"]));
-    expect(slugs).not.toContain("kexp");
-    expect(slugs).not.toContain("nts-1");
+    for (const cat of ["anchor", "campus", "public", "indie", "discovery"] as const) {
+      expect(slugsFor(new Set([cat]))).not.toContain("no-cats");
+    }
   });
 });

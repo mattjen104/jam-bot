@@ -30,7 +30,7 @@ afterEach(() => {
 function renderStrip(overrides: Partial<React.ComponentProps<typeof HomeCliStrip>> = {}) {
   const props: React.ComponentProps<typeof HomeCliStrip> = {
     activeTiers: new Set<AgeTier>(),
-    activeCategories: new Set<StationCategory>(["lore"]),
+    activeCategories: new Set<StationCategory>(["anchor"]),
     onToggleTier: vi.fn(),
     onToggleCategory: vi.fn(),
     scanOffset: 0,
@@ -86,7 +86,7 @@ describe("HomeCliStrip", () => {
 
   it("renders scan chips in the unified rail that fire onScan and show the active window", () => {
     const { props } = renderStrip({
-      activeCategories: new Set<StationCategory>(["lore", "college"]),
+      activeCategories: new Set<StationCategory>(["campus"]),
     });
 
     const scan1 = screen.getByRole("button", { name: "scan 1 /scan1" });
@@ -128,15 +128,16 @@ describe("HomeCliStrip", () => {
 
   it("renders every category chip, routes toggles, and exposes active state", () => {
     const { props } = renderStrip({
-      activeCategories: new Set<StationCategory>(["lore", "college"]),
+      activeCategories: new Set<StationCategory>(["campus"]),
     });
 
     const categories = [
-      ["/genre", "genre"],
       ["/ambient", "ambient"],
-      ["/spinitron", "spinitron"],
-      ["/college", "college"],
-      ["/flagship", "flagship"],
+      ["/campus", "campus"],
+      ["/specialist", "specialist"],
+      ["/anchor", "anchor"],
+      ["/public", "public"],
+      ["/indie", "indie"],
       ["/discovery", "discovery"],
     ] as const;
 
@@ -144,7 +145,7 @@ describe("HomeCliStrip", () => {
       const chip = screen.getByRole("button", { name: command });
       expect(chip.className).toContain("home-cli-strip__filter-chip");
       expect(chip.getAttribute("aria-pressed")).toBe(
-        cat === "college" ? "true" : "false",
+        cat === "campus" ? "true" : "false",
       );
       fireEvent.click(chip);
       expect(props.onToggleCategory).toHaveBeenCalledWith(cat);
@@ -159,15 +160,15 @@ describe("HomeCliStrip", () => {
     // Scan button count is dynamic — driven by the pageCount prop (default 3).
     expect(scanRow.querySelectorAll("button")).toHaveLength(3);
     expect(ageRow.querySelectorAll("button")).toHaveLength(4);
-    expect(categoryRow.querySelectorAll("button")).toHaveLength(6);
+    expect(categoryRow.querySelectorAll("button")).toHaveLength(7);
 
     const chips = [
       ...scanRow.querySelectorAll("button"),
       ...ageRow.querySelectorAll("button"),
       ...categoryRow.querySelectorAll("button"),
     ];
-    // 3 scans + 4 age tiers + 6 station categories; /lore is the home button.
-    expect(chips.length).toBe(13);
+    // 3 scans + 4 age tiers + 7 station categories; /lore is the home button.
+    expect(chips.length).toBe(14);
     for (const chip of chips) {
       expect(chip.className).toContain("home-cli-strip__filter-chip");
     }
