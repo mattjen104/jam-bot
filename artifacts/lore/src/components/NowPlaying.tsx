@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
+import { isStaleNowPlaying } from "../lib/freshness";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { Link, useLocation } from "wouter";
 import {
@@ -33,6 +36,77 @@ import {
 } from "lucide-react";
 
 type ArtMode = "art" | "lyrics" | "exploder";
+
+/**
+ * Explicit "Identify this station" action — shown only when the station is
+ * metadata-less or its now-playing observation has gone stale. Asks the
+ * server to capture a short clip from the station's own stream and
+ * fingerprint it via ACRCloud. A failed identify is reported honestly and is
+ * never presented as "nothing playing".
+ */
+function IdentifyStationButton({ slug }: { slug: string }) {
+  const queryClient = useQueryClient();
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const identify = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/stations/${slug}/fingerprint`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "explicit" }),
+      });
+      if (res.status === 503) return { kind: "unavailable" as const };
+      if (res.status === 429) return { kind: "cooldown" as const };
+      if (!res.ok) return { kind: "failed" as const };
+      const body = (await res.json()) as { logged: boolean; mbid: string | null };
+      return { kind: "ok" as const, ...body };
+    },
+    onSuccess: (result) => {
+      if (result.kind === "ok" && (result.logged || result.mbid)) {
+        setNotice(null);
+        void queryClient.invalidateQueries({
+          queryKey: getGetStationNowPlayingQueryKey(slug),
+        });
+        return;
+      }
+      setNotice(
+        result.kind === "cooldown"
+          ? "Identified recently — try again in a couple of minutes."
+          : result.kind === "unavailable"
+            ? "Identification isn't available right now."
+            : result.kind === "failed"
+              ? "Identification failed — the stream couldn't be sampled."
+              : "Couldn't identify what's playing right now.",
+      );
+    },
+    onError: () => {
+      setNotice("Identification failed — the stream couldn't be sampled.");
+    },
+  });
+
+  return (
+    <div className="mt-3" data-testid="identify-station">
+      <button
+        type="button"
+        onClick={() => { setNotice(null); identify.mutate(); }}
+        disabled={identify.isPending}
+        data-testid="identify-station-button"
+        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide text-foreground/80 transition-colors hover:bg-secondary/70 disabled:cursor-default disabled:opacity-60"
+      >
+        <Search className={`h-3.5 w-3.5 ${identify.isPending ? "animate-pulse" : ""}`} />
+        {identify.isPending ? "Listening to the stream…" : "Identify this station"}
+      </button>
+      {notice && (
+        <p
+          className="mt-1.5 font-mono text-[13px] text-muted-foreground"
+          data-testid="identify-station-notice"
+        >
+          {notice}
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface NowPlayingProps {
   data: StationNowPlaying | undefined;
@@ -266,6 +340,9 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
             )}
 
             {rec && rec.links.length > 0 && <DeepLinks links={rec.links} />}
+
+            {/* Stale observation — offer a precise ACR identify. */}
+            {isStaleNowPlaying(np) && <IdentifyStationButton slug={station.slug} />}
           </>
         ) : clientNowPlaying ? (
           <div className="py-2">
@@ -298,6 +375,8 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
             <p className="mt-1 text-base text-muted-foreground">
               Now-playing data appears the moment the station logs its next track.
             </p>
+            {/* Metadata-less station — offer a precise ACR identify. */}
+            {!isLoading && <IdentifyStationButton slug={station.slug} />}
           </div>
         )}
 

@@ -244,13 +244,20 @@ export function ListeningLogger() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [icecastKey, stationSlug]);
 
-  // --- ACR absolute fallback: fingerprint via ACRCloud when Icecast silent ---
-  // When neither the server poller nor Icecast metadata have found a track
-  // after ACR_INITIAL_DELAY_MS, ask the server to grab a short audio clip
-  // from the station's stream URL and fingerprint it via ACRCloud. The server
-  // uses the DB stream URL (not client-supplied), so there's no SSRF risk.
-  // Re-polls every ACR_POLL_INTERVAL_MS while the station remains unidentified.
-  const needsAcr = listening && !np && !icecastNp;
+  // --- ACR targeted fallback: fingerprint via ACRCloud -----------------------
+  // Automatic requests are scheduled whenever the station's metadata is not
+  // demonstrably healthy: no track found at all (after ACR_INITIAL_DELAY_MS),
+  // or a now-playing observation whose freshness has degraded (aging/stale).
+  // The server's shared trigger policy is the authoritative admission control
+  // — it re-reads fresh metadata first, admits degraded-but-not-stale
+  // observations only for allowlisted stations (409 otherwise, swallowed
+  // below), and bounds spend with a per-station cooldown. Fresh metadata
+  // never even sends the request, so healthy stations cost nothing.
+  // The server uses the DB stream URL (not client-supplied) — no SSRF risk.
+  // Re-polls every ACR_POLL_INTERVAL_MS while the station stays unhealthy.
+  const npDegraded =
+    !!np && (np.freshness === "stale" || np.freshness === "aging");
+  const needsAcr = listening && ((!np && !icecastNp) || npDegraded);
   const acrSlugRef = useRef<string | null>(null);
   const acrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -258,9 +265,14 @@ export function ListeningLogger() {
     mutationFn: async (vars: { slug: string }) => {
       const res = await fetch(`/api/stations/${vars.slug}/fingerprint`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Automatic fallback — the server's shared trigger policy only lets
+        // this proceed for metadata-less/stale/allowlisted stations.
+        body: JSON.stringify({ trigger: "auto" }),
       });
-      // 503 = ACR not configured; 429 = rate limited — swallow silently.
-      if (res.status === 503 || res.status === 429) return null;
+      // 503 = ACR not configured; 429 = rate limited / cooldown;
+      // 409 = policy says metadata is healthy — all swallowed silently.
+      if (res.status === 503 || res.status === 429 || res.status === 409) return null;
       if (!res.ok) throw new Error(`fingerprint failed: ${res.status}`);
       return res.json() as Promise<{ logged: boolean; mbid: string | null }>;
     },

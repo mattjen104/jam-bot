@@ -55,6 +55,15 @@ import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../.
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
+import {
+  evaluateFingerprintPolicy,
+  markFingerprintRun,
+  tryReserveFingerprint,
+  releaseFingerprintReservation,
+  type FingerprintTrigger,
+} from "../../lore/fingerprint-policy.js";
+import { classifyFreshness } from "../../lore/freshness.js";
+import { pollStation } from "../../lore/poller.js";
 import { attachListener, isRelayAllowed } from "../../lore/stream-relay.js";
 import { computeGenreBreakdown, computeDiscoveryScore, labelFromScore } from "../../lore/genre-insights.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
@@ -343,6 +352,10 @@ const fingerprintLimiter = rateLimit({
   limit: 4,
   standardHeaders: "draft-8",
   legacyHeaders: false,
+  // The integration suite exercises the policy/cooldown layers with more
+  // than 4 requests from one IP; the IP limiter itself is express-rate-limit
+  // standard behavior and doesn't need re-testing here.
+  skip: () => !!process.env["VITEST"],
 });
 
 // GET /api/stations
@@ -840,17 +853,77 @@ router.post("/stations/:slug/report-now-playing", reportNowPlayingLimiter, h(asy
   );
 }));
 
+// ---------------------------------------------------------------------------
 // POST /api/stations/:slug/fingerprint
-// ACR absolute fallback: when neither a server poller nor Icecast metadata
-// can identify the playing track, the client asks the server to grab a short
-// clip from the station's own stream URL and fingerprint it via ACRCloud.
 //
-// The stream URL comes from the DB (not the client) — no SSRF risk. The clip
-// is captured by ffmpeg, sent as bytes to ACRCloud, and the match is fed into
-// logSpinIfChanged exactly like any other spin. Returns 503 when ACRCloud is
-// not configured, 404 when the station doesn't exist.
+// Targeted ACR fingerprint fallback. Every request runs through the shared
+// trigger policy (lore/fingerprint-policy.ts): explicit "Identify this
+// station" actions are always trigger-eligible; automatic requests (the
+// ListeningLogger's fallback sends trigger:"auto") only proceed for stations
+// with no metadata source, stale metadata, or the hand-curated ACR allowlist
+// flag. A per-station cooldown bounds spend for both.
+//
+// Two-stage flow: before any audio is captured, a fresh metadata read runs
+// for stations that HAVE a now-playing source — if that read comes back with
+// a fresh spin, it is returned directly and no fingerprint fires. Only a
+// still-empty/stale station reaches ffmpeg + ACRCloud. Matches are fed into
+// logSpinIfChanged like any other spin, tagged source="acr_fingerprint" with
+// playedAt derived from capture time minus the match's play offset.
+//
+// The stream URL comes from the DB (not the client) — no SSRF risk.
+// Status codes: 503 ACR unconfigured; 404 unknown station; 422 no stream URL;
+// 409 policy-ineligible (healthy metadata); 429 cooldown/rate limit;
+// 502 capture/ACR hard failure. A clean "no match" is 200 {logged:false}.
+// ---------------------------------------------------------------------------
+
+// Seams for tests: swap the ffmpeg+ACR runner and the stage-1 metadata read
+// without touching real streams or the poller.
+let runFingerprint: typeof fingerprintStream = fingerprintStream;
+let fingerprintReady: typeof fingerprintAvailable = fingerprintAvailable;
+let stage1MetadataRefresh: (station: typeof stationsTable.$inferSelect) => Promise<void> =
+  async (station) => pollStation(station);
+
+/** Tests only: swap the fingerprint runner (also bypasses the availability check). */
+export function _testOnly_setFingerprintRunner(fn: typeof fingerprintStream): () => void {
+  const prevRun = runFingerprint;
+  const prevReady = fingerprintReady;
+  runFingerprint = fn;
+  fingerprintReady = () => true;
+  return () => { runFingerprint = prevRun; fingerprintReady = prevReady; };
+}
+
+/** Tests only: swap the stage-1 fresh metadata read. */
+export function _testOnly_setStage1Refresh(
+  fn: (station: typeof stationsTable.$inferSelect) => Promise<void>,
+): () => void {
+  const prev = stage1MetadataRefresh;
+  stage1MetadataRefresh = fn;
+  return () => { stage1MetadataRefresh = prev; };
+}
+
+/** Newest spin's freshness inputs + identity for a station, or null. */
+async function latestSpinForStation(stationId: number): Promise<{
+  mbid: string | null;
+  confidence: string;
+  source: string | null;
+  observedAt: Date;
+} | null> {
+  const [row] = await db
+    .select({
+      mbid: spinsTable.mbid,
+      confidence: spinsTable.confidence,
+      source: spinsTable.source,
+      observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
+    })
+    .from(spinsTable)
+    .where(eq(spinsTable.stationId, stationId))
+    .orderBy(desc(spinsTable.playedAt))
+    .limit(1);
+  return row ?? null;
+}
+
 router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res) => {
-  if (!fingerprintAvailable()) {
+  if (!fingerprintReady()) {
     return res.status(503).json({ error: "ACR fingerprint is not configured" });
   }
 
@@ -858,6 +931,12 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
   if (!parsedParams.success) {
     return res.status(404).json({ error: "Station not found" });
   }
+
+  // Trigger provenance: automatic callers (ListeningLogger) send
+  // { trigger: "auto" }; anything else — including the bodyless legacy call —
+  // is treated as an explicit listener action.
+  const trigger: FingerprintTrigger =
+    (req.body as { trigger?: string } | undefined)?.trigger === "auto" ? "auto" : "explicit";
 
   const [station] = await db
     .select()
@@ -867,13 +946,64 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
   }
-  if (!station.streamUrl) {
-    return res.status(422).json({ error: "Station has no stream URL" });
+
+  const latestBefore = await latestSpinForStation(station.id);
+  const decision = evaluateFingerprintPolicy(
+    station,
+    latestBefore ? { source: latestBefore.source, observedAt: latestBefore.observedAt } : null,
+    trigger,
+  );
+  if (!decision.eligible) {
+    if (decision.reason === "no_stream_url") {
+      return res.status(422).json({ error: "Station has no stream URL" });
+    }
+    if (decision.reason === "cooldown") {
+      res.setHeader("Retry-After", String(Math.ceil((decision.retryAfterMs ?? 0) / 1000)));
+      return res.status(429).json({ error: "Fingerprint cooldown active for this station" });
+    }
+    // healthy_metadata — automatic fallback must not spend ACR budget here.
+    return res.status(409).json({ error: "Station metadata is healthy; fingerprint not needed" });
   }
+
+  // Atomic admission: hold a per-station reservation across the async stages
+  // so two concurrent requests can't both pass the cooldown check and both
+  // bill an ACR capture. A concurrent holder reads as a cooldown to callers.
+  if (!tryReserveFingerprint(station.id)) {
+    res.setHeader("Retry-After", "10");
+    return res.status(429).json({ error: "A fingerprint for this station is already in progress" });
+  }
+  try {
+
+  // ── Stage 1: fresh metadata read ─────────────────────────────────────────
+  // Cheaper and more precise than audio capture when the source responds.
+  // Only stations WITH a configured source can be re-read; a fresh result
+  // short-circuits the fingerprint entirely.
+  if (station.nowPlayingSource) {
+    try {
+      await stage1MetadataRefresh(station);
+    } catch (err) {
+      console.error("[lore] fingerprint stage-1 metadata read failed", station.slug, err);
+    }
+    const latest = await latestSpinForStation(station.id);
+    if (latest && classifyFreshness(latest.source, latest.observedAt) === "fresh") {
+      return res.json(
+        IcecastReportResultBody.parse({
+          logged: false,
+          mbid: latest.mbid,
+          ...(latest.confidence ? { confidence: latest.confidence } : {}),
+        }),
+      );
+    }
+  }
+
+  // ── Stage 2: capture + ACR fingerprint ───────────────────────────────────
+  // Arm the cooldown when the capture actually starts (a failed capture still
+  // spent ffmpeg time and possibly an ACR call).
+  markFingerprintRun(station.id);
 
   let result: Awaited<ReturnType<typeof fingerprintStream>>;
   try {
-    result = await fingerprintStream(station.streamUrl);
+    result = await runFingerprint(station.streamUrl);
   } catch (err) {
     console.error("[lore] fingerprint failed", station.slug, err);
     return res.status(502).json({ error: "Fingerprint failed", detail: String(err) });
@@ -881,20 +1011,27 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
 
   const { match, clipEndedAt } = result;
   if (!match) {
+    // Honest "couldn't identify" — never presented as "nothing playing".
     return res.json(IcecastReportResultBody.parse({ logged: false, mbid: null }));
   }
 
-  const logged = await logSpinIfChanged(station, {
-    rawArtist: match.artist,
-    rawTitle: match.title,
-    ...(match.isrc ? { isrc: match.isrc } : {}),
-    // Preserve the provider's position signal. play_offset_ms is the
-    // position in the matched ORIGINAL track at the END of the recognized
-    // clip, so it's paired with the clip-end timestamp — not the capture
-    // start (which would overstate elapsed time by the clip duration).
-    playOffsetMs: match.playOffsetMs,
-    offsetCapturedAt: clipEndedAt,
-  });
+  const logged = await logSpinIfChanged(
+    station,
+    {
+      rawArtist: match.artist,
+      rawTitle: match.title,
+      ...(match.isrc ? { isrc: match.isrc } : {}),
+      // Preserve the provider's position signal. play_offset_ms is the
+      // position in the matched ORIGINAL track at the END of the recognized
+      // clip, so it's paired with the clip-end timestamp — not the capture
+      // start (which would overstate elapsed time by the clip duration).
+      playOffsetMs: match.playOffsetMs,
+      offsetCapturedAt: clipEndedAt,
+      // Play offset places the spin where the song actually started.
+      playedAt: new Date(clipEndedAt.getTime() - match.playOffsetMs),
+    },
+    { source: "acr_fingerprint" },
+  );
 
   const [latest] = await db
     .select({ mbid: spinsTable.mbid, confidence: spinsTable.confidence })
@@ -910,6 +1047,10 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
       ...(latest?.confidence ? { confidence: latest.confidence } : {}),
     }),
   );
+
+  } finally {
+    releaseFingerprintReservation(station.id);
+  }
 }));
 
 // GET /api/stations/:slug/archive — a station's documented runs, newest first.

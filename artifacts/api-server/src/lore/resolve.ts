@@ -662,7 +662,23 @@ const DEDUP_WINDOW_MS = 120_000;
  */
 export async function logSpinIfChanged(
   station: Station,
-  np: NowPlayingRaw,
+  np: NowPlayingRaw & {
+    /**
+     * Explicit play-start time, when the caller knows it more precisely than
+     * "now". The ACR fingerprint path derives it from capture time minus the
+     * match's play offset, so a fingerprinted spin lands on the timeline where
+     * the song actually started rather than where the clip was captured.
+     */
+    playedAt?: Date;
+  },
+  opts?: {
+    /**
+     * Provenance override for the spins.source column. Defaults to the
+     * station's own now-playing source; the ACR fingerprint path passes
+     * "acr_fingerprint" so fingerprint-derived spins stay distinguishable.
+     */
+    source?: string;
+  },
 ): Promise<boolean> {
   try {
     // Junk-metadata guard: programming labels, pure-punctuation, audio filenames.
@@ -754,7 +770,7 @@ export async function logSpinIfChanged(
       resolution: r,
       raw: np,
       showId,
-      source: station.nowPlayingSource ?? "unknown",
+      source: opts?.source ?? station.nowPlayingSource ?? "unknown",
     });
     if (wrote) {
       // Check whether this MBID has been logged on any prior calendar day so

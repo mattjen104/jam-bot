@@ -45,6 +45,10 @@ const SOURCE_CADENCE_MS: Record<string, number> = {
   // Multiplexed host tier polls every host every 10s; SSE is instant.
   azuracast: 30_000,
   icecast: 30_000,
+  // ACR fingerprint spins arrive on the client's 2-minute re-fingerprint
+  // cadence at most — classify against that so a one-shot identify doesn't
+  // read as "fresh" for a whole default window after the song has moved on.
+  acr_fingerprint: 120_000,
 };
 
 /** Poller default for sources without a dedicated cadence entry. */
