@@ -10,8 +10,26 @@
  * re-checks so the corrected track lands within a few seconds. Whenever a
  * result differs from the candidate the listener landed on, `onFreshTrack`
  * fires so the caller can reconcile the displayed track.
+ *
+ * Landing confirmation (task: parallel live-stream startup) — the hook also
+ * models the handoff explicitly, keyed off the landing identity (every
+ * landOnStation call takes a fresh generation token; responses from a
+ * superseded landing are ignored entirely — no reconciliation callback, no
+ * confirmation change, no re-check scheduling):
+ *
+ *   confirming             — audio started; the bounded window is open.
+ *   confirmed              — a fast-lane response arrived with a non-stale
+ *                            stored track: the display is current/exact.
+ *   unconfirmed-continuing — the window elapsed with no (non-stale) response.
+ *                            Playback continues untouched; the UI may show a
+ *                            soft "metadata may be delayed" hint. A LATE
+ *                            response upgrades this to confirmed seamlessly.
+ *
+ * A timeout is never a negative claim: no phase transition removes or
+ * replaces the displayed track — only a real differing response does (via
+ * `onFreshTrack`), exactly as before.
  */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface FastLaneNow {
   mbid: string | null;
@@ -51,6 +69,13 @@ export interface FastLaneCandidate {
 /** Post-refresh re-check schedule (ms after landing response). */
 export const FAST_LANE_RECHECK_DELAYS_MS: readonly number[] = [2500, 5000];
 
+/**
+ * Bounded confirmation window: how long after landing we wait for a fresh
+ * metadata response before moving to the soft unconfirmed state. Audio is
+ * never gated on this — it starts immediately, in parallel.
+ */
+export const LANDING_CONFIRM_WINDOW_MS = 1500;
+
 /** Padding past the estimated track boundary before the single expiry re-check. */
 export const EXPIRY_RECHECK_PAD_MS = 3000;
 /** Upper bound on how far out an expiry re-check may be scheduled. */
@@ -88,7 +113,11 @@ export function tracksDiffer(
 
 export function useStationFastLane(
   onFreshTrack: (slug: string, now: FastLaneNow) => void,
-): { landOnStation: (slug: string, candidate: FastLaneCandidate | null) => void } {
+): {
+  landOnStation: (slug: string, candidate: FastLaneCandidate | null) => void;
+  /** Handoff state for the most recent landing (see module doc). */
+  confirmation: LandingConfirmation | null;
+} {
   // Latest callback in a ref so landOnStation stays referentially stable.
   const cbRef = useRef(onFreshTrack);
   useEffect(() => { cbRef.current = onFreshTrack; }, [onFreshTrack]);
@@ -97,10 +126,22 @@ export function useStationFastLane(
   // supersedes any in-flight re-check schedule.
   const timersRef = useRef(new Map<string, number[]>());
 
-  // Per-slug landing generation. A new landing bumps the generation, so any
-  // still-in-flight fetch from a superseded landing is discarded on arrival:
-  // it neither reconciles the display nor registers re-check timers.
-  const genRef = useRef(new Map<string, number>());
+  // ── Landing confirmation state machine ────────────────────────────────
+  // Keyed off the landing identity: every landOnStation call takes a fresh
+  // generation token. A response (or re-check) from a superseded landing is
+  // ignored entirely — no reconciliation callback, no confirmation change,
+  // no re-check scheduling. Zeroing the generation on unmount invalidates
+  // every in-flight fetch too.
+  const [confirmation, setConfirmation] = useState<LandingConfirmation | null>(null);
+  const landingGenRef = useRef(0);
+  const windowTimerRef = useRef<number | null>(null);
+
+  const clearWindowTimer = useCallback(() => {
+    if (windowTimerRef.current != null) {
+      window.clearTimeout(windowTimerRef.current);
+      windowTimerRef.current = null;
+    }
+  }, []);
 
   const clearSlugTimers = useCallback((slug: string) => {
     const ids = timersRef.current.get(slug);
@@ -113,23 +154,49 @@ export function useStationFastLane(
   const landOnStation = useCallback(
     (slug: string, candidate: FastLaneCandidate | null) => {
       clearSlugTimers(slug);
-      const gen = (genRef.current.get(slug) ?? 0) + 1;
-      genRef.current.set(slug, gen);
-      const isCurrent = () => genRef.current.get(slug) === gen;
+
+      // Open the bounded confirmation window for this landing. Audio startup
+      // runs in parallel at the call site — never gated on this.
+      const gen = ++landingGenRef.current;
+      const isCurrent = () => landingGenRef.current === gen;
+      clearWindowTimer();
+      setConfirmation({ slug, phase: "confirming" });
+      windowTimerRef.current = window.setTimeout(() => {
+        windowTimerRef.current = null;
+        // Window elapsed with no confirming response: soft unconfirmed state.
+        // NEVER a negative claim — the displayed track is untouched, and a
+        // late response below still upgrades this to confirmed.
+        setConfirmation((c) =>
+          c && c.slug === slug && c.phase === "confirming"
+            ? { slug, phase: "unconfirmed" }
+            : c,
+        );
+      }, LANDING_CONFIRM_WINDOW_MS);
 
       const check = async (): Promise<FastLaneResponse | null> => {
         const res = await fetch(
           `/api/player/station/${encodeURIComponent(slug)}/now`,
           { headers: { "Content-Type": "application/json" } },
         );
-        // Superseded while in flight: a newer landing owns this slug now —
-        // discard the result entirely (no reconcile, no timers).
+        // Superseded while in flight: a newer landing owns the handoff now —
+        // discard the response completely (no reconciliation callback, no
+        // confirmation change, no timers).
         if (!isCurrent()) return null;
         if (!res.ok) return null;
         const body = (await res.json()) as FastLaneResponse;
         if (!isCurrent()) return null;
         if (body.now && tracksDiffer(candidate, body.now)) {
           cbRef.current(slug, body.now);
+        }
+        // Confirm the landing: any non-stale stored track means the display
+        // is now current/exact. Stale responses keep the window open — the
+        // triggered one-shot refresh (re-checks below) usually resolves it.
+        // Late responses (after the window) upgrade unconfirmed → confirmed.
+        if (body.now && body.now.freshness !== "stale") {
+          clearWindowTimer();
+          setConfirmation((c) =>
+            c && c.slug === slug ? { slug, phase: "confirmed" } : c,
+          );
         }
         return body;
       };
@@ -141,7 +208,7 @@ export function useStationFastLane(
 
       void check()
         .then((body) => {
-          if (!body) return;
+          if (!body || !isCurrent()) return;
           const ids: number[] = [];
           if (body.refreshTriggered) {
             // The server kicked a one-shot source refresh — briefly re-check so
@@ -172,23 +239,38 @@ export function useStationFastLane(
         })
         .catch(() => { /* transient — landing is best-effort */ });
     },
-    [clearSlugTimers],
+    [clearSlugTimers, clearWindowTimer],
   );
 
-  // Unmount: cancel every pending re-check AND invalidate all landing
-  // generations, so an in-flight fetch resolving after cleanup can neither
-  // reconcile nor register new timers.
+  // Unmount: cancel every pending re-check, the confirmation window, AND
+  // invalidate the landing generation, so an in-flight fetch resolving after
+  // cleanup can neither reconcile nor register new timers.
   useEffect(() => {
     const timers = timersRef.current;
-    const gens = genRef.current;
     return () => {
       for (const ids of timers.values()) {
         for (const id of ids) window.clearTimeout(id);
       }
       timers.clear();
-      gens.clear();
+      landingGenRef.current = -1;
+      if (windowTimerRef.current != null) {
+        window.clearTimeout(windowTimerRef.current);
+        windowTimerRef.current = null;
+      }
     };
   }, []);
 
-  return { landOnStation };
+  return { landOnStation, confirmation };
+}
+
+/** Handoff phase for the most recent station landing. */
+export type LandingConfirmationPhase =
+  | "confirming"
+  | "confirmed"
+  | "unconfirmed";
+
+/** Confirmation state for the most recent landing, or null before any landing. */
+export interface LandingConfirmation {
+  slug: string;
+  phase: LandingConfirmationPhase;
 }

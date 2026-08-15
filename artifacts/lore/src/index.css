@@ -2589,6 +2589,18 @@
   height: 1px;
 }
 
+/* ── Landing handoff note — quiet metadata-confirmation status ── */
+/* Soft and non-blocking: no spinner, no layout claim. Renders only while a
+   landing is confirming or its bounded window elapsed unconfirmed. */
+.dial-landing-note {
+  margin: 0;
+  padding: 2px 12px;
+  font-family: var(--lore-font-mono);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--muted-foreground));
+  opacity: 0.75;
+}
+
 /* ── Live-zone skeleton (shown while first live pulse is in-flight) ── */
 .dial-live-skeleton {
   display: flex;

@@ -15,6 +15,7 @@ import {
   FAST_LANE_RECHECK_DELAYS_MS,
   EXPIRY_RECHECK_PAD_MS,
   EXPIRY_RECHECK_MAX_MS,
+  LANDING_CONFIRM_WINDOW_MS,
   type FastLaneNow,
   type FastLaneResponse,
 } from "../src/hooks/useStationFastLane";
@@ -361,5 +362,175 @@ describe("useStationFastLane", () => {
       await vi.advanceTimersByTimeAsync(120_000);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Landing confirmation state machine (task: parallel live-stream startup):
+ * audio and metadata race in parallel; the bounded window never converts a
+ * timeout into a negative claim.
+ */
+describe("useStationFastLane — landing confirmation", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("starts confirming on landing and confirms when fresh metadata wins the race", async () => {
+    // Metadata-first order: the fast-lane response resolves inside the window.
+    const fetchMock = fetchResponding([resp(NOW_BASE, false)]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useStationFastLane(vi.fn()));
+
+    expect(result.current.confirmation).toBeNull();
+    act(() => {
+      result.current.landOnStation("kfoo", null);
+    });
+    // Synchronously confirming — audio startup at the call site is not gated.
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "confirming" });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "confirmed" });
+
+    // Window elapsing after confirmation never downgrades it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LANDING_CONFIRM_WINDOW_MS + 100);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "confirmed" });
+  });
+
+  it("moves to soft unconfirmed when the window elapses, then upgrades on a late response (audio-first order)", async () => {
+    // The response resolves only after the window — playback continues,
+    // the state is unconfirmed (never negative), and the late arrival upgrades it.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const fetchMock = vi.fn(async () => {
+      await gate;
+      return {
+        ok: true,
+        json: () => Promise.resolve(resp(NOW_BASE, false)),
+      } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onFresh = vi.fn();
+    const { result } = renderHook(() => useStationFastLane(onFresh));
+
+    act(() => {
+      result.current.landOnStation("kfoo", null);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LANDING_CONFIRM_WINDOW_MS + 100);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "unconfirmed" });
+    // A timeout is never a negative claim — no callback fired to blank the track.
+    expect(onFresh).not.toHaveBeenCalled();
+
+    // Late confirmation upgrades seamlessly.
+    await act(async () => {
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "confirmed" });
+    expect(onFresh).toHaveBeenCalledWith("kfoo", NOW_BASE);
+  });
+
+  it("keeps confirming on a stale response and confirms via the post-refresh re-check", async () => {
+    const fresh: FastLaneNow = { ...NOW_BASE, mbid: "mbid-corrected", title: "Corrected" };
+    const fetchMock = fetchResponding([
+      resp({ ...NOW_BASE, freshness: "stale" }, true),
+      resp(fresh, false),
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useStationFastLane(vi.fn()));
+
+    act(() => {
+      result.current.landOnStation("kfoo", null);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // Stale stored state does not count as confirmation.
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "confirming" });
+
+    // Window elapses first (re-checks come later) → soft unconfirmed.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LANDING_CONFIRM_WINDOW_MS + 100);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "unconfirmed" });
+
+    // First re-check returns fresh data → upgraded to confirmed.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(Math.max(...FAST_LANE_RECHECK_DELAYS_MS) + 100);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "confirmed" });
+  });
+
+  it("a failed fetch never becomes a negative claim — soft unconfirmed only", async () => {
+    const fetchMock = vi.fn(() => Promise.reject(new Error("network")));
+    vi.stubGlobal("fetch", fetchMock);
+    const onFresh = vi.fn();
+    const { result } = renderHook(() => useStationFastLane(onFresh));
+
+    act(() => {
+      result.current.landOnStation("kfoo", null);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LANDING_CONFIRM_WINDOW_MS + 100);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "kfoo", phase: "unconfirmed" });
+    expect(onFresh).not.toHaveBeenCalled();
+  });
+
+  it("a new landing supersedes the previous one; late responses for the old slug are ignored", async () => {
+    let releaseOld!: () => void;
+    const oldGate = new Promise<void>((r) => { releaseOld = r; });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("kold")) {
+        // refreshTriggered:true — a live landing would schedule re-checks;
+        // a superseded one must not.
+        return oldGate.then(() => ({
+          ok: true,
+          json: () => Promise.resolve(resp(NOW_BASE, true)),
+        } as Response));
+      }
+      // New landing: respond stale so it stays confirming.
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(resp({ ...NOW_BASE, freshness: "stale" }, false)),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onFresh = vi.fn();
+    const { result } = renderHook(() => useStationFastLane(onFresh));
+
+    act(() => {
+      result.current.landOnStation("kold", null);
+    });
+    act(() => {
+      result.current.landOnStation("knew", null);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "knew", phase: "confirming" });
+
+    // The old landing's response arrives late — it must not confirm "knew",
+    // must never fire the reconciliation callback (which would mutate the
+    // shared now-playing override), and must not schedule re-checks.
+    await act(async () => {
+      releaseOld();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.confirmation).toEqual({ slug: "knew", phase: "confirming" });
+    expect(onFresh).not.toHaveBeenCalledWith("kold", expect.anything());
+    // Only the two landing fetches — no re-checks from the superseded landing.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(Math.max(...FAST_LANE_RECHECK_DELAYS_MS) + 100);
+    });
+    const koldCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes("kold"));
+    expect(koldCalls).toHaveLength(1);
   });
 });

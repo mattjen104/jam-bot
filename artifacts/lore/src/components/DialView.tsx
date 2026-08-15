@@ -13,6 +13,7 @@ import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTa
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { useStationFastLane, type FastLaneNow, type FastLaneCandidate } from "../hooks/useStationFastLane";
+import { LandingConfirmationNote } from "./dial/LandingConfirmationNote";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -2480,6 +2481,14 @@ export function DialView() {
     });
   }, [applyNowPlayingOverride]);
   const fastLane = useStationFastLane(handleFastLaneTrack);
+  // Quiet handoff status for the most recent landing — confirming /
+  // unconfirmed render a soft note; confirmed renders nothing.
+  const landingNote = (
+    <LandingConfirmationNote
+      confirmation={fastLane.confirmation}
+      activeSlug={radio.station?.slug ?? null}
+    />
+  );
   const fastLaneCandidate = useCallback((track: DialSpin | null | undefined): FastLaneCandidate | null =>
     track ? { mbid: track.mbid, title: track.title, artist: track.artist } : null,
   []);
@@ -3033,6 +3042,10 @@ export function DialView() {
 
                     {/* The unified feed: every live station, crossing matches
                         ranked first (▲) or last (▼). Grows via infinite scroll. */}
+                    {/* Landing handoff status — quiet, non-blocking; shown in
+                        and out of context mode for the tuned station only. */}
+                    {landingNote}
+
                     {!inContext && feedSection}
 
                     {/* Skeleton deadline expired but the server is still computing —
