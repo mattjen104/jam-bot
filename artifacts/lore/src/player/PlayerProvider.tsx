@@ -114,6 +114,7 @@ import {
   type StoredStation,
 } from "./sectionMemory";
 import { useAppConfig } from "../lib/meHooks";
+import { getPreviewCached, prefetchPreview } from "./previewCache";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
 export interface RideAttribution {
@@ -640,14 +641,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Display info (`scanCurrent`) is derived during render from `scanIdx`, so
     // the UI already reflects this hop — no imperative state update needed here.
 
-    // Fetch the 30 s iTunes preview and play it.
-    void getRecordingPreview(entry.mbid)
+    // Fetch the 30 s iTunes preview and play it. Goes through the client
+    // preview cache so looping the scan across the same stations never issues
+    // duplicate lookups — repeat passes (and known-negatives) hit instantly.
+    void getPreviewCached(entry.mbid)
       .then((p) => {
         if (scanTokenRef.current !== token) return;
         if (p.previewUrl && el) {
           el.src = p.previewUrl;
           el.load();
           void el.play().catch(() => {/* autoplay blocked — advance anyway */});
+        }
+        // Next-hop URL prefetch: while this preview plays, resolve the NEXT
+        // scan candidate's preview URL through the same cache so the hop
+        // feels instant. URL only — no audio element is created or loaded.
+        if (p.previewUrl) {
+          const n = scannableStations.length;
+          const nextEntry =
+            scannableStations[(((scanIdx + scanDir) % n) + n) % n];
+          if (nextEntry && nextEntry.mbid !== entry.mbid) {
+            prefetchPreview(nextEntry.mbid);
+          }
         }
         // Schedule next hop: quick-skip when no preview is available.
         scanTimerRef.current = setTimeout(() => {
