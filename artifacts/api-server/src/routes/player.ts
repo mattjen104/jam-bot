@@ -19,6 +19,7 @@ import { getUserFromSession } from "../lore/userSession.js";
 import { toStation, isPickerOptedOut, validScheduleShowAttribution } from "./lore/shared.js";
 import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
 import { classifyFreshness } from "../lore/freshness.js";
+import { estimateExpiry } from "../lore/expiry.js";
 import { pollStation } from "../lore/poller.js";
 import { h } from "../middlewares/asyncHandler.js";
 
@@ -235,6 +236,9 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
       artistMbid: recordingsTable.artistMbid,
       artworkUrl: recordingsTable.artworkUrl,
       releaseYear: recordingsTable.releaseYear,
+      durationMs: recordingsTable.durationMs,
+      playOffsetMs: spinsTable.playOffsetMs,
+      offsetCapturedAt: spinsTable.offsetCapturedAt,
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
@@ -244,6 +248,21 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
 
   const now = new Date();
   const freshness = spin ? classifyFreshness(spin.source, spin.observedAt, now) : null;
+
+  // Advisory expiry estimate: when the recording's duration is known, how
+  // much of the song is likely left. Null when duration (or a position
+  // signal) is absent — no estimate, no penalty. This never changes which
+  // track is reported; the client only uses it to schedule a re-check just
+  // past the estimated boundary instead of trusting an about-to-expire track.
+  const expiry = spin
+    ? estimateExpiry({
+        durationMs: spin.durationMs,
+        playedAt: spin.playedAt,
+        playOffsetMs: spin.playOffsetMs,
+        offsetCapturedAt: spin.offsetCapturedAt,
+        now,
+      })
+    : null;
 
   // "Fresh" means within the source's freshness budget — anything past it
   // (aging/stale, or no stored spin at all) warrants a one-shot re-poll.
@@ -273,6 +292,8 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
           observedAt: spin.observedAt.toISOString(),
           freshness,
           resolved: spin.mbid != null,
+          estimatedRemainingMs: expiry?.remainingMs ?? null,
+          likelyExpiring: expiry?.likelyExpiring ?? false,
         }
       : null,
     refreshTriggered,

@@ -24,7 +24,19 @@ export function fingerprintAvailable(): boolean {
   return !!acrCredentials();
 }
 
-export async function fingerprintStream(streamUrl: string): Promise<AcrMatch | null> {
+export interface FingerprintResult {
+  match: AcrMatch | null;
+  /**
+   * When the captured clip ENDED. ACRCloud's play_offset_ms is the position
+   * in the matched original track at the end of the recognized portion, so
+   * this — not the capture start — is the instant the offset applies to.
+   * Pairing the offset with capture start would overstate elapsed time by
+   * the whole clip duration (+ latency) and fire expiry re-checks early.
+   */
+  clipEndedAt: Date;
+}
+
+export async function fingerprintStream(streamUrl: string): Promise<FingerprintResult> {
   const creds = acrCredentials();
   if (!creds) throw new Error("ACRCloud is not configured");
 
@@ -34,7 +46,9 @@ export async function fingerprintStream(streamUrl: string): Promise<AcrMatch | n
   // -f mp3           — output as MP3 (compact, ACRCloud accepts it)
   // pipe:1           — write to stdout
   const clip = await captureClip(streamUrl);
-  return identifyAudio(clip, creds);
+  const clipEndedAt = new Date();
+  const match = await identifyAudio(clip, creds);
+  return { match, clipEndedAt };
 }
 
 function captureClip(streamUrl: string): Promise<Buffer> {

@@ -585,6 +585,9 @@ async function persistSpin(args: {
       citation: citation ?? null,
       confidence: r.confidence,
       ...(raw.playedAt ? { playedAt: raw.playedAt } : {}),
+      // Fingerprint position signal — only ACR-derived spins carry it.
+      ...(raw.playOffsetMs != null ? { playOffsetMs: raw.playOffsetMs } : {}),
+      ...(raw.offsetCapturedAt ? { offsetCapturedAt: raw.offsetCapturedAt } : {}),
       // Observation time is ALWAYS "now" — when Lore received the metadata —
       // even for history-feed items whose playedAt is hours old. Freshness
       // classification keys off this, never off playedAt.

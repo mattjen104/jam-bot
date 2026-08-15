@@ -24,6 +24,15 @@ export interface FastLaneNow {
   observedAt: string;
   freshness: "fresh" | "aging" | "stale";
   resolved: boolean;
+  /**
+   * Advisory expiry estimate: how much of the song the server thinks is left
+   * (from recording duration + best position signal). Null when duration is
+   * unknown. Never changes which track is displayed — it only drives the
+   * boundary re-check below.
+   */
+  estimatedRemainingMs?: number | null;
+  /** True when the track is inside the server's likely-expiring window. */
+  likelyExpiring?: boolean;
 }
 
 export interface FastLaneResponse {
@@ -41,6 +50,23 @@ export interface FastLaneCandidate {
 
 /** Post-refresh re-check schedule (ms after landing response). */
 export const FAST_LANE_RECHECK_DELAYS_MS: readonly number[] = [2500, 5000];
+
+/** Padding past the estimated track boundary before the single expiry re-check. */
+export const EXPIRY_RECHECK_PAD_MS = 3000;
+/** Upper bound on how far out an expiry re-check may be scheduled. */
+export const EXPIRY_RECHECK_MAX_MS = 45_000;
+
+/**
+ * When a landing result is likely-expiring, when (ms from now) should the
+ * single boundary re-check fire? Null when the result carries no usable
+ * estimate — advisory only, no estimate ⇒ no re-check.
+ */
+export function expiryRecheckDelayMs(now: FastLaneNow | null): number | null {
+  if (!now?.likelyExpiring) return null;
+  const remaining = now.estimatedRemainingMs;
+  if (remaining == null || remaining < 0) return null;
+  return Math.min(remaining + EXPIRY_RECHECK_PAD_MS, EXPIRY_RECHECK_MAX_MS);
+}
 
 /**
  * Does the fast-lane result name a different track than the landing
@@ -71,6 +97,11 @@ export function useStationFastLane(
   // supersedes any in-flight re-check schedule.
   const timersRef = useRef(new Map<string, number[]>());
 
+  // Per-slug landing generation. A new landing bumps the generation, so any
+  // still-in-flight fetch from a superseded landing is discarded on arrival:
+  // it neither reconciles the display nor registers re-check timers.
+  const genRef = useRef(new Map<string, number>());
+
   const clearSlugTimers = useCallback((slug: string) => {
     const ids = timersRef.current.get(slug);
     if (ids) {
@@ -82,46 +113,80 @@ export function useStationFastLane(
   const landOnStation = useCallback(
     (slug: string, candidate: FastLaneCandidate | null) => {
       clearSlugTimers(slug);
+      const gen = (genRef.current.get(slug) ?? 0) + 1;
+      genRef.current.set(slug, gen);
+      const isCurrent = () => genRef.current.get(slug) === gen;
 
-      const check = async (): Promise<boolean> => {
+      const check = async (): Promise<FastLaneResponse | null> => {
         const res = await fetch(
           `/api/player/station/${encodeURIComponent(slug)}/now`,
           { headers: { "Content-Type": "application/json" } },
         );
-        if (!res.ok) return false;
+        // Superseded while in flight: a newer landing owns this slug now —
+        // discard the result entirely (no reconcile, no timers).
+        if (!isCurrent()) return null;
+        if (!res.ok) return null;
         const body = (await res.json()) as FastLaneResponse;
+        if (!isCurrent()) return null;
         if (body.now && tracksDiffer(candidate, body.now)) {
           cbRef.current(slug, body.now);
         }
-        return body.refreshTriggered;
+        return body;
+      };
+
+      const addTimers = (ids: number[]) => {
+        const existing = timersRef.current.get(slug) ?? [];
+        timersRef.current.set(slug, [...existing, ...ids]);
       };
 
       void check()
-        .then((refreshTriggered) => {
-          if (!refreshTriggered) return;
-          // The server kicked a one-shot source refresh — briefly re-check so
-          // the corrected track lands. Re-checks never reschedule themselves
-          // (the server debounces further refreshes anyway).
-          const ids = FAST_LANE_RECHECK_DELAYS_MS.map((delay) =>
-            window.setTimeout(() => {
-              void check().catch(() => { /* transient — landing is best-effort */ });
-            }, delay),
-          );
-          timersRef.current.set(slug, ids);
+        .then((body) => {
+          if (!body) return;
+          const ids: number[] = [];
+          if (body.refreshTriggered) {
+            // The server kicked a one-shot source refresh — briefly re-check so
+            // the corrected track lands. Re-checks never reschedule themselves
+            // (the server debounces further refreshes anyway).
+            ids.push(
+              ...FAST_LANE_RECHECK_DELAYS_MS.map((delay) =>
+                window.setTimeout(() => {
+                  void check().catch(() => { /* transient — landing is best-effort */ });
+                }, delay),
+              ),
+            );
+          }
+          // Likely-expiring candidate: the song is close to its end, so the
+          // track we just landed on is provisional. Schedule ONE re-check just
+          // past the estimated boundary; only a genuinely different track from
+          // the server changes the display (tracksDiffer above). The boundary
+          // re-check never reschedules itself.
+          const expiryDelay = expiryRecheckDelayMs(body.now);
+          if (expiryDelay != null) {
+            ids.push(
+              window.setTimeout(() => {
+                void check().catch(() => { /* transient — landing is best-effort */ });
+              }, expiryDelay),
+            );
+          }
+          if (ids.length) addTimers(ids);
         })
         .catch(() => { /* transient — landing is best-effort */ });
     },
     [clearSlugTimers],
   );
 
-  // Unmount: cancel every pending re-check.
+  // Unmount: cancel every pending re-check AND invalidate all landing
+  // generations, so an in-flight fetch resolving after cleanup can neither
+  // reconcile nor register new timers.
   useEffect(() => {
     const timers = timersRef.current;
+    const gens = genRef.current;
     return () => {
       for (const ids of timers.values()) {
         for (const id of ids) window.clearTimeout(id);
       }
       timers.clear();
+      gens.clear();
     };
   }, []);
 

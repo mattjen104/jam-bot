@@ -133,4 +133,5 @@
 - [Shows lens Bandsintown config](shows-lens-bandsintown.md) — fetcher fails closed/silent without BANDSINTOWN_APP_ID; always-empty Shows = check the secret first.
 - [Now-playing freshness contract](nowplaying-freshness.md) — unchanged-track dedup paths must refresh observed_at (live only, never backfill) or healthy stations go falsely stale; local vitest hangs = merge-gate flock held.
 - [Positional body.click() in e2e helpers](e2e-positional-body-click.md) — Playwright clicks body center; strip reorders silently retarget the click onto chips; blur via evaluate instead.
+- [Track expiry advisory signal](track-expiry-advisory.md) — likely-expiring estimate never swaps the displayed track, only schedules one boundary re-check; lives on the plain-JSON fast lane, not orval payloads.
 - [Vitest 4 config placement traps](vitest4-config-placement.md) — cacheDir must be top-level (not test.cacheDir); environmentMatchGlobs removed, use test.projects with extends:true; both fail silently.

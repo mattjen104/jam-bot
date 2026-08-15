@@ -22,6 +22,16 @@ export interface AcrMatch {
   artist: string;
   album: string;
   isrc?: string;
+  /**
+   * ACRCloud `play_offset_ms`: the playback position within the MATCHED
+   * ORIGINAL TRACK at the end of the recognized portion — not an offset
+   * within the submitted clip. (The clip-relative offsets are the separate
+   * `sample_begin/end_time_offset_ms` fields; `play_offset_ms` tracks
+   * `db_end_time_offset_ms`, the matched region of the database track. See
+   * docs.acrcloud.com/reference/identification-api/metadata/music.) This is
+   * what makes it usable as an absolute position signal, e.g. for the
+   * track-expiry estimate.
+   */
   playOffsetMs: number;
   score?: number;
 }

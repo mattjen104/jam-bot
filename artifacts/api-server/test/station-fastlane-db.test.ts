@@ -30,8 +30,10 @@ import {
  */
 const run = randomUUID().slice(0, 8);
 const MBID = `test-fl-a-${run}`;
+const MBID_EXP = `test-fl-exp-${run}`;
 const freshSlug = `test-fl-fresh-${run}`;
 const staleSlug = `test-fl-stale-${run}`;
+const expiringSlug = `test-fl-expiring-${run}`;
 const MIN = 60 * 1000;
 
 let dbAvailable = false;
@@ -71,12 +73,21 @@ beforeAll(async () => {
         stationClass: "curated",
         nowPlayingSource: "radio_browser_icy",
       },
+      {
+        slug: expiringSlug,
+        name: `Test FL Expiring ${run}`,
+        streamUrl: "http://example.invalid/fl-expiring",
+        stationClass: "curated",
+        nowPlayingSource: "radio_browser_icy",
+      },
     ])
     .returning({ id: stationsTable.id });
   stationIds = stations.map((s) => s.id);
 
   await db.insert(recordingsTable).values([
-    { mbid: MBID, title: "Fast Song", artist: `Fast Artist ${run}` },
+    // Known 3-minute duration → the fast lane can compute an expiry estimate.
+    { mbid: MBID, title: "Fast Song", artist: `Fast Artist ${run}`, durationMs: 180_000 },
+    { mbid: MBID_EXP, title: "Ending Song", artist: `Ending Artist ${run}`, durationMs: 180_000 },
   ]);
 
   const now = Date.now();
@@ -102,6 +113,20 @@ beforeAll(async () => {
       playedAt: new Date(now - 10 * MIN),
       observedAt: new Date(now - 10 * MIN),
     },
+    // Expiring: fingerprint offset pins the song near its end (170s into a
+    // 180s song, captured seconds ago) — playedAt alone would say otherwise.
+    {
+      stationId: stationIds[2]!,
+      mbid: MBID_EXP,
+      confidence: "text",
+      source: "radio_browser_icy",
+      rawArtist: "raw-fl-exp",
+      rawTitle: "raw-fl-exp-t",
+      playedAt: new Date(now - 10_000),
+      observedAt: new Date(now - 2_000),
+      playOffsetMs: 170_000,
+      offsetCapturedAt: new Date(now - 2_000),
+    },
   ]);
 
   server = app.listen(0);
@@ -116,7 +141,7 @@ afterAll(async () => {
   _testOnly_resetFastLaneDebounce();
   if (!dbAvailable || stationIds.length === 0) return;
   await db.delete(spinsTable).where(inArray(spinsTable.stationId, stationIds));
-  await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID]));
+  await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID, MBID_EXP]));
   await db.delete(stationsTable).where(inArray(stationsTable.id, stationIds));
 });
 
@@ -178,6 +203,41 @@ describe("GET /api/player/station/:slug/now", () => {
     const body3 = (await res3.json()) as { refreshTriggered: boolean };
     expect(body3.refreshTriggered).toBe(true);
     expect(refreshes()).toBe(2);
+  });
+
+  it("includes an advisory expiry estimate when duration is known", async () => {
+    if (!dbAvailable) return;
+    const res = await fetch(`${baseUrl}/api/player/station/${freshSlug}/now`);
+    const body = (await res.json()) as {
+      now: { estimatedRemainingMs: number | null; likelyExpiring: boolean } | null;
+    };
+    // 180s song, started ~5s ago → plenty remaining, not expiring.
+    expect(body.now!.estimatedRemainingMs).not.toBeNull();
+    expect(body.now!.estimatedRemainingMs!).toBeGreaterThan(150_000);
+    expect(body.now!.likelyExpiring).toBe(false);
+  });
+
+  it("omits the estimate when duration is unknown (no penalty)", async () => {
+    if (!dbAvailable) return;
+    const res = await fetch(`${baseUrl}/api/player/station/${staleSlug}/now`);
+    const body = (await res.json()) as {
+      now: { estimatedRemainingMs: number | null; likelyExpiring: boolean } | null;
+    };
+    expect(body.now!.estimatedRemainingMs).toBeNull();
+    expect(body.now!.likelyExpiring).toBe(false);
+  });
+
+  it("uses the fingerprint offset as the position source and flags likely-expiring", async () => {
+    if (!dbAvailable) return;
+    const res = await fetch(`${baseUrl}/api/player/station/${expiringSlug}/now`);
+    const body = (await res.json()) as {
+      now: { estimatedRemainingMs: number | null; likelyExpiring: boolean } | null;
+    };
+    // Offset pinned the song at ~172s of 180s → <10s left; playedAt alone
+    // (10s ago) would have said ~170s remained.
+    expect(body.now!.estimatedRemainingMs).not.toBeNull();
+    expect(body.now!.estimatedRemainingMs!).toBeLessThan(15_000);
+    expect(body.now!.likelyExpiring).toBe(true);
   });
 
   it("404s for an unknown station", async () => {

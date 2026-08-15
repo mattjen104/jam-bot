@@ -14,6 +14,13 @@ export interface NowPlayingRaw {
   /** ISRC, when the source provides one. */
   isrc?: string;
   durationMs?: number;
+  /**
+   * ACR fingerprint play offset — how far into the song (ms) the captured
+   * clip was, per the provider. Only fingerprint-derived reports carry it.
+   */
+  playOffsetMs?: number;
+  /** When the fingerprint clip was captured (pairs with playOffsetMs). */
+  offsetCapturedAt?: Date;
   /** Show/DJ attribution, when the source exposes program metadata (e.g. NTS). */
   show?: ShowAttribution;
 }

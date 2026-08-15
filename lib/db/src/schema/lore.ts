@@ -533,6 +533,16 @@ export const spinsTable = pgTable(
      * timestamp — readers coalesce to `createdAt`.
      */
     observedAt: timestamp("observed_at").defaultNow(),
+    /**
+     * ACR fingerprint play offset — how far into the song (ms) the provider
+     * said the captured clip was. Only set for fingerprint-derived spins;
+     * null for every ordinary polled spin. Together with
+     * `offsetCapturedAt`, this is the strongest position signal for the
+     * track-expiry estimate.
+     */
+    playOffsetMs: integer("play_offset_ms"),
+    /** When the fingerprint clip was captured (pairs with playOffsetMs). */
+    offsetCapturedAt: timestamp("offset_captured_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [

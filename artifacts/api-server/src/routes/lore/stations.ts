@@ -871,14 +871,15 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
     return res.status(422).json({ error: "Station has no stream URL" });
   }
 
-  let match: Awaited<ReturnType<typeof fingerprintStream>>;
+  let result: Awaited<ReturnType<typeof fingerprintStream>>;
   try {
-    match = await fingerprintStream(station.streamUrl);
+    result = await fingerprintStream(station.streamUrl);
   } catch (err) {
     console.error("[lore] fingerprint failed", station.slug, err);
     return res.status(502).json({ error: "Fingerprint failed", detail: String(err) });
   }
 
+  const { match, clipEndedAt } = result;
   if (!match) {
     return res.json(IcecastReportResultBody.parse({ logged: false, mbid: null }));
   }
@@ -887,6 +888,12 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
     rawArtist: match.artist,
     rawTitle: match.title,
     ...(match.isrc ? { isrc: match.isrc } : {}),
+    // Preserve the provider's position signal. play_offset_ms is the
+    // position in the matched ORIGINAL track at the END of the recognized
+    // clip, so it's paired with the clip-end timestamp — not the capture
+    // start (which would overstate elapsed time by the clip duration).
+    playOffsetMs: match.playOffsetMs,
+    offsetCapturedAt: clipEndedAt,
   });
 
   const [latest] = await db

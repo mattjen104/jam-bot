@@ -11,7 +11,10 @@ import { renderHook, act } from "@testing-library/react";
 import {
   useStationFastLane,
   tracksDiffer,
+  expiryRecheckDelayMs,
   FAST_LANE_RECHECK_DELAYS_MS,
+  EXPIRY_RECHECK_PAD_MS,
+  EXPIRY_RECHECK_MAX_MS,
   type FastLaneNow,
   type FastLaneResponse,
 } from "../src/hooks/useStationFastLane";
@@ -61,6 +64,32 @@ const resp = (now: FastLaneNow | null, refreshTriggered: boolean): FastLaneRespo
   station: { slug: "kfoo", name: "KFOO" },
   now,
   refreshTriggered,
+});
+
+describe("expiryRecheckDelayMs", () => {
+  it("returns null without a likely-expiring flag or usable estimate", () => {
+    expect(expiryRecheckDelayMs(null)).toBeNull();
+    expect(expiryRecheckDelayMs(NOW_BASE)).toBeNull();
+    expect(
+      expiryRecheckDelayMs({ ...NOW_BASE, likelyExpiring: false, estimatedRemainingMs: 5000 }),
+    ).toBeNull();
+    // Advisory rule: expiring without an estimate schedules nothing.
+    expect(
+      expiryRecheckDelayMs({ ...NOW_BASE, likelyExpiring: true, estimatedRemainingMs: null }),
+    ).toBeNull();
+  });
+
+  it("schedules just past the estimated boundary, capped", () => {
+    expect(
+      expiryRecheckDelayMs({ ...NOW_BASE, likelyExpiring: true, estimatedRemainingMs: 8000 }),
+    ).toBe(8000 + EXPIRY_RECHECK_PAD_MS);
+    expect(
+      expiryRecheckDelayMs({ ...NOW_BASE, likelyExpiring: true, estimatedRemainingMs: 0 }),
+    ).toBe(EXPIRY_RECHECK_PAD_MS);
+    expect(
+      expiryRecheckDelayMs({ ...NOW_BASE, likelyExpiring: true, estimatedRemainingMs: 500_000 }),
+    ).toBe(EXPIRY_RECHECK_MAX_MS);
+  });
 });
 
 describe("useStationFastLane", () => {
@@ -142,6 +171,148 @@ describe("useStationFastLane", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1 + FAST_LANE_RECHECK_DELAYS_MS.length);
   });
 
+  it("schedules ONE boundary re-check for a likely-expiring landing and reconciles only on real change", async () => {
+    const expiring: FastLaneNow = {
+      ...NOW_BASE,
+      mbid: "mbid-old",
+      title: "Old",
+      artist: "Old",
+      likelyExpiring: true,
+      estimatedRemainingMs: 8000,
+    };
+    const swapped: FastLaneNow = { ...NOW_BASE, mbid: "mbid-next", title: "Next Song" };
+    const fetchMock = fetchResponding([resp(expiring, false), resp(swapped, false)]);
+    vi.stubGlobal("fetch", fetchMock);
+    const onFresh = vi.fn();
+    const { result } = renderHook(() => useStationFastLane(onFresh));
+
+    await act(async () => {
+      // Candidate matches the expiring track — advisory only, no reconcile yet.
+      result.current.landOnStation("kfoo", { mbid: "mbid-old", title: "Old", artist: "Old" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onFresh).not.toHaveBeenCalled();
+
+    // Before the boundary: nothing fires.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000 + EXPIRY_RECHECK_PAD_MS - 100);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Just past the boundary: exactly one re-check; the real swap reconciles.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onFresh).toHaveBeenCalledTimes(1);
+    expect(onFresh).toHaveBeenCalledWith("kfoo", swapped);
+
+    // The boundary re-check never reschedules itself.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("no boundary re-check when the landing result carries no estimate", async () => {
+    const fetchMock = fetchResponding([resp({ ...NOW_BASE, likelyExpiring: true, estimatedRemainingMs: null }, false)]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useStationFastLane(vi.fn()));
+    await act(async () => {
+      result.current.landOnStation("kfoo", { mbid: "mbid-new", title: "New Song", artist: "New Artist" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a new landing on the same station supersedes a pending boundary re-check", async () => {
+    const expiring: FastLaneNow = {
+      ...NOW_BASE,
+      likelyExpiring: true,
+      estimatedRemainingMs: 10_000,
+    };
+    const fetchMock = fetchResponding([
+      resp(expiring, false),
+      resp(NOW_BASE, false),
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useStationFastLane(vi.fn()));
+
+    await act(async () => {
+      result.current.landOnStation("kfoo", { mbid: "mbid-new", title: "New Song", artist: "New Artist" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Re-land before the boundary: old timer cleared, new landing fetches.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+      result.current.landOnStation("kfoo", { mbid: "mbid-new", title: "New Song", artist: "New Artist" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Second response was not expiring — the superseded timer must not fire.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a superseded landing's delayed first response (no reconcile, no timers)", async () => {
+    // First landing's response is likely-expiring AND differs from the new
+    // candidate — if the race were unguarded it would both reconcile the old
+    // track and register a boundary re-check.
+    const stale: FastLaneNow = {
+      ...NOW_BASE,
+      mbid: "mbid-stale",
+      title: "Stale",
+      artist: "Stale",
+      likelyExpiring: true,
+      estimatedRemainingMs: 5000,
+    };
+    let resolveFirst!: (r: Response) => void;
+    const bodies = [resp(NOW_BASE, false)];
+    let call = 0;
+    const fetchMock = vi.fn(() => {
+      call += 1;
+      if (call === 1) {
+        return new Promise<Response>((r) => { resolveFirst = r; });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(bodies[0]),
+      } as Response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onFresh = vi.fn();
+    const { result } = renderHook(() => useStationFastLane(onFresh));
+
+    await act(async () => {
+      result.current.landOnStation("kfoo", { mbid: "mbid-old", title: "Old", artist: "Old" });
+      await vi.advanceTimersByTimeAsync(0);
+      // Second landing on the same station while the first fetch hangs.
+      result.current.landOnStation("kfoo", { mbid: "mbid-new", title: "New Song", artist: "New Artist" });
+      await vi.advanceTimersByTimeAsync(0);
+      // Now the FIRST (superseded) response arrives, late.
+      resolveFirst({ ok: true, json: () => Promise.resolve(resp(stale, true)) } as Response);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The late stale response must not reconcile (second landing's response
+    // matched its candidate, so no callback at all)…
+    expect(onFresh).not.toHaveBeenCalled();
+    // …and must not have registered refresh/expiry timers.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("cancels pending re-checks on unmount", async () => {
     const fetchMock = fetchResponding([
       resp({ ...NOW_BASE, freshness: "stale" }, true),
@@ -157,6 +328,37 @@ describe("useStationFastLane", () => {
     unmount();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a response arriving after unmount neither reconciles nor registers timers", async () => {
+    let resolveFirst!: (r: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((r) => { resolveFirst = r; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const onFresh = vi.fn();
+    const { result, unmount } = renderHook(() => useStationFastLane(onFresh));
+
+    await act(async () => {
+      result.current.landOnStation("kfoo", { mbid: "mbid-old", title: "Old", artist: "Old" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    unmount();
+    await act(async () => {
+      // Late response: differing, likely-expiring, refresh-triggered — every
+      // path that could reconcile or schedule.
+      resolveFirst({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            resp({ ...NOW_BASE, likelyExpiring: true, estimatedRemainingMs: 5000 }, true),
+          ),
+      } as Response);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(onFresh).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
