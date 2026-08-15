@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  cacheDir: "../../.cache/vitest/api-server",
   test: {
     environment: "node",
     // globalSetup runs once in the main thread before any worker starts.
@@ -11,6 +12,7 @@ export default defineConfig({
     globalSetup: ["./test/globalSetup.ts"],
     setupFiles: ["./test/setup.ts"],
     include: ["test/**/*.test.ts"],
+    bail: 1,
     // 30 s per test — DB integration tests can take several seconds each.
     // The 5 s default caused spurious timeouts on overlaps/crossings/player
     // requests that had to wait for a connection under parallel load.

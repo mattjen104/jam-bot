@@ -6,6 +6,7 @@ import { defineConfig } from "vitest/config";
 // count is capped even lower than the main config to keep connection
 // pressure and lock contention down.
 export default defineConfig({
+  cacheDir: "../../.cache/vitest/api-server-db",
   test: {
     environment: "node",
     globalSetup: ["./test/globalSetup.ts"],
@@ -17,6 +18,7 @@ export default defineConfig({
     // those tests override inline to 150s.
     testTimeout: 180_000,
     hookTimeout: 180_000,
+    bail: 1,
     // 1 worker: eliminates inter-file contention on the shared Postgres instance.
     // At 2 workers the DB-test suite intermittently races the running API Server
     // workflow's background pollers (radio-browser discovery, ICY watchers) and
