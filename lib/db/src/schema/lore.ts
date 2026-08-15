@@ -525,6 +525,14 @@ export const spinsTable = pgTable(
      */
     confidence: text("confidence").notNull().default("unresolved"),
     playedAt: timestamp("played_at").notNull().defaultNow(),
+    /**
+     * When Lore actually observed this play (ingestion time), as opposed to
+     * `playedAt` which is the station-reported start time (or our best guess).
+     * Powers the now-playing freshness classification (fresh/aging/stale).
+     * Nullable: rows written before the column existed have no observation
+     * timestamp — readers coalesce to `createdAt`.
+     */
+    observedAt: timestamp("observed_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [

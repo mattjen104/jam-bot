@@ -4450,6 +4450,21 @@ components:
           enum: [recording_id, isrc, text, unresolved, spotify]
         playedAt:
           type: string
+        observedAt:
+          type: string
+          description: >-
+            When Lore actually received this metadata (ingestion time), as
+            opposed to `playedAt` (station-reported start time). Optional —
+            older cached payloads may omit it; clients must degrade.
+        freshness:
+          type: string
+          enum: [fresh, aging, stale]
+          description: >-
+            Server-computed freshness class derived from the source's expected
+            polling cadence and the age since `observedAt`. `stale` items
+            should not be presented as definitively playing right now, and are
+            never counted as confirmed live crossings. Optional — absent means
+            unknown; treat as non-stale.
         artworkUrl:
           type: ["string", "null"]
         recording:

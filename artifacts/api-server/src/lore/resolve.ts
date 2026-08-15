@@ -585,6 +585,10 @@ async function persistSpin(args: {
       citation: citation ?? null,
       confidence: r.confidence,
       ...(raw.playedAt ? { playedAt: raw.playedAt } : {}),
+      // Observation time is ALWAYS "now" — when Lore received the metadata —
+      // even for history-feed items whose playedAt is hours old. Freshness
+      // classification keys off this, never off playedAt.
+      observedAt: new Date(),
     })
     .onConflictDoNothing({
       target: [spinsTable.stationId, spinsTable.externalId],
@@ -667,6 +671,7 @@ export async function logSpinIfChanged(
 
     const [last] = await db
       .select({
+        id: spinsTable.id,
         rawArtist: spinsTable.rawArtist,
         rawTitle: spinsTable.rawTitle,
         playedAt: spinsTable.playedAt,
@@ -677,12 +682,21 @@ export async function logSpinIfChanged(
       .limit(1);
 
     // Primary dedup: same track as the current last spin → nothing changed.
+    // The station DID just confirm this track is still on air, so refresh the
+    // spin's observation timestamp — otherwise a healthy station playing a
+    // normal multi-minute song would be classified stale after 2× its poll
+    // cadence. This is an observation refresh only: no new spin, no
+    // spin-changed event.
     if (
       last &&
       last.rawArtist &&
       last.rawTitle &&
       sig(last.rawArtist, last.rawTitle) === candidateSig
     ) {
+      await db
+        .update(spinsTable)
+        .set({ observedAt: new Date() })
+        .where(eq(spinsTable.id, last.id));
       return false;
     }
 
@@ -848,6 +862,26 @@ export async function ingestRawSpins(
           ),
         );
       seen = new Set(rows.map((r) => r.externalId).filter((v): v is string => !!v));
+    }
+
+    // Live polling re-reports the current track with the same stable id every
+    // cycle. Refresh the newest already-seen play's observation timestamp so
+    // an unchanged current track stays fresh (observation refresh only —
+    // never a new spin). Backfill/reconcile sweeps skip this: a historical
+    // slice re-surfacing an old id is not a "still on air" confirmation.
+    if (!skipCursor) {
+      const newest = ordered[ordered.length - 1];
+      if (newest?.externalId && seen.has(newest.externalId)) {
+        await db
+          .update(spinsTable)
+          .set({ observedAt: new Date() })
+          .where(
+            and(
+              eq(spinsTable.stationId, station.id),
+              eq(spinsTable.externalId, newest.externalId),
+            ),
+          );
+      }
     }
 
     let logged = 0;

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NowPlayingConfidence } from "./nowPlayingConfidence";
+import type { NowPlayingFreshness } from "./nowPlayingFreshness";
 import type { NowPlayingRecording } from "./nowPlayingRecording";
 import type { ShowRef } from "./showRef";
 
@@ -24,6 +25,10 @@ export interface NowPlaying {
   source?: string | null;
   confidence: NowPlayingConfidence;
   playedAt: string;
+  /** When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade. */
+  observedAt?: string;
+  /** Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale. */
+  freshness?: NowPlayingFreshness;
   /** @nullable */
   artworkUrl?: string | null;
   recording?: NowPlayingRecording | null;

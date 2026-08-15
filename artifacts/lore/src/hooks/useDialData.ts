@@ -35,6 +35,7 @@ import {
 import { useMyPickerNames, useMyDialCrossings, useMyBlendedCrossings, useMyPickerOverlap, type DialCrossing } from "../lib/meHooks";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import { spinAgeTier, type AgeTier } from "../lib/dialAgeFilter";
+import { gateLiveHitFlags } from "../lib/freshness";
 
 // ---------------------------------------------------------------------------
 // Shared name normaliser — strips zero-width chars, trims, collapses spaces.
@@ -970,14 +971,22 @@ export function useDialData(
       const releaseYear =
         (np as { recording?: { releaseYear?: number | null } | null }).recording?.releaseYear ?? null;
       const isFirstSpin = (np as { isFirstSpin?: boolean }).isFirstSpin ?? false;
+      // Server-computed freshness gate: a stale observation is never counted
+      // as a confirmed live crossing — hit flags are downgraded here, at the
+      // single point where the live snapshot becomes currentTrack/liveTrack,
+      // so every crossing presentation (grammar, front door, lanes) inherits
+      // the rule. Absent freshness = unknown ⇒ behaves exactly as today.
+      const gated = gateLiveHitFlags(
+        np as { freshness?: string | null; isLibraryHit?: boolean; isArtistHit?: boolean },
+      );
       m.set(item.slug, {
         mbid,
         artistMbid,
         title,
         artist,
         playedAt: new Date().toISOString(),
-        isLibraryHit: (np as { isLibraryHit?: boolean }).isLibraryHit ?? false,
-        isArtistHit: (np as { isArtistHit?: boolean }).isArtistHit ?? false,
+        isLibraryHit: gated.isLibraryHit,
+        isArtistHit: gated.isArtistHit,
         isFirstSpin,
         releaseYear,
         ageTier: spinAgeTier(isFirstSpin, releaseYear),

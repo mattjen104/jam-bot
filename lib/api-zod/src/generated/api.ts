@@ -476,6 +476,18 @@ export const ListStationsAtDateResponse = zod.object({
                   "spotify",
                 ]),
                 playedAt: zod.string(),
+                observedAt: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade.",
+                  ),
+                freshness: zod
+                  .enum(["fresh", "aging", "stale"])
+                  .optional()
+                  .describe(
+                    "Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.",
+                  ),
                 artworkUrl: zod.string().nullish(),
                 recording: zod
                   .union([
@@ -603,6 +615,18 @@ export const ListStationsNowPlayingResponse = zod.object({
                   "spotify",
                 ]),
                 playedAt: zod.string(),
+                observedAt: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade.",
+                  ),
+                freshness: zod
+                  .enum(["fresh", "aging", "stale"])
+                  .optional()
+                  .describe(
+                    "Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.",
+                  ),
                 artworkUrl: zod.string().nullish(),
                 recording: zod
                   .union([
@@ -839,6 +863,18 @@ export const GetStationNowPlayingResponse = zod.object({
             "spotify",
           ]),
           playedAt: zod.string(),
+          observedAt: zod
+            .string()
+            .optional()
+            .describe(
+              "When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade.",
+            ),
+          freshness: zod
+            .enum(["fresh", "aging", "stale"])
+            .optional()
+            .describe(
+              "Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.",
+            ),
           artworkUrl: zod.string().nullish(),
           recording: zod
             .union([

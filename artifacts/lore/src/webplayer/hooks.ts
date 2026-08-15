@@ -19,6 +19,14 @@ export interface WpNow {
   artist: string;
   artworkUrl: string | null;
   playedAt: string;
+  /** When Lore received the metadata (ingestion time). Best-effort field. */
+  observedAt?: string;
+  /**
+   * Server-computed freshness class from the source's polling cadence.
+   * "stale" ⇒ show the "may be delayed" hint; absent ⇒ unknown, treat as
+   * non-stale.
+   */
+  freshness?: "fresh" | "aging" | "stale";
   resolved: boolean;
 }
 

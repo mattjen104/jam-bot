@@ -203,6 +203,8 @@ async function buildNpBase(dateFilter: string | null): Promise<NpBaseCache> {
       source: spinsTable.source,
       confidence: spinsTable.confidence,
       playedAt: spinsTable.playedAt,
+      // Rows predating the observed_at column fall back to created_at.
+      observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
       mbid: recordingsTable.mbid,
       title: recordingsTable.title,
       artist: recordingsTable.artist,
@@ -704,6 +706,8 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
       source: spinsTable.source,
       confidence: spinsTable.confidence,
       playedAt: spinsTable.playedAt,
+      // Rows predating the observed_at column fall back to created_at.
+      observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
       mbid: recordingsTable.mbid,
       title: recordingsTable.title,
       artist: recordingsTable.artist,

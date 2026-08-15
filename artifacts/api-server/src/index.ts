@@ -49,6 +49,7 @@ import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
 import { applyLibraryExportMigration } from "./lore/library-export-migration.js";
 import { applyLibraryRemovedMigration } from "./lore/library-removed-migration.js";
 import { applySpinsPlayedAtIndexMigration } from "./lore/spins-played-at-index-migration.js";
+import { applySpinObservedAtMigration } from "./lore/spin-observed-at-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
 import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
 import { applyImportBufferMigration } from "./lore/import-buffer-migration.js";
@@ -157,6 +158,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyLibraryExportMigration", applyLibraryExportMigration);
     await runMigration("applyLibraryRemovedMigration", applyLibraryRemovedMigration);
     await runMigration("applySpinsPlayedAtIndexMigration", applySpinsPlayedAtIndexMigration);
+    await runMigration("applySpinObservedAtMigration", applySpinObservedAtMigration);
     await runMigration("applyLibraryProvenanceBackfill", async () => {
       await applyLibraryProvenanceBackfill();
     });

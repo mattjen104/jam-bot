@@ -8,6 +8,7 @@ import {
 import { eq, and, sql, type SQLWrapper } from "drizzle-orm";
 import { eligibleDjName } from "@workspace/lore-attribution";
 import { isRelayAllowed, relayUrlPath } from "../../lore/stream-relay.js";
+import { classifyFreshness } from "../../lore/freshness.js";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
 
@@ -324,6 +325,9 @@ export function toNowPlaying(row: {
   source: string | null;
   confidence: string;
   playedAt: Date;
+  /** When Lore observed the metadata (ingestion time). Optional: older call
+   * sites that don't select it simply omit freshness from the payload. */
+  observedAt?: Date | null;
   mbid: string | null;
   title: string | null;
   artist: string | null;
@@ -347,6 +351,12 @@ export function toNowPlaying(row: {
     source: row.source,
     confidence: row.confidence,
     playedAt: row.playedAt.toISOString(),
+    ...(row.observedAt
+      ? {
+          observedAt: row.observedAt.toISOString(),
+          freshness: classifyFreshness(row.source, row.observedAt),
+        }
+      : {}),
     artworkUrl: row.artworkUrl ?? null,
     recording: row.mbid
       ? {

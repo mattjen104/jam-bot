@@ -17,6 +17,7 @@ import { eq, and, desc, asc, sql, inArray, isNotNull, isNull, gte } from "drizzl
 import { getUserFromSession } from "../lore/userSession.js";
 import { toStation, isPickerOptedOut, validScheduleShowAttribution } from "./lore/shared.js";
 import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
+import { classifyFreshness } from "../lore/freshness.js";
 import { h } from "../middlewares/asyncHandler.js";
 
 /**
@@ -57,6 +58,9 @@ router.get("/player/onair", h(async (req, res) => {
     .selectDistinctOn([spinsTable.stationId], {
       stationId: spinsTable.stationId,
       playedAt: spinsTable.playedAt,
+      // Rows predating the observed_at column fall back to created_at.
+      observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
+      source: spinsTable.source,
       rawArtist: spinsTable.rawArtist,
       rawTitle: spinsTable.rawTitle,
       mbid: recordingsTable.mbid,
@@ -153,6 +157,8 @@ router.get("/player/onair", h(async (req, res) => {
           artist: spin.artist ?? spin.rawArtist,
           artworkUrl: spin.artworkUrl ?? null,
           playedAt: spin.playedAt.toISOString(),
+          observedAt: spin.observedAt.toISOString(),
+          freshness: classifyFreshness(spin.source, spin.observedAt, now),
           resolved: spin.mbid != null,
         },
         earlier,

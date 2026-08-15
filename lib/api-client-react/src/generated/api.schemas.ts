@@ -631,6 +631,18 @@ export const NowPlayingConfidence = {
   spotify: "spotify",
 } as const;
 
+/**
+ * Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.
+ */
+export type NowPlayingFreshness =
+  (typeof NowPlayingFreshness)[keyof typeof NowPlayingFreshness];
+
+export const NowPlayingFreshness = {
+  fresh: "fresh",
+  aging: "aging",
+  stale: "stale",
+} as const;
+
 export type ShowRefExtraction =
   (typeof ShowRefExtraction)[keyof typeof ShowRefExtraction];
 
@@ -669,6 +681,10 @@ export interface NowPlaying {
   source?: string | null;
   confidence: NowPlayingConfidence;
   playedAt: string;
+  /** When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade. */
+  observedAt?: string;
+  /** Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale. */
+  freshness?: NowPlayingFreshness;
   /** @nullable */
   artworkUrl?: string | null;
   recording?: NowPlayingRecording | null;

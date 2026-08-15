@@ -14,6 +14,7 @@ import {
 import { BottlePanel } from "../components/BottlePanel";
 import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
 import { useSocialMode } from "../lib/social";
+import { isStaleNowPlaying } from "../lib/freshness";
 import { useWpOnAir, useWpLoreCounts, type WpOnAirItem } from "./hooks";
 import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
@@ -149,6 +150,16 @@ function NowPlayingCard({
       <div style={{ minWidth: 0, flex: 1 }}>
         <p style={{ margin: 0, fontSize: 17, fontWeight: 400 }}>
           {trackLine}
+          {!scanHop && item && isStaleNowPlaying(item.now) && (
+            <span
+              className="wp-mono"
+              style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 8 }}
+              data-testid="wp-now-stale"
+              title="This station's feed hasn't updated in a while — the track may have changed."
+            >
+              may be delayed
+            </span>
+          )}
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 15, color: "var(--wp-text-secondary)" }}>
           {stationLine}
@@ -421,7 +432,8 @@ function OnAirKeep({
   );
 }
 
-function OnAirRow({
+// Exported for component tests (stale "may be delayed" indicator coverage).
+export function OnAirRow({
   item,
   authenticated,
   nowInLibrary,
@@ -534,6 +546,16 @@ function OnAirRow({
         {item.now.resolved ? (
           <p style={{ margin: "1px 0 0", fontSize: 14, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
             {item.now.artist}
+            {isStaleNowPlaying(item.now) && (
+              <span
+                className="wp-mono"
+                style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}
+                data-testid={`wp-stale-${item.station.slug}`}
+                title="This station's feed hasn't updated in a while — the track may have changed."
+              >
+                may be delayed
+              </span>
+            )}
             {socialEnabled && presence != null && presence.count > 1 && (
               <span
                 style={{ display: "inline-flex", alignItems: "center", fontSize: 12, color: "var(--wp-text-muted)", marginLeft: 5, opacity: 0.8 }}
@@ -567,6 +589,16 @@ function OnAirRow({
         ) : (
           <p style={{ margin: "1px 0 0", fontSize: 14, color: "var(--wp-text-muted)", ...oneLine }}>
             {item.now.title ?? "resolving spins…"}
+            {isStaleNowPlaying(item.now) && (
+              <span
+                className="wp-mono"
+                style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}
+                data-testid={`wp-stale-${item.station.slug}`}
+                title="This station's feed hasn't updated in a while — the track may have changed."
+              >
+                may be delayed
+              </span>
+            )}
           </p>
         )}
       </button>

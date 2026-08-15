@@ -154,6 +154,7 @@ export * from "./meShowsEvent";
 export * from "./meShowsResponse";
 export * from "./nowPlaying";
 export * from "./nowPlayingConfidence";
+export * from "./nowPlayingFreshness";
 export * from "./nowPlayingRecording";
 export * from "./oEmbed";
 export * from "./overlapRunItem";
