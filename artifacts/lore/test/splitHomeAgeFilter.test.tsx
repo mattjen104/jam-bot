@@ -296,4 +296,71 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(screen.queryByTestId("fdrow-deep-1")).toBeNull();
     expect(screen.queryByTestId("fdrow-cur-1")).toBeNull();
   });
+
+  it("renders one scan button per 5-row page and navigates past /scan3", () => {
+    // 23 stations → 5 pages (/scan1…/scan5); /scan4 shows rows 16–20.
+    mockStations.value = Array.from({ length: 23 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    render(<SplitHome />);
+
+    const scanRow = screen.getByRole("group", { name: "Scan commands" });
+    expect(scanRow.querySelectorAll("button")).toHaveLength(5);
+
+    typeCommand("/scan4");
+    expect(screen.getByTestId("fdrow-st-16")).toBeTruthy();
+    expect(screen.getByTestId("fdrow-st-20")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-st-15")).toBeNull();
+    expect(screen.queryByTestId("fdrow-st-21")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "scan 4 /scan4" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("clamps an out-of-range /scanN to the last valid page of a stable short list", () => {
+    // 6 stations → 2 pages (offsets 0 and 5). /scan10 (offset 45) must NOT
+    // leave the listener on an empty window — it lands on page 2.
+    mockStations.value = Array.from({ length: 6 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    render(<SplitHome />);
+
+    typeCommand("/scan10");
+
+    expect(screen.getByTestId("fdrow-st-6")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-st-1")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "scan 2 /scan2" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.queryByRole("button", { name: "scan 3 /scan3" })).toBeNull();
+  });
+
+  it("clamps a stale scan offset when the filtered list shrinks below it", () => {
+    // 12 stations → 3 pages; go to the last page (offset 10), then shrink
+    // the list to 6 rows — the offset must clamp to 5 (the new last page),
+    // not leave the listener staring at an empty scan window.
+    mockStations.value = Array.from({ length: 12 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    const { rerender } = render(<SplitHome />);
+
+    typeCommand("/scan3");
+    expect(screen.getByTestId("fdrow-st-11")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "scan 3 /scan3" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    mockStations.value = mockStations.value.slice(0, 6);
+    rerender(<SplitHome />);
+
+    // Offset clamped 10 → 5: the 6th row is now visible, page 2 is active,
+    // and the now-invalid /scan3 button is gone.
+    expect(screen.getByTestId("fdrow-st-6")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-st-1")).toBeNull();
+    const scanRow = screen.getByRole("group", { name: "Scan commands" });
+    expect(scanRow.querySelectorAll("button")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "scan 2 /scan2" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
 });

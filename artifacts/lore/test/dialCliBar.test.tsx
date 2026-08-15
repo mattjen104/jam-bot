@@ -181,12 +181,25 @@ describe("DialCliBar", () => {
       ["/scan1", 0],
       ["/scan2", 5],
       ["/scan3", 10],
+      ["/scan4", 15],
+      ["/scan10", 45],
     ] as const)("routes %s to onScan(%i) and clears the field", (command, offset) => {
       const onScan = vi.fn();
       const { input } = renderCli({ onScan });
       type(input, command);
       fireEvent.keyDown(input, { key: "Enter" });
       expect(onScan).toHaveBeenCalledWith(offset);
+      expect(input.value).toBe("");
+    });
+
+    it("ignores /scan0 and /scan without a page number", () => {
+      const onScan = vi.fn();
+      const { input } = renderCli({ onScan });
+      type(input, "/scan0");
+      fireEvent.keyDown(input, { key: "Enter" });
+      type(input, "/scan");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onScan).not.toHaveBeenCalled();
       expect(input.value).toBe("");
     });
   });

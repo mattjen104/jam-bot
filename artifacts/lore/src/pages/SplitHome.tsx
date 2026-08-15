@@ -2,7 +2,8 @@
  * SplitHome — the Lore front door as a fixed three-band split view.
  *
  *   top ~50%  — CompactDial: five live stations from the attribution-ladder
- *               sort, windowed by the active scan (offset 0 / 5 / 10).
+ *               sort, windowed by the active scan (offset 0, 5, 10, … — the
+ *               page count grows with the filtered list).
  *   middle    — HomeCliStrip: the CLI seam. Scan buttons hang down from the
  *               Dial band; add-artists/library buttons extend up from the
  *               Stack band; the slash-command input sits between them.
@@ -36,7 +37,7 @@ import type { StationCategory } from "../components/dial/DialFilterBar";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
-import { HomeCliStrip, type ScanOffset } from "../components/HomeCliStrip";
+import { HomeCliStrip } from "../components/HomeCliStrip";
 import { useStartMattLibrary } from "../lib/meHooks";
 import type { MattCliStatus } from "../components/dial/DialCliBar";
 
@@ -68,11 +69,9 @@ export default function SplitHome() {
   const { addSeed } = useSeedManager();
   const { radio } = usePlayer();
 
-  // Scan window: which 5-station slice of the sorted feed is shown.
-  const [scanOffset, setScanOffset] = useState<ScanOffset>(0);
-  const handleScan = useCallback((offset: number) => {
-    if (offset === 0 || offset === 5 || offset === 10) setScanOffset(offset);
-  }, []);
+  // Scan window: which 5-station slice of the sorted feed is shown. Any
+  // multiple of 5 is valid — the page count is dynamic (filtered rows / 5).
+  const [scanOffset, setScanOffset] = useState<number>(0);
 
   // Attribution-ladder sort — same ordering as DialView's sortedRows:
   // live crossing first, then attributed DJs, then overlap desc, rung asc.
@@ -132,6 +131,32 @@ export default function SplitHome() {
       return rowPassesAgeTierFilter(track.ageTier, activeTiers);
     });
   }, [sortedRows, activeTiers]);
+
+  // Clamp a requested page to the current page count at click/command time,
+  // so an out-of-range /scanN (e.g. /scan10 on a 6-row list) lands on the
+  // last valid page instead of an empty window.
+  const handleScan = useCallback((offset: number) => {
+    if (offset < 0 || offset % 5 !== 0) return;
+    const maxOffset = Math.max(0, Math.floor((filteredRows.length - 1) / 5) * 5);
+    setScanOffset(Math.min(offset, maxOffset));
+  }, [filteredRows.length]);
+
+  // Clamp the scan window when the filtered list shrinks (filter change or
+  // stations dropping off) so a stale offset never shows an empty window.
+  // Render-time adjustment (React's supported pattern for deriving state from
+  // a changing input; the lint rules forbid setState-in-effect). The last
+  // valid page offset is floor((rows - 1) / 5) * 5.
+  const [prevRowCount, setPrevRowCount] = useState(filteredRows.length);
+  if (prevRowCount !== filteredRows.length) {
+    setPrevRowCount(filteredRows.length);
+    if (filteredRows.length === 0) {
+      if (scanOffset !== 0) setScanOffset(0);
+    } else if (scanOffset >= filteredRows.length) {
+      setScanOffset(Math.floor((filteredRows.length - 1) / 5) * 5);
+    }
+  }
+
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / 5));
 
   const liveStationIds = useMemo(
     () => filteredRows.slice(scanOffset, scanOffset + 5).map((row) => row.ds.station.id),
@@ -211,6 +236,7 @@ export default function SplitHome() {
         onToggleTier={toggleTier}
         onToggleCategory={toggleCategory}
         scanOffset={scanOffset}
+        pageCount={pageCount}
         onScan={handleScan}
         onAddArtists={handleAddArtists}
         onRadioMode={handleRadioMode}

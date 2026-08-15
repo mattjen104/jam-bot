@@ -2,7 +2,8 @@
  * HomeCliStrip — the CLI seam of the SplitHome three-band layout.
  *
  * Structure (top → bottom):
- *   1. Three centered scan buttons.
+ *   1. Centered scan buttons — one per 5-station page of the filtered list
+ *      (/scan1 … /scanN, driven by the pageCount prop).
  *   2. Four centered song-age buttons.
  *   3. `/crossings`, `/radio`, and `/lore` controls beside the DialCliBar
  *      (strip variant), whose prompt is left-aligned so the field reads like
@@ -19,17 +20,15 @@ import { useLocation } from "wouter";
 import { DialCliBar, type DialCliBarProps, type MattCliStatus } from "./dial/DialCliBar";
 import { AGE_TIER_DEFINITIONS } from "../lib/dialAgeFilter";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
-export type ScanOffset = 0 | 5 | 10;
-
-const SCANS: { command: string; offset: ScanOffset }[] = [
-  { command: "/scan1", offset: 0 },
-  { command: "/scan2", offset: 5 },
-  { command: "/scan3", offset: 10 },
-];
 
 export interface HomeCliStripProps extends Pick<DialCliBarProps,
   "activeTiers" | "activeCategories" | "onToggleTier" | "onToggleCategory"> {
-  scanOffset: ScanOffset;
+  scanOffset: number;
+  /**
+   * Number of scan pages in the active filtered list (rows / 5, min 1).
+   * The strip renders exactly this many scan buttons (/scan1 … /scanN).
+   */
+  pageCount: number;
   onScan: (offset: number) => void;
   onAddArtists: (names: string[]) => void;
   onMatt?: () => void;
@@ -48,6 +47,7 @@ export function HomeCliStrip({
   onToggleTier,
   onToggleCategory,
   scanOffset,
+  pageCount,
   onScan,
   onAddArtists,
   onMatt,
@@ -76,7 +76,9 @@ export function HomeCliStrip({
       <div className="home-cli-strip__filter-stack" aria-label="Station and song filters">
         <div className="home-cli-strip__filter-rail">
           <div className="home-cli-strip__filter-row" role="group" aria-label="Scan commands">
-        {SCANS.map(({ command, offset }) => {
+        {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
+          const offset = i * 5;
+          const command = `/scan${i + 1}`;
           const active = scanOffset === offset;
           return (
             <button
@@ -84,7 +86,7 @@ export function HomeCliStrip({
               type="button"
               className={`home-cli-strip__filter-chip${active ? " home-cli-strip__filter-chip--active" : ""}`}
               aria-pressed={active}
-              aria-label={`scan ${offset / 5 + 1} ${command}`}
+              aria-label={`scan ${i + 1} ${command}`}
               onClick={() => onScan(offset)}
             >
               {command}

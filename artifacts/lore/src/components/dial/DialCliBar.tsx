@@ -19,7 +19,7 @@
  *   /college /longtail                  → station-category toggles
  *   /add <names>                        → seed artists (comma/newline split;
  *                                         whitespace split when no commas)
- *   /scan1 /scan2 /scan3                → compact-dial window offset 0/5/10
+ *   /scan1 /scan2 … /scanN              → compact-dial window offset (N-1)*5
  *   /library                            → navigate to the Stack (when wired)
  *   /matt                               → copy the configured Matt starter library
  *   /radio                              → blank radio mode: crossings suppressed,
@@ -84,8 +84,8 @@ export interface DialCliBarProps extends DialFilterBarProps {
    */
   onAddArtists?: (names: string[]) => void;
   /**
-   * Called when `/scan1`, `/scan2`, or `/scan3` is submitted.
-   * Receives the zero-based station offset: 0, 5, or 10.
+   * Called when `/scanN` is submitted (any page number N ≥ 1).
+   * Receives the zero-based station offset: (N - 1) * 5.
    */
   onScan?: (offset: number) => void;
   /** Called when `/library` is submitted (SplitHome wires this to navigate). */
@@ -164,10 +164,15 @@ export function DialCliBar({
       return;
     }
 
-    // /scan commands — compact-dial window offset.
-    if (lower === "/scan1") { onScan?.(0); setValue(""); return; }
-    if (lower === "/scan2") { onScan?.(5); setValue(""); return; }
-    if (lower === "/scan3") { onScan?.(10); setValue(""); return; }
+    // /scanN commands — compact-dial window offset. Any page number N ≥ 1
+    // is accepted; the offset is (N - 1) * 5.
+    const scanMatch = /^\/scan(\d+)$/.exec(lower);
+    if (scanMatch) {
+      const page = Number.parseInt(scanMatch[1], 10);
+      if (page >= 1) onScan?.((page - 1) * 5);
+      setValue("");
+      return;
+    }
 
     if (lower === "/library") { onLibrary?.(); setValue(""); return; }
     if (lower === "/matt") {

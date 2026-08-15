@@ -34,6 +34,7 @@ function renderStrip(overrides: Partial<React.ComponentProps<typeof HomeCliStrip
     onToggleTier: vi.fn(),
     onToggleCategory: vi.fn(),
     scanOffset: 0,
+    pageCount: 3,
     onScan: vi.fn(),
     onAddArtists: vi.fn(),
     ...overrides,
@@ -150,6 +151,7 @@ describe("HomeCliStrip", () => {
     const scanRow = screen.getByRole("group", { name: "Scan commands" });
     const ageRow = screen.getByRole("group", { name: "Age commands" });
     const categoryRow = screen.getByRole("group", { name: "Station category commands" });
+    // Scan button count is dynamic — driven by the pageCount prop (default 3).
     expect(scanRow.querySelectorAll("button")).toHaveLength(3);
     expect(ageRow.querySelectorAll("button")).toHaveLength(4);
     expect(categoryRow.querySelectorAll("button")).toHaveLength(5);
@@ -164,6 +166,30 @@ describe("HomeCliStrip", () => {
     for (const chip of chips) {
       expect(chip.className).toContain("home-cli-strip__filter-chip");
     }
+  });
+
+  it("renders exactly pageCount scan buttons with /scan1…/scanN commands", () => {
+    renderStrip({ pageCount: 5 });
+    const scanRow = screen.getByRole("group", { name: "Scan commands" });
+    const buttons = [...scanRow.querySelectorAll("button")];
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "/scan1", "/scan2", "/scan3", "/scan4", "/scan5",
+    ]);
+  });
+
+  it("renders a single scan button for a one-page filtered list", () => {
+    renderStrip({ pageCount: 1 });
+    const scanRow = screen.getByRole("group", { name: "Scan commands" });
+    expect(scanRow.querySelectorAll("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "scan 1 /scan1" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "scan 2 /scan2" })).toBeNull();
+  });
+
+  it("marks the active scan window via aria-pressed regardless of page count", () => {
+    renderStrip({ pageCount: 5, scanOffset: 15 });
+    expect(screen.getByRole("button", { name: "scan 4 /scan4" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "scan 1 /scan1" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "scan 5 /scan5" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("add-artists button focuses the input and inserts the /add prefix", () => {
