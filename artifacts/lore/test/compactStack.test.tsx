@@ -14,14 +14,15 @@
  *  Component:
  *   - collapsed rows render `album · artist · credit` (credit omitted
  *     cleanly when unavailable), never per-song lists
- *   - clicking a row expands it: header at top, metadata cards + → Stack
- *     link; other albums' rows are gone
+ *   - clicking a row expands it in place: collapse header at top, metadata
+ *     cards + → Stack link below it; other albums' rows stay mounted
  *   - clicking the expanded header collapses back to the five-row order
  *   - CAA fallback art is used for imported albums without artwork
  *   - collapsed rows each render their OWN stationary spine art (no shared
  *     backdrop, no pan class anywhere while collapsed)
- *   - expanded state applies the hero layout modifier, renders the album's
- *     backdrop art, and only pans once loaded art overflows the band
+ *   - expanded state applies the in-place modifier, renders the album's
+ *     backdrop art scoped to the notes region, and only pans once loaded
+ *     art overflows that region
  *   - onExpandedChange reports expansion up to the home view
  *  Play controls (Task 216):
  *   - ▶ button hidden when primaryMbid is null
@@ -404,7 +405,7 @@ describe("CompactStack collapsed rows", () => {
 });
 
 describe("CompactStack expansion", () => {
-  it("expands a non-top row into the top slot with metadata cards and a Stack link, then collapses", async () => {
+  it("expands a non-top row in place with metadata cards and a Stack link, then collapses", async () => {
     libraryItems = [
       makeItem({ mbid: "m1", albumTitle: "First Album", artist: "A", addedAt: "2026-08-03T00:00:00Z" }),
       makeItem({ mbid: "m2", albumTitle: "Second Album", artist: "B", artworkUrl: "https://example.com/second.jpg", addedAt: "2026-08-02T00:00:00Z" }),
@@ -431,20 +432,19 @@ describe("CompactStack expansion", () => {
       await screen.findByRole("button", { name: "Expand Second Album · B" }),
     );
 
-    // Header for the expanded album is present and collapsible;
-    // the other album's row is covered (gone).
+    // Header for the expanded album is present and collapsible; the other
+    // album's row stays mounted below the notes (in-place expansion — no
+    // takeover, nothing unmounts).
     const header = await screen.findByRole("button", {
       name: "Collapse Second Album",
     });
     expect(header.getAttribute("aria-expanded")).toBe("true");
     expect(
       header.closest(".compact-stack")?.classList.contains(
-        "compact-stack--expanded-hero",
+        "compact-stack--expanded",
       ),
     ).toBe(true);
-    expect(
-      screen.queryByRole("button", { name: "Expand First Album · A" }),
-    ).toBeNull();
+    screen.getByRole("button", { name: "Expand First Album · A" });
 
     // The expanded view renders the album's hero backdrop; fitting art
     // (jsdom reports zero natural size) never gains the pan class.

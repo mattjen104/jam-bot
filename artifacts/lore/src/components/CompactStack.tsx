@@ -10,15 +10,15 @@
  * remixes), the most crucial piece of liner-note metadata, omitted cleanly
  * when the knowledge layer has none.
  *
- * Tapping a row expands it in place: the album's full cover becomes a large
- * hero backdrop (top ~¾ of the band) and — once the image has loaded and is
- * larger than the band — begins a very slow cinematic pan. The liner-notes
- * metadata (pressing, credits, relationships, claims, books) fills the
- * remaining strip as individual card rows. Expansion is reported upward via
- * `onExpandedChange` so the home view can hide the mini feed and the CLI
- * remote while the art plays. A `→ Stack` link jumps to the album in the
- * full Stack. Tapping the expanded header collapses back to the five-row
- * list (and the art freezes again).
+ * Tapping a row expands it IN PLACE inside the band: the tapped album's row
+ * becomes a collapse header, its liner-notes metadata (pressing, credits,
+ * relationships, claims, books) grows directly below it as individual card
+ * rows over that album's own backdrop art (which pans cinematically once
+ * loaded), and the remaining compact rows follow underneath. The whole band
+ * then scrolls as one column — the mini feed and the CLI strip above never
+ * unmount or shift. A `→ Stack` link jumps to the album in the full Stack.
+ * Tapping the expanded header collapses back to the plain five-row list
+ * (and the art freezes again).
  *
  * Albums imported without artwork fall back to the Cover Art Archive
  * release-group front image derived from the recording's releaseGroupMbid.
@@ -394,9 +394,10 @@ function CompactStackRow({
 
 export interface CompactStackProps {
   /**
-   * Reports expansion state upward so the home view can hide the mini feed
-   * and CLI remote while the album-art hero plays. Called with `true` when a
-   * row expands and `false` when it collapses.
+   * Reports expansion state upward. Called with `true` when a row expands
+   * and `false` when it collapses. Expansion is now fully in place — no
+   * sibling bands unmount — so this is an informational shim kept for
+   * callers/tests that still observe it.
    */
   onExpandedChange?: (expanded: boolean) => void;
 }
@@ -505,20 +506,23 @@ export function CompactStack({ onExpandedChange }: CompactStackProps = {}) {
     );
   };
 
-  // ── Expanded: header row + metadata cards covering the other rows ──────
+  // ── Expanded: header row + notes in place, remaining rows still listed ──
   if (expandedGroup) {
     const stackHref = `/library?openAlbum=${encodeURIComponent(expandedGroup.key)}`;
     return (
       <div
-        className="compact-stack compact-stack--expanded compact-stack--expanded-hero"
+        className="compact-stack compact-stack--expanded"
         aria-label="Recent keeps"
       >
-        <CompactStackBackdrop key={expandedArt ?? "no-art"} art={expandedArt} />
         <ExpandedStackHeader
           group={expandedGroup}
           onCollapse={() => setExpandedKey(null)}
         />
-        <div className="compact-stack__cards" role="region" aria-label={`${expandedGroup.albumTitle} liner notes`}>
+        {/* The notes region owns its backdrop: the album art covers only this
+            section (panning once it overflows), never the whole band. */}
+        <div className="compact-stack__notes">
+          <CompactStackBackdrop key={expandedArt ?? "no-art"} art={expandedArt} />
+          <div className="compact-stack__cards" role="region" aria-label={`${expandedGroup.albumTitle} liner notes`}>
           {expandedLoading ? (
             <div className="compact-stack__card compact-stack__card--muted">
               Reading the liner notes…
@@ -564,7 +568,23 @@ export function CompactStack({ onExpandedChange }: CompactStackProps = {}) {
             <ArrowRight aria-hidden="true" />
             <span>Stack</span>
           </button>
+          </div>
         </div>
+        {/* The remaining compact rows stay mounted below the notes so the
+            band reads as one continuous, scrollable column. */}
+        {ordered.slice(1).map((group) => {
+          const mbid = primaryMbid(group);
+          const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
+          return (
+            <CompactStackRow
+              key={group.key}
+              group={group}
+              credit={credit}
+              renderSpine={renderSpine}
+              onExpand={() => setExpandedKey(group.key)}
+            />
+          );
+        })}
       </div>
     );
   }

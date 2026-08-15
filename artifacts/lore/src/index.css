@@ -7235,11 +7235,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-direction: column;
 }
 
-/* A Stack album expanded into its art hero: the mini feed and the CLI
-   remote are unmounted, so the Stack band takes the whole viewport. */
-.split-home--stack-expanded {
-  grid-template-rows: minmax(0, 1fr);
-}
+/* A Stack album expansion never changes this grid: the notes grow in place
+   inside the bottom band, which scrolls internally (see .compact-stack--expanded). */
 
 /* ── Compact Dial (top band) ─────────────────────────────────────────────── */
 .compact-dial {
@@ -7835,32 +7832,42 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-style: italic;
 }
 
-/* ── Expanded album: header row + metadata cards ───────────────────────── */
+/* ── Expanded album: in-place header row + notes, remaining rows follow ── */
 .compact-stack--expanded {
-  /* Header keeps one row-height slot; the card region absorbs the other 4. */
-  grid-template-rows: minmax(0, 1fr) minmax(0, 4fr);
+  /* The band stops being a rigid 5-row grid and becomes one continuous
+     scrollable column: header, liner notes, then the other compact rows.
+     The dial and CLI strip above never move. */
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.compact-stack--expanded-hero {
-  grid-template-rows: minmax(0, 3fr) minmax(0, 1fr);
-}
-.compact-stack--expanded-hero .compact-stack__backdrop-art {
-  height: 75%;
+/* Rows no longer share a grid slot, so they need an explicit height. */
+.compact-stack--expanded .compact-stack__row {
+  flex: 0 0 54px;
 }
 .compact-stack__row--expanded-header {
   border-bottom: 1px solid hsl(var(--border) / 0.6);
 }
-.compact-stack--expanded-hero .compact-stack__row--expanded-header {
-  align-self: end;
-  min-height: 54px;
-  height: 54px;
-  background: hsl(var(--background) / 0.38);
+/* The collapse header stays pinned at the top of the band while the
+   listener scrolls through the notes and the rows below. */
+.compact-stack--expanded .compact-stack__row--expanded-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: hsl(var(--background) / 0.72);
   backdrop-filter: blur(3px);
+}
+/* The notes region owns the backdrop art — the cover fills only this
+   section (never the whole band) and pans once it overflows. */
+.compact-stack__notes {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
 }
 .compact-stack__cards {
   position: relative;
   z-index: 1;
-  min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;

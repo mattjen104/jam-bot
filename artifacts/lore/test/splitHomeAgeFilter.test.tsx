@@ -30,7 +30,8 @@ vi.mock("../src/components/dial/FrontDoorRow", () => ({
 }));
 
 // CompactStack pulls in meHooks/Library — stub it out entirely, but keep
-// the onExpandedChange seam so the hide-feed-and-remote behavior is testable.
+// the onExpandedChange seam so expansion can be simulated (and the dial +
+// remote proven to stay mounted through it).
 vi.mock("../src/components/CompactStack", () => ({
   CompactStack: ({ onExpandedChange }: { onExpandedChange?: (e: boolean) => void }) => (
     <div data-testid="compact-stack-stub">
@@ -256,7 +257,7 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(screen.queryByTestId("fdrow-new-music")).toBeNull();
   });
 
-  it("hides the mini feed and CLI remote while a Stack album is expanded", () => {
+  it("keeps the mini feed and CLI remote mounted while a Stack album is expanded", () => {
     mockStations.value = [makeStation("deep-cuts", "deep")];
     const { container } = render(<SplitHome />);
 
@@ -264,16 +265,14 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Dial command" })).toBeTruthy();
 
+    // Expanded: the Stack band grows in place — the mini feed and the remote
+    // stay in the DOM and no takeover modifier is applied.
     fireEvent.click(screen.getByRole("button", { name: "stub-expand" }));
+    expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Dial command" })).toBeTruthy();
+    expect(container.querySelector(".split-home--stack-expanded")).toBeNull();
 
-    // Expanded: the mini feed and the remote are unmounted; the split-home
-    // root carries the expansion modifier so the Stack band takes over.
-    expect(screen.queryByTestId("fdrow-deep-cuts")).toBeNull();
-    expect(screen.queryByRole("textbox", { name: "Dial command" })).toBeNull();
-    expect(
-      container.querySelector(".split-home--stack-expanded"),
-    ).not.toBeNull();
-
+    // Collapsing changes nothing either — the bands never moved.
     fireEvent.click(screen.getByRole("button", { name: "stub-collapse" }));
     expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Dial command" })).toBeTruthy();
