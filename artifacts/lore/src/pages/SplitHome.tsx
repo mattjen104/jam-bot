@@ -1,14 +1,19 @@
 /**
- * SplitHome — the Lore front door as a fixed three-band split view.
+ * SplitHome — the Lore front door as a fixed five-slot split view.
  *
+ *   top edge  — RadioRemoteBar: the radio remote (/crossings /radio /lore
+ *               plus the age-tier and station-category chips), pinned above
+ *               the Dial band where the controls are most reachable.
  *   top ~50%  — CompactDial: five live stations from the attribution-ladder
  *               sort, windowed by the active scan (offset 0, 5, 10, … — the
  *               page count grows with the filtered list).
- *   middle    — HomeCliStrip: the CLI seam. Scan buttons hang down from the
- *               Dial band; add-artists/library buttons extend up from the
- *               Stack band; the slash-command input sits between them.
- *   bottom ~50% — CompactStack: the five newest kept album groups as
- *               cassette-spine rows.
+ *   middle    — HomeCliStrip: the CLI seam. Only the Dial page selectors,
+ *               Scan / Scan all, the slash-command input, and the /add
+ *               affordance live here now — a true seam between the bands.
+ *   bottom ~50% — CompactStack: kept album groups as cassette-spine rows,
+ *               windowed five at a time by the stack pager (stackOffset).
+ *   bottom edge — StackPagerBar: numeric stack page buttons plus Shuffle /
+ *               Shuffle all, pinned above the player dock.
  *
  * The view never scrolls — it fills the viewport between the app header and
  * the bottom shell. The full scrollable Dial lives at /feed; the full Stack
@@ -38,7 +43,11 @@ import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
 import { HomeCliStrip, type ScanMode } from "../components/HomeCliStrip";
-import { useStartMattLibrary } from "../lib/meHooks";
+import { RadioRemoteBar } from "../components/RadioRemoteBar";
+import { StackPagerBar } from "../components/StackPagerBar";
+import { useCompactStackShuffle } from "../hooks/useCompactStackShuffle";
+import { useMyLibraryInfinite, useStartMattLibrary } from "../lib/meHooks";
+import { buildAlbumGroups } from "./Library";
 import type { MattCliStatus } from "../components/dial/DialCliBar";
 
 export default function SplitHome() {
@@ -341,6 +350,54 @@ export default function SplitHome() {
     if (on) writeDialLens("radio");
     setLocation("/feed");
   }, [setLocation]);
+  // --- Stack paging + shuffle ---
+  // The Stack band windows the full library album-group list five rows at a
+  // time (stackOffset, multiples of 5), paged by the StackPagerBar pinned at
+  // the bottom edge. The page count grows with the library.
+  const { data: stackData } = useMyLibraryInfinite({}, 100);
+  const stackGroups = useMemo(
+    () => buildAlbumGroups(stackData?.pages[0]?.items ?? []),
+    [stackData],
+  );
+  const [stackOffset, setStackOffset] = useState<number>(0);
+
+  const {
+    shuffleMode,
+    shuffleGroupKey,
+    onShufflePage,
+    onShuffleAll,
+    stopShuffle,
+  } = useCompactStackShuffle({
+    groups: stackGroups,
+    stackOffset,
+    onSetStackOffset: setStackOffset,
+  });
+
+  // Clamp the stack window when the library shrinks (deselects/imports) so a
+  // stale offset never shows an empty page. Render-time adjustment, same
+  // derived-state pattern as the scan window clamp above.
+  const [prevStackCount, setPrevStackCount] = useState(stackGroups.length);
+  if (prevStackCount !== stackGroups.length) {
+    setPrevStackCount(stackGroups.length);
+    if (stackGroups.length === 0) {
+      if (stackOffset !== 0) setStackOffset(0);
+    } else if (stackOffset >= stackGroups.length) {
+      setStackOffset(Math.floor((stackGroups.length - 1) / 5) * 5);
+    }
+  }
+
+  const stackPageCount = Math.max(1, Math.ceil(stackGroups.length / 5));
+
+  // Stack page selection clamps to the last valid page (same contract as the
+  // dial's handleSelectPage) and stops any running shuffle — the listener
+  // explicitly navigated, so the shuffle cursor is now incompatible.
+  const handleSelectStackPage = useCallback((offset: number) => {
+    if (offset < 0 || offset % 5 !== 0) return;
+    const maxOffset = Math.max(0, Math.floor((stackGroups.length - 1) / 5) * 5);
+    setStackOffset(Math.min(offset, maxOffset));
+    stopShuffle();
+  }, [stackGroups.length, stopShuffle]);
+
   const mattStarterMutation = useStartMattLibrary();
   const startMattLibrary = useCallback(() => {
     if (mattStarterMutation.isPending) return;
@@ -370,10 +427,19 @@ export default function SplitHome() {
             }
         : null;
 
-  // All three bands stay mounted at all times — a Stack album expands in
-  // place inside its own band, never by unmounting the dial or the remote.
+  // All bands and both remotes stay mounted at all times — a Stack album
+  // expands in place inside its own band, never by unmounting the dial or
+  // the remotes.
   return (
     <div className="split-home">
+      <RadioRemoteBar
+        activeTiers={activeTiers}
+        activeCategories={activeCategories}
+        onToggleTier={toggleTier}
+        onToggleCategory={toggleCategory}
+        onRadioMode={handleRadioMode}
+      />
+
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
         <CompactDial
           rows={filteredRows}
@@ -408,8 +474,18 @@ export default function SplitHome() {
       />
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
-        <CompactStack />
+        <CompactStack offset={stackOffset} shuffleKey={shuffleGroupKey} />
       </section>
+
+      <StackPagerBar
+        stackOffset={stackOffset}
+        stackPageCount={stackPageCount}
+        totalGroups={stackGroups.length}
+        shuffleMode={shuffleMode}
+        onSelectStackPage={handleSelectStackPage}
+        onShufflePage={onShufflePage}
+        onShuffleAll={onShuffleAll}
+      />
     </div>
   );
 }

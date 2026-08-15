@@ -7221,11 +7221,73 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    and the CLI strip sizes to content in the middle. */
 .split-home {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* radio remote / dial band / CLI seam / stack band / stack pager */
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
   height: calc(100vh - var(--shell-h, 0px));
   height: calc(100dvh - var(--shell-h, 0px));
   overflow: hidden;
   background: hsl(var(--background));
+}
+
+/* ── Radio remote bar (top strip) ──────────────────────────────────────────
+   Thin horizontal console pinned above the Dial band: feed-mode commands,
+   then the age-tier and station-category chips. One scrollable row — groups
+   never wrap; the bar scrolls horizontally on narrow viewports. */
+.radio-remote-bar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 29px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--background));
+}
+.radio-remote-bar::-webkit-scrollbar { display: none; }
+.radio-remote-bar__group {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.radio-remote-bar__group + .radio-remote-bar__group { margin-left: 8px; }
+
+/* ── Stack pager bar (bottom strip) ────────────────────────────────────────
+   Pinned at the very bottom of the split view (the grid height already
+   excludes --shell-h, so this row lands directly above the player dock).
+   Reuses the middle seam's page-button / scan-button styling verbatim. */
+.stack-pager-bar {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 29px;
+  border-top: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--background));
+}
+.stack-pager-bar .home-cli-strip__scan-remote {
+  flex: 1;
+  min-width: 0;
+}
+/* The pager's rail is the horizontal overflow container for a long page
+   list; it drops the seam's bottom divider (the bar carries the border). */
+.stack-pager-bar__rail {
+  flex: 1;
+  min-width: 0;
+  border-bottom: none;
+}
+
+/* Sampling highlight on a compact-stack row during a stack shuffle — the
+   library-section counterpart of the dial's --live scan highlight. */
+.compact-stack__row--sampling {
+  background: hsl(var(--library) / 0.10);
+  outline: 1px solid hsl(var(--library) / 0.30);
 }
 
 .split-home__band {

@@ -204,15 +204,16 @@ function makeGroup(overrides: Partial<AlbumGroup> = {}): AlbumGroup {
   };
 }
 
-function renderStack() {
+function renderStack(props: React.ComponentProps<typeof CompactStack> = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const utils = render(
     <QueryClientProvider client={qc}>
-      <CompactStack />
+      <CompactStack {...props} />
     </QueryClientProvider>,
   );
+  return { ...utils, qc };
 }
 
 // ---------------------------------------------------------------------------
@@ -554,6 +555,79 @@ describe("CompactStack expansion", () => {
       screen.queryByRole("button", { name: "Collapse Vanishing Album" }),
     ).toBeNull();
     expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Paging (offset window + shuffle highlight)
+// ---------------------------------------------------------------------------
+
+describe("CompactStack paging", () => {
+  const sevenAlbums = () =>
+    Array.from({ length: 7 }, (_, i) =>
+      makeItem({
+        mbid: `m${i + 1}`,
+        albumTitle: `Album ${i + 1}`,
+        artist: `Artist ${i + 1}`,
+        // Descending recency so Album 1 is the newest group.
+        addedAt: `2026-08-0${7 - i}T00:00:00Z`,
+      }),
+    );
+
+  it("windows the library five albums at a time via the offset prop", async () => {
+    libraryItems = sevenAlbums();
+    const { qc, rerender } = renderStack({ offset: 0 });
+
+    // Page 1: the five newest albums only.
+    for (let i = 1; i <= 5; i++) {
+      await screen.findByRole("button", { name: `Expand Album ${i} · Artist ${i}` });
+    }
+    expect(screen.queryByRole("button", { name: "Expand Album 6 · Artist 6" })).toBeNull();
+
+    // Page 2 (offset 5): the remaining two albums, nothing from page 1.
+    rerender(
+      <QueryClientProvider client={qc}>
+        <CompactStack offset={5} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: "Expand Album 6 · Artist 6" });
+    screen.getByRole("button", { name: "Expand Album 7 · Artist 7" });
+    expect(screen.queryByRole("button", { name: "Expand Album 1 · Artist 1" })).toBeNull();
+  });
+
+  it("collapses the expanded album when a page change moves it out of the window", async () => {
+    libraryItems = sevenAlbums();
+    const onExpandedChange = vi.fn();
+    const { qc, rerender } = renderStack({ offset: 0, onExpandedChange });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Album 1 · Artist 1" }),
+    );
+    await screen.findByRole("button", { name: "Collapse Album 1" });
+    expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+
+    // Paging to offset 5 drops the expanded album from the visible window —
+    // the expansion collapses instead of reordering off-page.
+    rerender(
+      <QueryClientProvider client={qc}>
+        <CompactStack offset={5} onExpandedChange={onExpandedChange} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: "Expand Album 6 · Artist 6" });
+    expect(screen.queryByRole("button", { name: "Collapse Album 1" })).toBeNull();
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("highlights exactly the shuffle-sampled row via shuffleKey", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Album 1", artist: "Artist 1" }),
+      makeItem({ mbid: "m2", albumTitle: "Album 2", artist: "Artist 2", addedAt: "2026-07-31T00:00:00Z" }),
+    ];
+    renderStack({ shuffleKey: "Album 2\x1fArtist 2" });
+    await screen.findByRole("button", { name: "Expand Album 2 · Artist 2" });
+    const sampling = document.querySelectorAll(".compact-stack__row--sampling");
+    expect(sampling).toHaveLength(1);
+    expect(sampling[0].textContent).toContain("Album 2");
   });
 });
 

@@ -10,10 +10,11 @@
  *     `Scan` / `Scan all` controls that route to their callbacks, expose
  *     active/selected state accessibly, and become Stop controls while a
  *     scan is running.
- *  4. The `/crossings`, `/radio`, and `/lore` command controls stay in order
- *     and route their actions accessibly.
- *  5. The "add artists /add" button focuses the input and inserts the
+ *  4. The "add artists /add" button focuses the input and inserts the
  *     `/add ` prefix.
+ *
+ * The feed-mode buttons (/crossings /radio /lore) and the age/category
+ * filter chips moved to the RadioRemoteBar — see radioRemoteBar.test.tsx.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -91,9 +92,7 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders numeric page selectors that fire onSelectPage and show the selected page", () => {
-    const { props } = renderStrip({
-      activeCategories: new Set<StationCategory>(["campus"]),
-    });
+    const { props } = renderStrip();
 
     const page1 = screen.getByRole("button", { name: "page 1 /scan1" });
     const page2 = screen.getByRole("button", { name: "page 2 /scan2" });
@@ -173,99 +172,27 @@ describe("HomeCliStrip", () => {
     expect(props.onScanAll).not.toHaveBeenCalled();
   });
 
-  it("renders every age-tier chip, routes toggles, and exposes active state", () => {
-    const { props } = renderStrip({
-      activeTiers: new Set<AgeTier>(["first"]),
-    });
-
-    const tiers = [
-      ["/first", "first"],
-      ["/current", "current"],
-      ["/catalog", "catalog"],
-      ["/deep", "deep"],
-    ] as const;
-
-    for (const [command, tier] of tiers) {
-      const chip = screen.getByRole("button", { name: command });
-      expect(chip.className).toContain("home-cli-strip__filter-chip");
-      expect(chip.getAttribute("aria-pressed")).toBe(tier === "first" ? "true" : "false");
-      fireEvent.click(chip);
-      expect(props.onToggleTier).toHaveBeenCalledWith(tier);
-    }
-  });
-
-  it("renders every category chip, routes toggles, and exposes active state", () => {
-    const { props } = renderStrip({
-      activeCategories: new Set<StationCategory>(["campus"]),
-    });
-
-    const categories = [
-      ["/ambient", "ambient"],
-      ["/campus", "campus"],
-      ["/specialist", "specialist"],
-      ["/anchor", "anchor"],
-      ["/public", "public"],
-      ["/indie", "indie"],
-      ["/discovery", "discovery"],
-    ] as const;
-
-    for (const [command, cat] of categories) {
-      const chip = screen.getByRole("button", { name: command });
-      expect(chip.className).toContain("home-cli-strip__filter-chip");
-      expect(chip.getAttribute("aria-pressed")).toBe(
-        cat === "campus" ? "true" : "false",
-      );
-      fireEvent.click(chip);
-      expect(props.onToggleCategory).toHaveBeenCalledWith(cat);
-    }
-  });
-
-  it("renders the filter remote as three centered button rows", () => {
+  it("keeps the seam to scan remote → command row → add row, with the filters moved out", () => {
     renderStrip();
     const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    const ageRow = screen.getByRole("group", { name: "Age commands" });
-    const categoryRow = screen.getByRole("group", { name: "Station category commands" });
-    // Scan remote: pageCount numeric selectors (default 3) + Scan + Scan all.
-    expect(scanRow.querySelectorAll("button")).toHaveLength(5);
-    expect(ageRow.querySelectorAll("button")).toHaveLength(4);
-    expect(categoryRow.querySelectorAll("button")).toHaveLength(7);
-
-    const chips = [
-      ...ageRow.querySelectorAll("button"),
-      ...categoryRow.querySelectorAll("button"),
-    ];
-    // 4 age tiers + 7 station categories stay uniform chips; the scan remote
-    // uses its own compact page-selector + scan-button styling.
-    expect(chips.length).toBe(11);
-    for (const chip of chips) {
-      expect(chip.className).toContain("home-cli-strip__filter-chip");
-    }
-  });
-
-  it("orders the filter stack scan → age → category, with the command row last", () => {
-    renderStrip();
-    const strip = document.querySelector(".home-cli-strip")!;
-    const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    const ageRow = screen.getByRole("group", { name: "Age commands" });
-    const categoryRow = screen.getByRole("group", { name: "Station category commands" });
     const commandRow = document.querySelector(".home-cli-strip__command-row")!;
     const addRow = document.querySelector(".home-cli-strip__row--stack")!;
 
     // DOM order via compareDocumentPosition: DOCUMENT_POSITION_FOLLOWING
     // means the argument node comes after the receiver.
     const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(scanRow.compareDocumentPosition(ageRow) & FOLLOWING).toBeTruthy();
-    expect(ageRow.compareDocumentPosition(categoryRow) & FOLLOWING).toBeTruthy();
-    expect(categoryRow.compareDocumentPosition(commandRow) & FOLLOWING).toBeTruthy();
+    expect(scanRow.compareDocumentPosition(commandRow) & FOLLOWING).toBeTruthy();
     expect(commandRow.compareDocumentPosition(addRow) & FOLLOWING).toBeTruthy();
 
-    // All three filter groups live inside the same filter-stack element;
-    // the command row is outside it.
-    const filterStack = strip.querySelector(".home-cli-strip__filter-stack")!;
-    expect(filterStack.contains(scanRow)).toBe(true);
-    expect(filterStack.contains(ageRow)).toBe(true);
-    expect(filterStack.contains(categoryRow)).toBe(true);
-    expect(filterStack.contains(commandRow)).toBe(false);
+    // The scan remote is pageCount numeric selectors + Scan + Scan all.
+    expect(scanRow.querySelectorAll("button")).toHaveLength(5);
+    // The age/category chip groups and the feed-mode buttons live in the
+    // RadioRemoteBar now — not in the seam.
+    expect(screen.queryByRole("group", { name: "Age commands" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Station category commands" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "radio /radio" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "crossings /crossings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "homepage /lore" })).toBeNull();
   });
 
   it("renders exactly pageCount numeric page selectors — no /scanN button per page", () => {
@@ -302,41 +229,8 @@ describe("HomeCliStrip", () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it("renders the /lore homepage control beside the command field", () => {
+  it("renders the command prompt wordmark beside the command field", () => {
     renderStrip();
-    expect(screen.getByRole("button", { name: "homepage /lore" })).toBeTruthy();
     expect(screen.getByText(">_")).toBeTruthy();
-  });
-
-  it("renders mode controls before /lore in command-line order", () => {
-    renderStrip({ onRadioMode: vi.fn() });
-    const commandRow = document.querySelector(".home-cli-strip__command-row");
-    expect(commandRow).toBeTruthy();
-    expect(
-      [...commandRow!.querySelectorAll("button")].map((button) => button.textContent),
-    ).toEqual(["/crossings", "/radio", "/lore"]);
-  });
-
-  it.each([
-    ["crossings /crossings", false],
-    ["radio /radio", true],
-  ] as const)("routes the %s shortcut to onRadioMode(%s)", (name, mode) => {
-    const onRadioMode = vi.fn();
-    renderStrip({ onRadioMode });
-    const button = screen.getByRole("button", { name });
-    fireEvent.click(button);
-    expect(onRadioMode).toHaveBeenCalledWith(mode);
-    expect(button.getAttribute("type")).toBe("button");
-  });
-
-  it("keeps the mode shortcuts keyboard-activatable as native buttons", () => {
-    const onRadioMode = vi.fn();
-    renderStrip({ onRadioMode });
-    const button = screen.getByRole("button", { name: "radio /radio" });
-    button.focus();
-    expect(document.activeElement).toBe(button);
-    fireEvent.keyDown(button, { key: "Enter" });
-    fireEvent.click(button);
-    expect(onRadioMode).toHaveBeenCalledWith(true);
   });
 });

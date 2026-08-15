@@ -319,11 +319,14 @@ function CompactStackRow({
   group,
   credit,
   renderSpine,
+  sampling = false,
   onExpand,
 }: {
   group: AlbumGroup;
   credit: string | null;
   renderSpine: (group: AlbumGroup) => React.ReactNode;
+  /** True while the stack shuffle dwells on this row (highlight-only cue). */
+  sampling?: boolean;
   onExpand: () => void;
 }) {
   const { launch, isActive, isPlaying, isLoading, canLaunch, togglePause } =
@@ -334,7 +337,7 @@ function CompactStackRow({
 
   return (
     <div
-      className="compact-stack__row"
+      className={`compact-stack__row${sampling ? " compact-stack__row--sampling" : ""}`}
       role="button"
       tabIndex={0}
       aria-expanded="false"
@@ -394,6 +397,17 @@ function CompactStackRow({
 
 export interface CompactStackProps {
   /**
+   * Zero-based offset into the full library album-group list (a multiple of
+   * COMPACT_STACK_SIZE) — the Stack pager's window. Defaults to the first
+   * page.
+   */
+  offset?: number;
+  /**
+   * Key of the album group the stack shuffle is currently dwelling on; that
+   * row is highlighted for the dwell interval. Null when no shuffle runs.
+   */
+  shuffleKey?: string | null;
+  /**
    * Reports expansion state upward. Called with `true` when a row expands
    * and `false` when it collapses. Expansion is now fully in place — no
    * sibling bands unmount — so this is an informational shim kept for
@@ -402,24 +416,30 @@ export interface CompactStackProps {
   onExpandedChange?: (expanded: boolean) => void;
 }
 
-export function CompactStack({ onExpandedChange }: CompactStackProps = {}) {
+export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { data, isLoading } = useMyLibraryInfinite({}, 100);
 
-  const groups = useMemo<AlbumGroup[]>(() => {
+  // The full group list is windowed by the pager offset; expansion and the
+  // inline credits only ever operate on the visible five-album page.
+  const allGroups = useMemo<AlbumGroup[]>(() => {
     const items = data?.pages[0]?.items ?? [];
-    return buildAlbumGroups(items).slice(0, COMPACT_STACK_SIZE);
+    return buildAlbumGroups(items);
   }, [data]);
+  const groups = useMemo(
+    () => allGroups.slice(offset, offset + COMPACT_STACK_SIZE),
+    [allGroups, offset],
+  );
 
   const expandedGroup = expandedKey
     ? (groups.find((g) => g.key === expandedKey) ?? null)
     : null;
 
-  // A library refetch can remove or reorder the expanded album out of the
-  // top five. Drop the stale key during render (the derived-state pattern)
-  // so the collapsed strip, the upward report, and any future reappearance
-  // of the album all stay consistent.
+  // A library refetch or a page change can remove or reorder the expanded
+  // album out of the visible window. Drop the stale key during render (the
+  // derived-state pattern) so the collapsed strip, the upward report, and
+  // any future reappearance of the album all stay consistent.
   if (expandedKey && !expandedGroup) {
     setExpandedKey(null);
   }
@@ -581,6 +601,7 @@ export function CompactStack({ onExpandedChange }: CompactStackProps = {}) {
               group={group}
               credit={credit}
               renderSpine={renderSpine}
+              sampling={group.key === shuffleKey}
               onExpand={() => setExpandedKey(group.key)}
             />
           );
@@ -601,6 +622,7 @@ export function CompactStack({ onExpandedChange }: CompactStackProps = {}) {
             group={group}
             credit={credit}
             renderSpine={renderSpine}
+            sampling={group.key === shuffleKey}
             onExpand={() => setExpandedKey(group.key)}
           />
         );

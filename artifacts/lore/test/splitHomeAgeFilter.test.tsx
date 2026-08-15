@@ -21,6 +21,11 @@ const { mockSetLocation } = vi.hoisted(() => ({
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/", mockSetLocation],
+  // SplitHome imports buildAlbumGroups from the Library page, which imports
+  // these wouter members — the mock must provide them even though the
+  // compact-stack stub keeps Library's components from ever rendering.
+  useSearch: () => "",
+  Link: () => null,
 }));
 
 vi.mock("../src/components/dial/FrontDoorRow", () => ({
@@ -47,6 +52,11 @@ vi.mock("../src/components/CompactStack", () => ({
 
 vi.mock("../src/lib/meHooks", () => ({
   useStartMattLibrary: () => ({ mutate: vi.fn(), isPending: false, data: undefined, error: null }),
+  // SplitHome reads the first library page itself to size the stack pager.
+  useMyLibraryInfinite: () => ({
+    data: { pages: [{ items: [], nextCursor: null }] },
+    isLoading: false,
+  }),
 }));
 
 vi.mock("../src/components/dialViewHelpers", () => ({
@@ -391,6 +401,34 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(
       screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
     ).toBe("true");
+  });
+
+  it("pins the radio remote above the Dial band and the stack pager below the Stack band", () => {
+    mockStations.value = [makeStation("deep-cuts", "deep")];
+    const { container } = render(<SplitHome />);
+
+    const remote = screen.getByRole("toolbar", { name: "Radio remote" });
+    const dialBand = container.querySelector(".split-home__band--dial")!;
+    const seam = container.querySelector(".home-cli-strip")!;
+    const stackBand = container.querySelector(".split-home__band--stack")!;
+    const pager = container.querySelector(".stack-pager-bar")!;
+
+    // Grid contract: remote → dial → seam → stack → pager, top to bottom.
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(remote.compareDocumentPosition(dialBand) & FOLLOWING).toBeTruthy();
+    expect(dialBand.compareDocumentPosition(seam) & FOLLOWING).toBeTruthy();
+    expect(seam.compareDocumentPosition(stackBand) & FOLLOWING).toBeTruthy();
+    expect(stackBand.compareDocumentPosition(pager) & FOLLOWING).toBeTruthy();
+
+    // The filters live in the top remote, not the seam.
+    expect(remote.contains(screen.getByRole("group", { name: "Age commands" }))).toBe(true);
+    expect(remote.contains(screen.getByRole("group", { name: "Station category commands" }))).toBe(true);
+    expect(seam.contains(screen.getByRole("group", { name: "Scan commands" }))).toBe(true);
+
+    // The pager shows stack page selectors + Shuffle / Shuffle all.
+    expect(pager.contains(screen.getByRole("group", { name: "Stack page" }))).toBe(true);
+    expect(pager.contains(screen.getByRole("button", { name: "shuffle this page" }))).toBe(true);
+    expect(pager.contains(screen.getByRole("button", { name: "shuffle all albums" }))).toBe(true);
   });
 
   it("disables Scan and Scan all when no stations are on air", () => {
