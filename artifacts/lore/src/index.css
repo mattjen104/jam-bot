@@ -7419,12 +7419,28 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 
 /* ── Compact scan remote — numeric page selectors + Scan / Scan all ─────── */
 .home-cli-strip__scan-remote {
-  gap: 6px;
+  /* Keep the actions in the viewport while only the page list scrolls. */
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 0;
 }
 .home-cli-strip__page-selectors {
   display: flex;
   align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
   gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  padding-right: 6px;
+}
+.home-cli-strip__page-selectors::-webkit-scrollbar {
+  display: none;
 }
 .home-cli-strip__page-btn {
   appearance: none;
