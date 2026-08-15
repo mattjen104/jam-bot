@@ -220,15 +220,19 @@ async function installRoutes(page: import("@playwright/test").Page) {
  * Send a CLI command by pressing "/" (focus + set value) then typing the
  * rest of the command and submitting with Enter.
  *
- * NOTE: we click the body first so the focus lands outside any existing
- * editable element (the DialCliBar listener only fires when the active
- * element is NOT an input / textarea / contenteditable).
+ * NOTE: we blur the active element first so the focus lands outside any
+ * existing editable element (the DialCliBar listener only fires when the
+ * active element is NOT an input / textarea / contenteditable). Do NOT use
+ * a positional `body.click()` here: Playwright clicks the center of the
+ * body, which is the HomeCliStrip's middle row — a layout reorder turns
+ * that click into a filter-chip toggle and silently corrupts the test's
+ * category state.
  */
 async function sendCliCommand(
   page: import("@playwright/test").Page,
   cmd: "/spinitron" | "/college" | "/discovery",
 ) {
-  await page.locator("body").click();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("/");
   // After "/" the input is focused and value is "/"; type the rest.
   await page.keyboard.type(cmd.slice(1));

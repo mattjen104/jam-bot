@@ -173,6 +173,32 @@ describe("HomeCliStrip", () => {
     }
   });
 
+  it("orders the filter stack scan → age → category, with the command row last", () => {
+    renderStrip();
+    const strip = document.querySelector(".home-cli-strip")!;
+    const scanRow = screen.getByRole("group", { name: "Scan commands" });
+    const ageRow = screen.getByRole("group", { name: "Age commands" });
+    const categoryRow = screen.getByRole("group", { name: "Station category commands" });
+    const commandRow = document.querySelector(".home-cli-strip__command-row")!;
+    const addRow = document.querySelector(".home-cli-strip__row--stack")!;
+
+    // DOM order via compareDocumentPosition: DOCUMENT_POSITION_FOLLOWING
+    // means the argument node comes after the receiver.
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(scanRow.compareDocumentPosition(ageRow) & FOLLOWING).toBeTruthy();
+    expect(ageRow.compareDocumentPosition(categoryRow) & FOLLOWING).toBeTruthy();
+    expect(categoryRow.compareDocumentPosition(commandRow) & FOLLOWING).toBeTruthy();
+    expect(commandRow.compareDocumentPosition(addRow) & FOLLOWING).toBeTruthy();
+
+    // All three filter groups live inside the same filter-stack element;
+    // the command row is outside it.
+    const filterStack = strip.querySelector(".home-cli-strip__filter-stack")!;
+    expect(filterStack.contains(scanRow)).toBe(true);
+    expect(filterStack.contains(ageRow)).toBe(true);
+    expect(filterStack.contains(categoryRow)).toBe(true);
+    expect(filterStack.contains(commandRow)).toBe(false);
+  });
+
   it("renders exactly pageCount scan buttons with /scan1…/scanN commands", () => {
     renderStrip({ pageCount: 5 });
     const scanRow = screen.getByRole("group", { name: "Scan commands" });

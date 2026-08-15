@@ -131,3 +131,4 @@
 - [Split homepage vs full Dial routing](split-home-layout.md) — `/` is the three-band split view, full Dial is `/feed`; full-Dial specs must target /feed, and split-home CLI commands must be wired into its own render path.
 - [Dial lenses (Radio/Press)](dial-lenses-pattern.md) — exclusive views, lens state local-first; Press busts with the same bustCrossingsCache as Radio; lens-specific filters stay inside their branch.
 - [Shows lens Bandsintown config](shows-lens-bandsintown.md) — fetcher fails closed/silent without BANDSINTOWN_APP_ID; always-empty Shows = check the secret first.
+- [Positional body.click() in e2e helpers](e2e-positional-body-click.md) — Playwright clicks body center; strip reorders silently retarget the click onto chips; blur via evaluate instead.

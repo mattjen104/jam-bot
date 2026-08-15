@@ -5,10 +5,10 @@
  *   1. Centered scan buttons — one per 5-station page of the filtered list
  *      (/scan1 … /scanN, driven by the pageCount prop).
  *   2. Four centered song-age buttons.
- *   3. `/crossings`, `/radio`, and `/lore` controls beside the DialCliBar
+ *   3. Six centered station-category buttons (lore is the home control).
+ *   4. `/crossings`, `/radio`, and `/lore` controls beside the DialCliBar
  *      (strip variant), whose prompt is left-aligned so the field reads like
  *      a command line.
- *   4. Five centered station-category buttons (lore is the home control).
  *   5. The `/add artists` affordance, aligned to the left.
  *
  * Every button is labeled with its CLI equivalent so the affordance is
@@ -70,8 +70,8 @@ export function HomeCliStrip({
 
   return (
     <div className="home-cli-strip">
-      {/* The filter controls are a five-row remote: scan, age, home/CLI,
-          station categories, then add. Each button row remains bounded and
+      {/* The filter controls are a five-row remote: scan, age, station
+          categories, home/CLI, then add. Each button row remains bounded and
           scrollable as a fallback for unusually narrow viewports. */}
       <div className="home-cli-strip__filter-stack" aria-label="Station and song filters">
         <div className="home-cli-strip__filter-rail">
@@ -108,6 +108,26 @@ export function HomeCliStrip({
                   aria-pressed={active}
                   title={title}
                   onClick={() => onToggleTier(tier)}
+                >
+                  {command}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="home-cli-strip__filter-rail">
+          <div className="home-cli-strip__filter-row" role="group" aria-label="Station category commands">
+            {STATION_CATEGORY_DEFINITIONS.filter(({ cat }) => cat !== "lore").map(({ cat, command, title }) => {
+              const active = activeCategories.has(cat);
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`home-cli-strip__filter-chip${active ? " home-cli-strip__filter-chip--active" : ""}`}
+                  aria-pressed={active}
+                  title={title}
+                  onClick={() => onToggleCategory(cat)}
                 >
                   {command}
                 </button>
@@ -162,26 +182,6 @@ export function HomeCliStrip({
             inputRef={inputRef}
             prefill={prefill}
           />
-        </div>
-      </div>
-
-      <div className="home-cli-strip__filter-rail">
-        <div className="home-cli-strip__filter-row" role="group" aria-label="Station category commands">
-          {STATION_CATEGORY_DEFINITIONS.filter(({ cat }) => cat !== "lore").map(({ cat, command, title }) => {
-            const active = activeCategories.has(cat);
-            return (
-              <button
-                key={cat}
-                type="button"
-                className={`home-cli-strip__filter-chip${active ? " home-cli-strip__filter-chip--active" : ""}`}
-                aria-pressed={active}
-                title={title}
-                onClick={() => onToggleCategory(cat)}
-              >
-                {command}
-              </button>
-            );
-          })}
         </div>
       </div>
 
