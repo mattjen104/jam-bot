@@ -42,20 +42,22 @@ describe("toggleAgeTier", () => {
 describe("toggleStationCategory", () => {
   it("adds an inactive category (all original three can be active together)", () => {
     let s = new Set<StationCategory>(["lore"]);
-    s = toggleStationCategory(s, "classics");
+    s = toggleStationCategory(s, "genre");
     s = toggleStationCategory(s, "ambient");
     expect(s.size).toBe(3);
   });
 
-  it("adds the three new metadata categories", () => {
+  it("adds the four metadata categories", () => {
     let s = new Set<StationCategory>(["lore"]);
     s = toggleStationCategory(s, "spinitron");
     s = toggleStationCategory(s, "college");
-    s = toggleStationCategory(s, "longtail");
+    s = toggleStationCategory(s, "flagship");
+    s = toggleStationCategory(s, "discovery");
     expect(s.has("spinitron")).toBe(true);
     expect(s.has("college")).toBe(true);
-    expect(s.has("longtail")).toBe(true);
-    expect(s.size).toBe(4);
+    expect(s.has("flagship")).toBe(true);
+    expect(s.has("discovery")).toBe(true);
+    expect(s.size).toBe(5);
   });
 
   it("removes an active category while at least one other remains", () => {
@@ -65,10 +67,10 @@ describe("toggleStationCategory", () => {
   });
 
   it("refuses to deselect the last active category (returns prev unchanged)", () => {
-    const prev = new Set<StationCategory>(["classics"]);
-    const next = toggleStationCategory(prev, "classics");
+    const prev = new Set<StationCategory>(["genre"]);
+    const next = toggleStationCategory(prev, "genre");
     expect(next).toBe(prev);
-    expect(next.has("classics")).toBe(true);
+    expect(next.has("genre")).toBe(true);
   });
 
   it("refuses to deselect the last active new-category too", () => {
@@ -78,8 +80,8 @@ describe("toggleStationCategory", () => {
   });
 
   it("does not mutate the previous set on a normal toggle", () => {
-    const prev = new Set<StationCategory>(["lore", "classics"]);
-    toggleStationCategory(prev, "classics");
+    const prev = new Set<StationCategory>(["lore", "genre"]);
+    toggleStationCategory(prev, "genre");
     expect(prev.size).toBe(2);
   });
 });

@@ -6,11 +6,12 @@
 
 export type StationCategory =
   | "lore"
-  | "classics"
+  | "genre"
   | "ambient"
   | "spinitron"
   | "college"
-  | "longtail";
+  | "flagship"
+  | "discovery";
 
 export const STATION_CATEGORY_DEFINITIONS: {
   cat: StationCategory;
@@ -19,9 +20,10 @@ export const STATION_CATEGORY_DEFINITIONS: {
   title: string;
 }[] = [
   { cat: "lore",      command: "/lore",      label: "Lore",      title: "The normal curated Dial" },
-  { cat: "classics",  command: "/classics",  label: "Classics",  title: "Era/genre stations — decade radio, oldies, genre channels" },
+  { cat: "genre",     command: "/genre",     label: "Genre",     title: "Era/genre stations — decade radio, oldies, genre channels" },
   { cat: "ambient",   command: "/ambient",   label: "Ambient",   title: "Sleep, nature, and ambient stations" },
   { cat: "spinitron", command: "/spinitron", label: "Spinitron", title: "Stations that use Spinitron for now-playing data" },
   { cat: "college",   command: "/college",   label: "College",   title: "Confirmed campus and college radio stations" },
-  { cat: "longtail",  command: "/longtail",  label: "Long-tail", title: "Radio Browser and other long-tail community stations" },
+  { cat: "flagship",  command: "/flagship",  label: "Flagship",  title: "The anchor stations — KEXP, NTS, BBC 6 Music, FIP, Dublab, Rinse FM, and friends" },
+  { cat: "discovery", command: "/discovery", label: "Discovery", title: "Radio Browser and other long-tail community stations" },
 ];

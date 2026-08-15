@@ -85,7 +85,9 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders scan chips in the unified rail that fire onScan and show the active window", () => {
-    const { props } = renderStrip();
+    const { props } = renderStrip({
+      activeCategories: new Set<StationCategory>(["lore", "college"]),
+    });
 
     const scan1 = screen.getByRole("button", { name: "scan 1 /scan1" });
     const scan2 = screen.getByRole("button", { name: "scan 2 /scan2" });
@@ -104,7 +106,9 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders every age-tier chip, routes toggles, and exposes active state", () => {
-    const { props } = renderStrip({ activeTiers: new Set<AgeTier>(["first"]) });
+    const { props } = renderStrip({
+      activeTiers: new Set<AgeTier>(["first"]),
+    });
 
     const tiers = [
       ["/first", "first"],
@@ -128,11 +132,12 @@ describe("HomeCliStrip", () => {
     });
 
     const categories = [
-      ["/classics", "classics"],
+      ["/genre", "genre"],
       ["/ambient", "ambient"],
       ["/spinitron", "spinitron"],
       ["/college", "college"],
-      ["/longtail", "longtail"],
+      ["/flagship", "flagship"],
+      ["/discovery", "discovery"],
     ] as const;
 
     for (const [command, cat] of categories) {
@@ -154,15 +159,15 @@ describe("HomeCliStrip", () => {
     // Scan button count is dynamic — driven by the pageCount prop (default 3).
     expect(scanRow.querySelectorAll("button")).toHaveLength(3);
     expect(ageRow.querySelectorAll("button")).toHaveLength(4);
-    expect(categoryRow.querySelectorAll("button")).toHaveLength(5);
+    expect(categoryRow.querySelectorAll("button")).toHaveLength(6);
 
     const chips = [
       ...scanRow.querySelectorAll("button"),
       ...ageRow.querySelectorAll("button"),
       ...categoryRow.querySelectorAll("button"),
     ];
-    // 3 scans + 4 age tiers + 5 station categories; /lore is the home button.
-    expect(chips.length).toBe(12);
+    // 3 scans + 4 age tiers + 6 station categories; /lore is the home button.
+    expect(chips.length).toBe(13);
     for (const chip of chips) {
       expect(chip.className).toContain("home-cli-strip__filter-chip");
     }

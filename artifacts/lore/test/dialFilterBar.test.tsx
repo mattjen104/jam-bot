@@ -40,7 +40,7 @@ describe("DialFilterBar", () => {
     renderBar();
     for (const label of [
       "First", "Current", "Catalog", "Deep",
-      "Lore", "Classics", "Ambient", "Spinitron", "College", "Long-tail",
+      "Lore", "Genre", "Ambient", "Spinitron", "College", "Flagship", "Discovery",
     ]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
     }
@@ -62,12 +62,13 @@ describe("DialFilterBar", () => {
     expect(pressed("Catalog")).toBe("false");
     expect(pressed("Lore")).toBe("true");
     expect(pressed("Ambient")).toBe("true");
-    expect(pressed("Classics")).toBe("false");
+    expect(pressed("Genre")).toBe("false");
     expect(pressed("Spinitron")).toBe("false");
     expect(pressed("College")).toBe("true");
-    expect(pressed("Long-tail")).toBe("false");
+    expect(pressed("Flagship")).toBe("false");
+    expect(pressed("Discovery")).toBe("false");
     expect(screen.getByRole("button", { name: "Current" }).className).toContain("dial-filter-bar__btn--on");
-    expect(screen.getByRole("button", { name: "Classics" }).className).not.toContain("--on");
+    expect(screen.getByRole("button", { name: "Genre" }).className).not.toContain("--on");
   });
 
   it("fires onToggleTier / onToggleCategory with the clicked value", () => {
@@ -80,7 +81,9 @@ describe("DialFilterBar", () => {
     expect(props.onToggleCategory).toHaveBeenCalledWith("spinitron");
     fireEvent.click(screen.getByRole("button", { name: "College" }));
     expect(props.onToggleCategory).toHaveBeenCalledWith("college");
-    fireEvent.click(screen.getByRole("button", { name: "Long-tail" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("longtail");
+    fireEvent.click(screen.getByRole("button", { name: "Flagship" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("flagship");
+    fireEvent.click(screen.getByRole("button", { name: "Discovery" }));
+    expect(props.onToggleCategory).toHaveBeenCalledWith("discovery");
   });
 });

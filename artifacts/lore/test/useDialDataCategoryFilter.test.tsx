@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * useDialData — metadata-category filtering (/spinitron, /college, /longtail).
+ * useDialData — metadata-category filtering (/spinitron, /college,
+ * /flagship, /discovery).
  *
  * These categories don't trigger extra server fetches: the hook filters the
  * already-fetched Lore station list client-side using the server-supplied
@@ -33,10 +34,10 @@ const makeStation = (slug: string, stationCategories: string[]): Partial<Station
 
 const STATIONS = [
   makeStation("wprb", ["spinitron", "college"]),
-  makeStation("kexp", []),
-  makeStation("rb-longtail", ["longtail"]),
+  makeStation("kexp", ["flagship"]),
+  makeStation("rb-discovery", ["discovery"]),
   makeStation("cfuv", ["college"]),
-  makeStation("nts-1", []),
+  makeStation("nts-1", ["flagship"]),
 ];
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
@@ -68,7 +69,7 @@ function slugsFor(categories: Set<DialStationCategory>): string[] {
 describe("useDialData metadata-category filter", () => {
   it("lore alone shows every station (no metadata filter)", () => {
     expect(slugsFor(new Set(["lore"]))).toEqual(
-      ["cfuv", "kexp", "nts-1", "rb-longtail", "wprb"],
+      ["cfuv", "kexp", "nts-1", "rb-discovery", "wprb"],
     );
   });
 
@@ -80,13 +81,17 @@ describe("useDialData metadata-category filter", () => {
     expect(slugsFor(new Set(["lore", "college"]))).toEqual(["cfuv", "wprb"]);
   });
 
-  it("/longtail restricts to stations labeled longtail", () => {
-    expect(slugsFor(new Set(["lore", "longtail"]))).toEqual(["rb-longtail"]);
+  it("/flagship restricts to stations labeled flagship", () => {
+    expect(slugsFor(new Set(["lore", "flagship"]))).toEqual(["kexp", "nts-1"]);
+  });
+
+  it("/discovery restricts to stations labeled discovery", () => {
+    expect(slugsFor(new Set(["lore", "discovery"]))).toEqual(["rb-discovery"]);
   });
 
   it("multiple metadata categories union their matches", () => {
-    expect(slugsFor(new Set(["lore", "college", "longtail"]))).toEqual(
-      ["cfuv", "rb-longtail", "wprb"],
+    expect(slugsFor(new Set(["lore", "college", "discovery"]))).toEqual(
+      ["cfuv", "rb-discovery", "wprb"],
     );
   });
 
@@ -95,7 +100,7 @@ describe("useDialData metadata-category filter", () => {
   });
 
   it("stations with empty stationCategories never match a metadata filter", () => {
-    const slugs = slugsFor(new Set(["lore", "spinitron", "college", "longtail"]));
+    const slugs = slugsFor(new Set(["lore", "spinitron", "college", "discovery"]));
     expect(slugs).not.toContain("kexp");
     expect(slugs).not.toContain("nts-1");
   });

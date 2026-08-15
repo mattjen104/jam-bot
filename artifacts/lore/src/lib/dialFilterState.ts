@@ -4,7 +4,7 @@
  * Both menus are additive multi-selects:
  *   - Age tiers (First | Current | Catalog | Deep): any subset, including
  *     empty (empty = no age filtering).
- *   - Station categories (Lore | Classics | Ambient): any subset EXCEPT
+ *   - Station categories (Lore | Genre | Ambient | …): any subset EXCEPT
  *     empty — the last active category cannot be deselected, so the dial
  *     always has at least one station source.
  *

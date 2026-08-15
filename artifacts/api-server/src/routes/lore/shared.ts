@@ -189,13 +189,18 @@ export async function isPickerOptedOut(pickerId: number): Promise<boolean> {
  *                   radio_browser stations whose name matches a university/
  *                   college pattern.  Detection is tag-based; the migration
  *                   and ingest-time classifier are the source of truth.
- *  - "longtail"   — curated discovery stations (source="curated", tier=
- *                   "longtail") always qualify; radio_browser-sourced stations
- *                   only qualify when they carry a meaningful quality signal:
- *                   a scored qualityTier of "proven", "promising", or "raw"
- *                   (not "unscored"/"silent"), OR a non-null discoveryScore.
- *                   Unscored/silent radio_browser rows are too noisy to be
- *                   useful in the discovery category surface.
+ *  - "discovery"  — curated discovery stations (tier="longtail") always
+ *                   qualify regardless of source (curated rows AND hand-seeded
+ *                   source=null rows are known-good by editorial decision);
+ *                   radio_browser-sourced stations only qualify when they
+ *                   carry a meaningful quality signal: a scored qualityTier of
+ *                   "proven", "promising", or "raw" (not "unscored"/"silent"),
+ *                   OR a non-null discoveryScore. Unscored/silent
+ *                   radio_browser rows are too noisy to be useful in the
+ *                   discovery category surface.
+ *  - "flagship"   — the ~12 anchor stations (KEXP, NTS, BBC 6 Music, FIP,
+ *                   Dublab, Rinse FM, ...), derived read-only from
+ *                   tier="flagship".
  *
  * All inputs come from already-public station fields; no nowPlayingConfig
  * values or Spinitron API keys are read or exposed.
@@ -212,10 +217,11 @@ export function deriveStationCategories(s: Station, qualityTier?: string | null)
   if (tags.includes("college")) {
     cats.push("college");
   }
-  // Curated longtail stations (hand-picked discoveries like KCHUNG, Radio
-  // AlHara, Radio Nopal) always surface in the longtail category regardless
-  // of quality scoring — they are known-good by editorial decision.
-  const isCuratedLongtail = s.source === "curated" && s.tier === "longtail";
+  // Curated longtail-tier stations (hand-picked discoveries like KCHUNG,
+  // Radio AlHara, Radio Nopal — and hand-seeded source=null rows like ByteFM
+  // or Cashmere Radio) always surface in the discovery category regardless of
+  // source or quality scoring — they are known-good by editorial decision.
+  const isCuratedLongtail = s.tier === "longtail" && s.source !== "radio_browser";
   // Radio Browser auto-discovered stations only qualify when they have
   // accumulated enough spin data to be scored above the noise floor.
   const hasQualitySignal =
@@ -224,7 +230,12 @@ export function deriveStationCategories(s: Station, qualityTier?: string | null)
       qualityTier !== "silent") ||
     s.discoveryScore != null;
   if (isCuratedLongtail || (s.source === "radio_browser" && hasQualitySignal)) {
-    cats.push("longtail");
+    cats.push("discovery");
+  }
+  // Flagship anchors are derived read-only from the tier; the tier itself is
+  // curated upstream and never modified here.
+  if (s.tier === "flagship") {
+    cats.push("flagship");
   }
   return cats;
 }

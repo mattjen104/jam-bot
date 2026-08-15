@@ -62,10 +62,10 @@ describe("DialCliBar", () => {
     const { input } = renderCli();
     // Idle: no wordmark element in the DOM.
     expect(document.querySelector(".dial-cli-overlay__wordmark")).toBeNull();
-    type(input, "/classics");
+    type(input, "/genre");
     // Typing: wordmark appears with the command text.
     const wordmark = document.querySelector(".dial-cli-overlay__wordmark");
-    expect(wordmark?.textContent).toBe("/classics");
+    expect(wordmark?.textContent).toBe("/genre");
     expect(wordmark?.className).toContain("dial-cli-overlay__wordmark--typing");
     // Clearing: wordmark disappears again.
     type(input, "");
@@ -88,11 +88,12 @@ describe("DialCliBar", () => {
 
   it.each([
     ["/lore",      "lore"      ],
-    ["/classics",  "classics"  ],
+    ["/genre",     "genre"     ],
     ["/ambient",   "ambient"   ],
     ["/spinitron", "spinitron" ],
     ["/college",   "college"   ],
-    ["/longtail",  "longtail"  ],
+    ["/flagship",  "flagship"  ],
+    ["/discovery", "discovery" ],
   ] as const)("routes %s to onToggleCategory and clears the field", (command, cat) => {
     const { props, input } = renderCli();
     type(input, command);
@@ -106,7 +107,11 @@ describe("DialCliBar", () => {
     const { props, input } = renderCli();
     type(input, "/nonsense");
     fireEvent.keyDown(input, { key: "Enter" });
-    type(input, "classics"); // missing slash — not a command
+    type(input, "genre"); // missing slash — not a command
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "/classics"); // retired command — silently ignored
+    fireEvent.keyDown(input, { key: "Enter" });
+    type(input, "/longtail"); // retired command — silently ignored
     fireEvent.keyDown(input, { key: "Enter" });
     expect(props.onToggleTier).not.toHaveBeenCalled();
     expect(props.onToggleCategory).not.toHaveBeenCalled();
@@ -114,9 +119,9 @@ describe("DialCliBar", () => {
 
   it("accepts commands case-insensitively with surrounding whitespace", () => {
     const { props, input } = renderCli();
-    type(input, "  /CLASSICS  ");
+    type(input, "  /GENRE  ");
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(props.onToggleCategory).toHaveBeenCalledWith("classics");
+    expect(props.onToggleCategory).toHaveBeenCalledWith("genre");
   });
 
   it("executes on form submit (mobile enter/tap path)", () => {

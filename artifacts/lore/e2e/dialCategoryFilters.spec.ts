@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * End-to-end tests confirming that the /spinitron, /college, and /longtail
+ * End-to-end tests confirming that the /spinitron, /college, and /discovery
  * CLI commands (and the matching DialFilterBar toggle buttons) correctly
  * narrow the dial to stations whose server-supplied `stationCategories` array
  * contains the requested label.
@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
  *
  *  - spinitron-fm   → stationCategories: ["spinitron"]
  *  - college-wkrp   → stationCategories: ["college"]
- *  - longtail-rb    → stationCategories: ["longtail"]
+ *  - discovery-rb   → stationCategories: ["discovery"]
  *  - lore-flagship  → stationCategories: []  (normal curated station)
  *
  * All four stations are live (recent now-playing) and carry enough crossings
@@ -20,7 +20,7 @@ import { test, expect } from "@playwright/test";
  * CLI mechanics:
  *   1. Press "/" globally — the DialCliBar listener intercepts it, focuses
  *      the invisible input, and sets its value to "/".
- *   2. Type the rest of the command ("spinitron", "college", "longtail").
+ *   2. Type the rest of the command ("spinitron", "college", "discovery").
  *   3. Press Enter — executeCommand() dispatches the category toggle.
  *
  * Filter-bar mechanics:
@@ -72,7 +72,7 @@ function makeStation(
 const STATIONS = [
   makeStation("spinitron-fm",  "Spinitron FM",   ["spinitron"], 0),
   makeStation("college-wkrp",  "College WKRP",   ["college"],   1),
-  makeStation("longtail-rb",   "Longtail RB",    ["longtail"],  2),
+  makeStation("discovery-rb",  "Discovery RB",   ["discovery"], 2),
   makeStation("lore-flagship", "Lore Flagship",  [],            3),
 ];
 
@@ -226,7 +226,7 @@ async function installRoutes(page: import("@playwright/test").Page) {
  */
 async function sendCliCommand(
   page: import("@playwright/test").Page,
-  cmd: "/spinitron" | "/college" | "/longtail",
+  cmd: "/spinitron" | "/college" | "/discovery",
 ) {
   await page.locator("body").click();
   await page.keyboard.press("/");
@@ -266,7 +266,7 @@ test.describe("Dial category filters — CLI commands", () => {
 
     await expect(page.getByText("Spinitron FM").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("College WKRP")).not.toBeVisible();
-    await expect(page.getByText("Longtail RB")).not.toBeVisible();
+    await expect(page.getByText("Discovery RB")).not.toBeVisible();
     await expect(page.getByText("Lore Flagship")).not.toBeVisible();
   });
 
@@ -275,14 +275,14 @@ test.describe("Dial category filters — CLI commands", () => {
 
     await expect(page.getByText("College WKRP").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Spinitron FM")).not.toBeVisible();
-    await expect(page.getByText("Longtail RB")).not.toBeVisible();
+    await expect(page.getByText("Discovery RB")).not.toBeVisible();
     await expect(page.getByText("Lore Flagship")).not.toBeVisible();
   });
 
-  test("/longtail shows only longtail-tagged stations", async ({ page }) => {
-    await sendCliCommand(page, "/longtail");
+  test("/discovery shows only discovery-tagged stations", async ({ page }) => {
+    await sendCliCommand(page, "/discovery");
 
-    await expect(page.getByText("Longtail RB").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Spinitron FM")).not.toBeVisible();
     await expect(page.getByText("College WKRP")).not.toBeVisible();
     await expect(page.getByText("Lore Flagship")).not.toBeVisible();
@@ -297,7 +297,7 @@ test.describe("Dial category filters — CLI commands", () => {
 
     await expect(page.getByText("Spinitron FM").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("College WKRP").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Longtail RB")).not.toBeVisible();
+    await expect(page.getByText("Discovery RB")).not.toBeVisible();
     await expect(page.getByText("Lore Flagship")).not.toBeVisible();
   });
 });
@@ -353,19 +353,19 @@ test.describe("Dial category filters — filter bar button wiring at /lore/feed"
     await expect(collegeBtn).toHaveAttribute("aria-pressed", "false");
   });
 
-  test("Long-tail filter bar button reflects aria-pressed after /longtail CLI", async ({
+  test("Discovery filter bar button reflects aria-pressed after /discovery CLI", async ({
     page,
   }) => {
-    const longtailBtn = page
-      .locator(".dial-filter-bar__btn", { hasText: "Long-tail" })
+    const discoveryBtn = page
+      .locator(".dial-filter-bar__btn", { hasText: "Discovery" })
       .first();
-    await expect(longtailBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(discoveryBtn).toHaveAttribute("aria-pressed", "false");
 
-    await sendCliCommand(page, "/longtail");
-    await expect(page.getByText("Longtail RB").first()).toBeVisible({ timeout: 10_000 });
-    await expect(longtailBtn).toHaveAttribute("aria-pressed", "true");
+    await sendCliCommand(page, "/discovery");
+    await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
+    await expect(discoveryBtn).toHaveAttribute("aria-pressed", "true");
 
-    await sendCliCommand(page, "/longtail");
-    await expect(longtailBtn).toHaveAttribute("aria-pressed", "false");
+    await sendCliCommand(page, "/discovery");
+    await expect(discoveryBtn).toHaveAttribute("aria-pressed", "false");
   });
 });

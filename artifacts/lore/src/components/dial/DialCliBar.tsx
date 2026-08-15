@@ -15,8 +15,8 @@
  *
  * Commands:
  *   /first /current /catalog /deep      → age-tier toggles
- *   /lore /classics /ambient /spinitron
- *   /college /longtail                  → station-category toggles
+ *   /lore /genre /ambient /spinitron
+ *   /college /flagship /discovery       → station-category toggles
  *   /add <names>                        → seed artists (comma/newline split;
  *                                         whitespace split when no commas)
  *   /scan1 /scan2 … /scanN              → compact-dial window offset (N-1)*5
