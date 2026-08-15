@@ -4,8 +4,9 @@
  * Structure (top → bottom):
  *   1. Three centered scan buttons.
  *   2. Four centered song-age buttons.
- *   3. A `/lore` home button beside the DialCliBar (strip variant), whose
- *      prompt is left-aligned so the field reads like a command line.
+ *   3. `/crossings`, `/radio`, and `/lore` controls beside the DialCliBar
+ *      (strip variant), whose prompt is left-aligned so the field reads like
+ *      a command line.
  *   4. Five centered station-category buttons (lore is the home control).
  *   5. The `/add artists` affordance, aligned to the left.
  *
@@ -35,9 +36,8 @@ export interface HomeCliStripProps extends Pick<DialCliBarProps,
   mattPending?: boolean;
   mattStatus?: MattCliStatus | null;
   /**
-   * `/radio` / `/crossings` feed-mode commands. Optional — SplitHome leaves
-   * this undefined because radioMode only applies to the full DialView feed
-   * at /feed (the CompactDial keeps the crossing sort regardless).
+   * `/radio` / `/crossings` feed-mode commands. Optional for callers that only
+   * need the filter remote; SplitHome wires this to the full feed at /feed.
    */
   onRadioMode?: (on: boolean) => void;
 }
@@ -115,9 +115,26 @@ export function HomeCliStrip({
         </div>
       </div>
 
-      {/* Home command + CLI field. The home command sits below /scan1 and
-          keeps the entry prompt to its right, like one console line. */}
+      {/* Feed-mode commands + home command + CLI field. The mode commands sit
+          immediately before /lore so the whole row reads like one console
+          line, while the input remains the flexible final segment. */}
       <div className="home-cli-strip__command-row">
+        <button
+          type="button"
+          className="home-cli-strip__btn home-cli-strip__mode-btn"
+          aria-label="crossings /crossings"
+          onClick={() => onRadioMode?.(false)}
+        >
+          /crossings
+        </button>
+        <button
+          type="button"
+          className="home-cli-strip__btn home-cli-strip__mode-btn"
+          aria-label="radio /radio"
+          onClick={() => onRadioMode?.(true)}
+        >
+          /radio
+        </button>
         <button
           type="button"
           className="home-cli-strip__btn home-cli-strip__home-btn"

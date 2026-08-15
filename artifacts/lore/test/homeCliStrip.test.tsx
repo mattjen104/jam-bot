@@ -9,7 +9,9 @@
  *  3. The unified filter rail renders scan, age-tier, and category chips in
  *     one row, all as uniform chips that route to their callbacks and expose
  *     active state accessibly (aria-pressed).
- *  4. The "add artists /add" button focuses the input and inserts the
+ *  4. The `/crossings`, `/radio`, and `/lore` command controls stay in order
+ *     and route their actions accessibly.
+ *  5. The "add artists /add" button focuses the input and inserts the
  *     `/add ` prefix.
  */
 import React from "react";
@@ -176,5 +178,37 @@ describe("HomeCliStrip", () => {
     renderStrip();
     expect(screen.getByRole("button", { name: "homepage /lore" })).toBeTruthy();
     expect(screen.getByText(">_")).toBeTruthy();
+  });
+
+  it("renders mode controls before /lore in command-line order", () => {
+    renderStrip({ onRadioMode: vi.fn() });
+    const commandRow = document.querySelector(".home-cli-strip__command-row");
+    expect(commandRow).toBeTruthy();
+    expect(
+      [...commandRow!.querySelectorAll("button")].map((button) => button.textContent),
+    ).toEqual(["/crossings", "/radio", "/lore"]);
+  });
+
+  it.each([
+    ["crossings /crossings", false],
+    ["radio /radio", true],
+  ] as const)("routes the %s shortcut to onRadioMode(%s)", (name, mode) => {
+    const onRadioMode = vi.fn();
+    renderStrip({ onRadioMode });
+    const button = screen.getByRole("button", { name });
+    fireEvent.click(button);
+    expect(onRadioMode).toHaveBeenCalledWith(mode);
+    expect(button.getAttribute("type")).toBe("button");
+  });
+
+  it("keeps the mode shortcuts keyboard-activatable as native buttons", () => {
+    const onRadioMode = vi.fn();
+    renderStrip({ onRadioMode });
+    const button = screen.getByRole("button", { name: "radio /radio" });
+    button.focus();
+    expect(document.activeElement).toBe(button);
+    fireEvent.keyDown(button, { key: "Enter" });
+    fireEvent.click(button);
+    expect(onRadioMode).toHaveBeenCalledWith(true);
   });
 });

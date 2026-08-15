@@ -15,8 +15,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 // Module mocks — must precede imports of the subjects.
 // ---------------------------------------------------------------------------
 
+const { mockSetLocation } = vi.hoisted(() => ({
+  mockSetLocation: vi.fn(),
+}));
+
 vi.mock("wouter", () => ({
-  useLocation: () => ["/", vi.fn()],
+  useLocation: () => ["/", mockSetLocation],
 }));
 
 vi.mock("../src/components/dial/FrontDoorRow", () => ({
@@ -85,6 +89,8 @@ vi.mock("../src/hooks/useDialData", () => ({
 
 import SplitHome from "../src/pages/SplitHome";
 import type { AgeTier } from "../src/lib/dialAgeFilter";
+import { readRadioMode } from "../src/lib/dialRadioMode";
+import { readDialLens, writeDialLens } from "../src/lib/dialLensState";
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -131,6 +137,8 @@ function typeCommand(command: string) {
 afterEach(() => {
   cleanup();
   mockStations.value = [];
+  mockSetLocation.mockReset();
+  localStorage.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -138,6 +146,61 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
+  it.each([
+    ["crossings /crossings", false],
+    ["radio /radio", true],
+  ] as const)("shortcut %s persists its mode and opens the full feed", (name, mode) => {
+    render(<SplitHome />);
+
+    fireEvent.click(screen.getByRole("button", { name }));
+
+    expect(readRadioMode()).toBe(mode);
+    expect(localStorage.getItem("lore:radioMode")).toBe(mode ? "true" : "false");
+    expect(mockSetLocation).toHaveBeenCalledWith("/feed");
+  });
+
+  it.each([
+    ["/crossings", false],
+    ["/radio", true],
+  ] as const)("typed %s persists its mode and opens the full feed", (command, mode) => {
+    render(<SplitHome />);
+
+    typeCommand(command);
+
+    expect(readRadioMode()).toBe(mode);
+    expect(mockSetLocation).toHaveBeenCalledWith("/feed");
+  });
+
+  it("/radio forces the Radio lens even when the listener was on Press or Shows", () => {
+    // Simulate a returning visitor who previously selected the Press lens.
+    writeDialLens("press");
+    expect(readDialLens()).toBe("press");
+
+    render(<SplitHome />);
+
+    // Clicking the /radio shortcut must clobber the persisted Press lens.
+    fireEvent.click(screen.getByRole("button", { name: "radio /radio" }));
+
+    expect(readRadioMode()).toBe(true);
+    expect(readDialLens()).toBe("radio");
+    expect(localStorage.getItem("lore:dialLens")).toBe("radio");
+    expect(mockSetLocation).toHaveBeenCalledWith("/feed");
+  });
+
+  it("/crossings does not clobber the active lens — it only changes the radio-mode flag", () => {
+    // A Press-lens visitor using /crossings should still land on Press (only
+    // the crossing-ranked sort is toggled, not the lens).
+    writeDialLens("press");
+
+    render(<SplitHome />);
+
+    fireEvent.click(screen.getByRole("button", { name: "crossings /crossings" }));
+
+    expect(readRadioMode()).toBe(false);
+    expect(readDialLens()).toBe("press");
+    expect(mockSetLocation).toHaveBeenCalledWith("/feed");
+  });
+
   it("/deep hides rows whose current track is not deep; unknown-age and trackless rows stay", () => {
     mockStations.value = [
       makeStation("deep-cuts", "deep"),

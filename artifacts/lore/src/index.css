@@ -7430,6 +7430,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--foreground));
   border-color: hsl(var(--foreground) / 0.4);
 }
+.home-cli-strip__btn:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.home-cli-strip__btn:active {
+  background: hsl(var(--muted));
+}
 .home-cli-strip__btn--active,
 .home-cli-strip__btn--primary {
   background: hsl(var(--secondary));
@@ -7486,12 +7495,19 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-size: var(--lore-size-small);
   line-height: 1.2;
 }
+.home-cli-strip__mode-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.home-cli-strip__mode-btn + .home-cli-strip__mode-btn,
+.home-cli-strip__mode-btn + .home-cli-strip__home-btn,
 .home-cli-strip__home-btn + .home-cli-strip__input-row {
   margin-left: -1px;
 }
 .home-cli-strip__input-row {
   position: relative;
-  flex: 0 0 3.2rem;
+  flex: 1 1 3.2rem;
+  width: 3.2rem;
   height: 27px;
   min-width: 0;
   border: 1px solid hsl(var(--foreground) / 0.68);

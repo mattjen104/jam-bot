@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   useDialData,
@@ -28,6 +29,8 @@ import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { reason } from "../components/dialViewHelpers";
 import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
+import { writeRadioMode } from "../lib/dialRadioMode";
+import { writeDialLens } from "../lib/dialLensState";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
@@ -38,6 +41,8 @@ import { useStartMattLibrary } from "../lib/meHooks";
 import type { MattCliStatus } from "../components/dial/DialCliBar";
 
 export default function SplitHome() {
+  const [, setLocation] = useLocation();
+
   // CLI filter state — same semantics as the full Dial (additive tiers,
   // last-category protection). Categories drive the station fetch.
   const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
@@ -152,6 +157,13 @@ export default function SplitHome() {
   const handleAddArtists = useCallback((names: string[]) => {
     for (const name of names) addSeed(name);
   }, [addSeed]);
+  const handleRadioMode = useCallback((on: boolean) => {
+    writeRadioMode(on);
+    // /radio must force the Radio lens so a returning visitor on Press/Shows
+    // lands on the Radio feed, matching DialView's own setRadioMode behavior.
+    if (on) writeDialLens("radio");
+    setLocation("/feed");
+  }, [setLocation]);
   const mattStarterMutation = useStartMattLibrary();
   const startMattLibrary = useCallback(() => {
     if (mattStarterMutation.isPending) return;
@@ -208,6 +220,7 @@ export default function SplitHome() {
           scanOffset={scanOffset}
           onScan={handleScan}
           onAddArtists={handleAddArtists}
+          onRadioMode={handleRadioMode}
           onMatt={startMattLibrary}
           mattPending={mattStarterMutation.isPending}
           mattStatus={mattCliStatus}
