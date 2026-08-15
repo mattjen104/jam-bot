@@ -5,6 +5,7 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+/artifacts/api-server/.tsbuildinfo
 .expo
 .expo-shared
 
@@ -46,6 +47,7 @@ Thumbs.db
 
 # Replit
 .cache/
+.cache/vitest/
 .local/
 
 # Pasted terminal logs / scratch notes (may contain secrets — never commit)
