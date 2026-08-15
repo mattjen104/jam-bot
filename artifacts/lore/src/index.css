@@ -7416,6 +7416,83 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-color: hsl(var(--foreground) / 0.45);
   background: hsl(var(--secondary));
 }
+
+/* ── Compact scan remote — numeric page selectors + Scan / Scan all ─────── */
+.home-cli-strip__scan-remote {
+  gap: 6px;
+}
+.home-cli-strip__page-selectors {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.home-cli-strip__page-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  min-width: 27px;
+  height: 27px;
+  padding: 0 5px;
+  border: 1px solid hsl(var(--foreground) / 0.68);
+  border-radius: 2px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-cli-strip__page-btn + .home-cli-strip__page-btn {
+  margin-left: -1px;
+}
+.home-cli-strip__page-btn:hover,
+.home-cli-strip__page-btn:focus-visible {
+  position: relative;
+  z-index: 1;
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.5);
+}
+.home-cli-strip__page-btn:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.home-cli-strip__page-btn--active {
+  color: hsl(var(--background));
+  background: hsl(var(--foreground) / 0.82);
+  border-color: hsl(var(--foreground) / 0.82);
+}
+.home-cli-strip__page-btn--active:hover,
+.home-cli-strip__page-btn--active:focus-visible {
+  color: hsl(var(--background));
+  background: hsl(var(--foreground) / 0.9);
+  border-color: hsl(var(--foreground) / 0.9);
+}
+.home-cli-strip__scan-btn {
+  min-width: 52px;
+}
+.home-cli-strip__scan-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.home-cli-strip__scan-btn--active {
+  color: hsl(var(--accent));
+  border-color: hsl(var(--accent) / 0.6);
+  background: hsl(var(--accent) / 0.1);
+}
+.home-cli-strip__scan-btn--active:hover,
+.home-cli-strip__scan-btn--active:focus-visible {
+  color: hsl(var(--accent));
+  border-color: hsl(var(--accent) / 0.8);
+  background: hsl(var(--accent) / 0.14);
+}
+
+/* Sampling highlight on a compact-dial row during a homepage scan. */
+.compact-dial__row--sampling {
+  background: hsl(var(--live) / 0.07);
+  outline: 1px solid hsl(var(--live) / 0.25);
+}
 /* The Stack-side command is the bottom line of the same console outline. */
 .home-cli-strip__row--stack {
   min-height: 29px;

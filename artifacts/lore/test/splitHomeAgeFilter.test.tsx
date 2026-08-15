@@ -9,7 +9,7 @@
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Module mocks — must precede imports of the subjects.
@@ -53,12 +53,20 @@ vi.mock("../src/components/dialViewHelpers", () => ({
   reason: () => ({ r: 0, cls: "w0", node: "on air" }),
 }));
 
+const { mockPreview } = vi.hoisted(() => ({
+  mockPreview: vi.fn(),
+}));
+
 vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: () => ({ radio: { station: null, status: "idle", toggle: vi.fn() } }),
+  usePlayer: () => ({
+    radio: { station: null, status: "idle", toggle: vi.fn(), preview: mockPreview },
+  }),
 }));
 
 vi.mock("../src/hooks/useRadioPlayer", () => ({
-  resolvePlaybackSource: () => null,
+  // Scan tests need stations to count as playable so preview() is invoked;
+  // the station stubs carry a streamUrl-equivalent identity via their slug.
+  resolvePlaybackSource: (station: { slug: string }) => ({ kind: "stream", station }),
 }));
 
 vi.mock("../src/hooks/useSeedManager", () => ({
@@ -139,6 +147,7 @@ afterEach(() => {
   cleanup();
   mockStations.value = [];
   mockSetLocation.mockReset();
+  mockPreview.mockReset();
   localStorage.clear();
 });
 
@@ -297,15 +306,20 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(screen.queryByTestId("fdrow-cur-1")).toBeNull();
   });
 
-  it("renders one scan button per 5-row page and navigates past /scan3", () => {
-    // 23 stations → 5 pages (/scan1…/scan5); /scan4 shows rows 16–20.
+  it("renders one numeric page selector per 5-row page and navigates past page 3", () => {
+    // 23 stations → 5 pages (1…5); /scan4 shows rows 16–20.
     mockStations.value = Array.from({ length: 23 }, (_, i) =>
       makeStation(`st-${i + 1}`, null),
     );
     render(<SplitHome />);
 
+    const pageGroup = screen.getByRole("group", { name: "Page" });
+    expect(pageGroup.querySelectorAll("button")).toHaveLength(5);
+    // The scan remote has exactly two scan actions — no per-page scan buttons.
     const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    expect(scanRow.querySelectorAll("button")).toHaveLength(5);
+    expect(scanRow.querySelectorAll("button")).toHaveLength(7); // 5 pages + Scan + Scan all
+    expect(screen.getByRole("button", { name: "scan this page" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "scan all stations" })).toBeTruthy();
 
     typeCommand("/scan4");
     expect(screen.getByTestId("fdrow-st-16")).toBeTruthy();
@@ -313,7 +327,22 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(screen.queryByTestId("fdrow-st-15")).toBeNull();
     expect(screen.queryByTestId("fdrow-st-21")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "scan 4 /scan4" }).getAttribute("aria-pressed"),
+      screen.getByRole("button", { name: "page 4 /scan4" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("clicking a numeric page selector changes the visible window", () => {
+    mockStations.value = Array.from({ length: 12 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    render(<SplitHome />);
+
+    fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
+    expect(screen.getByTestId("fdrow-st-6")).toBeTruthy();
+    expect(screen.getByTestId("fdrow-st-10")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-st-1")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
     ).toBe("true");
   });
 
@@ -330,9 +359,9 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(screen.getByTestId("fdrow-st-6")).toBeTruthy();
     expect(screen.queryByTestId("fdrow-st-1")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "scan 2 /scan2" }).getAttribute("aria-pressed"),
+      screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
     ).toBe("true");
-    expect(screen.queryByRole("button", { name: "scan 3 /scan3" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "page 3 /scan3" })).toBeNull();
   });
 
   it("clamps a stale scan offset when the filtered list shrinks below it", () => {
@@ -347,20 +376,258 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     typeCommand("/scan3");
     expect(screen.getByTestId("fdrow-st-11")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "scan 3 /scan3" }).getAttribute("aria-pressed"),
+      screen.getByRole("button", { name: "page 3 /scan3" }).getAttribute("aria-pressed"),
     ).toBe("true");
 
     mockStations.value = mockStations.value.slice(0, 6);
     rerender(<SplitHome />);
 
     // Offset clamped 10 → 5: the 6th row is now visible, page 2 is active,
-    // and the now-invalid /scan3 button is gone.
+    // and the now-invalid page 3 selector is gone.
     expect(screen.getByTestId("fdrow-st-6")).toBeTruthy();
     expect(screen.queryByTestId("fdrow-st-1")).toBeNull();
-    const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    expect(scanRow.querySelectorAll("button")).toHaveLength(2);
+    const pageGroup = screen.getByRole("group", { name: "Page" });
+    expect(pageGroup.querySelectorAll("button")).toHaveLength(2);
     expect(
-      screen.getByRole("button", { name: "scan 2 /scan2" }).getAttribute("aria-pressed"),
+      screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
     ).toBe("true");
+  });
+
+  it("disables Scan and Scan all when no stations are on air", () => {
+    mockStations.value = [];
+    render(<SplitHome />);
+
+    expect(
+      (screen.getByRole("button", { name: "scan this page" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "scan all stations" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Compact scan remote — page/all preview scans
+// ---------------------------------------------------------------------------
+
+describe("SplitHome — compact scan remote", () => {
+  it("Scan previews the first row of the selected page and becomes Stop", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 12 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      // Select page 2, then start a page scan.
+      fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
+      fireEvent.click(screen.getByRole("button", { name: "scan this page" }));
+
+      // The control is now a Stop action with active state.
+      const stopBtn = screen.getByRole("button", { name: "stop page scan" });
+      expect(stopBtn.textContent).toBe("Stop");
+      expect(mockPreview).toHaveBeenCalledTimes(1);
+      // First hop = first row of page 2 (st-6).
+      expect(mockPreview.mock.calls[0][0].slug).toBe("st-6");
+      // Sampling highlight lands on the previewed row.
+      expect(document.querySelector(".compact-dial__row--sampling")).toBeTruthy();
+
+      // Advance one dwell — hops to the next row within the page.
+      act(() => { vi.advanceTimersByTime(7000); });
+      expect(mockPreview).toHaveBeenCalledTimes(2);
+      expect(mockPreview.mock.calls[1][0].slug).toBe("st-7");
+
+      // Stop returns the control to a start action and clears the highlight.
+      fireEvent.click(stopBtn);
+      expect(screen.getByRole("button", { name: "scan this page" }).textContent).toBe("Scan");
+      expect(document.querySelector(".compact-dial__row--sampling")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("page scan wraps within its five-row window, never leaving the page", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 12 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "scan this page" }));
+      // Page 1 rows: st-1 … st-5, then wrap back to st-1.
+      for (let hop = 0; hop < 5; hop++) {
+        act(() => { vi.advanceTimersByTime(7000); });
+      }
+      const slugs = mockPreview.mock.calls.map((c) => c[0].slug);
+      expect(slugs).toEqual(["st-1", "st-2", "st-3", "st-4", "st-5", "st-1"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Scan all walks past the page boundary through the full filtered list", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 7 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      expect(screen.getByRole("button", { name: "stop scan all" }).textContent).toBe("Stop");
+
+      for (let hop = 0; hop < 7; hop++) {
+        act(() => { vi.advanceTimersByTime(7000); });
+      }
+      const slugs = mockPreview.mock.calls.map((c) => c[0].slug);
+      // Crosses the page-1 boundary (st-5 → st-6) and wraps at the end.
+      expect(slugs).toEqual(["st-1", "st-2", "st-3", "st-4", "st-5", "st-6", "st-7", "st-1"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Scan all advances the visible page window so the sampled row stays rendered", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 7 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      // Start from page 2 — an all-scan snaps back to page 1 (it begins at
+      // the top of the full list).
+      fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      expect(
+        screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+      // The sampled row is visible and highlighted on page 1.
+      expect(document.querySelector(".compact-dial__row--sampling")).toBeTruthy();
+
+      // Hop through the rest of page 1 (st-2 … st-5): still page 1.
+      for (let hop = 0; hop < 4; hop++) {
+        act(() => { vi.advanceTimersByTime(7000); });
+      }
+      expect(
+        screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+
+      // Next hop crosses to st-6 — the window follows to page 2 and the
+      // highlight stays on the (now visible) sampled row.
+      act(() => { vi.advanceTimersByTime(7000); });
+      expect(
+        screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+      expect(document.querySelector(".compact-dial__row--sampling")).toBeTruthy();
+
+      // Wrap at the end returns the window to page 1.
+      act(() => { vi.advanceTimersByTime(7000); }); // st-7
+      act(() => { vi.advanceTimersByTime(7000); }); // wrap → st-1
+      expect(
+        screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("typed /scanN stops an active all-scan, matching the page buttons", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 12 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      expect(screen.getByRole("button", { name: "stop scan all" })).toBeTruthy();
+
+      act(() => { typeCommand("/scan2"); });
+      // Scan stopped and the page changed; no further hops fire.
+      expect(screen.getByRole("button", { name: "scan all stations" }).textContent).toBe("Scan all");
+      expect(
+        screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+      const callsBefore = mockPreview.mock.calls.length;
+      act(() => { vi.advanceTimersByTime(30000); });
+      expect(mockPreview.mock.calls.length).toBe(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clicking the other scan control switches modes instead of only stopping", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 7 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      // Page scan running…
+      fireEvent.click(screen.getByRole("button", { name: "scan this page" }));
+      expect(screen.getByRole("button", { name: "stop page scan" })).toBeTruthy();
+
+      // …click Scan all: page scan stops, all-scan starts immediately.
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      expect(screen.getByRole("button", { name: "stop scan all" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "scan this page" }).textContent).toBe("Scan");
+      // The all-scan restarted from the top of the list.
+      const lastSlug = mockPreview.mock.calls.at(-1)?.[0].slug;
+      expect(lastSlug).toBe("st-1");
+
+      // And back: click Scan (page) while the all-scan runs — switches again.
+      fireEvent.click(screen.getByRole("button", { name: "scan this page" }));
+      expect(screen.getByRole("button", { name: "stop page scan" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "scan all stations" }).textContent).toBe("Scan all");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("changing page stops an active page scan", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 12 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "scan this page" }));
+      expect(screen.getByRole("button", { name: "stop page scan" })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
+      // Scan stopped; the control is a start action again and no more hops fire.
+      expect(screen.getByRole("button", { name: "scan this page" }).textContent).toBe("Scan");
+      const callsBefore = mockPreview.mock.calls.length;
+      act(() => { vi.advanceTimersByTime(30000); });
+      expect(mockPreview.mock.calls.length).toBe(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("changing an age filter stops an active scan", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = [
+        ...Array.from({ length: 6 }, (_, i) => makeStation(`deep-${i + 1}`, "deep" as AgeTier)),
+        makeStation("cur-1", "current"),
+      ];
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      expect(screen.getByRole("button", { name: "stop scan all" })).toBeTruthy();
+
+      act(() => { typeCommand("/deep"); });
+      expect(screen.getByRole("button", { name: "scan all stations" }).textContent).toBe("Scan all");
+      const callsBefore = mockPreview.mock.calls.length;
+      act(() => { vi.advanceTimersByTime(30000); });
+      expect(mockPreview.mock.calls.length).toBe(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

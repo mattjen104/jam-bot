@@ -15,7 +15,7 @@
  * at /library.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
@@ -37,7 +37,7 @@ import type { StationCategory } from "../components/dial/DialFilterBar";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
-import { HomeCliStrip } from "../components/HomeCliStrip";
+import { HomeCliStrip, type ScanMode } from "../components/HomeCliStrip";
 import { useStartMattLibrary } from "../lib/meHooks";
 import type { MattCliStatus } from "../components/dial/DialCliBar";
 
@@ -74,6 +74,39 @@ export default function SplitHome() {
   // Scan window: which 5-station slice of the sorted feed is shown. Any
   // multiple of 5 is valid — the page count is dynamic (filtered rows / 5).
   const [scanOffset, setScanOffset] = useState<number>(0);
+
+  // Compact scan remote state: null = not scanning, "page" = auto-advancing
+  // through the selected five-row window, "all" = auto-advancing through
+  // the full filtered list.
+  const [scanMode, setScanMode] = useState<ScanMode>(null);
+  const [scanRowIdx, setScanRowIdx] = useState<number | null>(null);
+
+  // Timer/RAF refs for the compact scan — same pattern as useFrontDoorScan.
+  const scanRt = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    active: boolean;
+    mode: "page" | "all" | null;
+  }>({
+    timer: null,
+    active: false,
+    mode: null,
+  });
+  const SCAN_DWELL_MS = 7000;
+
+  const stopCompactScan = useCallback(() => {
+    scanRt.current.active = false;
+    scanRt.current.mode = null;
+    if (scanRt.current.timer != null) {
+      clearTimeout(scanRt.current.timer);
+      scanRt.current.timer = null;
+    }
+    setScanMode(null);
+    setScanRowIdx(null);
+  }, []);
+
+  // filteredRows ref to avoid stale closures inside the timer callback.
+  const filteredRowsRef = useRef<typeof filteredRows>([]);
+  const scanOffsetRef = useRef(0);
 
   // Attribution-ladder sort — same ordering as DialView's sortedRows:
   // live crossing first, then attributed DJs, then overlap desc, rung asc.
@@ -134,14 +167,33 @@ export default function SplitHome() {
     });
   }, [sortedRows, activeTiers]);
 
+  // Keep refs current so timer callbacks always see the latest values.
+  // Synced in an effect (not during render) per the react-hooks/refs rule;
+  // timers only fire after render + effects, so the mirror is never stale
+  // when a hop callback reads it.
+  useEffect(() => {
+    filteredRowsRef.current = filteredRows;
+    scanOffsetRef.current = scanOffset;
+  });
+
   // Clamp a requested page to the current page count at click/command time,
   // so an out-of-range /scanN (e.g. /scan10 on a 6-row list) lands on the
-  // last valid page instead of an empty window.
-  const handleScan = useCallback((offset: number) => {
+  // last valid page instead of an empty window. Also stops any running scan
+  // since the scope is now incompatible (user navigated to a different page).
+  const handleSelectPage = useCallback((offset: number) => {
     if (offset < 0 || offset % 5 !== 0) return;
-    const maxOffset = Math.max(0, Math.floor((filteredRows.length - 1) / 5) * 5);
-    setScanOffset(Math.min(offset, maxOffset));
-  }, [filteredRows.length]);
+    const maxOffset = Math.max(0, Math.floor((filteredRowsRef.current.length - 1) / 5) * 5);
+    const clamped = Math.min(offset, maxOffset);
+    setScanOffset(clamped);
+    // Stop an active scan when the user explicitly picks a different page —
+    // the in-progress scan was for the previous window.
+    if (scanRt.current.active) stopCompactScan();
+  }, [stopCompactScan]);
+
+  // CLI /scanN command: page selection with the same cancellation semantics
+  // as clicking a page button — any active scan (page or all) stops, because
+  // the user explicitly navigated and the scan cursor is now incompatible.
+  const handleCliScan = handleSelectPage;
 
   // Clamp the scan window when the filtered list shrinks (filter change or
   // stations dropping off) so a stale offset never shows an empty window.
@@ -160,6 +212,106 @@ export default function SplitHome() {
 
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / 5));
 
+  // --- Compact scan hop logic ---
+  // The scan auto-advances through a list of rows at SCAN_DWELL_MS per hop,
+  // previewing each station's live stream via radio.preview(). The list is
+  // either the current page's five rows ("page" mode) or all filtered rows
+  // ("all" mode). scanRowIdx is a raw index into filteredRows (not page-local).
+  const radioRef = useRef(radio);
+  // eslint-disable-next-line react-hooks/refs
+  radioRef.current = radio;
+
+  const scheduleNextHop = useCallback((currentRowIdx: number, mode: "page" | "all") => {
+    // Inner named function so the recursive self-reference stays local (the
+    // useCallback const can't reference itself under the compiler rules).
+    function hop(fromIdx: number) {
+      scanRt.current.timer = setTimeout(() => {
+        if (!scanRt.current.active) return;
+        const rows = filteredRowsRef.current;
+        const offset = scanOffsetRef.current;
+        const list = mode === "page" ? rows.slice(offset, offset + 5) : rows;
+        const localIdx = fromIdx + 1;
+        if (list.length === 0) { stopCompactScan(); return; }
+        const wrappedLocalIdx = localIdx % list.length;
+        const globalIdx = mode === "page" ? offset + wrappedLocalIdx : wrappedLocalIdx;
+        const row = rows[globalIdx];
+        if (row && resolvePlaybackSource(row.ds.station) != null) {
+          void radioRef.current.preview(row.ds.station);
+        }
+        // An all-scan drives the visible window along with it, so the sampled
+        // station is always rendered and highlighted (CompactDial only shows
+        // the current five-row page).
+        if (mode === "all") {
+          setScanOffset(Math.floor(globalIdx / 5) * 5);
+        }
+        setScanRowIdx(globalIdx);
+        hop(wrappedLocalIdx);
+      }, SCAN_DWELL_MS);
+    }
+    hop(currentRowIdx);
+  }, [stopCompactScan]);
+
+  const startCompactScan = useCallback((mode: "page" | "all") => {
+    const rows = filteredRowsRef.current;
+    const offset = scanOffsetRef.current;
+    const list = mode === "page" ? rows.slice(offset, offset + 5) : rows;
+    if (list.length === 0) return;
+    scanRt.current.active = true;
+    scanRt.current.mode = mode;
+    setScanMode(mode);
+    // Start at the first row of the relevant list. An all-scan begins at the
+    // top of the whole filtered list, so snap the visible window to page 1.
+    const globalIdx = mode === "page" ? offset : 0;
+    if (mode === "all") {
+      setScanOffset(0);
+      scanOffsetRef.current = 0;
+    }
+    const row = rows[globalIdx];
+    if (row && resolvePlaybackSource(row.ds.station) != null) {
+      void radioRef.current.preview(row.ds.station);
+    }
+    setScanRowIdx(globalIdx);
+    scheduleNextHop(0, mode);
+  }, [scheduleNextHop]);
+
+  // Scan buttons: clicking the active mode's button stops the scan; clicking
+  // the other mode's button switches to that mode (stop, then start) so the
+  // labels always do what they say.
+  const handleScanPage = useCallback(() => {
+    const wasMode = scanRt.current.mode;
+    if (scanRt.current.active) stopCompactScan();
+    // Toggle off if a page scan was running; otherwise start (or switch to)
+    // a page scan.
+    if (wasMode === "page") return;
+    startCompactScan("page");
+  }, [stopCompactScan, startCompactScan]);
+
+  const handleScanAll = useCallback(() => {
+    const wasMode = scanRt.current.mode;
+    if (scanRt.current.active) stopCompactScan();
+    if (wasMode === "all") return;
+    startCompactScan("all");
+  }, [stopCompactScan, startCompactScan]);
+
+  // Stop scan when filters change — the row list is incompatible with the
+  // in-progress scan cursor.
+  const prevTiersRef = useRef(activeTiers);
+  const prevCatsRef = useRef(activeCategories);
+  useEffect(() => {
+    const tiersChanged = prevTiersRef.current !== activeTiers;
+    const catsChanged = prevCatsRef.current !== activeCategories;
+    prevTiersRef.current = activeTiers;
+    prevCatsRef.current = activeCategories;
+    if ((tiersChanged || catsChanged) && scanRt.current.active) {
+      stopCompactScan();
+    }
+  }, [activeTiers, activeCategories, stopCompactScan]);
+
+  // Clean up timers on unmount.
+  useEffect(() => () => {
+    if (scanRt.current.timer != null) clearTimeout(scanRt.current.timer);
+  }, []);
+
   const liveStationIds = useMemo(
     () => filteredRows.slice(scanOffset, scanOffset + 5).map((row) => row.ds.station.id),
     [filteredRows, scanOffset],
@@ -168,14 +320,16 @@ export default function SplitHome() {
 
   const tuneRow = useCallback((row: DialLaneRow) => {
     if (resolvePlaybackSource(row.ds.station) == null) return;
+    stopCompactScan();
     if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
       void radio.toggle(row.ds.station);
     }
-  }, [radio]);
+  }, [radio, stopCompactScan]);
   const playRow = useCallback((row: DialLaneRow) => {
     if (resolvePlaybackSource(row.ds.station) == null) return;
+    stopCompactScan();
     void radio.toggle(row.ds.station);
-  }, [radio]);
+  }, [radio, stopCompactScan]);
 
   const handleAddArtists = useCallback((names: string[]) => {
     for (const name of names) addSeed(name);
@@ -193,26 +347,26 @@ export default function SplitHome() {
     mattStarterMutation.mutate();
   }, [mattStarterMutation]);
   const mattCliStatus: MattCliStatus | null = mattStarterMutation.isPending
-    ? { kind: "pending", message: "Adding Matt’s starter library…" }
+    ? { kind: "pending", message: "Adding Matt's starter library…" }
     : mattStarterMutation.error
       ? {
           kind: "error",
           message: mattStarterMutation.error instanceof Error
             ? mattStarterMutation.error.message
-            : "We couldn’t add Matt’s starter library. Try again.",
+            : "We couldn't add Matt's starter library. Try again.",
         }
       : mattStarterMutation.data
         ? mattStarterMutation.data.available
           ? {
               kind: "success",
               message: mattStarterMutation.data.addedCount > 0
-                ? `Added ${mattStarterMutation.data.addedCount} album${mattStarterMutation.data.addedCount === 1 ? "" : "s"} from Matt’s starter library.`
-                : "Matt’s starter library is already in your Stack.",
+                ? `Added ${mattStarterMutation.data.addedCount} album${mattStarterMutation.data.addedCount === 1 ? "" : "s"} from Matt's starter library.`
+                : "Matt's starter library is already in your Stack.",
             }
           : {
               kind: "error",
               message: mattStarterMutation.data.error
-                ?? "Matt’s starter library is not available right now.",
+                ?? "Matt's starter library is not available right now.",
             }
         : null;
 
@@ -224,6 +378,7 @@ export default function SplitHome() {
         <CompactDial
           rows={filteredRows}
           offset={scanOffset}
+          samplingRowIdx={scanRowIdx}
           activeSlug={radio.station?.slug ?? null}
           playerStatus={radio.status}
           presenceMap={presenceMap}
@@ -239,7 +394,12 @@ export default function SplitHome() {
         onToggleCategory={toggleCategory}
         scanOffset={scanOffset}
         pageCount={pageCount}
-        onScan={handleScan}
+        totalRows={filteredRows.length}
+        scanMode={scanMode}
+        onSelectPage={handleSelectPage}
+        onScanPage={handleScanPage}
+        onScanAll={handleScanAll}
+        onScan={handleCliScan}
         onAddArtists={handleAddArtists}
         onRadioMode={handleRadioMode}
         onMatt={startMattLibrary}

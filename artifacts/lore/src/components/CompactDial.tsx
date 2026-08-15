@@ -17,6 +17,12 @@ const COMPACT_DIAL_SIZE = 5;
 export interface CompactDialProps {
   rows: DialLaneRow[];
   offset: number;
+  /**
+   * Raw index into `rows` of the station currently being sampled by the
+   * homepage scan remote (null when no scan is active). Rows outside the
+   * visible window are simply not highlighted.
+   */
+  samplingRowIdx?: number | null;
   activeSlug: string | null;
   playerStatus: PlayerStatus;
   presenceMap: Map<number, StationPresence>;
@@ -27,6 +33,7 @@ export interface CompactDialProps {
 export function CompactDial({
   rows,
   offset,
+  samplingRowIdx = null,
   activeSlug,
   playerStatus,
   presenceMap,
@@ -45,10 +52,12 @@ export function CompactDial({
 
   return (
     <div className="compact-dial">
-      {slice.map((row) => (
+      {slice.map((row, i) => {
+        const isSampling = samplingRowIdx != null && samplingRowIdx === offset + i;
+        return (
         <div
           key={row.ds.station.slug}
-          className="compact-dial__row"
+          className={`compact-dial__row${isSampling ? " compact-dial__row--sampling" : ""}`}
         >
           {resolvePlaybackSource(row.ds.station) != null && (
             <CompactPlayButton
@@ -71,13 +80,14 @@ export function CompactDial({
             ov={0}
             scrubSlug={row.ds.station.slug}
             isActive={row.ds.station.slug === activeSlug}
-            isSampling={false}
+            isSampling={isSampling}
             onTuneIn={() => onTuneIn(row)}
             presence={presenceMap.get(row.ds.station.id)}
             compactSentence
           />
         </div>
-      ))}
+        );
+      })}
       {/* Empty slots when fewer than 5 rows are available */}
       {Array.from({ length: Math.max(0, COMPACT_DIAL_SIZE - slice.length) }).map((_, i) => (
         <div key={`empty-${i}`} className="compact-dial__row compact-dial__row--empty" aria-hidden="true" />

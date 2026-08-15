@@ -5,10 +5,11 @@
  * Covers:
  *  1. Typing `/add …` in the strip's input calls onAddArtists with
  *     correctly split/trimmed artist names.
- *  2. Typing `/scan2` calls onScan(5).
- *  3. The unified filter rail renders scan, age-tier, and category chips in
- *     one row, all as uniform chips that route to their callbacks and expose
- *     active state accessibly (aria-pressed).
+ *  2. Typing `/scan2` calls onScan(5) (CLI page-command compatibility).
+ *  3. The compact scan remote renders numeric page selectors plus single
+ *     `Scan` / `Scan all` controls that route to their callbacks, expose
+ *     active/selected state accessibly, and become Stop controls while a
+ *     scan is running.
  *  4. The `/crossings`, `/radio`, and `/lore` command controls stay in order
  *     and route their actions accessibly.
  *  5. The "add artists /add" button focuses the input and inserts the
@@ -35,6 +36,11 @@ function renderStrip(overrides: Partial<React.ComponentProps<typeof HomeCliStrip
     onToggleCategory: vi.fn(),
     scanOffset: 0,
     pageCount: 3,
+    totalRows: 13,
+    scanMode: null,
+    onSelectPage: vi.fn(),
+    onScanPage: vi.fn(),
+    onScanAll: vi.fn(),
     onScan: vi.fn(),
     onAddArtists: vi.fn(),
     ...overrides,
@@ -84,25 +90,87 @@ describe("HomeCliStrip", () => {
     expect(screen.getByRole("status").textContent).toContain("Adding Matt’s starter library");
   });
 
-  it("renders scan chips in the unified rail that fire onScan and show the active window", () => {
+  it("renders numeric page selectors that fire onSelectPage and show the selected page", () => {
     const { props } = renderStrip({
       activeCategories: new Set<StationCategory>(["campus"]),
     });
 
-    const scan1 = screen.getByRole("button", { name: "scan 1 /scan1" });
-    const scan2 = screen.getByRole("button", { name: "scan 2 /scan2" });
-    const scan3 = screen.getByRole("button", { name: "scan 3 /scan3" });
+    const page1 = screen.getByRole("button", { name: "page 1 /scan1" });
+    const page2 = screen.getByRole("button", { name: "page 2 /scan2" });
+    const page3 = screen.getByRole("button", { name: "page 3 /scan3" });
 
-    // scanOffset=0 → /scan1 is the active window.
-    expect(scan1.getAttribute("aria-pressed")).toBe("true");
-    expect(scan1.className).toContain("home-cli-strip__filter-chip--active");
-    expect(scan2.getAttribute("aria-pressed")).toBe("false");
-    expect(scan3.getAttribute("aria-pressed")).toBe("false");
+    // Compact numeric labels — no giant /scanN buttons.
+    expect(page1.textContent).toBe("1");
+    expect(page2.textContent).toBe("2");
+    expect(page3.textContent).toBe("3");
 
-    fireEvent.click(scan2);
-    expect(props.onScan).toHaveBeenCalledWith(5);
-    fireEvent.click(scan3);
-    expect(props.onScan).toHaveBeenCalledWith(10);
+    // scanOffset=0 → page 1 is selected.
+    expect(page1.getAttribute("aria-pressed")).toBe("true");
+    expect(page1.className).toContain("home-cli-strip__page-btn--active");
+    expect(page2.getAttribute("aria-pressed")).toBe("false");
+    expect(page3.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(page2);
+    expect(props.onSelectPage).toHaveBeenCalledWith(5);
+    fireEvent.click(page3);
+    expect(props.onSelectPage).toHaveBeenCalledWith(10);
+  });
+
+  it("renders one Scan and one Scan all control that route to their callbacks", () => {
+    const { props } = renderStrip();
+
+    const scanBtn = screen.getByRole("button", { name: "scan this page" });
+    const scanAllBtn = screen.getByRole("button", { name: "scan all stations" });
+    expect(scanBtn.textContent).toBe("Scan");
+    expect(scanAllBtn.textContent).toBe("Scan all");
+    expect(scanBtn.getAttribute("aria-pressed")).toBe("false");
+    expect(scanAllBtn.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(scanBtn);
+    expect(props.onScanPage).toHaveBeenCalledTimes(1);
+    fireEvent.click(scanAllBtn);
+    expect(props.onScanAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns the Scan control into a Stop action while a page scan is active", () => {
+    const { props } = renderStrip({ scanMode: "page" });
+
+    const stopBtn = screen.getByRole("button", { name: "stop page scan" });
+    expect(stopBtn.textContent).toBe("Stop");
+    expect(stopBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(stopBtn.className).toContain("home-cli-strip__scan-btn--active");
+    // The Scan-all control stays a start action.
+    expect(screen.getByRole("button", { name: "scan all stations" }).textContent).toBe("Scan all");
+
+    fireEvent.click(stopBtn);
+    expect(props.onScanPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns the Scan all control into a Stop action while an all-scan is active", () => {
+    const { props } = renderStrip({ scanMode: "all" });
+
+    const stopBtn = screen.getByRole("button", { name: "stop scan all" });
+    expect(stopBtn.textContent).toBe("Stop");
+    expect(stopBtn.getAttribute("aria-pressed")).toBe("true");
+    // The page-scan control stays a start action.
+    expect(screen.getByRole("button", { name: "scan this page" }).textContent).toBe("Scan");
+
+    fireEvent.click(stopBtn);
+    expect(props.onScanAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables both scan actions when the filtered list is empty", () => {
+    const { props } = renderStrip({ totalRows: 0, pageCount: 1 });
+
+    const scanBtn = screen.getByRole("button", { name: "scan this page" }) as HTMLButtonElement;
+    const scanAllBtn = screen.getByRole("button", { name: "scan all stations" }) as HTMLButtonElement;
+    expect(scanBtn.disabled).toBe(true);
+    expect(scanAllBtn.disabled).toBe(true);
+
+    fireEvent.click(scanBtn);
+    fireEvent.click(scanAllBtn);
+    expect(props.onScanPage).not.toHaveBeenCalled();
+    expect(props.onScanAll).not.toHaveBeenCalled();
   });
 
   it("renders every age-tier chip, routes toggles, and exposes active state", () => {
@@ -157,18 +225,18 @@ describe("HomeCliStrip", () => {
     const scanRow = screen.getByRole("group", { name: "Scan commands" });
     const ageRow = screen.getByRole("group", { name: "Age commands" });
     const categoryRow = screen.getByRole("group", { name: "Station category commands" });
-    // Scan button count is dynamic — driven by the pageCount prop (default 3).
-    expect(scanRow.querySelectorAll("button")).toHaveLength(3);
+    // Scan remote: pageCount numeric selectors (default 3) + Scan + Scan all.
+    expect(scanRow.querySelectorAll("button")).toHaveLength(5);
     expect(ageRow.querySelectorAll("button")).toHaveLength(4);
     expect(categoryRow.querySelectorAll("button")).toHaveLength(7);
 
     const chips = [
-      ...scanRow.querySelectorAll("button"),
       ...ageRow.querySelectorAll("button"),
       ...categoryRow.querySelectorAll("button"),
     ];
-    // 3 scans + 4 age tiers + 7 station categories; /lore is the home button.
-    expect(chips.length).toBe(14);
+    // 4 age tiers + 7 station categories stay uniform chips; the scan remote
+    // uses its own compact page-selector + scan-button styling.
+    expect(chips.length).toBe(11);
     for (const chip of chips) {
       expect(chip.className).toContain("home-cli-strip__filter-chip");
     }
@@ -200,28 +268,30 @@ describe("HomeCliStrip", () => {
     expect(filterStack.contains(commandRow)).toBe(false);
   });
 
-  it("renders exactly pageCount scan buttons with /scan1…/scanN commands", () => {
-    renderStrip({ pageCount: 5 });
-    const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    const buttons = [...scanRow.querySelectorAll("button")];
-    expect(buttons.map((b) => b.textContent)).toEqual([
-      "/scan1", "/scan2", "/scan3", "/scan4", "/scan5",
-    ]);
+  it("renders exactly pageCount numeric page selectors — no /scanN button per page", () => {
+    renderStrip({ pageCount: 5, totalRows: 23 });
+    const pageGroup = screen.getByRole("group", { name: "Page" });
+    const buttons = [...pageGroup.querySelectorAll("button")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    // The old giant per-page command buttons are gone.
+    expect(buttons.every((b) => !b.textContent?.startsWith("/scan"))).toBe(true);
   });
 
-  it("renders a single scan button for a one-page filtered list", () => {
-    renderStrip({ pageCount: 1 });
-    const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    expect(scanRow.querySelectorAll("button")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "scan 1 /scan1" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "scan 2 /scan2" })).toBeNull();
+  it("renders a single page selector for a one-page filtered list", () => {
+    renderStrip({ pageCount: 1, totalRows: 4 });
+    const pageGroup = screen.getByRole("group", { name: "Page" });
+    expect(pageGroup.querySelectorAll("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "page 1 /scan1" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "page 2 /scan2" })).toBeNull();
+    // Scan actions stay enabled — there are rows to scan.
+    expect((screen.getByRole("button", { name: "scan this page" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("marks the active scan window via aria-pressed regardless of page count", () => {
-    renderStrip({ pageCount: 5, scanOffset: 15 });
-    expect(screen.getByRole("button", { name: "scan 4 /scan4" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "scan 1 /scan1" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("button", { name: "scan 5 /scan5" }).getAttribute("aria-pressed")).toBe("false");
+  it("marks the selected page via aria-pressed regardless of page count", () => {
+    renderStrip({ pageCount: 5, totalRows: 23, scanOffset: 15 });
+    expect(screen.getByRole("button", { name: "page 4 /scan4" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "page 5 /scan5" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("add-artists button focuses the input and inserts the /add prefix", () => {
