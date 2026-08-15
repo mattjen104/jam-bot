@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   db,
+  type Station,
   stationsTable,
   spinsTable,
   showsTable,
@@ -18,6 +19,7 @@ import { getUserFromSession } from "../lore/userSession.js";
 import { toStation, isPickerOptedOut, validScheduleShowAttribution } from "./lore/shared.js";
 import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
 import { classifyFreshness } from "../lore/freshness.js";
+import { pollStation } from "../lore/poller.js";
 import { h } from "../middlewares/asyncHandler.js";
 
 /**
@@ -174,6 +176,107 @@ router.get("/player/onair", h(async (req, res) => {
     );
 
   return res.json({ items, authenticated: user != null });
+}));
+
+// ---------------------------------------------------------------------------
+// GET /api/player/station/:slug/now — station-landing fast lane.
+//
+// When a listener stops the scan on (or tunes to) a station, the aggregate
+// on-air snapshot can be up to a poll cycle old. This endpoint returns just
+// that station's freshest stored state (local read-model — no external
+// lookups in the request path) and, when the observation has exceeded its
+// source's freshness budget, fire-and-forgets a one-shot targeted poll of
+// that station via the existing poller machinery (`pollStation`, which
+// honors the per-station in-flight guard). A short per-station debounce
+// coalesces repeated landings so a source can never be hammered.
+// ---------------------------------------------------------------------------
+
+/** Minimum gap between fast-lane-triggered refreshes of one station. */
+const FAST_LANE_DEBOUNCE_MS = 30_000;
+/** stationId → last time the fast lane triggered a refresh (ms epoch). */
+const fastLaneLastTrigger = new Map<number, number>();
+
+type FastLaneRefreshFn = (station: Station) => Promise<void>;
+let fastLaneRefresh: FastLaneRefreshFn = (station) => pollStation(station);
+
+/** Tests only: swap the one-shot refresh implementation. Returns a restore fn. */
+export function _testOnly_setFastLaneRefresh(fn: FastLaneRefreshFn): () => void {
+  const prev = fastLaneRefresh;
+  fastLaneRefresh = fn;
+  return () => { fastLaneRefresh = prev; };
+}
+
+/** Tests only: clear the per-station refresh debounce. */
+export function _testOnly_resetFastLaneDebounce(): void {
+  fastLaneLastTrigger.clear();
+}
+
+router.get("/player/station/:slug/now", h(async (req, res) => {
+  const slug = typeof req.params.slug === "string" ? req.params.slug : "";
+
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(and(eq(stationsTable.slug, slug), eq(stationsTable.hidden, false)))
+    .limit(1);
+  if (!station) return res.status(404).json({ error: "Station not found" });
+
+  const [spin] = await db
+    .select({
+      playedAt: spinsTable.playedAt,
+      // Rows predating the observed_at column fall back to created_at.
+      observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
+      source: spinsTable.source,
+      rawArtist: spinsTable.rawArtist,
+      rawTitle: spinsTable.rawTitle,
+      mbid: recordingsTable.mbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      artistMbid: recordingsTable.artistMbid,
+      artworkUrl: recordingsTable.artworkUrl,
+      releaseYear: recordingsTable.releaseYear,
+    })
+    .from(spinsTable)
+    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .where(eq(spinsTable.stationId, station.id))
+    .orderBy(desc(spinsTable.playedAt))
+    .limit(1);
+
+  const now = new Date();
+  const freshness = spin ? classifyFreshness(spin.source, spin.observedAt, now) : null;
+
+  // "Fresh" means within the source's freshness budget — anything past it
+  // (aging/stale, or no stored spin at all) warrants a one-shot re-poll.
+  let refreshTriggered = false;
+  if (freshness !== "fresh") {
+    const last = fastLaneLastTrigger.get(station.id) ?? 0;
+    if (now.getTime() - last >= FAST_LANE_DEBOUNCE_MS) {
+      fastLaneLastTrigger.set(station.id, now.getTime());
+      refreshTriggered = true;
+      void fastLaneRefresh(station).catch((err) => {
+        console.error("[lore] fast-lane refresh failed", station.slug, err);
+      });
+    }
+  }
+
+  return res.json({
+    station: { slug: station.slug, name: station.name },
+    now: spin
+      ? {
+          mbid: spin.mbid ?? null,
+          artistMbid: spin.artistMbid ?? null,
+          title: spin.title ?? spin.rawTitle,
+          artist: spin.artist ?? spin.rawArtist,
+          artworkUrl: spin.artworkUrl ?? null,
+          releaseYear: spin.releaseYear ?? null,
+          playedAt: spin.playedAt.toISOString(),
+          observedAt: spin.observedAt.toISOString(),
+          freshness,
+          resolved: spin.mbid != null,
+        }
+      : null,
+    refreshTriggered,
+  });
 }));
 
 // ---------------------------------------------------------------------------

@@ -88,6 +88,14 @@ export async function setup(): Promise<void> {
     );
     await applyReleaseYearMigration();
 
+    // Ensures spins.observed_at exists — required by any test that inserts
+    // into spinsTable with an explicit observation timestamp (freshness /
+    // fast-lane coverage).
+    const { applySpinObservedAtMigration } = await import(
+      "../src/lore/spin-observed-at-migration.js"
+    );
+    await applySpinObservedAtMigration();
+
     // Ensures artist_events / artist_events_cache exist — required by the
     // Shows lens read-model tests (me-shows-db).
     const { applyArtistEventsMigration } = await import(

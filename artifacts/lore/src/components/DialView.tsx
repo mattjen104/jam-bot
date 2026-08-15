@@ -12,6 +12,7 @@ import { useLocation } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyPressCrossings, useMyShows, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
+import { useStationFastLane, type FastLaneNow, type FastLaneCandidate } from "../hooks/useStationFastLane";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -1609,6 +1610,7 @@ export function DialView() {
     crossingsPhase,
     stationsError,
     refetchStations,
+    applyNowPlayingOverride,
   } = useDialData(displayMode, {
     sleepMode: sleepEnabled,
     eraGenreMode: eraGenreEnabled,
@@ -2461,18 +2463,42 @@ export function DialView() {
   // Top row for Listen button label (spec §10) — kept for potential reuse
   const _topRow = sortedRows[0] ?? null;
 
+  // ── Station-landing fast lane (task: fast-lane revalidation) ─────────────
+  // On landing, fetch the station's freshest stored state in parallel with
+  // starting audio; when the fast-lane result names a different track than
+  // the candidate the listener landed on, reconcile the display through the
+  // same override layer the SSE stream uses. `applyNowPlayingOverride` is
+  // optional-chained: older test mocks of useDialData don't provide it.
+  const handleFastLaneTrack = useCallback((slug: string, now: FastLaneNow) => {
+    applyNowPlayingOverride?.(slug, {
+      mbid: now.mbid,
+      artistMbid: now.artistMbid,
+      title: now.title,
+      artist: now.artist,
+      playedAt: now.playedAt,
+      releaseYear: now.releaseYear,
+    });
+  }, [applyNowPlayingOverride]);
+  const fastLane = useStationFastLane(handleFastLaneTrack);
+  const fastLaneCandidate = useCallback((track: DialSpin | null | undefined): FastLaneCandidate | null =>
+    track ? { mbid: track.mbid, title: track.title, artist: track.artist } : null,
+  []);
+
   const _handleScanLand = useCallback(() => {
     const idx = scan.samplingIdx;
     if (idx != null && withReason[idx]) {
       scan.land();
-      const station = withReason[idx].ds.station;
+      const row = withReason[idx];
+      const station = row.ds.station;
       // A scan landing counts as the committing click — enter context mode.
       commitTune(station.slug, station.name);
       void radio.toggle(station);
+      // Fast-lane revalidation runs in parallel with audio startup.
+      fastLane.landOnStation(station.slug, fastLaneCandidate(row.ds.liveTrack));
     } else {
       scan.land();
     }
-  }, [scan, withReason, radio, commitTune]);
+  }, [scan, withReason, radio, commitTune, fastLane, fastLaneCandidate]);
 
   // Shared tune handler for Zone-2 ghost rows (no qualifying replay run):
   // like any station row, the first click commits to context mode and plays.
@@ -2481,8 +2507,9 @@ export function DialView() {
     commitTune(g.slug, g.name);
     if (radio.station?.slug !== g.slug || radio.status !== "playing") {
       void radio.toggle(ghostToStation(g));
+      fastLane.landOnStation(g.slug, null);
     }
-  }, [scan, commitTune, radio, ghostToStation]);
+  }, [scan, commitTune, radio, ghostToStation, fastLane]);
 
   // --- topbar helpers ---
 
@@ -2681,8 +2708,10 @@ export function DialView() {
     if (resolvePlaybackSource(row.ds.station) == null) return;
     if (radio.station?.slug !== row.ds.station.slug || radio.status !== "playing") {
       void radio.toggle(row.ds.station);
+      // Direct tune: same fast-lane revalidation as a scan landing.
+      fastLane.landOnStation(row.ds.station.slug, fastLaneCandidate(row.ds.liveTrack));
     }
-  }, [scan, radio]);
+  }, [scan, radio, fastLane, fastLaneCandidate]);
   const popLineFor = useCallback((slug: string) =>
     popHasContent(slug)
       ? <PopCrossingLine artists={popMap.get(slug)!} seedsLower={seedsLower} onAdd={addSeed} />

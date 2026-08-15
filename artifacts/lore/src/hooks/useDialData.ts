@@ -16,7 +16,7 @@
  * DialView, which applies the attribution-tier ladder: live crossing → named
  * selector (lifetime overlap count) → unattributed station (24h crossings).
  */
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   useListStations,
   useListStationsNowPlaying,
@@ -667,6 +667,19 @@ export function useDialData(
   stationsError: boolean;
   /** Re-request the station list without navigating away. */
   refetchStations: () => void;
+  /**
+   * Reconcile a station's displayed now-playing track from an out-of-band
+   * source (the station-landing fast lane). Writes into the same override
+   * layer as the SSE spin-changed stream, so every dial surface inherits it.
+   */
+  applyNowPlayingOverride: (slug: string, entry: {
+    mbid: string | null;
+    artistMbid: string | null;
+    title: string;
+    artist: string;
+    playedAt: string;
+    releaseYear: number | null;
+  }) => void;
 } {
   const today = todayStr();
   const yesterday = yesterdayStr();
@@ -716,6 +729,34 @@ export function useDialData(
       }
     };
     return () => es.close();
+  }, []);
+
+  // Fast-lane reconciliation: a station-landing fast-lane result that names a
+  // different track than the display writes into the same override map the
+  // SSE stream uses, so the correction propagates to every dial surface.
+  // Hit flags aren't part of the fast-lane payload — keep the existing
+  // entry's flags when the track is unchanged, otherwise reset to false
+  // (the next REST poll / SSE push carries the authoritative flags).
+  const applyNowPlayingOverride = useCallback((slug: string, entry: {
+    mbid: string | null;
+    artistMbid: string | null;
+    title: string;
+    artist: string;
+    playedAt: string;
+    releaseYear: number | null;
+  }) => {
+    setSseOverrides((prev) => {
+      const next = new Map(prev);
+      const existing = prev.get(slug);
+      const sameTrack = existing != null && existing.mbid != null && existing.mbid === entry.mbid;
+      next.set(slug, {
+        ...entry,
+        isFirstSpin: sameTrack ? existing.isFirstSpin : false,
+        isLibraryHit: sameTrack ? existing.isLibraryHit : false,
+        isArtistHit: sameTrack ? existing.isArtistHit : false,
+      });
+      return next;
+    });
   }, []);
 
   // ── fetch stations ──────────────────────────────────────────────────────
@@ -1300,5 +1341,6 @@ export function useDialData(
     crossingsPhase: selectedCrossingsPhase,
     stationsError,
     refetchStations: () => { void refetchStations(); },
+    applyNowPlayingOverride,
   };
 }

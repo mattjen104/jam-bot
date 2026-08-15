@@ -21,3 +21,5 @@ Even no-op `ADD COLUMN IF NOT EXISTS` / `SET NOT NULL` take AccessExclusive; mig
 **Guard test:** `test/migration-advisory-lock-guard.test.ts` scans `src/lore/*-migration.ts` and fails any transaction containing DDL whose first `tx.execute` isn't the advisory lock. New migrations with DDL-in-transaction must lock first or the suite fails.
 
 **Flake note:** under full-suite load, `test/replay-resolution.test.ts` can time out in its `afterAll` cleanup (10s hookTimeout) yet passes in isolation — retry before treating as a real regression.
+
+**Also:** boot-only migrations (the `runMigration` list in api-server `src/index.ts`) do NOT reach the shared dev/test DB until the server boots — a schema column can exist in code yet be missing in the DB (42703 on insert, e.g. `spins.observed_at`). Any migration a DB test's fixtures depend on must ALSO be added to `test/globalSetup.ts`.
