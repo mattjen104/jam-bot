@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
   getGetRecordingSupportQueryKey,
@@ -8,6 +9,12 @@ import {
   useHoldRecordingSupport,
   useUnholdRecordingSupport,
 } from "@workspace/api-client-react";
+import {
+  getStreamHealthy,
+  mergeSpinIntoOnAir,
+  subscribeSpinStream,
+  subscribeStreamHealth,
+} from "./nowPlayingStream";
 
 // ---------------------------------------------------------------------------
 // Types mirroring /api/player/* response shapes
@@ -144,14 +151,48 @@ async function apiFetch<T>(url: string): Promise<T> {
 // Hooks
 // ---------------------------------------------------------------------------
 
+/** Poll cadence while the SSE push stream is healthy — a slow safety sweep. */
+export const WP_ONAIR_POLL_STREAM_HEALTHY_MS = 120_000;
+/** Poll cadence when the stream is degraded/absent — the original backstop. */
+export const WP_ONAIR_POLL_DEGRADED_MS = 30_000;
+
 export function useWpOnAir() {
+  const queryClient = useQueryClient();
+
+  // Shared SSE push channel: one module-level EventSource across every
+  // consumer of this hook. Pushed spin changes merge straight into the
+  // ["wp","onair"] cache so all existing consumers update within seconds of
+  // the server logging a spin — no per-component rewrites needed. The merge
+  // is idempotent (same-track events return the previous object untouched),
+  // so multiple mounted consumers applying the same event is harmless.
+  const [streamHealthy, setStreamHealthy] = useState(getStreamHealthy);
+  useEffect(() => {
+    const unsubSpins = subscribeSpinStream((ev) => {
+      queryClient.setQueryData<WpOnAirResponse>(["wp", "onair"], (prev) =>
+        mergeSpinIntoOnAir(prev, ev),
+      );
+    });
+    // Health transitions arrive via the subscription; a change that lands in
+    // the tiny window between render and subscribe is at worst one poll cycle
+    // stale — the 30s backstop covers it.
+    const unsubHealth = subscribeStreamHealth(setStreamHealthy);
+    return () => {
+      unsubSpins();
+      unsubHealth();
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["wp", "onair"],
     queryFn: () => apiFetch<WpOnAirResponse>("/api/player/onair"),
-    // Match station now-playing poller cadence: 30s keeps the dial fresh
-    // without hammering the server. React Query pauses background polling
-    // when the window is hidden; same query key avoids a loading flash.
-    refetchInterval: 30_000,
+    // Polling is the correctness backstop. While the SSE stream is healthy it
+    // stretches to a slow sweep (push carries track changes); when the stream
+    // is degraded or unavailable it silently resumes the original 30s cadence.
+    // React Query pauses background polling when the window is hidden; same
+    // query key avoids a loading flash.
+    refetchInterval: streamHealthy
+      ? WP_ONAIR_POLL_STREAM_HEALTHY_MS
+      : WP_ONAIR_POLL_DEGRADED_MS,
     staleTime: 25_000,
   });
 }

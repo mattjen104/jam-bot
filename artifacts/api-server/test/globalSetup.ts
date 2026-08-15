@@ -102,6 +102,13 @@ export async function setup(): Promise<void> {
       "../src/lore/artist-events-migration.js"
     );
     await applyArtistEventsMigration();
+
+    // Ensures spins.observed_at exists — persistSpin writes it on every
+    // insert, so any test that logs a spin needs the column.
+    const { applySpinObservedAtMigration } = await import(
+      "../src/lore/spin-observed-at-migration.js"
+    );
+    await applySpinObservedAtMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

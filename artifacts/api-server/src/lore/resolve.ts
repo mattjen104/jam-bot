@@ -616,6 +616,10 @@ export interface SpinChangedEvent {
   releaseYear: number | null;
   /** True when this is the first time this recording (by MBID) has appeared in the archive. */
   isFirstSpin: boolean;
+  /** When Lore observed the metadata (spin write time), ISO 8601. Mirrors spins.observed_at. */
+  observedAt: string;
+  /** Resolution confidence tier for the spin — same values as spins.confidence. */
+  confidence: MbidResolution["confidence"];
 }
 
 /**
@@ -795,6 +799,8 @@ export async function logSpinIfChanged(
         releaseGroupMbid,
         releaseYear,
         isFirstSpin,
+        observedAt: new Date().toISOString(),
+        confidence: r.confidence,
       } satisfies SpinChangedEvent);
     }
     return wrote;
