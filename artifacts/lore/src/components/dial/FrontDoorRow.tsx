@@ -502,7 +502,10 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // the "no live stream configured" safety-net error). Instead the row shows
   // a "Listen on <site> ↗" affordance that opens the station's own website.
   const playable = resolvePlaybackSource(ds.station) != null;
-  const siteHref = playable ? null : safeHttpUrl(ds.station.homepageUrl);
+  // Station homepage link: computed for every station (safeHttpUrl guards
+  // against non-http(s) values). Attribution-only rows keep it in tier 1;
+  // playable rows surface it inside the expanded byline instead.
+  const siteHref = safeHttpUrl(ds.station.homepageUrl);
 
   // Expand-then-keep click handler:
   //   compact + collapsed → expand (reveal byline)
@@ -592,7 +595,9 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {/* Tier 1: reason sentence — leads at full display weight */}
         <div className={`fdrow__t1 ${tier1Cls}`}>
           {tier1Node}
-          {siteHref && (
+          {/* Tier-1 site link is reserved for attribution-only stations —
+              playable stations get the link in the expanded byline instead. */}
+          {!playable && siteHref && (
             <a
               className="fdrow__site-link"
               href={siteHref}
@@ -622,6 +627,22 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
               )}
               {bylineTrack && (
                 <span className="fdrow__byline-track">{bylineTrack}</span>
+              )}
+              {/* Station homepage link — shown for playable stations only
+                  (attribution-only rows keep theirs in tier 1). Click
+                  propagation stopped so the tune-in handler never fires. */}
+              {playable && siteHref && (
+                <a
+                  className="fdrow__byline-station-link"
+                  href={siteHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Listen on ${ds.station.name} site`}
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  ↗ {ds.station.name}
+                </a>
               )}
             </span>
             {onKeep && (

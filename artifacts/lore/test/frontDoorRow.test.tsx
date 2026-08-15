@@ -762,3 +762,54 @@ describe("compact Dial feed identity", () => {
     expect(onTuneIn).not.toHaveBeenCalled();
   });
 });
+describe("expanded row station link", () => {
+  it("shows a ↗ station link in the expanded byline for a playable station with a homepage", () => {
+    const onTuneIn = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({
+        name: "KEXP",
+        streamUrl: "https://example.com/stream",
+        homepageUrl: "https://kexp.org",
+      } as Partial<DialStation["station"]>),
+      makeShow({ djName: "DJ Test", currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      { onTuneIn },
+    );
+    const row = container.querySelector(".fdrow")!;
+    // Collapsed playable row: no station link anywhere (tier-1 link is
+    // reserved for attribution-only stations).
+    expect(container.querySelector(".fdrow__byline-station-link")).toBeNull();
+    expect(container.querySelector(".fdrow__site-link")).toBeNull();
+
+    // Expand the row — the byline link appears.
+    fireEvent.click(row);
+    const link = container.querySelector(".fdrow__byline-station-link") as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute("href")).toBe("https://kexp.org/");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(link.textContent).toContain("KEXP");
+
+    // Clicking the link never triggers the tune-in handler.
+    fireEvent.click(link);
+    expect(onTuneIn).not.toHaveBeenCalled();
+  });
+
+  it("renders no station link for a playable station without a homepage", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ djName: "DJ Test", currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(container.querySelector(".fdrow__byline")).not.toBeNull();
+    expect(container.querySelector(".fdrow__byline-station-link")).toBeNull();
+  });
+
+  it("keeps the tier-1 site link for attribution-only stations (no playable source)", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ streamUrl: null, homepageUrl: "https://wvum.org" } as Partial<DialStation["station"]>),
+      makeShow({ currentTrack: makeSpin() }),
+    );
+    expect(container.querySelector(".fdrow__site-link")).not.toBeNull();
+    expect(container.querySelector(".fdrow__byline-station-link")).toBeNull();
+  });
+});

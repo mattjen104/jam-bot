@@ -5467,6 +5467,22 @@
   color: hsl(var(--muted-foreground) / 0.72);
   font-style: italic;
 }
+/* Station homepage link inside the expanded byline (playable stations).
+   Matches the byline's muted system-sans weight; underline on hover/focus. */
+#dial-feed-rows .fdrow__byline-station-link {
+  display: inline-block;
+  margin-top: 2px;
+  font-family: var(--app-font-sans);
+  font-size: var(--lore-size-small);
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+  text-decoration: none;
+}
+#dial-feed-rows .fdrow__byline-station-link:hover,
+#dial-feed-rows .fdrow__byline-station-link:focus-visible {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+}
 /* Keep affordance — soft pill button at the right edge of the byline.
    Amber border matches the library colour token; tapping saves provenance. */
 #dial-feed-rows .fdrow__keep {
