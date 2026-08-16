@@ -669,3 +669,141 @@ describe("SplitHome — compact scan remote", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-station scan-skip preference
+// ---------------------------------------------------------------------------
+
+describe("SplitHome — per-station scan skip", () => {
+  it("unchecking a station sorts it after the others (moves to the last page)", () => {
+    mockStations.value = Array.from({ length: 6 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    render(<SplitHome />);
+
+    // Page 1 shows st-1 … st-5; skip st-1.
+    fireEvent.click(screen.getByRole("button", { name: "Skip Station st-1 in scan" }));
+
+    // st-1 sank below st-6: page 1 is now st-2 … st-6.
+    expect(screen.queryByTestId("fdrow-st-1")).toBeNull();
+    expect(screen.getByTestId("fdrow-st-6")).toBeTruthy();
+
+    // st-1 is on the last page, still visible there and re-includable.
+    fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
+    expect(screen.getByTestId("fdrow-st-1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Include Station st-1 in scan" })).toBeTruthy();
+  });
+
+  it("skip preference persists in localStorage under lore:dialSkipped", () => {
+    mockStations.value = [makeStation("kexp-ish", null)];
+    render(<SplitHome />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip Station kexp-ish in scan" }));
+    expect(JSON.parse(localStorage.getItem("lore:dialSkipped")!)).toEqual(["kexp-ish"]);
+  });
+
+  it("Scan all skips unchecked stations entirely", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 4 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      // Skip st-2: it sinks to the end AND is excluded from the scan.
+      fireEvent.click(screen.getByRole("button", { name: "Skip Station st-2 in scan" }));
+
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      for (let hop = 0; hop < 4; hop++) {
+        act(() => { vi.advanceTimersByTime(7000); });
+      }
+      const slugs = mockPreview.mock.calls.map((c) => c[0].slug);
+      // Wraps within the included stations only — st-2 never sampled.
+      expect(slugs).toEqual(["st-1", "st-3", "st-4", "st-1", "st-3"]);
+      expect(slugs).not.toContain("st-2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("page scan skips unchecked rows within the page", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 5 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Skip Station st-3 in scan" }));
+
+      fireEvent.click(screen.getByRole("button", { name: "scan this page" }));
+      for (let hop = 0; hop < 4; hop++) {
+        act(() => { vi.advanceTimersByTime(7000); });
+      }
+      const slugs = mockPreview.mock.calls.map((c) => c[0].slug);
+      // st-3 sank to the page's last slot and is excluded from sampling.
+      expect(slugs).toEqual(["st-1", "st-2", "st-4", "st-5", "st-1"]);
+      expect(slugs).not.toContain("st-3");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Scan all is disabled-equivalent (no-op) when every station is skipped", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = [makeStation("only-one", null)];
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Skip Station only-one in scan" }));
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+
+      // Scan never started: control still reads "Scan all", no preview fired.
+      expect(screen.getByRole("button", { name: "scan all stations" }).textContent).toBe("Scan all");
+      expect(mockPreview).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(30000); });
+      expect(mockPreview).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("toggling a skip stops an active scan (the candidate list changed)", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 4 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      expect(screen.getByRole("button", { name: "stop scan all" })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Skip Station st-4 in scan" }));
+      expect(screen.getByRole("button", { name: "scan all stations" }).textContent).toBe("Scan all");
+      const callsBefore = mockPreview.mock.calls.length;
+      act(() => { vi.advanceTimersByTime(30000); });
+      expect(mockPreview.mock.calls.length).toBe(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Scan all with every station checked behaves identically to before", () => {
+    vi.useFakeTimers();
+    try {
+      mockStations.value = Array.from({ length: 7 }, (_, i) =>
+        makeStation(`st-${i + 1}`, null),
+      );
+      render(<SplitHome />);
+
+      fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
+      for (let hop = 0; hop < 7; hop++) {
+        act(() => { vi.advanceTimersByTime(7000); });
+      }
+      const slugs = mockPreview.mock.calls.map((c) => c[0].slug);
+      expect(slugs).toEqual(["st-1", "st-2", "st-3", "st-4", "st-5", "st-6", "st-7", "st-1"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

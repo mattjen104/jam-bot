@@ -34,8 +34,8 @@ import { useSeedManager } from "../hooks/useSeedManager";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { reason } from "../components/dialViewHelpers";
-import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
-import { writeRadioMode } from "../lib/dialRadioMode";
+import { toggleAgeTier, toggleStationCategory, useDialSkipped } from "../lib/dialFilterState";
+import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import { writeDialLens } from "../lib/dialLensState";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
@@ -55,8 +55,8 @@ export default function SplitHome() {
 
   // CLI filter state — same semantics as the full Dial (additive tiers,
   // single-select categories). No category is selected initially, so the
-  // front door starts unfiltered; the first selection is permanent
-  // (radio-style, no return to the empty state).
+  // front door starts unfiltered; re-clicking the active category clears it
+  // back to the all-stations state.
   const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set<StationCategory>(),
@@ -67,6 +67,15 @@ export default function SplitHome() {
   const toggleCategory = useCallback((cat: StationCategory) => {
     setActiveCategories((prev) => toggleStationCategory(prev, cat));
   }, []);
+
+  // Feed mode (persisted): false = /crossings (default), true = /radio.
+  // Drives the pressed state of the remote's feed-mode toggles.
+  const [radioMode, setRadioMode] = useState<boolean>(() => readRadioMode());
+
+  // Per-station scan-skip preference (localStorage "lore:dialSkipped").
+  // Skipped stations sort to the last scan pages and are excluded from
+  // Scan / Scan all.
+  const { skipped, toggleSkip } = useDialSkipped();
 
   const {
     stations,
@@ -116,6 +125,7 @@ export default function SplitHome() {
   // filteredRows ref to avoid stale closures inside the timer callback.
   const filteredRowsRef = useRef<typeof filteredRows>([]);
   const scanOffsetRef = useRef(0);
+  const skippedRef = useRef<ReadonlySet<string>>(new Set());
 
   // Attribution-ladder sort — same ordering as DialView's sortedRows:
   // live crossing first, then attributed DJs, then overlap desc, rung asc.
@@ -146,6 +156,12 @@ export default function SplitHome() {
         return { ds, show: attributionSafeShow, rz, effectiveDjName, isPinned };
       })
       .sort((a, b) => {
+        // 0. Skipped stations always sort after non-skipped stations, so they
+        //    land on the last scan pages. Within each group the existing
+        //    ordering (crossings, pins, overlap) still applies.
+        const aSkip = skipped.has(a.ds.station.slug) ? 1 : 0;
+        const bSkip = skipped.has(b.ds.station.slug) ? 1 : 0;
+        if (aSkip !== bSkip) return aSkip - bSkip;
         const ac = a.rz.r === 1 ? 0 : 1;
         const bc = b.rz.r === 1 ? 0 : 1;
         if (ac !== bc) return ac - bc;
@@ -159,7 +175,7 @@ export default function SplitHome() {
         const sortR = (r: number) => r === 0 ? 99 : r;
         return sortR(a.rz.r) - sortR(b.rz.r);
       });
-  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode]);
+  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, skipped]);
 
   // Age-tier CLI filter (/first /current /catalog /deep) — same semantics as
   // DialFeedLane: a row's age identity is its station's current track (live
@@ -183,6 +199,7 @@ export default function SplitHome() {
   useEffect(() => {
     filteredRowsRef.current = filteredRows;
     scanOffsetRef.current = scanOffset;
+    skippedRef.current = skipped;
   });
 
   // Clamp a requested page to the current page count at click/command time,
@@ -230,19 +247,35 @@ export default function SplitHome() {
   // eslint-disable-next-line react-hooks/refs
   radioRef.current = radio;
 
-  const scheduleNextHop = useCallback((currentRowIdx: number, mode: "page" | "all") => {
+  // Build the scan candidate list: global indices into `rows`, excluding
+  // skipped stations. "page" mode scans the current five-row window; "all"
+  // mode scans the whole filtered list. Skipped stations sort last, so a
+  // page of only skipped rows simply yields no candidates.
+  const scanCandidates = useCallback((mode: "page" | "all"): number[] => {
+    const rows = filteredRowsRef.current;
+    const offset = scanOffsetRef.current;
+    const skippedSet = skippedRef.current;
+    const start = mode === "page" ? offset : 0;
+    const end = mode === "page" ? Math.min(offset + 5, rows.length) : rows.length;
+    const out: number[] = [];
+    for (let i = start; i < end; i++) {
+      const row = rows[i];
+      if (row && !skippedSet.has(row.ds.station.slug)) out.push(i);
+    }
+    return out;
+  }, []);
+
+  const scheduleNextHop = useCallback((currentCandIdx: number, mode: "page" | "all") => {
     // Inner named function so the recursive self-reference stays local (the
     // useCallback const can't reference itself under the compiler rules).
-    function hop(fromIdx: number) {
+    function hop(fromCandIdx: number) {
       scanRt.current.timer = setTimeout(() => {
         if (!scanRt.current.active) return;
         const rows = filteredRowsRef.current;
-        const offset = scanOffsetRef.current;
-        const list = mode === "page" ? rows.slice(offset, offset + 5) : rows;
-        const localIdx = fromIdx + 1;
-        if (list.length === 0) { stopCompactScan(); return; }
-        const wrappedLocalIdx = localIdx % list.length;
-        const globalIdx = mode === "page" ? offset + wrappedLocalIdx : wrappedLocalIdx;
+        const candidates = scanCandidates(mode);
+        if (candidates.length === 0) { stopCompactScan(); return; }
+        const wrappedCandIdx = (fromCandIdx + 1) % candidates.length;
+        const globalIdx = candidates[wrappedCandIdx];
         const row = rows[globalIdx];
         if (row && resolvePlaybackSource(row.ds.station) != null) {
           void radioRef.current.preview(row.ds.station);
@@ -254,26 +287,28 @@ export default function SplitHome() {
           setScanOffset(Math.floor(globalIdx / 5) * 5);
         }
         setScanRowIdx(globalIdx);
-        hop(wrappedLocalIdx);
+        hop(wrappedCandIdx);
       }, SCAN_DWELL_MS);
     }
-    hop(currentRowIdx);
-  }, [stopCompactScan]);
+    hop(currentCandIdx);
+  }, [stopCompactScan, scanCandidates]);
 
   const startCompactScan = useCallback((mode: "page" | "all") => {
-    const rows = filteredRowsRef.current;
-    const offset = scanOffsetRef.current;
-    const list = mode === "page" ? rows.slice(offset, offset + 5) : rows;
-    if (list.length === 0) return;
-    scanRt.current.active = true;
-    scanRt.current.mode = mode;
-    setScanMode(mode);
-    // Start at the first row of the relevant list. An all-scan begins at the
-    // top of the whole filtered list, so snap the visible window to page 1.
-    const globalIdx = mode === "page" ? offset : 0;
+    // An all-scan begins at the top of the whole filtered list, so snap the
+    // visible window to page 1 before computing candidates.
     if (mode === "all") {
       setScanOffset(0);
       scanOffsetRef.current = 0;
+    }
+    const candidates = scanCandidates(mode);
+    if (candidates.length === 0) return;
+    scanRt.current.active = true;
+    scanRt.current.mode = mode;
+    setScanMode(mode);
+    const rows = filteredRowsRef.current;
+    const globalIdx = candidates[0];
+    if (mode === "all") {
+      setScanOffset(Math.floor(globalIdx / 5) * 5);
     }
     const row = rows[globalIdx];
     if (row && resolvePlaybackSource(row.ds.station) != null) {
@@ -281,7 +316,7 @@ export default function SplitHome() {
     }
     setScanRowIdx(globalIdx);
     scheduleNextHop(0, mode);
-  }, [scheduleNextHop]);
+  }, [scheduleNextHop, scanCandidates]);
 
   // Scan buttons: clicking the active mode's button stops the scan; clicking
   // the other mode's button switches to that mode (stop, then start) so the
@@ -302,19 +337,22 @@ export default function SplitHome() {
     startCompactScan("all");
   }, [stopCompactScan, startCompactScan]);
 
-  // Stop scan when filters change — the row list is incompatible with the
-  // in-progress scan cursor.
+  // Stop scan when filters or the skipped set change — the row list is
+  // incompatible with the in-progress scan cursor.
   const prevTiersRef = useRef(activeTiers);
   const prevCatsRef = useRef(activeCategories);
+  const prevSkippedRef = useRef(skipped);
   useEffect(() => {
     const tiersChanged = prevTiersRef.current !== activeTiers;
     const catsChanged = prevCatsRef.current !== activeCategories;
+    const skippedChanged = prevSkippedRef.current !== skipped;
     prevTiersRef.current = activeTiers;
     prevCatsRef.current = activeCategories;
-    if ((tiersChanged || catsChanged) && scanRt.current.active) {
+    prevSkippedRef.current = skipped;
+    if ((tiersChanged || catsChanged || skippedChanged) && scanRt.current.active) {
       stopCompactScan();
     }
-  }, [activeTiers, activeCategories, stopCompactScan]);
+  }, [activeTiers, activeCategories, skipped, stopCompactScan]);
 
   // Clean up timers on unmount.
   useEffect(() => () => {
@@ -344,6 +382,7 @@ export default function SplitHome() {
     for (const name of names) addSeed(name);
   }, [addSeed]);
   const handleRadioMode = useCallback((on: boolean) => {
+    setRadioMode(on);
     writeRadioMode(on);
     // /radio must force the Radio lens so a returning visitor on Press/Shows
     // lands on the Radio feed, matching DialView's own setRadioMode behavior.
@@ -438,6 +477,7 @@ export default function SplitHome() {
         onToggleTier={toggleTier}
         onToggleCategory={toggleCategory}
         onRadioMode={handleRadioMode}
+        radioMode={radioMode}
       />
 
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
@@ -450,6 +490,8 @@ export default function SplitHome() {
           presenceMap={presenceMap}
           onTuneIn={tuneRow}
           onPlay={playRow}
+          skipped={skipped}
+          onToggleSkip={toggleSkip}
         />
       </section>
 

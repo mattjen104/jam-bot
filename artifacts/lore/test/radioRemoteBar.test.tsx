@@ -3,8 +3,9 @@
  * RadioRemoteBar — the radio remote pinned to the top of SplitHome.
  *
  * Covers the controls that moved out of the middle CLI seam:
- *  1. `/crossings`, `/radio`, `/lore` feed-mode controls render in order and
- *     route their actions accessibly (/lore navigates home).
+ *  1. `/crossings`, `/radio` feed-mode controls are true exclusive toggles
+ *     (aria-pressed transfers between them; /crossings default-on); `/lore`
+ *     is navigation-only.
  *  2. The four age-tier chips render with active state and route toggles.
  *  3. The seven station-category chips render with active state and route
  *     toggles.
@@ -46,7 +47,7 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof RadioRemoteBar
 describe("RadioRemoteBar", () => {
   it("renders the mode controls in command-line order: /crossings /radio /lore", () => {
     renderBar();
-    const modeGroup = screen.getByRole("group", { name: "Feed mode commands" });
+    const modeGroup = screen.getByRole("group", { name: "Feed mode" });
     expect(
       [...modeGroup.querySelectorAll("button")].map((button) => button.textContent),
     ).toEqual(["/crossings", "/radio", "/lore"]);
@@ -61,6 +62,45 @@ describe("RadioRemoteBar", () => {
     fireEvent.click(button);
     expect(props.onRadioMode).toHaveBeenCalledWith(mode);
     expect(button.getAttribute("type")).toBe("button");
+  });
+
+  it("defaults to /crossings pressed and /radio unpressed", () => {
+    renderBar();
+    expect(
+      screen.getByRole("button", { name: "crossings /crossings" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "radio /radio" }).getAttribute("aria-pressed"),
+    ).toBe("false");
+  });
+
+  it("transfers aria-pressed to /radio when radioMode is on", () => {
+    renderBar({ radioMode: true });
+    expect(
+      screen.getByRole("button", { name: "crossings /crossings" }).getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(
+      screen.getByRole("button", { name: "radio /radio" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("clicking /radio while active releases back to /crossings (onRadioMode(false))", () => {
+    const { props } = renderBar({ radioMode: true });
+    fireEvent.click(screen.getByRole("button", { name: "radio /radio" }));
+    expect(props.onRadioMode).toHaveBeenCalledWith(false);
+  });
+
+  it("clicking /crossings while active is a no-op mode-wise (still onRadioMode(false))", () => {
+    const { props } = renderBar({ radioMode: false });
+    fireEvent.click(screen.getByRole("button", { name: "crossings /crossings" }));
+    expect(props.onRadioMode).toHaveBeenCalledWith(false);
+  });
+
+  it("/lore carries no pressed state — it is navigation, not a toggle", () => {
+    renderBar();
+    const loreBtn = screen.getByRole("button", { name: "homepage /lore" });
+    expect(loreBtn.getAttribute("aria-pressed")).toBeNull();
+    expect(loreBtn.className).toContain("home-cli-strip__home-btn--nav");
   });
 
   it("keeps the mode shortcuts keyboard-activatable as native buttons", () => {
@@ -129,7 +169,7 @@ describe("RadioRemoteBar", () => {
   it("groups the remote as mode → age → category in one bar", () => {
     renderBar();
     const bar = screen.getByRole("toolbar", { name: "Radio remote" });
-    const modeGroup = screen.getByRole("group", { name: "Feed mode commands" });
+    const modeGroup = screen.getByRole("group", { name: "Feed mode" });
     const ageRow = screen.getByRole("group", { name: "Age commands" });
     const categoryRow = screen.getByRole("group", { name: "Station category commands" });
 

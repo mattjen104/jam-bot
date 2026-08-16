@@ -75,7 +75,10 @@ beforeAll(async () => {
   restores.push(
     _testOnly_setFingerprintRunner(async () => {
       events.push("fingerprint");
-      return fingerprintResult;
+      // Mirror fingerprintStream's contract: the match is paired with the
+      // clip-end timestamp (play_offset_ms is the position at the END of the
+      // recognized clip), so the route can derive playedAt from it.
+      return { match: fingerprintResult, clipEndedAt: new Date() };
     }),
     _testOnly_setStage1Refresh(async () => {
       events.push("stage1");

@@ -1555,9 +1555,9 @@ export function DialView() {
   // The hidden gesture modes (sleep / era-genre) keep priority: while either is
   // active the filter bar is hidden and the legacy single-mode fetch applies.
   const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
-  // No category selected initially — the dial starts unfiltered. Once a
-  // listener picks a category the selection is radio-style single-select and
-  // can never return to the empty (unfiltered) state.
+  // No category selected initially — the dial starts unfiltered. Category
+  // selection is radio-style single-select; re-clicking the active category
+  // clears it back to the empty (all-stations) state.
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set<StationCategory>(),
   );

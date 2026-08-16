@@ -16,8 +16,9 @@ import { test, expect } from "@playwright/test";
  * All four stations are live (recent now-playing) and carry enough crossings
  * to be Zone-1 rows in the feed, so the initial unfiltered state shows all
  * four rows. Categories are radio-style single-select: each selection then
- * shows exactly the matching stations, and picking a new category REPLACES
- * the previous one (no union, no empty state).
+ * shows exactly the matching stations, picking a new category REPLACES the
+ * previous one (no union), and re-selecting the active category CLEARS the
+ * filter back to the unfiltered dial.
  *
  * CLI mechanics:
  *   1. Press "/" globally — the DialCliBar listener intercepts it, focuses
@@ -306,7 +307,7 @@ test.describe("Dial category filters — CLI commands", () => {
 // A CLI command activates a category → the corresponding DialFilterBar button
 // must switch to aria-pressed="true"; selecting a different category must
 // revert it to "false" (single-select), and re-selecting the active category
-// must keep it pressed (no empty state).
+// clears the filter (back to the unfiltered dial).
 // ---------------------------------------------------------------------------
 
 test.describe("Dial category filters — filter bar button wiring at /lore/feed", () => {
@@ -328,9 +329,10 @@ test.describe("Dial category filters — filter bar button wiring at /lore/feed"
     await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
     await expect(campusBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Re-selecting the active category keeps it active — no empty state.
+    // Re-selecting the active category clears the filter — back to all stations.
     await sendCliCommand(page, "/campus");
-    await expect(campusBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(campusBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("Selecting a new category replaces the old one (single-select)", async ({
