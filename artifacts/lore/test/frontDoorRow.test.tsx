@@ -646,6 +646,38 @@ describe("compact Dial feed identity", () => {
     expect(byline?.querySelector(".fdrow__byline-track")?.textContent).toBe("Come On Let's Go");
   });
 
+  it("shows the station homepage description only after a compact row expands", () => {
+    const blurb = "Independent radio for adventurous listeners, with music selected by local hosts.";
+    const { container } = renderCompactRow(
+      makeDialStation({
+        name: "KEXP",
+        streamUrl: "https://example.com/stream",
+        homepageBlurb: blurb,
+      }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+    expect(container.querySelector(".fdrow__station-description")).toBeNull();
+
+    fireEvent.click(container.querySelector(".fdrow")!);
+
+    expect(container.querySelector(".fdrow__station-description")?.textContent).toBe(blurb);
+  });
+
+  it("does not render an empty station description when the homepage blurb is absent", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({
+        name: "KEXP",
+        streamUrl: "https://example.com/stream",
+        homepageBlurb: "   ",
+      }),
+      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+
+    fireEvent.click(container.querySelector(".fdrow")!);
+
+    expect(container.querySelector(".fdrow__station-description")).toBeNull();
+  });
+
   it("expanded byline shows Keep button only when onKeep is provided", () => {
     const onKeep = vi.fn();
     const { container } = renderCompactRow(

@@ -378,6 +378,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     return rawShow;
   })();
   const bylineTrack = cleanLiveValue(show?.currentTrack?.title ?? null);
+  const stationBlurb = ds.station.homepageBlurb?.trim() || null;
 
   // Clickable-"and" expansion: probe the sentence first to learn which artist
   // names it already shows, derive the rest of the set (setlist order, library
@@ -655,6 +656,9 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
               >+ Keep</button>
             )}
           </div>
+        )}
+        {compactSentence && compact && expanded && stationBlurb && (
+          <p className="fdrow__station-description">{stationBlurb}</p>
         )}
 
         {/* "this set:" expanded block — shows the full station setlist below the

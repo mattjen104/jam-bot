@@ -5479,6 +5479,22 @@
   color: hsl(var(--muted-foreground) / 0.72);
   font-style: italic;
 }
+/* First-party station context revealed with the expanded Feed row. Keep it
+   quieter than live attribution and bounded so scraped metadata stays useful
+   on both phone-width and desktop rows. */
+#dial-feed-rows .fdrow__station-description {
+  max-width: min(100%, 62ch);
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: hsl(var(--muted-foreground) / 0.68);
+  font-family: var(--app-font-sans);
+  font-size: var(--lore-size-small);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
+}
 /* Station homepage link inside the expanded byline (playable stations).
    Matches the byline's muted system-sans weight; underline on hover/focus. */
 #dial-feed-rows .fdrow__byline-station-link {
