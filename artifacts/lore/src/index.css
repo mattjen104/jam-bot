@@ -7332,16 +7332,28 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-dial {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-rows: repeat(5, minmax(0, 1fr));
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* The fold shows exactly 5 active rows (each 20% of the band height);
+     skipped rows continue below the fold and are reached by scrolling. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  overscroll-behavior-y: contain;
+}
+/* The skipped region is a grouping element for a11y/tests only — its rows
+   lay out as if they were direct children of the scroller, so every row
+   shares the same 20% height basis. */
+.compact-dial__skipped-region {
+  display: contents;
 }
 .compact-dial__row {
+  flex: 0 0 20%;
   min-height: 0;
   display: flex;
   flex-direction: row;
   /* Same row grammar as the mini Stack below: triangle in flow, content
-     vertically centred, one shared row height from the 5-row grid. */
+     vertically centred, one shared row height for every row. */
   align-items: center;
   position: relative;
   overflow: hidden;
@@ -7599,32 +7611,51 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: hsl(var(--live) / 0.07);
   outline: 1px solid hsl(var(--live) / 0.25);
 }
-/* Per-station scan-skip toggle: a subtle dot at the row's right edge.
-   ● = included in scan (default), ○ = skipped (row dims, pushed to the
-   last scan pages, excluded from Scan / Scan all). */
-.compact-dial__skip-btn {
+/* Per-station scan-inclusion checkbox at the row's far-right trailing edge.
+   Checked = included in scan (default); unchecked = skipped (row dims and
+   moves to the below-fold skipped region, excluded from Scan / Scan all).
+   Styled as a small square console key matching the terminal chip grammar. */
+.compact-dial__scan-checkbox {
+  appearance: none;
   flex: 0 0 auto;
   align-self: center;
-  margin-left: auto;
-  padding: 0 8px;
-  border: none;
-  background: none;
-  color: hsl(var(--muted-foreground) / 0.45);
-  font-size: var(--lore-size-small);
-  line-height: 1;
+  width: 13px;
+  height: 13px;
+  margin: 0 12px 0 auto;
+  border: 1px solid hsl(var(--foreground) / 0.55);
+  border-radius: 2px;
+  background: hsl(var(--secondary));
   cursor: pointer;
-  transition: color 0.15s ease;
+  position: relative;
+  z-index: 2;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.compact-dial__skip-btn:hover,
-.compact-dial__skip-btn:focus-visible {
-  color: hsl(var(--foreground) / 0.8);
+.compact-dial__scan-checkbox:hover {
+  border-color: hsl(var(--foreground) / 0.85);
 }
-.compact-dial__skip-btn:focus-visible {
+.compact-dial__scan-checkbox:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 1px;
 }
-.compact-dial__skip-btn--skipped {
-  color: hsl(var(--muted-foreground) / 0.35);
+.compact-dial__scan-checkbox:checked {
+  background: hsl(var(--foreground) / 0.82);
+  border-color: hsl(var(--foreground) / 0.82);
+}
+/* Check mark drawn on the key itself — dark tick on the lit key. */
+.compact-dial__scan-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 4px;
+  height: 8px;
+  border: solid hsl(var(--background));
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.compact-dial__scan-checkbox:not(:checked) {
+  border-color: hsl(var(--muted-foreground) / 0.45);
+  background: transparent;
 }
 /* A skipped row recedes: content dims, but stays fully interactive. */
 .compact-dial__row--skipped .fdrow,

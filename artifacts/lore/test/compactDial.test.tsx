@@ -8,7 +8,7 @@
  *  - clicking ▶ calls onPlay and does NOT call onTuneIn
  *  - when activeSlug matches and playerStatus === "playing", shows ⏸
  *  - when activeSlug matches and playerStatus === "loading", shows muted ▶
- *  - empty state renders the "No stations on air right now." message
+ *  - empty state renders the "No stations to show right now." message
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -86,8 +86,8 @@ function makeRow(stationOverrides: Partial<Station> = {}): DialLaneRow {
 
 function renderDial(props: Partial<CompactDialProps> = {}) {
   const defaults: CompactDialProps = {
-    rows: [],
-    offset: 0,
+    activeRows: [],
+    skippedRows: [],
     activeSlug: null,
     playerStatus: "idle",
     presenceMap: new Map(),
@@ -103,8 +103,73 @@ function renderDial(props: Partial<CompactDialProps> = {}) {
 
 describe("CompactDial empty state", () => {
   it("shows the no-stations message when rows is empty", () => {
-    renderDial({ rows: [] });
-    screen.getByText("No stations on air right now.");
+    renderDial({ activeRows: [], skippedRows: [] });
+    screen.getByText("No stations to show right now.");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Trailing scan checkbox (far-right edge)
+// ---------------------------------------------------------------------------
+
+describe("CompactDial scan checkbox", () => {
+  it("renders a trailing checked checkbox for an active row", () => {
+    const onToggleSkip = vi.fn();
+    const row = makeRow({ slug: "kexp", name: "KEXP" });
+    const { container } = renderDial({ activeRows: [row], onToggleSkip });
+
+    const box = screen.getByRole("checkbox", { name: "Skip KEXP in scan" }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    // Trailing edge: last element in the row, after the play button + FrontDoorRow.
+    const rowEl = container.querySelector(".compact-dial__row")!;
+    expect(rowEl.lastElementChild).toBe(box);
+  });
+
+  it("renders an unchecked checkbox and dims the row when the station is in skippedRows", () => {
+    const row = makeRow({ slug: "kexp", name: "KEXP" });
+    const { container } = renderDial({
+      skippedRows: [row],
+      onToggleSkip: vi.fn(),
+    });
+
+    const box = screen.getByRole("checkbox", { name: "Include KEXP in scan" }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(container.querySelector(".compact-dial__row--skipped")).toBeTruthy();
+  });
+
+  it("skipped rows appear in .compact-dial__skipped-region below the active grid", () => {
+    const active = makeRow({ slug: "kcrw", name: "KCRW" });
+    const skipped = makeRow({ slug: "kexp", name: "KEXP" });
+    const { container } = renderDial({
+      activeRows: [active],
+      skippedRows: [skipped],
+      onToggleSkip: vi.fn(),
+    });
+
+    const region = container.querySelector(".compact-dial__skipped-region");
+    expect(region).toBeTruthy();
+    expect(region!.querySelector('[data-testid="fdrow-kexp"]')).toBeTruthy();
+    // Active row is NOT inside the skipped region
+    expect(container.querySelector(".compact-dial__row:not(.compact-dial__row--skipped) [data-testid='fdrow-kcrw']")).toBeTruthy();
+  });
+
+  it("toggling the checkbox calls onToggleSkip with the slug, not onPlay/onTuneIn", () => {
+    const onToggleSkip = vi.fn();
+    const onPlay = vi.fn();
+    const onTuneIn = vi.fn();
+    const row = makeRow({ slug: "kexp", name: "KEXP" });
+    renderDial({ activeRows: [row], onToggleSkip, onPlay, onTuneIn });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip KEXP in scan" }));
+    expect(onToggleSkip).toHaveBeenCalledWith("kexp");
+    expect(onPlay).not.toHaveBeenCalled();
+    expect(onTuneIn).not.toHaveBeenCalled();
+  });
+
+  it("renders no checkbox when onToggleSkip is not provided", () => {
+    const row = makeRow({ slug: "kexp", name: "KEXP" });
+    renderDial({ activeRows: [row] });
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });
 
@@ -115,7 +180,7 @@ describe("CompactDial empty state", () => {
 describe("CompactDial play controls", () => {
   it("renders a ▶ play button for a station with a streamUrl", () => {
     const row = makeRow({ slug: "kexp", name: "KEXP", streamUrl: "https://stream.kexp.org/kexp128.mp3" });
-    renderDial({ rows: [row] });
+    renderDial({ activeRows: [row] });
     screen.getByRole("button", { name: "Play KEXP" });
   });
 
@@ -128,7 +193,7 @@ describe("CompactDial play controls", () => {
       streamUrl: "",
       relayUrl: "/api/stations/relay-only/relay",
     });
-    renderDial({ rows: [row] });
+    renderDial({ activeRows: [row] });
     screen.getByRole("button", { name: "Play Relay Station" });
   });
 
@@ -139,7 +204,7 @@ describe("CompactDial play controls", () => {
       streamUrl: "",
       relayUrl: null,
     });
-    renderDial({ rows: [row] });
+    renderDial({ activeRows: [row] });
     // FrontDoorRow stub is rendered (station is shown)
     screen.getByTestId("fdrow-attr-only");
     // But play button must be absent
@@ -150,7 +215,7 @@ describe("CompactDial play controls", () => {
     const onPlay = vi.fn();
     const onTuneIn = vi.fn();
     const row = makeRow({ slug: "wmfo", name: "WMFO" });
-    renderDial({ rows: [row], onPlay, onTuneIn });
+    renderDial({ activeRows: [row], onPlay, onTuneIn });
     fireEvent.click(screen.getByRole("button", { name: "Play WMFO" }));
     expect(onPlay).toHaveBeenCalledTimes(1);
     expect(onTuneIn).not.toHaveBeenCalled();
@@ -158,7 +223,7 @@ describe("CompactDial play controls", () => {
 
   it("shows ⏸ (Pause) when activeSlug matches and playerStatus is 'playing'", () => {
     const row = makeRow({ slug: "kcrw", name: "KCRW" });
-    renderDial({ rows: [row], activeSlug: "kcrw", playerStatus: "playing" });
+    renderDial({ activeRows: [row], activeSlug: "kcrw", playerStatus: "playing" });
     screen.getByRole("button", { name: "Pause KCRW" });
     expect(screen.queryByRole("button", { name: "Play KCRW" })).toBeNull();
   });
@@ -167,7 +232,7 @@ describe("CompactDial play controls", () => {
     const onPlay = vi.fn();
     const onTuneIn = vi.fn();
     const row = makeRow({ slug: "kcrw", name: "KCRW" });
-    renderDial({ rows: [row], activeSlug: "kcrw", playerStatus: "playing", onPlay, onTuneIn });
+    renderDial({ activeRows: [row], activeSlug: "kcrw", playerStatus: "playing", onPlay, onTuneIn });
     fireEvent.click(screen.getByRole("button", { name: "Pause KCRW" }));
     expect(onPlay).toHaveBeenCalledTimes(1);
     expect(onTuneIn).not.toHaveBeenCalled();
@@ -175,7 +240,7 @@ describe("CompactDial play controls", () => {
 
   it("shows muted ▶ (Play label, not Pause) when activeSlug matches and playerStatus is 'loading'", () => {
     const row = makeRow({ slug: "wfmu", name: "WFMU" });
-    renderDial({ rows: [row], activeSlug: "wfmu", playerStatus: "loading" });
+    renderDial({ activeRows: [row], activeSlug: "wfmu", playerStatus: "loading" });
     // Shows Play (not Pause) during loading — isLoading=true keeps it as ▶
     const btn = screen.getByRole("button", { name: "Play WFMU" });
     expect(screen.queryByRole("button", { name: "Pause WFMU" })).toBeNull();
@@ -188,7 +253,7 @@ describe("CompactDial play controls", () => {
     const onPlay = vi.fn();
     const onTuneIn = vi.fn();
     const row = makeRow({ slug: "wfmu", name: "WFMU" });
-    renderDial({ rows: [row], activeSlug: "wfmu", playerStatus: "loading", onPlay, onTuneIn });
+    renderDial({ activeRows: [row], activeSlug: "wfmu", playerStatus: "loading", onPlay, onTuneIn });
     fireEvent.click(screen.getByRole("button", { name: "Play WFMU" }));
     // Never re-fire radio.toggle for a buffering station — useRadioPlayer.toggle
     // treats a loading current station as a fresh play() and reattaches the source.
@@ -199,7 +264,7 @@ describe("CompactDial play controls", () => {
   it("shows ▶ for an inactive station even when another station is playing", () => {
     const onPlay = vi.fn();
     const row = makeRow({ slug: "kexp", name: "KEXP" });
-    renderDial({ rows: [row], activeSlug: "kcrw", playerStatus: "playing", onPlay });
+    renderDial({ activeRows: [row], activeSlug: "kcrw", playerStatus: "playing", onPlay });
     // KEXP is not active — shows Play
     screen.getByRole("button", { name: "Play KEXP" });
   });

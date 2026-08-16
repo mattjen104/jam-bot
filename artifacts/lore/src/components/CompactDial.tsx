@@ -1,12 +1,21 @@
 /**
- * CompactDial — a compact, non-scrolling 5-row dial feed for the SplitHome.
+ * CompactDial — the SplitHome mini dial feed.
  *
- * Slices `sortedRows` by offset and renders each row using the existing
- * FrontDoorRow infrastructure. No filter bar, no skeleton, no infinite scroll.
+ * Layout model
+ * ─────────────
+ * activeRows  — stations NOT in the skip set, sliced to the current page
+ *               (up to 5). These fill the fixed five-slot grid at the top.
+ * skippedRows — ALL skipped stations, appended below in a scrollable
+ *               overflow region so the listener can still reach them without
+ *               navigating to a different page.
  *
- * Each row carries a subtle skip toggle (checkbox icon). Checked = included
- * in scan (default). Unchecked = skipped stations are pushed to the last scan
- * page and excluded from Scan all / page scan.
+ * The scan remote's page count and candidate indices are derived from
+ * activeRows only — skipped stations never participate in a scan.
+ *
+ * Checkbox: far-right trailing edge of each row.
+ *   Checked  (active)  → filled key, normal opacity
+ *   Unchecked (skipped) → open key, row dims, row lives in the below-fold
+ *                         overflow region regardless of alphabetical position
  */
 
 import type { DialLaneRow } from "./dial/DialFeedLane";
@@ -19,12 +28,21 @@ import { CompactPlayButton } from "./CompactPlayButton";
 const COMPACT_DIAL_SIZE = 5;
 
 export interface CompactDialProps {
-  rows: DialLaneRow[];
-  offset: number;
   /**
-   * Raw index into `rows` of the station currently being sampled by the
-   * homepage scan remote (null when no scan is active). Rows outside the
-   * visible window are simply not highlighted.
+   * Active (non-skipped) rows for the current page — already sliced to at
+   * most 5 by SplitHome before being passed in. Scan indices in
+   * `samplingRowIdx` are positions in the FULL activeRows array (i.e. the
+   * pre-sliced list), offset corrected by the caller.
+   */
+  activeRows: DialLaneRow[];
+  /**
+   * All skipped rows across the entire filtered list. Rendered below the
+   * active grid in a scrollable overflow region.
+   */
+  skippedRows: DialLaneRow[];
+  /**
+   * Index into the current page's activeRows of the station being sampled.
+   * Null when no scan is running.
    */
   samplingRowIdx?: number | null;
   activeSlug: string | null;
@@ -32,90 +50,150 @@ export interface CompactDialProps {
   presenceMap: Map<number, StationPresence>;
   onTuneIn: (row: DialLaneRow) => void;
   onPlay: (row: DialLaneRow) => void;
-  /** Set of station slugs the listener has opted out of scanning. */
-  skipped?: ReadonlySet<string>;
-  /** Toggle skip state for a station slug. */
+  /** Toggle skip state for a station slug (checks ↔ unchecks). */
   onToggleSkip?: (slug: string) => void;
 }
 
+function DialRow({
+  row,
+  isSampling,
+  isSkipped,
+  activeSlug,
+  playerStatus,
+  presenceMap,
+  onTuneIn,
+  onPlay,
+  onToggleSkip,
+}: {
+  row: DialLaneRow;
+  isSampling: boolean;
+  isSkipped: boolean;
+  activeSlug: string | null;
+  playerStatus: PlayerStatus;
+  presenceMap: Map<number, StationPresence>;
+  onTuneIn: (row: DialLaneRow) => void;
+  onPlay: (row: DialLaneRow) => void;
+  onToggleSkip?: (slug: string) => void;
+}) {
+  const slug = row.ds.station.slug;
+  return (
+    <div
+      className={[
+        "compact-dial__row",
+        isSampling ? "compact-dial__row--sampling" : "",
+        isSkipped ? "compact-dial__row--skipped" : "",
+      ].filter(Boolean).join(" ")}
+    >
+      {resolvePlaybackSource(row.ds.station) != null && (
+        <CompactPlayButton
+          title={row.ds.station.name}
+          isPlaying={slug === activeSlug && playerStatus === "playing"}
+          isLoading={slug === activeSlug && playerStatus === "loading"}
+          onClick={() => onPlay(row)}
+          testId={`compact-dial-play-${slug}`}
+        />
+      )}
+      <FrontDoorRow
+        ds={row.ds}
+        show={row.show}
+        ov={0}
+        scrubSlug={slug}
+        isActive={slug === activeSlug}
+        isSampling={isSampling}
+        onTuneIn={() => onTuneIn(row)}
+        presence={presenceMap.get(row.ds.station.id)}
+        compactSentence
+      />
+      {onToggleSkip && (
+        <input
+          type="checkbox"
+          className="compact-dial__scan-checkbox"
+          checked={!isSkipped}
+          aria-label={
+            isSkipped
+              ? `Include ${row.ds.station.name} in scan`
+              : `Skip ${row.ds.station.name} in scan`
+          }
+          title={
+            isSkipped
+              ? "Excluded from scan — check to include"
+              : "Included in scan — uncheck to skip"
+          }
+          onChange={() => onToggleSkip(slug)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
+    </div>
+  );
+}
+
 export function CompactDial({
-  rows,
-  offset,
+  activeRows,
+  skippedRows,
   samplingRowIdx = null,
   activeSlug,
   playerStatus,
   presenceMap,
   onTuneIn,
   onPlay,
-  skipped,
   onToggleSkip,
 }: CompactDialProps) {
-  const slice = rows.slice(offset, offset + COMPACT_DIAL_SIZE);
+  const totalRows = activeRows.length + skippedRows.length;
 
-  if (rows.length === 0) {
+  if (totalRows === 0) {
     return (
       <div className="compact-dial compact-dial--empty">
-        <p className="compact-dial__empty-msg">No stations on air right now.</p>
+        <p className="compact-dial__empty-msg">No stations to show right now.</p>
       </div>
     );
   }
 
+  const emptySlots = Math.max(0, COMPACT_DIAL_SIZE - activeRows.length);
+
   return (
     <div className="compact-dial">
-      {slice.map((row, i) => {
-        const isSampling = samplingRowIdx != null && samplingRowIdx === offset + i;
-        const slug = row.ds.station.slug;
-        const isSkipped = skipped?.has(slug) ?? false;
-        return (
-        <div
-          key={slug}
-          className={`compact-dial__row${isSampling ? " compact-dial__row--sampling" : ""}${isSkipped ? " compact-dial__row--skipped" : ""}`}
-        >
-          {resolvePlaybackSource(row.ds.station) != null && (
-            <CompactPlayButton
-              title={row.ds.station.name}
-              isPlaying={
-                slug === activeSlug &&
-                playerStatus === "playing"
-              }
-              isLoading={
-                slug === activeSlug &&
-                playerStatus === "loading"
-              }
-              onClick={() => onPlay(row)}
-              testId={`compact-dial-play-${slug}`}
-            />
-          )}
-          <FrontDoorRow
-            ds={row.ds}
-            show={row.show}
-            ov={0}
-            scrubSlug={slug}
-            isActive={slug === activeSlug}
-            isSampling={isSampling}
-            onTuneIn={() => onTuneIn(row)}
-            presence={presenceMap.get(row.ds.station.id)}
-            compactSentence
-          />
-          {onToggleSkip && (
-            <button
-              type="button"
-              className={`compact-dial__skip-btn${isSkipped ? " compact-dial__skip-btn--skipped" : ""}`}
-              aria-pressed={isSkipped}
-              aria-label={isSkipped ? `Include ${row.ds.station.name} in scan` : `Skip ${row.ds.station.name} in scan`}
-              title={isSkipped ? "Excluded from scan — click to include" : "Click to exclude from scan"}
-              onClick={(e) => { e.stopPropagation(); onToggleSkip(slug); }}
-            >
-              {isSkipped ? "○" : "●"}
-            </button>
-          )}
-        </div>
-        );
-      })}
-      {/* Empty slots when fewer than 5 rows are available */}
-      {Array.from({ length: Math.max(0, COMPACT_DIAL_SIZE - slice.length) }).map((_, i) => (
-        <div key={`empty-${i}`} className="compact-dial__row compact-dial__row--empty" aria-hidden="true" />
+      {/* ── Active rows: fixed 5-slot grid ─────────────────────────────── */}
+      {activeRows.map((row, i) => (
+        <DialRow
+          key={row.ds.station.slug}
+          row={row}
+          isSampling={samplingRowIdx === i}
+          isSkipped={false}
+          activeSlug={activeSlug}
+          playerStatus={playerStatus}
+          presenceMap={presenceMap}
+          onTuneIn={onTuneIn}
+          onPlay={onPlay}
+          onToggleSkip={onToggleSkip}
+        />
       ))}
+      {/* Empty filler slots so the grid always spans 5 rows */}
+      {Array.from({ length: emptySlots }).map((_, i) => (
+        <div
+          key={`empty-${i}`}
+          className="compact-dial__row compact-dial__row--empty"
+          aria-hidden="true"
+        />
+      ))}
+      {/* ── Skipped rows: scrollable overflow below the fold ────────────── */}
+      {skippedRows.length > 0 && (
+        <div className="compact-dial__skipped-region" aria-label="Excluded from scan">
+          {skippedRows.map((row) => (
+            <DialRow
+              key={row.ds.station.slug}
+              row={row}
+              isSampling={false}
+              isSkipped={true}
+              activeSlug={activeSlug}
+              playerStatus={playerStatus}
+              presenceMap={presenceMap}
+              onTuneIn={onTuneIn}
+              onPlay={onPlay}
+              onToggleSkip={onToggleSkip}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

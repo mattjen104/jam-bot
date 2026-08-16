@@ -117,7 +117,16 @@ import { readDialLens, writeDialLens } from "../src/lib/dialLensState";
 
 let nextId = 1;
 
-function makeStation(slug: string, tier: AgeTier | null | "none") {
+function makeStation(
+  slug: string,
+  tier: AgeTier | null | "none",
+  overrides: Partial<{
+    name: string;
+    isLive: boolean;
+    crossings: number;
+    lifetimeCrossings: number;
+  }> = {},
+) {
   const liveTrack = tier === "none" ? null : {
     mbid: "00000000-0000-0000-0000-000000000001",
     artistMbid: null,
@@ -131,20 +140,27 @@ function makeStation(slug: string, tier: AgeTier | null | "none") {
     ageTier: tier,
   };
   return {
-    station: { id: nextId++, slug, name: `Station ${slug}` },
-    isLive: true,
+    station: { id: nextId++, slug, name: overrides.name ?? `Station ${slug}` },
+    isLive: overrides.isLive ?? true,
     shows: [],
-    crossings: 0,
+    crossings: overrides.crossings ?? 0,
     artistCrossings: 0,
     weekCrossings: 0,
     weekArtistCrossings: 0,
     monthCrossings: 0,
     monthArtistCrossings: 0,
-    lifetimeCrossings: 0,
+    lifetimeCrossings: overrides.lifetimeCrossings ?? 0,
     lifetimeArtistCrossings: 0,
     topArtistNames: [],
     liveTrack,
   };
+}
+
+/** Slugs of the fdrow stubs currently rendered, in document order. */
+function renderedRowSlugs(): string[] {
+  return [...document.querySelectorAll('[data-testid^="fdrow-"]')].map((el) =>
+    el.getAttribute("data-testid")!.replace(/^fdrow-/, ""),
+  );
 }
 
 function typeCommand(command: string) {
@@ -445,6 +461,99 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 });
 
 // ---------------------------------------------------------------------------
+// All-stations deterministic ordering
+// ---------------------------------------------------------------------------
+
+describe("SplitHome — all stations in one deterministic order", () => {
+  it("sorts alphabetically by station name regardless of crossing data", () => {
+    // Crossing counts would have ranked zebra first under the old personal
+    // sort — the deterministic order must ignore them entirely.
+    mockStations.value = [
+      makeStation("zebra", null, { name: "Zebra Radio", crossings: 99, lifetimeCrossings: 500 }),
+      makeStation("mid", null, { name: "Midtown FM" }),
+      makeStation("alpha", null, { name: "Alpha College Radio" }),
+    ];
+    render(<SplitHome />);
+
+    expect(renderedRowSlugs()).toEqual(["alpha", "mid", "zebra"]);
+  });
+
+  it("includes off-air stations in the same alphabetical order", () => {
+    mockStations.value = [
+      makeStation("live-1", null, { name: "B Live Station" }),
+      makeStation("dark-1", "none", { name: "A Dark Station", isLive: false }),
+      makeStation("dark-2", "none", { name: "C Dark Station", isLive: false }),
+    ];
+    render(<SplitHome />);
+
+    expect(renderedRowSlugs()).toEqual(["dark-1", "live-1", "dark-2"]);
+  });
+
+  it("name ties fall back to slug so the order never depends on fetch order", () => {
+    mockStations.value = [
+      makeStation("twin-b", null, { name: "Twin FM" }),
+      makeStation("twin-a", null, { name: "Twin FM" }),
+    ];
+    render(<SplitHome />);
+
+    expect(renderedRowSlugs()).toEqual(["twin-a", "twin-b"]);
+  });
+
+  it("numeric names sort naturally (Channel 2 before Channel 10)", () => {
+    mockStations.value = [
+      makeStation("ch-10", null, { name: "Channel 10" }),
+      makeStation("ch-2", null, { name: "Channel 2" }),
+    ];
+    render(<SplitHome />);
+
+    expect(renderedRowSlugs()).toEqual(["ch-2", "ch-10"]);
+  });
+
+  it("skipping a station moves it below the fold (skipped-region), not onto a later page", () => {
+    mockStations.value = [
+      makeStation("alpha", null, { name: "Alpha FM" }),
+      makeStation("bravo", null, { name: "Bravo FM" }),
+      makeStation("charlie", null, { name: "Charlie FM" }),
+    ];
+    const { container } = render(<SplitHome />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip Alpha FM in scan" }));
+
+    // Alpha moves into the scrollable skipped region below the active grid…
+    const skippedRegion = container.querySelector(".compact-dial__skipped-region");
+    expect(skippedRegion).toBeTruthy();
+    expect(skippedRegion!.querySelector('[data-testid="fdrow-alpha"]')).toBeTruthy();
+
+    // …while Bravo and Charlie remain in the active grid on page 1.
+    const activeRows = container.querySelectorAll(".compact-dial__row:not(.compact-dial__row--skipped):not(.compact-dial__row--empty)");
+    const activeSlugs = [...activeRows].map((el) =>
+      el.querySelector('[data-testid^="fdrow-"]')?.getAttribute("data-testid")?.replace(/^fdrow-/, ""),
+    ).filter(Boolean);
+    expect(activeSlugs).toEqual(["bravo", "charlie"]);
+  });
+
+  it("every row has a trailing scan checkbox; included rows are checked", () => {
+    mockStations.value = [
+      makeStation("alpha", null, { name: "Alpha FM" }),
+      makeStation("bravo", null, { name: "Bravo FM" }),
+    ];
+    const { container } = render(<SplitHome />);
+
+    const boxes = container.querySelectorAll(".compact-dial__scan-checkbox");
+    expect(boxes).toHaveLength(2);
+    for (const box of boxes) {
+      expect((box as HTMLInputElement).checked).toBe(true);
+      // Trailing edge: the checkbox is the last element in its row.
+      expect(box.parentElement!.lastElementChild).toBe(box);
+    }
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip Bravo FM in scan" }));
+    const bravoBox = screen.getByRole("checkbox", { name: "Include Bravo FM in scan" }) as HTMLInputElement;
+    expect(bravoBox.checked).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Compact scan remote — page/all preview scans
 // ---------------------------------------------------------------------------
 
@@ -675,29 +784,34 @@ describe("SplitHome — compact scan remote", () => {
 // ---------------------------------------------------------------------------
 
 describe("SplitHome — per-station scan skip", () => {
-  it("unchecking a station sorts it after the others (moves to the last page)", () => {
+  it("unchecking a station moves it to the below-fold skipped region, freeing the active page", () => {
     mockStations.value = Array.from({ length: 6 }, (_, i) =>
       makeStation(`st-${i + 1}`, null),
     );
-    render(<SplitHome />);
+    const { container } = render(<SplitHome />);
 
-    // Page 1 shows st-1 … st-5; skip st-1.
-    fireEvent.click(screen.getByRole("button", { name: "Skip Station st-1 in scan" }));
+    // Page 1 active slots show st-1 … st-5 (st-6 is on page 2). Skip st-1.
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip Station st-1 in scan" }));
 
-    // st-1 sank below st-6: page 1 is now st-2 … st-6.
-    expect(screen.queryByTestId("fdrow-st-1")).toBeNull();
+    // Active page 1 now has st-2 … st-6 (st-1 freed a slot, st-6 fills it).
     expect(screen.getByTestId("fdrow-st-6")).toBeTruthy();
 
-    // st-1 is on the last page, still visible there and re-includable.
-    fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
-    expect(screen.getByTestId("fdrow-st-1")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Include Station st-1 in scan" })).toBeTruthy();
+    // st-1 is in the skipped-region (below the fold), not on any active page.
+    const skippedRegion = container.querySelector(".compact-dial__skipped-region");
+    expect(skippedRegion).toBeTruthy();
+    expect(skippedRegion!.querySelector('[data-testid="fdrow-st-1"]')).toBeTruthy();
+
+    // The re-include checkbox is present on the skipped row.
+    expect(screen.getByRole("checkbox", { name: "Include Station st-1 in scan" })).toBeTruthy();
+
+    // pageCount shrinks: 5 active stations → 1 page (no page 2 button).
+    expect(screen.queryByRole("button", { name: "page 2 /scan2" })).toBeNull();
   });
 
   it("skip preference persists in localStorage under lore:dialSkipped", () => {
     mockStations.value = [makeStation("kexp-ish", null)];
     render(<SplitHome />);
-    fireEvent.click(screen.getByRole("button", { name: "Skip Station kexp-ish in scan" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip Station kexp-ish in scan" }));
     expect(JSON.parse(localStorage.getItem("lore:dialSkipped")!)).toEqual(["kexp-ish"]);
   });
 
@@ -709,8 +823,9 @@ describe("SplitHome — per-station scan skip", () => {
       );
       render(<SplitHome />);
 
-      // Skip st-2: it sinks to the end AND is excluded from the scan.
-      fireEvent.click(screen.getByRole("button", { name: "Skip Station st-2 in scan" }));
+      // Skip st-2: it moves to the below-fold skipped region AND is excluded
+      // from the scan. The active list becomes [st-1, st-3, st-4].
+      fireEvent.click(screen.getByRole("checkbox", { name: "Skip Station st-2 in scan" }));
 
       fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
       for (let hop = 0; hop < 4; hop++) {
@@ -725,22 +840,24 @@ describe("SplitHome — per-station scan skip", () => {
     }
   });
 
-  it("page scan skips unchecked rows within the page", () => {
+  it("page scan only samples active (non-skipped) rows on the page", () => {
     vi.useFakeTimers();
     try {
+      // 5 stations; skipping st-3 moves it below the fold so the active page
+      // becomes [st-1, st-2, st-4, st-5] — 4 active rows, all on page 1.
       mockStations.value = Array.from({ length: 5 }, (_, i) =>
         makeStation(`st-${i + 1}`, null),
       );
       render(<SplitHome />);
 
-      fireEvent.click(screen.getByRole("button", { name: "Skip Station st-3 in scan" }));
+      fireEvent.click(screen.getByRole("checkbox", { name: "Skip Station st-3 in scan" }));
 
       fireEvent.click(screen.getByRole("button", { name: "scan this page" }));
       for (let hop = 0; hop < 4; hop++) {
         act(() => { vi.advanceTimersByTime(7000); });
       }
       const slugs = mockPreview.mock.calls.map((c) => c[0].slug);
-      // st-3 sank to the page's last slot and is excluded from sampling.
+      // st-3 is below the fold and is excluded from sampling.
       expect(slugs).toEqual(["st-1", "st-2", "st-4", "st-5", "st-1"]);
       expect(slugs).not.toContain("st-3");
     } finally {
@@ -754,7 +871,7 @@ describe("SplitHome — per-station scan skip", () => {
       mockStations.value = [makeStation("only-one", null)];
       render(<SplitHome />);
 
-      fireEvent.click(screen.getByRole("button", { name: "Skip Station only-one in scan" }));
+      fireEvent.click(screen.getByRole("checkbox", { name: "Skip Station only-one in scan" }));
       fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
 
       // Scan never started: control still reads "Scan all", no preview fired.
@@ -778,7 +895,7 @@ describe("SplitHome — per-station scan skip", () => {
       fireEvent.click(screen.getByRole("button", { name: "scan all stations" }));
       expect(screen.getByRole("button", { name: "stop scan all" })).toBeTruthy();
 
-      fireEvent.click(screen.getByRole("button", { name: "Skip Station st-4 in scan" }));
+      fireEvent.click(screen.getByRole("checkbox", { name: "Skip Station st-4 in scan" }));
       expect(screen.getByRole("button", { name: "scan all stations" }).textContent).toBe("Scan all");
       const callsBefore = mockPreview.mock.calls.length;
       act(() => { vi.advanceTimersByTime(30000); });

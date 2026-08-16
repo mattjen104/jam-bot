@@ -4,9 +4,10 @@
  *   top edge  — RadioRemoteBar: the radio remote (/crossings /radio /lore
  *               plus the age-tier and station-category chips), pinned above
  *               the Dial band where the controls are most reachable.
- *   top ~50%  — CompactDial: five live stations from the attribution-ladder
- *               sort, windowed by the active scan (offset 0, 5, 10, … — the
- *               page count grows with the filtered list).
+ *   top ~50%  — CompactDial: five stations from the all-stations alphabetical
+ *               sort (same order for every listener), windowed by the active
+ *               scan (offset 0, 5, 10, … — the page count grows with the
+ *               filtered list).
  *   middle    — HomeCliStrip: the CLI seam. Only the Dial page selectors,
  *               Scan / Scan all, the slash-command input, and the /add
  *               affordance live here now — a true seam between the bands.
@@ -25,15 +26,12 @@ import { useLocation } from "wouter";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   useDialData,
-  readPins,
-  normalizeDjName,
   type DialStationCategory,
 } from "../hooks/useDialData";
 import { useStationPresence } from "../hooks/useStationPresence";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
-import { reason } from "../components/dialViewHelpers";
 import { toggleAgeTier, toggleStationCategory, useDialSkipped } from "../lib/dialFilterState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import { writeDialLens } from "../lib/dialLensState";
@@ -77,13 +75,12 @@ export default function SplitHome() {
   // Scan / Scan all.
   const { skipped, toggleSkip } = useDialSkipped();
 
-  const {
-    stations,
-    overlapByPickerId,
-    pickerNameToId,
-    crossingSourceMode,
-  } = useDialData("personal", {
+  const { stations } = useDialData("personal", {
     categories: activeCategories as ReadonlySet<DialStationCategory>,
+    // The main view lists EVERY station (live or not) alphabetically; the
+    // hook's default dial visibility filter (live / flagship / named show)
+    // would silently drop off-air stations without schedule metadata.
+    includeAllStations: true,
   });
 
   const { addSeed } = useSeedManager();
@@ -127,20 +124,15 @@ export default function SplitHome() {
   const scanOffsetRef = useRef(0);
   const skippedRef = useRef<ReadonlySet<string>>(new Set());
 
-  // Attribution-ladder sort — same ordering as DialView's sortedRows:
-  // live crossing first, then attributed DJs, then overlap desc, rung asc.
+  // All-stations deterministic sort — every station (live or not) in one
+  // alphabetical order by station name, identical for every listener. The
+  // explicit "en" locale + numeric collation keep the order stable regardless
+  // of the visitor's browser locale ("KEXP 2" sorts after "KEXP 1", not
+  // after "KEXP 10"). The only personal influence is the skip preference:
+  // skipped stations sort after included ones so they land on the last scan
+  // pages — within each group the alphabetical order still applies.
   const sortedRows = useMemo(() => {
-    const pins = readPins();
-    const pickerOv = (pickerId: number | null, djName: string | null): number => {
-      if (pickerId != null) return overlapByPickerId.get(pickerId) ?? 0;
-      if (djName != null) {
-        const pid = pickerNameToId.get(normalizeDjName(djName));
-        if (pid != null) return overlapByPickerId.get(pid) ?? 0;
-      }
-      return 0;
-    };
     return [...stations]
-      .filter((ds) => ds.isLive)
       .map((ds) => {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
         const djNameList = eligibleDjNames(
@@ -151,31 +143,21 @@ export default function SplitHome() {
         const attributionSafeShow = show && effectiveDjName !== show.djName
           ? { ...show, djName: effectiveDjName }
           : show;
-        const rz = reason(attributionSafeShow, ds.crossings, ds.artistCrossings, crossingSourceMode);
-        const isPinned = pins.has(ds.station.slug);
-        return { ds, show: attributionSafeShow, rz, effectiveDjName, isPinned };
+        return { ds, show: attributionSafeShow, effectiveDjName };
       })
       .sort((a, b) => {
-        // 0. Skipped stations always sort after non-skipped stations, so they
-        //    land on the last scan pages. Within each group the existing
-        //    ordering (crossings, pins, overlap) still applies.
         const aSkip = skipped.has(a.ds.station.slug) ? 1 : 0;
         const bSkip = skipped.has(b.ds.station.slug) ? 1 : 0;
         if (aSkip !== bSkip) return aSkip - bSkip;
-        const ac = a.rz.r === 1 ? 0 : 1;
-        const bc = b.rz.r === 1 ? 0 : 1;
-        if (ac !== bc) return ac - bc;
-        const at = a.effectiveDjName != null ? 0 : 1;
-        const bt = b.effectiveDjName != null ? 0 : 1;
-        if (at !== bt) return at - bt;
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        const aOv = a.effectiveDjName != null ? pickerOv(a.show?.pickerId ?? null, a.effectiveDjName) : a.ds.lifetimeCrossings;
-        const bOv = b.effectiveDjName != null ? pickerOv(b.show?.pickerId ?? null, b.effectiveDjName) : b.ds.lifetimeCrossings;
-        if (aOv !== bOv) return bOv - aOv;
-        const sortR = (r: number) => r === 0 ? 99 : r;
-        return sortR(a.rz.r) - sortR(b.rz.r);
+        return (
+          a.ds.station.name.localeCompare(b.ds.station.name, "en", {
+            numeric: true,
+            sensitivity: "base",
+          }) ||
+          a.ds.station.slug.localeCompare(b.ds.station.slug, "en")
+        );
       });
-  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, skipped]);
+  }, [stations, skipped]);
 
   // Age-tier CLI filter (/first /current /catalog /deep) — same semantics as
   // DialFeedLane: a row's age identity is its station's current track (live
@@ -192,12 +174,24 @@ export default function SplitHome() {
     });
   }, [sortedRows, activeTiers]);
 
+  // Split into active (not skipped) and skipped after age-tier filtering.
+  // Scan pagination and page count are based on activeRows only; skipped rows
+  // are always rendered below the fold in a scrollable overflow region.
+  const activeRows = useMemo(
+    () => filteredRows.filter((r) => !skipped.has(r.ds.station.slug)),
+    [filteredRows, skipped],
+  );
+  const skippedRows = useMemo(
+    () => filteredRows.filter((r) => skipped.has(r.ds.station.slug)),
+    [filteredRows, skipped],
+  );
+
   // Keep refs current so timer callbacks always see the latest values.
   // Synced in an effect (not during render) per the react-hooks/refs rule;
   // timers only fire after render + effects, so the mirror is never stale
   // when a hop callback reads it.
   useEffect(() => {
-    filteredRowsRef.current = filteredRows;
+    filteredRowsRef.current = activeRows;
     scanOffsetRef.current = scanOffset;
     skippedRef.current = skipped;
   });
@@ -221,22 +215,22 @@ export default function SplitHome() {
   // the user explicitly navigated and the scan cursor is now incompatible.
   const handleCliScan = handleSelectPage;
 
-  // Clamp the scan window when the filtered list shrinks (filter change or
-  // stations dropping off) so a stale offset never shows an empty window.
-  // Render-time adjustment (React's supported pattern for deriving state from
-  // a changing input; the lint rules forbid setState-in-effect). The last
-  // valid page offset is floor((rows - 1) / 5) * 5.
-  const [prevRowCount, setPrevRowCount] = useState(filteredRows.length);
-  if (prevRowCount !== filteredRows.length) {
-    setPrevRowCount(filteredRows.length);
-    if (filteredRows.length === 0) {
+  // Clamp the scan window when the active list shrinks (skip toggle, filter
+  // change, stations dropping off) so a stale offset never shows an empty
+  // window. Render-time adjustment (React's supported pattern for deriving
+  // state from a changing input; the lint rules forbid setState-in-effect).
+  // The last valid page offset is floor((rows - 1) / 5) * 5.
+  const [prevRowCount, setPrevRowCount] = useState(activeRows.length);
+  if (prevRowCount !== activeRows.length) {
+    setPrevRowCount(activeRows.length);
+    if (activeRows.length === 0) {
       if (scanOffset !== 0) setScanOffset(0);
-    } else if (scanOffset >= filteredRows.length) {
-      setScanOffset(Math.floor((filteredRows.length - 1) / 5) * 5);
+    } else if (scanOffset >= activeRows.length) {
+      setScanOffset(Math.floor((activeRows.length - 1) / 5) * 5);
     }
   }
 
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / 5));
+  const pageCount = Math.max(1, Math.ceil(activeRows.length / 5));
 
   // --- Compact scan hop logic ---
   // The scan auto-advances through a list of rows at SCAN_DWELL_MS per hop,
@@ -247,20 +241,20 @@ export default function SplitHome() {
   // eslint-disable-next-line react-hooks/refs
   radioRef.current = radio;
 
-  // Build the scan candidate list: global indices into `rows`, excluding
-  // skipped stations. "page" mode scans the current five-row window; "all"
-  // mode scans the whole filtered list. Skipped stations sort last, so a
-  // page of only skipped rows simply yields no candidates.
+  // Build the scan candidate list.
+  // filteredRowsRef now tracks activeRows (skipped stations are excluded at
+  // the split point, so skippedRef is only used for stop-on-change detection).
+  // "page" mode scans the current five-slot window into activeRows; "all"
+  // mode scans the whole active list. No further skip filtering needed here —
+  // activeRows already has skipped rows removed.
   const scanCandidates = useCallback((mode: "page" | "all"): number[] => {
-    const rows = filteredRowsRef.current;
+    const rows = filteredRowsRef.current; // = activeRows via the effect
     const offset = scanOffsetRef.current;
-    const skippedSet = skippedRef.current;
     const start = mode === "page" ? offset : 0;
     const end = mode === "page" ? Math.min(offset + 5, rows.length) : rows.length;
     const out: number[] = [];
     for (let i = start; i < end; i++) {
-      const row = rows[i];
-      if (row && !skippedSet.has(row.ds.station.slug)) out.push(i);
+      if (rows[i]) out.push(i);
     }
     return out;
   }, []);
@@ -271,7 +265,7 @@ export default function SplitHome() {
     function hop(fromCandIdx: number) {
       scanRt.current.timer = setTimeout(() => {
         if (!scanRt.current.active) return;
-        const rows = filteredRowsRef.current;
+        const rows = filteredRowsRef.current; // = activeRows
         const candidates = scanCandidates(mode);
         if (candidates.length === 0) { stopCompactScan(); return; }
         const wrappedCandIdx = (fromCandIdx + 1) % candidates.length;
@@ -282,7 +276,7 @@ export default function SplitHome() {
         }
         // An all-scan drives the visible window along with it, so the sampled
         // station is always rendered and highlighted (CompactDial only shows
-        // the current five-row page).
+        // the current five-row active page).
         if (mode === "all") {
           setScanOffset(Math.floor(globalIdx / 5) * 5);
         }
@@ -294,8 +288,8 @@ export default function SplitHome() {
   }, [stopCompactScan, scanCandidates]);
 
   const startCompactScan = useCallback((mode: "page" | "all") => {
-    // An all-scan begins at the top of the whole filtered list, so snap the
-    // visible window to page 1 before computing candidates.
+    // An all-scan begins at the top of the active list, so snap the visible
+    // window to page 1 before computing candidates.
     if (mode === "all") {
       setScanOffset(0);
       scanOffsetRef.current = 0;
@@ -305,7 +299,7 @@ export default function SplitHome() {
     scanRt.current.active = true;
     scanRt.current.mode = mode;
     setScanMode(mode);
-    const rows = filteredRowsRef.current;
+    const rows = filteredRowsRef.current; // = activeRows
     const globalIdx = candidates[0];
     if (mode === "all") {
       setScanOffset(Math.floor(globalIdx / 5) * 5);
@@ -360,8 +354,8 @@ export default function SplitHome() {
   }, []);
 
   const liveStationIds = useMemo(
-    () => filteredRows.slice(scanOffset, scanOffset + 5).map((row) => row.ds.station.id),
-    [filteredRows, scanOffset],
+    () => activeRows.slice(scanOffset, scanOffset + 5).map((row) => row.ds.station.id),
+    [activeRows, scanOffset],
   );
   const presenceMap = useStationPresence(liveStationIds);
 
@@ -482,15 +476,14 @@ export default function SplitHome() {
 
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
         <CompactDial
-          rows={filteredRows}
-          offset={scanOffset}
-          samplingRowIdx={scanRowIdx}
+          activeRows={activeRows.slice(scanOffset, scanOffset + 5)}
+          skippedRows={skippedRows}
+          samplingRowIdx={scanRowIdx != null ? scanRowIdx - scanOffset : null}
           activeSlug={radio.station?.slug ?? null}
           playerStatus={radio.status}
           presenceMap={presenceMap}
           onTuneIn={tuneRow}
           onPlay={playRow}
-          skipped={skipped}
           onToggleSkip={toggleSkip}
         />
       </section>
@@ -502,7 +495,7 @@ export default function SplitHome() {
         onToggleCategory={toggleCategory}
         scanOffset={scanOffset}
         pageCount={pageCount}
-        totalRows={filteredRows.length}
+        totalRows={activeRows.length}
         scanMode={scanMode}
         onSelectPage={handleSelectPage}
         onScanPage={handleScanPage}

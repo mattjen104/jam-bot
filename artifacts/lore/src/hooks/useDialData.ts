@@ -637,6 +637,14 @@ export function useDialData(
      * When omitted the legacy single-mode sleepMode/eraGenreMode flags apply.
      */
     categories?: ReadonlySet<DialStationCategory>;
+    /**
+     * When true, skip the dial visibility filter (live / flagship / named
+     * show) and return EVERY station from the list. The main SplitHome view
+     * uses this so its alphabetical all-stations list includes off-air
+     * stations without schedule metadata. Defaults to false — DialView and
+     * every other consumer keep the curated filtering.
+     */
+    includeAllStations?: boolean;
   } = {},
 ): {
   stations: DialStation[];
@@ -770,6 +778,7 @@ export function useDialData(
   // list. When `categories` is provided it drives fetching; the legacy single
   // `sleepMode`/`eraGenreMode` flags stay supported for the hidden gesture modes.
   const categories = opts.categories;
+  const includeAllStations = opts.includeAllStations === true;
   // Single-select taxonomy: at most one category is active at a time.
   //  - "ambient"    → sleep server mode list
   //  - "specialist" → era-genre server mode list
@@ -1287,6 +1296,10 @@ export function useDialData(
     //   3. Any other station that has at least one named show (not "Unknown show")
     //      — keeps Radio Browser stations with no show metadata out of the view
     .filter((ds) => {
+      // includeAllStations: the main SplitHome view lists every station
+      // alphabetically, off-air ones included, so it bypasses this
+      // visibility filter entirely.
+      if (includeAllStations) return true;
       if (ds.isLive) return true;
       if (ds.station.tier === "flagship") return true;
       return ds.shows.some(
@@ -1296,7 +1309,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, categories, wantAmbient, wantSpecialist, metaCategory, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode]);
+  }, [stationsData, categories, wantAmbient, wantSpecialist, metaCategory, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // isCoreLoading: only block until the station list arrives so the offline

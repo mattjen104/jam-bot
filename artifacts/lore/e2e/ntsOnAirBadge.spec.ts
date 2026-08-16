@@ -219,13 +219,15 @@ test.describe("On-air show + DJ attribution on the dial front door", () => {
     });
     await page.goto("/lore/");
 
-    // With no live pulse the first-run sidebar reports an empty dial. (The
-    // old "Know who you're looking for?" manual-entry section was removed.)
+    // The main view now lists ALL stations (alphabetically), so the offline
+    // station still appears as a row — it is not hidden behind an empty-dial
+    // message anymore.
     await expect(
-      page.getByText("No stations on air right now.", { exact: false }),
+      page.getByText(STATION.name, { exact: false }).first(),
     ).toBeVisible({ timeout: 15_000 });
 
-    // No live pulse → no DJs-on-air band, no live DJ credit.
+    // But with no live pulse it must never claim an on-air DJ: no
+    // DJs-on-air band, no live DJ credit.
     await expect(page.getByText("DJs on air")).not.toBeVisible();
     await expect(page.getByText(DJ_NAME)).not.toBeVisible();
   });
