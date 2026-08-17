@@ -22,6 +22,10 @@
 #   - compactCrossingLabels.spec.ts    (compact Feed row crossing-artist labels: live
 #                                       ", now" suffix, set-level ", this set" Oxford
 #                                       comma, and no DJ/show name in collapsed row)
+#   - liveTrackChange.spec.ts          (SSE fast path: spin-raw provisional cue appears
+#                                       immediately; spin-changed/spin-raw-failed clear it
+#                                       on WebPlayer ON AIR row; PlayerDock test skipped
+#                                       pending fdrow infrastructure recovery)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -95,6 +99,7 @@ RUN_SPECS=(
   e2e/dialInfiniteScroll.spec.ts
   e2e/compactCrossingLabels.spec.ts
   e2e/dialCategoryFilters.spec.ts
+  e2e/liveTrackChange.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
