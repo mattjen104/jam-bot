@@ -1548,16 +1548,16 @@ export function DialView() {
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
 
-  // ── Dial filter menus — song-age tiers (left) + station categories (right).
-  // Age tiers are additive; empty set = no age filtering. Station categories
-  // are a radio-style single-select: exactly one editorial category is active
-  // at all times (Anchor is the default front-door view).
+  // ── Dial filter dropdowns — crossings mode, song-age tiers, station types.
+  // Age tiers and station categories are both additive multi-selects; the
+  // empty set = unfiltered. Checked station categories are unioned by
+  // useDialData. The Crossings dropdown's checkbox is the inverse of
+  // radioMode (checked = crossing-ranked feed).
   // The hidden gesture modes (sleep / era-genre) keep priority: while either is
   // active the filter bar is hidden and the legacy single-mode fetch applies.
   const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
-  // No category selected initially — the dial starts unfiltered. Category
-  // selection is radio-style single-select; re-clicking the active category
-  // clears it back to the empty (all-stations) state.
+  // No category selected initially — the dial starts unfiltered. Checking a
+  // category adds it to the filter set; unchecking removes it.
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set<StationCategory>(),
   );
@@ -3035,8 +3035,10 @@ export function DialView() {
                       <DialFilterBar
                         activeTiers={activeTiers}
                         activeCategories={activeCategories}
+                        crossingsActive={!radioMode}
                         onToggleTier={toggleTier}
                         onToggleCategory={toggleCategory}
+                        onToggleCrossings={() => setRadioMode(!radioMode)}
                       />
                     )}
 

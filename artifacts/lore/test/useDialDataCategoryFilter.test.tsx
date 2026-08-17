@@ -7,8 +7,10 @@
  * already-fetched Lore station list client-side using the server-supplied
  * single-value `stationCategories` array on each station.
  *
- * Contract under test (single-select taxonomy):
+ * Contract under test (additive multi-select taxonomy):
  *  - each metadata category restricts to stations carrying exactly that label
+ *  - multiple checked metadata categories UNION their stations (a station
+ *    matching any checked category renders)
  *  - stations with stationCategories: [] (or absent) never match a metadata
  *    filter
  *  - an empty categories set applies no filter (legacy/no-filter path)
@@ -98,5 +100,17 @@ describe("useDialData metadata-category filter", () => {
     for (const cat of ["anchor", "campus", "public", "indie", "discovery"] as const) {
       expect(slugsFor(new Set([cat]))).not.toContain("no-cats");
     }
+  });
+
+  it("multiple checked categories union their stations (no duplicates)", () => {
+    expect(slugsFor(new Set(["campus", "anchor"]))).toEqual(
+      ["cfuv", "kexp", "nts-1", "wprb"],
+    );
+  });
+
+  it("unioning every metadata category still excludes uncategorized stations", () => {
+    expect(slugsFor(new Set(["anchor", "campus", "public", "indie", "discovery"]))).toEqual(
+      ["balamii", "cfuv", "kexp", "nts-1", "rb-discovery", "wbgo", "wprb"],
+    );
   });
 });

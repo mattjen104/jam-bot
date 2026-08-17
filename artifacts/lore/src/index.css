@@ -2141,6 +2141,84 @@
   .dial-filter-bar__btn { padding: 2px 2px 1px; }
 }
 
+/* ── Filter dropdown menus (DialFilterBar + RadioRemoteBar) ────────────────
+   One collapsible menu per filter family: a trigger button (family name +
+   active-count badge) and a fixed-position panel of labeled checkboxes.
+   The panel is position:fixed so it is never clipped by the remote bar's
+   horizontal scroll container; it stays mounted (`hidden`) when closed. */
+.filter-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.filter-dropdown__trigger {
+  white-space: nowrap;
+}
+.filter-dropdown__count {
+  font-family: var(--app-font-mono);
+  opacity: 0.85;
+}
+.filter-dropdown__panel {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 10px 32px hsl(var(--background) / 0.6);
+}
+.filter-dropdown__panel[hidden] {
+  display: none;
+}
+.filter-dropdown__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.filter-dropdown__option:hover {
+  background: hsl(var(--muted));
+}
+.filter-dropdown__option:focus-within {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+.filter-dropdown__checkbox {
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  accent-color: hsl(var(--primary));
+  cursor: pointer;
+}
+.filter-dropdown__option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.filter-dropdown__option-label {
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-interface);
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.filter-dropdown__option-desc {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--faint));
+}
+
 /* ── Dial lens bar — Radio | Press toggle (same anatomy as the filter bar,
    but always visible; the filter bar itself stays hidden/CLI-driven). */
 .dial-lens-bar {

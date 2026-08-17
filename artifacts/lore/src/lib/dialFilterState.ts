@@ -1,14 +1,15 @@
 /**
- * dialFilterState — pure set-toggle semantics for the Dial's filter menus.
+ * dialFilterState — pure toggle semantics for the Dial's filter dropdowns.
  *
- * The two menus have different semantics:
+ * All three filter families share the same additive shape:
  *   - Age tiers (First | Current | Catalog | Deep): additive multi-select;
  *     any subset, including empty (empty = no age filtering).
- *   - Station categories (Ambient & Sleep | Campus | …): radio-style
- *     single-select — at most one category is active. The dial starts with
- *     no category selected (unfiltered); once a category is picked, selecting
- *     a new one replaces it, and re-selecting the active one CLEARS it back
- *     to the empty (all-stations) state.
+ *   - Station categories (Ambient & Sleep | Campus | …): additive
+ *     multi-select; checked categories are unioned. Empty = all stations.
+ *   - Crossings: a single boolean (crossings mode on = crossing-ranked feed,
+ *     off = blank radio mode). Callers keep it as the inverse of their
+ *     radioMode state (see dialRadioMode.ts) — DialView and SplitHome wire
+ *     the dropdown's "Crossings on" checkbox to setRadioMode(!on).
  *
  * Kept out of DialView so the rules are unit-testable without the component
  * tree. DialView owns the useState; these produce the next set (returning the
@@ -33,20 +34,24 @@ export function toggleAgeTier(prev: ReadonlySet<AgeTier>, tier: AgeTier): Set<Ag
 }
 
 /**
- * Radio-style single-select for station categories: selecting a category
- * replaces whatever was active before (exactly one category active when
- * non-empty). Re-selecting the already-active category CLEARS it back to
- * the empty state so the listener can return to all-stations at any time.
- * Selecting a new category when one is already active replaces it.
+ * Plain additive toggle for station categories: checking a category adds it
+ * to the set, unchecking removes it. Any subset is valid — the empty set
+ * means "all stations" (no category filtering), and multiple checked
+ * categories are unioned by useDialData before display.
  */
 export function toggleStationCategory(
-  prev: Set<StationCategory>,
+  prev: ReadonlySet<StationCategory>,
   cat: StationCategory,
 ): Set<StationCategory> {
-  // Re-select active → clear to empty (all stations)
-  if (prev.has(cat) && prev.size === 1) return new Set();
-  // Select new → replace
-  return new Set([cat]);
+  const next = new Set(prev);
+  if (next.has(cat)) next.delete(cat);
+  else next.add(cat);
+  return next;
+}
+
+/** Toggle the crossings-mode boolean (on = crossing-ranked feed). */
+export function toggleCrossings(prev: boolean): boolean {
+  return !prev;
 }
 
 // ---------------------------------------------------------------------------

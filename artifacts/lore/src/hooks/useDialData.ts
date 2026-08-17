@@ -19,6 +19,7 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   useListStations,
+  getListStationsQueryKey,
   useListStationsNowPlaying,
   getListStationsNowPlayingQueryKey,
   useGetStationsSchedule,
@@ -628,13 +629,14 @@ export function useDialData(
     sleepMode?: boolean;
     eraGenreMode?: boolean;
     /**
-     * Single-select station-category filter. When provided, its (single)
-     * member drives station fetching and/or client-side filtering:
+     * Additive multi-select station-category filter. Every checked category
+     * contributes its stations to a union (deduplicated by station id):
      *  - Ambient = sleep server mode list
      *  - Specialist = era-genre server mode list
      *  - Anchor/Campus/Public/Indie/Discovery = client-side filter on the
      *    normal Lore list (no extra server fetch needed)
-     * When omitted the legacy single-mode sleepMode/eraGenreMode flags apply.
+     * The empty set applies no filter (all stations). When omitted the legacy
+     * single-mode sleepMode/eraGenreMode flags apply.
      */
     categories?: ReadonlySet<DialStationCategory>;
     /**
@@ -779,22 +781,19 @@ export function useDialData(
   // `sleepMode`/`eraGenreMode` flags stay supported for the hidden gesture modes.
   const categories = opts.categories;
   const includeAllStations = opts.includeAllStations === true;
-  // Single-select taxonomy: at most one category is active at a time.
+  // Additive multi-select taxonomy: any subset of categories may be checked.
   //  - "ambient"    → sleep server mode list
   //  - "specialist" → era-genre server mode list
   //  - anchor/campus/public/indie/discovery → normal Lore list + client-side
   //    filter on the server-supplied single-value `stationCategories` array.
-  const activeCategory: DialStationCategory | undefined = categories
-    ? [...categories][0]
-    : undefined;
-  const wantAmbient = categories ? activeCategory === "ambient" : sleepMode;
-  const wantSpecialist = categories ? activeCategory === "specialist" : eraGenreMode;
+  // All checked categories' stations are unioned and deduplicated by id.
+  const wantAmbient = categories ? categories.has("ambient") : sleepMode;
+  const wantSpecialist = categories ? categories.has("specialist") : eraGenreMode;
   // Metadata categories filter the fetched Lore list client-side; no extra
   // server fetch is needed for them.
-  const metaCategory =
-    categories && activeCategory && !wantAmbient && !wantSpecialist
-      ? activeCategory
-      : undefined;
+  const metaCategories: readonly DialStationCategory[] = categories
+    ? [...categories].filter((c) => c !== "ambient" && c !== "specialist")
+    : [];
 
   // Hidden browse modes swap the station source. Sleep takes precedence if both
   // flags somehow arrive true (the modes are mutually exclusive upstream).
@@ -803,17 +802,24 @@ export function useDialData(
     : eraGenreMode
     ? ({ mode: "era-genre" } as const)
     : undefined;
-  // Base list: mode list for Ambient/Specialist, else the normal Lore list.
-  // (In legacy single-mode use, modeParam already carries sleep/era-genre.)
-  const baseParam = categories
-    ? wantAmbient
-      ? ({ mode: "sleep" } as const)
-      : wantSpecialist
-      ? ({ mode: "era-genre" } as const)
-      : undefined
-    : modeParam;
+  // Base list. Legacy single-mode use (no categories) fetches the mode list
+  // directly. In the category-driven path the base list is the normal Lore
+  // list, needed whenever no filter is active or any metadata category is
+  // checked; ambient/specialist pools are separate union fetches below.
+  const baseParam = categories ? undefined : modeParam;
+  const wantNormalList = !categories || categories.size === 0 || metaCategories.length > 0;
   const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations(
     baseParam,
+    { query: { queryKey: getListStationsQueryKey(baseParam), enabled: wantNormalList } },
+  );
+  // Union pools: fetched only when their category is explicitly checked.
+  const { data: ambientData, isLoading: ambientLoading, isError: ambientError, refetch: refetchAmbient } = useListStations(
+    { mode: "sleep" } as const,
+    { query: { queryKey: getListStationsQueryKey({ mode: "sleep" }), enabled: categories != null && wantAmbient } },
+  );
+  const { data: specialistData, isLoading: specialistLoading, isError: specialistError, refetch: refetchSpecialist } = useListStations(
+    { mode: "era-genre" } as const,
+    { query: { queryKey: getListStationsQueryKey({ mode: "era-genre" }), enabled: categories != null && wantSpecialist } },
   );
 
   // ── live pulse (30s polling) ─────────────────────────────────────────────
@@ -1092,27 +1098,54 @@ export function useDialData(
 
   // ── assemble enriched stations ────────────────────────────────────────────
   const stations = useMemo((): DialStation[] => {
-    // Single-select taxonomy: the base list is either a mode list
-    // (ambient/specialist) or the normal Lore list. Slugs from era-genre/sleep
-    // mode lists are tracked so they render as always-live (those stations are
-    // hidden from the now-playing pollers). In the legacy single-mode path (no
-    // categories), only the base list is present.
+    // Additive multi-select taxonomy: union the normal Lore list with the
+    // ambient (sleep) and specialist (era-genre) mode pools, deduplicated by
+    // station id. Mode-pool membership is tracked independently of the dedup
+    // so a station present in BOTH the normal list and a checked mode pool
+    // still counts as a pool member (renders always-live and survives the
+    // metadata filter even without a matching stationCategories label).
+    // In the legacy single-mode path (no categories), only the base list is
+    // present.
     const alwaysLiveSlugs = new Set<string>();
     const bySlugRaw = new Map<string, Station>();
-    for (const s of stationsData?.stations ?? []) bySlugRaw.set(s.slug, s);
-    if (categories && (wantAmbient || wantSpecialist)) {
-      // The base list IS a mode list — mark every station live so mode-only
-      // stations render.
-      for (const s of stationsData?.stations ?? []) alwaysLiveSlugs.add(s.slug);
+    const seenIds = new Set<number | string>();
+    const addAll = (list: Station[] | undefined, poolIsAlwaysLive: boolean) => {
+      for (const s of list ?? []) {
+        // Record pool membership BEFORE the dedup check: a duplicate from the
+        // normal list must still be treated as a mode-pool station.
+        if (poolIsAlwaysLive) alwaysLiveSlugs.add(s.slug);
+        // Dedupe by station id; tolerate id-less fixtures by falling back to
+        // the slug (both are unique per station).
+        const key: number | string = s.id ?? s.slug;
+        if (seenIds.has(key)) continue;
+        seenIds.add(key);
+        bySlugRaw.set(s.slug, s);
+      }
+    };
+    if (categories) {
+      // Only requested sources contribute: the normal list is skipped when no
+      // metadata category is checked and the filter is non-empty (a disabled
+      // TanStack Query observer can retain cached data, so gate on
+      // wantNormalList rather than on stationsData being undefined).
+      if (wantNormalList) addAll(stationsData?.stations, false);
+      // Mode pools join the union only when their category is checked; every
+      // station they contribute renders as always-live.
+      if (wantAmbient) addAll(ambientData?.stations, true);
+      if (wantSpecialist) addAll(specialistData?.stations, true);
+    } else {
+      addAll(stationsData?.stations, false);
     }
     // Client-side metadata filter: when anchor/campus/public/indie/discovery
-    // is the active category, restrict to stations whose server-supplied
-    // `stationCategories` array carries that label.
-    const filteredBySlug = metaCategory
+    // categories are checked, restrict the normal list to stations whose
+    // server-supplied `stationCategories` array carries a checked label.
+    // Mode-pool stations (ambient/specialist) already passed by virtue of
+    // their category being checked, so they always survive the filter.
+    const filteredBySlug = metaCategories.length > 0
       ? new Map(
-          [...bySlugRaw].filter(([, s]) => {
+          [...bySlugRaw].filter(([slug, s]) => {
+            if (alwaysLiveSlugs.has(slug)) return true;
             const cats = (s.stationCategories ?? []) as string[];
-            return cats.includes(metaCategory);
+            return metaCategories.some((c) => cats.includes(c));
           }),
         )
       : bySlugRaw;
@@ -1309,9 +1342,11 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, categories, wantAmbient, wantSpecialist, metaCategory, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
+  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, metaCategories, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
 
-  const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
+  const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading
+    || (categories != null && wantAmbient && ambientLoading)
+    || (categories != null && wantSpecialist && specialistLoading);
   // isCoreLoading: only block until the station list arrives so the offline
   // section and Zone 3 appear immediately.  Zone 1 has its own crossingsLoading
   // gate so it shows a context-sensitive placeholder instead of loading nothing.
@@ -1352,8 +1387,14 @@ export function useDialData(
     crossingSourceMode,
     crossingError: displayMode === "blended" && blendedError && blendedCrossings == null,
     crossingsPhase: selectedCrossingsPhase,
-    stationsError,
-    refetchStations: () => { void refetchStations(); },
+    stationsError: stationsError
+      || (categories != null && wantAmbient && ambientError)
+      || (categories != null && wantSpecialist && specialistError),
+    refetchStations: () => {
+      void refetchStations();
+      if (categories != null && wantAmbient) void refetchAmbient();
+      if (categories != null && wantSpecialist) void refetchSpecialist();
+    },
     applyNowPlayingOverride,
   };
 }

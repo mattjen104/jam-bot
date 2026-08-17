@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 /**
- * DialFilterBar — the Dial's two filter menus.
+ * DialFilterBar — the Dial's three filter dropdown menus.
  *
  * Covers:
- *  1. Renders both groups with all labels and pipe separators.
- *  2. aria-pressed reflects the active sets.
- *  3. Clicking a button fires the matching toggle callback.
+ *  1. Three dropdown triggers render: Crossings, Track age, Station type.
+ *  2. Each panel carries the right checkboxes with full labels, checked
+ *     state driven by the active sets / crossings flag.
+ *  3. Active-count badges reflect the number of checked options.
+ *  4. Toggling a checkbox fires the matching callback.
  *
- * The selection semantics themselves (additive age tiers, radio-style
- * single-select categories) live in dialFilterState and are exercised in
- * dialFilterState.test.ts.
+ * The selection semantics themselves (additive tiers + categories, crossings
+ * boolean) live in dialFilterState and are exercised in
+ * dialFilterState.test.ts; open/close mechanics are covered in
+ * filterDropdownMenu.test.tsx.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,69 +30,99 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof DialFilterBar>
   const props = {
     activeTiers: new Set<AgeTier>(),
     activeCategories: new Set<StationCategory>(["anchor"]),
+    crossingsActive: true,
     onToggleTier: vi.fn(),
     onToggleCategory: vi.fn(),
+    onToggleCrossings: vi.fn(),
     ...overrides,
   };
   const utils = render(<DialFilterBar {...props} />);
   return { ...utils, props };
 }
 
+function openMenu(name: string) {
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${name}`) }));
+}
+
 describe("DialFilterBar", () => {
-  it("renders both menus with every label of the editorial taxonomy", () => {
+  it("renders the three dropdown triggers inside the filter bar group", () => {
     renderBar();
-    for (const label of [
-      "First", "Current", "Catalog", "Deep",
-      "Ambient & Sleep", "Campus Radio", "Specialist Radio", "Anchor Stations",
-      "Public & Community", "Independent DJ", "Discovery",
-    ]) {
-      expect(screen.getByRole("button", { name: label })).toBeTruthy();
+    const bar = screen.getByRole("group", { name: "Dial filters" });
+    for (const name of ["Crossings", "Track age", "Station type"]) {
+      const trigger = screen.getByRole("button", { name: new RegExp(`^${name}`) });
+      expect(bar.contains(trigger)).toBe(true);
+      expect(trigger.getAttribute("aria-haspopup")).toBe("true");
     }
-    // Grouped for a11y: song-age group + station-category group.
-    expect(screen.getByRole("group", { name: "Song age" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "Station category" })).toBeTruthy();
   });
 
-  it("marks the single active category with aria-pressed and the --on class", () => {
+  it("the Crossings menu has a single checkbox reflecting crossingsActive", () => {
+    const { props } = renderBar({ crossingsActive: true });
+    openMenu("Crossings");
+    const box = screen.getByRole("checkbox", { name: /Crossings on/ }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    fireEvent.click(box);
+    expect(props.onToggleCrossings).toHaveBeenCalledTimes(1);
+  });
+
+  it("the Crossings checkbox is unchecked in radio mode", () => {
+    renderBar({ crossingsActive: false });
+    openMenu("Crossings");
+    expect((screen.getByRole("checkbox", { name: /Crossings on/ }) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("the Track age menu lists all four tiers with checked state from activeTiers", () => {
+    renderBar({ activeTiers: new Set<AgeTier>(["current", "deep"]) });
+    openMenu("Track age");
+    const checked = (name: RegExp) =>
+      (screen.getByRole("checkbox", { name }) as HTMLInputElement).checked;
+    expect(checked(/First/)).toBe(false);
+    expect(checked(/Current/)).toBe(true);
+    expect(checked(/Catalog/)).toBe(false);
+    expect(checked(/Deep/)).toBe(true);
+    // Full descriptions render as part of the option labels.
+    expect(screen.getByText("Released 60+ months ago")).toBeTruthy();
+  });
+
+  it("the Station type menu lists all seven categories, additively checked", () => {
     renderBar({
-      activeTiers: new Set<AgeTier>(["current", "deep"]),
-      activeCategories: new Set<StationCategory>(["campus"]),
+      activeCategories: new Set<StationCategory>(["campus", "specialist"]),
     });
-    const pressed = (name: string) =>
-      screen.getByRole("button", { name }).getAttribute("aria-pressed");
-    expect(pressed("Current")).toBe("true");
-    expect(pressed("Deep")).toBe("true");
-    expect(pressed("First")).toBe("false");
-    expect(pressed("Catalog")).toBe("false");
-    expect(pressed("Campus Radio")).toBe("true");
-    expect(pressed("Ambient & Sleep")).toBe("false");
-    expect(pressed("Specialist Radio")).toBe("false");
-    expect(pressed("Anchor Stations")).toBe("false");
-    expect(pressed("Public & Community")).toBe("false");
-    expect(pressed("Independent DJ")).toBe("false");
-    expect(pressed("Discovery")).toBe("false");
-    expect(screen.getByRole("button", { name: "Current" }).className).toContain("dial-filter-bar__btn--on");
-    expect(screen.getByRole("button", { name: "Campus Radio" }).className).toContain("dial-filter-bar__btn--on");
-    expect(screen.getByRole("button", { name: "Discovery" }).className).not.toContain("--on");
+    openMenu("Station type");
+    const boxes = screen.getAllByRole("checkbox");
+    expect(boxes).toHaveLength(7);
+    const checked = (name: RegExp) =>
+      (screen.getByRole("checkbox", { name }) as HTMLInputElement).checked;
+    expect(checked(/Ambient & Sleep/)).toBe(false);
+    expect(checked(/Campus Radio/)).toBe(true);
+    expect(checked(/Specialist Radio/)).toBe(true);
+    expect(checked(/Anchor Stations/)).toBe(false);
+    expect(checked(/Public & Community/)).toBe(false);
+    expect(checked(/Independent DJ/)).toBe(false);
+    expect(checked(/Discovery/)).toBe(false);
   });
 
-  it("fires onToggleTier / onToggleCategory with the clicked value", () => {
-    const { props } = renderBar();
-    fireEvent.click(screen.getByRole("button", { name: "Catalog" }));
-    expect(props.onToggleTier).toHaveBeenCalledWith("catalog");
-    fireEvent.click(screen.getByRole("button", { name: "Ambient & Sleep" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("ambient");
-    fireEvent.click(screen.getByRole("button", { name: "Campus Radio" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("campus");
-    fireEvent.click(screen.getByRole("button", { name: "Specialist Radio" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("specialist");
-    fireEvent.click(screen.getByRole("button", { name: "Anchor Stations" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("anchor");
-    fireEvent.click(screen.getByRole("button", { name: "Public & Community" }));
+  it("shows active-count badges for checked families and routes toggles", () => {
+    const { props } = renderBar({
+      activeTiers: new Set<AgeTier>(["first", "catalog"]),
+      activeCategories: new Set<StationCategory>(["indie"]),
+    });
+    expect(screen.getByRole("button", { name: /^Track age/ }).textContent).toContain("· 2");
+    expect(screen.getByRole("button", { name: /^Station type/ }).textContent).toContain("· 1");
+
+    openMenu("Track age");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Deep/ }));
+    expect(props.onToggleTier).toHaveBeenCalledWith("deep");
+
+    openMenu("Station type");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Public & Community/ }));
     expect(props.onToggleCategory).toHaveBeenCalledWith("public");
-    fireEvent.click(screen.getByRole("button", { name: "Independent DJ" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("indie");
-    fireEvent.click(screen.getByRole("button", { name: "Discovery" }));
-    expect(props.onToggleCategory).toHaveBeenCalledWith("discovery");
+  });
+
+  it("a Crossings-on badge appears only when crossings mode is off (count 0) — never for the default", () => {
+    renderBar({ crossingsActive: true });
+    // Crossings counts as "active" only when its checkbox is checked; the
+    // badge reads the checked count, so crossings-on shows · 1.
+    expect(screen.getByRole("button", { name: /^Crossings/ }).textContent).toContain("· 1");
   });
 });

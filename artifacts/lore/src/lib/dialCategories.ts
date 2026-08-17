@@ -9,9 +9,10 @@
  *   Ambient > Campus > Specialist > Anchor > Public & Community >
  *   Independent DJ > Discovery
  *
- * The category filter is a radio-style single-select (exactly one active,
- * never empty). The `/lore` home command is NOT a category — it stays wired
- * separately in DialCliBar and HomeCliStrip.
+ * The category filter is an additive multi-select: any subset of categories
+ * may be checked, checked categories are unioned, and the empty set means
+ * "all stations". The `/lore` home command is NOT a category — it stays
+ * wired separately in DialCliBar and HomeCliStrip.
  */
 
 export type StationCategory =

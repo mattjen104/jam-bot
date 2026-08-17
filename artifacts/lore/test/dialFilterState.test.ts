@@ -1,19 +1,20 @@
 // @vitest-environment jsdom
 /**
- * dialFilterState — toggle semantics for the Dial filter menus.
+ * dialFilterState — toggle semantics for the Dial filter dropdowns.
  *
  * Covers:
  *  1. Age tiers toggle on/off additively; the empty set is allowed.
- *  2. Station categories are a radio-style single-select: selecting a new
- *     category REPLACES the previous one, and re-selecting the active
- *     category CLEARS it back to the empty (all-stations) state.
- *  3. useDialSkipped — the per-station scan-skip preference persisted under
+ *  2. Station categories are an additive multi-select: checking adds,
+ *     unchecking removes, and any subset (including empty) is valid.
+ *  3. toggleCrossings flips the crossings-mode boolean.
+ *  4. useDialSkipped — the per-station scan-skip preference persisted under
  *     "lore:dialSkipped".
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import {
   toggleAgeTier,
+  toggleCrossings,
   toggleStationCategory,
   useDialSkipped,
 } from "../src/lib/dialFilterState";
@@ -48,31 +49,38 @@ describe("toggleAgeTier", () => {
   });
 });
 
-describe("toggleStationCategory (single-select, clearable)", () => {
-  it("selecting a new category replaces the previous one", () => {
+describe("toggleStationCategory (additive multi-select)", () => {
+  it("checking a new category adds it alongside the existing ones", () => {
     let s = new Set<StationCategory>(["anchor"]);
     s = toggleStationCategory(s, "campus");
-    expect([...s]).toEqual(["campus"]);
+    expect(s.has("anchor")).toBe(true);
+    expect(s.has("campus")).toBe(true);
+    expect(s.size).toBe(2);
     s = toggleStationCategory(s, "ambient");
-    expect([...s]).toEqual(["ambient"]);
+    expect(s.size).toBe(3);
   });
 
-  it("at most one category is active after any sequence of selections", () => {
-    let s = new Set<StationCategory>(["anchor"]);
-    for (const cat of ["ambient", "campus", "specialist", "public", "indie", "discovery"] as const) {
+  it("every category can be active together", () => {
+    let s = new Set<StationCategory>();
+    for (const cat of ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const) {
       s = toggleStationCategory(s, cat);
-      expect(s.size).toBe(1);
-      expect(s.has(cat)).toBe(true);
     }
+    expect(s.size).toBe(7);
   });
 
-  it("re-selecting the active category clears it back to the empty (all-stations) state", () => {
+  it("unchecking an active category removes only that category", () => {
+    let s = new Set<StationCategory>(["anchor", "campus"]);
+    s = toggleStationCategory(s, "campus");
+    expect([...s]).toEqual(["anchor"]);
+  });
+
+  it("unchecking the last category reverts to the empty (all-stations) state", () => {
     const prev = new Set<StationCategory>(["specialist"]);
     const next = toggleStationCategory(prev, "specialist");
     expect(next.size).toBe(0);
   });
 
-  it("a category can be re-selected after clearing", () => {
+  it("a category can be re-checked after unchecking", () => {
     let s = new Set<StationCategory>();
     s = toggleStationCategory(s, "campus");
     expect([...s]).toEqual(["campus"]);
@@ -82,25 +90,19 @@ describe("toggleStationCategory (single-select, clearable)", () => {
     expect([...s]).toEqual(["campus"]);
   });
 
-  it("does not mutate the previous set on a replacement", () => {
+  it("does not mutate the previous set", () => {
     const prev = new Set<StationCategory>(["anchor"]);
-    const next = toggleStationCategory(prev, "indie");
+    toggleStationCategory(prev, "indie");
     expect(prev.has("anchor")).toBe(true);
+    expect(prev.has("indie")).toBe(false);
     expect(prev.size).toBe(1);
-    expect([...next]).toEqual(["indie"]);
   });
+});
 
-  it("does not mutate the previous set on a clear", () => {
-    const prev = new Set<StationCategory>(["anchor"]);
-    const next = toggleStationCategory(prev, "anchor");
-    expect(prev.has("anchor")).toBe(true);
-    expect(next.size).toBe(0);
-  });
-
-  it("collapses a (legacy) multi-member set down to the newly selected category", () => {
-    const prev = new Set<StationCategory>(["anchor", "campus"]);
-    const next = toggleStationCategory(prev, "campus");
-    expect([...next]).toEqual(["campus"]);
+describe("toggleCrossings", () => {
+  it("flips the crossings-mode boolean both ways", () => {
+    expect(toggleCrossings(true)).toBe(false);
+    expect(toggleCrossings(false)).toBe(true);
   });
 });
 

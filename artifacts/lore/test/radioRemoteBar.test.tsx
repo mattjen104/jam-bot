@@ -3,12 +3,13 @@
  * RadioRemoteBar — the radio remote pinned to the top of SplitHome.
  *
  * Covers the controls that moved out of the middle CLI seam:
- *  1. `/crossings`, `/radio` feed-mode controls are true exclusive toggles
- *     (aria-pressed transfers between them; /crossings default-on); `/lore`
- *     is navigation-only.
- *  2. The four age-tier chips render with active state and route toggles.
- *  3. The seven station-category chips render with active state and route
- *     toggles.
+ *  1. Three filter dropdowns — Crossings, Track age, Station type — each a
+ *     trigger button opening a panel of labeled checkboxes.
+ *  2. The Crossings checkbox reflects the feed mode (checked = crossings,
+ *     unchecked = radio) and routes flips to onRadioMode.
+ *  3. Age-tier and station-category checkboxes reflect the active sets and
+ *     route toggles.
+ *  4. `/lore` is navigation-only (no pressed state) and routes home.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -44,55 +45,47 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof RadioRemoteBar
   return { props };
 }
 
+function openMenu(name: string) {
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${name}`) }));
+}
+
 describe("RadioRemoteBar", () => {
-  it("renders the mode controls in command-line order: /crossings /radio /lore", () => {
+  it("renders the three dropdown triggers plus the /lore nav button", () => {
     renderBar();
-    const modeGroup = screen.getByRole("group", { name: "Feed mode" });
-    expect(
-      [...modeGroup.querySelectorAll("button")].map((button) => button.textContent),
-    ).toEqual(["/crossings", "/radio", "/lore"]);
+    const bar = screen.getByRole("toolbar", { name: "Radio remote" });
+    for (const name of ["Crossings", "Track age", "Station type"]) {
+      const trigger = screen.getByRole("button", { name: new RegExp(`^${name}`) });
+      expect(trigger.getAttribute("aria-haspopup")).toBe("true");
+      expect(trigger.className).toContain("home-cli-strip__filter-chip");
+      expect(bar.contains(trigger)).toBe(true);
+    }
+    expect(bar.contains(screen.getByRole("button", { name: "homepage /lore" }))).toBe(true);
   });
 
-  it.each([
-    ["crossings /crossings", false],
-    ["radio /radio", true],
-  ] as const)("routes the %s shortcut to onRadioMode(%s)", (name, mode) => {
-    const { props } = renderBar();
-    const button = screen.getByRole("button", { name });
-    fireEvent.click(button);
-    expect(props.onRadioMode).toHaveBeenCalledWith(mode);
-    expect(button.getAttribute("type")).toBe("button");
-  });
-
-  it("defaults to /crossings pressed and /radio unpressed", () => {
+  it("the Crossings checkbox defaults to checked (crossings is the default mode)", () => {
     renderBar();
-    expect(
-      screen.getByRole("button", { name: "crossings /crossings" }).getAttribute("aria-pressed"),
-    ).toBe("true");
-    expect(
-      screen.getByRole("button", { name: "radio /radio" }).getAttribute("aria-pressed"),
-    ).toBe("false");
+    openMenu("Crossings");
+    const box = screen.getByRole("checkbox", { name: /Crossings on/ }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
   });
 
-  it("transfers aria-pressed to /radio when radioMode is on", () => {
+  it("the Crossings checkbox is unchecked when radioMode is on", () => {
     renderBar({ radioMode: true });
-    expect(
-      screen.getByRole("button", { name: "crossings /crossings" }).getAttribute("aria-pressed"),
-    ).toBe("false");
-    expect(
-      screen.getByRole("button", { name: "radio /radio" }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    openMenu("Crossings");
+    expect((screen.getByRole("checkbox", { name: /Crossings on/ }) as HTMLInputElement).checked).toBe(false);
   });
 
-  it("clicking /radio while active releases back to /crossings (onRadioMode(false))", () => {
-    const { props } = renderBar({ radioMode: true });
-    fireEvent.click(screen.getByRole("button", { name: "radio /radio" }));
-    expect(props.onRadioMode).toHaveBeenCalledWith(false);
-  });
-
-  it("clicking /crossings while active is a no-op mode-wise (still onRadioMode(false))", () => {
+  it("unchecking Crossings switches to radio mode (onRadioMode(true))", () => {
     const { props } = renderBar({ radioMode: false });
-    fireEvent.click(screen.getByRole("button", { name: "crossings /crossings" }));
+    openMenu("Crossings");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
+    expect(props.onRadioMode).toHaveBeenCalledWith(true);
+  });
+
+  it("checking Crossings in radio mode switches back (onRadioMode(false))", () => {
+    const { props } = renderBar({ radioMode: true });
+    openMenu("Crossings");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
     expect(props.onRadioMode).toHaveBeenCalledWith(false);
   });
 
@@ -103,84 +96,64 @@ describe("RadioRemoteBar", () => {
     expect(loreBtn.className).toContain("home-cli-strip__home-btn--nav");
   });
 
-  it("keeps the mode shortcuts keyboard-activatable as native buttons", () => {
-    const { props } = renderBar();
-    const button = screen.getByRole("button", { name: "radio /radio" });
-    button.focus();
-    expect(document.activeElement).toBe(button);
-    fireEvent.keyDown(button, { key: "Enter" });
-    fireEvent.click(button);
-    expect(props.onRadioMode).toHaveBeenCalledWith(true);
-  });
-
   it("/lore navigates to the homepage", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "homepage /lore" }));
     expect(mockSetLocation).toHaveBeenCalledWith("/");
   });
 
-  it("renders every age-tier chip, routes toggles, and exposes active state", () => {
+  it("renders every age-tier checkbox and routes toggles", () => {
     const { props } = renderBar({
       activeTiers: new Set<AgeTier>(["first"]),
     });
+    openMenu("Track age");
 
     const tiers = [
-      ["/first", "first"],
-      ["/current", "current"],
-      ["/catalog", "catalog"],
-      ["/deep", "deep"],
+      [/First/, "first"],
+      [/Current/, "current"],
+      [/Catalog/, "catalog"],
+      [/Deep/, "deep"],
     ] as const;
 
-    for (const [command, tier] of tiers) {
-      const chip = screen.getByRole("button", { name: command });
-      expect(chip.className).toContain("home-cli-strip__filter-chip");
-      expect(chip.getAttribute("aria-pressed")).toBe(tier === "first" ? "true" : "false");
-      fireEvent.click(chip);
+    for (const [name, tier] of tiers) {
+      const box = screen.getByRole("checkbox", { name }) as HTMLInputElement;
+      expect(box.checked).toBe(tier === "first");
+      fireEvent.click(box);
       expect(props.onToggleTier).toHaveBeenCalledWith(tier);
     }
   });
 
-  it("renders every category chip, routes toggles, and exposes active state", () => {
+  it("renders every category checkbox, additively checked, and routes toggles", () => {
     const { props } = renderBar({
-      activeCategories: new Set<StationCategory>(["campus"]),
+      activeCategories: new Set<StationCategory>(["campus", "indie"]),
     });
+    openMenu("Station type");
 
     const categories = [
-      ["/ambient", "ambient"],
-      ["/campus", "campus"],
-      ["/specialist", "specialist"],
-      ["/anchor", "anchor"],
-      ["/public", "public"],
-      ["/indie", "indie"],
-      ["/discovery", "discovery"],
+      [/Ambient & Sleep/, "ambient", false],
+      [/Campus Radio/, "campus", true],
+      [/Specialist Radio/, "specialist", false],
+      [/Anchor Stations/, "anchor", false],
+      [/Public & Community/, "public", false],
+      [/Independent DJ/, "indie", true],
+      [/Discovery/, "discovery", false],
     ] as const;
 
-    for (const [command, cat] of categories) {
-      const chip = screen.getByRole("button", { name: command });
-      expect(chip.className).toContain("home-cli-strip__filter-chip");
-      expect(chip.getAttribute("aria-pressed")).toBe(
-        cat === "campus" ? "true" : "false",
-      );
-      fireEvent.click(chip);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(7);
+    for (const [name, cat, isChecked] of categories) {
+      const box = screen.getByRole("checkbox", { name }) as HTMLInputElement;
+      expect(box.checked).toBe(isChecked);
+      fireEvent.click(box);
       expect(props.onToggleCategory).toHaveBeenCalledWith(cat);
     }
   });
 
-  it("groups the remote as mode → age → category in one bar", () => {
-    renderBar();
-    const bar = screen.getByRole("toolbar", { name: "Radio remote" });
-    const modeGroup = screen.getByRole("group", { name: "Feed mode" });
-    const ageRow = screen.getByRole("group", { name: "Age commands" });
-    const categoryRow = screen.getByRole("group", { name: "Station category commands" });
-
-    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(modeGroup.compareDocumentPosition(ageRow) & FOLLOWING).toBeTruthy();
-    expect(ageRow.compareDocumentPosition(categoryRow) & FOLLOWING).toBeTruthy();
-
-    expect(bar.contains(modeGroup)).toBe(true);
-    expect(bar.contains(ageRow)).toBe(true);
-    expect(bar.contains(categoryRow)).toBe(true);
-    expect(ageRow.querySelectorAll("button")).toHaveLength(4);
-    expect(categoryRow.querySelectorAll("button")).toHaveLength(7);
+  it("shows active-count badges on families with checked options", () => {
+    renderBar({
+      activeTiers: new Set<AgeTier>(["first", "deep"]),
+      activeCategories: new Set<StationCategory>(["campus"]),
+    });
+    expect(screen.getByRole("button", { name: /^Track age/ }).textContent).toContain("· 2");
+    expect(screen.getByRole("button", { name: /^Station type/ }).textContent).toContain("· 1");
   });
 });

@@ -52,9 +52,9 @@ export default function SplitHome() {
   const [, setLocation] = useLocation();
 
   // CLI filter state — same semantics as the full Dial (additive tiers,
-  // single-select categories). No category is selected initially, so the
-  // front door starts unfiltered; re-clicking the active category clears it
-  // back to the all-stations state.
+  // additive categories). No category is selected initially, so the
+  // front door starts unfiltered; unchecking every category reverts to the
+  // all-stations state.
   const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set<StationCategory>(),

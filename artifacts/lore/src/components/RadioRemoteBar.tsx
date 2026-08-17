@@ -4,19 +4,17 @@
  *
  * One horizontally scrollable bar carrying the controls that used to live in
  * the middle CLI seam:
- *   1. Feed-mode commands — /crossings (default, pressed), /radio.
- *      /lore is navigation-only and rendered as a nav link, not a toggle.
- *   2. Four song-age chips (/first /current /catalog /deep).
- *   3. Seven station-category chips.
+ *   1. Crossings dropdown — a single "Crossings on" checkbox that toggles
+ *      between the crossing-ranked feed (default) and blank radio mode.
+ *   2. Track age dropdown — the four age tiers (additive multi-select).
+ *   3. Station type dropdown — the seven station categories (additive
+ *      multi-select; checked categories are unioned, empty = all stations).
+ *   4. /lore — navigation-only home button (not a filter).
  *
- * Feed-mode buttons are true exclusive toggles: /crossings starts pressed
- * (the default discovery mode). Pressing either one transfers aria-pressed.
- * /lore is a navigation affordance — it goes home rather than filtering, so
- * it carries no pressed state and is styled as a secondary nav button.
- *
- * Chips reuse the home-cli-strip key styling so the remote reads as the same
- * console surface, just relocated to the top edge. The middle seam keeps only
- * the Dial page selectors, Scan / Scan all, the CLI input, and /add.
+ * The dropdowns are the same FilterDropdownMenu components the full-Dial
+ * DialFilterBar uses, with the compact "chips" trigger variant so the remote
+ * reads as the same console surface. The middle seam keeps only the Dial
+ * page selectors, Scan / Scan all, the CLI input, and /add.
  */
 
 import { useCallback } from "react";
@@ -24,21 +22,30 @@ import { useLocation } from "wouter";
 import { AGE_TIER_DEFINITIONS, type AgeTier } from "../lib/dialAgeFilter";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { StationCategory } from "./dial/DialFilterBar";
-import { FilterToggleGroup } from "./dial/FilterToggleGroup";
+import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
 
-// The remote's chips are labeled by their CLI command (/first, /campus, …)
-// so the surface stays self-documenting for the typed CLI.
-const AGE_CHIP_OPTIONS = AGE_TIER_DEFINITIONS.map(({ tier, command, title }) => ({
+const AGE_OPTIONS = AGE_TIER_DEFINITIONS.map(({ tier, label, title }) => ({
   value: tier,
-  label: command,
+  label,
   title,
 }));
 
-const CATEGORY_CHIP_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(({ cat, command, title }) => ({
+const CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(({ cat, label, title }) => ({
   value: cat,
-  label: command,
+  label,
   title,
 }));
+
+const CROSSINGS_VALUE = "on";
+const CROSSINGS_OPTIONS = [
+  {
+    value: CROSSINGS_VALUE,
+    label: "Crossings on",
+    title: "Rank the feed by stations crossing your artists; uncheck for plain radio",
+  },
+] as const;
+const CROSSINGS_ACTIVE = new Set<string>([CROSSINGS_VALUE]);
+const CROSSINGS_INACTIVE = new Set<string>();
 
 export interface RadioRemoteBarProps {
   activeTiers: ReadonlySet<AgeTier>;
@@ -47,7 +54,7 @@ export interface RadioRemoteBarProps {
   onToggleCategory: (cat: StationCategory) => void;
   /** `/radio` / `/crossings` feed-mode commands (SplitHome routes to /feed). */
   onRadioMode?: (on: boolean) => void;
-  /** Whether blank-radio mode is currently on (drives aria-pressed). */
+  /** Whether blank-radio mode is currently on (drives the Crossings checkbox). */
   radioMode?: boolean;
 }
 
@@ -63,34 +70,49 @@ export function RadioRemoteBar({
   const goHome = useCallback(() => setLocation("/"), [setLocation]);
 
   // crossings is the default (radioMode=false); radio is the alt (radioMode=true).
+  // Flipping the checkbox inverts the feed mode: radioMode := !crossingsActive…
+  // i.e. the new radioMode equals the CURRENT crossingsActive.
   const crossingsActive = !radioMode;
-  const radioActive = radioMode;
+  const toggleCrossings = useCallback(
+    () => onRadioMode?.(crossingsActive),
+    [onRadioMode, crossingsActive],
+  );
 
   return (
     <div className="radio-remote-bar" role="toolbar" aria-label="Radio remote">
-      {/* Feed mode: exclusive toggles. /crossings default-on, /radio off.
-          Clicking /radio while it is active releases back to /crossings;
-          clicking /crossings while active is a no-op (one mode always on). */}
-      <div className="radio-remote-bar__group" role="group" aria-label="Feed mode">
-        <button
-          type="button"
-          className={`home-cli-strip__btn home-cli-strip__mode-btn${crossingsActive ? " home-cli-strip__btn--active" : ""}`}
-          aria-pressed={crossingsActive}
-          aria-label="crossings /crossings"
-          onClick={() => onRadioMode?.(false)}
-        >
-          /crossings
-        </button>
-        <button
-          type="button"
-          className={`home-cli-strip__btn home-cli-strip__mode-btn${radioActive ? " home-cli-strip__btn--active" : ""}`}
-          aria-pressed={radioActive}
-          aria-label="radio /radio"
-          onClick={() => onRadioMode?.(!radioActive)}
-        >
-          /radio
-        </button>
-        {/* /lore is navigation, not a filter toggle — styled as a nav link */}
+      {/* Feed mode: the Crossings checkbox. Checked = crossing-ranked feed
+          (the default); unchecked = blank radio mode. */}
+      <FilterDropdownMenu
+        label="Crossings"
+        ariaLabel="Crossings"
+        options={CROSSINGS_OPTIONS}
+        active={crossingsActive ? CROSSINGS_ACTIVE : CROSSINGS_INACTIVE}
+        onToggle={toggleCrossings}
+        variant="chips"
+      />
+
+      {/* Track age: additive multi-select, empty = all ages */}
+      <FilterDropdownMenu
+        label="Track age"
+        ariaLabel="Track age"
+        options={AGE_OPTIONS}
+        active={activeTiers}
+        onToggle={onToggleTier}
+        variant="chips"
+      />
+
+      {/* Station type: additive multi-select, empty = all stations */}
+      <FilterDropdownMenu
+        label="Station type"
+        ariaLabel="Station type"
+        options={CATEGORY_OPTIONS}
+        active={activeCategories}
+        onToggle={onToggleCategory}
+        variant="chips"
+      />
+
+      {/* /lore is navigation, not a filter toggle — styled as a nav link */}
+      <div className="radio-remote-bar__group" role="group" aria-label="Navigation">
         <button
           type="button"
           className="home-cli-strip__btn home-cli-strip__home-btn home-cli-strip__home-btn--nav"
@@ -100,24 +122,6 @@ export function RadioRemoteBar({
           /lore
         </button>
       </div>
-
-      {/* Age filters: additive multi-select, empty = all ages */}
-      <FilterToggleGroup
-        ariaLabel="Age commands"
-        options={AGE_CHIP_OPTIONS}
-        active={activeTiers}
-        onToggle={onToggleTier}
-        variant="chips"
-      />
-
-      {/* Station categories: single-select, click active to clear */}
-      <FilterToggleGroup
-        ariaLabel="Station category commands"
-        options={CATEGORY_CHIP_OPTIONS}
-        active={activeCategories}
-        onToggle={onToggleCategory}
-        variant="chips"
-      />
     </div>
   );
 }

@@ -15,10 +15,9 @@ import { test, expect } from "@playwright/test";
  *
  * All four stations are live (recent now-playing) and carry enough crossings
  * to be Zone-1 rows in the feed, so the initial unfiltered state shows all
- * four rows. Categories are radio-style single-select: each selection then
- * shows exactly the matching stations, picking a new category REPLACES the
- * previous one (no union), and re-selecting the active category CLEARS the
- * filter back to the unfiltered dial.
+ * four rows. Categories are an additive multi-select: each checked category
+ * shows its matching stations, checking a second category UNIONS it with the
+ * first, and unchecking every category reverts to the unfiltered dial.
  *
  * CLI mechanics:
  *   1. Press "/" globally — the DialCliBar listener intercepts it, focuses
@@ -27,9 +26,10 @@ import { test, expect } from "@playwright/test";
  *   3. Press Enter — executeCommand() dispatches the category toggle.
  *
  * Filter-bar mechanics:
- *   The DialFilterBar is now visible on the full DialView (/lore/feed), so
- *   its buttons can be clicked directly and their aria-pressed state
- *   validated against CLI-driven selections.
+ *   The DialFilterBar on the full DialView (/lore/feed) exposes one dropdown
+ *   per filter family. Opening the "Station type" trigger reveals one
+ *   checkbox per category; the checked state validates against CLI-driven
+ *   selections.
  */
 
 // ---------------------------------------------------------------------------
@@ -285,7 +285,7 @@ test.describe("Dial category filters — CLI commands", () => {
     await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
   });
 
-  test("/campus then /indie replaces the selection (single-select, no union)", async ({
+  test("/campus then /indie unions the selection (additive multi-select)", async ({
     page,
   }) => {
     await sendCliCommand(page, "/campus");
@@ -294,81 +294,114 @@ test.describe("Dial category filters — CLI commands", () => {
 
     await sendCliCommand(page, "/indie");
 
+    // Both categories are now checked: campus and indie stations render,
+    // everything else stays hidden.
     await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
     await expect(page.getByText("Discovery RB")).not.toBeVisible();
     await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
+
+    // Unchecking /campus removes only those stations from the union.
+    await sendCliCommand(page, "/campus");
+    await expect(page.getByText("Indie FM").first()).toBeVisible();
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Filter bar button tests — run against /lore/feed (the full DialView), which
-// renders the now-visible DialFilterBar with aria-pressed toggle buttons.
-// A CLI command activates a category → the corresponding DialFilterBar button
-// must switch to aria-pressed="true"; selecting a different category must
-// revert it to "false" (single-select), and re-selecting the active category
-// clears the filter (back to the unfiltered dial).
+// Filter bar dropdown tests — run against /lore/feed (the full DialView),
+// whose DialFilterBar carries one dropdown per filter family. Opening the
+// "Station type" trigger reveals one checkbox per category; a CLI command
+// that checks a category must flip the matching checkbox, checking a second
+// category must leave the first checked (additive), and unchecking every
+// category reverts to the unfiltered dial.
 // ---------------------------------------------------------------------------
 
-test.describe("Dial category filters — filter bar button wiring at /lore/feed", () => {
+test.describe("Dial category filters — filter bar dropdown wiring at /lore/feed", () => {
   test.beforeEach(async ({ page }) => {
     await installRoutes(page);
     await page.goto("/lore/feed");
     await waitForAllStations(page);
   });
 
-  test("Campus filter bar button reflects aria-pressed after /campus CLI", async ({
-    page,
-  }) => {
-    const campusBtn = page
-      .locator(".dial-filter-bar__btn", { hasText: "Campus Radio" })
-      .first();
-    await expect(campusBtn).toHaveAttribute("aria-pressed", "false");
+  function stationTypeTrigger(page: import("@playwright/test").Page) {
+    return page.getByRole("button", { name: /^Station type/ });
+  }
+
+  function categoryCheckbox(
+    page: import("@playwright/test").Page,
+    name: string,
+  ) {
+    return page.getByRole("checkbox", { name });
+  }
+
+  test("Campus checkbox reflects /campus CLI toggles", async ({ page }) => {
+    await stationTypeTrigger(page).click();
+    const campusBox = categoryCheckbox(page, "Campus Radio");
+    await expect(campusBox).not.toBeChecked();
 
     await sendCliCommand(page, "/campus");
     await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
-    await expect(campusBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(campusBox).toBeChecked();
 
-    // Re-selecting the active category clears the filter — back to all stations.
+    // Unchecking the active category clears the filter — back to all stations.
     await sendCliCommand(page, "/campus");
-    await expect(campusBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(campusBox).not.toBeChecked();
     await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("Selecting a new category replaces the old one (single-select)", async ({
+  test("Checking a second category unions it (additive multi-select)", async ({
     page,
   }) => {
-    const campusBtn = page
-      .locator(".dial-filter-bar__btn", { hasText: "Campus Radio" })
-      .first();
-    const indieBtn = page
-      .locator(".dial-filter-bar__btn", { hasText: "Independent DJ" })
-      .first();
+    await stationTypeTrigger(page).click();
+    const campusBox = categoryCheckbox(page, "Campus Radio");
+    const indieBox = categoryCheckbox(page, "Independent DJ");
 
     await sendCliCommand(page, "/campus");
-    await expect(campusBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(campusBox).toBeChecked();
 
     await sendCliCommand(page, "/indie");
-    await expect(indieBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(campusBtn).toHaveAttribute("aria-pressed", "false");
+    await expect(indieBox).toBeChecked();
+    await expect(campusBox).toBeChecked();
     await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
   });
 
-  test("Discovery filter bar button can be clicked directly (visible bar)", async ({
+  test("Discovery checkbox can be toggled directly from the dropdown", async ({
     page,
   }) => {
-    const discoveryBtn = page
-      .locator(".dial-filter-bar__btn", { hasText: "Discovery" })
-      .first();
-    await expect(discoveryBtn).toBeVisible();
-    await expect(discoveryBtn).toHaveAttribute("aria-pressed", "false");
+    await stationTypeTrigger(page).click();
+    const discoveryBox = categoryCheckbox(page, "Discovery");
+    await expect(discoveryBox).toBeVisible();
+    await expect(discoveryBox).not.toBeChecked();
 
-    await discoveryBtn.click();
-    await expect(discoveryBtn).toHaveAttribute("aria-pressed", "true");
+    await discoveryBox.click();
+    await expect(discoveryBox).toBeChecked();
     await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Campus WKRP")).not.toBeVisible();
     await expect(page.getByText("Indie FM")).not.toBeVisible();
     await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
+
+    // Unchecking the only checked category reverts to all stations.
+    await discoveryBox.click();
+    await expect(discoveryBox).not.toBeChecked();
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Escape closes the dropdown and the trigger shows an active-count badge", async ({
+    page,
+  }) => {
+    const trigger = stationTypeTrigger(page);
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    await categoryCheckbox(page, "Campus Radio").click();
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+    await expect(trigger).toContainText("· 1");
+
+    await page.keyboard.press("Escape");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    // The panel stays mounted but hidden.
+    await expect(categoryCheckbox(page, "Campus Radio")).toBeHidden();
   });
 });

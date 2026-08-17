@@ -77,7 +77,8 @@ export function parseAddArtists(remainder: string): string[] {
   return names;
 }
 
-export interface DialCliBarProps extends DialFilterBarProps {
+export interface DialCliBarProps extends Pick<DialFilterBarProps,
+  "activeTiers" | "activeCategories" | "onToggleTier" | "onToggleCategory" | "className"> {
   /** Visual skin: front-door ambient overlay (default) or SplitHome strip. */
   variant?: "overlay" | "strip";
   /**
@@ -94,8 +95,8 @@ export interface DialCliBarProps extends DialFilterBarProps {
   onLibrary?: () => void;
   /**
    * Called when `/lore` is submitted — the home command. Navigation, not a
-   * category toggle: the categories are a mutually exclusive taxonomy that
-   * no longer includes "lore".
+   * category toggle: the categories are an additive multi-select taxonomy
+   * that no longer includes "lore".
    */
   onHome?: () => void;
   /** Called when `/matt` is submitted. The source library is server-configured. */

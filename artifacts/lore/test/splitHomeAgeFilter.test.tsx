@@ -182,13 +182,20 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
+  function clickCrossingsCheckbox() {
+    fireEvent.click(screen.getByRole("button", { name: /^Crossings/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
+  }
+
   it.each([
-    ["crossings /crossings", false],
-    ["radio /radio", true],
-  ] as const)("shortcut %s persists its mode and opens the full feed", (name, mode) => {
+    ["crossings", false],
+    ["radio", true],
+  ] as const)("Crossings dropdown (%s) persists its mode and opens the full feed", (_name, mode) => {
+    // Start in the opposite mode so the checkbox flip lands on `mode`.
+    localStorage.setItem("lore:radioMode", mode ? "false" : "true");
     render(<SplitHome />);
 
-    fireEvent.click(screen.getByRole("button", { name }));
+    clickCrossingsCheckbox();
 
     expect(readRadioMode()).toBe(mode);
     expect(localStorage.getItem("lore:radioMode")).toBe(mode ? "true" : "false");
@@ -207,15 +214,17 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(mockSetLocation).toHaveBeenCalledWith("/feed");
   });
 
-  it("/radio forces the Radio lens even when the listener was on Press or Shows", () => {
+  it("radio mode forces the Radio lens even when the listener was on Press or Shows", () => {
     // Simulate a returning visitor who previously selected the Press lens.
     writeDialLens("press");
     expect(readDialLens()).toBe("press");
 
     render(<SplitHome />);
 
-    // Clicking the /radio shortcut must clobber the persisted Press lens.
-    fireEvent.click(screen.getByRole("button", { name: "radio /radio" }));
+    // Unchecking "Crossings on" (switching to radio mode) must clobber the
+    // persisted Press lens.
+    fireEvent.click(screen.getByRole("button", { name: /^Crossings/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
 
     expect(readRadioMode()).toBe(true);
     expect(readDialLens()).toBe("radio");
@@ -223,14 +232,16 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(mockSetLocation).toHaveBeenCalledWith("/feed");
   });
 
-  it("/crossings does not clobber the active lens — it only changes the radio-mode flag", () => {
-    // A Press-lens visitor using /crossings should still land on Press (only
-    // the crossing-ranked sort is toggled, not the lens).
+  it("crossings mode does not clobber the active lens — it only changes the radio-mode flag", () => {
+    // A Press-lens visitor switching back to crossings should still land on
+    // Press (only the crossing-ranked sort is toggled, not the lens).
     writeDialLens("press");
+    localStorage.setItem("lore:radioMode", "true");
 
     render(<SplitHome />);
 
-    fireEvent.click(screen.getByRole("button", { name: "crossings /crossings" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Crossings/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
 
     expect(readRadioMode()).toBe(false);
     expect(readDialLens()).toBe("press");
@@ -436,9 +447,10 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(seam.compareDocumentPosition(stackBand) & FOLLOWING).toBeTruthy();
     expect(stackBand.compareDocumentPosition(pager) & FOLLOWING).toBeTruthy();
 
-    // The filters live in the top remote, not the seam.
-    expect(remote.contains(screen.getByRole("group", { name: "Age commands" }))).toBe(true);
-    expect(remote.contains(screen.getByRole("group", { name: "Station category commands" }))).toBe(true);
+    // The filters live in the top remote as dropdown menus, not the seam.
+    expect(remote.contains(screen.getByRole("button", { name: /^Track age/ }))).toBe(true);
+    expect(remote.contains(screen.getByRole("button", { name: /^Station type/ }))).toBe(true);
+    expect(remote.contains(screen.getByRole("button", { name: /^Crossings/ }))).toBe(true);
     expect(seam.contains(screen.getByRole("group", { name: "Scan commands" }))).toBe(true);
 
     // The pager shows stack page selectors + Shuffle / Shuffle all.
