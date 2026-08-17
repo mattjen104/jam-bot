@@ -91,6 +91,11 @@ import { ingestAllBookSources, BOOK_SOURCE_HANDLE } from "../../lore/book-knowle
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, getFeedFreshnessStaleStations, coverageClassFor } from "../../lore/poller.js";
 import { monitoringSince } from "../../lore/feed-freshness-health.js";
+import {
+  latencyMonitoringSince,
+  getSlowResolutionStations,
+  SLOW_THRESHOLD_MS,
+} from "../../lore/resolution-latency-health.js";
 import { clearIcyErrorBackoff, isPollable } from "../../lore/adapters.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
 import {
@@ -1549,6 +1554,28 @@ router.get("/admin/feed-freshness-health", h(async (_req, res) => {
       consecutiveEmpties: s.consecutiveEmpties,
       staleSinceMs: s.staleSinceMs,
       thresholdMs: s.thresholdMs,
+    })),
+  });
+}));
+
+// GET /api/admin/resolution-latency-health — stations whose rolling-median
+// source_to_resolved_ms exceeds SLOW_THRESHOLD_MS over the most recent 60
+// resolved track changes. An empty `slow` array means no station is
+// chronically slow right now.
+// `monitoringSince` reflects process start — state does not survive restarts.
+router.get("/admin/resolution-latency-health", h(async (_req, res) => {
+  const slow = getSlowResolutionStations(true);
+  return res.json({
+    monitoringSince: latencyMonitoringSince.toISOString(),
+    slowThresholdMs: SLOW_THRESHOLD_MS,
+    slowCount: slow.length,
+    stations: slow.map((s) => ({
+      stationId: s.stationId,
+      slug: s.slug,
+      sampleCount: s.sampleCount,
+      medianMs: Math.round(s.medianMs),
+      p95Ms: Math.round(s.p95Ms),
+      maxMs: s.maxMs,
     })),
   });
 }));

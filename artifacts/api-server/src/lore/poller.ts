@@ -16,6 +16,7 @@ import {
   recordFeedFreshnessResult,
   clearFeedFreshnessState,
 } from "./feed-freshness-health.js";
+import { clearResolutionLatencyState } from "./resolution-latency-health.js";
 import {
   initHostMultiplex,
   tryJoinHostGroup,
@@ -697,4 +698,5 @@ export function unenrollStationPoller(stationId: number): void {
   }
   clearSpinitronWebState(stationId);
   clearFeedFreshnessState(stationId);
+  clearResolutionLatencyState(stationId);
 }

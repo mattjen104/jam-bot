@@ -25,6 +25,7 @@ import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
 import { enqueueRecordingEmbeds } from "./embed-resolution.js";
 import { artDelete } from "../lib/artStorage.js";
+import { captureResolutionGeneration, recordResolutionLatency } from "./resolution-latency-health.js";
 
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
 export interface MbidResolution {
@@ -765,8 +766,15 @@ export function logSpinIfChanged(
   // source_to_resolved_ms latency metrics. Queue wait is included on purpose:
   // it is real listener-facing latency.
   const arrivedAtMs = Date.now();
+  // Capture the generation HERE — before the work is queued — so that if the
+  // station is unenrolled while a prior resolution is still running (and this
+  // callback is sitting in the chain waiting its turn), the generation will
+  // already be stale by the time the callback executes and records a sample.
+  // Capturing inside logSpinIfChangedInner would miss that window: by the time
+  // the inner function starts, the queue has already drained past the unenroll.
+  const resolutionGeneration = captureResolutionGeneration(station.id);
   return enqueueStationWork(station.id, () =>
-    logSpinIfChangedInner(station, np, opts, arrivedAtMs),
+    logSpinIfChangedInner(station, np, opts, arrivedAtMs, resolutionGeneration),
   );
 }
 
@@ -776,6 +784,7 @@ async function logSpinIfChangedInner(
   np: NowPlayingRaw & { playedAt?: Date },
   opts: { source?: string } | undefined,
   arrivedAtMs: number,
+  resolutionGeneration: number,
 ): Promise<boolean> {
   // Set once the provisional `spin-raw` event leaves. Every failure exit past
   // that point must terminate the provisional display with `spin-raw-failed`
@@ -981,12 +990,14 @@ async function logSpinIfChangedInner(
         observedAt: new Date().toISOString(),
         confidence: r.confidence,
       } satisfies SpinChangedEvent);
+      const source_to_resolved_ms = Date.now() - arrivedAtMs;
       console.debug("[lore] resolved now-playing emitted", {
         stationId: station.id,
         slug: station.slug,
         confidence: r.confidence,
-        source_to_resolved_ms: Date.now() - arrivedAtMs,
+        source_to_resolved_ms,
       });
+      recordResolutionLatency(station.id, station.slug, source_to_resolved_ms, resolutionGeneration);
     }
     return wrote;
   } catch (err) {
