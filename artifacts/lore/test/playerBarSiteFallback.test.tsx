@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /**
- * PlayerBar "Listen on site" fallback contract:
- *   - stations with no streamUrl and no relayUrl show a site link instead of
- *     the play/pause button;
+ * PlayerBar / PlayerSheet attribution-only station fallback contract:
+ *   - stations with no streamUrl and no relayUrl show a fixed-size icon-only
+ *     site link instead of the play/pause button;
  *   - the link opens the station's homepageUrl in a new tab;
- *   - stations with a valid streamUrl keep the normal play button.
+ *   - clicking the link does NOT invoke tune-in or stop playback;
+ *   - stations with a valid streamUrl keep the normal play button;
+ *   - invalid / missing homepage URLs suppress the fallback control entirely.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const { makeApiClientMock } = await import("./helpers/apiClientMock");
@@ -62,11 +64,15 @@ afterEach(() => {
 });
 
 describe("PlayerBar — attribution-only station (no stream)", () => {
-  it("renders the site link instead of the play button", () => {
+  it("renders the fixed-size site link instead of the play button", () => {
     const station = makeStation({ streamUrl: "", relayUrl: null });
     renderBar(station);
     expect(screen.queryByTestId("player-toggle")).toBeNull();
-    expect(screen.getByTestId("player-site-link")).toBeTruthy();
+    const link = screen.getByTestId("player-site-link") as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    // Must carry the shared fixed-size control classes
+    expect(link.className).toContain("player-bar-btn");
+    expect(link.className).toContain("station-site-link");
   });
 
   it("site link points to the station homepageUrl", () => {
@@ -76,7 +82,7 @@ describe("PlayerBar — attribution-only station (no stream)", () => {
     expect(link.href).toBe("https://wvum.org/");
   });
 
-  it("site link opens in a new tab", () => {
+  it("site link opens in a new tab with noopener", () => {
     const station = makeStation({ streamUrl: "", relayUrl: null });
     renderBar(station);
     const link = screen.getByTestId("player-site-link") as HTMLAnchorElement;
@@ -84,10 +90,45 @@ describe("PlayerBar — attribution-only station (no stream)", () => {
     expect(link.rel).toContain("noopener");
   });
 
+  it("site link has accessible label identifying the station", () => {
+    const station = makeStation({ streamUrl: "", relayUrl: null, name: "WVUM" });
+    renderBar(station);
+    const link = screen.getByTestId("player-site-link") as HTMLAnchorElement;
+    expect(link.getAttribute("aria-label")).toBe("Open WVUM site");
+    expect(link.title).toBe("Open WVUM site");
+  });
+
+  it("clicking the site link does not invoke onToggle or onStop", () => {
+    const onToggle = vi.fn();
+    const onStop = vi.fn();
+    const station = makeStation({ streamUrl: "", relayUrl: null });
+    render(
+      <PlayerBar
+        station={station}
+        status="idle"
+        volume={0.8}
+        error={null}
+        onToggle={onToggle}
+        onStop={onStop}
+        onVolume={vi.fn()}
+      />,
+    );
+    const link = screen.getByTestId("player-site-link");
+    fireEvent.click(link);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
   it("renders nothing in the play-button slot when homepageUrl is absent", () => {
     const station = makeStation({ streamUrl: "", relayUrl: null, homepageUrl: null });
     renderBar(station);
     expect(screen.queryByTestId("player-toggle")).toBeNull();
+    expect(screen.queryByTestId("player-site-link")).toBeNull();
+  });
+
+  it("renders nothing when homepageUrl is an invalid URL", () => {
+    const station = makeStation({ streamUrl: "", relayUrl: null, homepageUrl: "javascript:alert(1)" });
+    renderBar(station);
     expect(screen.queryByTestId("player-site-link")).toBeNull();
   });
 });

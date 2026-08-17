@@ -156,26 +156,33 @@
   border-color: hsl(var(--accent) / 0.5);
   background: hsl(var(--accent) / 0.08);
 }
-/* Attribution-only station fallback: replaces the play button with a site link */
-.player-bar-site-link {
+/* Attribution-only station fallback: replaces the play button with the same
+   fixed-size site control on every playback surface. */
+.station-site-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   white-space: nowrap;
-  font-family: var(--app-font-mono);
-  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
   border: 1px solid hsl(var(--border));
   border-radius: 7px;
   background: transparent;
-  padding: 0 10px;
-  height: 30px;
+  padding: 0;
   text-decoration: none;
   flex-shrink: 0;
   transition: background 0.1s, color 0.1s;
 }
-.player-bar-site-link:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.station-site-link:hover,
+.station-site-link:focus-visible {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
 /* Larger touch target in the expanded sheet */
-.player-sheet__btn.player-bar-site-link { height: 40px; }
+.player-sheet__btn.station-site-link { width: 40px; min-width: 40px; height: 40px; }
 
 /* ── Ticker strip ───────────────────────────────────────────────────────────
    Hidden at all widths: the collapsed dock is a single line everywhere
@@ -3384,9 +3391,15 @@
 .dial-lane__hd {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
   gap: 7px;
   padding: 0 var(--dial-lane-pad) 7px;
   cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .dial-lane__dot {
   width: 6px;
@@ -3397,6 +3410,11 @@
   animation: lore-eq 2.4s ease-in-out infinite;
 }
 .dial-lane__name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
   font-family: var(--app-font-display);
   font-size: var(--lore-size-interface);
   font-weight: 400;
@@ -3404,6 +3422,7 @@
   letter-spacing: 0.06em;
   color: hsl(var(--dim));
   transition: color 0.1s;
+  white-space: nowrap;
 }
 .dial-lane__name--tuned { color: hsl(var(--live)); }
 .dial-lane__cross {
@@ -3433,12 +3452,19 @@
   border-color: hsl(var(--border));
 }
 .dial-lane__play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   font-size: var(--lore-size-small);
   color: hsl(var(--faint));
   border: 1px solid hsl(var(--card-border));
   background: none;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 0;
   border-radius: 99px;
   flex-shrink: 0;
   transition: color 0.1s, border-color 0.1s, background 0.1s;
@@ -3452,20 +3478,14 @@
 }
 /* Fallback for attribution-only stations (no stream, no relay) */
 .dial-lane__site-link {
-  display: inline-flex;
-  align-items: center;
-  font-size: var(--lore-size-small);
   color: hsl(var(--muted-foreground));
-  border: 1px solid hsl(var(--border));
-  background: none;
-  padding: 2px 6px;
   border-radius: 99px;
-  flex-shrink: 0;
-  text-decoration: none;
-  line-height: 1.4;
-  transition: color 0.1s, border-color 0.1s;
 }
-.dial-lane__site-link:hover { color: hsl(var(--foreground)); border-color: hsl(var(--muted-foreground)); }
+.dial-lane__site-link:hover,
+.dial-lane__site-link:focus-visible {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--muted-foreground));
+}
 
 /* Feed-row variant — inline after the tier-1 sentence on attribution-only
    stations (no stream, no relay). Same pill treatment as the lane link. */

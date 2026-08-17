@@ -10,6 +10,7 @@ import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
 import {
   Cast,
+  ExternalLink,
   Loader2,
   Pause,
   Play,
@@ -81,6 +82,7 @@ export function PlayerBar({
   const showDevicePicker = !!(spotify?.connected && spotify.premium);
   const showConnectPrompt = !!(spotify?.configured && !spotify.connected);
   const castDeviceName = spotify?.pinnedDevice?.name ?? "your Spotify";
+  const homepageUrl = safeHttpUrl(station.homepageUrl);
 
   // Metadata for the ticker
   // Layout (top→bottom): song (dim) · album (mid) · artist (lime, most prominent)
@@ -244,16 +246,17 @@ export function PlayerBar({
                   ? <Pause className="h-3.5 w-3.5 fill-current" />
                   : <Play className="h-3.5 w-3.5 fill-current ml-0.5" />}
             </button>
-          ) : safeHttpUrl(station.homepageUrl) ? (
+          ) : homepageUrl ? (
             <a
-              href={safeHttpUrl(station.homepageUrl)!}
+              href={homepageUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="player-bar-site-link"
-              aria-label={`Listen on ${station.name} site`}
+              className="player-bar-btn station-site-link player-bar-site-link"
+              title={`Open ${station.name} site`}
+              aria-label={`Open ${station.name} site`}
               data-testid="player-site-link"
             >
-              ↗ Listen on site
+              <ExternalLink aria-hidden="true" size={14} strokeWidth={1.8} />
             </a>
           ) : null}
 

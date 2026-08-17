@@ -42,6 +42,7 @@ const STATION = {
   votes: 0,
   clickcount: 0,
   upcomingShowCount: 0,
+  stationCategories: ["anchor"],
 };
 
 /** A fresh unresolved spin — makes the station count as live on the dial. */

@@ -6,6 +6,7 @@ import { safeHttpUrl } from "../lib/utils";
 import { NowPlaying } from "./NowPlaying";
 import {
   ChevronDown,
+  ExternalLink,
   Loader2,
   Pause,
   Play,
@@ -49,6 +50,7 @@ export function PlayerSheet({
 }: PlayerSheetProps) {
   const isPlaying = status === "playing";
   const isLoading = status === "loading";
+  const homepageUrl = safeHttpUrl(station.homepageUrl);
 
   // Escape collapses, matching the sheet convention elsewhere in the app.
   useEffect(() => {
@@ -118,16 +120,17 @@ export function PlayerSheet({
                 ? <Pause className="h-4 w-4 fill-current" />
                 : <Play className="h-4 w-4 fill-current ml-0.5" />}
           </button>
-        ) : safeHttpUrl(station.homepageUrl) ? (
+        ) : homepageUrl ? (
           <a
-            href={safeHttpUrl(station.homepageUrl)!}
+            href={homepageUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="player-bar-site-link player-sheet__btn"
-            aria-label={`Listen on ${station.name} site`}
+            className="player-bar-btn station-site-link player-bar-site-link player-sheet__btn"
+            title={`Open ${station.name} site`}
+            aria-label={`Open ${station.name} site`}
             data-testid="player-sheet-site-link"
           >
-            ↗ Listen on site
+            <ExternalLink aria-hidden="true" size={16} strokeWidth={1.8} />
           </a>
         ) : null}
         {onScanToggle && (

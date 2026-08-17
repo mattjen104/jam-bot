@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 import type { DialStation, DialShow } from "../hooks/useDialData";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
+import { ExternalLink } from "lucide-react";
 
 // CSS layout constants — must match :root in index.css
 const NEEDLE_X = 270; // px — position of the NOW needle in each viewport
@@ -165,6 +166,7 @@ interface StationLaneProps {
 export function StationLane({ dialStation, isPinned: _isPinned, onStationClick, onShowClick, onPinToggle: _onPinToggle, onPlay, isActive }: StationLaneProps) {
   const { station, isLive, shows, crossings, artistCrossings } = dialStation;
   const rowRef = useRef<HTMLDivElement>(null);
+  const homepageUrl = safeHttpUrl(station.homepageUrl);
 
   // Scroll so the live (or most-recent) block's left edge lands at LIVE_TARGET_LEFT
   useEffect(() => {
@@ -183,7 +185,11 @@ export function StationLane({ dialStation, isPinned: _isPinned, onStationClick, 
       <div className="dial-lane__hd" onClick={onStationClick} role="button" tabIndex={0}
         onKeyDown={(e) => e.key === "Enter" && onStationClick()}>
         {isLive && <span className="dial-lane__dot" aria-hidden="true" />}
-        <span className={`dial-lane__name${isActive ? " dial-lane__name--tuned" : ""}`}>
+        <span
+          className={`dial-lane__name${isActive ? " dial-lane__name--tuned" : ""}`}
+          tabIndex={0}
+          aria-label={station.name}
+        >
           {station.name}
         </span>
         {(() => {
@@ -200,20 +206,23 @@ export function StationLane({ dialStation, isPinned: _isPinned, onStationClick, 
             className={`dial-lane__play${isActive ? " dial-lane__play--on" : ""}`}
             onClick={(e) => { e.stopPropagation(); onPlay(); }}
             aria-label={isActive ? `Stop ${station.name}` : `Play ${station.name}`}
+            data-testid="station-play-btn"
           >
             {isActive ? "■" : "▶"}
           </button>
         ) : (
-          safeHttpUrl(station.homepageUrl) ? (
+          homepageUrl ? (
             <a
-              className="dial-lane__site-link"
-              href={safeHttpUrl(station.homepageUrl)!}
+              className="dial-lane__play dial-lane__site-link"
+              href={homepageUrl}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`Listen on ${station.name} site`}
+              title={`Open ${station.name} site`}
+              aria-label={`Open ${station.name} site`}
+              data-testid="station-site-link"
               onClick={(e) => e.stopPropagation()}
             >
-              ↗ Site
+              <ExternalLink aria-hidden="true" size={14} strokeWidth={1.8} />
             </a>
           ) : null
         )}

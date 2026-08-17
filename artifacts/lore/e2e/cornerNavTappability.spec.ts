@@ -50,6 +50,7 @@ const STATION = {
   votes: 0,
   clickcount: 0,
   upcomingShowCount: 0,
+  stationCategories: ["anchor"],
 };
 
 function makeNowPlaying() {

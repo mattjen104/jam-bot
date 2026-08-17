@@ -45,6 +45,7 @@ function makeStation(slug: string, idx: number) {
     votes: 0,
     clickcount: 0,
     upcomingShowCount: 0,
+    stationCategories: ["anchor"],
   };
 }
 
