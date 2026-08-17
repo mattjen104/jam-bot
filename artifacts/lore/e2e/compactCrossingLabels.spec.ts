@@ -37,11 +37,11 @@ function makeStation(slug: string, name: string, streamUrl = "https://stream.exa
     logoUrl: null,
     attribution: true,
     tags: null,
+    stationCategories: ["campus"],
     mayHaveAds: false,
     votes: 0,
     clickcount: 0,
     upcomingShowCount: 0,
-    stationCategories: ["anchor"],
   };
 }
 

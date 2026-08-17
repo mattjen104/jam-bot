@@ -41,11 +41,11 @@ function makeLiveStation(slug: string, idx: number) {
     logoUrl: null,
     attribution: true,
     tags: null,
+    stationCategories: ["anchor"],
     mayHaveAds: false,
     votes: 0,
     clickcount: 0,
     upcomingShowCount: 0,
-    stationCategories: ["anchor"],
   };
 }
 
@@ -204,7 +204,7 @@ test.describe("Dial infinite scroll — sentinel triggers row reveal on scroll",
     // Wait for at least one ghost row to render.
     await expect(page.locator(".ghost-row").first()).toBeVisible({ timeout: 20_000 });
 
-    // Initial fold: exactly ZONE2_INITIAL (6) rows shown, sentinel is present.
+    // Initial fold: exactly ZONE2_INITIAL (6) ghost rows shown, sentinel is present.
     const countBefore = await page.locator(".ghost-row").count();
     expect(countBefore).toBeGreaterThanOrEqual(6);
     await expect(page.locator(".zone2-sentinel")).toBeAttached({ timeout: 5_000 });

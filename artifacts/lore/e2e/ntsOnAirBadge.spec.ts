@@ -38,11 +38,11 @@ const STATION = {
   logoUrl: null,
   attribution: true,
   tags: null,
+  stationCategories: ["anchor"],
   mayHaveAds: false,
   votes: 0,
   clickcount: 0,
   upcomingShowCount: 0,
-  stationCategories: ["anchor"],
 };
 
 /** A fresh unresolved spin — makes the station count as live on the dial. */

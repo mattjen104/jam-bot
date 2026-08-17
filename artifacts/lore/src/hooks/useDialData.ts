@@ -33,6 +33,7 @@ import {
   type StationRecentSpin,
   type StationsArtistFrequencyItem,
 } from "@workspace/api-client-react";
+import { subscribeSpinStream } from "../webplayer/nowPlayingStream";
 import { useMyPickerNames, useMyDialCrossings, useMyBlendedCrossings, useMyPickerOverlap, type DialCrossing } from "../lib/meHooks";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import { spinAgeTier, type AgeTier } from "../lib/dialAgeFilter";
@@ -76,6 +77,13 @@ export interface DialSpin {
    * and the spin is not a first-play (such rows pass through the age filter).
    */
   ageTier: AgeTier | null;
+  /**
+   * True while this spin arrived via the provisional `spin-raw` fast path and
+   * is still awaiting MusicBrainz resolution. A resolving entry must NEVER be
+   * treated as a confirmed crossing — `isLibraryHit` and `isArtistHit` are
+   * always false for provisional entries.
+   */
+  resolving?: boolean;
 }
 
 export interface DialShow {
@@ -521,16 +529,28 @@ interface SseSpinEntry {
   /** Server-computed hit flags — sent in the spin-changed SSE payload. */
   isLibraryHit: boolean;
   isArtistHit: boolean;
+  /**
+   * True while the entry came from a provisional `spin-raw` frame and is
+   * still awaiting MusicBrainz resolution. `isLibraryHit` and `isArtistHit`
+   * are always false for provisional entries — they cannot be confirmed
+   * crossings until the resolved spin-changed frame arrives.
+   */
+  resolving?: boolean;
+  /**
+   * Pre-provisional state stashed on the first `spin-raw` frame so a terminal
+   * `spin-raw-failed` can restore the last persisted spin. Chained provisional
+   * frames keep the ORIGINAL stash — reverting to another unresolved row is
+   * not meaningful.
+   */
+  revertTo?: Omit<SseSpinEntry, "resolving" | "revertTo">;
 }
 
 /**
  * The now-playing SSE stream carries three frame types sharing one message
  * channel: resolved `spin-changed` (type absent), provisional `spin-raw`
- * (pre-resolution), and terminal `spin-raw-failed` (never persisted). The
- * Dial is a persisted-spin surface, so ONLY resolved frames may override a
- * Dial row — a provisional frame would display an unpersisted track with
- * empty MBID/release-year/hit flags, and overrides are never cleared. Guards
- * the override handler below; exported for the regression test.
+ * (pre-resolution), and terminal `spin-raw-failed` (never persisted).
+ * Resolved frames are authoritative — they carry hit flags, MBID, and
+ * release year. Guards the spin-changed upgrade path in the SSE handler.
  */
 export function isResolvedSseSpinFrame(ev: { type?: string }): boolean {
   return ev.type !== "spin-raw" && ev.type !== "spin-raw-failed";
@@ -710,53 +730,121 @@ export function useDialData(
   const yesterday = yesterdayStr();
 
   // ── SSE override: instant now-playing from the server's spin-changed stream ─
-  // When the server persists a new spin it pushes a spin-changed SSE event.
-  // We store the latest entry per station slug so the Dial updates immediately
-  // instead of waiting up to 30s for the REST poll to catch up.
+  // The shared spin-stream subscriber (one EventSource per tab) delivers three
+  // frame types. We handle all of them to show tracks the moment they appear:
+  //
+  //   spin-raw          — provisional fast path: the metadata changed but MB
+  //                       resolution has not completed yet. Show immediately
+  //                       with resolving:true; isLibraryHit/isArtistHit stay
+  //                       false (cannot be confirmed crossings yet).
+  //   spin-raw-failed   — terminal failure: the provisional track never
+  //                       persisted. Revert to the stashed pre-provisional row.
+  //   spin-changed      — resolved, persisted spin. Clears the resolving flag
+  //                       and sets accurate hit flags from the server.
+  //
+  // The override map is keyed by station slug; each entry's resolving flag
+  // drives the subtle "resolving" visual cue on the Dial feed row.
   const [sseOverrides, setSseOverrides] = useState<Map<string, SseSpinEntry>>(
     () => new Map(),
   );
   useEffect(() => {
-    if (typeof EventSource === "undefined") return;
-    const es = new EventSource("/api/stations/now-playing/stream");
-    es.onmessage = (msg) => {
-      try {
-        const ev = JSON.parse(msg.data as string) as {
-          stationSlug?: string;
-          type?: string;
-          rawArtist?: string;
-          rawTitle?: string;
-          mbid?: string | null;
-          artistMbid?: string | null;
-          releaseYear?: number | null;
-          isFirstSpin?: boolean;
-          isLibraryHit?: boolean;
-          isArtistHit?: boolean;
-        };
-        if (!ev.stationSlug) return;
-        // Persisted-spin surface: ignore provisional/terminal-failure frames.
-        if (!isResolvedSseSpinFrame(ev)) return;
+    return subscribeSpinStream((ev) => {
+      // ── spin-raw-failed: revert the provisional row ──────────────────────
+      if (ev.type === "spin-raw-failed") {
         setSseOverrides((prev) => {
+          const existing = prev.get(ev.stationSlug);
+          // Only revert when the current entry is the matching provisional row.
+          if (
+            !existing?.resolving ||
+            existing.artist !== ev.rawArtist ||
+            existing.title !== ev.rawTitle
+          ) {
+            return prev;
+          }
           const next = new Map(prev);
-          next.set(ev.stationSlug!, {
-            mbid: ev.mbid ?? null,
+          if (existing.revertTo) {
+            next.set(ev.stationSlug, { ...existing.revertTo });
+          } else {
+            next.delete(ev.stationSlug);
+          }
+          return next;
+        });
+        return;
+      }
+
+      // ── spin-raw: provisional fast path — show immediately ────────────────
+      if (ev.provisional === true) {
+        setSseOverrides((prev) => {
+          const existing = prev.get(ev.stationSlug);
+          // Never downgrade a resolved row back to provisional for the same track.
+          if (
+            existing &&
+            !existing.resolving &&
+            existing.mbid != null &&
+            existing.artist === ev.rawArtist &&
+            existing.title === ev.rawTitle
+          ) {
+            return prev;
+          }
+          const next = new Map(prev);
+          const observedAt = ev.observedAt ?? new Date().toISOString();
+          // Stash the pre-provisional state so spin-raw-failed can revert.
+          // Chained provisional frames keep the ORIGINAL stash.
+          const revertTo: SseSpinEntry["revertTo"] =
+            existing?.revertTo ??
+            (existing
+              ? {
+                  mbid: existing.mbid,
+                  artistMbid: existing.artistMbid,
+                  title: existing.title,
+                  artist: existing.artist,
+                  playedAt: existing.playedAt,
+                  releaseYear: existing.releaseYear,
+                  isFirstSpin: existing.isFirstSpin,
+                  isLibraryHit: existing.isLibraryHit,
+                  isArtistHit: existing.isArtistHit,
+                }
+              : undefined);
+          next.set(ev.stationSlug, {
+            mbid: null,
             artistMbid: ev.artistMbid ?? null,
             title: ev.rawTitle ?? "",
             artist: ev.rawArtist ?? "",
-            playedAt: new Date().toISOString(),
+            playedAt: observedAt,
             releaseYear: ev.releaseYear ?? null,
             isFirstSpin: ev.isFirstSpin ?? false,
-            // Hit flags computed server-side per listener at spin-write time.
-            isLibraryHit: ev.isLibraryHit ?? false,
-            isArtistHit: ev.isArtistHit ?? false,
+            // Hit flags are unknown until resolution completes.
+            isLibraryHit: false,
+            isArtistHit: false,
+            resolving: true,
+            revertTo,
           });
           return next;
         });
-      } catch {
-        // ignore unparseable frames (ping comments arrive as empty data)
+        return;
       }
-    };
-    return () => es.close();
+
+      // ── spin-changed: resolved, persisted spin ────────────────────────────
+      if (!isResolvedSseSpinFrame(ev)) return;
+      setSseOverrides((prev) => {
+        const next = new Map(prev);
+        next.set(ev.stationSlug, {
+          mbid: ev.mbid ?? null,
+          artistMbid: ev.artistMbid ?? null,
+          title: ev.rawTitle ?? "",
+          artist: ev.rawArtist ?? "",
+          playedAt: ev.observedAt ?? new Date().toISOString(),
+          releaseYear: ev.releaseYear ?? null,
+          isFirstSpin: ev.isFirstSpin ?? false,
+          // Hit flags computed server-side per listener at spin-write time.
+          isLibraryHit: ev.isLibraryHit ?? false,
+          isArtistHit: ev.isArtistHit ?? false,
+          // Clear the resolving flag now that the spin is persisted.
+          resolving: false,
+        });
+        return next;
+      });
+    });
   }, []);
 
   // Fast-lane reconciliation: a station-landing fast-lane result that names a
@@ -1082,6 +1170,8 @@ export function useDialData(
         isFirstSpin: entry.isFirstSpin,
         releaseYear: entry.releaseYear,
         ageTier: spinAgeTier(entry.isFirstSpin, entry.releaseYear),
+        // Propagate the resolving flag so FrontDoorRow can show the visual cue.
+        ...(entry.resolving ? { resolving: true } : {}),
       });
     }
     return m;

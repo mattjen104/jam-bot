@@ -41,12 +41,12 @@ function makeStation(
     logoUrl: null,
     attribution: true,
     tags: null,
+    stationCategories: ["anchor"],
     mayHaveAds: false,
     automationClass: opts.automationClass ?? null,
     votes: 0,
     clickcount: 0,
     upcomingShowCount: 0,
-    stationCategories: ["anchor"],
   };
 }
 

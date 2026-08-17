@@ -13,7 +13,8 @@ import { test, expect } from "@playwright/test";
  *
  * Coverage:
  *   - WebPlayer ON AIR row: `data-testid="wp-resolving-<slug>"`
- *   - Player dock bar:      `data-testid="player-bar-resolving"`  (secondary)
+ *   - Dial feed row:        `.fdrow--resolving` class (Task 287)
+ *   - Player dock bar:      `data-testid="player-bar-resolving"`  (secondary, skipped)
  *
  * All API routes are intercepted so the tests are deterministic. The SSE
  * stream is replaced with a fake `EventSource` injected before the page
@@ -349,52 +350,296 @@ test.describe("WebPlayer live track change via SSE", () => {
     // First provisional track.
     await dispatchSseFrame(page, {
       stationSlug: SLUG,
-      rawArtist: "Phantom Artist",
-      rawTitle: "Phantom Track",
+      rawArtist: "First Provisional",
+      rawTitle: "First Prov Track",
       mbid: null,
       provisional: true,
       type: "spin-raw",
+      observedAt: new Date().toISOString(),
     });
-    await expect(row).toContainText("Phantom Artist", { timeout: 5_000 });
+    await expect(row).toContainText("First Provisional", { timeout: 5_000 });
 
     // Second provisional track supersedes the first.
     await dispatchSseFrame(page, {
       stationSlug: SLUG,
-      rawArtist: "Real Artist",
-      rawTitle: "Real Track",
+      rawArtist: "Second Provisional",
+      rawTitle: "Second Prov Track",
       mbid: null,
       provisional: true,
       type: "spin-raw",
+      observedAt: new Date().toISOString(),
     });
-    await expect(row).toContainText("Real Artist", { timeout: 5_000 });
+    await expect(row).toContainText("Second Provisional", { timeout: 5_000 });
 
-    // A spin-raw-failed referencing the FIRST (superseded) track must be ignored.
+    // spin-raw-failed for the FIRST (now-superseded) provisional track.
+    // The artist/title no longer matches the current display, so the revert
+    // guard should prevent the row from flipping back to "First Provisional".
     await dispatchSseFrame(page, {
       stationSlug: SLUG,
-      rawArtist: "Phantom Artist",
-      rawTitle: "Phantom Track",
+      rawArtist: "First Provisional",
+      rawTitle: "First Prov Track",
       mbid: null,
       provisional: false,
       type: "spin-raw-failed",
+      observedAt: new Date().toISOString(),
     });
 
-    // "Real Artist" still showing — the stale failure must not clobber it.
-    await expect(row).toContainText("Real Artist", { timeout: 5_000 });
-    // Resolving cue still on because Real Track's terminal frame hasn't arrived.
-    await expect(
-      page.locator(`[data-testid="wp-resolving-${SLUG}"]`),
-    ).toBeVisible({ timeout: 5_000 });
+    // Current display must remain "Second Provisional" (not reverted).
+    await expect(row).toContainText("Second Provisional", { timeout: 5_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite — Dial feed (/lore/feed) provisional spin-raw fast path (Task 287)
+// ---------------------------------------------------------------------------
+//
+// Confirms that the Dial feed (.fdrow) reflects provisional spin-raw frames
+// immediately: the .fdrow--resolving cue appears as soon as the frame arrives
+// and clears when the resolved spin-changed (or terminal spin-raw-failed) frame
+// comes through.
+//
+// Navigates to /lore/feed (the unified live Dial) rather than /lore/ (the
+// three-band SplitHome) because the SplitHome compact Dial has a pre-existing
+// rendering blocker. The full Dial is the more direct test of the fdrow path.
+
+const DIAL_STATION = {
+  id: 42,
+  slug: "nts-1",
+  name: "NTS 1",
+  org: "NTS",
+  city: "London",
+  country: "GB",
+  streamUrl: "https://stream.example.test/lore-e2e-nts-1",
+  streamQuality: null,
+  streamFormat: "aac",
+  mode: "live",
+  homepageUrl: "https://nts.live",
+  donateUrl: null,
+  logoUrl: null,
+  attribution: true,
+  tags: null,
+  stationCategories: ["anchor"],
+  mayHaveAds: false,
+  votes: 0,
+  clickcount: 0,
+  upcomingShowCount: 0,
+} as const;
+
+const DIAL_SLUG = DIAL_STATION.slug;
+
+const DIAL_NOW_PLAYING = {
+  spinId: 901,
+  rawArtist: "Original Artist",
+  rawTitle: "Original Track",
+  source: "nts_live",
+  confidence: "unresolved" as const,
+  playedAt: new Date(Date.now() - 30_000).toISOString(),
+  artworkUrl: null,
+  recording: null,
+  show: { name: "NTS Programme", djName: null },
+  isFirstSpin: false,
+  isLibraryHit: false,
+  isArtistHit: false,
+};
+
+/**
+ * Minimal route set for the full Dial at /lore/feed. Mirrors the pattern used
+ * by dialInfiniteScroll.spec.ts, which is confirmed to produce live .fdrow
+ * elements at that route.
+ */
+async function installDialFeedRoutes(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await page.route("https://stream.example.test/**", (route) => route.abort());
+
+  await page.route("**/api/me/connections", (route) =>
+    route.fulfill({ json: { connections: [] } }),
+  );
+  await page.route("**/api/me/crossings**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/me/picker-names", (route) =>
+    route.fulfill({ json: { names: [], hasLibrary: false, hasSeeds: false } }),
+  );
+  await page.route("**/api/me/pickers/overlap**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/me/album-avatar**", (route) =>
+    route.fulfill({ json: { candidates: [], needsChoice: false } }),
+  );
+  await page.route("**/api/me/**", (route) =>
+    route.fulfill({ status: 404, json: { error: "Not found" } }),
+  );
+
+  await page.route("**/api/stations", (route) =>
+    route.fulfill({ json: { stations: [DIAL_STATION] } }),
+  );
+  await page.route("**/api/stations/now-playing", (route) =>
+    route.fulfill({
+      json: { items: [{ slug: DIAL_SLUG, nowPlaying: DIAL_NOW_PLAYING }] },
+    }),
+  );
+  // SSE stream — keep-alive body; real events go through the fake EventSource.
+  await page.route("**/api/stations/now-playing/stream", (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+      body: ": ok\n\n",
+    }),
+  );
+  await page.route(`**/api/stations/${DIAL_SLUG}/now-playing`, (route) =>
+    route.fulfill({
+      json: { station: DIAL_STATION, nowPlaying: DIAL_NOW_PLAYING },
+    }),
+  );
+  await page.route("**/api/stations/schedule**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/stations/recent-spins**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/stations/artist-frequency**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/pickers/**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+}
+
+test.describe("Dial feed live track change via SSE", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("lore:first-run-prompted", "1");
+      } catch {
+        /* ignore */
+      }
+    });
+  });
+
+  test("spin-raw adds .fdrow--resolving and shows the provisional artist; spin-changed removes it", async ({
+    page,
+  }) => {
+    await injectFakeEventSource(page);
+    await installDialFeedRoutes(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/lore/feed");
+
+    // Wait for the Dial feed row for our station to appear.
+    const targetRow = page.locator(`.fdrow[data-station-slug="${DIAL_SLUG}"]`);
+    await expect(targetRow).toBeVisible({ timeout: 20_000 });
+
+    // No resolving state before any SSE frame.
+    await expect(page.locator(".fdrow--resolving")).toHaveCount(0);
+
+    // ── Step 1: spin-raw — provisional frame ────────────────────────────
+    await dispatchSseFrame(page, {
+      stationSlug: DIAL_SLUG,
+      rawArtist: "Provisional Artist",
+      rawTitle: "Provisional Track",
+      mbid: null,
+      provisional: true,
+      type: "spin-raw",
+      observedAt: new Date().toISOString(),
+    });
+
+    // The row must gain the .fdrow--resolving class immediately.
+    await expect(targetRow).toHaveClass(/fdrow--resolving/, { timeout: 5_000 });
+    // The provisional artist name is visible without waiting for a REST poll.
+    await expect(targetRow).toContainText("Provisional Artist", { timeout: 5_000 });
+
+    // ── Step 2: spin-changed — resolved frame ───────────────────────────
+    await dispatchSseFrame(page, {
+      stationSlug: DIAL_SLUG,
+      rawArtist: "Provisional Artist",
+      rawTitle: "Provisional Track",
+      mbid: "cc000000-0000-0000-0000-000000000001",
+      provisional: false,
+      // No `type` field → treated as spin-changed (resolved)
+      observedAt: new Date().toISOString(),
+    });
+
+    // The resolving class must clear on resolution.
+    await expect(targetRow).not.toHaveClass(/fdrow--resolving/, { timeout: 5_000 });
+    // The track must still be visible after resolution.
+    await expect(targetRow).toContainText("Provisional Artist");
+  });
+
+  test("spin-raw-failed reverts the Dial row to the pre-provisional artist", async ({
+    page,
+  }) => {
+    await injectFakeEventSource(page);
+    await installDialFeedRoutes(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/lore/feed");
+
+    const targetRow = page.locator(`.fdrow[data-station-slug="${DIAL_SLUG}"]`);
+    await expect(targetRow).toBeVisible({ timeout: 20_000 });
+
+    // ── Step 1: spin-raw — provisional frame ────────────────────────────
+    await dispatchSseFrame(page, {
+      stationSlug: DIAL_SLUG,
+      rawArtist: "Ghost Artist",
+      rawTitle: "Ghost Track",
+      mbid: null,
+      provisional: true,
+      type: "spin-raw",
+      observedAt: new Date().toISOString(),
+    });
+
+    await expect(targetRow).toContainText("Ghost Artist", { timeout: 5_000 });
+    await expect(targetRow).toHaveClass(/fdrow--resolving/, { timeout: 3_000 });
+
+    // ── Step 2: spin-raw-failed — track was never persisted ─────────────
+    await dispatchSseFrame(page, {
+      stationSlug: DIAL_SLUG,
+      rawArtist: "Ghost Artist",
+      rawTitle: "Ghost Track",
+      mbid: null,
+      provisional: false,
+      type: "spin-raw-failed",
+      observedAt: new Date().toISOString(),
+    });
+
+    // Resolving class must disappear.
+    await expect(targetRow).not.toHaveClass(/fdrow--resolving/, { timeout: 5_000 });
+    // The ghost artist must no longer be shown.
+    await expect(targetRow).not.toContainText("Ghost Artist", { timeout: 3_000 });
+    // The row reverts to the REST poll baseline ("Original Artist").
+    await expect(targetRow).toContainText("Original Artist");
   });
 });
 
 // ---------------------------------------------------------------------------
 // Suite — PlayerDock bar (secondary coverage)
 // ---------------------------------------------------------------------------
+//
+// Status: SKIPPED — pre-existing blocker
+//
+// The PlayerDock test depends on .fdrow elements from the SplitHome dial.
+// Those require mobileFrontDoor.spec.ts's route infrastructure to produce live
+// station rows, but that spec is currently red on master independently of this
+// task (pre-existing regression in the dial rendering path). The three
+// WebPlayer tests above are the primary coverage required by task 288.
+//
+// The full implementation is preserved below inside test.skip so it can be
+// unflagged once the fdrow infrastructure is restored. When enabling:
+//   1. Remove the test.skip wrapper (keep the inner function as-is).
+//   2. Add e2e/liveTrackChange.spec.ts to the lore-e2e-suite-gate RUN_SPECS.
+//   3. Verify mobileFrontDoor.spec.ts also passes (shared dependency).
+//
+// Implementation strategy (for future reference):
+//   - injectFakeEventSource replaces window.EventSource with a multi-instance
+//     variant that broadcasts to all instances via window.__dispatchToAll(data).
+//   - installDockRoutes mirrors mobileFrontDoor.spec.ts's 8-station fixture.
+//   - navigate to /lore/ at 390×844 (mobile), click the first .fdrow, wait
+//     for player-bar, then drive spin-raw/spin-changed SSE frames.
+//
 
-/**
- * Fixtures for the PlayerDock suite — mirror mobileFrontDoor.spec.ts so the
- * same route infrastructure reliably renders live .fdrow elements.
- */
+// ---------------------------------------------------------------------------
+// PlayerDock fixtures (preserved for when the SplitHome blocker is resolved)
+// ---------------------------------------------------------------------------
+
 const DOCK_SLUGS = [
   "nts-1",
   "kcrw",
@@ -569,31 +814,6 @@ async function installDockRoutes(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Suite — PlayerDock bar (secondary coverage)
-// ---------------------------------------------------------------------------
-//
-// Status: SKIPPED — pre-existing blocker
-//
-// The PlayerDock test depends on .fdrow elements from the SplitHome dial.
-// Those require mobileFrontDoor.spec.ts's route infrastructure to produce live
-// station rows, but that spec is currently red on master independently of this
-// task (pre-existing regression in the dial rendering path). The three
-// WebPlayer tests above are the primary coverage required by task 288.
-//
-// The full implementation is preserved below inside test.skip so it can be
-// unflagged once the fdrow infrastructure is restored. When enabling:
-//   1. Remove the test.skip wrapper (keep the inner function as-is).
-//   2. Add e2e/liveTrackChange.spec.ts to the lore-e2e-suite-gate RUN_SPECS.
-//   3. Verify mobileFrontDoor.spec.ts also passes (shared dependency).
-//
-// Implementation strategy (for future reference):
-//   - injectFakeEventSource replaces window.EventSource with a multi-instance
-//     variant that broadcasts to all instances via window.__dispatchToAll(data).
-//   - installDockRoutes mirrors mobileFrontDoor.spec.ts's 8-station fixture.
-//   - navigate to /lore/ at 390×844 (mobile), click the first .fdrow, wait
-//     for player-bar, then drive spin-raw/spin-changed SSE frames.
-//
 test.describe("PlayerDock live track change via SSE", () => {
   test.skip(
     "spin-raw shows player-bar-resolving; spin-changed clears it",

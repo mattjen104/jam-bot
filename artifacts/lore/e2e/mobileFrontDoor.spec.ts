@@ -41,11 +41,11 @@ function makeStation(slug: string, idx: number) {
     logoUrl: null,
     attribution: true,
     tags: null,
+    stationCategories: ["anchor"],
     mayHaveAds: false,
     votes: 0,
     clickcount: 0,
     upcomingShowCount: 0,
-    stationCategories: ["anchor"],
   };
 }
 
@@ -232,12 +232,8 @@ test.describe("Mobile front door — five-row viewport guarantee", () => {
 
     const g = await readFrontDoorGeometry(page);
 
-    // 1. No front-door wordmark / moon topbar element.
     expect(g.hasTopbarAll).toBe(false);
 
-    // 2. At least five .fdrow elements fully within the viewport (no scroll).
-    //    The corner-nav is pointer-events:none transparent — not a solid dock —
-    //    so we check against the full window.innerHeight.
     const visibleRows = g.rows.filter((r) => r.top >= 0 && r.bottom <= g.vh);
     expect(visibleRows.length).toBeGreaterThanOrEqual(5);
 

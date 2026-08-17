@@ -5526,6 +5526,19 @@
   background: hsl(var(--live) / 0.07);
   outline: 1px solid hsl(var(--live) / 0.25);
 }
+/* Resolving rows: the track just appeared via the provisional spin-raw fast
+   path — MusicBrainz resolution is still in flight. A gentle opacity pulse
+   signals the transient state without breaking visual hierarchy. The artist
+   name in compact mode gets the same cue via --resolving modifier. */
+@keyframes fdrow-resolving-pulse {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.fdrow--resolving .fdrow__compact-artist--resolving,
+.fdrow--resolving .fdrow__live-sentence b,
+.fdrow--resolving .fdrow__artist {
+  animation: fdrow-resolving-pulse 1.6s ease-in-out infinite;
+}
 
 /* ── Historical crossing run rows (day mode / top-sets mode) ─────────────
    Visually consistent with Zone 1 rows but carries a muted archive tone:

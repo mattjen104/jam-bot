@@ -447,6 +447,11 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // Whether there is a visible artist lead (crossing or single artist)
   const hasArtistLead = compactCrossingNode != null || (compact?.artist != null);
 
+  // True while the live track arrived via the provisional spin-raw fast path
+  // (MusicBrainz resolution still in flight). Drives fdrow--resolving on the
+  // row and fdrow__compact-artist--resolving on the compact artist span.
+  const isResolving = ds.liveTrack?.resolving === true;
+
   const tier1Node = compactSentence && compact ? (
     <span
       className="fdrow__compact-identity"
@@ -457,7 +462,10 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             The artist cell stays in the DOM (empty, aria-hidden) when there is
             no usable artist — never invented. */}
         {compactCrossingNode ?? (
-          <span className="fdrow__compact-artist" aria-hidden={compact.artist == null}>
+          <span
+            className={`fdrow__compact-artist${isResolving ? " fdrow__compact-artist--resolving" : ""}`}
+            aria-hidden={compact.artist == null}
+          >
             {compact.artist ?? ""}
           </span>
         )}
@@ -496,6 +504,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     isSampling ? "fdrow--sampling" : "",
     isActive ? "fdrow--playing" : "",
     compactSentence && expanded ? "fdrow--expanded" : "",
+    isResolving ? "fdrow--resolving" : "",
   ].filter(Boolean).join(" ");
 
   // Attribution-only stations (no direct stream, no relay) cannot be played
@@ -574,6 +583,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     <div
       className={rowCls}
       data-scrub-slug={scrubSlug}
+      data-station-slug={ds.station.slug}
       role="button"
       aria-expanded={compactSentence ? expanded : undefined}
       aria-label={compactSentence ? compact?.text : compact?.plainText}

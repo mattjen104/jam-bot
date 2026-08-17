@@ -40,6 +40,12 @@ export interface SpinStreamEvent {
   confidence?: string;
   isLibraryHit?: boolean;
   isArtistHit?: boolean;
+  /** MusicBrainz artist MBID when the spin has been resolved. */
+  artistMbid?: string | null;
+  /** MusicBrainz first-release year for the recording; null when unknown. */
+  releaseYear?: number | null;
+  /** True when this is the first-ever appearance of this recording in the archive. */
+  isFirstSpin?: boolean;
 }
 
 type SpinListener = (ev: SpinStreamEvent) => void;
@@ -101,6 +107,9 @@ function openStream(): void {
           ...(data.confidence ? { confidence: data.confidence } : {}),
           ...(data.isLibraryHit != null ? { isLibraryHit: data.isLibraryHit } : {}),
           ...(data.isArtistHit != null ? { isArtistHit: data.isArtistHit } : {}),
+          ...(data.artistMbid != null ? { artistMbid: data.artistMbid } : {}),
+          ...(data.releaseYear != null ? { releaseYear: data.releaseYear } : {}),
+          ...(data.isFirstSpin != null ? { isFirstSpin: data.isFirstSpin } : {}),
         };
       }
     } catch {
