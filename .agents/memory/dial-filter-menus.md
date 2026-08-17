@@ -16,3 +16,5 @@ Rules future changes must stay consistent with:
 - **Why:** filters are ephemeral browse state, not persisted, and reuse existing station-list endpoints instead of a new API.
 
 Gotcha: category buttons must carry `aria-pressed` (toggles), never act as plain navigation (see dialTimeTravelStrip test). The old additive Lore/Classics/Ambient trio and /genre /spinitron /college /flagship commands are retired.
+
+Gotcha (dropdown era): the dropdown panels are `position:fixed` anchored to the trigger's left edge — any anchored fixed panel MUST clamp against `window.innerWidth` after render (layout effect) or triggers near the right edge open off-screen on mobile and look like dead buttons.

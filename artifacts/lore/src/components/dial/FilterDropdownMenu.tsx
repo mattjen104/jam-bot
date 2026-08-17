@@ -23,7 +23,7 @@
  *   - "chips" — bordered console key (SplitHome remote)
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export interface FilterDropdownOption<V extends string> {
   value: V;
@@ -60,6 +60,7 @@ export function FilterDropdownMenu<V extends string>({
   const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLSpanElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
@@ -74,6 +75,23 @@ export function FilterDropdownMenu<V extends string>({
       return true;
     });
   }, []);
+
+  // Clamp the open panel inside the viewport. The anchor starts at the
+  // trigger's left edge, but a trigger near the right edge of a narrow
+  // (mobile) viewport would push the fixed-position panel off-screen — so
+  // after the panel renders, measure its real width and pull it left until
+  // it fits (8px gutter). Layout effect: the correction must land in the
+  // same paint as the panel opening, or it visibly jumps.
+  useLayoutEffect(() => {
+    if (!open || !anchor) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const width = panel.getBoundingClientRect().width;
+    const maxLeft = Math.max(8, window.innerWidth - width - 8);
+    if (anchor.left > maxLeft) {
+      setAnchor({ top: anchor.top, left: maxLeft });
+    }
+  }, [open, anchor]);
 
   // Click-outside closes the menu. The listener only exists while open.
   useEffect(() => {
@@ -129,6 +147,7 @@ export function FilterDropdownMenu<V extends string>({
         )}
       </button>
       <div
+        ref={panelRef}
         className="filter-dropdown__panel"
         role="group"
         aria-label={ariaLabel}
