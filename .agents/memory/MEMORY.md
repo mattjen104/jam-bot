@@ -135,4 +135,5 @@
 - [Positional body.click() in e2e helpers](e2e-positional-body-click.md) — Playwright clicks body center; strip reorders silently retarget the click onto chips; blur via evaluate instead.
 - [Track expiry advisory signal](track-expiry-advisory.md) — likely-expiring estimate never swaps the displayed track, only schedules one boundary re-check; lives on the plain-JSON fast lane, not orval payloads.
 - [Vitest 4 config placement traps](vitest4-config-placement.md) — cacheDir must be top-level (not test.cacheDir); environmentMatchGlobs removed, use test.projects with extends:true; both fail silently.
+- [Native checkboxes invisible on dark mobile panels](native-checkbox-dark-mobile.md) — appearance:none + custom border/check required; computed styles lie, verify via screenshot.
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
