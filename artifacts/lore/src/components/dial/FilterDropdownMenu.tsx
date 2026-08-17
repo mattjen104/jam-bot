@@ -24,6 +24,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface FilterDropdownOption<V extends string> {
   value: V;
@@ -97,9 +98,12 @@ export function FilterDropdownMenu<V extends string>({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (ev: MouseEvent | TouchEvent) => {
-      if (rootRef.current && ev.target instanceof Node && !rootRef.current.contains(ev.target)) {
-        close(false);
-      }
+      if (!(ev.target instanceof Node)) return;
+      // The panel is portaled to document.body, so "inside" means inside the
+      // trigger root OR inside the panel itself.
+      const inRoot = rootRef.current?.contains(ev.target) ?? false;
+      const inPanel = panelRef.current?.contains(ev.target) ?? false;
+      if (!inRoot && !inPanel) close(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("touchstart", onPointerDown);
@@ -146,29 +150,33 @@ export function FilterDropdownMenu<V extends string>({
           </span>
         )}
       </button>
-      <div
-        ref={panelRef}
-        className="filter-dropdown__panel"
-        role="group"
-        aria-label={ariaLabel}
-        hidden={!open}
-        style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
-      >
-        {options.map(({ value, label: optionLabel, title }) => (
-          <label key={value} className="filter-dropdown__option" title={title}>
-            <input
-              type="checkbox"
-              className="filter-dropdown__checkbox"
-              checked={active.has(value)}
-              onChange={() => onToggle(value)}
-            />
-            <span className="filter-dropdown__option-text">
-              <span className="filter-dropdown__option-label">{optionLabel}</span>
-              <span className="filter-dropdown__option-desc">{title}</span>
-            </span>
-          </label>
-        ))}
-      </div>
+      {createPortal(
+        <div
+          ref={panelRef}
+          className="filter-dropdown__panel"
+          role="group"
+          aria-label={ariaLabel}
+          hidden={!open}
+          onKeyDown={onKeyDown}
+          style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
+        >
+          {options.map(({ value, label: optionLabel, title }) => (
+            <label key={value} className="filter-dropdown__option" title={title}>
+              <input
+                type="checkbox"
+                className="filter-dropdown__checkbox"
+                checked={active.has(value)}
+                onChange={() => onToggle(value)}
+              />
+              <span className="filter-dropdown__option-text">
+                <span className="filter-dropdown__option-label">{optionLabel}</span>
+                <span className="filter-dropdown__option-desc">{title}</span>
+              </span>
+            </label>
+          ))}
+        </div>,
+        document.body,
+      )}
     </span>
   );
 }
