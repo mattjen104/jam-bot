@@ -68,6 +68,12 @@ export function expectedCadenceMs(source: string | null | undefined): number {
 /**
  * Classify how fresh a now-playing observation is for its source kind.
  * Negative ages (clock skew) clamp to 0 — never stale by skew alone.
+ *
+ * Provisional observations (the `spin-raw` fast path, emitted before
+ * resolution/persistence) carry the same observedAt semantics as persisted
+ * spins, so they classify through this function unchanged: a just-observed
+ * provisional track is "fresh" and a station never reads aging/stale while a
+ * resolution is in flight.
  */
 export function classifyFreshness(
   source: string | null | undefined,

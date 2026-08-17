@@ -1,16 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
+import { subscribeSpinStream } from "../webplayer/nowPlayingStream";
 import { PlayerBar } from "./PlayerBar";
 import { PlayerSheet } from "./PlayerSheet";
 import { RideBar } from "./RideBar";
 
 /** Matches the shell's phone-width CSS convention (one-line dock breakpoint). */
 const MOBILE_SHELL_QUERY = "(orientation: portrait), (max-width: 720px)";
+
+/**
+ * Upper bound for how long a provisional now-playing track may stay on screen
+ * without its terminal SSE frame (spin-changed or spin-raw-failed). Terminal
+ * frames normally land within seconds; this only fires when the server died
+ * mid-pipeline, in which case the dock falls back to the 30s REST poll.
+ */
+const PROVISIONAL_EXPIRY_MS = 120_000;
 
 /**
  * The single bottom dock. A ride takes over audio while active (so it wins the
@@ -33,6 +42,74 @@ export function PlayerDock() {
       staleTime: 15_000,
     },
   });
+
+  // Provisional fast path: the SSE stream's spin-raw frame carries the new
+  // track's raw artist/title seconds before resolution + persistence complete
+  // and the 30s REST poll catches up. Held locally (never written into the
+  // shared query cache) and cleared once the polled data shows the track.
+  const [provisional, setProvisional] = useState<{
+    artist: string;
+    title: string;
+    resolving: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!stationSlug) return;
+    // Bounded expiry: a terminal frame (spin-changed or spin-raw-failed)
+    // normally lands within seconds, but if the server dies mid-pipeline no
+    // terminal frame is ever emitted — the timer guarantees the dock falls
+    // back to the 30s REST poll instead of showing an unpersisted track
+    // forever.
+    let expiry: ReturnType<typeof setTimeout> | null = null;
+    const arm = () => {
+      if (expiry) clearTimeout(expiry);
+      expiry = setTimeout(() => setProvisional(null), PROVISIONAL_EXPIRY_MS);
+    };
+    const unsub = subscribeSpinStream((ev) => {
+      if (ev.stationSlug !== stationSlug) return;
+      if (ev.type === "spin-raw-failed") {
+        // The provisional track never persisted — revert to polled data, but
+        // only when the failure matches the track currently shown (a stale
+        // failure for a superseded track must not clear a newer provisional).
+        setProvisional((cur) =>
+          cur && cur.artist === ev.rawArtist && cur.title === ev.rawTitle
+            ? null
+            : cur,
+        );
+        return;
+      }
+      if (ev.provisional) {
+        setProvisional({ artist: ev.rawArtist, title: ev.rawTitle, resolving: true });
+      } else {
+        // Resolved frame: keep showing the track, just stop the resolving cue
+        // until the REST poll reflects the persisted spin.
+        setProvisional({ artist: ev.rawArtist, title: ev.rawTitle, resolving: false });
+      }
+      arm();
+    });
+    return () => {
+      if (expiry) clearTimeout(expiry);
+      unsub();
+    };
+  }, [stationSlug]);
+  // Provisional lifecycle housekeeping is a pure derivation, applied during
+  // render (the sanctioned "adjust state while rendering" pattern, same as
+  // prevLocation below): reset on station change, and clear once the polled
+  // REST data catches up to the provisional track.
+  const np = npData?.nowPlaying;
+  const [prevSlug, setPrevSlug] = useState(stationSlug);
+  if (stationSlug !== prevSlug) {
+    setPrevSlug(stationSlug);
+    setProvisional(null);
+  } else if (provisional && np) {
+    const currentArtist = np.recording?.artist ?? np.rawArtist;
+    const currentTitle = np.recording?.title ?? np.rawTitle;
+    if (
+      currentArtist === provisional.artist &&
+      currentTitle === provisional.title
+    ) {
+      setProvisional(null);
+    }
+  }
 
   // Collapse when the station goes away, a ride takes over, or the listener
   // navigates (e.g. taps a song/artist link inside the sheet).
@@ -93,6 +170,7 @@ export function PlayerDock() {
           onStop={radio.stop}
           onVolume={radio.setVolume}
           nowPlaying={npData?.nowPlaying}
+          provisionalNowPlaying={provisional}
           spotify={spotify}
           scanActive={scan.active}
           onScanToggle={scan.toggle}

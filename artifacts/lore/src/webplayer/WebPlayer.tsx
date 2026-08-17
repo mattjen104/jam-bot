@@ -588,7 +588,19 @@ export function OnAirRow({
           </p>
         ) : (
           <p style={{ margin: "1px 0 0", fontSize: 14, color: "var(--wp-text-muted)", ...oneLine }}>
-            {item.now.title ?? "resolving spins…"}
+            {item.now.resolving
+              ? `${item.now.artist} — ${item.now.title}`
+              : (item.now.title ?? "resolving spins…")}
+            {item.now.resolving && (
+              <span
+                className="wp-mono wp-resolving"
+                style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}
+                data-testid={`wp-resolving-${item.station.slug}`}
+                title="New track just detected — details still resolving"
+              >
+                resolving…
+              </span>
+            )}
             {isStaleNowPlaying(item.now) && (
               <span
                 className="wp-mono"

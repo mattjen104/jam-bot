@@ -34,6 +34,14 @@ interface PlayerBarProps {
   onVolume: (v: number) => void;
   spotify?: SpotifyConnectApi;
   nowPlaying?: NowPlaying | null;
+  /**
+   * Provisional now-playing from the SSE spin-raw fast path: the raw
+   * artist/title of a just-detected track, shown while resolution (and the
+   * 30s REST poll) catch up. `resolving` is true until the resolved
+   * spin-changed frame arrives — render a subtle cue rather than full
+   * confidence.
+   */
+  provisionalNowPlaying?: { artist: string; title: string; resolving: boolean } | null;
   scanActive?: boolean;
   scanCurrent?: number;
   scanTotal?: number;
@@ -57,6 +65,7 @@ export function PlayerBar({
   onStop,
   onVolume,
   nowPlaying,
+  provisionalNowPlaying = null,
   spotify,
   scanActive = false,
   scanCurrent = 1,
@@ -76,9 +85,12 @@ export function PlayerBar({
   // Metadata for the ticker
   // Layout (top→bottom): song (dim) · album (mid) · artist (lime, most prominent)
   // Station name is already shown in the player-bar-info block above.
-  const metaSong   = nowPlaying?.recording?.title   ?? nowPlaying?.rawTitle  ?? null;
-  const metaArtist = nowPlaying?.recording?.artist  ?? nowPlaying?.rawArtist ?? null;
+  const metaSong   = provisionalNowPlaying?.title  ?? nowPlaying?.recording?.title   ?? nowPlaying?.rawTitle  ?? null;
+  const metaArtist = provisionalNowPlaying?.artist ?? nowPlaying?.recording?.artist  ?? nowPlaying?.rawArtist ?? null;
   const metaAlbum: string | null = null; // album title not yet in NowPlaying type
+  // Subtle cue while a provisional track is still resolving — dim the
+  // provisional text so it never reads with full confidence.
+  const metaResolving = provisionalNowPlaying?.resolving === true;
 
   // Status text for the secondary line
   const statusText = error
@@ -142,7 +154,12 @@ export function PlayerBar({
           {/* Phone widths: one quiet line — station · current track. The
               stacked ticker below is CSS-hidden at the same breakpoint. */}
           {(metaArtist || metaSong) && (
-            <span className="player-bar-mobiletrack">
+            <span
+              className="player-bar-mobiletrack"
+              style={metaResolving ? { opacity: 0.6 } : undefined}
+              title={metaResolving ? "New track just detected — details still resolving" : undefined}
+              data-testid={metaResolving ? "player-bar-resolving" : undefined}
+            >
               {" · "}{[metaArtist, metaSong].filter(Boolean).join(" — ")}
             </span>
           )}
@@ -269,7 +286,12 @@ export function PlayerBar({
       {/* ── Ticker strip — 3-line car-radio track info ────────────────── */}
       {/* Row order: song (dim) · album (mid) · artist (lime, most prominent) */}
       <div className="player-ticker">
-        <div className="player-ticker__meta">
+        <div
+          className="player-ticker__meta"
+          style={metaResolving ? { opacity: 0.6 } : undefined}
+          title={metaResolving ? "New track just detected — details still resolving" : undefined}
+          data-testid={metaResolving ? "player-ticker-resolving" : undefined}
+        >
           <div className="player-ticker__meta-line player-ticker__meta-song">
             {metaSong ?? "—"}
           </div>

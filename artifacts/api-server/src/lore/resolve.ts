@@ -623,15 +623,90 @@ export interface SpinChangedEvent {
   observedAt: string;
   /** Resolution confidence tier for the spin — same values as spins.confidence. */
   confidence: MbidResolution["confidence"];
+  /**
+   * Always false (or absent) on this resolved path — the flag exists so SSE
+   * frames share one shape; provisional observations travel as `spin-raw`
+   * events with `provisional: true` instead.
+   */
+  provisional?: boolean;
 }
 
 /**
- * Emits `spin-changed` (SpinChangedEvent) whenever logSpinIfChanged persists a
- * genuinely-new spin. Powers the SSE now-playing stream — subscribers are one
- * per connected browser, so the listener cap is raised well above the default.
+ * Payload emitted on `spin-raw` the moment a genuinely-new track passes the
+ * junk/ad and dedup checks — BEFORE MusicBrainz/Spotify resolution and
+ * persistence. Lets SSE subscribers show the new artist+title immediately and
+ * upgrade in place when the resolved `spin-changed` event arrives.
+ */
+export interface SpinRawEvent {
+  stationId: number;
+  stationSlug: string;
+  rawArtist: string;
+  rawTitle: string;
+  /** When Lore observed the metadata, ISO 8601. */
+  observedAt: string;
+  confidence: "unresolved";
+  provisional: true;
+}
+
+/**
+ * Terminal event for a provisional observation that will NOT be followed by
+ * `spin-changed`: resolution/persistence threw, or the write was declined
+ * (e.g. the (station, externalId) unique index found a pre-existing row).
+ * Emitted only after a matching `spin-raw`, on the same per-station chain.
+ * Clients showing the provisional track must revert to the last persisted
+ * spin — the raw track never reached the spine.
+ */
+export interface SpinRawFailedEvent {
+  stationId: number;
+  stationSlug: string;
+  rawArtist: string;
+  rawTitle: string;
+  /** When Lore observed the metadata, ISO 8601. Mirrors the spin-raw frame. */
+  observedAt: string;
+  confidence: "unresolved";
+  provisional: true;
+  /** Why the pipeline ended without persisting (observability only). */
+  reason: "exception" | "persist-declined";
+}
+
+/**
+ * Emits `spin-raw` (SpinRawEvent) the instant a new track is observed, then
+ * `spin-changed` (SpinChangedEvent) when logSpinIfChanged persists the
+ * resolved spin. Per-station serialisation (see stationChains) guarantees
+ * each station's events leave in observation order. Powers the SSE now-playing
+ * stream — subscribers are one per connected browser, so the listener cap is
+ * raised well above the default.
  */
 export const spinEvents = new EventEmitter();
 spinEvents.setMaxListeners(1000);
+
+// ---- Per-station serialisation -------------------------------------------
+
+/**
+ * Per-station promise chains serialising logSpinIfChanged. A rapid second
+ * track change while the first is still resolving (slow MusicBrainz/Spotify)
+ * queues behind it, so the dedup read always sees the latest committed spin
+ * and events always leave in observation order — a stale resolved event can
+ * never overtake a fresher provisional one. Chain tails self-clean on settle
+ * so the map stays bounded by the number of actively-ingesting stations.
+ */
+const stationChains = new Map<number, Promise<unknown>>();
+
+function enqueueStationWork<T>(
+  stationId: number,
+  work: () => Promise<T>,
+): Promise<T> {
+  const prev = stationChains.get(stationId) ?? Promise.resolve();
+  // Run work whether or not the predecessor settled cleanly — one station's
+  // failed ingest must never wedge the chain for the next track.
+  const next = prev.then(work, work);
+  stationChains.set(stationId, next);
+  const cleanup = () => {
+    if (stationChains.get(stationId) === next) stationChains.delete(stationId);
+  };
+  void next.then(cleanup, cleanup);
+  return next;
+}
 
 // ---- Ingestion paths ----------------------------------------------------
 
@@ -659,8 +734,13 @@ const DEDUP_WINDOW_MS = 120_000;
  * returns a previous show during handoff, causing an A→stale-B→A bounce. The
  * second A arrives with a different "last spin" (stale B) so the ordinary sig
  * check would pass — the window prevents writing a duplicate A.
+ *
+ * Every call runs on the station's serial chain (see enqueueStationWork): a
+ * track change arriving while the previous track is still resolving queues
+ * behind it, so dedup always reads the latest committed spin and the
+ * `spin-raw` → `spin-changed` event order can never invert.
  */
-export async function logSpinIfChanged(
+export function logSpinIfChanged(
   station: Station,
   np: NowPlayingRaw & {
     /**
@@ -680,6 +760,48 @@ export async function logSpinIfChanged(
     source?: string;
   },
 ): Promise<boolean> {
+  // Adapters resolve immediately before calling, so entry time ≈ the moment
+  // the source delivered the metadata — the anchor for the source_to_raw_ms /
+  // source_to_resolved_ms latency metrics. Queue wait is included on purpose:
+  // it is real listener-facing latency.
+  const arrivedAtMs = Date.now();
+  return enqueueStationWork(station.id, () =>
+    logSpinIfChangedInner(station, np, opts, arrivedAtMs),
+  );
+}
+
+/** Serialised body of logSpinIfChanged — never call off-chain. */
+async function logSpinIfChangedInner(
+  station: Station,
+  np: NowPlayingRaw & { playedAt?: Date },
+  opts: { source?: string } | undefined,
+  arrivedAtMs: number,
+): Promise<boolean> {
+  // Set once the provisional `spin-raw` event leaves. Every failure exit past
+  // that point must terminate the provisional display with `spin-raw-failed`
+  // (emitted on the same per-station chain, so ordering holds) — otherwise
+  // clients would show an unpersisted track as "resolving" indefinitely, and
+  // the REST poll can never correct them because the write never landed.
+  let rawEvent: SpinRawEvent | null = null;
+  // Tracks persistence separately from the try/catch: once persistSpin has
+  // written the spin, the track IS on the spine, so a later exception (post-
+  // persist metadata, a throwing SSE listener) must NOT emit spin-raw-failed
+  // — clients would revert a persisted track and no spin-changed would follow.
+  let wrote = false;
+  const failProvisional = (reason: SpinRawFailedEvent["reason"]) => {
+    const raw = rawEvent;
+    if (!raw) return;
+    spinEvents.emit("spin-raw-failed", {
+      ...raw,
+      reason,
+    } satisfies SpinRawFailedEvent);
+    console.debug("[lore] provisional now-playing failed", {
+      stationId: raw.stationId,
+      slug: raw.stationSlug,
+      reason,
+      source_to_failed_ms: Date.now() - arrivedAtMs,
+    });
+  };
   try {
     // Junk-metadata guard: programming labels, pure-punctuation, audio filenames.
     // Runs before dedup and resolution so garbage never reaches the spine.
@@ -754,6 +876,28 @@ export async function logSpinIfChanged(
       return false;
     }
 
+    // Provisional fast path: the track genuinely changed — tell subscribers
+    // immediately, before MusicBrainz/Spotify resolution and persistence add
+    // seconds of latency. The resolved `spin-changed` event follows on this
+    // same per-station chain, so it can never arrive out of order.
+    const rawEventPayload: SpinRawEvent = {
+      stationId: station.id,
+      stationSlug: station.slug,
+      rawArtist: np.rawArtist,
+      rawTitle: np.rawTitle,
+      observedAt: new Date().toISOString(),
+      confidence: "unresolved",
+      provisional: true,
+    };
+    spinEvents.emit("spin-raw", rawEventPayload);
+    rawEvent = rawEventPayload;
+    console.debug("[lore] provisional now-playing emitted", {
+      stationId: station.id,
+      slug: station.slug,
+      confidence: "unresolved",
+      source_to_raw_ms: Date.now() - arrivedAtMs,
+    });
+
     const r = await resolveToMbid(np.rawArtist, np.rawTitle, np.durationMs, {
       ...(np.recordingId ? { recordingId: np.recordingId } : {}),
       ...(np.isrc ? { isrc: np.isrc } : {}),
@@ -765,13 +909,17 @@ export async function logSpinIfChanged(
         ? await lookupScrapedShowId(station.id, station.ianaTimezone, new Date())
         : null;
 
-    const wrote = await persistSpin({
+    wrote = await persistSpin({
       station,
       resolution: r,
       raw: np,
       showId,
       source: opts?.source ?? station.nowPlayingSource ?? "unknown",
     });
+    // persistSpin declined the write (e.g. the (station, externalId) unique
+    // index matched a pre-existing row): no spin-changed is coming, so close
+    // out the provisional display explicitly.
+    if (!wrote) failProvisional("persist-declined");
     if (wrote) {
       // Check whether this MBID has been logged on any prior calendar day so
       // the SSE event carries the same isFirstSpin flag as the REST response.
@@ -779,32 +927,44 @@ export async function logSpinIfChanged(
       let releaseGroupMbid: string | null = null;
       let releaseYear: number | null = null;
       if (r.mbid) {
-        const [prior, rgRow, recRow] = await Promise.all([
-          db.execute<{ found: number }>(sql`
-            SELECT 1 AS found FROM spins
-            WHERE mbid = ${r.mbid}
-              AND played_at::date < CURRENT_DATE
-            LIMIT 1
-          `),
-          db
-            .select({ rg: recordingReleaseGroupsTable.releaseGroupMbid })
-            .from(recordingReleaseGroupsTable)
-            .where(
-              and(
-                eq(recordingReleaseGroupsTable.recordingMbid, r.mbid),
-                eq(recordingReleaseGroupsTable.isPrimary, true),
-              ),
-            )
-            .limit(1),
-          db
-            .select({ releaseYear: recordingsTable.releaseYear })
-            .from(recordingsTable)
-            .where(eq(recordingsTable.mbid, r.mbid))
-            .limit(1),
-        ]);
-        isFirstSpin = prior.rows.length === 0;
-        releaseGroupMbid = rgRow[0]?.rg ?? null;
-        releaseYear = recRow[0]?.releaseYear ?? null;
+        // Post-persist metadata is OPTIONAL enrichment for the SSE frame: the
+        // spin is already written, so a failure here must never surface as
+        // spin-raw-failed (clients would revert a persisted track). Fall back
+        // to safe defaults and still deliver the resolved terminal frame.
+        try {
+          const [prior, rgRow, recRow] = await Promise.all([
+            db.execute<{ found: number }>(sql`
+              SELECT 1 AS found FROM spins
+              WHERE mbid = ${r.mbid}
+                AND played_at::date < CURRENT_DATE
+              LIMIT 1
+            `),
+            db
+              .select({ rg: recordingReleaseGroupsTable.releaseGroupMbid })
+              .from(recordingReleaseGroupsTable)
+              .where(
+                and(
+                  eq(recordingReleaseGroupsTable.recordingMbid, r.mbid),
+                  eq(recordingReleaseGroupsTable.isPrimary, true),
+                ),
+              )
+              .limit(1),
+            db
+              .select({ releaseYear: recordingsTable.releaseYear })
+              .from(recordingsTable)
+              .where(eq(recordingsTable.mbid, r.mbid))
+              .limit(1),
+          ]);
+          isFirstSpin = prior.rows.length === 0;
+          releaseGroupMbid = rgRow[0]?.rg ?? null;
+          releaseYear = recRow[0]?.releaseYear ?? null;
+        } catch (metaErr) {
+          console.warn(
+            "[lore] post-persist metadata lookup failed; emitting spin-changed with fallback metadata",
+            station.slug,
+            metaErr,
+          );
+        }
       }
       // MBID is fully resolved before persist, so subscribers (SSE clients)
       // get everything they need without a follow-up round-trip.
@@ -821,10 +981,20 @@ export async function logSpinIfChanged(
         observedAt: new Date().toISOString(),
         confidence: r.confidence,
       } satisfies SpinChangedEvent);
+      console.debug("[lore] resolved now-playing emitted", {
+        stationId: station.id,
+        slug: station.slug,
+        confidence: r.confidence,
+        source_to_resolved_ms: Date.now() - arrivedAtMs,
+      });
     }
     return wrote;
   } catch (err) {
     console.error("[lore] logSpinIfChanged failed", station.slug, err);
+    // Only PRE-WRITE failures terminate as failed. Once the spin is persisted
+    // the track is on the spine; a missed spin-changed recovers via the 30s
+    // REST poll, whereas spin-raw-failed would revert a real spin.
+    if (!wrote) failProvisional("exception");
     return false;
   }
 }

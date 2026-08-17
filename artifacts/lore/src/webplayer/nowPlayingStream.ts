@@ -18,12 +18,22 @@
 
 import type { WpOnAirResponse } from "./hooks";
 
-/** Compact per-station spin-change payload (mirrors the server's SpinChangedEvent). */
+/** Compact per-station spin-change payload (mirrors the server's SpinChangedEvent / SpinRawEvent). */
 export interface SpinStreamEvent {
   stationSlug: string;
   rawArtist: string;
   rawTitle: string;
   mbid: string | null;
+  /**
+   * Frame discriminator. "spin-raw" is the provisional fast path — emitted
+   * before MusicBrainz/Spotify resolution completes. "spin-raw-failed" is the
+   * terminal failure frame: the provisional track never persisted, so the
+   * display must revert to the last persisted spin. Absent/"spin-changed"
+   * means the resolved, persisted event.
+   */
+  type?: "spin-raw" | "spin-raw-failed" | "spin-changed";
+  /** True on provisional `spin-raw` frames — the track is still resolving. */
+  provisional?: boolean;
   /** ISO timestamp of when the server observed the spin. Best-effort field. */
   observedAt?: string;
   /** Resolution confidence tier ("recording_id" | "isrc" | "text" | "spotify" | "unresolved"). */
@@ -83,6 +93,10 @@ function openStream(): void {
           rawArtist: data.rawArtist ?? "",
           rawTitle: data.rawTitle ?? "",
           mbid: data.mbid ?? null,
+          ...(data.type === "spin-raw" || data.type === "spin-raw-failed"
+            ? { type: data.type }
+            : {}),
+          ...(data.provisional === true ? { provisional: true } : {}),
           ...(data.observedAt ? { observedAt: data.observedAt } : {}),
           ...(data.confidence ? { confidence: data.confidence } : {}),
           ...(data.isLibraryHit != null ? { isLibraryHit: data.isLibraryHit } : {}),
@@ -190,11 +204,68 @@ export function mergeSpinIntoOnAir(
   if (idx < 0) return prev;
   const item = prev.items[idx]!;
 
+  // Terminal failure frame: the provisional track never persisted, so no
+  // spin-changed is coming. Revert the row to the stashed pre-provisional
+  // state (the last persisted spin). No-op unless the row currently shows the
+  // matching provisional track — a failure frame for an already-upgraded or
+  // never-provisional row must not clobber it.
+  if (ev.type === "spin-raw-failed") {
+    if (
+      !item.now.resolving ||
+      item.now.artist !== ev.rawArtist ||
+      item.now.title !== ev.rawTitle
+    ) {
+      return prev;
+    }
+    const items = [...prev.items];
+    const stash = item.now.revertTo;
+    items[idx] = stash
+      ? { ...item, now: stash.now, earlier: stash.earlier }
+      : { ...item, now: { ...item.now, resolving: false } };
+    return { ...prev, items };
+  }
+
+  const provisional = ev.provisional === true;
+
   const sameTrack =
     item.now.artist === ev.rawArtist &&
     item.now.title === ev.rawTitle &&
     item.now.mbid === (ev.mbid ?? null);
-  if (sameTrack) return prev;
+  if (sameTrack) {
+    // A resolved (non-provisional) frame for the track currently shown as
+    // provisional still completes the fast path when resolution FAILED —
+    // the final spin-changed carries mbid: null, making it artist/title/mbid
+    // identical to the provisional row. Clear the resolving flag and refresh
+    // the observation metadata so the "resolving" cue never sticks forever.
+    if (!provisional && item.now.resolving) {
+      const items = [...prev.items];
+      items[idx] = {
+        ...item,
+        now: {
+          ...item.now,
+          resolving: false,
+          // Terminal frame reached — the failure-revert stash is obsolete.
+          revertTo: undefined,
+          observedAt: ev.observedAt ?? item.now.observedAt,
+          freshness: "fresh",
+        },
+      };
+      return { ...prev, items };
+    }
+    return prev;
+  }
+
+  // A provisional frame carries mbid: null, so sameTrack misses when the
+  // display already shows this track RESOLVED — never downgrade a resolved
+  // row back to resolving on a duplicate raw observation.
+  if (
+    provisional &&
+    item.now.resolved &&
+    item.now.artist === ev.rawArtist &&
+    item.now.title === ev.rawTitle
+  ) {
+    return prev;
+  }
 
   const observedAt = ev.observedAt ?? new Date().toISOString();
 
@@ -219,6 +290,20 @@ export function mergeSpinIntoOnAir(
       observedAt,
       freshness: "fresh",
       resolved: ev.mbid != null,
+      // Provisional frames flag the row as still resolving; the matching
+      // resolved spin-changed frame replaces it and clears the flag.
+      resolving: provisional,
+      // Stash the outgoing persisted row so a terminal spin-raw-failed frame
+      // can revert to it. Chained provisional frames keep the ORIGINAL stash —
+      // reverting to another provisional row would resurrect an unpersisted
+      // track. Resolved frames build a fresh `now` without the field, so the
+      // stash is dropped the moment a track is confirmed.
+      ...(provisional
+        ? {
+            revertTo:
+              item.now.revertTo ?? { now: item.now, earlier: item.earlier },
+          }
+        : {}),
     },
     earlier,
   };

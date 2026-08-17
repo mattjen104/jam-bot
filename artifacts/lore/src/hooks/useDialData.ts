@@ -523,6 +523,19 @@ interface SseSpinEntry {
   isArtistHit: boolean;
 }
 
+/**
+ * The now-playing SSE stream carries three frame types sharing one message
+ * channel: resolved `spin-changed` (type absent), provisional `spin-raw`
+ * (pre-resolution), and terminal `spin-raw-failed` (never persisted). The
+ * Dial is a persisted-spin surface, so ONLY resolved frames may override a
+ * Dial row — a provisional frame would display an unpersisted track with
+ * empty MBID/release-year/hit flags, and overrides are never cleared. Guards
+ * the override handler below; exported for the regression test.
+ */
+export function isResolvedSseSpinFrame(ev: { type?: string }): boolean {
+  return ev.type !== "spin-raw" && ev.type !== "spin-raw-failed";
+}
+
 // ---------------------------------------------------------------------------
 // Bounded pending — a loading flag with a settle deadline
 // ---------------------------------------------------------------------------
@@ -710,6 +723,7 @@ export function useDialData(
       try {
         const ev = JSON.parse(msg.data as string) as {
           stationSlug?: string;
+          type?: string;
           rawArtist?: string;
           rawTitle?: string;
           mbid?: string | null;
@@ -720,6 +734,8 @@ export function useDialData(
           isArtistHit?: boolean;
         };
         if (!ev.stationSlug) return;
+        // Persisted-spin surface: ignore provisional/terminal-failure frames.
+        if (!isResolvedSseSpinFrame(ev)) return;
         setSseOverrides((prev) => {
           const next = new Map(prev);
           next.set(ev.stationSlug!, {

@@ -74,3 +74,20 @@ describe("classifyFreshness — clock skew", () => {
     expect(classifyFreshness("radio_browser_icy", at(-60_000), T0)).toBe("fresh");
   });
 });
+
+describe("classifyFreshness — provisional observations (spin-raw fast path)", () => {
+  // Contract: a provisional observation carries the same observedAt semantics
+  // as a persisted spin, so it classifies identically — a station must never
+  // read aging/stale while a resolution is in flight.
+  it("a just-observed provisional track is fresh for every source cadence", () => {
+    for (const source of ["radio_browser_icy", "spinitron", "kcrw", null]) {
+      expect(classifyFreshness(source, at(0), T0)).toBe("fresh");
+    }
+  });
+
+  it("classification is purely observedAt-driven — no special provisional branch", () => {
+    // A provisional frame observed 70s ago on a 30s-cadence source ages
+    // exactly like a persisted spin of the same age.
+    expect(classifyFreshness("radio_browser_icy", at(70_000), T0)).toBe("aging");
+  });
+});

@@ -53,7 +53,7 @@ import { resolveAutomationClass } from "../../lore/scraped-shows-sync.js";
 import { getUserFromSession } from "../../lore/userSession.js";
 import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../../lore/library-hits.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
-import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/resolve.js";
+import { logSpinIfChanged, spinEvents, type SpinChangedEvent, type SpinRawEvent, type SpinRawFailedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
 import {
   evaluateFingerprintPolicy,
@@ -525,9 +525,23 @@ router.get("/stations/now-playing", h(async (req, res) => {
 }));
 
 // GET /api/stations/now-playing/stream — Server-Sent Events push of spin
-// changes. One event per persisted spin, fired the moment the resolver writes
-// it (persistent ICY watchers make this near-instant for favorite stations).
-// Payload carries the resolved MBID so clients need no follow-up request.
+// changes. Two frame types share the default message channel:
+//   spin-raw     — provisional: fired the moment a genuinely-new track passes
+//                  the junk/ad + dedup checks, BEFORE resolution/persistence.
+//                  Carries `type: "spin-raw"` and `provisional: true` so
+//                  clients can show the new artist+title immediately with a
+//                  "resolving" cue. Library-hit flags don't exist yet (no
+//                  MBID), so both are false.
+//   spin-changed — resolved: fired the moment the resolver persists the spin
+//                  (persistent ICY watchers make this near-instant for
+//                  favorite stations). Payload carries the resolved MBID so
+//                  clients need no follow-up request.
+//   spin-raw-failed — terminal failure: the provisional track never persisted
+//                  (resolver error or declined write), so no spin-changed is
+//                  coming. Clients must revert to the last persisted spin.
+// Per-station serialisation in the emitter guarantees a station's spin-raw
+// always precedes its matching terminal frame (spin-changed or
+// spin-raw-failed).
 // Plain SSE, deliberately outside the OpenAPI/orval surface (EventSource, not
 // fetch). Must be registered before any /stations/:slug route.
 //
@@ -590,6 +604,27 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
   };
   spinEvents.on("spin-changed", onSpin);
 
+  // Provisional fast path: forward raw observations immediately so browsers
+  // can show the new artist+title while resolution is still in flight. Hit
+  // flags require a resolved MBID, so both are false on these frames.
+  const onRaw = (ev: SpinRawEvent) => {
+    if (res.writableEnded) return;
+    res.write(
+      `data: ${JSON.stringify({ ...ev, type: "spin-raw", isLibraryHit: false, isArtistHit: false })}\n\n`,
+    );
+  };
+  spinEvents.on("spin-raw", onRaw);
+
+  // Terminal failure: the provisional track never persisted (resolver error,
+  // declined write) — clients must revert to the last persisted spin.
+  const onRawFailed = (ev: SpinRawFailedEvent) => {
+    if (res.writableEnded) return;
+    res.write(
+      `data: ${JSON.stringify({ ...ev, type: "spin-raw-failed", isLibraryHit: false, isArtistHit: false })}\n\n`,
+    );
+  };
+  spinEvents.on("spin-raw-failed", onRawFailed);
+
   // Keep-alive comment every 30s so idle proxies don't kill the connection.
   const ping = setInterval(() => res.write(":ping\n\n"), 30_000);
 
@@ -609,6 +644,8 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
     clearInterval(ping);
     if (hitCtxRefresh !== null) clearInterval(hitCtxRefresh);
     spinEvents.off("spin-changed", onSpin);
+    spinEvents.off("spin-raw", onRaw);
+    spinEvents.off("spin-raw-failed", onRawFailed);
     // Slot is released by the earlier releaseSlot listener; no duplicate call needed.
   });
 

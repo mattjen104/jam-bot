@@ -35,6 +35,18 @@ export interface WpNow {
    */
   freshness?: "fresh" | "aging" | "stale";
   resolved: boolean;
+  /**
+   * True while a provisional spin-raw observation is awaiting its resolved
+   * spin-changed event — show a subtle "resolving" cue rather than full
+   * confidence. Cleared when the resolved event merges.
+   */
+  resolving?: boolean;
+  /**
+   * Client-internal: the pre-provisional row state, stashed when a spin-raw
+   * frame replaces the display so a terminal spin-raw-failed frame can
+   * revert to the last persisted spin. Never present on server payloads.
+   */
+  revertTo?: { now: WpNow; earlier: string[] } | undefined;
 }
 
 export interface WpOnAirItem {

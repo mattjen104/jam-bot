@@ -349,10 +349,26 @@
   color: var(--wp-text-accent);
 }
 
+/* Provisional now-playing cue — a quiet pulse while a just-observed track
+   is still resolving (spin-raw received, spin-changed pending). */
+.wp-resolving {
+  animation: wp-resolving-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes wp-resolving-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wp-support-link,
   .wp-support-link * {
     transition: none !important;
+  }
+
+  .wp-resolving {
+    animation: none;
+    opacity: 0.7;
   }
 }
 
