@@ -32,7 +32,13 @@ import { useStationPresence } from "../hooks/useStationPresence";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
-import { toggleAgeTier, toggleStationCategory, useDialSkipped } from "../lib/dialFilterState";
+import {
+  DEFAULT_ACTIVE_AGE_TIERS,
+  DEFAULT_ACTIVE_STATION_CATEGORIES,
+  toggleAgeTier,
+  toggleStationCategory,
+  useDialSkipped,
+} from "../lib/dialFilterState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import { writeDialLens } from "../lib/dialLensState";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
@@ -53,12 +59,13 @@ export default function SplitHome() {
   const [, setLocation] = useLocation();
 
   // CLI filter state — same semantics as the full Dial (additive tiers,
-  // additive categories). No category is selected initially, so the
-  // front door starts unfiltered; unchecking every category reverts to the
-  // all-stations state.
-  const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
+  // additive categories). Start with the normal radio browse scope visible;
+  // unchecking every category still reverts to the all-stations state.
+  const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(
+    () => new Set(DEFAULT_ACTIVE_AGE_TIERS),
+  );
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
-    () => new Set<StationCategory>(),
+    () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
   );
   const toggleTier = useCallback((tier: AgeTier) => {
     setActiveTiers((prev) => toggleAgeTier(prev, tier));

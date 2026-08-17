@@ -29,7 +29,12 @@ import { DialLensBar } from "./dial/DialLensBar";
 import { PressFeedLane } from "./dial/PressFeedLane";
 import { ShowsFeedLane } from "./dial/ShowsFeedLane";
 import { type AgeTier } from "../lib/dialAgeFilter";
-import { toggleAgeTier, toggleStationCategory } from "../lib/dialFilterState";
+import {
+  DEFAULT_ACTIVE_AGE_TIERS,
+  DEFAULT_ACTIVE_STATION_CATEGORIES,
+  toggleAgeTier,
+  toggleStationCategory,
+} from "../lib/dialFilterState";
 import { readDialLens, writeDialLens, readShowsCity, writeShowsCity, type DialLens } from "../lib/dialLensState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import {
@@ -1550,16 +1555,18 @@ export function DialView() {
 
   // ── Dial filter dropdowns — crossings mode, song-age tiers, station types.
   // Age tiers and station categories are both additive multi-selects; the
-  // empty set = unfiltered. Checked station categories are unioned by
-  // useDialData. The Crossings dropdown's checkbox is the inverse of
+  // normal radio browse scope is checked initially, while the empty set =
+  // unfiltered. Checked station categories are unioned by useDialData. The Crossings dropdown's checkbox is the inverse of
   // radioMode (checked = crossing-ranked feed).
   // The hidden gesture modes (sleep / era-genre) keep priority: while either is
   // active the filter bar is hidden and the legacy single-mode fetch applies.
-  const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(() => new Set());
-  // No category selected initially — the dial starts unfiltered. Checking a
+  const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(
+    () => new Set(DEFAULT_ACTIVE_AGE_TIERS),
+  );
+  // Anchor, Campus, and Public & Community are selected initially. Checking a
   // category adds it to the filter set; unchecking removes it.
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
-    () => new Set<StationCategory>(),
+    () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
   );
   const toggleTier = useCallback((tier: AgeTier) => {
     setActiveTiers((prev) => toggleAgeTier(prev, tier));

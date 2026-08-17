@@ -61,15 +61,16 @@ export function spinAgeTier(
  *
  * Rules:
  *   - If no tiers are active (empty set), all rows pass.
- *   - If the spin's tier is null (no release year, not isFirstSpin), the row
+ *   - If the spin's tier is null OR undefined (no release year, not
+ *     isFirstSpin, or an older payload shape without the field), the row
  *     always passes — we never hide a row solely due to missing release data.
  *   - Otherwise the spin's tier must be in the active set.
  */
 export function rowPassesAgeTierFilter(
-  tier: AgeTier | null,
+  tier: AgeTier | null | undefined,
   activeTiers: ReadonlySet<AgeTier>,
 ): boolean {
   if (activeTiers.size === 0) return true;
-  if (tier === null) return true;
+  if (tier == null) return true;
   return activeTiers.has(tier);
 }

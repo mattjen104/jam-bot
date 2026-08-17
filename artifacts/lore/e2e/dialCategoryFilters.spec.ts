@@ -70,11 +70,16 @@ function makeStation(
   };
 }
 
+// Each station carries its primary editorial category plus one of the three
+// default-checked categories (anchor/campus/public) so all four are visible
+// when the app loads with default filters. Without the extra tag, stations
+// whose primary category is not in the default set (indie, discovery) would
+// be hidden on load, breaking waitForAllStations.
 const STATIONS = [
-  makeStation("campus-wkrp",  "Campus WKRP",  ["campus"],    0),
-  makeStation("indie-fm",     "Indie FM",     ["indie"],     1),
-  makeStation("discovery-rb", "Discovery RB", ["discovery"], 2),
-  makeStation("anchor-kexp",  "Anchor KEXP",  ["anchor"],    3),
+  makeStation("campus-wkrp",  "Campus WKRP",  ["campus"],           0),
+  makeStation("indie-fm",     "Indie FM",     ["indie", "anchor"],  1),
+  makeStation("discovery-rb", "Discovery RB", ["discovery", "anchor"], 2),
+  makeStation("anchor-kexp",  "Anchor KEXP",  ["anchor"],           3),
 ];
 
 function makeNowPlaying(slug: string, idx: number) {
@@ -258,53 +263,70 @@ test.describe("Dial category filters — CLI commands", () => {
     await waitForAllStations(page);
   });
 
-  test("/campus shows only campus-labeled stations", async ({ page }) => {
-    await sendCliCommand(page, "/campus");
+  // Default-checked categories: anchor, campus, public. Category CLI
+  // commands TOGGLE membership in that set, so a command for a default
+  // category unchecks it, and a command for an opt-in category adds it.
 
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Indie FM")).not.toBeVisible();
-    await expect(page.getByText("Discovery RB")).not.toBeVisible();
-    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
-  });
-
-  test("/indie shows only indie-labeled stations", async ({ page }) => {
-    await sendCliCommand(page, "/indie");
-
-    await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
-    await expect(page.getByText("Discovery RB")).not.toBeVisible();
-    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
-  });
-
-  test("/discovery shows only discovery-labeled stations", async ({ page }) => {
-    await sendCliCommand(page, "/discovery");
-
-    await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
-    await expect(page.getByText("Indie FM")).not.toBeVisible();
-    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
-  });
-
-  test("/campus then /indie unions the selection (additive multi-select)", async ({
+  test("/campus unchecks the default campus category, hiding campus-only stations", async ({
     page,
   }) => {
     await sendCliCommand(page, "/campus");
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+
+    // campus-wkrp only carries campus, so it drops out; the other three
+    // remain visible through the still-checked anchor category.
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Indie FM").first()).toBeVisible();
+    await expect(page.getByText("Discovery RB").first()).toBeVisible();
+    await expect(page.getByText("Anchor KEXP").first()).toBeVisible();
+  });
+
+  test("/anchor unchecks anchor, leaving only campus-covered stations", async ({
+    page,
+  }) => {
+    await sendCliCommand(page, "/anchor");
+
+    // Active set is now {campus, public}: only campus-wkrp matches.
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
     await expect(page.getByText("Indie FM")).not.toBeVisible();
+    await expect(page.getByText("Discovery RB")).not.toBeVisible();
+  });
+
+  test("/anchor then /indie unions indie back into the narrowed selection", async ({
+    page,
+  }) => {
+    await sendCliCommand(page, "/anchor");
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
 
     await sendCliCommand(page, "/indie");
 
-    // Both categories are now checked: campus and indie stations render,
-    // everything else stays hidden.
+    // Active set is now {campus, public, indie}: campus + indie stations
+    // render, anchor-only and discovery stations stay hidden.
     await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Campus WKRP").first()).toBeVisible();
     await expect(page.getByText("Discovery RB")).not.toBeVisible();
     await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
 
-    // Unchecking /campus removes only those stations from the union.
-    await sendCliCommand(page, "/campus");
-    await expect(page.getByText("Indie FM").first()).toBeVisible();
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
+    // Unchecking /indie removes only those stations from the union.
+    await sendCliCommand(page, "/indie");
+    await expect(page.getByText("Indie FM")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
+  });
+
+  test("/anchor then /discovery shows discovery alongside campus", async ({
+    page,
+  }) => {
+    await sendCliCommand(page, "/anchor");
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible({ timeout: 10_000 });
+
+    await sendCliCommand(page, "/discovery");
+
+    // Active set is now {campus, public, discovery}.
+    await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
+    await expect(page.getByText("Indie FM")).not.toBeVisible();
+    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
   });
 });
 
@@ -335,30 +357,36 @@ test.describe("Dial category filters — filter bar dropdown wiring at /lore/fee
     return page.getByRole("checkbox", { name });
   }
 
-  test("Campus checkbox reflects /campus CLI toggles", async ({ page }) => {
+  test("Campus checkbox starts checked (default) and reflects /campus CLI toggles", async ({
+    page,
+  }) => {
     await stationTypeTrigger(page).click();
     const campusBox = categoryCheckbox(page, "Campus Radio");
-    await expect(campusBox).not.toBeChecked();
-
-    await sendCliCommand(page, "/campus");
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+    // Campus is one of the three default-checked categories.
     await expect(campusBox).toBeChecked();
 
-    // Unchecking the active category clears the filter — back to all stations.
+    // /campus unchecks it — the campus-only station drops out.
     await sendCliCommand(page, "/campus");
     await expect(campusBox).not.toBeChecked();
-    await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Anchor KEXP").first()).toBeVisible();
+
+    // /campus again re-checks it — the campus station returns.
+    await sendCliCommand(page, "/campus");
+    await expect(campusBox).toBeChecked();
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("Checking a second category unions it (additive multi-select)", async ({
+  test("Checking an opt-in category unions it with the defaults (additive multi-select)", async ({
     page,
   }) => {
     await stationTypeTrigger(page).click();
     const campusBox = categoryCheckbox(page, "Campus Radio");
     const indieBox = categoryCheckbox(page, "Independent DJ");
 
-    await sendCliCommand(page, "/campus");
+    // Defaults: campus checked, indie unchecked.
     await expect(campusBox).toBeChecked();
+    await expect(indieBox).not.toBeChecked();
 
     await sendCliCommand(page, "/indie");
     await expect(indieBox).toBeChecked();
@@ -373,16 +401,17 @@ test.describe("Dial category filters — filter bar dropdown wiring at /lore/fee
     await stationTypeTrigger(page).click();
     const discoveryBox = categoryCheckbox(page, "Discovery");
     await expect(discoveryBox).toBeVisible();
+    // Discovery is opt-in — not part of the default-checked set.
     await expect(discoveryBox).not.toBeChecked();
 
     await discoveryBox.click();
     await expect(discoveryBox).toBeChecked();
+    // Discovery unions with the still-checked defaults, so every fixture
+    // station is visible (discovery-rb also carries anchor).
     await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible();
-    await expect(page.getByText("Indie FM")).not.toBeVisible();
-    await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
+    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
 
-    // Unchecking the only checked category reverts to all stations.
+    // Unchecking reverts to the default three categories.
     await discoveryBox.click();
     await expect(discoveryBox).not.toBeChecked();
     await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
@@ -392,12 +421,15 @@ test.describe("Dial category filters — filter bar dropdown wiring at /lore/fee
     page,
   }) => {
     const trigger = stationTypeTrigger(page);
+    // Three default-checked categories → the badge starts at 3.
+    await expect(trigger).toContainText("· 3");
     await trigger.click();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
 
+    // Unchecking Campus drops the count to 2.
     await categoryCheckbox(page, "Campus Radio").click();
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
-    await expect(trigger).toContainText("· 1");
+    await expect(page.getByText("Campus WKRP")).not.toBeVisible({ timeout: 10_000 });
+    await expect(trigger).toContainText("· 2");
 
     await page.keyboard.press("Escape");
     await expect(trigger).toHaveAttribute("aria-expanded", "false");

@@ -25,6 +25,21 @@ import { useState, useCallback } from "react";
 import type { AgeTier } from "./dialAgeFilter";
 import type { StationCategory } from "./dialCategories";
 
+/** Initial browse scope shown by both the home remote and full Dial. */
+export const DEFAULT_ACTIVE_AGE_TIERS: ReadonlySet<AgeTier> = new Set([
+  "first",
+  "current",
+  "catalog",
+  "deep",
+]);
+
+/** Normal radio defaults; Ambient & Sleep stays an explicit opt-in category. */
+export const DEFAULT_ACTIVE_STATION_CATEGORIES: ReadonlySet<StationCategory> = new Set([
+  "anchor",
+  "campus",
+  "public",
+]);
+
 /** Toggle an age tier: plain additive toggle, empty set allowed. */
 export function toggleAgeTier(prev: ReadonlySet<AgeTier>, tier: AgeTier): Set<AgeTier> {
   const next = new Set(prev);

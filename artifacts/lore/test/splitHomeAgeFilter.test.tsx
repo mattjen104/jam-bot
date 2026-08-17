@@ -248,7 +248,8 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(mockSetLocation).toHaveBeenCalledWith("/feed");
   });
 
-  it("/deep hides rows whose current track is not deep; unknown-age and trackless rows stay", () => {
+  it("/deep removes deep from the active set, hiding deep rows while others stay", () => {
+    // Default: all four age tiers are active, so every row renders initially.
     mockStations.value = [
       makeStation("deep-cuts", "deep"),
       makeStation("new-music", "current"),
@@ -257,21 +258,26 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     ];
     render(<SplitHome />);
 
-    // All four render before any tier is active.
+    // All four render with the default all-tiers-active state.
     expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
     expect(screen.getByTestId("fdrow-new-music")).toBeTruthy();
 
+    // /deep toggles deep OUT of the active set (first/current/catalog remain).
+    // Deep-tagged rows are now hidden; current, unknown-age, and trackless pass.
     typeCommand("/deep");
 
-    // The "current" row is hidden; deep matches, and the unknown-age +
-    // trackless rows always pass (never hide rows for missing data).
-    expect(screen.queryByTestId("fdrow-new-music")).toBeNull();
-    expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-deep-cuts")).toBeNull();
+    expect(screen.getByTestId("fdrow-new-music")).toBeTruthy();
     expect(screen.getByTestId("fdrow-no-year")).toBeTruthy();
     expect(screen.getByTestId("fdrow-dark-station")).toBeTruthy();
   });
 
-  it("tier commands toggle: /current twice restores the unfiltered feed", () => {
+  it("tier commands toggle: /current twice restores the all-tiers feed", () => {
+    // Start: all four tiers active — both rows visible.
+    // /current once: removes current from active set (first/catalog/deep remain)
+    //   → deep-cuts visible, new-music hidden.
+    // /current again: re-adds current (all four active again)
+    //   → both rows visible again.
     mockStations.value = [
       makeStation("deep-cuts", "deep"),
       makeStation("new-music", "current"),
@@ -279,15 +285,19 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     render(<SplitHome />);
 
     typeCommand("/current");
-    expect(screen.queryByTestId("fdrow-deep-cuts")).toBeNull();
-    expect(screen.getByTestId("fdrow-new-music")).toBeTruthy();
+    expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-new-music")).toBeNull();
 
     typeCommand("/current");
     expect(screen.getByTestId("fdrow-deep-cuts")).toBeTruthy();
     expect(screen.getByTestId("fdrow-new-music")).toBeTruthy();
   });
 
-  it("tiers are additive: /first + /catalog show both tiers, hide the rest", () => {
+  it("tiers are additive: /current + /first remove those tiers, leaving catalog + deep", () => {
+    // Default: all four tiers active — all three rows visible.
+    // /current removes current → premieres (first) + catalog-fm (catalog) visible,
+    //   new-music (current) hidden.
+    // /first removes first → only catalog-fm (catalog) visible.
     mockStations.value = [
       makeStation("premieres", "first"),
       makeStation("catalog-fm", "catalog"),
@@ -295,10 +305,13 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     ];
     render(<SplitHome />);
 
-    typeCommand("/first");
-    typeCommand("/catalog");
-
+    typeCommand("/current");
     expect(screen.getByTestId("fdrow-premieres")).toBeTruthy();
+    expect(screen.getByTestId("fdrow-catalog-fm")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-new-music")).toBeNull();
+
+    typeCommand("/first");
+    expect(screen.queryByTestId("fdrow-premieres")).toBeNull();
     expect(screen.getByTestId("fdrow-catalog-fm")).toBeTruthy();
     expect(screen.queryByTestId("fdrow-new-music")).toBeNull();
   });
@@ -326,21 +339,23 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
   });
 
   it("filtering happens before scan windowing: /scan2 pages within the filtered set", () => {
-    // 7 deep rows interleaved with current rows — after /deep, scan 2
-    // (offset 5) must show the 6th and 7th DEEP rows, not raw-index rows.
+    // 7 current rows interleaved with deep rows — after /deep (removes deep
+    // from the active set), scan 2 (offset 5) must show the 6th and 7th
+    // CURRENT rows, not raw-index rows.
     mockStations.value = [
-      ...Array.from({ length: 7 }, (_, i) => makeStation(`deep-${i + 1}`, "deep" as AgeTier)),
-      ...Array.from({ length: 3 }, (_, i) => makeStation(`cur-${i + 1}`, "current" as AgeTier)),
+      ...Array.from({ length: 7 }, (_, i) => makeStation(`cur-${i + 1}`, "current" as AgeTier)),
+      ...Array.from({ length: 3 }, (_, i) => makeStation(`deep-${i + 1}`, "deep" as AgeTier)),
     ];
     render(<SplitHome />);
 
+    // /deep removes deep from the active set → only current rows remain.
     typeCommand("/deep");
     typeCommand("/scan2");
 
-    expect(screen.getByTestId("fdrow-deep-6")).toBeTruthy();
-    expect(screen.getByTestId("fdrow-deep-7")).toBeTruthy();
-    expect(screen.queryByTestId("fdrow-deep-1")).toBeNull();
+    expect(screen.getByTestId("fdrow-cur-6")).toBeTruthy();
+    expect(screen.getByTestId("fdrow-cur-7")).toBeTruthy();
     expect(screen.queryByTestId("fdrow-cur-1")).toBeNull();
+    expect(screen.queryByTestId("fdrow-deep-1")).toBeNull();
   });
 
   it("renders one numeric page selector per 5-row page and navigates past page 3", () => {
