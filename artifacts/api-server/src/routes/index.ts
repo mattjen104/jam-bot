@@ -8,6 +8,7 @@ import shareRouter from "./share";
 import artRouter from "./art.js";
 import meRouter from "./me/index.js";
 import playerRouter from "./player.js";
+import stationSearchRouter from "./station-search.js";
 import bottlesRouter from "./lore/bottles.js";
 import importedSetsRouter from "./lore/imported-sets.js";
 
@@ -27,6 +28,9 @@ router.use(artRouter);
 router.use(bottlesRouter);
 // Imported sets must also precede loreRouter (same catch-all caveat).
 router.use(importedSetsRouter);
+// Station search (Radio Browser proxy for the Station Finder) is public and
+// must also precede loreRouter (same catch-all caveat).
+router.use(stationSearchRouter);
 router.use(loreRouter);
 
 export default router;

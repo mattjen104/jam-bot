@@ -42,6 +42,7 @@ import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
 import { HomeCliStrip, type ScanMode } from "../components/HomeCliStrip";
 import { RadioRemoteBar } from "../components/RadioRemoteBar";
+import { StationFinderSheet } from "../components/StationFinderSheet";
 import { StackPagerBar } from "../components/StackPagerBar";
 import { useCompactStackShuffle } from "../hooks/useCompactStackShuffle";
 import { useMyLibraryInfinite, useStartMattLibrary } from "../lib/meHooks";
@@ -69,6 +70,11 @@ export default function SplitHome() {
   // Feed mode (persisted): false = /crossings (default), true = /radio.
   // Drives the pressed state of the remote's feed-mode toggles.
   const [radioMode, setRadioMode] = useState<boolean>(() => readRadioMode());
+
+  // Station Finder sheet (Radio Browser search → pin personal stations).
+  const [finderOpen, setFinderOpen] = useState(false);
+  const openFinder = useCallback(() => setFinderOpen(true), []);
+  const closeFinder = useCallback(() => setFinderOpen(false), []);
 
   // Per-station scan-skip preference (localStorage "lore:dialSkipped").
   // Skipped stations sort to the last scan pages and are excluded from
@@ -354,7 +360,12 @@ export default function SplitHome() {
   }, []);
 
   const liveStationIds = useMemo(
-    () => activeRows.slice(scanOffset, scanOffset + 5).map((row) => row.ds.station.id),
+    () => activeRows
+      .slice(scanOffset, scanOffset + 5)
+      .map((row) => row.ds.station.id)
+      // Personal (listener-pinned) stations carry negative synthetic ids and
+      // have no server-side presence — leave them out of the presence query.
+      .filter((id) => id > 0),
     [activeRows, scanOffset],
   );
   const presenceMap = useStationPresence(liveStationIds);
@@ -472,7 +483,10 @@ export default function SplitHome() {
         onToggleCategory={toggleCategory}
         onRadioMode={handleRadioMode}
         radioMode={radioMode}
+        onFindStations={openFinder}
       />
+
+      {finderOpen && <StationFinderSheet onClose={closeFinder} />}
 
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
         <CompactDial

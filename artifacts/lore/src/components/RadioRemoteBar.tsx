@@ -56,6 +56,8 @@ export interface RadioRemoteBarProps {
   onRadioMode?: (on: boolean) => void;
   /** Whether blank-radio mode is currently on (drives the Crossings checkbox). */
   radioMode?: boolean;
+  /** Opens the Station Finder sheet (search Radio Browser, pin stations). */
+  onFindStations?: () => void;
 }
 
 export function RadioRemoteBar({
@@ -65,6 +67,7 @@ export function RadioRemoteBar({
   onToggleCategory,
   onRadioMode,
   radioMode = false,
+  onFindStations,
 }: RadioRemoteBarProps) {
   const [, setLocation] = useLocation();
   const goHome = useCallback(() => setLocation("/"), [setLocation]);
@@ -110,6 +113,21 @@ export function RadioRemoteBar({
         onToggle={onToggleCategory}
         variant="chips"
       />
+
+      {/* Find stations opens the Station Finder — an action, not a filter,
+          so it renders only when the host provides the handler. */}
+      {onFindStations && (
+        <div className="radio-remote-bar__group" role="group" aria-label="Station finder">
+          <button
+            type="button"
+            className="home-cli-strip__btn home-cli-strip__home-btn home-cli-strip__home-btn--nav"
+            aria-label="Find stations"
+            onClick={onFindStations}
+          >
+            Find stations
+          </button>
+        </div>
+      )}
 
       {/* /lore is navigation, not a filter toggle — styled as a nav link */}
       <div className="radio-remote-bar__group" role="group" aria-label="Navigation">

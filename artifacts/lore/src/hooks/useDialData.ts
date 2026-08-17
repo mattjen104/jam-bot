@@ -37,6 +37,8 @@ import { useMyPickerNames, useMyDialCrossings, useMyBlendedCrossings, useMyPicke
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import { spinAgeTier, type AgeTier } from "../lib/dialAgeFilter";
 import { gateLiveHitFlags } from "../lib/freshness";
+import { useAddedStations } from "./useAddedStations";
+import { addedStationToStation } from "../lib/addedStations";
 
 // ---------------------------------------------------------------------------
 // Shared name normaliser — strips zero-width chars, trims, collapses spaces.
@@ -1096,6 +1098,15 @@ export function useDialData(
 
   // pins are managed externally by DialView; not needed for data assembly
 
+  // Listener-pinned personal stations (Station Finder). Device-local, adapted
+  // to the Station shape so they flow through the same enrichment pipeline as
+  // curated stations below.
+  const { addedStations } = useAddedStations();
+  const personalStations = useMemo(
+    () => addedStations.map(addedStationToStation),
+    [addedStations],
+  );
+
   // ── assemble enriched stations ────────────────────────────────────────────
   const stations = useMemo((): DialStation[] => {
     // Additive multi-select taxonomy: union the normal Lore list with the
@@ -1149,7 +1160,26 @@ export function useDialData(
           }),
         )
       : bySlugRaw;
-    const raw = [...filteredBySlug.values()];
+    // Personal (listener-pinned) stations join the raw pool here so they flow
+    // through the same enrichment below. Category semantics mirror the
+    // curated list: with no category filter active they always appear; with
+    // one or more categories checked they need a tag-mapped category match
+    // (ambient/specialist included — personal stations have no server mode
+    // pool, so the checked set itself is the filter). A personal station
+    // whose name matches a curated station is dropped — the curated row wins
+    // (the Finder already blocks adding catalog stations via inLoreCatalog).
+    const curatedNames = new Set(
+      [...bySlugRaw.values()].map((s) => s.name.trim().toLowerCase()),
+    );
+    const personalRaw = personalStations.filter((s) => {
+      if (curatedNames.has(s.name.trim().toLowerCase())) return false;
+      if (!categories || categories.size === 0) return true;
+      const cats = (s.stationCategories ?? []) as string[];
+      for (const c of categories) if (cats.includes(c)) return true;
+      return false;
+    });
+    const personalSlugs = new Set(personalRaw.map((s) => s.slug));
+    const raw = [...filteredBySlug.values(), ...personalRaw];
     // Rolling 24-hour cutoff for crossings. We fetch both today's and
     // yesterday's data so that overnight shows are present, but only spins
     // within the past 24 hours count toward crossings — spins from earlier
@@ -1333,6 +1363,10 @@ export function useDialData(
       // alphabetically, off-air ones included, so it bypasses this
       // visibility filter entirely.
       if (includeAllStations) return true;
+      // Personal stations have no server pulse or schedule — the live /
+      // flagship / named-show rules would always hide them. The listener
+      // explicitly pinned them, so they always pass.
+      if (personalSlugs.has(ds.station.slug)) return true;
       if (ds.isLive) return true;
       if (ds.station.tier === "flagship") return true;
       return ds.shows.some(
@@ -1342,7 +1376,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, metaCategories, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
+  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, metaCategories, personalStations, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading
     || (categories != null && wantAmbient && ambientLoading)

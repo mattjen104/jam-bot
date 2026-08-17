@@ -102,6 +102,20 @@ describe("RadioRemoteBar", () => {
     expect(mockSetLocation).toHaveBeenCalledWith("/");
   });
 
+  it("renders no Find stations button when the host does not wire it", () => {
+    renderBar();
+    expect(screen.queryByRole("button", { name: "Find stations" })).toBeNull();
+  });
+
+  it("Find stations is an action (no pressed state) and routes clicks", () => {
+    const onFindStations = vi.fn();
+    renderBar({ onFindStations });
+    const btn = screen.getByRole("button", { name: "Find stations" });
+    expect(btn.getAttribute("aria-pressed")).toBeNull();
+    fireEvent.click(btn);
+    expect(onFindStations).toHaveBeenCalledTimes(1);
+  });
+
   it("renders every age-tier checkbox and routes toggles", () => {
     const { props } = renderBar({
       activeTiers: new Set<AgeTier>(["first"]),
