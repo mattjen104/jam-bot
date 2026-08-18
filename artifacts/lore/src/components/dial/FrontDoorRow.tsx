@@ -374,8 +374,10 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     ds.liveTrack?.artist,
   );
 
-  // Expand-then-keep: first tap expands the row to show the byline + Keep
-  // affordance; second tap (or long-press on collapsed) tunes in.
+  // Expand-then-meta: first tap switches the row into "meta" mode — the left
+  // slot becomes a car-radio-style ticker cycling through the available
+  // metadata. Second tap (or long-press on collapsed) tunes in. Row height
+  // never changes; the station stays pinned at the right edge.
   // Only active in compact mode — legacy sentence rows still tune on first tap.
   const [expanded, setExpanded] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -387,16 +389,55 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     };
   }, []);
 
-  // Byline content — visible when expanded in compact mode.
-  // Attribution: DJ name if available, else show name (with same filtering as
-  // liveSentence so placeholder/echo values don't surface).
-  const bylineAttribution: string | null = usableDj ?? (() => {
-    const rawShow = cleanLiveValue(show?.showName);
-    if (!rawShow || sameLiveValue(rawShow, ds.station.name)) return null;
-    return rawShow;
+  // Attribution-only stations (no direct stream, no relay) cannot be played
+  // in-app: the row click must not reach radio.toggle (which would surface
+  // the "no live stream configured" safety-net error).
+  const playable = resolvePlaybackSource(ds.station) != null;
+  // Station homepage link: computed for every station (safeHttpUrl guards
+  // against non-http(s) values). Attribution-only rows keep it in tier 1;
+  // playable rows surface it as the last ticker slot instead.
+  const siteHref = safeHttpUrl(ds.station.homepageUrl);
+
+  // Meta-ticker slots, in car-radio order: artist → song title → DJ name →
+  // show name → station description → station site link. Missing fields are
+  // skipped; the site link renders as a real anchor.
+  type TickerSlot =
+    | { kind: "artist" | "title" | "dj" | "show" | "blurb"; label: string }
+    | { kind: "link"; label: string; href: string };
+  const tickerShowName: string | null = (() => {
+    const raw = cleanLiveValue(show?.showName);
+    if (!raw || sameLiveValue(raw, ds.station.name)) return null;
+    if (usableDj && sameLiveValue(raw, usableDj)) return null; // shown as DJ already
+    return raw;
   })();
-  const bylineTrack = cleanLiveValue(show?.currentTrack?.title ?? null);
+  const tickerTitle = cleanLiveValue(show?.currentTrack?.title ?? null);
   const stationBlurb = ds.station.homepageBlurb?.trim() || null;
+  const tickerArtist = compact?.artist ?? null;
+  const tickerSlots = useMemo<TickerSlot[]>(() => {
+    const slots: TickerSlot[] = [];
+    if (tickerArtist) slots.push({ kind: "artist", label: tickerArtist });
+    if (tickerTitle) slots.push({ kind: "title", label: tickerTitle });
+    if (usableDj) slots.push({ kind: "dj", label: usableDj });
+    if (tickerShowName) slots.push({ kind: "show", label: tickerShowName });
+    if (stationBlurb) slots.push({ kind: "blurb", label: stationBlurb });
+    if (siteHref) slots.push({ kind: "link", label: `↗ ${ds.station.name}`, href: siteHref });
+    return slots;
+  }, [tickerArtist, tickerTitle, usableDj, tickerShowName, stationBlurb, siteHref, ds.station.name]);
+
+  // Restarted from the first slot on every meta-mode entry (see handleClick);
+  // rendering clamps with a modulo when the slot list shrinks mid-cycle.
+  const [tickerIdx, setTickerIdx] = useState(0);
+  useEffect(() => {
+    if (!expanded || tickerSlots.length <= 1) return;
+    const id = setInterval(() => {
+      setTickerIdx((i) => (i + 1) % tickerSlots.length);
+    }, 2500);
+    return () => clearInterval(id);
+  }, [expanded, tickerSlots.length]);
+  const tickerSlot: TickerSlot | null =
+    expanded && tickerSlots.length > 0
+      ? tickerSlots[tickerIdx % tickerSlots.length]
+      : null;
 
   // Clickable-"and" expansion: probe the sentence first to learn which artist
   // names it already shows, derive the rest of the set (setlist order, library
@@ -477,15 +518,38 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       aria-label={compact.text}
     >
       <span className="fdrow__compact-lead">
-        {/* The now-playing artist always leads. The artist cell stays in the
-            DOM (empty, aria-hidden) when there is no usable artist — never
-            invented, never replaced by a crossing artist name. */}
-        <span
-          className={`fdrow__compact-artist${isResolving ? " fdrow__compact-artist--resolving" : ""}`}
-          aria-hidden={compact.artist == null}
-        >
-          {compact.artist ?? ""}
-        </span>
+        {/* Left slot. Collapsed: the now-playing artist leads. The artist cell
+            stays in the DOM (empty, aria-hidden) when there is no usable
+            artist — never invented, never replaced by a crossing artist name.
+            Expanded (meta mode): a car-radio ticker cycles through the
+            available metadata one item at a time; the site-link slot is a
+            real anchor that never triggers tune-in. */}
+        {tickerSlot ? (
+          tickerSlot.kind === "link" ? (
+            <a
+              className="fdrow__ticker fdrow__ticker--link"
+              href={tickerSlot.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Listen on ${ds.station.name} site`}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {tickerSlot.label}
+            </a>
+          ) : (
+            <span className={`fdrow__ticker fdrow__ticker--${tickerSlot.kind}`}>
+              {tickerSlot.label}
+            </span>
+          )
+        ) : (
+          <span
+            className={`fdrow__compact-artist${isResolving ? " fdrow__compact-artist--resolving" : ""}`}
+            aria-hidden={compact.artist == null}
+          >
+            {compact.artist ?? ""}
+          </span>
+        )}
         {/* ✳ coverage marker — superscript after the artist lead when investigation
             sources are available. Tapping opens the Artist Investigation sheet.
             Never shown when there is no artist to anchor it to. */}
@@ -499,10 +563,22 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             onPointerDown={(e) => e.stopPropagation()}
           >✳</button>
         )}
-        {hasArtistLead && (
+        {hasArtistLead && !tickerSlot && (
           <span className="fdrow__compact-separator" aria-hidden="true">·</span>
         )}
-        {/* Station only — DJ and show belong in the expanded byline. */}
+      </span>
+      {/* Right cluster — the station is always visible at the far right edge;
+          the Keep affordance joins it while the row is in meta mode. */}
+      <span className="fdrow__compact-right">
+        {expanded && onKeep && (
+          <button
+            type="button"
+            className="fdrow__keep"
+            aria-label="Keep this track"
+            onClick={(e) => { e.stopPropagation(); onKeep(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >+ Keep</button>
+        )}
         <span className="fdrow__compact-station">{compact.station}</span>
         {/* ⬤ crossing indicator — present iff the station has ≥1 crossing at
             the active scope. Tapping toggles the inline scope detail. */}
@@ -543,18 +619,8 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     isResolving ? "fdrow--resolving" : "",
   ].filter(Boolean).join(" ");
 
-  // Attribution-only stations (no direct stream, no relay) cannot be played
-  // in-app: the row click must not reach radio.toggle (which would surface
-  // the "no live stream configured" safety-net error). Instead the row shows
-  // a "Listen on <site> ↗" affordance that opens the station's own website.
-  const playable = resolvePlaybackSource(ds.station) != null;
-  // Station homepage link: computed for every station (safeHttpUrl guards
-  // against non-http(s) values). Attribution-only rows keep it in tier 1;
-  // playable rows surface it inside the expanded byline instead.
-  const siteHref = safeHttpUrl(ds.station.homepageUrl);
-
-  // Expand-then-keep click handler:
-  //   compact + collapsed → expand (reveal byline)
+  // Expand-then-meta click handler:
+  //   compact + collapsed → expand (left slot becomes the meta ticker)
   //   compact + expanded  → tune in
   //   non-compact         → tune in immediately (legacy behaviour)
   const handleClick = () => {
@@ -661,55 +727,6 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             </a>
           )}
         </div>
-
-        {/* Expanded byline — visible on compact rows after first tap.
-            Shows: [DJ · Show]  ·  [now-playing title]     [+ Keep]
-            Byline uses system-sans at small size; Keep is a soft bordered
-            pill at the right edge. Click propagation stopped so the tune-in
-            handler (on the row root) is not re-triggered by the Keep button. */}
-        {compactSentence && compact && expanded && (
-          <div className="fdrow__byline" onClick={(e) => e.stopPropagation()}>
-            <span className="fdrow__byline-text">
-              {bylineAttribution && (
-                <span className="fdrow__byline-dj">{bylineAttribution}</span>
-              )}
-              {bylineAttribution && bylineTrack && (
-                <span className="fdrow__byline-sep" aria-hidden="true"> · </span>
-              )}
-              {bylineTrack && (
-                <span className="fdrow__byline-track">{bylineTrack}</span>
-              )}
-              {/* Station homepage link — shown for playable stations only
-                  (attribution-only rows keep theirs in tier 1). Click
-                  propagation stopped so the tune-in handler never fires. */}
-              {playable && siteHref && (
-                <a
-                  className="fdrow__byline-station-link"
-                  href={siteHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Listen on ${ds.station.name} site`}
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  ↗ {ds.station.name}
-                </a>
-              )}
-            </span>
-            {onKeep && (
-              <button
-                type="button"
-                className="fdrow__keep"
-                aria-label="Keep this track"
-                onClick={(e) => { e.stopPropagation(); onKeep(); }}
-                onPointerDown={(e) => e.stopPropagation()}
-              >+ Keep</button>
-            )}
-          </div>
-        )}
-        {compactSentence && compact && expanded && stationBlurb && (
-          <p className="fdrow__station-description">{stationBlurb}</p>
-        )}
 
         {/* Inline ⬤ crossing detail — scope label, top crossing artists at
             that scope, and the total count. Artist names are tappable to drill

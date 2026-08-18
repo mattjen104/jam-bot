@@ -5692,16 +5692,57 @@
 #dial-feed-rows .fdrow__compact-sentence {
   display: block;
 }
+/* Car-radio identity line: lead text left, station cluster pinned right.
+   One line, fixed height — expanding a row never grows it. */
 #dial-feed-rows .fdrow__compact-identity {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 10px;
   width: 100%;
   min-width: 0;
 }
 #dial-feed-rows .fdrow__compact-lead {
-  display: inline;
+  flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Right cluster: station name (+ Keep in meta mode, ⬤ dot). Never shrinks —
+   the station stays fully visible at the right edge of every row. */
+#dial-feed-rows .fdrow__compact-right {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  column-gap: 8px;
+  max-width: 55%;
+  overflow: hidden;
+}
+#dial-feed-rows .fdrow__compact-right .fdrow__compact-station {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Meta ticker — the cycling one-line slot shown while a row is expanded.
+   Same size as the artist lead; quieter tones for context-y fields. */
+#dial-feed-rows .fdrow__ticker {
+  display: inline;
+  color: hsl(var(--dial-fg));
+}
+#dial-feed-rows .fdrow__ticker--title { font-style: italic; }
+#dial-feed-rows .fdrow__ticker--dj,
+#dial-feed-rows .fdrow__ticker--show { color: hsl(var(--dial-fg) / 0.85); }
+#dial-feed-rows .fdrow__ticker--blurb { color: hsl(var(--dial-fg) / 0.68); }
+#dial-feed-rows .fdrow__ticker--link {
+  color: hsl(var(--dial-fg) / 0.85);
+  text-decoration: none;
+}
+#dial-feed-rows .fdrow__ticker--link:hover,
+#dial-feed-rows .fdrow__ticker--link:focus-visible {
+  color: hsl(var(--dial-fg));
+  text-decoration: underline;
 }
 #dial-feed-rows .fdrow__compact-artist {
   color: hsl(var(--dial-fg));
@@ -5910,69 +5951,8 @@
 #dial-feed-rows .fdrow__coverage-marker:hover {
   color: hsl(var(--library) / 0.72);
 }
-/* Expanded byline — revealed after first tap on a compact row.
-   System-sans at small size; two zones: attribution text left, Keep right.
-   Second tap on the row itself (fdrow root) triggers tune-in. */
-#dial-feed-rows .fdrow__byline {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  column-gap: 10px;
-  margin-top: 5px;
-  font-family: var(--app-font-sans);
-  font-size: var(--lore-size-small);
-  line-height: 1.4;
-  color: hsl(var(--muted-foreground));
-}
-#dial-feed-rows .fdrow__byline-text {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-#dial-feed-rows .fdrow__byline-dj {
-  color: hsl(var(--foreground) / 0.78);
-}
-#dial-feed-rows .fdrow__byline-sep {
-  color: hsl(var(--muted-foreground) / 0.6);
-}
-#dial-feed-rows .fdrow__byline-track {
-  color: hsl(var(--muted-foreground) / 0.72);
-  font-style: italic;
-}
-/* First-party station context revealed with the expanded Feed row. Keep it
-   quieter than live attribution and bounded so scraped metadata stays useful
-   on both phone-width and desktop rows. */
-#dial-feed-rows .fdrow__station-description {
-  max-width: min(100%, 62ch);
-  margin: 4px 0 0;
-  overflow: hidden;
-  color: hsl(var(--muted-foreground) / 0.68);
-  font-family: var(--app-font-sans);
-  font-size: var(--lore-size-small);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow-wrap: anywhere;
-}
-/* Station homepage link inside the expanded byline (playable stations).
-   Matches the byline's muted system-sans weight; underline on hover/focus. */
-#dial-feed-rows .fdrow__byline-station-link {
-  display: inline-block;
-  margin-top: 2px;
-  font-family: var(--app-font-sans);
-  font-size: var(--lore-size-small);
-  line-height: 1.4;
-  color: hsl(var(--muted-foreground));
-  text-decoration: none;
-}
-#dial-feed-rows .fdrow__byline-station-link:hover,
-#dial-feed-rows .fdrow__byline-station-link:focus-visible {
-  color: hsl(var(--foreground));
-  text-decoration: underline;
-}
-/* Keep affordance — soft pill button at the right edge of the byline.
-   Amber border matches the library colour token; tapping saves provenance. */
+/* Keep affordance — soft pill button in the right cluster while a row is in
+   meta mode. Amber border matches the library colour token. */
 #dial-feed-rows .fdrow__keep {
   flex-shrink: 0;
   appearance: none;
