@@ -5725,22 +5725,54 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Meta ticker — the cycling one-line slot shown while a row is expanded.
-   Same size as the artist lead; quieter tones for context-y fields. */
-#dial-feed-rows .fdrow__ticker {
-  display: inline;
-  color: hsl(var(--dial-fg));
+/* Expanded byline: DJ · Show — static, one line, below the identity row. */
+#dial-feed-rows .fdrow__byline {
+  font-size: 0.82em;
+  color: hsl(var(--dial-fg) / 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
 }
-#dial-feed-rows .fdrow__ticker--title { font-style: italic; }
-#dial-feed-rows .fdrow__ticker--dj,
-#dial-feed-rows .fdrow__ticker--show { color: hsl(var(--dial-fg) / 0.85); }
-#dial-feed-rows .fdrow__ticker--blurb { color: hsl(var(--dial-fg) / 0.68); }
-#dial-feed-rows .fdrow__ticker--link {
+#dial-feed-rows .fdrow__byline-dj {
   color: hsl(var(--dial-fg) / 0.85);
-  text-decoration: none;
 }
-#dial-feed-rows .fdrow__ticker--link:hover,
-#dial-feed-rows .fdrow__ticker--link:focus-visible {
+#dial-feed-rows .fdrow__byline-sep {
+  color: hsl(var(--dial-fg) / 0.45);
+}
+#dial-feed-rows .fdrow__byline-show {
+  font-style: italic;
+  color: hsl(var(--dial-fg) / 0.7);
+}
+/* Expanded detail panel: song title, station description, site link. */
+#dial-feed-rows .fdrow__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  font-size: 0.82em;
+}
+#dial-feed-rows .fdrow__detail-title {
+  font-style: italic;
+  color: hsl(var(--dial-fg) / 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#dial-feed-rows .fdrow__detail-blurb {
+  color: hsl(var(--dial-fg) / 0.58);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#dial-feed-rows .fdrow__detail-link {
+  color: hsl(var(--dial-fg) / 0.75);
+  text-decoration: none;
+  width: fit-content;
+}
+#dial-feed-rows .fdrow__detail-link:hover,
+#dial-feed-rows .fdrow__detail-link:focus-visible {
   color: hsl(var(--dial-fg));
   text-decoration: underline;
 }

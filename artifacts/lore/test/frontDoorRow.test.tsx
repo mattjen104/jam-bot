@@ -2,7 +2,7 @@
 /** Component tests for the dial's single-sentence live context. */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("wouter", () => ({ useLocation: () => ["/", vi.fn()] }));
 vi.mock("../src/hooks/useDialData", () => ({ useDialData: vi.fn() }));
@@ -678,119 +678,108 @@ describe("compact Dial feed identity", () => {
     );
     const row = container.querySelector(".fdrow")!;
 
-    // First tap: enters meta mode — no tune-in, ticker appears, aria-expanded=true.
+    // First tap: expands — no tune-in, aria-expanded=true, no ticker cycling.
     fireEvent.click(row);
     expect(onTuneIn).not.toHaveBeenCalled();
     expect(row.getAttribute("aria-expanded")).toBe("true");
-    expect(container.querySelector(".fdrow__ticker")).not.toBeNull();
-    // The old expanding byline/description blocks are gone — row height is fixed.
-    expect(container.querySelector(".fdrow__byline")).toBeNull();
-    expect(container.querySelector(".fdrow__station-description")).toBeNull();
+    // No auto-cycling ticker in the new design.
+    expect(container.querySelector(".fdrow__ticker")).toBeNull();
 
     // Second tap: tunes in.
     fireEvent.click(row);
     expect(onTuneIn).toHaveBeenCalledOnce();
   });
 
-  it("collapsed compact row starts with aria-expanded=false and no ticker", () => {
+  it("collapsed compact row starts with aria-expanded=false and no byline or detail", () => {
     const { container } = renderCompactRow(
       makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
-      makeShow({ currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      makeShow({ djName: "DJ Test", currentTrack: makeSpin({ artist: "Broadcast" }) }),
     );
     const row = container.querySelector(".fdrow")!;
     expect(row.getAttribute("aria-expanded")).toBe("false");
-    expect(container.querySelector(".fdrow__ticker")).toBeNull();
+    expect(container.querySelector(".fdrow__byline")).toBeNull();
+    expect(container.querySelector(".fdrow__detail")).toBeNull();
   });
 
-  it("meta ticker cycles artist → title → DJ → show → blurb → site link, skipping nothing that exists", () => {
-    vi.useFakeTimers();
-    try {
-      const blurb = "Independent radio for adventurous listeners.";
-      const { container } = renderCompactRow(
-        makeDialStation({
-          name: "KEXP",
-          streamUrl: "https://example.com/stream",
-          homepageUrl: "https://kexp.org",
-          homepageBlurb: blurb,
-        } as Partial<DialStation["station"]>),
-        makeShow({
-          djName: "John Richards",
-          showName: "Morning Show",
-          currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }),
-        }),
-      );
-      fireEvent.click(container.querySelector(".fdrow")!);
-      const tick = () => { act(() => { vi.advanceTimersByTime(2500); }); };
-      const ticker = () => container.querySelector(".fdrow__ticker");
+  it("expanded row shows DJ · Show byline and song title + site link in detail panel", () => {
+    const blurb = "Independent radio for adventurous listeners.";
+    const { container } = renderCompactRow(
+      makeDialStation({
+        name: "KEXP",
+        streamUrl: "https://example.com/stream",
+        homepageUrl: "https://kexp.org",
+        homepageBlurb: blurb,
+      } as Partial<DialStation["station"]>),
+      makeShow({
+        djName: "John Richards",
+        showName: "Morning Show",
+        currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }),
+      }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
 
-      expect(ticker()?.textContent).toBe("Broadcast");            // artist
-      tick();
-      expect(ticker()?.textContent).toBe("Come On Let's Go");     // title
-      tick();
-      expect(ticker()?.textContent).toBe("John Richards");        // DJ
-      tick();
-      expect(ticker()?.textContent).toBe("Morning Show");         // show
-      tick();
-      expect(ticker()?.textContent).toBe(blurb);                  // description
-      tick();
-      const link = ticker() as HTMLAnchorElement;                 // site link
-      expect(link.tagName).toBe("A");
-      expect(link.getAttribute("href")).toBe("https://kexp.org/");
-      expect(link.getAttribute("target")).toBe("_blank");
-      expect(link.getAttribute("rel")).toContain("noopener");
-      expect(link.textContent).toContain("KEXP");
-      tick();
-      expect(ticker()?.textContent).toBe("Broadcast");            // wraps around
-    } finally {
-      vi.useRealTimers();
-    }
+    // Byline: DJ · Show
+    const byline = container.querySelector(".fdrow__byline");
+    expect(byline).not.toBeNull();
+    expect(byline?.querySelector(".fdrow__byline-dj")?.textContent).toBe("John Richards");
+    expect(byline?.querySelector(".fdrow__byline-show")?.textContent).toBe("Morning Show");
+
+    // Detail panel: title, blurb, link
+    const detail = container.querySelector(".fdrow__detail");
+    expect(detail).not.toBeNull();
+    expect(detail?.querySelector(".fdrow__detail-title")?.textContent).toBe("Come On Let's Go");
+    expect(detail?.querySelector(".fdrow__detail-blurb")?.textContent).toBe(blurb);
+    const link = detail?.querySelector(".fdrow__detail-link") as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute("href")).toBe("https://kexp.org/");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(link.textContent).toContain("KEXP");
   });
 
-  it("meta ticker skips missing fields (no DJ/show/blurb/link)", () => {
-    vi.useFakeTimers();
-    try {
-      const { container } = renderCompactRow(
-        makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
-        makeShow({
-          djName: null,
-          showName: "KEXP", // echoes the station name — filtered out
-          currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }),
-        }),
-      );
-      fireEvent.click(container.querySelector(".fdrow")!);
-      const ticker = () => container.querySelector(".fdrow__ticker");
-      expect(ticker()?.textContent).toBe("Broadcast");
-      act(() => { vi.advanceTimersByTime(2500); });
-      expect(ticker()?.textContent).toBe("Come On Let's Go");
-      act(() => { vi.advanceTimersByTime(2500); });
-      expect(ticker()?.textContent).toBe("Broadcast"); // only two slots — wraps
-    } finally {
-      vi.useRealTimers();
-    }
+  it("byline omits show when it echoes the station name", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({
+        djName: "DJ Test",
+        showName: "KEXP", // echoes station name — filtered out
+        currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }),
+      }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
+    const byline = container.querySelector(".fdrow__byline");
+    expect(byline?.querySelector(".fdrow__byline-dj")?.textContent).toBe("DJ Test");
+    expect(byline?.querySelector(".fdrow__byline-show")).toBeNull();
   });
 
-  it("whitespace-only station blurb never becomes a ticker slot", () => {
-    vi.useFakeTimers();
-    try {
-      const { container } = renderCompactRow(
-        makeDialStation({
-          name: "KEXP",
-          streamUrl: "https://example.com/stream",
-          homepageBlurb: "   ",
-        }),
-        makeShow({
-          showName: "KEXP", // echoes the station name — filtered out
-          currentTrack: makeSpin({ artist: "Broadcast", title: null as unknown as string }),
-        }),
-      );
-      fireEvent.click(container.querySelector(".fdrow")!);
-      // Artist is the only slot: advancing never lands on a blank blurb.
-      expect(container.querySelector(".fdrow__ticker")?.textContent).toBe("Broadcast");
-      act(() => { vi.advanceTimersByTime(2500); });
-      expect(container.querySelector(".fdrow__ticker")?.textContent).toBe("Broadcast");
-    } finally {
-      vi.useRealTimers();
-    }
+  it("no byline rendered when neither DJ nor show name is available", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({
+        djName: null,
+        showName: "KEXP", // echoes station name — filtered out
+        currentTrack: makeSpin({ artist: "Broadcast", title: "Come On Let's Go" }),
+      }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(container.querySelector(".fdrow__byline")).toBeNull();
+  });
+
+  it("whitespace-only station blurb does not appear in detail panel", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({
+        name: "KEXP",
+        streamUrl: "https://example.com/stream",
+        homepageBlurb: "   ",
+      }),
+      makeShow({
+        showName: "KEXP", // echoes the station name — filtered out
+        currentTrack: makeSpin({ artist: "Broadcast", title: null as unknown as string }),
+      }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
+    // Whitespace blurb is excluded; no detail-blurb element.
+    expect(container.querySelector(".fdrow__detail-blurb")).toBeNull();
   });
 
   it("station name stays pinned in the right cluster in both modes", () => {
@@ -922,60 +911,44 @@ describe("compact Dial feed identity", () => {
   });
 });
 describe("expanded row station link", () => {
-  it("reaches a clickable ↗ station link via the ticker for a playable station with a homepage", () => {
-    vi.useFakeTimers();
-    try {
-      const onTuneIn = vi.fn();
-      const { container } = renderCompactRow(
-        makeDialStation({
-          name: "KEXP",
-          streamUrl: "https://example.com/stream",
-          homepageUrl: "https://kexp.org",
-        } as Partial<DialStation["station"]>),
-        makeShow({ djName: "DJ Test", currentTrack: makeSpin({ artist: "Broadcast" }) }),
-        { onTuneIn },
-      );
-      const row = container.querySelector(".fdrow")!;
-      // Collapsed playable row: no link anywhere (tier-1 link is reserved
-      // for attribution-only stations).
-      expect(container.querySelector(".fdrow__ticker--link")).toBeNull();
-      expect(container.querySelector(".fdrow__site-link")).toBeNull();
+  it("shows a clickable ↗ station link in the detail panel for a playable station with a homepage", () => {
+    const onTuneIn = vi.fn();
+    const { container } = renderCompactRow(
+      makeDialStation({
+        name: "KEXP",
+        streamUrl: "https://example.com/stream",
+        homepageUrl: "https://kexp.org",
+      } as Partial<DialStation["station"]>),
+      makeShow({ djName: "DJ Test", currentTrack: makeSpin({ artist: "Broadcast" }) }),
+      { onTuneIn },
+    );
+    const row = container.querySelector(".fdrow")!;
+    // Collapsed playable row: no link anywhere (tier-1 link is reserved
+    // for attribution-only stations).
+    expect(container.querySelector(".fdrow__detail-link")).toBeNull();
+    expect(container.querySelector(".fdrow__site-link")).toBeNull();
 
-      // Enter meta mode and advance to the last slot
-      // (artist → title → DJ → show → link).
-      fireEvent.click(row);
-      act(() => { vi.advanceTimersByTime(4 * 2500); });
-      const link = container.querySelector(".fdrow__ticker--link") as HTMLAnchorElement;
-      expect(link).not.toBeNull();
-      expect(link.getAttribute("href")).toBe("https://kexp.org/");
-      expect(link.getAttribute("target")).toBe("_blank");
-      expect(link.getAttribute("rel")).toContain("noopener");
-      expect(link.textContent).toContain("KEXP");
+    // Expand: the detail panel carries the station link.
+    fireEvent.click(row);
+    const link = container.querySelector(".fdrow__detail-link") as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute("href")).toBe("https://kexp.org/");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(link.textContent).toContain("KEXP");
 
-      // Clicking the link never triggers the tune-in handler.
-      fireEvent.click(link);
-      expect(onTuneIn).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
+    // Clicking the link never triggers the tune-in handler.
+    fireEvent.click(link);
+    expect(onTuneIn).not.toHaveBeenCalled();
   });
 
-  it("never renders a link slot for a playable station without a homepage", () => {
-    vi.useFakeTimers();
-    try {
-      const { container } = renderCompactRow(
-        makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
-        makeShow({ djName: "DJ Test", currentTrack: makeSpin({ artist: "Broadcast" }) }),
-      );
-      fireEvent.click(container.querySelector(".fdrow")!);
-      // Cycle through every slot — a link never appears.
-      for (let i = 0; i < 5; i++) {
-        expect(container.querySelector(".fdrow__ticker--link")).toBeNull();
-        act(() => { vi.advanceTimersByTime(2500); });
-      }
-    } finally {
-      vi.useRealTimers();
-    }
+  it("never renders a detail link for a playable station without a homepage", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KEXP", streamUrl: "https://example.com/stream" }),
+      makeShow({ djName: "DJ Test", currentTrack: makeSpin({ artist: "Broadcast" }) }),
+    );
+    fireEvent.click(container.querySelector(".fdrow")!);
+    expect(container.querySelector(".fdrow__detail-link")).toBeNull();
   });
 
   it("keeps the tier-1 site link for attribution-only stations (no playable source)", () => {
@@ -984,6 +957,6 @@ describe("expanded row station link", () => {
       makeShow({ currentTrack: makeSpin() }),
     );
     expect(container.querySelector(".fdrow__site-link")).not.toBeNull();
-    expect(container.querySelector(".fdrow__ticker--link")).toBeNull();
+    expect(container.querySelector(".fdrow__detail-link")).toBeNull();
   });
 });
