@@ -155,9 +155,16 @@ export interface StackRowProps {
   /** Propagated from parent for single-open coordination */
   isOpen: boolean;
   onToggle: () => void;
+  /** True when this album is in the "Hidden" section */
+  isSkipped?: boolean;
+  /**
+   * When provided, a hide/show checkbox is rendered in the row header.
+   * Called with the album's group key when the checkbox changes.
+   */
+  onToggleSkip?: (key: string) => void;
 }
 
-export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: StackRowProps) {
+export function StackRow({ group, hasInvestigation = false, isOpen, onToggle, isSkipped = false, onToggleSkip }: StackRowProps) {
   const [investigationOpen, setInvestigationOpen] = useState(false);
   const { launch, busy, canLaunch } = useLaunchAlbum(group);
 
@@ -223,6 +230,31 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle }: 
               </span>
             ))}
           </div>
+
+          {/* Hide/show checkbox — only when a handler is wired */}
+          {onToggleSkip && (
+            <input
+              type="checkbox"
+              data-testid="stack-row-skip-checkbox"
+              checked={!isSkipped}
+              aria-label={
+                isSkipped
+                  ? `Show ${group.albumTitle} in the Stack`
+                  : `Hide ${group.albumTitle} from the Stack`
+              }
+              title={
+                isSkipped
+                  ? "Hidden — check to restore"
+                  : "Visible — uncheck to hide"
+              }
+              onChange={() => onToggleSkip(group.key)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+              }}
+              style={{ flexShrink: 0, marginLeft: 6, cursor: "pointer" }}
+            />
+          )}
 
           {/* Chevron indicator */}
           <span

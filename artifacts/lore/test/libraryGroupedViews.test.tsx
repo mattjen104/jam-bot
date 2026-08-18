@@ -15,15 +15,18 @@
  *   - Component tests render AlbumGroupRow / ArtistGroupRow with a real
  *     React tree, simulating the parent re-rendering with updated groups
  *     after a keep toggle.
+ *   - Full-Stack skip-split tests render a minimal wrapper that mirrors
+ *     the Library's active/hidden split using the real useStackSkipped hook
+ *     (localStorage is available in jsdom) with a stub StackRow.
  */
 
 import React, { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
-// Module mocks — only LibraryRow needs to be stubbed; the group rows don't
-// use wouter or the player directly.
+// Module mocks — LibraryRow and StackRow are stubbed; group rows don't use
+// wouter or the player directly.
 // ---------------------------------------------------------------------------
 
 vi.mock("../src/components/LibraryRow", () => ({
@@ -31,6 +34,37 @@ vi.mock("../src/components/LibraryRow", () => ({
     <li data-testid="library-row" data-mbid={item.mbid ?? "soft"}>
       {item.recording?.title ?? item.mbid ?? "unknown"}
     </li>
+  ),
+}));
+
+// StackRow has heavy deps (usePlayer, useMutationKeep, etc.) — stub it with
+// a minimal version that renders the skip checkbox so split tests can work.
+vi.mock("../src/components/StackRow", () => ({
+  StackRow: ({
+    group,
+    isSkipped,
+    onToggleSkip,
+  }: {
+    group: { key: string; albumTitle: string };
+    isSkipped?: boolean;
+    onToggleSkip?: (key: string) => void;
+  }) => (
+    <div
+      data-testid="stack-row"
+      data-album-key={group.key}
+      data-skipped={isSkipped ? "true" : "false"}
+    >
+      <span data-testid="stack-row-title">{group.albumTitle}</span>
+      {onToggleSkip && (
+        <input
+          type="checkbox"
+          data-testid="stack-row-skip-checkbox"
+          checked={!isSkipped}
+          onChange={() => onToggleSkip(group.key)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
+    </div>
   ),
 }));
 
@@ -47,6 +81,19 @@ import {
   type ArtistGroup,
 } from "../src/pages/Library";
 import type { LibraryItem } from "../src/lib/meHooks";
+import { useStackSkipped } from "../src/lib/dialFilterState";
+import { StackRow } from "../src/components/StackRow";
+
+// ---------------------------------------------------------------------------
+// localStorage housekeeping — clear the Stack-skip key before every test so
+// skip-split tests don't bleed state into unrelated suites.
+// ---------------------------------------------------------------------------
+
+const LS_STACK_SKIPPED_KEY = "lore:stackSkipped";
+
+beforeEach(() => {
+  localStorage.removeItem(LS_STACK_SKIPPED_KEY);
+});
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -489,5 +536,199 @@ describe("ArtistGroupRow", () => {
     // Confirm header counts update too
     expect(screen.getByText(/1 album/)).toBeTruthy();
     expect(screen.getByText(/1 track/)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Component tests — full-Stack skip split
+//
+// A minimal wrapper mirrors the Library album-view split:
+//   active groups → rendered directly (isSkipped=false)
+//   skipped groups → collapsed "Hidden" section at the bottom
+//
+// StackRow is stubbed above (renders title + checkbox stub).
+// useStackSkipped is exercised for real via jsdom localStorage.
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors the Library album-view rendering for the skip split.
+ * Accepts a fixed list of groups + the real useStackSkipped hook so tests can
+ * drive the preference through the checkbox rather than mocking the hook.
+ */
+function FullStackAlbumView({ groups }: { groups: AlbumGroup[] }) {
+  const { skipped, toggleSkip } = useStackSkipped();
+  const [hiddenOpen, setHiddenOpen] = useState(false);
+
+  const active = groups.filter((g) => !skipped.has(g.key));
+  const hidden = groups.filter((g) => skipped.has(g.key));
+
+  return (
+    <div data-testid="library-album-view">
+      {active.map((g) => (
+        <StackRow
+          key={g.key}
+          group={g}
+          isOpen={false}
+          onToggle={() => undefined}
+          onToggleSkip={toggleSkip}
+        />
+      ))}
+
+      {hidden.length > 0 && (
+        <div data-testid="library-stack-hidden-section">
+          <div
+            role="button"
+            tabIndex={0}
+            data-testid="library-stack-hidden-toggle"
+            onClick={() => setHiddenOpen((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setHiddenOpen((v) => !v);
+            }}
+            aria-expanded={hiddenOpen}
+          >
+            {`Hidden · ${hidden.length}`}
+          </div>
+          {hiddenOpen &&
+            hidden.map((g) => (
+              <StackRow
+                key={g.key}
+                group={g}
+                isOpen={false}
+                onToggle={() => undefined}
+                isSkipped
+                onToggleSkip={toggleSkip}
+              />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function makeGroup(albumTitle: string, artist = "Artist"): AlbumGroup {
+  return {
+    key: `${albumTitle}\x1f${artist}`,
+    albumTitle,
+    artist,
+    artworkUrl: null,
+    releaseYear: null,
+    items: [makeItem({ mbid: `mbid-${albumTitle}`, albumTitle, artist })],
+  };
+}
+
+describe("full-Stack skip split", () => {
+  it("renders all albums in the active list when none are skipped", () => {
+    const groups = [makeGroup("Rumours"), makeGroup("Thriller")];
+    render(<FullStackAlbumView groups={groups} />);
+
+    const rows = screen.getAllByTestId("stack-row");
+    expect(rows).toHaveLength(2);
+    expect(screen.queryByTestId("library-stack-hidden-section")).toBeNull();
+  });
+
+  it("moves an album to the hidden section when its checkbox is unchecked", () => {
+    const groups = [makeGroup("Rumours"), makeGroup("Thriller")];
+    render(<FullStackAlbumView groups={groups} />);
+
+    // Both albums active initially
+    expect(screen.getAllByTestId("stack-row")).toHaveLength(2);
+
+    // Uncheck the first album's checkbox → hides "Rumours"
+    const checkboxes = screen.getAllByTestId("stack-row-skip-checkbox");
+    fireEvent.click(checkboxes[0]!);
+
+    // One active row remains; hidden section appears
+    const activeRows = screen
+      .getAllByTestId("stack-row")
+      .filter((el) => el.getAttribute("data-skipped") === "false");
+    expect(activeRows).toHaveLength(1);
+    expect(screen.getByTestId("library-stack-hidden-section")).toBeTruthy();
+    expect(screen.getByText(/Hidden · 1/)).toBeTruthy();
+  });
+
+  it("hidden section is collapsed by default — skipped row not visible until toggled", () => {
+    const groups = [makeGroup("Rumours"), makeGroup("Thriller")];
+    render(<FullStackAlbumView groups={groups} />);
+
+    // Skip Rumours
+    const checkboxes = screen.getAllByTestId("stack-row-skip-checkbox");
+    fireEvent.click(checkboxes[0]!);
+
+    // Hidden section header exists but Rumours row is not rendered yet
+    expect(screen.getByTestId("library-stack-hidden-toggle")).toBeTruthy();
+    const rows = screen.getAllByTestId("stack-row");
+    // Only the active row (Thriller) is mounted
+    expect(rows.every((r) => r.getAttribute("data-skipped") !== "true")).toBe(true);
+  });
+
+  it("expanding the hidden section reveals the skipped album", () => {
+    const groups = [makeGroup("Rumours"), makeGroup("Thriller")];
+    render(<FullStackAlbumView groups={groups} />);
+
+    // Skip Rumours
+    const checkboxes = screen.getAllByTestId("stack-row-skip-checkbox");
+    fireEvent.click(checkboxes[0]!);
+
+    // Expand hidden section
+    fireEvent.click(screen.getByTestId("library-stack-hidden-toggle"));
+
+    // Now the skipped row is visible
+    const skippedRows = screen
+      .getAllByTestId("stack-row")
+      .filter((el) => el.getAttribute("data-skipped") === "true");
+    expect(skippedRows).toHaveLength(1);
+    expect(skippedRows[0]!.querySelector("[data-testid='stack-row-title']")?.textContent).toBe("Rumours");
+  });
+
+  it("restoring a hidden album via its checkbox moves it back to the active list", () => {
+    const groups = [makeGroup("Rumours"), makeGroup("Thriller")];
+    render(<FullStackAlbumView groups={groups} />);
+
+    // Skip Rumours
+    const [firstCheckbox] = screen.getAllByTestId("stack-row-skip-checkbox");
+    fireEvent.click(firstCheckbox!);
+
+    // Expand hidden section so Rumours row is visible
+    fireEvent.click(screen.getByTestId("library-stack-hidden-toggle"));
+
+    // Re-check the skipped row's checkbox to restore it
+    const skippedCheckbox = screen
+      .getAllByTestId("stack-row-skip-checkbox")
+      .find((el) => el.closest("[data-skipped='true']") != null);
+    expect(skippedCheckbox).toBeTruthy();
+    fireEvent.click(skippedCheckbox!);
+
+    // Both albums active again; hidden section gone
+    expect(screen.getAllByTestId("stack-row")).toHaveLength(2);
+    expect(screen.queryByTestId("library-stack-hidden-section")).toBeNull();
+  });
+
+  it("skip preference persists across re-renders (localStorage round-trip)", () => {
+    const groups = [makeGroup("Rumours"), makeGroup("Thriller")];
+    const { unmount } = render(<FullStackAlbumView groups={groups} />);
+
+    // Skip Rumours
+    fireEvent.click(screen.getAllByTestId("stack-row-skip-checkbox")[0]!);
+    unmount();
+
+    // Re-mount — hook reads from localStorage
+    render(<FullStackAlbumView groups={groups} />);
+    expect(screen.getByTestId("library-stack-hidden-section")).toBeTruthy();
+    const activeRows = screen
+      .getAllByTestId("stack-row")
+      .filter((el) => el.getAttribute("data-skipped") === "false");
+    expect(activeRows).toHaveLength(1);
+  });
+
+  it("hidden section toggle label reflects current count", () => {
+    const groups = [makeGroup("Rumours"), makeGroup("Thriller"), makeGroup("Kind of Blue")];
+    render(<FullStackAlbumView groups={groups} />);
+
+    const checkboxes = screen.getAllByTestId("stack-row-skip-checkbox");
+    fireEvent.click(checkboxes[0]!); // hide Rumours
+    expect(screen.getByText(/Hidden · 1/)).toBeTruthy();
+
+    fireEvent.click(screen.getAllByTestId("stack-row-skip-checkbox")[0]!); // hide Thriller
+    expect(screen.getByText(/Hidden · 2/)).toBeTruthy();
   });
 });

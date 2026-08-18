@@ -39,6 +39,7 @@ import {
 import { ApiError } from "@workspace/api-client-react";
 import { LibraryRow } from "../components/LibraryRow";
 import { StackRow } from "../components/StackRow";
+import { useStackSkipped } from "../lib/dialFilterState";
 import { AlbumAvatarPicker } from "../components/AlbumAvatarPicker";
 import {
   CheckCircle2,
@@ -1397,6 +1398,20 @@ export default function Library() {
     [viewMode, keptItems],
   );
 
+  // Per-album hide preference — shared with the compact Stack on the front door
+  // so a homepage skip is honoured here too.
+  const { skipped: stackSkipped, toggleSkip: toggleStackSkip } = useStackSkipped();
+  const activeAlbumGroups = useMemo(
+    () => albumGroups.filter((g) => !stackSkipped.has(g.key)),
+    [albumGroups, stackSkipped],
+  );
+  const skippedAlbumGroups = useMemo(
+    () => albumGroups.filter((g) => stackSkipped.has(g.key)),
+    [albumGroups, stackSkipped],
+  );
+  // Collapsed/expanded state for the "Hidden" section at the bottom of the Stack.
+  const [hiddenSectionOpen, setHiddenSectionOpen] = useState(false);
+
   // Scroll to the album row targeted by the ?openAlbum= URL param once
   // albumGroups have been built (data loads asynchronously after mount).
   useEffect(() => {
@@ -2099,7 +2114,7 @@ export default function Library() {
           /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */
           <>
             <div data-testid="library-album-view">
-              {albumGroups.map((group) => (
+              {activeAlbumGroups.map((group) => (
                 <div key={group.key} data-album-key={group.key}>
                   <StackRow
                     group={group}
@@ -2110,9 +2125,83 @@ export default function Library() {
                     onToggle={() =>
                       setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
                     }
+                    onToggleSkip={toggleStackSkip}
                   />
                 </div>
               ))}
+
+              {/* Hidden section — collapsed by default, expands to show skipped albums */}
+              {skippedAlbumGroups.length > 0 && (
+                <div data-testid="library-stack-hidden-section">
+                  {/* Section toggle header */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    data-testid="library-stack-hidden-toggle"
+                    onClick={() => setHiddenSectionOpen((v) => !v)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setHiddenSectionOpen((v) => !v);
+                      }
+                    }}
+                    aria-expanded={hiddenSectionOpen}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 15px",
+                      cursor: "pointer",
+                      borderTop: "1px solid hsl(var(--border) / 0.4)",
+                      borderBottom: hiddenSectionOpen ? "1px solid hsl(var(--border) / 0.3)" : undefined,
+                      background: "hsl(var(--secondary) / 0.3)",
+                      userSelect: "none",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--app-font-mono)",
+                        fontSize: 11,
+                        color: "hsl(var(--faint))",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
+                        flex: 1,
+                      }}
+                    >
+                      Hidden · {skippedAlbumGroups.length}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        fontFamily: "var(--app-font-mono)",
+                        fontSize: 10,
+                        color: "hsl(var(--faint))",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {hiddenSectionOpen ? "▴" : "▾"}
+                    </span>
+                  </div>
+
+                  {/* Skipped album rows */}
+                  {hiddenSectionOpen && skippedAlbumGroups.map((group) => (
+                    <div key={group.key} data-album-key={group.key} style={{ opacity: 0.55 }}>
+                      <StackRow
+                        group={group}
+                        hasInvestigation={group.items.some(
+                          (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
+                        )}
+                        isOpen={openAlbumKey === group.key}
+                        onToggle={() =>
+                          setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
+                        }
+                        isSkipped
+                        onToggleSkip={toggleStackSkip}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
             {isFetchingNextPage && (
