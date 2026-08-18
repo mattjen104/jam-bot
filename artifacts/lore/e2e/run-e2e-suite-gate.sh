@@ -101,6 +101,7 @@ RUN_SPECS=(
   e2e/compactCrossingLabels.spec.ts
   e2e/dialCategoryFilters.spec.ts
   e2e/liveTrackChange.spec.ts
+  e2e/compactStackBand.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
