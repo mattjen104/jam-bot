@@ -459,8 +459,11 @@ export const scrapedShowsTable = pgTable(
     scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
     /** "llm" | "api" | "manual". */
     extraction: text("extraction").notNull(),
-    /** Admin audit marker for schedule evidence that must not drive attribution. */
-    voidedAt: timestamp("voided_at"),
+    /** Admin audit marker for schedule evidence that must not drive attribution.
+     * withTimezone matches the boot migration's timestamptz — declaring it
+     * without tz makes drizzle-kit push try an ALTER that fails because the
+     * picks_unified view depends on this column. */
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
     /** Required explanation recorded with an administrative withdrawal. */
     voidReason: text("void_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -3170,3 +3173,18 @@ export const loreSettingsTable = pgTable("lore_settings", {
 export type LoreSetting = typeof loreSettingsTable.$inferSelect;
 
 export type InsertLoreSetting = typeof loreSettingsTable.$inferInsert;
+
+/**
+ * Last-run timestamps for background jobs (e.g. the Pitchfork pass), so a
+ * restart within the pass window skips an immediate re-run. The table is
+ * created by an idempotent boot migration in api-server; it is declared here
+ * so drizzle-kit push does not see it as an unknown table and try to drop it.
+ */
+export const jobTimestampsTable = pgTable("job_timestamps", {
+  /** Stable job identifier, e.g. 'pitchfork-pass'. */
+  key: text("key").primaryKey(),
+  /** When the job last started a full pass. */
+  lastRanAt: timestamp("last_ran_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});

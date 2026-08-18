@@ -32,6 +32,7 @@
 - [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.
 - [Lore UI component tests](lore-ui-component-tests.md) — per-file jsdom pragma + barrel mock + media stubs; wouter memoryLocation searchPath must NOT start with "?" or params silently vanish.
 - [Lore admin router catch-all](lore-admin-router-catchall.md) — admin router has rate-limit + auth middleware for ALL paths; new /api/* routers must be mounted before loreRouter in routes/index.ts or they get 503 "Admin entry not configured".
+- [drizzle push post-merge failures](drizzle-push-post-merge-failures.md) — 3 modes: view-blocked type drift (declare withTimezone), boot-only tables get DROP'd (mirror in schema), FK re-add hits orphans (prune loop).
 - [db lib dist rebuild](db-lib-dist-rebuild.md) — lib/db AND lib/api-zod both need `tsc -p tsconfig.json` after any task merge that adds schema/types; api-server sees stale .d.ts and reports "no exported member".
 - [Spotify import fetch timeout](spotify-import-fetch-timeout.md) — Node fetch has no default timeout; Spotify silently hangs TCP under rate-limit, leaving import worker frozen forever; fix: AbortController with 20s timeout on every page fetch.
 - [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
