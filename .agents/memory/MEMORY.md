@@ -137,3 +137,4 @@
 - [Vitest 4 config placement traps](vitest4-config-placement.md) — cacheDir must be top-level (not test.cacheDir); environmentMatchGlobs removed, use test.projects with extends:true; both fail silently.
 - [Native checkboxes invisible on dark mobile panels](native-checkbox-dark-mobile.md) — appearance:none + custom border/check required; computed styles lie, verify via screenshot.
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
+- [Shared-DB top-N fixture sizing](shared-db-topn-fixture-sizing.md) — fixed play-count fixtures rot as the shared dev archive grows past them; size off the live top-N boundary + margin via generate_series, and count canonical-alias group spins when topping up.

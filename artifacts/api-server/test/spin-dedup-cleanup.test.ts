@@ -46,7 +46,7 @@ beforeAll(async () => {
     })
     .returning({ id: stationsTable.id });
   stationId = station!.id;
-}, 30_000);
+}, 90_000);
 
 afterAll(async () => {
   if (!dbAvailable || !stationId) return;
@@ -57,7 +57,7 @@ afterAll(async () => {
   await db.execute(
     sql`DELETE FROM migration_completions WHERE name = 'applySpinDedupCleanup'`,
   );
-}, 30_000);
+}, 90_000);
 
 /** Remove the completion-ledger row before each test so the full migration path runs. */
 beforeEach(async () => {
@@ -65,7 +65,7 @@ beforeEach(async () => {
   await db.execute(
     sql`DELETE FROM migration_completions WHERE name = 'applySpinDedupCleanup'`,
   );
-}, 10_000);
+}, 90_000);
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 

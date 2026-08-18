@@ -34,6 +34,12 @@ export interface LibraryRecording {
    * resolved (common on imports). Absent on soft rows and older responses.
    */
   releaseGroupMbid?: string | null;
+  /**
+   * First-release year for the recording (MusicBrainz first-release-date),
+   * when known. Null when never enriched or MusicBrainz had no dated
+   * release; absent on soft rows and older responses.
+   */
+  releaseYear?: number | null;
   /** Spotify track URL from Odesli resolution, when available. */
   spotifyUrl: string | null;
 }

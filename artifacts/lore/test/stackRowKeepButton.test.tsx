@@ -83,6 +83,7 @@ function makeGroup(items: LibraryItem[]): AlbumGroup {
     albumTitle: "Test Album",
     artist: "Test Artist",
     artworkUrl: null,
+    releaseYear: null,
     items,
   };
 }

@@ -98,7 +98,7 @@ beforeEach(async () => {
     sql`UPDATE stations SET automation_class = NULL WHERE slug LIKE ${"test-acm-%" + run}`,
   );
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
-}, 10_000);
+}, 90_000);
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

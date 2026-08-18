@@ -8250,6 +8250,147 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: relative;
   overflow: hidden;
 }
+/* With skipped albums present the collapsed band scrolls so the below-fold
+   overflow region is reachable; skipped rows keep the same 20%-of-band slot
+   height as the five active slots. */
+.compact-stack--has-skipped {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  overscroll-behavior-y: contain;
+  grid-auto-rows: minmax(0, 20%);
+}
+/* The skipped region is a grouping element for a11y/tests only — its rows
+   lay out as if they were direct children of the grid/scroller. */
+.compact-stack__skipped-region {
+  display: contents;
+}
+/* Release-year leading annotation on collapsed rows — a mono era anchor
+   ahead of the album title, omitted cleanly when the year is unknown. */
+.compact-stack__year {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  font-weight: 400;
+  color: hsl(var(--faint));
+  margin-right: 0.8em;
+}
+/* Same annotation in the expanded header, quieter still. */
+.compact-stack__year--header {
+  opacity: 0.8;
+}
+/* Per-album window-inclusion checkbox at the row's far-right trailing edge.
+   Checked = shown in the five-slot window (default); unchecked = skipped
+   (row dims and moves to the below-fold skipped region). Styled as a small
+   square console key, identical to the compact dial's scan checkbox. */
+.compact-stack__scan-checkbox {
+  appearance: none;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  margin: 0 12px 0 auto;
+  border: 1px solid hsl(var(--foreground) / 0.55);
+  border-radius: 2px;
+  background: hsl(var(--secondary));
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.compact-stack__scan-checkbox:hover {
+  border-color: hsl(var(--foreground) / 0.85);
+}
+.compact-stack__scan-checkbox:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+.compact-stack__scan-checkbox:checked {
+  background: hsl(var(--foreground) / 0.82);
+  border-color: hsl(var(--foreground) / 0.82);
+}
+/* Check mark drawn on the key itself — dark tick on the lit key. */
+.compact-stack__scan-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 4px;
+  height: 8px;
+  border: solid hsl(var(--background));
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.compact-stack__scan-checkbox:not(:checked) {
+  border-color: hsl(var(--muted-foreground) / 0.45);
+  background: transparent;
+}
+/* A skipped row recedes: content dims, but stays fully interactive. */
+.compact-stack__row--skipped .compact-stack__text {
+  opacity: 0.45;
+}
+/* Artist release filmstrip in the expanded notes area — a horizontal scroll
+   row of small cover tiles, oldest → newest, in the same dark translucent
+   tile grammar as the liner cards. */
+/* While a filmstrip swap is in flight the notes dim slightly — the header
+   and strip stay interactive. */
+.compact-stack__cards--swapping {
+  opacity: 0.6;
+}
+.compact-stack__filmstrip {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+.compact-stack__filmstrip-tile {
+  appearance: none;
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 4px;
+  background: hsl(var(--background) / 0.55);
+  padding: 4px;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  width: 56px;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.compact-stack__filmstrip-tile:hover {
+  border-color: hsl(var(--foreground) / 0.6);
+}
+.compact-stack__filmstrip-tile:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+.compact-stack__filmstrip-tile--active {
+  border-color: hsl(var(--library) / 0.8);
+  background: hsl(var(--library) / 0.12);
+}
+.compact-stack__filmstrip-art {
+  display: block;
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.compact-stack__filmstrip-year {
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  font-weight: 400;
+  color: hsl(var(--faint));
+  line-height: 1;
+}
+.compact-stack__filmstrip-tile--active .compact-stack__filmstrip-year {
+  color: hsl(var(--library));
+}
 /* Expanded-hero backdrop: the tapped album's full cover. Stationary until
    the image has loaded AND overflows the band; then the cinematic pan.
    The composition starts in the middle of the record, lingers there, eases

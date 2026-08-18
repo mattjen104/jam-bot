@@ -38,6 +38,7 @@ import {
   toggleAgeTier,
   toggleStationCategory,
   useDialSkipped,
+  useStackSkipped,
 } from "../lib/dialFilterState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import { writeDialLens } from "../lib/dialLensState";
@@ -410,6 +411,16 @@ export default function SplitHome() {
     () => buildAlbumGroups(stackData?.pages[0]?.items ?? []),
     [stackData],
   );
+
+  // Per-album Stack-skip preference (localStorage "lore:stackSkipped").
+  // Unchecked albums leave the five-slot active window for the below-fold
+  // overflow region; the pager and the shuffle only see active albums —
+  // the Stack-side mirror of the dial's skipped stations.
+  const { skipped: stackSkipped, toggleSkip: toggleStackSkip } = useStackSkipped();
+  const activeStackGroups = useMemo(
+    () => stackGroups.filter((g) => !stackSkipped.has(g.key)),
+    [stackGroups, stackSkipped],
+  );
   const [stackOffset, setStackOffset] = useState<number>(0);
 
   const {
@@ -419,35 +430,35 @@ export default function SplitHome() {
     onShuffleAll,
     stopShuffle,
   } = useCompactStackShuffle({
-    groups: stackGroups,
+    groups: activeStackGroups,
     stackOffset,
     onSetStackOffset: setStackOffset,
   });
 
-  // Clamp the stack window when the library shrinks (deselects/imports) so a
-  // stale offset never shows an empty page. Render-time adjustment, same
-  // derived-state pattern as the scan window clamp above.
-  const [prevStackCount, setPrevStackCount] = useState(stackGroups.length);
-  if (prevStackCount !== stackGroups.length) {
-    setPrevStackCount(stackGroups.length);
-    if (stackGroups.length === 0) {
+  // Clamp the stack window when the active list shrinks (deselects/imports/
+  // skip toggles) so a stale offset never shows an empty page. Render-time
+  // adjustment, same derived-state pattern as the scan window clamp above.
+  const [prevStackCount, setPrevStackCount] = useState(activeStackGroups.length);
+  if (prevStackCount !== activeStackGroups.length) {
+    setPrevStackCount(activeStackGroups.length);
+    if (activeStackGroups.length === 0) {
       if (stackOffset !== 0) setStackOffset(0);
-    } else if (stackOffset >= stackGroups.length) {
-      setStackOffset(Math.floor((stackGroups.length - 1) / 5) * 5);
+    } else if (stackOffset >= activeStackGroups.length) {
+      setStackOffset(Math.floor((activeStackGroups.length - 1) / 5) * 5);
     }
   }
 
-  const stackPageCount = Math.max(1, Math.ceil(stackGroups.length / 5));
+  const stackPageCount = Math.max(1, Math.ceil(activeStackGroups.length / 5));
 
   // Stack page selection clamps to the last valid page (same contract as the
   // dial's handleSelectPage) and stops any running shuffle — the listener
   // explicitly navigated, so the shuffle cursor is now incompatible.
   const handleSelectStackPage = useCallback((offset: number) => {
     if (offset < 0 || offset % 5 !== 0) return;
-    const maxOffset = Math.max(0, Math.floor((stackGroups.length - 1) / 5) * 5);
+    const maxOffset = Math.max(0, Math.floor((activeStackGroups.length - 1) / 5) * 5);
     setStackOffset(Math.min(offset, maxOffset));
     stopShuffle();
-  }, [stackGroups.length, stopShuffle]);
+  }, [activeStackGroups.length, stopShuffle]);
 
   const mattStarterMutation = useStartMattLibrary();
   const startMattLibrary = useCallback(() => {
@@ -530,13 +541,18 @@ export default function SplitHome() {
       />
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
-        <CompactStack offset={stackOffset} shuffleKey={shuffleGroupKey} />
+        <CompactStack
+          offset={stackOffset}
+          shuffleKey={shuffleGroupKey}
+          skipped={stackSkipped}
+          onToggleSkip={toggleStackSkip}
+        />
       </section>
 
       <StackPagerBar
         stackOffset={stackOffset}
         stackPageCount={stackPageCount}
-        totalGroups={stackGroups.length}
+        totalGroups={activeStackGroups.length}
         shuffleMode={shuffleMode}
         onSelectStackPage={handleSelectStackPage}
         onShufflePage={onShufflePage}

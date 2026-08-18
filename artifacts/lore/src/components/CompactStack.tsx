@@ -46,7 +46,7 @@ import { useMyLibraryInfinite } from "../lib/meHooks";
 import { buildAlbumGroups, type AlbumGroup } from "../pages/Library";
 import { buildLinerGroups, type LinerGroup } from "../lib/linerNotes";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { onArtError } from "../lib/rumours";
+import { RUMOURS, onArtError } from "../lib/rumours";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { CompactPlayButton } from "./CompactPlayButton";
 
@@ -185,30 +185,67 @@ function CompactStackBackdrop({ art }: { art: string | null }) {
 }
 
 /**
+ * A release the listener swapped into the expanded view via the artist
+ * filmstrip: the payload of GET /api/release-groups/:rgMbid/tracks.
+ */
+export interface SwappedAlbum {
+  rgMbid: string;
+  rgTitle: string | null;
+  releaseYear: number | null;
+  artworkUrl: string | null;
+  tracks: { mbid: string; title: string; artist: string }[];
+}
+
+/**
  * Album replay controls for the compact Stack row. This intentionally mirrors
  * StackRow's full-album launch path, while retaining the resolved label so
  * replay labels supplied by MusicBrainz still identify this row as active.
+ *
+ * When `swap` is provided (the expanded view is showing a different release
+ * from the artist filmstrip), launch replays the swapped release's tracks
+ * directly — they were already fetched by the swap — under its own title.
  */
-export function useAlbumPlay(group: AlbumGroup) {
+export function useAlbumPlay(
+  group: AlbumGroup,
+  swap?: { tracks: SwappedAlbum["tracks"]; label: string } | null,
+) {
   const { ride } = usePlayer();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
   const mbid = primaryMbid(group);
-  const sessionLabels = [group.albumTitle, resolvedLabel].filter(
+  const sessionLabels = [group.albumTitle, swap?.label ?? null, resolvedLabel].filter(
     (label): label is string => label != null,
   );
   const isThisAlbum = ride.active && sessionLabels.includes(ride.replayLabel ?? "");
 
   const launch = useCallback(async () => {
-    if (!mbid) return false;
+    if (!swap && !mbid) return false;
     // Single-flight: never fire a second album-tracks request (and a second
     // startReplay) while one is already in flight for this row.
     if (busyRef.current) return false;
     busyRef.current = true;
     setBusy(true);
     try {
-      const data = await getRecordingAlbumTracks(mbid);
+      if (swap) {
+        // The swap fetch already returned this release's tracks — no second
+        // album-tracks request needed.
+        const seeds: RideSeed[] = swap.tracks.map((track) => ({
+          mbid: track.mbid,
+          title: track.title,
+          artist: track.artist,
+          artworkUrl: null,
+          links: [],
+        }));
+        if (seeds.length === 0) throw new Error("no tracks");
+        setResolvedLabel(swap.label);
+        ride.startReplay(seeds, swap.label, {
+          timeOrientation: "curated",
+          context: "library",
+        });
+        return true;
+      }
+      const data = await getRecordingAlbumTracks(mbid!);
       const seeds: RideSeed[] = data.tracks.map((track) => ({
         mbid: track.mbid,
         title: track.title,
@@ -230,7 +267,7 @@ export function useAlbumPlay(group: AlbumGroup) {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [group.albumTitle, mbid, ride]);
+  }, [group.albumTitle, mbid, ride, swap]);
 
   const isPlaying = isThisAlbum && ride.status === "playing";
   // Loading covers both this row's own in-flight album-tracks request (busy)
@@ -243,7 +280,7 @@ export function useAlbumPlay(group: AlbumGroup) {
   return {
     launch,
     busy,
-    canLaunch: mbid != null,
+    canLaunch: swap ? swap.tracks.length > 0 : mbid != null,
     /** True when this album is the active ride session (any status). */
     isActive: isThisAlbum,
     isPlaying,
@@ -261,20 +298,30 @@ export function useAlbumPlay(group: AlbumGroup) {
  */
 function ExpandedStackHeader({
   group,
+  swappedAlbum,
   onCollapse,
 }: {
   group: AlbumGroup;
+  /** Release swapped in via the artist filmstrip; null = the kept album. */
+  swappedAlbum: SwappedAlbum | null;
   onCollapse: () => void;
 }) {
+  const displayTitle = swappedAlbum?.rgTitle ?? group.albumTitle;
+  const displayYear = swappedAlbum ? swappedAlbum.releaseYear : group.releaseYear;
   const { launch, isActive, isPlaying, isLoading, canLaunch, togglePause } =
-    useAlbumPlay(group);
+    useAlbumPlay(
+      group,
+      swappedAlbum
+        ? { tracks: swappedAlbum.tracks, label: displayTitle }
+        : null,
+    );
   return (
     <div
       className="compact-stack__row compact-stack__row--expanded-header"
       role="button"
       tabIndex={0}
       aria-expanded="true"
-      aria-label={`Collapse ${group.albumTitle}`}
+      aria-label={`Collapse ${displayTitle}`}
       onClick={onCollapse}
       onKeyDown={(event) => {
         // The play button stops Enter/Space propagation on its own keydown,
@@ -288,7 +335,7 @@ function ExpandedStackHeader({
       <div className="compact-stack__overlay" aria-hidden="true" />
       {canLaunch && (
         <CompactPlayButton
-          title={group.albumTitle}
+          title={displayTitle}
           isPlaying={isPlaying}
           isLoading={isLoading}
           onClick={() => {
@@ -303,7 +350,12 @@ function ExpandedStackHeader({
         />
       )}
       <span className="compact-stack__text">
-        <span className="compact-stack__album">{group.albumTitle}</span>
+        {displayYear != null && (
+          <span className="compact-stack__year compact-stack__year--header">
+            {displayYear}
+          </span>
+        )}
+        <span className="compact-stack__album">{displayTitle}</span>
         {group.artist && (
           <>
             <span className="compact-stack__sep" aria-hidden="true">·</span>
@@ -320,6 +372,8 @@ function CompactStackRow({
   credit,
   renderSpine,
   sampling = false,
+  isSkipped = false,
+  onToggleSkip,
   onExpand,
 }: {
   group: AlbumGroup;
@@ -327,6 +381,10 @@ function CompactStackRow({
   renderSpine: (group: AlbumGroup) => React.ReactNode;
   /** True while the stack shuffle dwells on this row (highlight-only cue). */
   sampling?: boolean;
+  /** True when the album is unchecked — row dims and lives below the fold. */
+  isSkipped?: boolean;
+  /** Trailing checkbox handler; the checkbox renders only when provided. */
+  onToggleSkip?: (key: string) => void;
   onExpand: () => void;
 }) {
   const { launch, isActive, isPlaying, isLoading, canLaunch, togglePause } =
@@ -337,7 +395,7 @@ function CompactStackRow({
 
   return (
     <div
-      className={`compact-stack__row${sampling ? " compact-stack__row--sampling" : ""}`}
+      className={`compact-stack__row${sampling ? " compact-stack__row--sampling" : ""}${isSkipped ? " compact-stack__row--skipped" : ""}`}
       role="button"
       tabIndex={0}
       aria-expanded="false"
@@ -373,6 +431,9 @@ function CompactStackRow({
       )}
       {renderSpine(group)}
       <span className="compact-stack__text">
+        {group.releaseYear != null && (
+          <span className="compact-stack__year">{group.releaseYear}</span>
+        )}
         <span className="compact-stack__album">{group.albumTitle}</span>
         {group.artist && (
           <>
@@ -387,6 +448,161 @@ function CompactStackRow({
           </>
         )}
       </span>
+      {onToggleSkip && (
+        <input
+          type="checkbox"
+          className="compact-stack__scan-checkbox"
+          checked={!isSkipped}
+          aria-label={
+            isSkipped
+              ? `Include ${label} in the Stack window`
+              : `Skip ${label} in the Stack window`
+          }
+          title={
+            isSkipped
+              ? "Excluded from the Stack window — check to include"
+              : "Shown in the Stack window — uncheck to skip"
+          }
+          onChange={() => onToggleSkip(group.key)}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            // Space/Enter must toggle the checkbox only, never expand the row.
+            if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artist release filmstrip (expanded view)
+// ---------------------------------------------------------------------------
+
+/** One entry of GET /api/recordings/:mbid/artist-releases. */
+export interface ArtistRelease {
+  releaseGroupMbid: string;
+  title: string | null;
+  primaryType: string | null;
+  releaseYear: number | null;
+  artworkUrl: string | null;
+}
+
+/**
+ * Chronological ascending (oldest first, so the listener scrolls right
+ * through time); undated releases trail in their fetched order.
+ */
+export function sortReleasesChronologically(
+  releases: ArtistRelease[],
+): ArtistRelease[] {
+  return releases
+    .map((r, i) => ({ r, i }))
+    .sort(
+      (a, b) =>
+        (a.r.releaseYear ?? Number.MAX_SAFE_INTEGER) -
+          (b.r.releaseYear ?? Number.MAX_SAFE_INTEGER) || a.i - b.i,
+    )
+    .map(({ r }) => r);
+}
+
+/**
+ * Compact artist-release filmstrip for the expanded album view: a horizontal
+ * scroll row of cover tiles (same visual grammar as ArtistPortalStrip),
+ * sorted oldest → newest, with the currently viewed album's tile highlighted.
+ * Tapping a tile swaps the expanded view to that release — a browsing
+ * affordance only; nothing auto-plays.
+ *
+ * Renders nothing while loading, when the artist has ≤1 known release, or
+ * when the fetch fails — there is no placeholder state.
+ */
+function CompactStackFilmstrip({
+  recordingMbid,
+  activeRgMbid,
+  artistName,
+  onSelect,
+}: {
+  /** A resolved recording MBID of the expanded album (artist discovery). */
+  recordingMbid: string;
+  /** Release-group MBID of the album currently shown (highlighted tile). */
+  activeRgMbid: string | null;
+  artistName: string;
+  onSelect: (rgMbid: string) => void;
+}) {
+  const [releases, setReleases] = useState<ArtistRelease[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const activeTileRef = useRef<HTMLButtonElement | null>(null);
+
+  // Reset synchronously when the recording changes (render-time adjustment,
+  // same pattern as ArtistPortalStrip).
+  const [prevRecordingMbid, setPrevRecordingMbid] = useState(recordingMbid);
+  if (recordingMbid !== prevRecordingMbid) {
+    setPrevRecordingMbid(recordingMbid);
+    setReleases(null);
+    setLoading(true);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/recordings/${recordingMbid}/artist-releases`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
+      .then((data: { releases?: ArtistRelease[] }) => {
+        if (!cancelled) setReleases(data.releases ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setReleases([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [recordingMbid]);
+
+  // Scroll the current album's tile into view once the strip first renders.
+  useEffect(() => {
+    if (releases && releases.length > 1) {
+      activeTileRef.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }
+  }, [releases]);
+
+  if (loading || !releases || releases.length <= 1) return null;
+
+  return (
+    <div
+      className="compact-stack__filmstrip"
+      role="group"
+      aria-label={`More by ${artistName}`}
+    >
+      {sortReleasesChronologically(releases).map((r) => {
+        const isActive = r.releaseGroupMbid === activeRgMbid;
+        return (
+          <button
+            key={r.releaseGroupMbid}
+            type="button"
+            ref={isActive ? activeTileRef : undefined}
+            className={`compact-stack__filmstrip-tile${isActive ? " compact-stack__filmstrip-tile--active" : ""}`}
+            aria-pressed={isActive}
+            aria-label={`View ${r.title ?? r.primaryType ?? "release"}${r.releaseYear ? ` (${r.releaseYear})` : ""}`}
+            title={[r.title, r.releaseYear].filter(Boolean).join(" · ")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(r.releaseGroupMbid);
+            }}
+          >
+            <img
+              src={proxyArtUrl(r.artworkUrl) ?? RUMOURS}
+              alt=""
+              className="compact-stack__filmstrip-art"
+              loading="lazy"
+              onError={onArtError}
+            />
+            <span className="compact-stack__filmstrip-year">
+              {r.releaseYear ?? "····"}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -414,27 +630,145 @@ export interface CompactStackProps {
    * callers/tests that still observe it.
    */
   onExpandedChange?: (expanded: boolean) => void;
+  /**
+   * Album-group keys the listener has unchecked. Skipped albums leave the
+   * five-slot active window (which is paged over active groups only) and
+   * render dimmed in a below-fold overflow region where they stay
+   * interactive. Absent = nothing is skipped.
+   */
+  skipped?: ReadonlySet<string>;
+  /**
+   * Trailing-checkbox handler for the skip preference. When omitted, rows
+   * render no checkbox at all.
+   */
+  onToggleSkip?: (key: string) => void;
 }
 
-export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }: CompactStackProps = {}) {
+export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, skipped, onToggleSkip }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { data, isLoading } = useMyLibraryInfinite({}, 100);
 
-  // The full group list is windowed by the pager offset; expansion and the
-  // inline credits only ever operate on the visible five-album page.
+  // The full group list splits into active (pager-windowed) and skipped
+  // (below-fold overflow) albums — the Stack-side mirror of CompactDial.
   const allGroups = useMemo<AlbumGroup[]>(() => {
     const items = data?.pages[0]?.items ?? [];
     return buildAlbumGroups(items);
   }, [data]);
+  const activeGroups = useMemo(
+    () => (skipped ? allGroups.filter((g) => !skipped.has(g.key)) : allGroups),
+    [allGroups, skipped],
+  );
+  const skippedGroups = useMemo(
+    () => (skipped ? allGroups.filter((g) => skipped.has(g.key)) : []),
+    [allGroups, skipped],
+  );
   const groups = useMemo(
-    () => allGroups.slice(offset, offset + COMPACT_STACK_SIZE),
-    [allGroups, offset],
+    () => activeGroups.slice(offset, offset + COMPACT_STACK_SIZE),
+    [activeGroups, offset],
   );
 
+  // The expanded album is looked up in the visible window OR the skipped
+  // region — a skipped row stays expandable — but never off-page, so paging
+  // away still collapses a stale expansion.
   const expandedGroup = expandedKey
-    ? (groups.find((g) => g.key === expandedKey) ?? null)
+    ? (groups.find((g) => g.key === expandedKey) ??
+      skippedGroups.find((g) => g.key === expandedKey) ??
+      null)
     : null;
+
+  // Release swapped into the expanded view via the artist filmstrip, guarded
+  // against async races. Every swap request carries (a) a monotonic sequence,
+  // so a slow response can never overwrite a newer tile tap, and (b) an
+  // invalidation token bumped on every expansion change/collapse, so a
+  // response that lands after the listener moved to another album is
+  // discarded. `requested` tracks the newest pending request for the loading
+  // dim; `settled` is the newest committed result (album null = a failed
+  // swap, which keeps showing the current album).
+  const swapSeqRef = useRef(0);
+  const swapInvalidationRef = useRef(0);
+  const [requestedSwap, setRequestedSwap] = useState<{
+    forKey: string | null;
+    seq: number;
+  } | null>(null);
+  const [settledSwap, setSettledSwap] = useState<{
+    forKey: string | null;
+    seq: number;
+    album: SwappedAlbum | null;
+  } | null>(null);
+
+  // Every expansion change invalidates in-flight filmstrip swaps and clears
+  // their state. Called from event handlers only — the render-time
+  // stale-drop below leaves the swap state alone: its late commits stay
+  // hidden (the forKey check fails while collapsed), and any re-expand
+  // passes through here, bumping the token so they are dropped for good.
+  const changeExpanded = (key: string | null) => {
+    if (key === expandedKey) return;
+    swapInvalidationRef.current += 1;
+    setRequestedSwap(null);
+    setSettledSwap(null);
+    setExpandedKey(key);
+  };
+
+  const swappedAlbum =
+    settledSwap?.album != null && settledSwap.forKey === expandedKey
+      ? settledSwap.album
+      : null;
+  const swapLoading =
+    requestedSwap != null &&
+    requestedSwap.forKey === expandedKey &&
+    (settledSwap == null ||
+      settledSwap.seq < requestedSwap.seq ||
+      settledSwap.forKey !== expandedKey);
+
+  // The release-group MBID of the album currently shown: the swapped release
+  // when one is active, otherwise the kept group's own primary RG.
+  const groupRgMbid = expandedGroup
+    ? (expandedGroup.items.find((i) => i.recording?.releaseGroupMbid)
+        ?.recording?.releaseGroupMbid ?? null)
+    : null;
+  const activeRgMbid = swappedAlbum?.rgMbid ?? groupRgMbid;
+
+  const handleSwapAlbum = useCallback(
+    async (rgMbid: string) => {
+      if (rgMbid === activeRgMbid) {
+        // Tapping the album already on display is a "keep this one"
+        // selection: like every filmstrip tap it supersedes any swap still
+        // in flight, so the late response can never replace the view the
+        // listener just re-affirmed.
+        swapInvalidationRef.current += 1;
+        setRequestedSwap(null);
+        return;
+      }
+      const seq = ++swapSeqRef.current;
+      const invalidation = swapInvalidationRef.current;
+      const forKey = expandedKey;
+      setRequestedSwap({ forKey, seq });
+      try {
+        const res = await fetch(`/api/release-groups/${rgMbid}/tracks`);
+        if (!res.ok) throw new Error("not_found");
+        const album = (await res.json()) as SwappedAlbum;
+        // Stale: the expanded album changed (or collapsed) while fetching.
+        if (invalidation !== swapInvalidationRef.current) return;
+        // Settle only when no newer request has been issued since.
+        setSettledSwap((prev) =>
+          prev && prev.seq > seq ? prev : { forKey, seq, album },
+        );
+      } catch {
+        if (invalidation !== swapInvalidationRef.current) return;
+        // A failed swap keeps showing the current album — record the settle
+        // anyway so the request stops counting as pending.
+        setSettledSwap((prev) =>
+          prev && prev.seq > seq
+            ? prev
+            : prev && prev.forKey === forKey
+              ? { ...prev, seq }
+              : { forKey, seq, album: null },
+        );
+      }
+    },
+    [activeRgMbid, expandedKey],
+  );
 
   // A library refetch or a page change can remove or reorder the expanded
   // album out of the visible window. Drop the stale key during render (the
@@ -453,19 +787,33 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }
   // Cheap over ≤5 groups; the React Compiler memoizes it (a manual useMemo
   // here can't be preserved by the compiler and forces a skip).
   const ordered = orderForExpansion(groups, expandedKey);
+  // Rows below the notes: the window minus the expanded album when it leads
+  // the window; the full window when a skipped row is the expanded one.
+  const expandedInWindow =
+    expandedGroup != null && groups.some((g) => g.key === expandedGroup.key);
+  const belowRows = expandedInWindow ? ordered.slice(1) : groups;
+  // Backdrop: the swapped release's own art when browsing the filmstrip
+  // (release-exact CAA fallback when the swap returned no art), otherwise the
+  // kept album's spine art.
   const expandedArt = proxyArtUrl(
-    expandedGroup ? spineArtUrl(expandedGroup) : null,
+    !expandedGroup
+      ? null
+      : swappedAlbum
+        ? (swappedAlbum.artworkUrl ??
+          `https://coverartarchive.org/release-group/${swappedAlbum.rgMbid}/front-1200`)
+        : spineArtUrl(expandedGroup),
   );
 
   // Knowledge for the collapsed inline credit — one query per album (its
-  // newest resolved recording). Cached under the same key the liner-notes
-  // sheet uses, so no duplicate fetches.
+  // newest resolved recording), covering the window and the skipped region.
+  // Cached under the same key the liner-notes sheet uses, so no duplicate
+  // fetches.
   const creditMbids = useMemo(
     () =>
-      groups
+      [...groups, ...skippedGroups]
         .map((g) => primaryMbid(g))
         .filter((m): m is string => m !== null),
-    [groups],
+    [groups, skippedGroups],
   );
   const creditResults = useQueries({
     queries: creditMbids.map((mbid) => ({
@@ -482,10 +830,15 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }
 
   // Expanded album: fetch every resolved recording so claims from all kept
   // tracks on the album are aggregated (same pattern as the investigation
-  // sheet).
+  // sheet). After a filmstrip swap the notes follow the swapped release's
+  // own track list instead of the kept album's recordings.
   // Cheap over one small group; the React Compiler memoizes it (a manual
   // useMemo here can't be preserved by the compiler and forces a skip).
-  const expandedMbids = expandedGroup ? groupMbids(expandedGroup) : [];
+  const expandedMbids = !expandedGroup
+    ? []
+    : swappedAlbum
+      ? [...new Set(swappedAlbum.tracks.map((t) => t.mbid))]
+      : groupMbids(expandedGroup);
   const expandedResults = useQueries({
     queries: expandedMbids.map((mbid) => ({
       queryKey: getGetRecordingKnowledgeQueryKey(mbid),
@@ -536,13 +889,18 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }
       >
         <ExpandedStackHeader
           group={expandedGroup}
-          onCollapse={() => setExpandedKey(null)}
+          swappedAlbum={swappedAlbum}
+          onCollapse={() => changeExpanded(null)}
         />
         {/* The notes region owns its backdrop: the album art covers only this
             section (panning once it overflows), never the whole band. */}
         <div className="compact-stack__notes">
           <CompactStackBackdrop key={expandedArt ?? "no-art"} art={expandedArt} />
-          <div className="compact-stack__cards" role="region" aria-label={`${expandedGroup.albumTitle} liner notes`}>
+          <div
+            className={`compact-stack__cards${swapLoading ? " compact-stack__cards--swapping" : ""}`}
+            role="region"
+            aria-label={`${expandedGroup.albumTitle} liner notes`}
+          >
           {expandedLoading ? (
             <div className="compact-stack__card compact-stack__card--muted">
               Reading the liner notes…
@@ -580,6 +938,20 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }
               No liner notes available for this album yet.
             </div>
           )}
+          {/* Artist release cycle: every primary release by this artist,
+              oldest → newest. Tapping a tile swaps the header identity and
+              the notes to that release; nothing auto-plays. */}
+          {(() => {
+            const filmstripMbid = primaryMbid(expandedGroup);
+            return filmstripMbid ? (
+              <CompactStackFilmstrip
+                recordingMbid={filmstripMbid}
+                activeRgMbid={activeRgMbid}
+                artistName={expandedGroup.artist}
+                onSelect={(rgMbid) => void handleSwapAlbum(rgMbid)}
+              />
+            ) : null;
+          })()}
           <button
             type="button"
             className="compact-stack__card compact-stack__card--stack-link"
@@ -592,7 +964,7 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }
         </div>
         {/* The remaining compact rows stay mounted below the notes so the
             band reads as one continuous, scrollable column. */}
-        {ordered.slice(1).map((group) => {
+        {belowRows.map((group) => {
           const mbid = primaryMbid(group);
           const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
           return (
@@ -602,17 +974,48 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }
               credit={credit}
               renderSpine={renderSpine}
               sampling={group.key === shuffleKey}
-              onExpand={() => setExpandedKey(group.key)}
+              onToggleSkip={onToggleSkip}
+              onExpand={() => changeExpanded(group.key)}
             />
           );
         })}
+        {skippedGroups.filter((g) => g.key !== expandedKey).length > 0 && (
+          <div
+            className="compact-stack__skipped-region"
+            aria-label="Excluded from the Stack window"
+          >
+            {skippedGroups
+              .filter((g) => g.key !== expandedKey)
+              .map((group) => {
+                const mbid = primaryMbid(group);
+                const credit = mbid
+                  ? relationshipCredit(knowledgeByMbid.get(mbid))
+                  : null;
+                return (
+                  <CompactStackRow
+                    key={group.key}
+                    group={group}
+                    credit={credit}
+                    renderSpine={renderSpine}
+                    sampling={group.key === shuffleKey}
+                    isSkipped
+                    onToggleSkip={onToggleSkip}
+                    onExpand={() => changeExpanded(group.key)}
+                  />
+                );
+              })}
+          </div>
+        )}
       </div>
     );
   }
 
-  // ── Collapsed: five single-line rows ────────────────────────────────────
+  // ── Collapsed: five single-line rows (+ below-fold skipped region) ──────
   return (
-    <div className="compact-stack" aria-label="Recent keeps">
+    <div
+      className={`compact-stack${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
+      aria-label="Recent keeps"
+    >
       {ordered.map((group) => {
         const mbid = primaryMbid(group);
         const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
@@ -623,11 +1026,37 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange }
             credit={credit}
             renderSpine={renderSpine}
             sampling={group.key === shuffleKey}
-            onExpand={() => setExpandedKey(group.key)}
+            onToggleSkip={onToggleSkip}
+            onExpand={() => changeExpanded(group.key)}
           />
         );
       })}
-      {!isLoading && groups.length === 0 && (
+      {skippedGroups.length > 0 && (
+        <div
+          className="compact-stack__skipped-region"
+          aria-label="Excluded from the Stack window"
+        >
+          {skippedGroups.map((group) => {
+            const mbid = primaryMbid(group);
+            const credit = mbid
+              ? relationshipCredit(knowledgeByMbid.get(mbid))
+              : null;
+            return (
+              <CompactStackRow
+                key={group.key}
+                group={group}
+                credit={credit}
+                renderSpine={renderSpine}
+                sampling={group.key === shuffleKey}
+                isSkipped
+                onToggleSkip={onToggleSkip}
+                onExpand={() => changeExpanded(group.key)}
+              />
+            );
+          })}
+        </div>
+      )}
+      {!isLoading && groups.length === 0 && skippedGroups.length === 0 && (
         <button
           type="button"
           className="compact-stack__empty"

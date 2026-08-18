@@ -32,7 +32,7 @@
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { TrackKnowledge, TrackClaim } from "@workspace/api-client-react";
 
@@ -57,6 +57,7 @@ vi.mock("../src/lib/proxyArt", () => ({
 }));
 
 vi.mock("../src/lib/rumours", () => ({
+  RUMOURS: "rumours.jpg",
   onArtError: vi.fn(),
 }));
 
@@ -107,6 +108,61 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   };
 });
 
+// Artist-release filmstrip fetches — plain fetch, stubbed per test.
+// artistReleasesByMbid: mbid → releases payload (null = fetch rejects).
+// rgTracksByMbid: rgMbid → release-group tracks payload (null = 404).
+const artistReleasesByMbid = new Map<
+  string,
+  Array<{
+    releaseGroupMbid: string;
+    title: string | null;
+    primaryType: string | null;
+    releaseYear: number | null;
+    artworkUrl: string | null;
+  }> | null
+>();
+const rgTracksByMbid = new Map<
+  string,
+  {
+    rgMbid: string;
+    rgTitle: string | null;
+    rgType: string | null;
+    releaseYear: number | null;
+    artworkUrl: string | null;
+    tracks: Array<{ mbid: string; title: string; artist: string }>;
+  } | null
+>();
+
+function jsonResponse(body: unknown, ok = true, status = 200) {
+  return {
+    ok,
+    status,
+    json: async () => body,
+  } as Response;
+}
+
+const fetchStub = vi.fn(async (input: unknown) => {
+  const url = String(input);
+  const artistMatch = url.match(/\/api\/recordings\/([^/]+)\/artist-releases/);
+  if (artistMatch) {
+    const payload = artistReleasesByMbid.get(artistMatch[1]!);
+    if (payload === undefined || payload === null) {
+      return jsonResponse({ error: "not_found" }, false, 404);
+    }
+    return jsonResponse({ artistName: "Artist", releases: payload });
+  }
+  const rgMatch = url.match(/\/api\/release-groups\/([^/]+)\/tracks/);
+  if (rgMatch) {
+    const payload = rgTracksByMbid.get(rgMatch[1]!);
+    if (payload === undefined || payload === null) {
+      return jsonResponse({ error: "not_found" }, false, 404);
+    }
+    return jsonResponse(payload);
+  }
+  return jsonResponse({ error: "unexpected" }, false, 500);
+});
+vi.stubGlobal("fetch", fetchStub);
+
 // Player provider mock — ride state controlled per test.
 let rideActive = false;
 let rideStatus: string = "idle";
@@ -140,6 +196,8 @@ afterEach(() => {
   albumTracksByMbid.clear();
   albumTracksOverride = null;
   albumTracksCalls.length = 0;
+  artistReleasesByMbid.clear();
+  rgTracksByMbid.clear();
   rideActive = false;
   rideStatus = "idle";
   rideReplayLabel = null;
@@ -156,6 +214,7 @@ function makeItem(overrides: {
   title?: string;
   artworkUrl?: string | null;
   releaseGroupMbid?: string | null;
+  releaseYear?: number | null;
   addedAt?: string;
 }): LibraryItem {
   return {
@@ -168,6 +227,7 @@ function makeItem(overrides: {
       artworkUrl: overrides.artworkUrl ?? null,
       albumTitle: overrides.albumTitle ?? "Some Album",
       releaseGroupMbid: overrides.releaseGroupMbid ?? null,
+      releaseYear: overrides.releaseYear ?? null,
       spotifyUrl: null,
     },
   };
@@ -199,6 +259,7 @@ function makeGroup(overrides: Partial<AlbumGroup> = {}): AlbumGroup {
     albumTitle: "Album",
     artist: "Artist",
     artworkUrl: null,
+    releaseYear: null,
     items: [],
     ...overrides,
   };
@@ -628,6 +689,369 @@ describe("CompactStack paging", () => {
     const sampling = document.querySelectorAll(".compact-stack__row--sampling");
     expect(sampling).toHaveLength(1);
     expect(sampling[0].textContent).toContain("Album 2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Album checkboxes (skip preference)
+// ---------------------------------------------------------------------------
+
+describe("CompactStack album checkboxes", () => {
+  const twoAlbums = () => [
+    makeItem({ mbid: "m1", albumTitle: "Blue Lines", artist: "Massive Attack", addedAt: "2026-08-02T00:00:00Z" }),
+    makeItem({ mbid: "m2", albumTitle: "Dummy", artist: "Portishead", addedAt: "2026-08-01T00:00:00Z" }),
+  ];
+
+  it("renders a trailing checkbox on each row when onToggleSkip is provided", async () => {
+    libraryItems = twoAlbums();
+    renderStack({ skipped: new Set(), onToggleSkip: vi.fn() });
+    await screen.findByRole("button", { name: "Expand Blue Lines · Massive Attack" });
+    const skip = screen.getByRole("checkbox", {
+      name: "Skip Blue Lines · Massive Attack in the Stack window",
+    });
+    expect(skip.getAttribute("class")).toContain("compact-stack__scan-checkbox");
+    screen.getByRole("checkbox", {
+      name: "Skip Dummy · Portishead in the Stack window",
+    });
+  });
+
+  it("renders no checkbox without a skip handler", async () => {
+    libraryItems = twoAlbums();
+    renderStack();
+    await screen.findByRole("button", { name: "Expand Blue Lines · Massive Attack" });
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("toggling a checkbox calls onToggleSkip with the group key and does not expand", async () => {
+    libraryItems = twoAlbums();
+    const onToggleSkip = vi.fn();
+    renderStack({ skipped: new Set(), onToggleSkip });
+    const checkbox = await screen.findByRole("checkbox", {
+      name: "Skip Dummy · Portishead in the Stack window",
+    });
+    fireEvent.click(checkbox);
+    expect(onToggleSkip).toHaveBeenCalledWith("Dummy\x1fPortishead");
+    // The row must not have expanded.
+    expect(screen.queryByRole("region")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Expand Dummy · Portishead" })
+        .getAttribute("aria-expanded"),
+    ).toBe("false");
+  });
+
+  it("skipped albums move to the below-fold region, dimmed but interactive", async () => {
+    libraryItems = twoAlbums();
+    const onToggleSkip = vi.fn();
+    const { container } = renderStack({
+      skipped: new Set(["Dummy\x1fPortishead"]),
+      onToggleSkip,
+    });
+    await screen.findByRole("button", { name: "Expand Blue Lines · Massive Attack" });
+
+    // The skipped album is NOT among the active rows…
+    const region = container.querySelector(".compact-stack__skipped-region");
+    expect(region).not.toBeNull();
+    const skippedRow = region!.querySelector(".compact-stack__row--skipped");
+    expect(skippedRow?.textContent).toContain("Dummy");
+    // …and the active window contains only Blue Lines.
+    const activeRows = [...container.querySelectorAll(".compact-stack__row")]
+      .filter((r) => !r.classList.contains("compact-stack__row--skipped"));
+    expect(activeRows).toHaveLength(1);
+    expect(activeRows[0]!.textContent).toContain("Blue Lines");
+
+    // The skipped row stays interactive: its checkbox offers re-inclusion.
+    const recheck = screen.getByRole("checkbox", {
+      name: "Include Dummy · Portishead in the Stack window",
+    });
+    fireEvent.click(recheck);
+    expect(onToggleSkip).toHaveBeenCalledWith("Dummy\x1fPortishead");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Release year (leading annotation)
+// ---------------------------------------------------------------------------
+
+describe("CompactStack release year", () => {
+  it("renders the year as a leading mono annotation when non-null", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Dummy", artist: "Portishead", releaseYear: 1994 }),
+    ];
+    const { container } = renderStack();
+    await screen.findByRole("button", { name: "Expand Dummy · Portishead" });
+    const year = container.querySelector(".compact-stack__year");
+    expect(year?.textContent).toBe("1994");
+    // The year leads the row grammar, ahead of the album title.
+    const text = container.querySelector(".compact-stack__text")!;
+    expect(text.firstElementChild).toBe(year);
+  });
+
+  it("takes the first non-null year in the group and omits it cleanly when null", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Dated", artist: "A", releaseYear: null, addedAt: "2026-08-02T00:00:00Z" }),
+      makeItem({ mbid: "m2", albumTitle: "Dated", artist: "A", releaseYear: 1987, addedAt: "2026-08-01T00:00:00Z" }),
+      makeItem({ mbid: "m3", albumTitle: "Undated", artist: "B", releaseYear: null }),
+    ];
+    const { container } = renderStack();
+    await screen.findByRole("button", { name: "Expand Dated · A" });
+    const years = [...container.querySelectorAll(".compact-stack__year")];
+    expect(years.map((y) => y.textContent)).toEqual(["1987"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Artist release cycle (filmstrip in the expanded view)
+// ---------------------------------------------------------------------------
+
+describe("CompactStack artist release cycle", () => {
+  const portisheadReleases = [
+    { releaseGroupMbid: "rg-dummy", title: "Dummy", primaryType: "Album", releaseYear: 1994, artworkUrl: null },
+    { releaseGroupMbid: "rg-portishead", title: "Portishead", primaryType: "Album", releaseYear: 1997, artworkUrl: null },
+    { releaseGroupMbid: "rg-third", title: "Third", primaryType: "Album", releaseYear: 2008, artworkUrl: null },
+  ];
+
+  it("shows the filmstrip chronologically in the expanded view with the current album highlighted", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead", releaseYear: 1997 }),
+    ];
+    // Server returns newest-first; the strip re-sorts oldest → newest.
+    artistReleasesByMbid.set("m1", [...portisheadReleases].reverse());
+    const { container } = renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+
+    const stripEl = await screen.findByRole("group", { name: "More by Portishead" });
+    expect(container.contains(stripEl)).toBe(true);
+    // Chronological ascending: 1994 → 1997 → 2008.
+    const yearLabels = [...stripEl.querySelectorAll(".compact-stack__filmstrip-year")]
+      .map((y) => y.textContent);
+    expect(yearLabels).toEqual(["1994", "1997", "2008"]);
+    // The kept album's tile is the active one.
+    const active = stripEl.querySelector(".compact-stack__filmstrip-tile--active");
+    expect(active?.getAttribute("aria-label")).toBe("View Portishead (1997)");
+  });
+
+  it("tapping a tile swaps the expanded header and notes to that release", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead" }),
+    ];
+    artistReleasesByMbid.set("m1", portisheadReleases);
+    rgTracksByMbid.set("rg-third", {
+      rgMbid: "rg-third",
+      rgTitle: "Third",
+      rgType: "Album",
+      releaseYear: 2008,
+      artworkUrl: null,
+      tracks: [
+        { mbid: "t-silence", title: "Silence", artist: "Portishead" },
+        { mbid: "t-hunter", title: "Hunter", artist: "Portishead" },
+      ],
+    });
+    knowledgeByMbid.set("t-silence", {
+      knowledge: makeKnowledge({ relationships: [SAMPLES_REL] }),
+      claims: [],
+    });
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+    const tile = await screen.findByRole("button", { name: "View Third (2008)" });
+    fireEvent.click(tile);
+
+    // Header identity swaps to the tapped release; collapse still works.
+    await screen.findByRole("button", { name: "Collapse Third" });
+    // The notes follow the swapped release's own tracks.
+    await screen.findByText("samples — Funky Drummer (James Brown)");
+    // The tapped tile becomes the highlighted one.
+    expect(tile.getAttribute("aria-pressed")).toBe("true");
+    // The header play control now launches the swapped release.
+    const playBtn = await screen.findByRole("button", { name: "Play Third" });
+    fireEvent.click(playBtn);
+    await vi.waitFor(() => expect(startReplay).toHaveBeenCalledTimes(1));
+    const [seeds, label] = startReplay.mock.calls[0] as Parameters<typeof startReplay>;
+    expect(label).toBe("Third");
+    expect(seeds[0]).toMatchObject({ mbid: "t-silence", title: "Silence" });
+  });
+
+  it("omits the filmstrip when the artist has a single known release", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Only Album", artist: "Solo Act", releaseGroupMbid: "rg-only" }),
+    ];
+    artistReleasesByMbid.set("m1", [
+      { releaseGroupMbid: "rg-only", title: "Only Album", primaryType: "Album", releaseYear: 2001, artworkUrl: null },
+    ]);
+    const { container } = renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Only Album · Solo Act" }),
+    );
+    await screen.findByText("No liner notes available for this album yet.");
+    await vi.waitFor(() => {
+      expect(fetchStub.mock.calls.some(([u]) =>
+        String(u).includes("/artist-releases"),
+      )).toBe(true);
+    });
+    expect(container.querySelector(".compact-stack__filmstrip")).toBeNull();
+  });
+
+  it("silently omits the filmstrip when the artist-releases fetch fails", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Fragile LP", artist: "Nobody" }),
+    ];
+    artistReleasesByMbid.set("m1", null); // 404
+    const { container } = renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Fragile LP · Nobody" }),
+    );
+    await screen.findByText("No liner notes available for this album yet.");
+    await vi.waitFor(() => {
+      expect(fetchStub.mock.calls.some(([u]) =>
+        String(u).includes("/artist-releases"),
+      )).toBe(true);
+    });
+    expect(container.querySelector(".compact-stack__filmstrip")).toBeNull();
+  });
+
+  it("ignores a stale swap response when a newer tile was tapped first", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead" }),
+    ];
+    artistReleasesByMbid.set("m1", portisheadReleases);
+    rgTracksByMbid.set("rg-dummy", {
+      rgMbid: "rg-dummy",
+      rgTitle: "Dummy",
+      rgType: "Album",
+      releaseYear: 1994,
+      artworkUrl: null,
+      tracks: [{ mbid: "t-roads", title: "Roads", artist: "Portishead" }],
+    });
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+    await screen.findByRole("group", { name: "More by Portishead" });
+
+    // The Third fetch hangs until the test releases it.
+    let releaseThird!: (r: Response) => void;
+    fetchStub.mockImplementationOnce((input: unknown) => {
+      expect(String(input)).toContain("/api/release-groups/rg-third/tracks");
+      return new Promise<Response>((res) => {
+        releaseThird = res;
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "View Third (2008)" }));
+    // A faster tap on Dummy completes first and wins the header.
+    fireEvent.click(screen.getByRole("button", { name: "View Dummy (1994)" }));
+    await screen.findByRole("button", { name: "Collapse Dummy" });
+
+    // The slow Third response lands late and must be ignored.
+    await act(async () => {
+      releaseThird(
+        jsonResponse({
+          rgMbid: "rg-third",
+          rgTitle: "Third",
+          rgType: "Album",
+          releaseYear: 2008,
+          artworkUrl: null,
+          tracks: [{ mbid: "t-silence", title: "Silence", artist: "Portishead" }],
+        }),
+      );
+    });
+    expect(screen.getByRole("button", { name: "Collapse Dummy" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Collapse Third" })).toBeNull();
+  });
+
+  it("ignores a pending swap when a different album is expanded before it lands", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead", addedAt: "2026-08-02T00:00:00Z" }),
+      makeItem({ mbid: "m2", albumTitle: "Blue Lines", artist: "Massive Attack", addedAt: "2026-08-01T00:00:00Z" }),
+    ];
+    artistReleasesByMbid.set("m1", portisheadReleases);
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+    await screen.findByRole("group", { name: "More by Portishead" });
+
+    let releaseThird!: (r: Response) => void;
+    fetchStub.mockImplementationOnce(
+      () =>
+        new Promise<Response>((res) => {
+          releaseThird = res;
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "View Third (2008)" }));
+
+    // Expand a different album before the swap lands.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand Blue Lines · Massive Attack" }),
+    );
+    await screen.findByRole("button", { name: "Collapse Blue Lines" });
+    await act(async () => {
+      releaseThird(
+        jsonResponse({
+          rgMbid: "rg-third",
+          rgTitle: "Third",
+          rgType: "Album",
+          releaseYear: 2008,
+          artworkUrl: null,
+          tracks: [{ mbid: "t-silence", title: "Silence", artist: "Portishead" }],
+        }),
+      );
+    });
+    // The late response must not hijack the Blue Lines expansion…
+    expect(
+      screen.getByRole("button", { name: "Collapse Blue Lines" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Collapse Third" })).toBeNull();
+
+    // …nor resurface when Portishead is re-expanded: the view starts clean.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+    await screen.findByRole("button", { name: "Collapse Portishead" });
+    expect(screen.queryByRole("button", { name: "Collapse Third" })).toBeNull();
+  });
+
+  it("cancels a pending swap when the currently displayed tile is tapped", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead" }),
+    ];
+    artistReleasesByMbid.set("m1", portisheadReleases);
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+    await screen.findByRole("group", { name: "More by Portishead" });
+
+    // Start a swap to Third that hangs until the test releases it…
+    let releaseThird!: (r: Response) => void;
+    fetchStub.mockImplementationOnce((input: unknown) => {
+      expect(String(input)).toContain("/api/release-groups/rg-third/tracks");
+      return new Promise<Response>((res) => {
+        releaseThird = res;
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "View Third (2008)" }));
+
+    // …then re-affirm the album already on display (its tile is the active
+    // one). That tap must cancel the pending swap: the late Third response
+    // can no longer replace the view.
+    fireEvent.click(screen.getByRole("button", { name: "View Portishead (1997)" }));
+    await act(async () => {
+      releaseThird(
+        jsonResponse({
+          rgMbid: "rg-third",
+          rgTitle: "Third",
+          rgType: "Album",
+          releaseYear: 2008,
+          artworkUrl: null,
+          tracks: [{ mbid: "t-silence", title: "Silence", artist: "Portishead" }],
+        }),
+      );
+    });
+    expect(screen.getByRole("button", { name: "Collapse Portishead" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Collapse Third" })).toBeNull();
   });
 });
 

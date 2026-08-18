@@ -80,6 +80,7 @@ function makeGroup(mbids: (string | null)[]): AlbumGroup {
     albumTitle: "Test Album",
     artist: "Test Artist",
     artworkUrl: null,
+    releaseYear: null,
     items: mbids.map((mbid, i) => ({
       mbid,
       provenance: { kind: "keep" },

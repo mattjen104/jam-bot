@@ -123,3 +123,61 @@ export function useDialSkipped() {
 
   return { skipped, toggleSkip, isSkipped };
 }
+
+// ---------------------------------------------------------------------------
+// Per-album Stack skip preference (compact Stack on the front door)
+// ---------------------------------------------------------------------------
+
+const LS_STACK_SKIPPED_KEY = "lore:stackSkipped";
+
+function readStackSkipped(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LS_STACK_SKIPPED_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeStackSkipped(keys: Set<string>): void {
+  try {
+    localStorage.setItem(LS_STACK_SKIPPED_KEY, JSON.stringify([...keys]));
+  } catch {
+    // localStorage unavailable — preference won't survive a reload.
+  }
+}
+
+/**
+ * Hook: per-album Stack-skip preference, backed by localStorage. Keys are
+ * AlbumGroup.key strings (`albumTitle\x1fartist`). Skipped albums drop out of
+ * the compact Stack's five-slot active window into a below-fold overflow
+ * region — the Stack-side counterpart of useDialSkipped.
+ *
+ * Returns:
+ *   skipped   — current set of skipped album-group keys
+ *   toggleSkip(key) — add/remove a key from the skipped set
+ *   isSkipped(key) — predicate helper
+ */
+export function useStackSkipped() {
+  const [skipped, setSkipped] = useState<Set<string>>(() => readStackSkipped());
+
+  const toggleSkip = useCallback((key: string) => {
+    setSkipped((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      writeStackSkipped(next);
+      return next;
+    });
+  }, []);
+
+  const isSkipped = useCallback(
+    (key: string) => skipped.has(key),
+    [skipped],
+  );
+
+  return { skipped, toggleSkip, isSkipped };
+}

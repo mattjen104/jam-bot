@@ -563,6 +563,8 @@ export interface AlbumGroup {
   albumTitle: string;
   artist: string;
   artworkUrl: string | null;
+  /** First non-null release year carried by any item in the group. */
+  releaseYear: number | null;
   items: LibraryItem[];
 }
 
@@ -587,12 +589,16 @@ export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
         albumTitle: albumTitle || artist || "Unknown album",
         artist,
         artworkUrl: null,
+        releaseYear: null,
         items: [],
       };
       map.set(key, group);
     }
     if (!group.artworkUrl && item.recording?.artworkUrl) {
       group.artworkUrl = item.recording.artworkUrl;
+    }
+    if (group.releaseYear == null && item.recording?.releaseYear != null) {
+      group.releaseYear = item.recording.releaseYear;
     }
     group.items.push(item);
   }

@@ -31,6 +31,12 @@ let dbAvailable = false;
 let server: Server | undefined;
 let baseUrl = "";
 let stationIds: number[] = [];
+// Sized in beforeAll from the live archive: the endpoint returns only the
+// global top 60 by play count, so the fixture must outrank whatever the
+// shared development database currently holds (a fixed count rots as the
+// archive grows — 500 plays fell below the 60th-place boundary of 516).
+let alphaPlays = 0;
+let betaPlays = 0;
 
 beforeAll(async () => {
   try {
@@ -65,36 +71,54 @@ beforeAll(async () => {
     { stationId: stationIds[2]!, mbid: recordingMbids[5]!, rawArtist: "inactive", rawTitle: "one", confidence: "text" },
   ]);
   // Keep the fixture inside the bounded top set even when the shared
-  // development database already has a large Lore archive.
-  await db.insert(spinsTable).values([
-    ...Array.from({ length: 598 }, () => ({
-      stationId: stationIds[0]!,
-      mbid: recordingMbids[0]!,
-      rawArtist: "alias",
-      rawTitle: "one",
-      confidence: "text",
-    })),
-    ...Array.from({ length: 499 }, () => ({
-      stationId: stationIds[0]!,
-      mbid: recordingMbids[2]!,
-      rawArtist: "beta",
-      rawTitle: "one",
-      confidence: "text",
-    })),
-    ...Array.from({ length: 499 }, () => ({
-      stationId: stationIds[0]!,
-      mbid: recordingMbids[3]!,
-      rawArtist: "fallback",
-      rawTitle: "one",
-      confidence: "text",
-    })),
-  ]);
+  // development database already has a large Lore archive: read the live
+  // 60th-place play count (same resolved set the endpoint queries) and
+  // outrank it by a wide margin. Bulk-insert via generate_series — one
+  // round trip no matter how large the archive has grown.
+  const boundaryRows = await db.execute<{ boundary: number | null }>(sql`
+    WITH resolved AS (
+      SELECT COALESCE(
+        'mbid:' || r.artist_mbid,
+        'name:' || lower(regexp_replace(r.artist, '[^[:alnum:]]', '', 'g'))
+      ) AS k
+      FROM spins sp
+      INNER JOIN stations s
+        ON s.id = sp.station_id
+       AND s.active = true
+       AND s.hidden = false
+      INNER JOIN recordings r ON r.mbid = sp.mbid
+      WHERE sp.mbid IS NOT NULL
+        AND r.artist IS NOT NULL
+        AND length(trim(r.artist)) > 0
+    ), counts AS (
+      SELECT count(*) AS c FROM resolved GROUP BY k ORDER BY c DESC LIMIT 60
+    )
+    SELECT min(c)::int AS boundary FROM counts
+  `);
+  const boundary = boundaryRows.rows[0]?.boundary ?? 0;
+  // One spin per recording was already inserted above; top up to targets.
+  alphaPlays = boundary + 400;
+  betaPlays = boundary + 200;
+  const stationId = stationIds[0]!;
+  for (const [mbid, target, already] of [
+    // The canonical group holds TWO recordings (Zeta + Alpha Alias share
+    // artist-mbid-a), so it already has 2 spins from the fixture above.
+    [recordingMbids[0]!, alphaPlays, 2],
+    [recordingMbids[2]!, betaPlays, 1], // Beta
+    [recordingMbids[3]!, betaPlays, 1], // Fallback & Name (deterministic tie)
+  ] as const) {
+    await db.execute(sql`
+      INSERT INTO spins (station_id, mbid, raw_artist, raw_title, confidence)
+      SELECT ${stationId}, ${mbid}, 'bulk', 'bulk', 'text'
+      FROM generate_series(1, ${target - already})
+    `);
+  }
 
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
   const address = server.address();
   if (address && typeof address === "object") baseUrl = `http://127.0.0.1:${address.port}`;
-});
+}, 120_000);
 
 afterAll(async () => {
   server?.close();
@@ -121,17 +145,17 @@ describe("GET /api/stations/artist-frequency", () => {
       {
         artist: `Alpha Alias ${run}`,
         artistMbid: `artist-mbid-a-${run}`,
-        playCount: 600,
+        playCount: alphaPlays,
       },
       {
         artist: `Beta ${run}`,
         artistMbid: `artist-mbid-b-${run}`,
-        playCount: 500,
+        playCount: betaPlays,
       },
       {
         artist: `Fallback & Name ${run}`,
         artistMbid: null,
-        playCount: 500,
+        playCount: betaPlays,
       },
     ]);
     expect(body.artists.some((artist) => artist.artist.includes("Hidden"))).toBe(false);

@@ -78,6 +78,7 @@ function makeGroup(items: LibraryItem[]): AlbumGroup {
     albumTitle: "Rumours",
     artist: "Fleetwood Mac",
     artworkUrl: null,
+    releaseYear: null,
     items,
   };
 }

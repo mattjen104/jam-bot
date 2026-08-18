@@ -206,6 +206,7 @@ describe("AlbumGroupRow", () => {
       albumTitle: "Album X",
       artist: "Artist A",
       artworkUrl: null,
+      releaseYear: null,
       items,
     };
   }
@@ -336,6 +337,7 @@ describe("ArtistGroupRow", () => {
         albumTitle: a.title,
         artist: "The Band",
         artworkUrl: null,
+        releaseYear: null,
         items: a.items,
       })),
     };
