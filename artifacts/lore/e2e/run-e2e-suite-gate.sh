@@ -19,9 +19,10 @@
 #   - firstRunSidebarOnboarding.spec.ts (first-time visitor sees .frb__block sentences,
 #                                       NOT .z1-placeholder__seedchip chips; data-rung
 #                                       order non-decreasing)
-#   - compactCrossingLabels.spec.ts    (compact Feed row crossing-artist labels: live
-#                                       ", now" suffix, set-level ", this set" Oxford
-#                                       comma, and no DJ/show name in collapsed row)
+#   - compactCrossingLabels.spec.ts    (compact Feed row grammar: always
+#                                       "artist · station", ⬤ crossing dot with
+#                                       tap-to-detail, scope pill cycle, and no
+#                                       DJ/show name in collapsed row)
 #   - liveTrackChange.spec.ts          (SSE fast path: spin-raw provisional cue appears
 #                                       immediately; spin-changed/spin-raw-failed clear it
 #                                       on WebPlayer ON AIR row; PlayerDock test skipped

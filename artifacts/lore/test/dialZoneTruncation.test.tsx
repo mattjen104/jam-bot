@@ -18,7 +18,7 @@
  */
 
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -347,6 +347,9 @@ describe("Zone 1 — exactly 5 rows", () => {
 describe("Unified feed — no truncation toggles", () => {
   it("renders all ghost rows and all live rows with no See all buttons", () => {
     // Zero crossing stations, 12 unattributed live stations (no show → r=0).
+    // Radio mode (crossings off): the crossing-positive filter would hide all
+    // twelve — this test is about truncation, not the crossing filter.
+    localStorage.setItem("lore:radioMode", "true");
     const restStations = Array.from({ length: 12 }, (_, i) => makeZone3Station(`z3s${i}`));
     mockDialData(restStations);
 
@@ -480,6 +483,13 @@ describe("Zone 1 sort — DJ band above stream band (Fix 1)", () => {
 });
 
 describe("Zone 3 restBand — pinned stations float above non-pinned (Fix 3)", () => {
+  // These fixtures are zero-crossing r=0 stations; radio mode (crossings off)
+  // lifts the crossing-positive filter so the pin/sort behavior stays the
+  // variable under test.
+  beforeEach(() => {
+    localStorage.setItem("lore:radioMode", "true");
+  });
+
   it("(c) pinned r=0 row appears before non-pinned r=0 row with higher crossing count", () => {
     // 'high' has more lifetime crossings but is not pinned.
     // 'pinned' has zero crossings but is pinned.

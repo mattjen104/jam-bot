@@ -8,7 +8,7 @@
  * current track; rows with no current track always pass).
  */
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
@@ -87,13 +87,15 @@ vi.mock("../src/hooks/useStationPresence", () => ({
   useStationPresence: () => new Map(),
 }));
 
-const { mockStations } = vi.hoisted(() => ({
+const { mockStations, mockCrossingsLoading } = vi.hoisted(() => ({
   mockStations: { value: [] as unknown[] },
+  mockCrossingsLoading: { value: false },
 }));
 
 vi.mock("../src/hooks/useDialData", () => ({
   useDialData: () => ({
     stations: mockStations.value,
+    crossingsLoading: mockCrossingsLoading.value,
     overlapByPickerId: new Map(),
     pickerNameToId: new Map(),
     crossingSourceMode: "personal",
@@ -150,7 +152,10 @@ function makeStation(
     monthCrossings: 0,
     monthArtistCrossings: 0,
     lifetimeCrossings: overrides.lifetimeCrossings ?? 0,
-    lifetimeArtistCrossings: 0,
+    // Every fixture station carries a lifetime crossing so the crossing-positive
+    // filter (crossings on by default; scope pinned to "lifetime" in beforeEach)
+    // never hides rows — these tests exercise the AGE-TIER filter in isolation.
+    lifetimeArtistCrossings: 1,
     topArtistNames: [],
     liveTrack,
   };
@@ -169,9 +174,17 @@ function typeCommand(command: string) {
   fireEvent.keyDown(input, { key: "Enter" });
 }
 
+beforeEach(() => {
+  // Pin the crossing scope wide so the crossing-positive filter passes every
+  // fixture station (they all carry one lifetime crossing) — age-tier
+  // filtering stays the only variable under test here.
+  localStorage.setItem("lore:crossingScope", "lifetime");
+});
+
 afterEach(() => {
   cleanup();
   mockStations.value = [];
+  mockCrossingsLoading.value = false;
   mockSetLocation.mockReset();
   mockPreview.mockReset();
   localStorage.clear();
@@ -367,9 +380,10 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 
     const pageGroup = screen.getByRole("group", { name: "Page" });
     expect(pageGroup.querySelectorAll("button")).toHaveLength(5);
-    // The scan remote has exactly two scan actions — no per-page scan buttons.
+    // The scan remote has exactly two scan actions plus the crossing-scope
+    // pill — no per-page scan buttons.
     const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    expect(scanRow.querySelectorAll("button")).toHaveLength(7); // 5 pages + Scan + Scan all
+    expect(scanRow.querySelectorAll("button")).toHaveLength(8); // 5 pages + Scan + Scan all + scope pill
     expect(screen.getByRole("button", { name: "scan this page" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "scan all stations" })).toBeTruthy();
 
@@ -490,6 +504,27 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 // ---------------------------------------------------------------------------
 // All-stations deterministic ordering
 // ---------------------------------------------------------------------------
+
+describe("SplitHome — crossing-positive filter progressive loading", () => {
+  it("does not blank the feed while crossing scores are still loading", () => {
+    // A zero-crossing station (scope pinned to "set" by default → the fixture
+    // has no live show, so hasAnyCrossing is false once scores settle).
+    mockStations.value = [makeStation("kcrw", null, { name: "KCRW" })];
+    localStorage.setItem("lore:crossingScope", "set");
+
+    // While the crossings compute is in flight the filter is suspended —
+    // filtering on unsettled zero counters would flash "No stations to show".
+    mockCrossingsLoading.value = true;
+    const { rerender } = render(<SplitHome />);
+    expect(document.querySelectorAll('[data-testid="fdrow-kcrw"]').length).toBe(1);
+
+    // Once scores settle, the crossing-positive filter engages and the
+    // zero-crossing station is hidden.
+    mockCrossingsLoading.value = false;
+    act(() => { rerender(<SplitHome />); });
+    expect(document.querySelectorAll('[data-testid="fdrow-kcrw"]').length).toBe(0);
+  });
+});
 
 describe("SplitHome — all stations in one deterministic order", () => {
   it("sorts alphabetically by station name regardless of crossing data", () => {

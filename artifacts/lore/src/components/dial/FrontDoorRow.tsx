@@ -29,6 +29,11 @@ import {
   type DialShow,
   type DialDisplayMode,
 } from "../../hooks/useDialData";
+import {
+  type CrossingScope,
+  DEFAULT_CROSSING_SCOPE,
+  crossingScopeDetail,
+} from "../../lib/crossingScope";
 import { type StationPresence } from "../../hooks/useStationPresence";
 import { ListenerAvatarStack } from "../ListenerAvatarStack";
 
@@ -337,9 +342,19 @@ export interface FrontDoorRowProps {
    * sentence (artist · station) instead of a crossing lead.
    */
   suppressCrossings?: boolean;
+  /**
+   * True when the station has ≥1 crossing at the active scope — renders the
+   * ⬤ dot after the station name (compact rows only). Computed by the caller
+   * via hasAnyCrossing(ds, scope).
+   */
+  hasCrossing?: boolean;
+  /** The active crossing scope — labels the inline ⬤ detail panel. */
+  crossingScope?: CrossingScope;
+  /** Called when the ⬤ dot is tapped (in addition to toggling the detail). */
+  onCrossingDetail?: () => void;
 }
 
-export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false, hasCrossing = false, crossingScope = DEFAULT_CROSSING_SCOPE, onCrossingDetail }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -353,7 +368,6 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
     ds.station.name,
     safeShow,
     ds.liveTrack?.artist,
-    suppressCrossings ? { suppressCrossings: true } : undefined,
   );
 
   // Expand-then-keep: first tap expands the row to show the byline + Keep
@@ -420,32 +434,18 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // prefix is inert text now — the whole row tunes, and the pinned sentence
   // The lane row carries the set inline. Always use the bright-foreground
   // class so the weight rung (w0/w5…) cannot dim the summary sentence.
-  // Left-to-right sentence identity: artist leads (it is the thing you
-  // seeded), then a low-weight centred dot, then the station as secondary
-  // context. No centred pipe — the eye reads the row like a sentence.
-  // (Task #89 unified interface.)
-  // Crossing artists line: up to 3 names with Oxford commas, then the timing
-  // suffix that distinguishes a live hit from set-level crossings:
-  //   "Wet Leg, now"  /  "Wet Leg, Deftones, and Weezer, this set"
-  const compactCrossingNode: React.ReactNode = compact && compact.crossingArtists.length > 0
-    ? (() => {
-        const names = compact.crossingArtists;
-        const parts: React.ReactNode[] = [];
-        names.forEach((name, i) => {
-          if (i > 0) {
-            parts.push(i === names.length - 1
-              ? (names.length > 2 ? ", and " : " and ")
-              : ", ");
-          }
-          parts.push(<b className="fdrow__compact-crossing-artist" key={i}>{name}</b>);
-        });
-        const suffix = compact.crossingIsLive ? ", now" : ", this set";
-        return <span className="fdrow__compact-crossing">{parts}{suffix}</span>;
-      })()
-    : null;
+  // Left-to-right sentence identity: the now-playing artist leads (never a
+  // crossing artist name), then a low-weight centred dot, then the station as
+  // secondary context. Crossing evidence is the ⬤ dot after the station name,
+  // not words in the sentence.
+  const hasArtistLead = compact?.artist != null;
 
-  // Whether there is a visible artist lead (crossing or single artist)
-  const hasArtistLead = compactCrossingNode != null || (compact?.artist != null);
+  // Inline ⬤ detail: tapping the dot reveals a small disclosure below the
+  // identity line (scope label, top crossing artists, total count); tapping
+  // again — or tuning in — collapses it.
+  const [inlineDetail, setInlineDetail] = useState(false);
+  const showDot = compactSentence && hasCrossing && !suppressCrossings;
+  const detail = showDot && inlineDetail ? crossingScopeDetail(ds, crossingScope) : null;
 
   // True while the live track arrived via the provisional spin-raw fast path
   // (MusicBrainz resolution still in flight). Drives fdrow--resolving on the
@@ -458,17 +458,15 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       aria-label={compact.text}
     >
       <span className="fdrow__compact-lead">
-        {/* Crossing artists lead when present; otherwise the single best artist.
-            The artist cell stays in the DOM (empty, aria-hidden) when there is
-            no usable artist — never invented. */}
-        {compactCrossingNode ?? (
-          <span
-            className={`fdrow__compact-artist${isResolving ? " fdrow__compact-artist--resolving" : ""}`}
-            aria-hidden={compact.artist == null}
-          >
-            {compact.artist ?? ""}
-          </span>
-        )}
+        {/* The now-playing artist always leads. The artist cell stays in the
+            DOM (empty, aria-hidden) when there is no usable artist — never
+            invented, never replaced by a crossing artist name. */}
+        <span
+          className={`fdrow__compact-artist${isResolving ? " fdrow__compact-artist--resolving" : ""}`}
+          aria-hidden={compact.artist == null}
+        >
+          {compact.artist ?? ""}
+        </span>
         {/* ✳ coverage marker — superscript after the artist lead when investigation
             sources are available. Tapping opens the Artist Investigation sheet.
             Never shown when there is no artist to anchor it to. */}
@@ -487,6 +485,23 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         )}
         {/* Station only — DJ and show belong in the expanded byline. */}
         <span className="fdrow__compact-station">{compact.station}</span>
+        {/* ⬤ crossing indicator — present iff the station has ≥1 crossing at
+            the active scope. Tapping toggles the inline scope detail. */}
+        {showDot && (
+          <button
+            type="button"
+            className="fdrow__crossing-dot"
+            aria-expanded={inlineDetail}
+            aria-label={inlineDetail ? "Hide crossing detail" : "Show crossing detail"}
+            title="Crossing at the current scope"
+            onClick={(e) => {
+              e.stopPropagation();
+              setInlineDetail((v) => !v);
+              onCrossingDetail?.();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >⬤</button>
+        )}
       </span>
     </span>
   ) : fallbackTier1Node;
@@ -531,6 +546,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       }
       if (expanded) {
         setExpanded(false);
+        setInlineDetail(false);
         onTuneIn();
       } else {
         setExpanded(true);
@@ -565,6 +581,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
       }
+      setInlineDetail(false);
       onTuneIn();
     }, 600);
     // Prevent text selection during long-press on touch.
@@ -669,6 +686,27 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         )}
         {compactSentence && compact && expanded && stationBlurb && (
           <p className="fdrow__station-description">{stationBlurb}</p>
+        )}
+
+        {/* Inline ⬤ crossing detail — scope label, top crossing artists at
+            that scope, and the total count. Kept short: top 3 names. */}
+        {detail && (
+          <div className="fdrow__crossing-detail" onClick={(e) => e.stopPropagation()}>
+            <span className="fdrow__crossing-detail-scope">{detail.scopeLabel}</span>
+            {detail.artists.length > 0 && (
+              <span className="fdrow__crossing-detail-artists">
+                {detail.artists.map((name, i) => (
+                  <span key={name}>
+                    {i > 0 && " · "}
+                    <b className="fdrow__crossing-detail-artist">{name}</b>
+                  </span>
+                ))}
+              </span>
+            )}
+            <span className="fdrow__crossing-detail-count">
+              {detail.count} crossing{detail.count === 1 ? "" : "s"}
+            </span>
+          </div>
         )}
 
         {/* "this set:" expanded block — shows the full station setlist below the

@@ -41,6 +41,13 @@ import {
   useStackSkipped,
 } from "../lib/dialFilterState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
+import {
+  hasAnyCrossing,
+  nextCrossingScope,
+  readCrossingScope,
+  writeCrossingScope,
+  type CrossingScope,
+} from "../lib/crossingScope";
 import { writeDialLens } from "../lib/dialLensState";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
@@ -79,6 +86,19 @@ export default function SplitHome() {
   // Drives the pressed state of the remote's feed-mode toggles.
   const [radioMode, setRadioMode] = useState<boolean>(() => readRadioMode());
 
+  // Crossing scope (persisted): what a ⬤ dot on a row means and which window
+  // the crossing-positive filter uses. Only meaningful when crossings are on
+  // (crossings on = !radioMode, same as the remote's toggle semantics).
+  const [crossingScope, setCrossingScope] = useState<CrossingScope>(() => readCrossingScope());
+  const crossingsOn = !radioMode;
+  const cycleCrossingScope = useCallback(() => {
+    setCrossingScope((prev) => {
+      const next = nextCrossingScope(prev);
+      writeCrossingScope(next);
+      return next;
+    });
+  }, []);
+
   // Station Finder sheet (Radio Browser search → pin personal stations).
   const [finderOpen, setFinderOpen] = useState(false);
   const openFinder = useCallback(() => setFinderOpen(true), []);
@@ -89,7 +109,7 @@ export default function SplitHome() {
   // Scan / Scan all.
   const { skipped, toggleSkip } = useDialSkipped();
 
-  const { stations } = useDialData("personal", {
+  const { stations, crossingsLoading } = useDialData("personal", {
     categories: activeCategories as ReadonlySet<DialStationCategory>,
     // The main view lists EVERY station (live or not) alphabetically; the
     // hook's default dial visibility filter (live / flagship / named show)
@@ -180,13 +200,25 @@ export default function SplitHome() {
   // stations. Applied BEFORE the scan windowing so each window is full of
   // matching rows.
   const filteredRows = useMemo(() => {
-    if (activeTiers.size === 0) return sortedRows;
-    return sortedRows.filter((row) => {
-      const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
-      if (!track) return true;
-      return rowPassesAgeTierFilter(track.ageTier, activeTiers);
-    });
-  }, [sortedRows, activeTiers]);
+    let rows = sortedRows;
+    if (activeTiers.size > 0) {
+      rows = rows.filter((row) => {
+        const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
+        if (!track) return true;
+        return rowPassesAgeTierFilter(track.ageTier, activeTiers);
+      });
+    }
+    // Crossing-positive filter: with crossings on, only stations with ≥1
+    // crossing at the active scope remain — "show me only stations that have
+    // played my music in the chosen window". Off (radio mode) = no filter.
+    // Suspended while crossing scores are still loading: filtering on
+    // unsettled (zero) counters would blank the feed until the compute
+    // settles — same guard as DialView's scopeFilter.
+    if (crossingsOn && !crossingsLoading) {
+      rows = rows.filter((row) => hasAnyCrossing(row.ds, crossingScope));
+    }
+    return rows;
+  }, [sortedRows, activeTiers, crossingsOn, crossingsLoading, crossingScope]);
 
   // Split into active (not skipped) and skipped after age-tier filtering.
   // Scan pagination and page count are based on activeRows only; skipped rows
@@ -517,6 +549,10 @@ export default function SplitHome() {
           onTuneIn={tuneRow}
           onPlay={playRow}
           onToggleSkip={toggleSkip}
+          crossingScope={crossingScope}
+          suppressCrossings={!crossingsOn}
+          displayMode="personal"
+          onAddArtist={addSeed}
         />
       </section>
 
@@ -538,6 +574,9 @@ export default function SplitHome() {
         onMatt={startMattLibrary}
         mattPending={mattStarterMutation.isPending}
         mattStatus={mattCliStatus}
+        crossingScope={crossingScope}
+        crossingsOn={crossingsOn}
+        onCycleCrossingScope={cycleCrossingScope}
       />
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">

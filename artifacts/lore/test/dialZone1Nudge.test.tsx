@@ -175,7 +175,10 @@ function makeCrossingStation(slug: string, crossings = 3): DialStation {
       favorite: false,
     } as DialStation["station"],
     isLive: true,
-    shows: [makeShow()],
+    // Show-level crossings too: the crossing-positive filter at the default
+    // "this set" scope reads the live show, so a station with only 24h-level
+    // counts would be hidden.
+    shows: [makeShow({ crossings })],
     crossings,
     artistCrossings: 0,
     lifetimeCrossings: crossings,
@@ -237,6 +240,7 @@ afterEach(() => {
   vi.useRealTimers();
   cleanup();
   vi.clearAllMocks();
+  try { localStorage.clear(); } catch { /* ignore */ }
 });
 
 // ---------------------------------------------------------------------------
@@ -261,6 +265,9 @@ describe("Zone 1 nudge — appears when loaded with no crossings", () => {
   it("suppresses the nudge when live stations exist, even without crossings", () => {
     // Unified feed: unmatched live stations render as rows, so telling the
     // user "none of your artists have played" next to them is misleading.
+    // Radio mode (crossings off): with crossings on, the crossing-positive
+    // filter hides these zero-crossing rows — a different surface decision.
+    localStorage.setItem("lore:radioMode", "true");
     mockDialData({ stations: [makeNoCrossStation("kexp"), makeNoCrossStation("wfmu")] });
     renderDial();
 
@@ -271,6 +278,9 @@ describe("Zone 1 nudge — appears when loaded with no crossings", () => {
 
 describe("Zone 1 nudge — only when the feed is empty", () => {
   it("never renders the nudge alongside live station rows", () => {
+    // Radio mode (crossings off): with crossings on, the crossing-positive
+    // filter hides these zero-crossing rows — not what this test is about.
+    localStorage.setItem("lore:radioMode", "true");
     mockDialData({
       stations: [makeNoCrossStation("kexp")],
       hasLibrary: false,

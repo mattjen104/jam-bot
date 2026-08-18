@@ -511,6 +511,10 @@ test.describe("Dial feed live track change via SSE", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("lore:first-run-prompted", "1");
+        // Radio mode (crossings off): the fixture station has no crossings,
+        // which the crossing-positive filter would hide — this spec is about
+        // the provisional/resolving cue, not the crossing filter.
+        localStorage.setItem("lore:radioMode", "true");
       } catch {
         /* ignore */
       }

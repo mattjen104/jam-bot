@@ -152,8 +152,10 @@ function makeLiveStation(slug: string): DialStation {
       favorite: false,
     } as DialStation["station"],
     isLive: true,
-    shows: [makeShow()],
-    crossings: 0,
+    // One set-level crossing so the row survives the crossing-positive filter
+    // (crossings on by default) — these tests exercise the lens toggle.
+    shows: [makeShow({ crossings: 1, topArtists: ["Fleetwood Mac"] })],
+    crossings: 1,
     artistCrossings: 0,
     lifetimeCrossings: 0,
     lifetimeArtistCrossings: 0,

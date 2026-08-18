@@ -536,7 +536,7 @@ describe("compact Dial feed identity", () => {
     expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe("KEXP");
   });
 
-  it("marks a live crossing hit with ', now'", () => {
+  it("keeps the now-playing artist primary on a live crossing hit (no ', now' words)", () => {
     const { container } = renderCompactRow(
       makeDialStation({ name: "KCRW" }),
       makeShow({
@@ -544,16 +544,20 @@ describe("compact Dial feed identity", () => {
         showName: "The Morning Show",
         currentTrack: makeSpin({ artist: "Wet Leg", isArtistHit: true }),
       }),
+      { hasCrossing: true },
     );
-    const crossing = container.querySelector(".fdrow__compact-crossing");
-    expect(crossing?.textContent).toBe("Wet Leg, now");
+    // No crossing sentence — the identity stays plain artist · station.
+    expect(container.querySelector(".fdrow__compact-crossing")).toBeNull();
+    expect(container.querySelector(".fdrow__compact-artist")?.textContent).toBe("Wet Leg");
     expect(container.querySelector(".fdrow__compact-station")?.textContent).toBe("KCRW");
     expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
-      "Wet Leg, now · KCRW",
+      "Wet Leg · KCRW",
     );
+    // Crossing meaning is carried by the ⬤ dot instead.
+    expect(container.querySelector(".fdrow__crossing-dot")).not.toBeNull();
   });
 
-  it("lists up to three set-crossing artists with ', this set'", () => {
+  it("never replaces the now-playing artist with set-crossing artist names", () => {
     const { container } = renderCompactRow(
       makeDialStation({ name: "KCRW" }),
       makeShow({
@@ -563,16 +567,18 @@ describe("compact Dial feed identity", () => {
         topArtists: ["Wet Leg", "Deftones", "Weezer", "Pavement"],
         currentTrack: makeSpin({ artist: "Someone Else" }),
       }),
+      { hasCrossing: true },
     );
-    const crossing = container.querySelector(".fdrow__compact-crossing");
-    // Oxford comma, capped at three names, set-level suffix.
-    expect(crossing?.textContent).toBe("Wet Leg, Deftones, and Weezer, this set");
+    expect(container.querySelector(".fdrow__compact-crossing")).toBeNull();
+    expect(container.querySelector(".fdrow__compact-artist")?.textContent).toBe("Someone Else");
     expect(container.querySelector(".fdrow")?.getAttribute("aria-label")).toBe(
-      "Wet Leg, Deftones, and Weezer, this set · KCRW",
+      "Someone Else · KCRW",
     );
+    expect(container.textContent).not.toContain("this set");
+    expect(container.querySelector(".fdrow__crossing-dot")).not.toBeNull();
   });
 
-  it("uses plain 'and' for two set-crossing artists", () => {
+  it("renders no ⬤ dot when hasCrossing is false", () => {
     const { container } = renderCompactRow(
       makeDialStation({ name: "KCRW" }),
       makeShow({
@@ -581,10 +587,73 @@ describe("compact Dial feed identity", () => {
         topArtists: ["Wet Leg", "Deftones"],
         currentTrack: null,
       }),
+      { hasCrossing: false },
     );
-    expect(container.querySelector(".fdrow__compact-crossing")?.textContent).toBe(
-      "Wet Leg and Deftones, this set",
+    expect(container.querySelector(".fdrow__crossing-dot")).toBeNull();
+    expect(container.textContent).not.toContain("this set");
+  });
+
+  it("renders no ⬤ dot when crossings are suppressed (/radio)", () => {
+    const { container } = renderCompactRow(
+      makeDialStation({ name: "KCRW" }),
+      makeShow({
+        currentTrack: makeSpin({ artist: "Wet Leg", isArtistHit: true }),
+      }),
+      { hasCrossing: true, suppressCrossings: true },
     );
+    expect(container.querySelector(".fdrow__crossing-dot")).toBeNull();
+  });
+
+  it("⬤ dot toggles the inline crossing detail without tuning or expanding", () => {
+    const onTuneIn = vi.fn();
+    const onCrossingDetail = vi.fn();
+    const ds = makeDialStation(
+      { name: "KCRW", streamUrl: "https://example.com/stream" },
+      { crossings: 3, artistCrossings: 1, topArtistNames: ["Wet Leg", "Deftones"] },
+    );
+    const show = makeShow({
+      crossings: 2,
+      artistCrossings: 0,
+      topArtists: ["Wet Leg", "Deftones"],
+      currentTrack: makeSpin({ artist: "Someone Else" }),
+    });
+    ds.shows = [show];
+    const { container } = renderCompactRow(ds, show, {
+      hasCrossing: true, crossingScope: "set", onTuneIn, onCrossingDetail,
+    });
+    const dot = container.querySelector(".fdrow__crossing-dot")!;
+    fireEvent.click(dot);
+    expect(onCrossingDetail).toHaveBeenCalledTimes(1);
+    expect(onTuneIn).not.toHaveBeenCalled();
+    // The row did not expand — the dot owns its own click.
+    expect(container.querySelector(".fdrow")?.getAttribute("aria-expanded")).toBe("false");
+    const detail = container.querySelector(".fdrow__crossing-detail")!;
+    expect(detail).not.toBeNull();
+    expect(detail.querySelector(".fdrow__crossing-detail-scope")?.textContent).toBe("this set");
+    expect(detail.textContent).toContain("Wet Leg");
+    expect(detail.textContent).toContain("Deftones");
+    expect(detail.textContent).toContain("2 crossings");
+    // Second tap collapses.
+    fireEvent.click(dot);
+    expect(container.querySelector(".fdrow__crossing-detail")).toBeNull();
+  });
+
+  it("tuning in collapses the inline crossing detail", () => {
+    const onTuneIn = vi.fn();
+    const ds = makeDialStation(
+      { name: "KEXP", streamUrl: "https://example.com/stream" },
+      { crossings: 1, topArtistNames: ["Wet Leg"] },
+    );
+    const show = makeShow({ crossings: 1, topArtists: ["Wet Leg"], currentTrack: makeSpin({ artist: "Broadcast" }) });
+    ds.shows = [show];
+    const { container } = renderCompactRow(ds, show, { hasCrossing: true, onTuneIn });
+    fireEvent.click(container.querySelector(".fdrow__crossing-dot")!);
+    expect(container.querySelector(".fdrow__crossing-detail")).not.toBeNull();
+    const row = container.querySelector(".fdrow")!;
+    fireEvent.click(row); // expand
+    fireEvent.click(row); // tune in
+    expect(onTuneIn).toHaveBeenCalledOnce();
+    expect(container.querySelector(".fdrow__crossing-detail")).toBeNull();
   });
 
   it("keeps attribution-only site-link behavior on compact rows (never tunes)", () => {

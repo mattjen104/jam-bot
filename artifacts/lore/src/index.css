@@ -5725,6 +5725,77 @@
 #dial-feed-rows .fdrow__compact-sentence .fdrow__site-link {
   margin-top: 5px;
 }
+/* ⬤ crossing indicator — present iff the station has ≥1 crossing at the
+   active scope. A small inline button after the station name. */
+.fdrow__crossing-dot {
+  background: none;
+  border: none;
+  padding: 0 0 0 0.5em;
+  margin: 0;
+  font: inherit;
+  font-size: 0.62em;
+  color: hsl(var(--dial-accent, var(--primary)));
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1;
+}
+.fdrow__crossing-dot:hover,
+.fdrow__crossing-dot[aria-expanded="true"] {
+  opacity: 0.75;
+}
+/* Inline ⬤ detail — scope label · top crossing artists · count. */
+.fdrow__crossing-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em 0.7em;
+  margin-top: 4px;
+  font-size: 0.82em;
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.75);
+}
+.fdrow__crossing-detail-scope {
+  text-transform: none;
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.55);
+}
+.fdrow__crossing-detail-artist {
+  font-weight: 600;
+  color: hsl(var(--dial-fg, var(--foreground)));
+}
+.fdrow__crossing-detail-count {
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.55);
+}
+/* Crossing scope pill — sits next to the crossings toggle; cycles
+   now → this set → 24h → 7d → lifetime. Grayed/inert when crossings off. */
+.crossing-scope-pill {
+  background: none;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 1px 10px;
+  font: inherit;
+  font-size: 0.8em;
+  color: hsl(var(--foreground) / 0.85);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.crossing-scope-pill:hover:not(:disabled) {
+  border-color: hsl(var(--foreground) / 0.4);
+}
+.crossing-scope-pill--disabled,
+.crossing-scope-pill:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* /feed rows with a direct play button — button + row share a line. */
+#dial-feed-rows .dial-feed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+#dial-feed-rows .dial-feed-row > .fdrow,
+#dial-feed-rows .dial-feed-row > :last-child {
+  flex: 1;
+  min-width: 0;
+}
 /* Coverage marker ✳ — amber superscript after the artist lead.
    Inline button so it inherits the terminal font; superscript via vertical-align.
    Tapping opens the Artist Investigation sheet; tooltip explains the symbol. */

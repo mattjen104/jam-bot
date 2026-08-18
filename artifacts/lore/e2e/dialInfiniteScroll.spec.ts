@@ -227,6 +227,18 @@ test.describe("Dial infinite scroll — sentinel triggers row reveal on scroll",
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
 
+    // Radio mode (crossings off): these fixtures are zero-crossing stations,
+    // which the crossing-positive filter would otherwise hide — this test is
+    // about the scroll sentinel, not the crossing filter. Scoped to this test
+    // only: the Zone2 ghost test above depends on default zone behavior.
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem("lore:radioMode", "true");
+      } catch {
+        /* ignore */
+      }
+    });
+
     // 20 live stations — exceed FEED_INITIAL (12) so the sentinel renders.
     const stations = MANY_LIVE_SLUGS.map(makeLiveStation);
     await installRoutes(page, stations);

@@ -102,6 +102,17 @@ async function installDialRoutes(
     schedule: ReturnType<typeof makeSchedule> | null;
   },
 ) {
+  // Radio mode (crossings off): the fixture station has no crossings, which
+  // the crossing-positive filter would hide — this spec is about on-air DJ
+  // attribution, not the crossing filter.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("lore:radioMode", "true");
+    } catch {
+      /* ignore */
+    }
+  });
+
   // Soft-fetched listener endpoints — anonymous defaults.
   await page.route("**/api/me/**", (route) =>
     route.fulfill({ status: 404, json: { error: "Not found" } }),

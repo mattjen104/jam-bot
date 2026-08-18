@@ -20,10 +20,12 @@
 
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationPresence } from "../hooks/useStationPresence";
+import type { DialDisplayMode } from "../hooks/useDialData";
 import { FrontDoorRow } from "./dial/FrontDoorRow";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { CompactPlayButton } from "./CompactPlayButton";
+import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../lib/crossingScope";
 
 const COMPACT_DIAL_SIZE = 5;
 
@@ -52,6 +54,13 @@ export interface CompactDialProps {
   onPlay: (row: DialLaneRow) => void;
   /** Toggle skip state for a station slug (checks ↔ unchecks). */
   onToggleSkip?: (slug: string) => void;
+  /** Active crossing scope — drives the per-row ⬤ dot meaning. */
+  crossingScope?: CrossingScope;
+  /** When true (crossings off), no ⬤ dots render. */
+  suppressCrossings?: boolean;
+  displayMode?: DialDisplayMode;
+  seedsLower?: Set<string>;
+  onAddArtist?: (name: string) => void;
 }
 
 function DialRow({
@@ -64,6 +73,11 @@ function DialRow({
   onTuneIn,
   onPlay,
   onToggleSkip,
+  crossingScope = DEFAULT_CROSSING_SCOPE,
+  suppressCrossings = false,
+  displayMode,
+  seedsLower,
+  onAddArtist,
 }: {
   row: DialLaneRow;
   isSampling: boolean;
@@ -74,6 +88,11 @@ function DialRow({
   onTuneIn: (row: DialLaneRow) => void;
   onPlay: (row: DialLaneRow) => void;
   onToggleSkip?: (slug: string) => void;
+  crossingScope?: CrossingScope;
+  suppressCrossings?: boolean;
+  displayMode?: DialDisplayMode;
+  seedsLower?: Set<string>;
+  onAddArtist?: (name: string) => void;
 }) {
   const slug = row.ds.station.slug;
   return (
@@ -103,6 +122,12 @@ function DialRow({
         onTuneIn={() => onTuneIn(row)}
         presence={presenceMap.get(row.ds.station.id)}
         compactSentence
+        displayMode={displayMode}
+        seedsLower={seedsLower}
+        onAddArtist={onAddArtist}
+        suppressCrossings={suppressCrossings}
+        crossingScope={crossingScope}
+        hasCrossing={!suppressCrossings && hasAnyCrossing(row.ds, crossingScope)}
       />
       {onToggleSkip && (
         <input
@@ -137,6 +162,11 @@ export function CompactDial({
   onTuneIn,
   onPlay,
   onToggleSkip,
+  crossingScope = DEFAULT_CROSSING_SCOPE,
+  suppressCrossings = false,
+  displayMode,
+  seedsLower,
+  onAddArtist,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -165,6 +195,11 @@ export function CompactDial({
           onTuneIn={onTuneIn}
           onPlay={onPlay}
           onToggleSkip={onToggleSkip}
+          crossingScope={crossingScope}
+          suppressCrossings={suppressCrossings}
+          displayMode={displayMode}
+          seedsLower={seedsLower}
+          onAddArtist={onAddArtist}
         />
       ))}
       {/* Empty filler slots so the grid always spans 5 rows */}
@@ -190,6 +225,11 @@ export function CompactDial({
               onTuneIn={onTuneIn}
               onPlay={onPlay}
               onToggleSkip={onToggleSkip}
+              crossingScope={crossingScope}
+              suppressCrossings={suppressCrossings}
+              displayMode={displayMode}
+              seedsLower={seedsLower}
+              onAddArtist={onAddArtist}
             />
           ))}
         </div>

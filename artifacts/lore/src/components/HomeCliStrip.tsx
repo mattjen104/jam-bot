@@ -20,6 +20,8 @@
 import { useCallback, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DialCliBar, type DialCliBarProps, type MattCliStatus } from "./dial/DialCliBar";
+import { CrossingScopePill } from "./dial/CrossingScopePill";
+import type { CrossingScope } from "../lib/crossingScope";
 
 export type ScanMode = "page" | "all" | null;
 
@@ -59,6 +61,12 @@ export interface HomeCliStripProps extends Pick<DialCliBarProps,
    * selection without restoring per-page scan-command buttons.
    */
   onScan?: (offset: number) => void;
+  /** Active crossing scope — renders the scope pill when provided. */
+  crossingScope?: CrossingScope;
+  /** Whether crossings are on (pill is grayed/inert when off). */
+  crossingsOn?: boolean;
+  /** Cycles the scope: now → this set → 24h → 7d → lifetime. */
+  onCycleCrossingScope?: () => void;
 }
 
 export function HomeCliStrip({
@@ -79,6 +87,9 @@ export function HomeCliStrip({
   mattStatus,
   onRadioMode,
   onScan,
+  crossingScope,
+  crossingsOn = false,
+  onCycleCrossingScope,
 }: HomeCliStripProps) {
   const [, setLocation] = useLocation();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -142,6 +153,15 @@ export function HomeCliStrip({
           >
             {scanMode === "all" ? "Stop" : "Scan all"}
           </button>
+          {/* Crossing scope pill — cycles now → this set → 24h → 7d →
+              lifetime. Grayed/inert when crossings are off. */}
+          {crossingScope && onCycleCrossingScope && (
+            <CrossingScopePill
+              scope={crossingScope}
+              enabled={crossingsOn}
+              onCycle={onCycleCrossingScope}
+            />
+          )}
         </div>
       </div>
 

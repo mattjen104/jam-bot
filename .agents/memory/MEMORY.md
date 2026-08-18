@@ -19,6 +19,7 @@
 - [Postgres NUL in text columns](postgres-nul-in-text.md) — NUL (U+0000) is illegal in Postgres text (err 22021); never use it as a DB key separator, use U+001F. Silently-empty table + try/catch = swallowed DB error.
 - [Lore resolution ordering & cursor ingestion](lore-resolution-ordering.md) — try recording_id>isrc>text strongest-first with per-identifier cache namespaces (weak cached miss must not block a stronger id); history pollers must page back to lastSeenCursor, not fetch-latest-N-and-dedup.
 - [drizzle-kit + NULLS NOT DISTINCT drift](drizzle-kit-nulls-not-distinct.md) — drizzle-kit 0.31 doesn't introspect indnullsnotdistinct, so a nullsNotDistinct() unique key causes permanent push drift (tries to re-ADD an existing constraint); avoid it on a push-based project.
+- [drizzle push post-merge failures](drizzle-push-post-merge-failures.md) — 3 modes: view-blocked type drift (declare withTimezone), boot-only tables get DROP'd (mirror in schema), FK re-add hits orphans (prune loop).
 - [Orval params name collision](orval-params-name-collision.md) — an op with BOTH path + query params emits a duplicate `<Op>Params` that breaks the api-zod barrel; resolve the query value server-side.
 - [Pickers/picks generalization](lore-pickers-picks-model.md) — generalize DJ spins to any taste source; ladder stops at artist (never algorithmic), ordered picks are rideable segues, unresolved always logged.
 - [api-server test location](api-server-test-location.md) — vitest only runs `test/**`; colocated src/*.test.ts files are silently skipped, so verify the suite count grows after adding tests.
@@ -32,7 +33,6 @@
 - [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.
 - [Lore UI component tests](lore-ui-component-tests.md) — per-file jsdom pragma + barrel mock + media stubs; wouter memoryLocation searchPath must NOT start with "?" or params silently vanish.
 - [Lore admin router catch-all](lore-admin-router-catchall.md) — admin router has rate-limit + auth middleware for ALL paths; new /api/* routers must be mounted before loreRouter in routes/index.ts or they get 503 "Admin entry not configured".
-- [drizzle push post-merge failures](drizzle-push-post-merge-failures.md) — 3 modes: view-blocked type drift (declare withTimezone), boot-only tables get DROP'd (mirror in schema), FK re-add hits orphans (prune loop).
 - [db lib dist rebuild](db-lib-dist-rebuild.md) — lib/db AND lib/api-zod both need `tsc -p tsconfig.json` after any task merge that adds schema/types; api-server sees stale .d.ts and reports "no exported member".
 - [Spotify import fetch timeout](spotify-import-fetch-timeout.md) — Node fetch has no default timeout; Spotify silently hangs TCP under rate-limit, leaving import worker frozen forever; fix: AbortController with 20s timeout on every page fetch.
 - [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
@@ -138,4 +138,5 @@
 - [Vitest 4 config placement traps](vitest4-config-placement.md) — cacheDir must be top-level (not test.cacheDir); environmentMatchGlobs removed, use test.projects with extends:true; both fail silently.
 - [Native checkboxes invisible on dark mobile panels](native-checkbox-dark-mobile.md) — appearance:none + custom border/check required; computed styles lie, verify via screenshot.
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
+- [Crossing-positive filter test fallout](crossing-positive-filter-tests.md) — default-on filter hides zero-crossing fixtures; pin lore:radioMode or lore:crossingScope in unrelated specs.
 - [Shared-DB top-N fixture sizing](shared-db-topn-fixture-sizing.md) — fixed play-count fixtures rot as the shared dev archive grows past them; size off the live top-N boundary + margin via generate_series, and count canonical-alias group spins when topping up.

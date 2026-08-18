@@ -38,6 +38,13 @@ import {
 import { readDialLens, writeDialLens, readShowsCity, writeShowsCity, type DialLens } from "../lib/dialLensState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import {
+  hasAnyCrossing,
+  nextCrossingScope,
+  readCrossingScope,
+  writeCrossingScope,
+  type CrossingScope,
+} from "../lib/crossingScope";
+import {
   cleanLiveValue,
   nameNodes,
   reason,
@@ -1600,6 +1607,18 @@ export function DialView() {
     if (on) setDialLens("radio");
   }, [setDialLens]);
 
+  // Crossing scope (persisted, shared with SplitHome via localStorage): what
+  // a ⬤ dot means and which window the crossing-positive filter uses. Only
+  // meaningful while crossings are on (i.e. not radio mode).
+  const [crossingScope, setCrossingScope] = useState<CrossingScope>(() => readCrossingScope());
+  const cycleCrossingScope = useCallback(() => {
+    setCrossingScope((prev) => {
+      const next = nextCrossingScope(prev);
+      writeCrossingScope(next);
+      return next;
+    });
+  }, []);
+
   const {
     stations,
     isLoading,
@@ -2736,11 +2755,22 @@ export function DialView() {
   // While crossing scores are pending the reason rows are withheld (the
   // skeleton takes their place) but the rest of the feed renders immediately,
   // so a slow crossings compute never blanks live stations.
+  // Crossing-positive filter: with crossings on, only stations with ≥1
+  // crossing at the active scope stay in the feed (hidden, like the category
+  // filter). Radio mode (/radio) = crossings off = no filter. While crossing
+  // scores are still in-flight the filter is suspended — filtering on
+  // unsettled (zero) scores would blank the whole feed on every load.
+  const scopeFilter = useCallback(
+    (rows: DialLaneRow[]) => radioMode || crossingsLoading
+      ? rows
+      : rows.filter((row) => hasAnyCrossing(row.ds, crossingScope)),
+    [radioMode, crossingsLoading, crossingScope],
+  );
   const feedSection = sortedRows.length > 0 && (
     <DialFeedLane
-      reasonRows={crossingsLoading && !radioMode ? [] : zone1Display}
-      djRows={djBand}
-      restRows={restBand}
+      reasonRows={crossingsLoading && !radioMode ? [] : scopeFilter(zone1Display)}
+      djRows={scopeFilter(djBand)}
+      restRows={scopeFilter(restBand)}
       popSortDesc={popSortDesc}
       activeSlug={radio.station?.slug ?? null}
       samplingSlug={scan.samplingIdx != null ? withReason[scan.samplingIdx]?.ds.station.slug ?? null : null}
@@ -2761,6 +2791,9 @@ export function DialView() {
       onSetExpand={(_row) => undefined}
       activeAgeTiers={activeTiers}
       suppressCrossings={radioMode}
+      crossingScope={crossingScope}
+      onPlay={(row) => { void radio.toggle(row.ds.station); }}
+      playerStatus={radio.status}
     />
   );
 
@@ -3046,6 +3079,8 @@ export function DialView() {
                         onToggleTier={toggleTier}
                         onToggleCategory={toggleCategory}
                         onToggleCrossings={() => setRadioMode(!radioMode)}
+                        crossingScope={crossingScope}
+                        onCycleCrossingScope={cycleCrossingScope}
                       />
                     )}
 

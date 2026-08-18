@@ -96,6 +96,16 @@ function makeSchedule() {
 // ---------------------------------------------------------------------------
 
 async function installRoutes(page: Page) {
+  // Radio mode (crossings off): the fixture station has no crossings, which
+  // the crossing-positive filter would hide — this spec is about nav/dock
+  // geometry, not crossings.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("lore:radioMode", "true");
+    } catch {
+      /* ignore */
+    }
+  });
   // Never actually connect to the fake stream.
   await page.route("https://stream.example.test/**", (route) => route.abort());
 

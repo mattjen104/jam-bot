@@ -63,23 +63,21 @@ export interface CompactLiveSummary {
    *  Each entry is a non-empty, deduplicated label: [dj, show, station]
    *  (any of which may be absent). The caller renders them pipe-separated. */
   provenanceParts: string[];
-  /** Crossing artists (up to 3) and whether the match is live ("now") vs set. */
-  crossingArtists: string[];
-  crossingIsLive: boolean;
 }
 
 /**
  * Compact, truthful live identity used by the main Dial feed.
  *
- * Returns full provenance parts (DJ · Show · Station) so the row can render
- * "Jane Kamikazie | The Morning Show | KCRW" between the dots, and up to 3
- * crossing artists with a live/set flag for the `, now` / `, this set` suffix.
+ * The row grammar is always `[NowPlayingArtist] · [Station]` — the actual
+ * track on air is the primary identity and is never replaced by crossing
+ * artist names. Crossing evidence surfaces separately as the ⬤ dot indicator
+ * (see hasAnyCrossing in lib/crossingScope). Returns full provenance parts
+ * (DJ · Show · Station) for the expanded byline.
  */
 export function liveProvenanceSummary(
   stationName: string,
   show: DialShow | null,
   fallbackArtist?: string | null,
-  opts?: { suppressCrossings?: boolean },
 ): CompactLiveSummary | null {
   const station = cleanLiveValue(stationName);
   if (!station) return null;
@@ -90,36 +88,6 @@ export function liveProvenanceSummary(
   const artistCandidate = cleanLiveValue(current?.artist) ?? cleanLiveValue(fallbackArtist);
   const artist = sameLiveValue(artistCandidate, station) ? null : artistCandidate;
 
-  // Crossing artists — the live/set distinction:
-  //   live hit → just the crossing artist on air, suffixed ", now"
-  //   set crossings → up to 3 artists from this set, suffixed ", this set"
-  // Show-level evidence only: station-level 24h counts stay off this surface.
-  // suppressCrossings (the /radio blank-radio mode) skips this entirely so the
-  // row leads with the plain live identity instead of the crossing lead.
-  const suppressCrossings = opts?.suppressCrossings === true;
-  const hasExact = !suppressCrossings && (!!(current?.isLibraryHit) || (show?.crossings ?? 0) > 0);
-  const hasArtist = !suppressCrossings && (!!(current?.isArtistHit) || (show?.artistCrossings ?? 0) > 0);
-  const isLiveHit = !suppressCrossings && !!(current?.isLibraryHit || current?.isArtistHit);
-  let crossingArtists: string[] = [];
-  if (show && (hasExact || hasArtist)) {
-    const sourceArtists = hasExact ? (show.topArtists ?? []) : (show.topArtistNames ?? []);
-    const candidates = isLiveHit && artistCandidate ? [artistCandidate] : sourceArtists;
-    crossingArtists = candidates
-      .map((a) => cleanLiveValue(a))
-      .filter((a): a is string => a != null)
-      .filter((a) => !sameLiveValue(a, station))
-      .filter((a, i, all) => all.findIndex((o) => sameLiveValue(o, a)) === i)
-      .slice(0, 3);
-  }
-
-  // The plain-text mirror of the rendered row: crossing artists (with their
-  // timing suffix) lead when present, else the single best artist.
-  const oxford = crossingArtists.length <= 1 ? (crossingArtists[0] ?? null)
-    : crossingArtists.length === 2 ? `${crossingArtists[0]} and ${crossingArtists[1]}`
-    : `${crossingArtists.slice(0, -1).join(", ")}, and ${crossingArtists[crossingArtists.length - 1]}`;
-  const lead = oxford != null
-    ? `${oxford}${isLiveHit ? ", now" : ", this set"}`
-    : artist;
   // Provenance parts for the expanded byline: [DJ, Show, Station], deduplicated.
   // DJ name is resolved via eligibleDjNames so a single DJ in djNames still
   // gets credited; two distinct DJs collapse to null (no individual credit).
@@ -144,11 +112,9 @@ export function liveProvenanceSummary(
   return {
     station,
     artist,
-    text: lead ? `${lead} · ${station}` : station,
+    text: artist ? `${artist} · ${station}` : station,
     plainText: artist ? `${artist} · ${station}` : station,
     provenanceParts,
-    crossingArtists,
-    crossingIsLive: isLiveHit,
   };
 }
 

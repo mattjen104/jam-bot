@@ -25,6 +25,8 @@ import {
   type StationCategory,
 } from "../../lib/dialCategories";
 import { FilterDropdownMenu } from "./FilterDropdownMenu";
+import { CrossingScopePill } from "./CrossingScopePill";
+import type { CrossingScope } from "../../lib/crossingScope";
 
 export type { AgeTier };
 export type { StationCategory };
@@ -62,6 +64,10 @@ export interface DialFilterBarProps {
   onToggleCategory: (cat: StationCategory) => void;
   /** Fired when the "Crossings on" checkbox flips. */
   onToggleCrossings: () => void;
+  /** Active crossing scope — renders the scope pill next to Crossings. */
+  crossingScope?: CrossingScope;
+  /** Cycles the scope: now → this set → 24h → 7d → lifetime. */
+  onCycleCrossingScope?: () => void;
   className?: string;
 }
 
@@ -72,6 +78,8 @@ export function DialFilterBar({
   onToggleTier,
   onToggleCategory,
   onToggleCrossings,
+  crossingScope,
+  onCycleCrossingScope,
   className,
 }: DialFilterBarProps) {
   return (
@@ -84,6 +92,14 @@ export function DialFilterBar({
         onToggle={onToggleCrossings}
         variant="bar"
       />
+      {/* Scope pill — sits next to the crossings toggle; grayed when off. */}
+      {crossingScope && onCycleCrossingScope && (
+        <CrossingScopePill
+          scope={crossingScope}
+          enabled={crossingsActive}
+          onCycle={onCycleCrossingScope}
+        />
+      )}
       <FilterDropdownMenu
         label="Track age"
         ariaLabel="Track age"

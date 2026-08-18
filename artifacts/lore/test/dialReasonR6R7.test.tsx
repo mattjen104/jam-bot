@@ -21,7 +21,7 @@
  */
 
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -221,13 +221,22 @@ function renderDial() {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  try { localStorage.clear(); } catch { /* ignore */ }
 });
 
 // ---------------------------------------------------------------------------
 // r=6 — 24h station exact crossings
 // ---------------------------------------------------------------------------
 
+// These fixtures carry 24h-level station crossings only (no set-level
+// crossings), so the crossing scope is pinned to "24h" — at the default
+// "this set" scope the crossing-positive filter would hide the rows.
+
 describe("reason() r=6 — 24h station exact crossings row label", () => {
+  beforeEach(() => {
+    localStorage.setItem("lore:crossingScope", "24h");
+  });
+
   it("renders the crossing count followed by 'of yours here in the last 24h'", () => {
     mockDialData([makeR6Station("r6-station", 5)]);
     renderDial();
@@ -281,6 +290,10 @@ describe("reason() r=6 — 24h station exact crossings row label", () => {
 // ---------------------------------------------------------------------------
 
 describe("reason() r=7 — 24h station artist crossings row label", () => {
+  beforeEach(() => {
+    localStorage.setItem("lore:crossingScope", "24h");
+  });
+
   it("renders the crossing count followed by 'tracks by your artists here in the last 24h'", () => {
     mockDialData([makeR7Station("r7-station", 3)]);
     renderDial();
@@ -329,6 +342,10 @@ describe("reason() r=7 — 24h station artist crossings row label", () => {
 // ---------------------------------------------------------------------------
 
 describe("reason() r=6 takes priority over r=7", () => {
+  beforeEach(() => {
+    localStorage.setItem("lore:crossingScope", "24h");
+  });
+
   it("renders the exact-crossing copy (r=6) when stationCrossings > 0 even if artistCrossings is also > 0", () => {
     // Station has both exact and artist station crossings.
     // reason() reaches r=6 first, so the exact count copy must appear.

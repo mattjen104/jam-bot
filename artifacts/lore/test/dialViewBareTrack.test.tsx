@@ -9,7 +9,7 @@
  *      null / "Unknown show" variants; track title rendered without artist.
  */
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -188,6 +188,7 @@ function renderDial() {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  try { localStorage.clear(); } catch { /* ignore */ }
 });
 
 // ---------------------------------------------------------------------------
@@ -195,6 +196,13 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Dial feed compact identity", () => {
+  // These fixtures carry no crossings; radio mode (crossings off) lifts the
+  // crossing-positive filter so the compact-identity grammar stays the
+  // variable under test.
+  beforeEach(() => {
+    localStorage.setItem("lore:radioMode", "true");
+  });
+
   it("shows the current artist and station only (no DJ or show in compact row)", () => {
     const track = makeSpin({ title: "Gravity Falls", artist: "Pixies" });
     const show = makeShow({

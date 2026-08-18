@@ -1,16 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * End-to-end tests confirming that compact Feed row crossing-artist labels
- * render correctly in a real browser.
+ * End-to-end tests confirming the compact Feed row grammar in a real browser.
  *
- * Task #99 changed compact rows to show "artist · station" identity only
- * (no DJ or show name). The unit tests cover the logic in jsdom; these specs
- * confirm the crossing-artist rendering path in Chromium:
- *
- *   fdrow__compact-crossing   — the <span> wrapping Oxford-comma artist names
- *   ", now"                   — live artist hit suffix
- *   ", this set"              — set-level crossing suffix
+ * The compact row identity is ALWAYS `[NowPlayingArtist] · [Station]` — the
+ * now-playing artist is never replaced by crossing artist names. Crossing
+ * evidence renders as the ⬤ dot indicator after the station name
+ * (.fdrow__crossing-dot) when the station has ≥1 crossing at the active
+ * scope; tapping the dot toggles the inline scope detail
+ * (.fdrow__crossing-detail).
  *
  * All API routes are intercepted so the tests are deterministic and carry
  * no live-data dependence.
@@ -242,8 +240,8 @@ async function installRoutes(
 // Tests
 // ---------------------------------------------------------------------------
 
-test.describe("Compact Feed row — crossing-artist labels in a real browser", () => {
-  test("live artist hit renders 'Artist, now · Station' with no DJ or show name", async ({
+test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real browser", () => {
+  test("live artist hit keeps 'Artist · Station' identity and shows the ⬤ dot with tap-to-detail", async ({
     page,
   }) => {
     const station = makeStation("kcrw", "KCRW");
@@ -262,24 +260,32 @@ test.describe("Compact Feed row — crossing-artist labels in a real browser", (
     });
     await page.goto("/lore/");
 
-    // Wait for the compact crossing span to appear.
-    const crossing = page.locator(".fdrow__compact-crossing").first();
-    await expect(crossing).toBeVisible({ timeout: 15_000 });
-
-    // The crossing node must be "Wet Leg, now" — live suffix.
-    await expect(crossing).toHaveText("Wet Leg, now");
-
-    // The station cell shows "KCRW" only — no DJ or show.
     const row = page.locator(".fdrow").first();
-    await expect(row.locator(".fdrow__compact-station")).toHaveText("KCRW");
-    await expect(row).toHaveAttribute("aria-label", "Wet Leg, now · KCRW");
+    await expect(row).toBeVisible({ timeout: 15_000 });
 
-    // The DJ name and show name must not appear anywhere in the collapsed row.
+    // Identity is the plain now-playing sentence — no ", now" words.
+    await expect(row.locator(".fdrow__compact-artist")).toHaveText("Wet Leg");
+    await expect(row.locator(".fdrow__compact-station")).toHaveText("KCRW");
+    await expect(row).toHaveAttribute("aria-label", "Wet Leg · KCRW");
+    await expect(page.locator(".fdrow__compact-crossing")).toHaveCount(0);
+
+    // The ⬤ dot marks the crossing; tapping toggles the inline detail.
+    const dot = row.locator(".fdrow__crossing-dot");
+    await expect(dot).toBeVisible();
+    await dot.click();
+    const detail = page.locator(".fdrow__crossing-detail").first();
+    await expect(detail).toBeVisible();
+    await expect(detail.locator(".fdrow__crossing-detail-scope")).toHaveText("this set");
+    await expect(detail).toContainText("Wet Leg");
+    await dot.click();
+    await expect(page.locator(".fdrow__crossing-detail")).toHaveCount(0);
+
+    // The DJ name and show name must not appear in the collapsed row.
     await expect(row.getByText(DJ_NAME)).not.toBeVisible();
     await expect(row.getByText(SHOW_NAME)).not.toBeVisible();
   });
 
-  test("two-artist set crossing renders 'A and B, this set · Station'", async ({
+  test("set crossing never replaces the now-playing artist; the dot carries the meaning", async ({
     page,
   }) => {
     const station = makeStation("kexp", "KEXP");
@@ -299,62 +305,41 @@ test.describe("Compact Feed row — crossing-artist labels in a real browser", (
     });
     await page.goto("/lore/");
 
-    // Wait for the compact crossing span.
-    const crossing = page.locator(".fdrow__compact-crossing").first();
-    await expect(crossing).toBeVisible({ timeout: 15_000 });
-
-    // Two-artist crossing: plain "and", set-level suffix.
-    await expect(crossing).toHaveText("Wet Leg and Deftones, this set");
-
-    // Full row aria-label.
     const row = page.locator(".fdrow").first();
-    await expect(row).toHaveAttribute("aria-label", "Wet Leg and Deftones, this set · KEXP");
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    // The now-playing artist stays primary; no crossing sentence anywhere.
+    await expect(row).toHaveAttribute("aria-label", "Someone Else · KEXP");
+    await expect(page.locator(".fdrow__compact-crossing")).toHaveCount(0);
+    await expect(row).not.toContainText("this set");
+
+    // The set-level crossing renders as the ⬤ dot.
+    await expect(row.locator(".fdrow__crossing-dot")).toBeVisible();
 
     // DJ/show absent from the collapsed row.
     await expect(row.getByText(DJ_NAME)).not.toBeVisible();
     await expect(row.getByText(SHOW_NAME)).not.toBeVisible();
   });
 
-  test("three-artist set crossing renders Oxford-comma 'A, B, and C, this set · Station'", async ({
-    page,
-  }) => {
-    const station = makeStation("wfmu", "WFMU");
-    const DJ_NAME = "Trouble";
-    const SHOW_NAME = "Trouble in the Morning";
-
+  test("scope pill next to the crossings control cycles this set → 24h", async ({ page }) => {
+    const station = makeStation("kexp", "KEXP");
     await installRoutes(page, {
       station,
-      nowPlaying: makeNowPlaying({
-        artist: "Unrelated Artist",
-        isArtistHit: false,
-        djName: DJ_NAME,
-        showName: SHOW_NAME,
-      }),
-      schedule: makeSchedule("wfmu", { djName: DJ_NAME, showName: SHOW_NAME }),
-      recentSpins: makeRecentSpins("wfmu", ["Wet Leg", "Deftones", "Weezer"]),
+      nowPlaying: makeNowPlaying({ artist: "Someone Else", isArtistHit: false }),
+      schedule: makeSchedule("kexp", { djName: "John Richards" }),
+      recentSpins: makeRecentSpins("kexp", ["Wet Leg"]),
     });
     await page.goto("/lore/");
 
-    // Wait for the crossing span.
-    const crossing = page.locator(".fdrow__compact-crossing").first();
-    await expect(crossing).toBeVisible({ timeout: 15_000 });
-
-    // Oxford comma for three names, set-level suffix.
-    await expect(crossing).toHaveText("Wet Leg, Deftones, and Weezer, this set");
-
-    // Full row aria-label.
-    const row = page.locator(".fdrow").first();
-    await expect(row).toHaveAttribute(
-      "aria-label",
-      "Wet Leg, Deftones, and Weezer, this set · WFMU",
-    );
-
-    // DJ/show absent from the collapsed row.
-    await expect(row.getByText(DJ_NAME)).not.toBeVisible();
-    await expect(row.getByText(SHOW_NAME)).not.toBeVisible();
+    const pill = page.locator(".crossing-scope-pill").first();
+    await expect(pill).toBeVisible({ timeout: 15_000 });
+    await expect(pill).toBeEnabled();
+    await expect(pill).toContainText("this set");
+    await pill.click();
+    await expect(pill).toContainText("24h");
   });
 
-  test("compact row without a crossing shows plain artist · station (no suffix)", async ({
+  test("crossings off (/radio): plain artist · station, no dot, no filter", async ({
     page,
   }) => {
     const station = makeStation("nts-1", "NTS 1");
@@ -370,17 +355,21 @@ test.describe("Compact Feed row — crossing-artist labels in a real browser", (
       }),
       schedule: makeSchedule("nts-1", { djName: "Kode9", showName: "Hyperdub Special" }),
     });
+    // Crossings off — otherwise the crossing-positive filter would hide this
+    // zero-crossing station entirely.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "true");
+    });
     await page.goto("/lore/");
 
-    // Wait for at least one fdrow.
-    await expect(page.locator(".fdrow").first()).toBeVisible({ timeout: 15_000 });
-
-    // No crossing span — there is no library/artist hit.
-    await expect(page.locator(".fdrow__compact-crossing")).not.toBeVisible();
-
-    // The row shows plain "artist · station" identity.
     const row = page.locator(".fdrow").first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    // No crossing sentence, no dot, and the scope pill is inert.
+    await expect(page.locator(".fdrow__compact-crossing")).toHaveCount(0);
+    await expect(page.locator(".fdrow__crossing-dot")).toHaveCount(0);
     await expect(row.locator(".fdrow__compact-station")).toHaveText("NTS 1");
     await expect(row).toHaveAttribute("aria-label", "Burial · NTS 1");
+    await expect(page.locator(".crossing-scope-pill").first()).toBeDisabled();
   });
 });

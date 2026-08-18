@@ -296,12 +296,25 @@ describe("crossingsLoading=false — real rows visible, skeleton absent", () => 
     expect(realRows.length).toBeGreaterThan(0);
   });
 
-  it("renders real Zone 3 rows once crossing scores have resolved", () => {
+  it("renders real Zone 3 rows once crossing scores have resolved (crossings off)", () => {
+    // With crossings on, a zero-crossing station is hidden by the
+    // crossing-positive filter — so this skeleton-mutual-exclusion check
+    // runs in radio mode, where no crossing filter applies.
+    localStorage.setItem("lore:radioMode", "true");
     mockDialData(false, [makeZone3Station("kcrw")]);
     render(<DialView />);
 
     const realRows = document.querySelectorAll(".fdrow");
     expect(realRows.length).toBeGreaterThan(0);
+  });
+
+  it("crossings on: a zero-crossing Zone 3 station is hidden by the scope filter once scores resolve", () => {
+    mockDialData(false, [makeZone3Station("kcrw")]);
+    render(<DialView />);
+
+    // Crossing-positive filter: zero crossings at the active scope → hidden.
+    expect(document.querySelectorAll(".fdrow").length).toBe(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
   });
 
   it("skeletons absent and real rows present when multiple stations resolve", () => {
@@ -548,6 +561,9 @@ describe("Zone heading count stability during crossingsLoading transition", () =
   it("Zone 3 never renders a numeric count element (loading or loaded)", () => {
     // The dial no longer prints per-zone counts in its headings, so no
     // number-jump is possible between the pre-load estimate and the real count.
+    // Radio mode (crossings off): the crossing-positive filter would hide
+    // these zero-crossing stations and is not what this test is about.
+    localStorage.setItem("lore:radioMode", "true");
     mockDialData(true, [
       makeZone3Station("kcrw"),
       makeZone3Station("kexp"),
@@ -568,6 +584,9 @@ describe("Zone heading count stability during crossingsLoading transition", () =
   });
 
   it("Zone 3 renders real rows without any count element after load", () => {
+    // Radio mode (crossings off): the crossing-positive filter would hide
+    // these zero-crossing stations — this test is about the count element.
+    localStorage.setItem("lore:radioMode", "true");
     mockDialData(true, [makeZone3Station("kcrw")]);
     const { rerender } = render(<DialView />);
     act(() => { vi.advanceTimersByTime(150); });
@@ -639,8 +658,14 @@ describe("Zone heading count stability during crossingsLoading transition", () =
 describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () => {
   /**
    * Zone 3 needs stations with no crossing evidence (makeZone3Station, r=0).
-   * No ghost stations required.
+   * No ghost stations required. Radio mode (crossings off) lifts the
+   * crossing-positive filter so the zero-crossing rows stay visible — these
+   * tests are about the skeleton guard, not the crossing filter.
    */
+  beforeEach(() => {
+    localStorage.setItem("lore:radioMode", "true");
+  });
+
   function setupZone3(crossingsLoading: boolean, stations: DialStation[] = [makeZone3Station("kcrw")]) {
     mockDialData(crossingsLoading, stations);
     (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: [] });
@@ -655,13 +680,19 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
   });
 
   it("keeps Zone 3 rows visible while crossings reload (progressive render)", () => {
-    setupZone3(false);
+    // This test needs the Zone 1 skeleton, which radio mode suppresses — so
+    // instead pin the scope to lifetime and give the fixture a lifetime
+    // crossing to survive the crossing-positive filter once scores settle.
+    localStorage.removeItem("lore:radioMode");
+    localStorage.setItem("lore:crossingScope", "lifetime");
+    const station = { ...makeZone3Station("kcrw"), lifetimeArtistCrossings: 1 };
+    setupZone3(false, [station]);
     const { rerender } = render(<DialView />);
     expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
 
     // Background refresh starts — Zone 3 rows stay put; only Zone 1 swaps
     // for its skeleton.
-    setupZone3(true);
+    setupZone3(true, [station]);
     act(() => { rerender(<DialView />); });
     act(() => { vi.advanceTimersByTime(150); });
 
@@ -670,7 +701,7 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
     expect(document.querySelectorAll('[data-feed-band="reason"] .fdrow').length).toBe(0);
 
     // Refresh completes — rows remain, skeletons gone.
-    setupZone3(false);
+    setupZone3(false, [station]);
     act(() => { rerender(<DialView />); });
 
     expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);

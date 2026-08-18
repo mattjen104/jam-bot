@@ -27,6 +27,9 @@ import { type DialStation, type DialShow, type DialDisplayMode } from "../../hoo
 import { type StationPresence } from "../../hooks/useStationPresence";
 import { rowPassesAgeTierFilter, type AgeTier } from "../../lib/dialAgeFilter";
 import { FrontDoorRow } from "./FrontDoorRow";
+import { CompactPlayButton } from "../CompactPlayButton";
+import { resolvePlaybackSource, type PlayerStatus } from "../../hooks/useRadioPlayer";
+import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../../lib/crossingScope";
 
 /** The shape shared by all sorted dial rows (reason / dj / rest bands). */
 export interface DialLaneRow {
@@ -84,6 +87,12 @@ export interface DialFeedLaneProps {
    * Row membership and order are unchanged — the same flat feed.
    */
   suppressCrossings?: boolean;
+  /** Active crossing scope — determines what the per-row ⬤ dot means. */
+  crossingScope?: CrossingScope;
+  /** Direct play — renders a CompactPlayButton on each playable row. */
+  onPlay?: (row: DialLaneRow) => void;
+  /** Player status for the active station (play-button spinner/pause state). */
+  playerStatus?: PlayerStatus;
 }
 
 interface FeedEntry {
@@ -111,6 +120,9 @@ export function DialFeedLane({
   onSetExpand,
   activeAgeTiers,
   suppressCrossings = false,
+  crossingScope = DEFAULT_CROSSING_SCOPE,
+  onPlay,
+  playerStatus,
 }: DialFeedLaneProps) {
   // Flat display order mirrors the scrubber: ▲ reason → dj → rest;
   // ▼ rest → dj → reason (reason rows arrive pre-inverted from DialView).
@@ -198,8 +210,26 @@ export function DialFeedLane({
         // so the live now-playing sentence leads instead of the crossing
         // sentence (and the popular-crossing setlist stays hidden).
         const asReason = band === "reason" && !suppressCrossings;
+        const slug = row.ds.station.slug;
+        const hasCrossing = !suppressCrossings && hasAnyCrossing(row.ds, crossingScope);
+        // Direct play — same click isolation as CompactDial (the button owns
+        // its own click handling; row tap still tunes/expands).
+        const playButton = onPlay && resolvePlaybackSource(row.ds.station) != null ? (
+          <CompactPlayButton
+            title={row.ds.station.name}
+            isPlaying={slug === activeSlug && playerStatus === "playing"}
+            isLoading={slug === activeSlug && playerStatus === "loading"}
+            onClick={() => onPlay(row)}
+            testId={`dial-feed-play-${slug}`}
+          />
+        ) : null;
         return (
-        <div key={row.ds.station.slug} data-feed-band={band}>
+        <div
+          key={slug}
+          data-feed-band={band}
+          className={playButton ? "dial-feed-row" : undefined}
+        >
+          {playButton}
           {asReason ? (
             <FrontDoorRow
               ds={row.ds}
@@ -216,6 +246,8 @@ export function DialFeedLane({
               onAddArtist={onAddArtist}
               onSetExpand={() => onSetExpand(row)}
               compactSentence
+              crossingScope={crossingScope}
+              hasCrossing={hasCrossing}
             />
           ) : (
             <FrontDoorRow
@@ -232,6 +264,8 @@ export function DialFeedLane({
               popLine={suppressCrossings ? null : popLineFor(row.ds.station.slug)}
               compactSentence
               suppressCrossings={suppressCrossings}
+              crossingScope={crossingScope}
+              hasCrossing={hasCrossing}
             />
           )}
         </div>

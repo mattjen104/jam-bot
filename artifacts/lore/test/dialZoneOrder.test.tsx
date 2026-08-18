@@ -165,6 +165,7 @@ afterEach(() => {
   vi.useRealTimers();
   cleanup();
   vi.clearAllMocks();
+  try { localStorage.clear(); } catch { /* ignore */ }
 });
 
 // ---------------------------------------------------------------------------
@@ -302,6 +303,13 @@ function mockGhosts(ghosts: unknown[] = []) {
 }
 
 describe("Zone 3 DJ band split", () => {
+  // These fixtures are all zero-crossing Zone 3 stations; radio mode
+  // (crossings off) lifts the crossing-positive filter so the band split
+  // itself stays the variable under test.
+  beforeEach(() => {
+    localStorage.setItem("lore:radioMode", "true");
+  });
+
   it("attributed (r=5) rows appear in the DJ band above all unattributed rows", () => {
     // Three unattributed stations (r=0) with high lifetime crossings and one
     // attributed station (r=5). The band split places the attributed row in
