@@ -275,7 +275,7 @@ describe("CompactDial play controls", () => {
 // ---------------------------------------------------------------------------
 
 describe("CompactDial compact density", () => {
-  it("renders name-only rows numbered by their position in the full active list", () => {
+  it("renders name-only keys in a two-column remote grid", () => {
     const rows = [
       makeRow({ slug: "kcrw", name: "KCRW" }),
       makeRow({ slug: "kexp", name: "KEXP" }),
@@ -289,6 +289,7 @@ describe("CompactDial compact density", () => {
 
     const remoteRows = container.querySelectorAll("button.compact-dial__remote-row");
     expect(remoteRows).toHaveLength(2);
+    expect(container.querySelector(".compact-dial--compact")).toBeTruthy();
     expect(remoteRows[0].textContent).toBe("11KCRW");
     expect(remoteRows[1].textContent).toBe("12KEXP");
 
@@ -329,7 +330,7 @@ describe("CompactDial compact density", () => {
 });
 
 describe("CompactDial micro density", () => {
-  it("renders every active station as a numbered keypad button, grouped in triads", () => {
+  it("renders every active station as a numbered keypad button in three columns", () => {
     const rows = [1, 2, 3, 4, 5].map((n) =>
       makeRow({ slug: `st-${n}`, name: `Station ${n}` }),
     );
@@ -337,6 +338,7 @@ describe("CompactDial micro density", () => {
 
     const buttons = [...container.querySelectorAll(".compact-dial__micro-btn")];
     expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    expect(container.querySelector(".compact-dial__micro-grid")).toBeTruthy();
     // Grouped 3 per row of keys: triads of 3 + 2.
     const triads = container.querySelectorAll(".compact-dial__micro-triad");
     expect(triads).toHaveLength(2);

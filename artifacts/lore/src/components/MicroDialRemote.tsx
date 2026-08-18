@@ -1,11 +1,12 @@
 /**
  * MicroDialRemote — the dial band's "micro" density: every active station as
- * a small numbered button, grouped into triads like a telephone keypad.
+ * a larger numbered button, arranged three across like a telephone keypad.
  *
  * Each button shows only the station's ordinal (its 1-based position in the
  * full active list); the station name lives on the accessible label and the
  * hover title. Tapping a button tunes in immediately. There is no expansion,
- * no track detail, and no scan checkbox at this density.
+ * no track detail, and no scan checkbox at this density. The triad wrappers
+ * preserve logical grouping while CSS lets each key fill its grid cell.
  */
 
 import type { DialLaneRow } from "./dial/DialFeedLane";

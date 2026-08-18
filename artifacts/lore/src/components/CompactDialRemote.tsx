@@ -2,11 +2,12 @@
  * CompactDialRemote — the name-only station row for the dial band's
  * "compact" density (the remote-control view).
  *
- * One row = muted ordinal (the station's 1-based position across the whole
- * active list, not just the visible page) + station name. Tapping the row
- * tunes in. There is deliberately no play triangle, no now-playing sentence,
- * no crossing dot, no scan checkbox, and no expansion — the full row grammar
- * stays on the "normal" density.
+ * One key = muted ordinal (the station's 1-based position across the whole
+ * active list, not just the visible page) + station name. Compact keys are
+ * laid out two across by the parent grid. Tapping the key tunes in. There is
+ * deliberately no play triangle, no now-playing sentence, no crossing dot,
+ * no scan checkbox, and no expansion — the full row grammar stays on the
+ * "normal" density.
  */
 
 import type { DialLaneRow } from "./dial/DialFeedLane";

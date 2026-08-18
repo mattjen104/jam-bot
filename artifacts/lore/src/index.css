@@ -7915,11 +7915,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 
 /* ── Compact density: name-only remote rows (10 per page) ─────────────────
-   Half the height of a normal row (10% of the band). Ordinal + station name
-   only; the whole row is the tune-in target. */
+   The ten slots form five equal-height rows with two full-width station keys
+   per row. Ordinal + station name only; the whole cell is the tune-in target. */
+.compact-dial--compact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: row;
+  gap: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 .compact-dial__remote-row {
   appearance: none;
-  flex: 0 0 10%;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -7973,14 +7985,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 
 /* ── Micro density: the whole active list as a numbered keypad ────────────
-   Buttons are grouped into triads that share key seams (same joined-key
-   grammar as the page selectors); the grid wraps to fill the band. */
+   Three equal-width station keys fill each row. Triad wrappers remain in the
+   markup for the keypad grouping semantics, while display:contents lets the
+   buttons participate directly in the grid. */
 .compact-dial__micro-grid {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(34px, max-content);
   gap: 6px;
   padding: 8px 10px;
   overflow-y: auto;
@@ -7988,14 +8001,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overscroll-behavior-y: contain;
 }
 .compact-dial__micro-triad {
-  display: flex;
-  flex: 0 0 auto;
+  display: contents;
 }
 .compact-dial__micro-btn {
   appearance: none;
-  flex: 0 0 auto;
-  min-width: 30px;
-  height: 26px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  height: 100%;
   padding: 0 6px;
   border: 1px solid hsl(var(--foreground) / 0.68);
   border-radius: 2px;
