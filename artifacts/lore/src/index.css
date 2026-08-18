@@ -5764,6 +5764,99 @@
 .fdrow__crossing-detail-count {
   color: hsl(var(--dial-fg, var(--foreground)) / 0.55);
 }
+/* Clickable artist name inside the ⬤ crossing detail. */
+.fdrow__crossing-detail-artist-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 600;
+  color: hsl(var(--dial-fg, var(--foreground)));
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.fdrow__crossing-detail-artist-btn:hover,
+.fdrow__crossing-detail-artist-btn--active {
+  color: hsl(var(--dial-accent, var(--primary)));
+  text-decoration: none;
+}
+/* "see spins" affordance after the crossing count. */
+.fdrow__crossing-see-spins {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 0.88em;
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.45);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.fdrow__crossing-see-spins:hover,
+.fdrow__crossing-see-spins--active {
+  color: hsl(var(--dial-accent, var(--primary)));
+  text-decoration: none;
+}
+/* Spins drill-down panel — inline below the ⬤ detail. */
+.fdrow__crossing-spins {
+  margin-top: 4px;
+  padding: 5px 0 3px;
+  border-top: 1px solid hsl(var(--border) / 0.35);
+  font-size: 0.8em;
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.8);
+}
+.fdrow__crossing-spins-note {
+  display: block;
+  font-size: 0.88em;
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.4);
+  margin-bottom: 4px;
+  font-style: italic;
+}
+.fdrow__crossing-spins-empty {
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.4);
+  font-style: italic;
+}
+.fdrow__crossing-spins-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fdrow__crossing-spin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.4em;
+  line-height: 1.4;
+}
+.fdrow__crossing-spin--library .fdrow__crossing-spin-artist {
+  font-weight: 600;
+  color: hsl(var(--dial-fg, var(--foreground)));
+}
+.fdrow__crossing-spin--artist .fdrow__crossing-spin-artist {
+  font-weight: 500;
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.75);
+}
+.fdrow__crossing-spin-title {
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.fdrow__crossing-spin-ago {
+  font-size: 0.88em;
+  color: hsl(var(--dial-fg, var(--foreground)) / 0.38);
+  white-space: nowrap;
+  margin-left: auto;
+}
 /* Crossing scope pill — sits next to the crossings toggle; cycles
    now → this set → 24h → 7d → lifetime. Grayed/inert when crossings off. */
 .crossing-scope-pill {

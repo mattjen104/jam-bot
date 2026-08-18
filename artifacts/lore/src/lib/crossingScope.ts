@@ -18,7 +18,7 @@
  * dialRadioMode). Reading falls back to "set" on any malformed value.
  */
 
-import type { DialStation, DialShow } from "../hooks/useDialData";
+import type { DialStation, DialShow, DialSpin } from "../hooks/useDialData";
 
 export type CrossingScope = "now" | "set" | "24h" | "7d" | "lifetime";
 
@@ -75,6 +75,126 @@ export function writeCrossingScope(scope: CrossingScope): void {
   } catch {
     // localStorage unavailable — the scope simply won't survive a reload.
   }
+}
+
+export interface CrossingSpinsResult {
+  spins: DialSpin[];
+  /**
+   * True when the client's local spin data may be incomplete for the requested
+   * scope. Callers should surface `partialNote` to avoid implying the list
+   * matches the displayed crossing count.
+   *
+   * 24h:       partial because useDialData fetches today's spins only; a
+   *            rolling 24h window always includes yesterday after midnight.
+   * 7d/lifetime: partial because the client only holds a recent window.
+   * now/set:   never partial (live data; the client always has it).
+   */
+  partial: boolean;
+  /** Human-readable note for the UI explaining the data boundary. */
+  partialNote?: string;
+}
+
+/**
+ * Extract crossing spins for the drill-down panel, filtered to the active
+ * scope. Returns confirmed library/artist hit spins (never resolving entries).
+ *
+ * The 24h scope applies the same rolling boundary that useDialData uses when
+ * computing `ds.crossings` — spins from yesterday's loaded shows that fall
+ * outside the window are excluded so the drill-down matches the count.
+ *
+ * `nowMs` defaults to `Date.now()`; pass a fixed value in tests.
+ *
+ * Scope mapping:
+ *   now      → live track only (if it is a library/artist hit)
+ *   set      → live show's spins that are hits, newest-first
+ *   24h      → all shows' spins within the rolling 24h window
+ *   7d/lifetime → all available shows' spins; partial=true (client has today+yesterday only)
+ */
+export function crossingSpinsForScope(
+  ds: DialStation,
+  scope: CrossingScope,
+  nowMs = Date.now(),
+): CrossingSpinsResult {
+  const window24hCutoffMs = nowMs - 24 * 60 * 60 * 1000;
+  const liveSh = ds.shows.find((sh) => sh.state === "live") ?? null;
+
+  if (scope === "now") {
+    const track = ds.liveTrack ?? liveSh?.currentTrack ?? null;
+    if (track && !track.resolving && (track.isLibraryHit || track.isArtistHit)) {
+      return { spins: [track], partial: false };
+    }
+    return { spins: [], partial: false };
+  }
+
+  if (scope === "set") {
+    // The confirmed live track (ds.liveTrack) arrives via the SSE/live-pulse
+    // path independently of the recent-spins poll. It can be one poll cycle
+    // ahead of liveSh.spins, so a confirmed crossing may be missing from the
+    // show's spin array even though the ⬤ detail already reflects it. Merge
+    // it in first so it always appears in the drill-down, then deduplicate
+    // against the spin array to avoid showing it twice once the poll catches up.
+    const seenSet = new Set<string>();
+    const spins: DialSpin[] = [];
+    const liveT = ds.liveTrack;
+    if (liveT && !liveT.resolving && (liveT.isLibraryHit || liveT.isArtistHit)) {
+      const key = `${liveT.playedAt}::${liveT.artist}::${liveT.title}`;
+      seenSet.add(key);
+      spins.push(liveT);
+    }
+    if (liveSh) {
+      for (const sp of liveSh.spins) {
+        if (sp.resolving || !(sp.isLibraryHit || sp.isArtistHit)) continue;
+        const key = `${sp.playedAt}::${sp.artist}::${sp.title}`;
+        if (seenSet.has(key)) continue;
+        seenSet.add(key);
+        spins.push(sp);
+      }
+    }
+    spins.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
+    return { spins, partial: false };
+  }
+
+  // 24h / 7d / lifetime: enumerate all client-side show spins.
+  //
+  // 24h: the rolling window extends up to 24h into the past, but useDialData
+  // only loads today's recent spins (not yesterday's calendar data). After
+  // midnight any crossings from yesterday remain in the server's rolling count
+  // but are absent from ds.shows[].spins. We apply the time cutoff to exclude
+  // spins that fall outside the window, but always mark partial=true so the UI
+  // surfaces a note rather than implying the list matches the displayed count.
+  //
+  // 7d / lifetime: the client holds only a recent window; always partial.
+  const cutoffMs = scope === "24h" ? window24hCutoffMs : 0;
+  const seen = new Set<string>();
+  const all: DialSpin[] = [];
+  for (const show of ds.shows) {
+    for (const sp of show.spins) {
+      if (sp.resolving || !(sp.isLibraryHit || sp.isArtistHit)) continue;
+      if (new Date(sp.playedAt).getTime() < cutoffMs) continue;
+      // Deduplicate by identity key — the same spin can appear in overlapping
+      // show windows (e.g. a spin near a show boundary).
+      const key = `${sp.playedAt}::${sp.artist}::${sp.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push(sp);
+    }
+  }
+  // Merge in the confirmed live track for the same SSE timing reason as the
+  // set scope: it may not yet be in show.spins but IS a confirmed crossing.
+  const liveTWide = ds.liveTrack;
+  if (liveTWide && !liveTWide.resolving && (liveTWide.isLibraryHit || liveTWide.isArtistHit)) {
+    const liveMs = new Date(liveTWide.playedAt).getTime();
+    if (liveMs >= cutoffMs) {
+      const key = `${liveTWide.playedAt}::${liveTWide.artist}::${liveTWide.title}`;
+      if (!seen.has(key)) {
+        all.push(liveTWide);
+      }
+    }
+  }
+  all.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
+  const partialNote =
+    scope === "24h" ? "today's spins only" : "recent crossings shown";
+  return { spins: all, partial: true, partialNote };
 }
 
 /** The station's live show (the source of set-level crossing evidence). */

@@ -33,6 +33,7 @@ import {
   type CrossingScope,
   DEFAULT_CROSSING_SCOPE,
   crossingScopeDetail,
+  crossingSpinsForScope,
 } from "../../lib/crossingScope";
 import { type StationPresence } from "../../hooks/useStationPresence";
 import { ListenerAvatarStack } from "../ListenerAvatarStack";
@@ -450,6 +451,21 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   const showDot = compactSentence && hasCrossing && !suppressCrossings;
   const detail = showDot && inlineDetail ? crossingScopeDetail(ds, crossingScope) : null;
 
+  // Spins drill-down: null = closed; "" = show all crossing spins; non-empty
+  // string = show only spins by that artist name.
+  const [spinsDrill, setSpinsDrill] = useState<string | null>(null);
+  const spinsDrillData = useMemo(() => {
+    if (!inlineDetail || spinsDrill === null) return null;
+    return crossingSpinsForScope(ds, crossingScope);
+  }, [inlineDetail, spinsDrill, ds, crossingScope]);
+  const visibleDrillSpins = useMemo(() => {
+    if (!spinsDrillData) return [];
+    const { spins } = spinsDrillData;
+    if (!spinsDrill) return spins; // "" → all
+    const needle = spinsDrill.trim().toLowerCase();
+    return spins.filter((sp) => sp.artist.trim().toLowerCase() === needle);
+  }, [spinsDrillData, spinsDrill]);
+
   // True while the live track arrived via the provisional spin-raw fast path
   // (MusicBrainz resolution still in flight). Drives fdrow--resolving on the
   // row and fdrow__compact-artist--resolving on the compact artist span.
@@ -499,7 +515,9 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             title="Crossing at the current scope"
             onClick={(e) => {
               e.stopPropagation();
-              setInlineDetail((v) => !v);
+              const next = !inlineDetail;
+              setInlineDetail(next);
+              if (!next) setSpinsDrill(null);
               onCrossingDetail?.();
             }}
             onPointerDown={(e) => e.stopPropagation()}
@@ -550,6 +568,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       if (expanded) {
         setExpanded(false);
         setInlineDetail(false);
+        setSpinsDrill(null);
         onTuneIn();
       } else {
         setExpanded(true);
@@ -585,6 +604,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         longPressTimer.current = null;
       }
       setInlineDetail(false);
+      setSpinsDrill(null);
       onTuneIn();
     }, 600);
     // Prevent text selection during long-press on touch.
@@ -692,7 +712,8 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         )}
 
         {/* Inline ⬤ crossing detail — scope label, top crossing artists at
-            that scope, and the total count. Kept short: top 3 names. */}
+            that scope, and the total count. Artist names are tappable to drill
+            into that artist's spins; "see spins" opens the full crossing list. */}
         {detail && (
           <div className="fdrow__crossing-detail" onClick={(e) => e.stopPropagation()}>
             <span className="fdrow__crossing-detail-scope">{detail.scopeLabel}</span>
@@ -701,7 +722,16 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
                 {detail.artists.map((name, i) => (
                   <span key={name}>
                     {i > 0 && " · "}
-                    <b className="fdrow__crossing-detail-artist">{name}</b>
+                    <button
+                      type="button"
+                      className={`fdrow__crossing-detail-artist-btn${spinsDrill === name ? " fdrow__crossing-detail-artist-btn--active" : ""}`}
+                      aria-pressed={spinsDrill === name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSpinsDrill((v) => v === name ? null : name);
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >{name}</button>
                   </span>
                 ))}
               </span>
@@ -709,6 +739,48 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             <span className="fdrow__crossing-detail-count">
               {detail.count} crossing{detail.count === 1 ? "" : "s"}
             </span>
+            <button
+              type="button"
+              className={`fdrow__crossing-see-spins${spinsDrill === "" ? " fdrow__crossing-see-spins--active" : ""}`}
+              aria-pressed={spinsDrill === ""}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSpinsDrill((v) => v === "" ? null : "");
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >see spins</button>
+          </div>
+        )}
+
+        {/* Spins drill-down — crossing spins for the active scope, optionally
+            filtered to the selected artist. Shows artist / title / time-ago for
+            each confirmed hit. A note appears when wider scopes (7d/lifetime)
+            only have today's data available on the client. */}
+        {detail && spinsDrill !== null && (
+          <div className="fdrow__crossing-spins" onClick={(e) => e.stopPropagation()}>
+            {spinsDrillData?.partial && (
+              <span className="fdrow__crossing-spins-note">
+                {spinsDrillData.partialNote ?? "recent crossings shown"}
+              </span>
+            )}
+            {visibleDrillSpins.length === 0 ? (
+              <span className="fdrow__crossing-spins-empty">no spins found</span>
+            ) : (
+              <ul className="fdrow__crossing-spins-list">
+                {visibleDrillSpins.map((sp, i) => (
+                  <li
+                    key={`${sp.playedAt}::${sp.artist}::${sp.title}::${i}`}
+                    className={`fdrow__crossing-spin${sp.isLibraryHit ? " fdrow__crossing-spin--library" : " fdrow__crossing-spin--artist"}`}
+                  >
+                    <span className="fdrow__crossing-spin-artist">{sp.artist}</span>
+                    {sp.title && (
+                      <span className="fdrow__crossing-spin-title"> — {sp.title}</span>
+                    )}
+                    <span className="fdrow__crossing-spin-ago">{agoLabel(sp.playedAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
