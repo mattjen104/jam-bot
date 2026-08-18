@@ -1512,6 +1512,38 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
           )
       )::int`,
       lastCheckedAt: sql<string | null>`max(${recordingsTable.yearCheckedAt})::text`,
+      // -----------------------------------------------------------------------
+      // Release-date backfill coverage (Set B predicates from the backfill job):
+      //   release_year >= currentYear-1  AND  release_date IS NULL
+      //   — only recently-released tracks can qualify as Dial "First" premieres
+      //   so the back-catalog is deliberately excluded here too.
+      // -----------------------------------------------------------------------
+      //
+      // datePending   : total recent recordings still lacking a full date
+      //                 (inQueue + permMiss combined for date bucket)
+      // dateInQueue   : eligible rows not yet attempted (exact Set B predicate)
+      // datePermMiss  : checked but MB returned no date → won't be retried
+      // dateLastCheckedAt : latest release_date_checked_at in the recent set,
+      //                 so ops can see whether the job is making forward progress
+      datePending: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseYear} >= extract(year from now())::int - 1
+          and ${recordingsTable.releaseDate} is null
+      )::int`,
+      dateInQueue: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseYear} >= extract(year from now())::int - 1
+          and ${recordingsTable.releaseDate} is null
+          and ${recordingsTable.releaseDateCheckedAt} is null
+          and ${recordingsTable.mbid} not like 'sp:%'
+          and exists (select 1 from ${spinsTable} where ${spinsTable.mbid} = ${recordingsTable.mbid})
+      )::int`,
+      datePermMiss: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseYear} >= extract(year from now())::int - 1
+          and ${recordingsTable.releaseDate} is null
+          and ${recordingsTable.releaseDateCheckedAt} is not null
+      )::int`,
+      dateLastCheckedAt: sql<string | null>`max(${recordingsTable.releaseDateCheckedAt}) filter (
+        where ${recordingsTable.releaseYear} >= extract(year from now())::int - 1
+      )::text`,
     })
     .from(recordingsTable);
   return res.json({
@@ -1520,6 +1552,11 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
     permMiss: totals?.permMiss ?? 0,
     ineligible: totals?.ineligible ?? 0,
     lastCheckedAt: totals?.lastCheckedAt ?? null,
+    // Date-backfill coverage
+    datePending: totals?.datePending ?? 0,
+    dateInQueue: totals?.dateInQueue ?? 0,
+    datePermMiss: totals?.datePermMiss ?? 0,
+    dateLastCheckedAt: totals?.dateLastCheckedAt ?? null,
   });
 }));
 

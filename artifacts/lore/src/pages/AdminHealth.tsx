@@ -59,6 +59,14 @@ interface ReleaseYearHealth {
   /** Null year, null checked_at, but synthetic (sp:) or never aired — backfill skips these. */
   ineligible: number;
   lastCheckedAt: string | null;
+  /** Release-date backfill (Set B): recent recordings (release_year >= currentYear-1) still missing release_date. */
+  datePending: number;
+  /** Set B rows not yet attempted (exact backfill target predicate). */
+  dateInQueue: number;
+  /** Set B rows where MB was checked but returned no date — won't be retried. */
+  datePermMiss: number;
+  /** Max release_date_checked_at among recent recordings — shows job progress. */
+  dateLastCheckedAt: string | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -682,7 +690,17 @@ function ReleaseYearHealthSection({
   token: string;
   onRunComplete: () => void;
 }) {
-  const { totalNull, inQueue, permMiss, ineligible, lastCheckedAt } = health;
+  const {
+    totalNull,
+    inQueue,
+    permMiss,
+    ineligible,
+    lastCheckedAt,
+    datePending,
+    dateInQueue,
+    datePermMiss,
+    dateLastCheckedAt,
+  } = health;
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<RunBatchResult | string | null>(null);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -838,6 +856,88 @@ function ReleaseYearHealthSection({
               {running ? "Running…" : "Run batch now"}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ── Release-date backfill coverage ─────────────────────────────────── */}
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="text-sm font-medium text-foreground">Release date enrichment</h3>
+          <span className="text-[12px] text-muted-foreground">
+            (recent releases only — premiere tier)
+          </span>
+          {datePending > 0 && (
+            <span className="ml-auto rounded-full bg-zinc-500/15 px-2 py-0.5 text-sm font-normal text-zinc-600 dark:text-zinc-400">
+              {datePending.toLocaleString()} pending
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground mb-3">
+          Full partial-ISO dates (e.g. 2025-03) are needed for the Dial&rsquo;s
+          First/premiere tier. Only recordings with{" "}
+          <span className="font-mono text-xs">release_year &ge; currentYear&minus;1</span> are
+          targeted — the full back-catalog is deliberately skipped.
+        </p>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-base sm:grid-cols-3">
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Pending dates
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {datePending.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">recent, release_date IS NULL</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              In queue
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {dateInQueue.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">eligible, not yet checked</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Permanent MB miss
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {datePermMiss.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">checked, no date on MB</dd>
+          </div>
+        </dl>
+        <div className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
+          {datePending === 0 && (
+            <span className="text-zinc-500">All recent recordings have a release date ✓</span>
+          )}
+          {datePending > 0 && dateInQueue === 0 && dateLastCheckedAt && (
+            <>
+              <span className="text-zinc-500">Date queue exhausted.</span>
+              <span className="ml-2">
+                Last checked:{" "}
+                <span className="font-mono text-foreground">
+                  {formatTimestamp(dateLastCheckedAt)}
+                </span>
+              </span>
+            </>
+          )}
+          {datePending > 0 && dateInQueue > 0 && dateLastCheckedAt && (
+            <>
+              <span className="text-zinc-500">Date backfill in progress.</span>
+              <span className="ml-2">
+                Last checked:{" "}
+                <span className="font-mono text-foreground">
+                  {formatTimestamp(dateLastCheckedAt)}
+                </span>
+              </span>
+            </>
+          )}
+          {datePending > 0 && dateInQueue > 0 && !dateLastCheckedAt && (
+            <span className="text-zinc-500">
+              Date backfill not yet started — will run with the year backfill job.
+            </span>
+          )}
         </div>
       </div>
     </section>

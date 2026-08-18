@@ -212,6 +212,108 @@ describe("GET /admin/release-year-health", () => {
 });
 
 // ===========================================================================
+// GET /admin/release-year-health — release-date backfill coverage fields
+// ===========================================================================
+
+describe("GET /admin/release-year-health — date-backfill coverage", () => {
+  it("exposes datePending / dateInQueue / datePermMiss / dateLastCheckedAt", async () => {
+    // DB state for the date-backfill section:
+    //   - 5 recent recordings still lack release_date  → datePending = 5
+    //   - 3 not yet attempted (exact Set B)            → dateInQueue = 3
+    //   - 2 checked but MB returned no date            → datePermMiss = 2
+    //   - last successful check timestamp              → dateLastCheckedAt set
+    const dateChecked = "2026-08-15T09:00:00.000Z";
+    mockHealthSelect([
+      {
+        totalNull: 0,
+        inQueue: 0,
+        permMiss: 0,
+        ineligible: 0,
+        lastCheckedAt: null,
+        datePending: 5,
+        dateInQueue: 3,
+        datePermMiss: 2,
+        dateLastCheckedAt: dateChecked,
+      },
+    ]);
+
+    const res = await fetch(`${serverUrl}/admin/release-year-health`, {
+      headers: { "x-admin-token": ADMIN_TOKEN },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(body.datePending).toBe(5);
+    expect(body.dateInQueue).toBe(3);
+    expect(body.datePermMiss).toBe(2);
+    expect(body.dateLastCheckedAt).toBe(dateChecked);
+  });
+
+  it("returns zero date counts when all recent recordings already have a release_date", async () => {
+    mockHealthSelect([
+      {
+        totalNull: 0,
+        inQueue: 0,
+        permMiss: 0,
+        ineligible: 0,
+        lastCheckedAt: "2026-08-13T00:00:00.000Z",
+        datePending: 0,
+        dateInQueue: 0,
+        datePermMiss: 0,
+        dateLastCheckedAt: "2026-08-13T00:00:00.000Z",
+      },
+    ]);
+
+    const res = await fetch(`${serverUrl}/admin/release-year-health`, {
+      headers: { "x-admin-token": ADMIN_TOKEN },
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.datePending).toBe(0);
+    expect(body.dateInQueue).toBe(0);
+    expect(body.datePermMiss).toBe(0);
+  });
+
+  it("falls back to zero date counts and null dateLastCheckedAt when the DB returns no rows", async () => {
+    mockHealthSelect([]);
+
+    const res = await fetch(`${serverUrl}/admin/release-year-health`, {
+      headers: { "x-admin-token": ADMIN_TOKEN },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.datePending).toBe(0);
+    expect(body.dateInQueue).toBe(0);
+    expect(body.datePermMiss).toBe(0);
+    expect(body.dateLastCheckedAt).toBeNull();
+  });
+
+  it("dateInQueue + datePermMiss sum to datePending", async () => {
+    // Invariant: datePending covers both the unchecked and the perm-miss rows.
+    mockHealthSelect([
+      {
+        totalNull: 0,
+        inQueue: 0,
+        permMiss: 0,
+        ineligible: 0,
+        lastCheckedAt: null,
+        datePending: 7,
+        dateInQueue: 4,
+        datePermMiss: 3,
+        dateLastCheckedAt: null,
+      },
+    ]);
+
+    const res = await fetch(`${serverUrl}/admin/release-year-health`, {
+      headers: { "x-admin-token": ADMIN_TOKEN },
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect((body.dateInQueue as number) + (body.datePermMiss as number)).toBe(
+      body.datePending,
+    );
+  });
+});
+
+// ===========================================================================
 // backfillReleaseYearBatch — transient errors must not advance year_checked_at
 // ===========================================================================
 

@@ -142,6 +142,10 @@ describe("AdminHealth — release-year error banner", () => {
             permMiss: 5,
             ineligible: 7,
             lastCheckedAt: null,
+            datePending: 0,
+            dateInQueue: 0,
+            datePermMiss: 0,
+            dateLastCheckedAt: null,
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
@@ -186,6 +190,10 @@ describe("AdminHealth — release-year error banner", () => {
             permMiss: 2,
             ineligible: 3,
             lastCheckedAt: null,
+            datePending: 0,
+            dateInQueue: 0,
+            datePermMiss: 0,
+            dateLastCheckedAt: null,
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         );

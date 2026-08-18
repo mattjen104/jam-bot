@@ -50,6 +50,10 @@ function okReleaseYearResponse() {
       permMiss: 0,
       ineligible: 0,
       lastCheckedAt: null,
+      datePending: 0,
+      dateInQueue: 0,
+      datePermMiss: 0,
+      dateLastCheckedAt: null,
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
