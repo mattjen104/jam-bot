@@ -7765,6 +7765,20 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   outline: 2px solid hsl(var(--live));
   outline-offset: 2px;
 }
+/* Attribution-only station site link in the play-button slot on /feed rows.
+   Inherits compact-play-btn sizing/flex; overrides color so it reads as a
+   muted external link, not a play triangle. Never has an svg child. */
+.dial-feed-site-link {
+  color: hsl(var(--muted-foreground));
+  text-decoration: none;
+  font-size: var(--lore-size-interface);
+}
+.dial-feed-site-link:hover,
+.dial-feed-site-link:focus-visible {
+  color: hsl(var(--foreground));
+  outline: 2px solid hsl(var(--live));
+  outline-offset: 2px;
+}
 /* Loading: muted, inert affordance — activation is a no-op while the
    session buffers, so signal that visually without hiding the control. */
 .compact-play-btn[data-loading] {

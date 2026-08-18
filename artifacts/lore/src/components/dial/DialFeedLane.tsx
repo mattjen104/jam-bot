@@ -29,6 +29,7 @@ import { rowPassesAgeTierFilter, type AgeTier } from "../../lib/dialAgeFilter";
 import { FrontDoorRow } from "./FrontDoorRow";
 import { CompactPlayButton } from "../CompactPlayButton";
 import { resolvePlaybackSource, type PlayerStatus } from "../../hooks/useRadioPlayer";
+import { safeHttpUrl } from "../../lib/utils";
 import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../../lib/crossingScope";
 
 /** The shape shared by all sorted dial rows (reason / dj / rest bands). */
@@ -223,13 +224,29 @@ export function DialFeedLane({
             testId={`dial-feed-play-${slug}`}
           />
         ) : null;
+        const siteHref = safeHttpUrl(row.ds.station.homepageUrl);
+        const actionSlot = playButton ?? (!resolvePlaybackSource(row.ds.station) && siteHref ? (
+          <a
+            className="compact-play-btn dial-feed-site-link"
+            href={siteHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Listen on ${row.ds.station.name} site`}
+            title={`Listen on ${row.ds.station.name} site`}
+            data-testid={`dial-feed-site-${slug}`}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            ↗
+          </a>
+        ) : null);
         return (
         <div
           key={slug}
           data-feed-band={band}
-          className={playButton ? "dial-feed-row" : undefined}
+          className={actionSlot ? "dial-feed-row" : undefined}
         >
-          {playButton}
+          {actionSlot}
           {asReason ? (
             <FrontDoorRow
               ds={row.ds}
@@ -246,6 +263,7 @@ export function DialFeedLane({
               onAddArtist={onAddArtist}
               onSetExpand={() => onSetExpand(row)}
               compactSentence
+               siteLinkInTier1={false}
               crossingScope={crossingScope}
               hasCrossing={hasCrossing}
             />
@@ -263,6 +281,7 @@ export function DialFeedLane({
               artworkUrl={artworkUrl}
               popLine={suppressCrossings ? null : popLineFor(row.ds.station.slug)}
               compactSentence
+               siteLinkInTier1={false}
               suppressCrossings={suppressCrossings}
               crossingScope={crossingScope}
               hasCrossing={hasCrossing}

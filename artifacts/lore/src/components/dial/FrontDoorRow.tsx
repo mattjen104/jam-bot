@@ -317,6 +317,9 @@ export interface FrontDoorRowProps {
   onAddArtist?: (name: string) => void;
   /** Opens the persistent player queue for this station's complete set. */
   onSetExpand?: () => void;
+  /** Keep the attribution-only homepage link out of tier 1 when the parent
+   * renders it in a dedicated action slot beside the row. */
+  siteLinkInTier1?: boolean;
   /**
    * Renders the compact left-to-right artist · station identity as tier 1.
    * Dial lanes pass this; without it the row falls back to the full
@@ -354,7 +357,7 @@ export interface FrontDoorRowProps {
   onCrossingDetail?: () => void;
 }
 
-export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false, hasCrossing = false, crossingScope = DEFAULT_CROSSING_SCOPE, onCrossingDetail }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, siteLinkInTier1 = true, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false, hasCrossing = false, crossingScope = DEFAULT_CROSSING_SCOPE, onCrossingDetail }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -625,7 +628,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
           {tier1Node}
           {/* Tier-1 site link is reserved for attribution-only stations —
               playable stations get the link in the expanded byline instead. */}
-          {!playable && siteHref && (
+          {!playable && siteLinkInTier1 && siteHref && (
             <a
               className="fdrow__site-link"
               href={siteHref}

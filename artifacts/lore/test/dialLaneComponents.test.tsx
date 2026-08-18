@@ -81,15 +81,22 @@ import type { DialStation, DialShow } from "../src/hooks/useDialData";
 // Factories
 // ---------------------------------------------------------------------------
 
-function makeStation(slug: string, name = `Station ${slug}`): DialStation["station"] {
+function makeStation(
+  slug: string,
+  name = `Station ${slug}`,
+  stationOverrides: Partial<DialStation["station"]> = {},
+): DialStation["station"] {
   return {
     slug,
     name,
     automationClass: null,
     streamUrl: null,
+    relayUrl: null,
+    homepageUrl: null,
     websiteUrl: null,
     hidden: false,
     favorite: false,
+    ...stationOverrides,
   } as DialStation["station"];
 }
 
@@ -126,9 +133,13 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
   };
 }
 
-function makeLaneRow(slug: string, djName: string | null = null): DialLaneRow {
+function makeLaneRow(
+  slug: string,
+  djName: string | null = null,
+  stationOverrides: Partial<DialStation["station"]> = {},
+): DialLaneRow {
   return {
-    ds: makeDialStation(slug),
+    ds: { ...makeDialStation(slug), station: makeStation(slug, `Station ${slug}`, stationOverrides) },
     show: makeShow({ djName }),
     effectiveDjName: djName,
   };
@@ -283,6 +294,22 @@ describe("DialFeedLane — container and row rendering", () => {
 
     fireEvent.click(screen.getByTestId("fdrow-rest0"));
     expect(onTuneIn).toHaveBeenCalledWith(rest);
+  });
+
+  it("puts an attribution-only station's site link in the play-button slot", () => {
+    const row = makeLaneRow("bbc6", undefined, {
+      streamUrl: null,
+      relayUrl: null,
+      homepageUrl: "https://www.bbc.co.uk/sounds/play/live:bbc_6music",
+      name: "BBC 6 Music",
+    });
+    renderFeed({ restRows: [row] });
+
+    const link = screen.getByTestId("dial-feed-site-bbc6") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("https://www.bbc.co.uk/sounds/play/live:bbc_6music");
+    expect(link.getAttribute("aria-label")).toBe("Listen on BBC 6 Music site");
+    expect(link.closest(".dial-feed-row")).not.toBeNull();
+    expect(screen.queryByText("Listen on site")).toBeNull();
   });
 });
 
