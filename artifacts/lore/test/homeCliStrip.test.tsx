@@ -256,11 +256,11 @@ describe("HomeCliStrip", () => {
 
   it("labels the density key for each mode in the cycle", () => {
     const { unmount } = renderStrip({ density: "compact" });
-    expect(screen.getByRole("button", { name: "density 10 rows — switch to all" }).textContent).toBe("10");
+    expect(screen.getByRole("button", { name: "density 10 rows — switch to 15" }).textContent).toBe("10");
     unmount();
 
     renderStrip({ density: "micro" });
-    expect(screen.getByRole("button", { name: "density all rows — switch to 5" }).textContent).toBe("all");
+    expect(screen.getByRole("button", { name: "density 15 rows — switch to 5" }).textContent).toBe("15");
   });
 
   it("pages by 10-row offsets in compact density", () => {
@@ -275,13 +275,14 @@ describe("HomeCliStrip", () => {
     expect(screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("hides the page selectors in micro density (the whole list is one page)", () => {
-    renderStrip({ density: "micro", totalActiveCount: 13 });
-    expect(screen.queryByRole("group", { name: "Page" })).toBeNull();
-    // Scan controls and the count survive — only the page list is gone.
+  it("pages by 15-key offsets in micro density", () => {
+    const { props } = renderStrip({ density: "micro", pageCount: 2, totalRows: 20, totalActiveCount: 20 });
+    fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
+    expect(props.onSelectPage).toHaveBeenCalledWith(15);
+    // Scan controls and the count survive alongside the page selectors.
     screen.getByRole("button", { name: "scan this page" });
     screen.getByRole("button", { name: "scan all stations" });
-    expect(screen.getByRole("group", { name: "Scan commands" }).textContent).toContain("13 stations");
+    expect(screen.getByRole("group", { name: "Scan commands" }).textContent).toContain("20 stations");
   });
 
   it("add-artists button focuses the input and inserts the /add prefix", () => {

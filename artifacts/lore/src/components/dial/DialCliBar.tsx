@@ -93,7 +93,7 @@ export interface DialCliBarProps extends Pick<DialFilterBarProps,
   onScan?: (offset: number) => void;
   /**
    * Rows per scan page — the page-size unit `/scanN` multiplies by. Matches
-   * the dial band's density (5 normal, 10 compact, whole list in micro);
+   * the dial band's density (5 normal, 10 compact, 15 micro);
    * defaults to 5 (the classic five-row window).
    */
   scanPageSize?: number;

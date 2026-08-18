@@ -422,19 +422,56 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     ).toBe("true");
   });
 
-  it("micro density shows the whole list as a numbered keypad with no page selectors", () => {
+  it("micro density pages by 15 — /scan2 shows keypad buttons 16–23 with full-list ordinals", () => {
     localStorage.setItem("lore:dialDensity", "micro");
     mockStations.value = Array.from({ length: 23 }, (_, i) =>
       makeStation(`st-${i + 1}`, null),
     );
     render(<SplitHome />);
 
-    expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(23);
+    // Page 1: fifteen keypad buttons numbered 1–15; 23 stations → 2 pages.
+    expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(15);
     screen.getByRole("button", { name: "1. Station st-1 — tune in" });
-    screen.getByRole("button", { name: "23. Station st-23 — tune in" });
-    expect(screen.queryByRole("group", { name: "Page" })).toBeNull();
+    screen.getByRole("button", { name: "15. Station st-15 — tune in" });
+    expect(screen.queryByRole("button", { name: "16. Station st-16 — tune in" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Page" }).querySelectorAll("button")).toHaveLength(2);
     // The count label is still on the remote.
     expect(screen.getByRole("group", { name: "Scan commands" }).textContent).toContain("23 stations");
+
+    typeCommand("/scan2");
+
+    // Page 2 at the 15-key page size — ordinals continue from 16.
+    expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(8);
+    screen.getByRole("button", { name: "16. Station st-16 — tune in" });
+    screen.getByRole("button", { name: "23. Station st-23 — tune in" });
+    expect(screen.queryByRole("button", { name: "15. Station st-15 — tune in" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("switching density mid-list re-snaps the offset to the new page size", () => {
+    // 23 stations, compact density: /scan2 puts the listener on offset 10
+    // (rows 11–20). Switching to micro (15-key pages) must re-snap the
+    // offset to a 15-boundary — offset 0 — and renumber the keypad 1–15.
+    localStorage.setItem("lore:dialDensity", "compact");
+    mockStations.value = Array.from({ length: 23 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    render(<SplitHome />);
+
+    typeCommand("/scan2");
+    screen.getByRole("button", { name: "11. Station st-11 — tune in" });
+
+    fireEvent.click(screen.getByRole("button", { name: "density 10 rows — switch to 15" }));
+
+    expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(15);
+    screen.getByRole("button", { name: "1. Station st-1 — tune in" });
+    screen.getByRole("button", { name: "15. Station st-15 — tune in" });
+    expect(screen.queryByRole("button", { name: "16. Station st-16 — tune in" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("clicking a numeric page selector changes the visible window", () => {

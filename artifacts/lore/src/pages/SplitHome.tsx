@@ -4,9 +4,10 @@
  *   top edge  — RadioRemoteBar: the radio remote (/crossings /radio /lore
  *               plus the age-tier and station-category chips), pinned above
  *               the Dial band where the controls are most reachable.
- *   top ~50%  — CompactDial: five stations from the all-stations alphabetical
- *               sort (same order for every listener), windowed by the active
- *               scan (offset 0, 5, 10, … — the page count grows with the
+ *   top ~50%  — CompactDial: a page of stations from the all-stations
+ *               alphabetical sort (same order for every listener), windowed
+ *               by the active scan (page size follows the density: 5 normal,
+ *               10 compact, 15 micro — the page count grows with the
  *               filtered list).
  *   middle    — HomeCliStrip: the CLI seam. Only the Dial page selectors,
  *               Scan / Scan all, the slash-command input, and the /add
@@ -107,8 +108,8 @@ export default function SplitHome() {
   }, []);
 
   // Dial-band display density (persisted, localStorage "lore:dialDensity"):
-  // normal = 5 full rows, compact = 10 name-only remote rows, micro = the
-  // whole active list as a numbered keypad.
+  // normal = 5 full rows, compact = 10 name-only remote rows, micro = 15
+  // numbered keypad buttons.
   const [density, setDensity] = useState<DialDensity>(() => readDialDensity());
 
   // Station Finder sheet (Radio Browser search → pin personal stations).
@@ -132,12 +133,13 @@ export default function SplitHome() {
   const { addSeed } = useSeedManager();
   const { radio } = usePlayer();
 
-  // Scan window: which 5-station slice of the sorted feed is shown. Any
-  // multiple of 5 is valid — the page count is dynamic (filtered rows / 5).
+  // Scan window: which slice of the sorted feed is shown. Any multiple of
+  // the density page size is valid — the page count is dynamic (filtered
+  // rows / page size).
   const [scanOffset, setScanOffset] = useState<number>(0);
 
   // Compact scan remote state: null = not scanning, "page" = auto-advancing
-  // through the selected five-row window, "all" = auto-advancing through
+  // through the selected page window, "all" = auto-advancing through
   // the full filtered list.
   const [scanMode, setScanMode] = useState<ScanMode>(null);
   const [scanRowIdx, setScanRowIdx] = useState<number | null>(null);
@@ -258,9 +260,9 @@ export default function SplitHome() {
   );
 
   // Rows per scan page at the current density: 5 (normal), 10 (compact), or
-  // the whole active list (micro). Drives the window slice, the page count,
+  // 15 (micro). Drives the window slice, the page count,
   // and the scan candidate window alike.
-  const pageSize = dialPageSize(density, activeRows.length);
+  const pageSize = dialPageSize(density);
 
   // Keep refs current so timer callbacks always see the latest values.
   // Synced in an effect (not during render) per the react-hooks/refs rule;
@@ -321,7 +323,7 @@ export default function SplitHome() {
   // --- Compact scan hop logic ---
   // The scan auto-advances through a list of rows at SCAN_DWELL_MS per hop,
   // previewing each station's live stream via radio.preview(). The list is
-  // either the current page's five rows ("page" mode) or all filtered rows
+  // either the current page's rows ("page" mode) or all filtered rows
   // ("all" mode). scanRowIdx is a raw index into filteredRows (not page-local).
   const radioRef = useRef(radio);
   // eslint-disable-next-line react-hooks/refs
@@ -330,7 +332,7 @@ export default function SplitHome() {
   // Build the scan candidate list.
   // filteredRowsRef now tracks activeRows (skipped stations are excluded at
   // the split point, so skippedRef is only used for stop-on-change detection).
-  // "page" mode scans the current five-slot window into activeRows; "all"
+  // "page" mode scans the current page window into activeRows; "all"
   // mode scans the whole active list. No further skip filtering needed here —
   // activeRows already has skipped rows removed.
   const scanCandidates = useCallback((mode: "page" | "all"): number[] => {
@@ -363,8 +365,8 @@ export default function SplitHome() {
         }
         // An all-scan drives the visible window along with it, so the sampled
         // station is always rendered and highlighted (CompactDial only shows
-        // the current active page — 5 rows in normal, 10 in compact, all in
-        // micro, where the snap lands on offset 0 anyway).
+        // the current active page — 5 rows in normal, 10 in compact, 15 in
+        // micro).
         if (mode === "all") {
           const size = scanPageSizeRef.current;
           setScanOffset(Math.floor(globalIdx / size) * size);

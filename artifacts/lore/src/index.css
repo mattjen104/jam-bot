@@ -7984,7 +7984,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   pointer-events: none;
 }
 
-/* ── Micro density: the whole active list as a numbered keypad ────────────
+/* ── Micro density: the current 15-station page as a numbered keypad ──────
    Three equal-width station keys fill each row. Triad wrappers remain in the
    markup for the keypad grouping semantics, while display:contents lets the
    buttons participate directly in the grid. */

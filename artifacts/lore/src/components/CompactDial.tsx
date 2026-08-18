@@ -4,7 +4,7 @@
  * Layout model
  * ─────────────
  * activeRows  — stations NOT in the skip set, sliced to the current page
- *               (up to 5). These fill the fixed five-slot grid at the top.
+ *               (5 normal / 10 compact / 15 micro). These fill the dial band.
  * skippedRows — ALL skipped stations, appended below in a scrollable
  *               overflow region so the listener can still reach them without
  *               navigating to a different page.
@@ -68,8 +68,8 @@ export interface CompactDialProps {
   onAddArtist?: (name: string) => void;
   /**
    * Display density (default "normal"). "compact" renders name-only remote
-   * rows (10 per page); "micro" renders the whole page as a numbered keypad.
-   * Remote-control densities never expand a row.
+   * rows (10 per page); "micro" renders the page as a numbered keypad (15
+   * per page). Remote-control densities never expand a row.
    */
   density?: DialDensity;
   /**
@@ -197,9 +197,9 @@ export function CompactDial({
     );
   }
 
-  // ── Micro density: the whole active page as a numbered keypad. Skipped
-  //    rows and track detail stay on the normal density — one tap on the
-  //    remote's density key brings them back. ────────────────────────────
+  // ── Micro density: the current 15-station page as a numbered keypad.
+  //    Skipped rows and track detail stay on the normal density — one tap
+  //    on the remote's density key brings them back. ─────────────────────
   if (density === "micro") {
     return (
       <div className="compact-dial compact-dial--micro">

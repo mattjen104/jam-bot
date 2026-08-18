@@ -330,7 +330,7 @@ describe("CompactDial compact density", () => {
 });
 
 describe("CompactDial micro density", () => {
-  it("renders every active station as a numbered keypad button in three columns", () => {
+  it("renders the page's stations as numbered keypad buttons in three columns", () => {
     const rows = [1, 2, 3, 4, 5].map((n) =>
       makeRow({ slug: `st-${n}`, name: `Station ${n}` }),
     );
@@ -358,6 +358,23 @@ describe("CompactDial micro density", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "2. Station 2 — tune in" }));
     expect(onTuneIn).toHaveBeenCalledWith(rows[1]);
+  });
+
+  it("micro keypad buttons continue ordinals from the page offset", () => {
+    // Page 2 of a 15-per-page micro list: the parent slices rows 16–20 and
+    // passes firstOrdinal=16, so the keypad keeps full-list numbering.
+    const rows = [1, 2, 3, 4, 5].map((n) =>
+      makeRow({ slug: `st-${n}`, name: `Station ${n}` }),
+    );
+    const { container } = renderDial({
+      activeRows: rows,
+      density: "micro",
+      firstOrdinal: 16,
+    });
+
+    const buttons = [...container.querySelectorAll(".compact-dial__micro-btn")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["16", "17", "18", "19", "20"]);
+    screen.getByRole("button", { name: "16. Station 1 — tune in" });
   });
 
   it("marks the sampling and active keys in micro density", () => {

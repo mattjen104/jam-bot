@@ -1,6 +1,6 @@
 /**
- * MicroDialRemote — the dial band's "micro" density: every active station as
- * a larger numbered button, arranged three across like a telephone keypad.
+ * MicroDialRemote — the dial band's "micro" density: the current page of 15
+ * active stations as numbered buttons, three across like a telephone keypad.
  *
  * Each button shows only the station's ordinal (its 1-based position in the
  * full active list); the station name lives on the accessible label and the
@@ -12,7 +12,7 @@
 import type { DialLaneRow } from "./dial/DialFeedLane";
 
 export interface MicroDialRemoteProps {
-  /** All active stations (the whole list is visible at this density). */
+  /** The current page of active stations (up to 15 per page). */
   rows: DialLaneRow[];
   /** 1-based ordinal of rows[0] in the full active list (default 1). */
   firstOrdinal?: number;

@@ -3,7 +3,7 @@
  *
  * Structure (top → bottom):
  *   1. Compact scan remote — numeric page selectors, one Scan button for the
- *      selected five-row page, and one Scan all button for the full filtered
+ *      selected page, and one Scan all button for the full filtered
  *      list. Active scan turns the Scan/Scan all button into a Stop control.
  *   2. The DialCliBar (strip variant), whose prompt is left-aligned so the
  *      field reads like a command line.
@@ -30,30 +30,30 @@ export type ScanMode = "page" | "all" | null;
 const DENSITY_KEY_LABEL: Record<DialDensity, string> = {
   normal: "5",
   compact: "10",
-  micro: "all",
+  micro: "15",
 };
 
 export interface HomeCliStripProps extends Pick<DialCliBarProps,
   "activeTiers" | "activeCategories" | "onToggleTier" | "onToggleCategory"> {
   /**
    * Zero-based offset of the currently visible page — a multiple of the
-   * density's page size (5 normal, 10 compact; always 0 in micro).
+   * density's page size (5 normal, 10 compact, 15 micro).
    */
   scanOffset: number;
   /**
    * Number of scan pages in the active filtered list (rows / page size,
    * min 1). The strip renders exactly this many compact numeric page buttons
-   * (hidden in micro density, where the whole list is one page).
+   * at every density, including micro (15-key pages).
    */
   pageCount: number;
   /** Total number of rows in the filtered list (drives Scan all disabled state). */
   totalRows: number;
   /**
-   * Which scan is currently active: "page" = scanning the selected five-row
+   * Which scan is currently active: "page" = scanning the selected page
    * window, "all" = scanning the full filtered list, null = not scanning.
    */
   scanMode: ScanMode;
-  /** Called when the user selects a page (offset = (page - 1) * 5). */
+  /** Called when the user selects a page (offset = (page - 1) × page size). */
   onSelectPage: (offset: number) => void;
   /** Called when the Scan / Stop button is pressed (toggles page-scan). */
   onScanPage: () => void;
@@ -129,8 +129,8 @@ export function HomeCliStrip({
   }, []);
 
   // Page math follows the density: 5-row pages in normal, 10-row pages in
-  // compact. Micro shows the whole list, so the page selectors are hidden.
-  const pageSize = dialPageSize(density, totalActiveCount);
+  // compact, 15-key pages in micro.
+  const pageSize = dialPageSize(density);
   const currentPage = Math.floor(scanOffset / pageSize); // 0-based page index
   const nextDensity = nextDialDensity(density);
 
@@ -156,26 +156,25 @@ export function HomeCliStrip({
           >
             {DENSITY_KEY_LABEL[density]}
           </button>
-          {/* Compact numeric page selectors (hidden in micro: one page = all) */}
-          {density !== "micro" && (
-            <div className="home-cli-strip__page-selectors" role="group" aria-label="Page">
-              {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
-                const isCurrentPage = currentPage === i;
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
-                    aria-pressed={isCurrentPage}
-                    aria-label={`page ${i + 1} /scan${i + 1}`}
-                    onClick={() => onSelectPage(i * pageSize)}
-                  >
-                    {i + 1}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Numeric page selectors — one per page at the density's page
+              size (5 / 10 / 15 rows), at every density including micro. */}
+          <div className="home-cli-strip__page-selectors" role="group" aria-label="Page">
+            {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
+              const isCurrentPage = currentPage === i;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
+                  aria-pressed={isCurrentPage}
+                  aria-label={`page ${i + 1} /scan${i + 1}`}
+                  onClick={() => onSelectPage(i * pageSize)}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
           {/* Scan (page) button */}
           <button
             type="button"

@@ -6,8 +6,8 @@
  *                sentence, scan checkbox) — the classic CompactDial.
  *   - "compact": 10 name-only rows per page — ordinal + station name, tap
  *                to tune in, no expansion.
- *   - "micro":   every active station as a small numbered keypad button —
- *                the whole list visible at once, tap a number to tune in.
+ *   - "micro":   15 numbered keypad buttons per page, three across like a
+ *                telephone keypad — tap a number to tune in.
  *
  * Like the lens/radio-mode state, this is local-first listener state:
  * persisted in localStorage, never sent to the server. Reading falls back to
@@ -53,11 +53,11 @@ export function nextDialDensity(density: DialDensity): DialDensity {
 }
 
 /**
- * Rows shown per scan page at a density. Micro shows the whole active list
- * (min 1 so pagination math never divides by zero on an empty list).
+ * Rows shown per scan page at a density: 5 full rows (normal), 10 name-only
+ * remote keys (compact), or 15 keypad buttons (micro).
  */
-export function dialPageSize(density: DialDensity, activeCount: number): number {
+export function dialPageSize(density: DialDensity): number {
   if (density === "compact") return 10;
-  if (density === "micro") return Math.max(1, activeCount);
+  if (density === "micro") return 15;
   return 5;
 }
