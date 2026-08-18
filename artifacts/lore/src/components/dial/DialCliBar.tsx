@@ -88,9 +88,15 @@ export interface DialCliBarProps extends Pick<DialFilterBarProps,
   onAddArtists?: (names: string[]) => void;
   /**
    * Called when `/scanN` is submitted (any page number N ≥ 1).
-   * Receives the zero-based station offset: (N - 1) * 5.
+   * Receives the zero-based station offset: (N - 1) * scanPageSize.
    */
   onScan?: (offset: number) => void;
+  /**
+   * Rows per scan page — the page-size unit `/scanN` multiplies by. Matches
+   * the dial band's density (5 normal, 10 compact, whole list in micro);
+   * defaults to 5 (the classic five-row window).
+   */
+  scanPageSize?: number;
   /** Called when `/library` is submitted (SplitHome wires this to navigate). */
   onLibrary?: () => void;
   /**
@@ -133,6 +139,7 @@ export function DialCliBar({
   variant = "overlay",
   onAddArtists,
   onScan,
+  scanPageSize = 5,
   onLibrary,
   onHome,
   onMatt,
@@ -175,11 +182,12 @@ export function DialCliBar({
     }
 
     // /scanN commands — compact-dial window offset. Any page number N ≥ 1
-    // is accepted; the offset is (N - 1) * 5.
+    // is accepted; the offset is (N - 1) * scanPageSize so the page number
+    // tracks the dial band's active density (5-row, 10-row, or all).
     const scanMatch = /^\/scan(\d+)$/.exec(lower);
     if (scanMatch) {
       const page = Number.parseInt(scanMatch[1], 10);
-      if (page >= 1) onScan?.((page - 1) * 5);
+      if (page >= 1) onScan?.((page - 1) * scanPageSize);
       setValue("");
       return;
     }
@@ -209,7 +217,7 @@ export function DialCliBar({
     }
     // Unrecognised commands are silently cleared.
     setValue("");
-  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, onLibrary, onHome, onMatt, onRadioMode, mattPending, value]);
+  }, [onToggleCategory, onToggleTier, onAddArtists, onScan, scanPageSize, onLibrary, onHome, onMatt, onRadioMode, mattPending, value]);
 
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

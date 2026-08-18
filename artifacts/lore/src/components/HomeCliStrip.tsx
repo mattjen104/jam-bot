@@ -22,16 +22,28 @@ import { useLocation } from "wouter";
 import { DialCliBar, type DialCliBarProps, type MattCliStatus } from "./dial/DialCliBar";
 import { CrossingScopePill } from "./dial/CrossingScopePill";
 import type { CrossingScope } from "../lib/crossingScope";
+import { dialPageSize, nextDialDensity, type DialDensity } from "../lib/dialDensityState";
 
 export type ScanMode = "page" | "all" | null;
 
+/** Short key labels for the density cycle button: rows visible per page. */
+const DENSITY_KEY_LABEL: Record<DialDensity, string> = {
+  normal: "5",
+  compact: "10",
+  micro: "all",
+};
+
 export interface HomeCliStripProps extends Pick<DialCliBarProps,
   "activeTiers" | "activeCategories" | "onToggleTier" | "onToggleCategory"> {
-  /** Zero-based offset of the currently visible five-row page (multiple of 5). */
+  /**
+   * Zero-based offset of the currently visible page — a multiple of the
+   * density's page size (5 normal, 10 compact; always 0 in micro).
+   */
   scanOffset: number;
   /**
-   * Number of scan pages in the active filtered list (rows / 5, min 1).
-   * The strip renders exactly this many compact numeric page buttons.
+   * Number of scan pages in the active filtered list (rows / page size,
+   * min 1). The strip renders exactly this many compact numeric page buttons
+   * (hidden in micro density, where the whole list is one page).
    */
   pageCount: number;
   /** Total number of rows in the filtered list (drives Scan all disabled state). */
@@ -67,6 +79,15 @@ export interface HomeCliStripProps extends Pick<DialCliBarProps,
   crossingsOn?: boolean;
   /** Cycles the scope: now → this set → 24h → 7d → lifetime. */
   onCycleCrossingScope?: () => void;
+  /**
+   * Total number of active (scan-included) stations in the filtered list —
+   * always shown on the scan remote, at every density.
+   */
+  totalActiveCount: number;
+  /** Current dial-band display density (drives page-selector math). */
+  density: DialDensity;
+  /** Cycles the density: normal → compact → micro → normal. */
+  onCycleDensity: () => void;
 }
 
 export function HomeCliStrip({
@@ -90,6 +111,9 @@ export function HomeCliStrip({
   crossingScope,
   crossingsOn = false,
   onCycleCrossingScope,
+  totalActiveCount,
+  density,
+  onCycleDensity,
 }: HomeCliStripProps) {
   const [, setLocation] = useLocation();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -104,33 +128,54 @@ export function HomeCliStrip({
     setPrefill({ token: prefillToken.current, text: "/add " });
   }, []);
 
-  const currentPage = scanOffset / 5; // 0-based page index
+  // Page math follows the density: 5-row pages in normal, 10-row pages in
+  // compact. Micro shows the whole list, so the page selectors are hidden.
+  const pageSize = dialPageSize(density, totalActiveCount);
+  const currentPage = Math.floor(scanOffset / pageSize); // 0-based page index
+  const nextDensity = nextDialDensity(density);
 
   return (
     <div className="home-cli-strip">
-      {/* The scan remote is the seam's Dial-side row: numeric page selectors
-          plus the Scan / Scan all controls. The rail stays bounded so the
+      {/* The scan remote is the seam's Dial-side row: the active-station
+          count, the density cycle key, numeric page selectors, plus the
+          Scan / Scan all controls. The rail stays bounded so the
           max-content row remains horizontally scrollable on narrow screens. */}
       <div className="home-cli-strip__filter-rail">
         <div className="home-cli-strip__filter-row home-cli-strip__scan-remote" role="group" aria-label="Scan commands">
-          {/* Compact numeric page selectors */}
-          <div className="home-cli-strip__page-selectors" role="group" aria-label="Page">
-            {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
-              const isCurrentPage = currentPage === i;
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
-                  aria-pressed={isCurrentPage}
-                  aria-label={`page ${i + 1} /scan${i + 1}`}
-                  onClick={() => onSelectPage(i * 5)}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
-          </div>
+          {/* Always-visible count of scan-included stations */}
+          <span className="home-cli-strip__station-count">
+            {totalActiveCount} {totalActiveCount === 1 ? "station" : "stations"}
+          </span>
+          {/* Density cycle key: 5 rows → 10 rows → numbered keypad */}
+          <button
+            type="button"
+            className="home-cli-strip__filter-chip home-cli-strip__density-btn"
+            aria-label={`density ${DENSITY_KEY_LABEL[density]} rows — switch to ${DENSITY_KEY_LABEL[nextDensity]}`}
+            title={`Showing ${DENSITY_KEY_LABEL[density]} rows — tap for ${DENSITY_KEY_LABEL[nextDensity]}`}
+            onClick={onCycleDensity}
+          >
+            {DENSITY_KEY_LABEL[density]}
+          </button>
+          {/* Compact numeric page selectors (hidden in micro: one page = all) */}
+          {density !== "micro" && (
+            <div className="home-cli-strip__page-selectors" role="group" aria-label="Page">
+              {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
+                const isCurrentPage = currentPage === i;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
+                    aria-pressed={isCurrentPage}
+                    aria-label={`page ${i + 1} /scan${i + 1}`}
+                    onClick={() => onSelectPage(i * pageSize)}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* Scan (page) button */}
           <button
             type="button"
@@ -177,6 +222,7 @@ export function HomeCliStrip({
             onToggleCategory={onToggleCategory}
             onAddArtists={onAddArtists}
             onScan={onScan}
+            scanPageSize={pageSize}
             onLibrary={goLibrary}
             onHome={goHome}
             onMatt={onMatt}

@@ -269,3 +269,104 @@ describe("CompactDial play controls", () => {
     screen.getByRole("button", { name: "Play KEXP" });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Density modes (remote-control views)
+// ---------------------------------------------------------------------------
+
+describe("CompactDial compact density", () => {
+  it("renders name-only rows numbered by their position in the full active list", () => {
+    const rows = [
+      makeRow({ slug: "kcrw", name: "KCRW" }),
+      makeRow({ slug: "kexp", name: "KEXP" }),
+    ];
+    const { container } = renderDial({
+      activeRows: rows,
+      density: "compact",
+      firstOrdinal: 11, // page 2 of a 10-row compact list
+      onToggleSkip: vi.fn(),
+    });
+
+    const remoteRows = container.querySelectorAll("button.compact-dial__remote-row");
+    expect(remoteRows).toHaveLength(2);
+    expect(remoteRows[0].textContent).toBe("11KCRW");
+    expect(remoteRows[1].textContent).toBe("12KEXP");
+
+    // No FrontDoorRow track detail, no play triangle, no scan checkbox.
+    expect(container.querySelector("[data-testid^='fdrow-']")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Play/ })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+
+    // The grid always spans 10 slots — empties fill the remainder.
+    expect(container.querySelectorAll(".compact-dial__remote-row--empty")).toHaveLength(8);
+  });
+
+  it("tapping a compact row tunes in (no separate play control)", () => {
+    const onTuneIn = vi.fn();
+    const onPlay = vi.fn();
+    const row = makeRow({ slug: "kexp", name: "KEXP" });
+    renderDial({ activeRows: [row], density: "compact", onTuneIn, onPlay });
+
+    fireEvent.click(screen.getByRole("button", { name: "1. KEXP — tune in" }));
+    expect(onTuneIn).toHaveBeenCalledWith(row);
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it("keeps the sampling highlight and active-station cue in compact density", () => {
+    const rows = [
+      makeRow({ slug: "kcrw", name: "KCRW" }),
+      makeRow({ slug: "kexp", name: "KEXP" }),
+    ];
+    const { container } = renderDial({
+      activeRows: rows,
+      density: "compact",
+      samplingRowIdx: 1,
+      activeSlug: "kcrw",
+    });
+    expect(container.querySelector(".compact-dial__remote-row--sampling")?.textContent).toContain("KEXP");
+    expect(container.querySelector(".compact-dial__remote-row--active")?.textContent).toContain("KCRW");
+  });
+});
+
+describe("CompactDial micro density", () => {
+  it("renders every active station as a numbered keypad button, grouped in triads", () => {
+    const rows = [1, 2, 3, 4, 5].map((n) =>
+      makeRow({ slug: `st-${n}`, name: `Station ${n}` }),
+    );
+    const { container } = renderDial({ activeRows: rows, density: "micro" });
+
+    const buttons = [...container.querySelectorAll(".compact-dial__micro-btn")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    // Grouped 3 per row of keys: triads of 3 + 2.
+    const triads = container.querySelectorAll(".compact-dial__micro-triad");
+    expect(triads).toHaveLength(2);
+    expect(triads[0].querySelectorAll("button")).toHaveLength(3);
+    expect(triads[1].querySelectorAll("button")).toHaveLength(2);
+    // Names stay reachable via the accessible label.
+    screen.getByRole("button", { name: "4. Station 4 — tune in" });
+    // No rows, no checkboxes, no FrontDoorRow detail.
+    expect(container.querySelector(".compact-dial__row")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("tapping a keypad button tunes in that station", () => {
+    const onTuneIn = vi.fn();
+    const rows = [1, 2, 3].map((n) => makeRow({ slug: `st-${n}`, name: `Station ${n}` }));
+    renderDial({ activeRows: rows, density: "micro", onTuneIn });
+
+    fireEvent.click(screen.getByRole("button", { name: "2. Station 2 — tune in" }));
+    expect(onTuneIn).toHaveBeenCalledWith(rows[1]);
+  });
+
+  it("marks the sampling and active keys in micro density", () => {
+    const rows = [1, 2, 3].map((n) => makeRow({ slug: `st-${n}`, name: `Station ${n}` }));
+    const { container } = renderDial({
+      activeRows: rows,
+      density: "micro",
+      samplingRowIdx: 2,
+      activeSlug: "st-1",
+    });
+    expect(container.querySelector(".compact-dial__micro-btn--sampling")?.getAttribute("aria-label")).toContain("Station 3");
+    expect(container.querySelector(".compact-dial__micro-btn--active")?.getAttribute("aria-label")).toContain("Station 1");
+  });
+});

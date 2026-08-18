@@ -25,9 +25,14 @@ import { FrontDoorRow } from "./dial/FrontDoorRow";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { CompactPlayButton } from "./CompactPlayButton";
+import { CompactDialRemote } from "./CompactDialRemote";
+import { MicroDialRemote } from "./MicroDialRemote";
 import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../lib/crossingScope";
+import type { DialDensity } from "../lib/dialDensityState";
 
 const COMPACT_DIAL_SIZE = 5;
+/** Rows per page at the "compact" (name-only remote) density. */
+const COMPACT_REMOTE_SIZE = 10;
 
 export interface CompactDialProps {
   /**
@@ -61,6 +66,18 @@ export interface CompactDialProps {
   displayMode?: DialDisplayMode;
   seedsLower?: Set<string>;
   onAddArtist?: (name: string) => void;
+  /**
+   * Display density (default "normal"). "compact" renders name-only remote
+   * rows (10 per page); "micro" renders the whole page as a numbered keypad.
+   * Remote-control densities never expand a row.
+   */
+  density?: DialDensity;
+  /**
+   * 1-based ordinal of activeRows[0] within the FULL active list (i.e. the
+   * caller's scan offset + 1), so remote rows/keys show their position across
+   * the whole list rather than within the visible page. Default 1.
+   */
+  firstOrdinal?: number;
 }
 
 function DialRow({
@@ -167,6 +184,8 @@ export function CompactDial({
   displayMode,
   seedsLower,
   onAddArtist,
+  density = "normal",
+  firstOrdinal = 1,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -174,6 +193,50 @@ export function CompactDial({
     return (
       <div className="compact-dial compact-dial--empty">
         <p className="compact-dial__empty-msg">No stations to show right now.</p>
+      </div>
+    );
+  }
+
+  // ── Micro density: the whole active page as a numbered keypad. Skipped
+  //    rows and track detail stay on the normal density — one tap on the
+  //    remote's density key brings them back. ────────────────────────────
+  if (density === "micro") {
+    return (
+      <div className="compact-dial compact-dial--micro">
+        <MicroDialRemote
+          rows={activeRows}
+          firstOrdinal={firstOrdinal}
+          samplingRowIdx={samplingRowIdx}
+          activeSlug={activeSlug}
+          onTuneIn={onTuneIn}
+        />
+      </div>
+    );
+  }
+
+  // ── Compact density: name-only remote rows, ten to a page. ────────────
+  if (density === "compact") {
+    const emptyRemoteSlots = Math.max(0, COMPACT_REMOTE_SIZE - activeRows.length);
+    return (
+      <div className="compact-dial compact-dial--compact">
+        {activeRows.map((row, i) => (
+          <CompactDialRemote
+            key={row.ds.station.slug}
+            row={row}
+            ordinal={firstOrdinal + i}
+            isSampling={samplingRowIdx === i}
+            isActive={row.ds.station.slug === activeSlug}
+            onTuneIn={onTuneIn}
+          />
+        ))}
+        {/* Empty filler slots so the grid always spans 10 rows */}
+        {Array.from({ length: emptyRemoteSlots }).map((_, i) => (
+          <div
+            key={`empty-${i}`}
+            className="compact-dial__remote-row compact-dial__remote-row--empty"
+            aria-hidden="true"
+          />
+        ))}
       </div>
     );
   }

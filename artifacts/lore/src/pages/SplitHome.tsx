@@ -49,6 +49,13 @@ import {
   type CrossingScope,
 } from "../lib/crossingScope";
 import { writeDialLens } from "../lib/dialLensState";
+import {
+  dialPageSize,
+  nextDialDensity,
+  readDialDensity,
+  writeDialDensity,
+  type DialDensity,
+} from "../lib/dialDensityState";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
@@ -98,6 +105,11 @@ export default function SplitHome() {
       return next;
     });
   }, []);
+
+  // Dial-band display density (persisted, localStorage "lore:dialDensity"):
+  // normal = 5 full rows, compact = 10 name-only remote rows, micro = the
+  // whole active list as a numbered keypad.
+  const [density, setDensity] = useState<DialDensity>(() => readDialDensity());
 
   // Station Finder sheet (Radio Browser search → pin personal stations).
   const [finderOpen, setFinderOpen] = useState(false);
@@ -153,10 +165,23 @@ export default function SplitHome() {
     setScanRowIdx(null);
   }, []);
 
+  // Density cycle key on the scan remote. Switching density changes the page
+  // size, so any running scan stops — its cursor was computed for the old
+  // window. The offset re-clamps/snaps via the render-time clamp below.
+  const cycleDensity = useCallback(() => {
+    if (scanRt.current.active) stopCompactScan();
+    setDensity((prev) => {
+      const next = nextDialDensity(prev);
+      writeDialDensity(next);
+      return next;
+    });
+  }, [stopCompactScan]);
+
   // filteredRows ref to avoid stale closures inside the timer callback.
   const filteredRowsRef = useRef<typeof filteredRows>([]);
   const scanOffsetRef = useRef(0);
   const skippedRef = useRef<ReadonlySet<string>>(new Set());
+  const scanPageSizeRef = useRef(5);
 
   // All-stations deterministic sort — every station (live or not) in one
   // alphabetical order by station name, identical for every listener. The
@@ -232,6 +257,11 @@ export default function SplitHome() {
     [filteredRows, skipped],
   );
 
+  // Rows per scan page at the current density: 5 (normal), 10 (compact), or
+  // the whole active list (micro). Drives the window slice, the page count,
+  // and the scan candidate window alike.
+  const pageSize = dialPageSize(density, activeRows.length);
+
   // Keep refs current so timer callbacks always see the latest values.
   // Synced in an effect (not during render) per the react-hooks/refs rule;
   // timers only fire after render + effects, so the mirror is never stale
@@ -240,16 +270,21 @@ export default function SplitHome() {
     filteredRowsRef.current = activeRows;
     scanOffsetRef.current = scanOffset;
     skippedRef.current = skipped;
+    scanPageSizeRef.current = pageSize;
   });
 
   // Clamp a requested page to the current page count at click/command time,
   // so an out-of-range /scanN (e.g. /scan10 on a 6-row list) lands on the
-  // last valid page instead of an empty window. Also stops any running scan
-  // since the scope is now incompatible (user navigated to a different page).
+  // last valid page instead of an empty window. The requested offset snaps
+  // down to a page boundary at the active density's page size. Also stops
+  // any running scan since the scope is now incompatible (user navigated to
+  // a different page).
   const handleSelectPage = useCallback((offset: number) => {
-    if (offset < 0 || offset % 5 !== 0) return;
-    const maxOffset = Math.max(0, Math.floor((filteredRowsRef.current.length - 1) / 5) * 5);
-    const clamped = Math.min(offset, maxOffset);
+    if (offset < 0) return;
+    const size = scanPageSizeRef.current;
+    const snapped = Math.floor(offset / size) * size;
+    const maxOffset = Math.max(0, Math.floor((filteredRowsRef.current.length - 1) / size) * size);
+    const clamped = Math.min(snapped, maxOffset);
     setScanOffset(clamped);
     // Stop an active scan when the user explicitly picks a different page —
     // the in-progress scan was for the previous window.
@@ -262,21 +297,26 @@ export default function SplitHome() {
   const handleCliScan = handleSelectPage;
 
   // Clamp the scan window when the active list shrinks (skip toggle, filter
-  // change, stations dropping off) so a stale offset never shows an empty
-  // window. Render-time adjustment (React's supported pattern for deriving
-  // state from a changing input; the lint rules forbid setState-in-effect).
-  // The last valid page offset is floor((rows - 1) / 5) * 5.
-  const [prevRowCount, setPrevRowCount] = useState(activeRows.length);
-  if (prevRowCount !== activeRows.length) {
-    setPrevRowCount(activeRows.length);
+  // change, stations dropping off) or the density changes the page size, so
+  // a stale offset never shows an empty or misaligned window. Render-time
+  // adjustment (React's supported pattern for deriving state from a changing
+  // input; the lint rules forbid setState-in-effect). The last valid page
+  // offset is floor((rows - 1) / pageSize) * pageSize.
+  const clampKey = `${activeRows.length}:${pageSize}`;
+  const [prevClampKey, setPrevClampKey] = useState(clampKey);
+  if (prevClampKey !== clampKey) {
+    setPrevClampKey(clampKey);
     if (activeRows.length === 0) {
       if (scanOffset !== 0) setScanOffset(0);
-    } else if (scanOffset >= activeRows.length) {
-      setScanOffset(Math.floor((activeRows.length - 1) / 5) * 5);
+    } else {
+      const snapped = Math.floor(scanOffset / pageSize) * pageSize;
+      const maxOffset = Math.floor((activeRows.length - 1) / pageSize) * pageSize;
+      const clamped = Math.min(snapped, maxOffset);
+      if (clamped !== scanOffset) setScanOffset(clamped);
     }
   }
 
-  const pageCount = Math.max(1, Math.ceil(activeRows.length / 5));
+  const pageCount = Math.max(1, Math.ceil(activeRows.length / pageSize));
 
   // --- Compact scan hop logic ---
   // The scan auto-advances through a list of rows at SCAN_DWELL_MS per hop,
@@ -296,8 +336,9 @@ export default function SplitHome() {
   const scanCandidates = useCallback((mode: "page" | "all"): number[] => {
     const rows = filteredRowsRef.current; // = activeRows via the effect
     const offset = scanOffsetRef.current;
+    const size = scanPageSizeRef.current;
     const start = mode === "page" ? offset : 0;
-    const end = mode === "page" ? Math.min(offset + 5, rows.length) : rows.length;
+    const end = mode === "page" ? Math.min(offset + size, rows.length) : rows.length;
     const out: number[] = [];
     for (let i = start; i < end; i++) {
       if (rows[i]) out.push(i);
@@ -322,9 +363,11 @@ export default function SplitHome() {
         }
         // An all-scan drives the visible window along with it, so the sampled
         // station is always rendered and highlighted (CompactDial only shows
-        // the current five-row active page).
+        // the current active page — 5 rows in normal, 10 in compact, all in
+        // micro, where the snap lands on offset 0 anyway).
         if (mode === "all") {
-          setScanOffset(Math.floor(globalIdx / 5) * 5);
+          const size = scanPageSizeRef.current;
+          setScanOffset(Math.floor(globalIdx / size) * size);
         }
         setScanRowIdx(globalIdx);
         hop(wrappedCandIdx);
@@ -348,7 +391,8 @@ export default function SplitHome() {
     const rows = filteredRowsRef.current; // = activeRows
     const globalIdx = candidates[0];
     if (mode === "all") {
-      setScanOffset(Math.floor(globalIdx / 5) * 5);
+      const size = scanPageSizeRef.current;
+      setScanOffset(Math.floor(globalIdx / size) * size);
     }
     const row = rows[globalIdx];
     if (row && resolvePlaybackSource(row.ds.station) != null) {
@@ -401,12 +445,12 @@ export default function SplitHome() {
 
   const liveStationIds = useMemo(
     () => activeRows
-      .slice(scanOffset, scanOffset + 5)
+      .slice(scanOffset, scanOffset + pageSize)
       .map((row) => row.ds.station.id)
       // Personal (listener-pinned) stations carry negative synthetic ids and
       // have no server-side presence — leave them out of the presence query.
       .filter((id) => id > 0),
-    [activeRows, scanOffset],
+    [activeRows, scanOffset, pageSize],
   );
   const presenceMap = useStationPresence(liveStationIds);
 
@@ -540,7 +584,7 @@ export default function SplitHome() {
 
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
         <CompactDial
-          activeRows={activeRows.slice(scanOffset, scanOffset + 5)}
+          activeRows={activeRows.slice(scanOffset, scanOffset + pageSize)}
           skippedRows={skippedRows}
           samplingRowIdx={scanRowIdx != null ? scanRowIdx - scanOffset : null}
           activeSlug={radio.station?.slug ?? null}
@@ -553,6 +597,8 @@ export default function SplitHome() {
           suppressCrossings={!crossingsOn}
           displayMode="personal"
           onAddArtist={addSeed}
+          density={density}
+          firstOrdinal={scanOffset + 1}
         />
       </section>
 
@@ -577,6 +623,9 @@ export default function SplitHome() {
         crossingScope={crossingScope}
         crossingsOn={crossingsOn}
         onCycleCrossingScope={cycleCrossingScope}
+        totalActiveCount={activeRows.length}
+        density={density}
+        onCycleDensity={cycleDensity}
       />
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">

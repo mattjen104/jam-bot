@@ -380,10 +380,10 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 
     const pageGroup = screen.getByRole("group", { name: "Page" });
     expect(pageGroup.querySelectorAll("button")).toHaveLength(5);
-    // The scan remote has exactly two scan actions plus the crossing-scope
-    // pill — no per-page scan buttons.
+    // The scan remote has exactly two scan actions plus the density key and
+    // the crossing-scope pill — no per-page scan buttons.
     const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    expect(scanRow.querySelectorAll("button")).toHaveLength(8); // 5 pages + Scan + Scan all + scope pill
+    expect(scanRow.querySelectorAll("button")).toHaveLength(9); // 5 pages + density + Scan + Scan all + scope pill
     expect(screen.getByRole("button", { name: "scan this page" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "scan all stations" })).toBeTruthy();
 
@@ -395,6 +395,46 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     expect(
       screen.getByRole("button", { name: "page 4 /scan4" }).getAttribute("aria-pressed"),
     ).toBe("true");
+  });
+
+  it("compact density pages by 10 — /scan2 shows remote rows 11–20 with full-list ordinals", () => {
+    localStorage.setItem("lore:dialDensity", "compact");
+    mockStations.value = Array.from({ length: 23 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    render(<SplitHome />);
+
+    // Page 1: ten name-only remote rows numbered 1–10, no FrontDoorRow detail.
+    expect(document.querySelectorAll("button.compact-dial__remote-row")).toHaveLength(10);
+    screen.getByRole("button", { name: "1. Station st-1 — tune in" });
+    screen.getByRole("button", { name: "10. Station st-10 — tune in" });
+    expect(screen.queryByRole("button", { name: "11. Station st-11 — tune in" })).toBeNull();
+
+    typeCommand("/scan2");
+
+    // Page 2 at the 10-row page size — not offset 5 snapping back to page 1.
+    screen.getByRole("button", { name: "11. Station st-11 — tune in" });
+    screen.getByRole("button", { name: "20. Station st-20 — tune in" });
+    expect(screen.queryByRole("button", { name: "10. Station st-10 — tune in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "21. Station st-21 — tune in" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("micro density shows the whole list as a numbered keypad with no page selectors", () => {
+    localStorage.setItem("lore:dialDensity", "micro");
+    mockStations.value = Array.from({ length: 23 }, (_, i) =>
+      makeStation(`st-${i + 1}`, null),
+    );
+    render(<SplitHome />);
+
+    expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(23);
+    screen.getByRole("button", { name: "1. Station st-1 — tune in" });
+    screen.getByRole("button", { name: "23. Station st-23 — tune in" });
+    expect(screen.queryByRole("group", { name: "Page" })).toBeNull();
+    // The count label is still on the remote.
+    expect(screen.getByRole("group", { name: "Scan commands" }).textContent).toContain("23 stations");
   });
 
   it("clicking a numeric page selector changes the visible window", () => {

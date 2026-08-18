@@ -22,5 +22,12 @@ into the same range.
    main-repl/main..HEAD`). If your branch is mainline + your one scoped
    commit, resubmit with a `drift_reason` explaining the provenance; that
    passes validation.
-3. Reverting someone else's in-flight work inside your task can conflict with
+3. If the unrelated work got swept INTO your own commit (not a separate
+   commit), a drift_reason alone is not enough — split it out: `git reset
+   --mixed <base>`, commit the foreign files separately with a clear
+   provenance message, then commit your scoped work. Shared files (e.g. a
+   common stylesheet) can be divided by regenerating the foreign-only version
+   (subtract your known insertions) and committing it first. Then resubmit
+   with `request_fresh_code_review: true`.
+4. Reverting someone else's in-flight work inside your task can conflict with
    other active tasks building on that state.

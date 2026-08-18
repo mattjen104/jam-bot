@@ -7914,6 +7914,128 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-bottom-color: hsl(var(--border) / 0.15);
 }
 
+/* ── Compact density: name-only remote rows (10 per page) ─────────────────
+   Half the height of a normal row (10% of the band). Ordinal + station name
+   only; the whole row is the tune-in target. */
+.compact-dial__remote-row {
+  appearance: none;
+  flex: 0 0 10%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.2;
+  color: hsl(var(--foreground));
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.compact-dial__remote-row:hover,
+.compact-dial__remote-row:focus-visible {
+  background: hsl(var(--muted) / 0.5);
+}
+.compact-dial__remote-row:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+.compact-dial__remote-ordinal {
+  flex: 0 0 auto;
+  min-width: 2ch;
+  text-align: right;
+  color: hsl(var(--faint));
+}
+.compact-dial__remote-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-dial__remote-row--active .compact-dial__remote-name {
+  color: hsl(var(--accent));
+}
+/* Sampling highlight mirrors .compact-dial__row--sampling. */
+.compact-dial__remote-row--sampling {
+  background: hsl(var(--live) / 0.07);
+  outline: 1px solid hsl(var(--live) / 0.25);
+}
+.compact-dial__remote-row--empty {
+  border-bottom-color: hsl(var(--border) / 0.15);
+  pointer-events: none;
+}
+
+/* ── Micro density: the whole active list as a numbered keypad ────────────
+   Buttons are grouped into triads that share key seams (same joined-key
+   grammar as the page selectors); the grid wraps to fill the band. */
+.compact-dial__micro-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior-y: contain;
+}
+.compact-dial__micro-triad {
+  display: flex;
+  flex: 0 0 auto;
+}
+.compact-dial__micro-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid hsl(var(--foreground) / 0.68);
+  border-radius: 2px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.compact-dial__micro-btn + .compact-dial__micro-btn {
+  margin-left: -1px;
+}
+.compact-dial__micro-btn:hover,
+.compact-dial__micro-btn:focus-visible {
+  position: relative;
+  z-index: 1;
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.5);
+}
+.compact-dial__micro-btn:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+/* Currently tuned station reads as the lit key (same as the active page
+   button on the scan remote). */
+.compact-dial__micro-btn--active {
+  color: hsl(var(--background));
+  background: hsl(var(--foreground) / 0.82);
+  border-color: hsl(var(--foreground) / 0.82);
+}
+.compact-dial__micro-btn--sampling {
+  color: hsl(var(--live));
+  border-color: hsl(var(--live) / 0.6);
+  background: hsl(var(--live) / 0.1);
+}
+
 /* ── CLI strip (middle seam) ─────────────────────────────────────────────── */
 .home-cli-strip {
   position: relative;
@@ -8072,6 +8194,21 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--background));
   background: hsl(var(--foreground) / 0.9);
   border-color: hsl(var(--foreground) / 0.9);
+}
+/* Always-visible count of scan-included stations, plus the density cycle
+   key (5 → 10 → all). Both sit at the left edge of the scan remote. */
+.home-cli-strip__station-count {
+  flex: 0 0 auto;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.2;
+  color: hsl(var(--faint));
+  white-space: nowrap;
+  padding-right: 8px;
+}
+.home-cli-strip__density-btn {
+  min-width: 34px;
+  margin-right: 6px;
 }
 .home-cli-strip__scan-btn {
   min-width: 52px;
