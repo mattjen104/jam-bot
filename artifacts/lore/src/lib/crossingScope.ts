@@ -123,9 +123,15 @@ export interface CrossingScopeDetail {
 /**
  * Data for the inline ⬤ detail panel: which artists crossed at this scope
  * and how many crossings in total. Artist names come from the best available
- * source — the live show's top artists for now/set, the station-level
- * topArtistNames otherwise (the API exposes no per-window name lists beyond
- * that, so wider scopes reuse the station's known crossing artists).
+ * source:
+ *   now/set   → live show's topArtists/topArtistNames (set-level, real-time)
+ *   24h       → ds.topArtistNames24h (per-window from the API)
+ *   7d        → ds.topArtistNames7d  (per-window from the API)
+ *   lifetime  → ds.topArtistNamesLifetime (per-window from the API)
+ *
+ * The per-window lists are populated by the server's crossings aggregate and
+ * always match the displayed scope, so a 7d panel never shows an artist who
+ * only crossed in the last 24 hours.
  */
 export function crossingScopeDetail(ds: DialStation, scope: CrossingScope): CrossingScopeDetail {
   const show = liveShow(ds);
@@ -150,15 +156,15 @@ export function crossingScopeDetail(ds: DialStation, scope: CrossingScope): Cros
     }
     case "24h":
       count = ds.crossings + ds.artistCrossings;
-      source = ds.topArtistNames ?? [];
+      source = ds.topArtistNames24h ?? [];
       break;
     case "7d":
       count = (ds.weekCrossings ?? 0) + (ds.weekArtistCrossings ?? 0);
-      source = ds.topArtistNames ?? [];
+      source = ds.topArtistNames7d ?? [];
       break;
     case "lifetime":
       count = (ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0);
-      source = ds.topArtistNames ?? [];
+      source = ds.topArtistNamesLifetime ?? [];
       break;
   }
   const artists = source

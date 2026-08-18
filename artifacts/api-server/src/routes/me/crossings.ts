@@ -405,6 +405,10 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         weekArtistCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${notLibHit} and ${artistMatch})::int`,
         monthCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${libHit})::int`,
         monthArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${notLibHit} and ${artistMatch})::int`,
+        // Collect all matching artist names (with repeats) per window so we
+        // can rank by frequency in JS.  FILTER keeps only crossing spins.
+        topArtistNamesRaw24h: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${libHit} or (${notLibHit} and ${artistMatch})))`,
+        topArtistNamesRaw7d:  sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWeek}   and (${libHit} or (${notLibHit} and ${artistMatch})))`,
       })
       .from(spinsTable)
       .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -439,8 +443,10 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
     db
       .select({
         stationSlug: stationsTable.slug,
-        lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
-        lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
+        lifetimeCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
+        lifetimeArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
+        // Collect all matching artist names so we can rank by frequency in JS.
+        topArtistNamesRawLifetime:  sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${libHit} or (${notLibHit} and ${artistMatch}))`,
       })
       .from(spinsTable)
       .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -486,6 +492,9 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
       lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+      topArtistNames24h:       topArtistsFromRaw(r?.topArtistNamesRaw24h ?? null),
+      topArtistNames7d:        topArtistsFromRaw(r?.topArtistNamesRaw7d  ?? null),
+      topArtistNamesLifetime:  topArtistsFromRaw(l?.topArtistNamesRawLifetime ?? null),
     };
   });
 }
@@ -741,8 +750,13 @@ router.get("/me/crossings", h(async (req, res) => {
  */
 
 type BlendedCrossingsRow = CrossingsRow & { topArtistNames: string[] };
-/** Deduplicate and rank artist names from an array_agg result, returning top 5. */
-function blendedTopArtists(raw: string[] | null): string[] {
+
+/**
+ * Deduplicate and rank artist names from a Postgres array_agg result.
+ * Used for both the personal per-window lists (top 3) and the blended
+ * station-level list (top 5) so the ranking logic stays in one place.
+ */
+function topArtistsFromRaw(raw: string[] | null, limit = 3): string[] {
   if (!raw?.length) return [];
   const counts = new Map<string, number>();
   for (const name of raw) {
@@ -751,8 +765,13 @@ function blendedTopArtists(raw: string[] | null): string[] {
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
+    .slice(0, limit)
     .map(([name]) => name);
+}
+
+/** Deduplicate and rank artist names from an array_agg result, returning top 5. */
+function blendedTopArtists(raw: string[] | null): string[] {
+  return topArtistsFromRaw(raw, 5);
 }
 
 const BLENDED_CACHE_ROW_ID = 1;

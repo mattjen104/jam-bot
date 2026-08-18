@@ -541,6 +541,12 @@ export interface DialCrossing {
   lifetimeArtistCrossings: number;
   /** Top 5 crossing artist names by frequency. Only populated by the blended endpoint. */
   topArtistNames?: string[];
+  /** Top crossing artist names for the 24h window (personal mode; up to 3). */
+  topArtistNames24h?: string[];
+  /** Top crossing artist names for the 7d window (personal mode; up to 3). */
+  topArtistNames7d?: string[];
+  /** Top crossing artist names over all time (personal mode; up to 3). */
+  topArtistNamesLifetime?: string[];
 }
 
 /**

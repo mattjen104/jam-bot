@@ -2266,6 +2266,22 @@ export interface CrossingsRow {
   monthArtistCrossings: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
+  /**
+   * Top crossing artist names for the 24h window (up to 3, ranked by
+   * play-frequency).  Optional so old cached rows without this field still
+   * parse cleanly; consumers must treat undefined as [].
+   */
+  topArtistNames24h?: string[];
+  /**
+   * Top crossing artist names for the 7d window (up to 3).
+   * Optional for the same backward-compat reason as topArtistNames24h.
+   */
+  topArtistNames7d?: string[];
+  /**
+   * Top crossing artist names over all time (up to 3).
+   * Optional for the same backward-compat reason as topArtistNames24h.
+   */
+  topArtistNamesLifetime?: string[];
 }
 
 export const crossingsCacheTable = pgTable("crossings_cache", {

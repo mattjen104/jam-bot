@@ -46,6 +46,9 @@ function makeDs(overrides: Partial<DialStation> = {}): DialStation {
     monthCrossings: 0, monthArtistCrossings: 0,
     lifetimeCrossings: 0, lifetimeArtistCrossings: 0,
     topArtistNames: [],
+    topArtistNames24h: [],
+    topArtistNames7d: [],
+    topArtistNamesLifetime: [],
     ...overrides,
   } as DialStation;
 }
@@ -128,7 +131,7 @@ describe("crossingScopeDetail", () => {
     const ds = makeDs({
       crossings: 3,
       artistCrossings: 2,
-      topArtistNames: ["Wet Leg", "wet leg", "Deftones", "Weezer", "Pavement"],
+      topArtistNames24h: ["Wet Leg", "wet leg", "Deftones", "Weezer", "Pavement"],
     });
     const d = crossingScopeDetail(ds, "24h");
     expect(d.scopeLabel).toBe("24h");

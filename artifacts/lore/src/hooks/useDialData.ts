@@ -150,6 +150,19 @@ export interface DialStation {
    * DialView reads per-show topArtists/topArtistNames instead.
    */
   topArtistNames: string[];
+  /**
+   * Top crossing artist names for the 24h window (personal mode only; up to 3).
+   * Empty in blended mode — blended uses the flat topArtistNames instead.
+   */
+  topArtistNames24h: string[];
+  /**
+   * Top crossing artist names for the 7d window (personal mode only; up to 3).
+   */
+  topArtistNames7d: string[];
+  /**
+   * Top crossing artist names over all time (personal mode only; up to 3).
+   */
+  topArtistNamesLifetime: string[];
 }
 
 export interface LiveArtistSuggestion {
@@ -1052,7 +1065,20 @@ export function useDialData(
       : crossingsPhase;
 
   const serverCrossingsBySlug = useMemo(() => {
-    const m = new Map<string, { crossings: number; artistCrossings: number; weekCrossings: number; weekArtistCrossings: number; monthCrossings: number; monthArtistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number; topArtistNames: string[] }>();
+    const m = new Map<string, {
+      crossings: number;
+      artistCrossings: number;
+      weekCrossings: number;
+      weekArtistCrossings: number;
+      monthCrossings: number;
+      monthArtistCrossings: number;
+      lifetimeCrossings: number;
+      lifetimeArtistCrossings: number;
+      topArtistNames: string[];
+      topArtistNames24h: string[];
+      topArtistNames7d: string[];
+      topArtistNamesLifetime: string[];
+    }>();
     for (const cx of selectedCrossings ?? []) {
       m.set(cx.stationSlug, {
         crossings: cx.crossings,
@@ -1064,6 +1090,9 @@ export function useDialData(
         lifetimeCrossings: cx.lifetimeCrossings,
         lifetimeArtistCrossings: cx.lifetimeArtistCrossings,
         topArtistNames: cx.topArtistNames ?? [],
+        topArtistNames24h: cx.topArtistNames24h ?? [],
+        topArtistNames7d: cx.topArtistNames7d ?? [],
+        topArtistNamesLifetime: cx.topArtistNamesLifetime ?? [],
       });
     }
     return m;
@@ -1459,6 +1488,16 @@ export function useDialData(
           ? serverCx.topArtistNames
           : [];
 
+      // Per-window artist names: only populated in personal mode (the server
+      // returns them from the crossings aggregate queries).  In blended mode
+      // the flat topArtistNames is used for the provenance sentence instead.
+      const topArtistNames24h: string[] =
+        displayMode !== "blended" ? (serverCx?.topArtistNames24h ?? []) : [];
+      const topArtistNames7d: string[] =
+        displayMode !== "blended" ? (serverCx?.topArtistNames7d ?? []) : [];
+      const topArtistNamesLifetime: string[] =
+        displayMode !== "blended" ? (serverCx?.topArtistNamesLifetime ?? []) : [];
+
       return {
         station,
         isLive,
@@ -1472,6 +1511,9 @@ export function useDialData(
         lifetimeCrossings,
         lifetimeArtistCrossings,
         topArtistNames,
+        topArtistNames24h,
+        topArtistNames7d,
+        topArtistNamesLifetime,
         liveTrack: isLive ? (nowPlayingBySlug.get(station.slug) ?? null) : null,
       };
     })
