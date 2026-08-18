@@ -184,7 +184,21 @@ async function installRoutes(page: Page) {
 // ---------------------------------------------------------------------------
 
 async function loadFrontDoor(page: Page) {
-  await page.goto("/lore/");
+  const response = await page.goto("/lore/");
+  // Distinguish "dev server down / stale proxy" (502 etc.) from a genuine
+  // rendering regression: a non-OK document response means the app never
+  // loaded, so the .fdrow expectation below would time out with no
+  // explanation. Fail loudly with the real cause instead.
+  expect(
+    response?.ok(),
+    `front door document request failed (status ${response?.status()}) — is the lore dev server running?`,
+  ).toBe(true);
+  // App shell must mount before rows are judged; if this fails, the bundle
+  // did not boot (crash / blank page), not a row-filter problem.
+  await expect(
+    page.locator(".split-home"),
+    "app shell (.split-home) never mounted — bundle failed to boot",
+  ).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".fdrow").first()).toBeVisible({ timeout: 20_000 });
 }
 

@@ -18,3 +18,4 @@ Fixture pitfalls learned while reviving specs (**How to apply** when writing new
 
 - Library first-run auto-open: an empty library (+ no seeds, no avatar) auto-opens the import modal once per session — empty-state specs must pre-set `sessionStorage lore:first-run-prompted=1` via addInitScript or clicks get intercepted.
 - The ImportStrip "Add more +" entry point is gone (done jobs render no strip); its spec was removed — don't resurrect it.
+- A dead/stale lore dev workflow makes localhost:80/lore/ return 502 → every spec's `.fdrow` wait times out looking like a rendering regression. mobileFrontDoor's loadFrontDoor now asserts response.ok() + `.split-home` mount first, so server-down vs row-filter failures are distinguishable. Restart the `artifacts/lore: web` workflow before believing a direct (non-gate) spec run.
