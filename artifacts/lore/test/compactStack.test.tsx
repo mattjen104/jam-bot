@@ -1056,6 +1056,107 @@ describe("CompactStack artist release cycle", () => {
 });
 
 // ---------------------------------------------------------------------------
+// → Stack link href (swapped vs. unswapped)
+// ---------------------------------------------------------------------------
+
+describe("CompactStack → Stack link href", () => {
+  const portisheadReleases = [
+    { releaseGroupMbid: "rg-dummy", title: "Dummy", primaryType: "Album", releaseYear: 1994, artworkUrl: null },
+    { releaseGroupMbid: "rg-portishead", title: "Portishead", primaryType: "Album", releaseYear: 1997, artworkUrl: null },
+    { releaseGroupMbid: "rg-third", title: "Third", primaryType: "Album", releaseYear: 2008, artworkUrl: null },
+  ];
+
+  it("targets the kept album key when no swap is active", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead" }),
+    ];
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+    await screen.findByRole("button", { name: "Stack" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    expect(setLocation).toHaveBeenCalledWith(
+      `/library?openAlbum=${encodeURIComponent("Portishead\x1fPortishead")}`,
+    );
+  });
+
+  it("targets the swapped release after a filmstrip tile tap", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead" }),
+    ];
+    artistReleasesByMbid.set("m1", portisheadReleases);
+    rgTracksByMbid.set("rg-third", {
+      rgMbid: "rg-third",
+      rgTitle: "Third",
+      rgType: "Album",
+      releaseYear: 2008,
+      artworkUrl: null,
+      tracks: [{ mbid: "t-silence", title: "Silence", artist: "Portishead" }],
+    });
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+
+    // Tap the "Third" tile in the filmstrip.
+    const tile = await screen.findByRole("button", { name: "View Third (2008)" });
+    fireEvent.click(tile);
+
+    // Wait for the swap to settle (the "Collapse Third" header appears).
+    await screen.findByRole("button", { name: "Collapse Third" });
+
+    // → Stack now links to the swapped album, not the kept one.
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    expect(setLocation).toHaveBeenCalledWith(
+      `/library?openAlbum=${encodeURIComponent("Third\x1fPortishead")}`,
+    );
+  });
+
+  it("updates the link again when the listener swaps to yet another release", async () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "Portishead", artist: "Portishead", releaseGroupMbid: "rg-portishead" }),
+    ];
+    artistReleasesByMbid.set("m1", portisheadReleases);
+    rgTracksByMbid.set("rg-third", {
+      rgMbid: "rg-third",
+      rgTitle: "Third",
+      rgType: "Album",
+      releaseYear: 2008,
+      artworkUrl: null,
+      tracks: [{ mbid: "t-silence", title: "Silence", artist: "Portishead" }],
+    });
+    rgTracksByMbid.set("rg-dummy", {
+      rgMbid: "rg-dummy",
+      rgTitle: "Dummy",
+      rgType: "Album",
+      releaseYear: 1994,
+      artworkUrl: null,
+      tracks: [{ mbid: "t-roads", title: "Roads", artist: "Portishead" }],
+    });
+    renderStack();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
+    );
+
+    // First swap: Third
+    const thirdTile = await screen.findByRole("button", { name: "View Third (2008)" });
+    fireEvent.click(thirdTile);
+    await screen.findByRole("button", { name: "Collapse Third" });
+
+    // Second swap: Dummy — link must update to the new swap
+    fireEvent.click(screen.getByRole("button", { name: "View Dummy (1994)" }));
+    await screen.findByRole("button", { name: "Collapse Dummy" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    expect(setLocation).toHaveBeenCalledWith(
+      `/library?openAlbum=${encodeURIComponent("Dummy\x1fPortishead")}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Play controls (Task 216)
 // ---------------------------------------------------------------------------
 

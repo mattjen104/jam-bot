@@ -881,7 +881,15 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, 
 
   // ── Expanded: header row + notes in place, remaining rows still listed ──
   if (expandedGroup) {
-    const stackHref = `/library?openAlbum=${encodeURIComponent(expandedGroup.key)}`;
+    // When a filmstrip swap is active, link to the album the listener is
+    // actually viewing (derived from the swapped release's title + the kept
+    // album's artist, mirroring the buildAlbumGroups key format used by the
+    // Library page). Fall back to the kept group's own key when no swap is
+    // showing.
+    const stackTarget = swappedAlbum
+      ? `${swappedAlbum.rgTitle ?? ""}\x1f${expandedGroup.artist}`
+      : expandedGroup.key;
+    const stackHref = `/library?openAlbum=${encodeURIComponent(stackTarget)}`;
     return (
       <div
         className="compact-stack compact-stack--expanded"
