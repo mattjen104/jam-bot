@@ -106,6 +106,7 @@ import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js"
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
 import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
+import { applyReleaseDateMigration } from "./lore/release-date-migration.js";
 import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
 import { startPitchforkJob } from "./lore/pitchfork-job.js";
 import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
@@ -205,6 +206,7 @@ async function bootLore(): Promise<void> {
     // must also catch stations discovered after the first run. Both steps
     // are idempotent.
     await runMigration("applyReleaseYearMigration", applyReleaseYearMigration);
+    await runMigration("applyReleaseDateMigration", applyReleaseDateMigration);
     await runMigration("applySleepStationsMigration", applySleepStationsMigration);
     // Classify era-themed / single-genre stations into the hidden era/genre
     // browse mode. Runs AFTER sleep classification so sleep_mode rows are

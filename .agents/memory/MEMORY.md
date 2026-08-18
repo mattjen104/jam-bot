@@ -1,3 +1,4 @@
+// hint: Logic changed on both sides. Requires understanding intent of each change.
 - [List provenance admin workflow](list-provenance-workflow.md) — 4-table layer: scrape list → enrich recording release-groups → provenance appears; bridge table must be seeded first.
 - [Synced-listening strategy](social-listening-strategy.md) — jam-bot "agnostic spicetify": coordinate-never-redistribute, monetize the conductor, desktop-only, ban-risk reality.
 - [jam-bot persona & escalation](jam-bot-persona.md) — music-teacher voice that escalates when razzed; uses in-memory turn buffer (no Slack history scope) fed to askLLM.
@@ -139,4 +140,3 @@
 - [Native checkboxes invisible on dark mobile panels](native-checkbox-dark-mobile.md) — appearance:none + custom border/check required; computed styles lie, verify via screenshot.
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
 - [Crossing-positive filter test fallout](crossing-positive-filter-tests.md) — default-on filter hides zero-crossing fixtures; pin lore:radioMode or lore:crossingScope in unrelated specs.
-- [Shared-DB top-N fixture sizing](shared-db-topn-fixture-sizing.md) — fixed play-count fixtures rot as the shared dev archive grows past them; size off the live top-N boundary + margin via generate_series, and count canonical-alias group spins when topping up.

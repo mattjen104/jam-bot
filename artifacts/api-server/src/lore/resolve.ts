@@ -411,6 +411,7 @@ export async function upsertRecording(
       artworkUrl: recordingsTable.artworkUrl,
       genres: recordingsTable.genres,
       releaseYear: recordingsTable.releaseYear,
+      releaseDate: recordingsTable.releaseDate,
       genreEnrichedAt: recordingsTable.genreEnrichedAt,
     })
     .from(recordingsTable)
@@ -427,12 +428,14 @@ export async function upsertRecording(
   // import never fans out into hundreds of MB/Last.fm hits.
   let genres = existing?.genres ?? null;
   let releaseYear = existing?.releaseYear ?? null;
+  let releaseDate = existing?.releaseDate ?? null;
   let genreEnrichedAt = existing?.genreEnrichedAt ?? null;
   if (enrichLinks && genreEnrichedAt == null) {
     try {
       const g = await fetchGenreAndYear(r.mbid as string, r.artist, r.artistMbid);
       if (genres == null && g.genres.length) genres = g.genres;
       if (releaseYear == null && g.year != null) releaseYear = g.year;
+      if (releaseDate == null && g.releaseDate != null) releaseDate = g.releaseDate;
       genreEnrichedAt = new Date();
     } catch (err) {
       console.error("[lore] genre/year enrichment failed", r.mbid, err);
@@ -485,6 +488,7 @@ export async function upsertRecording(
       links,
       genres,
       releaseYear,
+      releaseDate,
       genreEnrichedAt,
     })
     .onConflictDoUpdate({
@@ -495,6 +499,7 @@ export async function upsertRecording(
         artistMbid: r.artistMbid ?? null,
         ...(genres ? { genres } : {}),
         ...(releaseYear != null ? { releaseYear } : {}),
+        ...(releaseDate != null ? { releaseDate } : {}),
         ...(genreEnrichedAt ? { genreEnrichedAt } : {}),
         ...(r.isrc ? { isrc: r.isrc } : {}),
         ...(newArtwork ? { artworkUrl: newArtwork } : {}),
@@ -618,6 +623,8 @@ export interface SpinChangedEvent {
   releaseGroupMbid: string | null;
   /** MusicBrainz first-release year for the recording, used by the Dial age-tier filter. Null when unknown/unresolved. */
   releaseYear: number | null;
+  /** MusicBrainz first-release date in partial-ISO form (YYYY / YYYY-MM / YYYY-MM-DD), used by the Dial First (premiere) tier. Null when unknown/unresolved. */
+  releaseDate: string | null;
   /** True when this is the first time this recording (by MBID) has appeared in the archive. */
   isFirstSpin: boolean;
   /** When Lore observed the metadata (spin write time), ISO 8601. Mirrors spins.observed_at. */
@@ -935,6 +942,7 @@ async function logSpinIfChangedInner(
       let isFirstSpin = false;
       let releaseGroupMbid: string | null = null;
       let releaseYear: number | null = null;
+      let releaseDate: string | null = null;
       if (r.mbid) {
         // Post-persist metadata is OPTIONAL enrichment for the SSE frame: the
         // spin is already written, so a failure here must never surface as
@@ -959,7 +967,10 @@ async function logSpinIfChangedInner(
               )
               .limit(1),
             db
-              .select({ releaseYear: recordingsTable.releaseYear })
+              .select({
+                releaseYear: recordingsTable.releaseYear,
+                releaseDate: recordingsTable.releaseDate,
+              })
               .from(recordingsTable)
               .where(eq(recordingsTable.mbid, r.mbid))
               .limit(1),
@@ -967,6 +978,7 @@ async function logSpinIfChangedInner(
           isFirstSpin = prior.rows.length === 0;
           releaseGroupMbid = rgRow[0]?.rg ?? null;
           releaseYear = recRow[0]?.releaseYear ?? null;
+          releaseDate = recRow[0]?.releaseDate ?? null;
         } catch (metaErr) {
           console.warn(
             "[lore] post-persist metadata lookup failed; emitting spin-changed with fallback metadata",
@@ -986,6 +998,7 @@ async function logSpinIfChangedInner(
         artistMbid: r.artistMbid ?? null,
         releaseGroupMbid,
         releaseYear,
+        releaseDate,
         isFirstSpin,
         observedAt: new Date().toISOString(),
         confidence: r.confidence,

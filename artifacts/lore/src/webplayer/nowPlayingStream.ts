@@ -44,6 +44,8 @@ export interface SpinStreamEvent {
   artistMbid?: string | null;
   /** MusicBrainz first-release year for the recording; null when unknown. */
   releaseYear?: number | null;
+  /** MusicBrainz first-release date in partial-ISO form; null when unknown. */
+  releaseDate?: string | null;
   /** True when this is the first-ever appearance of this recording in the archive. */
   isFirstSpin?: boolean;
 }
@@ -109,6 +111,7 @@ function openStream(): void {
           ...(data.isArtistHit != null ? { isArtistHit: data.isArtistHit } : {}),
           ...(data.artistMbid != null ? { artistMbid: data.artistMbid } : {}),
           ...(data.releaseYear != null ? { releaseYear: data.releaseYear } : {}),
+          ...(data.releaseDate != null ? { releaseDate: data.releaseDate } : {}),
           ...(data.isFirstSpin != null ? { isFirstSpin: data.isFirstSpin } : {}),
         };
       }

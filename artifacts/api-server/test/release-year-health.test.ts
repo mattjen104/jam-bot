@@ -27,8 +27,11 @@ import { createServer } from "node:http";
 // Hoist mocks — must be evaluated before the module graph is resolved.
 // ---------------------------------------------------------------------------
 
-const { mockFetchReleaseYear } = vi.hoisted(() => ({
-  mockFetchReleaseYear: vi.fn<[string, AbortSignal?], Promise<number | null>>(),
+const { mockFetchReleaseDateInfo } = vi.hoisted(() => ({
+  mockFetchReleaseDateInfo: vi.fn<
+    [string, AbortSignal?],
+    Promise<{ year: number | null; releaseDate: string | null } | null>
+  >(),
 }));
 
 const mockDbSelect = vi.fn();
@@ -54,7 +57,8 @@ vi.mock("@workspace/song-enrichment", async (importOriginal) => {
     ...actual,
     musicbrainzEnabled: () => true,
     createMbResolver: () => ({
-      fetchReleaseYear: mockFetchReleaseYear,
+      fetchReleaseYear: vi.fn().mockResolvedValue(null),
+      fetchReleaseDateInfo: mockFetchReleaseDateInfo,
       fetchIsrcByMbid: vi.fn().mockResolvedValue(null),
       resolveByIsrc: vi.fn().mockResolvedValue(null),
       resolveByText: vi.fn().mockResolvedValue(null),
@@ -238,7 +242,7 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
       });
 
     // Simulate a transient MB 503 — should be treated as a retryable error.
-    mockFetchReleaseYear.mockRejectedValueOnce(
+    mockFetchReleaseDateInfo.mockRejectedValueOnce(
       new Error("MusicBrainz 503 Service Unavailable"),
     );
 
@@ -270,7 +274,7 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
         }),
       });
 
-    mockFetchReleaseYear.mockRejectedValueOnce(new Error("fetch failed: ECONNRESET"));
+    mockFetchReleaseDateInfo.mockRejectedValueOnce(new Error("fetch failed: ECONNRESET"));
 
     await backfillReleaseYearBatch(10);
 
@@ -304,7 +308,7 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
       });
 
     // Genuine MB "no date" — not an error, resolver resolved with null.
-    mockFetchReleaseYear.mockResolvedValueOnce(null);
+    mockFetchReleaseDateInfo.mockResolvedValueOnce({ year: null, releaseDate: null });
 
     const result = await backfillReleaseYearBatch(10);
 
@@ -351,7 +355,7 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
         }),
       });
 
-    mockFetchReleaseYear.mockResolvedValueOnce(1977);
+    mockFetchReleaseDateInfo.mockResolvedValueOnce({ year: 1977, releaseDate: "1977" });
 
     await backfillReleaseYearBatch(10);
 
@@ -405,7 +409,7 @@ describe("startReleaseYearBackfillJob — tick scheduling", () => {
         }),
       });
 
-    mockFetchReleaseYear.mockResolvedValueOnce(1984);
+    mockFetchReleaseDateInfo.mockResolvedValueOnce({ year: 1984, releaseDate: "1984" });
 
     // Fresh module import so 'running = false' and the scheduler starts cleanly.
     const { startReleaseYearBackfillJob } = await import(

@@ -22,6 +22,11 @@ export interface StationRecentSpin {
    * @nullable
    */
   releaseYear?: number | null;
+  /**
+   * MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`). Used by the Dial First (premiere) tier. Null when unknown or unresolved.
+   * @nullable
+   */
+  releaseDate?: string | null;
   /** True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved). */
   isFirstSpin: boolean;
   /** True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests. */

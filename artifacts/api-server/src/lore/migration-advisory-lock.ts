@@ -19,6 +19,7 @@ export const MIGRATION_LOCK_KEYS = {
   automationClass: 7_233_141_500n,
   stationSchedule: 7_233_141_501n,
   attendance: 7_233_141_502n,
+  releaseDate: 7_233_141_503n,
 } as const;
 
 /**

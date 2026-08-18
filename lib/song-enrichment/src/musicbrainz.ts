@@ -243,6 +243,17 @@ export interface IsolatedMbResolver {
    * "checked" sentinel) from a genuine "no data" null (do write it).
    */
   fetchReleaseYear(mbid: string, signal?: AbortSignal): Promise<number | null>;
+  /**
+   * Same lookup as `fetchReleaseYear` but returns the raw MusicBrainz
+   * `first-release-date` string alongside the derived year, preserving MB's
+   * partial-ISO granularity (`YYYY` / `YYYY-MM` / `YYYY-MM-DD`) so premiere
+   * detection isn't limited to whole-year comparisons. Same error taxonomy:
+   * throws on 5xx/network so the caller leaves the checked sentinel unset.
+   */
+  fetchReleaseDateInfo(
+    mbid: string,
+    signal?: AbortSignal,
+  ): Promise<{ year: number | null; releaseDate: string | null } | null>;
 }
 
 export function createMbResolver(): IsolatedMbResolver {
@@ -314,6 +325,14 @@ export function createMbResolver(): IsolatedMbResolver {
     },
 
     async fetchReleaseYear(mbid: string, signal?: AbortSignal): Promise<number | null> {
+      const info = await this.fetchReleaseDateInfo(mbid, signal);
+      return info?.year ?? null;
+    },
+
+    async fetchReleaseDateInfo(
+      mbid: string,
+      signal?: AbortSignal,
+    ): Promise<{ year: number | null; releaseDate: string | null } | null> {
       if (!musicbrainzEnabled() || !mbid.trim()) return null;
       // 4xx errors (404 MBID not in MB, 400 malformed) are permanent client
       // failures — return null so the caller writes the "checked" sentinel and
@@ -324,7 +343,8 @@ export function createMbResolver(): IsolatedMbResolver {
           `/recording/${encodeURIComponent(mbid.trim())}?inc=genres&fmt=json`,
           signal,
         );
-        return parseRecordingGenreYear(body).year;
+        const { year, releaseDate } = parseRecordingGenreYear(body);
+        return { year, releaseDate };
       } catch (err) {
         const msg = String(err);
         // mbFetchOnChain throws `Error: MusicBrainz <status> for ...`
@@ -794,10 +814,34 @@ export function parseArtistReleaseGroups(
   return out.slice(0, cap);
 }
 
-/** Pure: ranked genre names + first-release year from a recording body. */
+/**
+ * Pure: validate a MusicBrainz partial-ISO date string (`YYYY`, `YYYY-MM`,
+ * or `YYYY-MM-DD`) and return it unchanged, or null when the shape is not one
+ * of the three partial forms. Partiality is preserved deliberately — the
+ * Dial's premiere (First) tier reads coarse dates permissively.
+ */
+export function parsePartialReleaseDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const s = value.trim();
+  const m = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/.exec(s);
+  if (!m) return null;
+  if (m[2] !== undefined) {
+    const month = Number(m[2]);
+    if (month < 1 || month > 12) return null;
+  }
+  if (m[3] !== undefined) {
+    const day = Number(m[3]);
+    if (day < 1 || day > 31) return null;
+  }
+  return s;
+}
+
+/** Pure: ranked genre names + first-release year/date from a recording body. */
 export function parseRecordingGenreYear(body: unknown): {
   genres: string[];
   year: number | null;
+  /** Raw `first-release-date` in MB's partial-ISO form, when present and valid. */
+  releaseDate: string | null;
 } {
   const b = body as {
     genres?: Array<{ name?: string; count?: number }>;
@@ -808,23 +852,23 @@ export function parseRecordingGenreYear(body: unknown): {
     .sort((a, c) => (c.count ?? 0) - (a.count ?? 0))
     .map((g) => g.name!.trim().toLowerCase())
     .slice(0, 5);
-  const yearStr = b?.["first-release-date"]?.slice(0, 4);
-  const year = yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : null;
-  return { genres, year };
+  const releaseDate = parsePartialReleaseDate(b?.["first-release-date"]);
+  const year = releaseDate ? Number(releaseDate.slice(0, 4)) : null;
+  return { genres, year, releaseDate };
 }
 
 /**
- * Fetch a recording's aggregated genre tags + first-release year. Best-effort
- * — returns `{ genres: [], year: null }` on any failure or when MusicBrainz
- * is unconfigured; never throws. This is the MB-primary half of the
- * genre/discovery enrichment pipeline (see `genre.ts` for the Last.fm
- * fallback composition).
+ * Fetch a recording's aggregated genre tags + first-release year/date.
+ * Best-effort — returns `{ genres: [], year: null, releaseDate: null }` on
+ * any failure or when MusicBrainz is unconfigured; never throws. This is the
+ * MB-primary half of the genre/discovery enrichment pipeline (see
+ * `genre.ts` for the Last.fm fallback composition).
  */
 export async function fetchRecordingGenreYear(
   recordingId: string,
-): Promise<{ genres: string[]; year: number | null }> {
+): Promise<{ genres: string[]; year: number | null; releaseDate: string | null }> {
   if (!musicbrainzEnabled() || !recordingId.trim()) {
-    return { genres: [], year: null };
+    return { genres: [], year: null, releaseDate: null };
   }
   try {
     const body = await mbFetch(`/recording/${recordingId}?inc=genres&fmt=json`);
@@ -834,7 +878,7 @@ export async function fetchRecordingGenreYear(
       recordingId,
       error: String(err),
     });
-    return { genres: [], year: null };
+    return { genres: [], year: null, releaseDate: null };
   }
 }
 

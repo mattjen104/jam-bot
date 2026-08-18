@@ -521,6 +521,12 @@ export const ListStationsAtDateResponse = zod.object({
                           .describe(
                             "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
                           ),
+                        releaseDate: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.",
+                          ),
                       })
                       .describe("The MBID-keyed recording a spin resolved to."),
                     zod.null(),
@@ -659,6 +665,12 @@ export const ListStationsNowPlayingResponse = zod.object({
                           .nullish()
                           .describe(
                             "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                          ),
+                        releaseDate: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.",
                           ),
                       })
                       .describe("The MBID-keyed recording a spin resolved to."),
@@ -907,6 +919,12 @@ export const GetStationNowPlayingResponse = zod.object({
                     .nullish()
                     .describe(
                       "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                    ),
+                  releaseDate: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.",
                     ),
                 })
                 .describe("The MBID-keyed recording a spin resolved to."),
@@ -1963,6 +1981,12 @@ export const GetStationSpinsResponse = zod
                     .describe(
                       "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
                     ),
+                  releaseDate: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.",
+                    ),
                 })
                 .describe("The MBID-keyed recording a spin resolved to."),
               zod.null(),
@@ -2101,6 +2125,12 @@ export const GetStationRunResponse = zod.object({
                   .describe(
                     "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
                   ),
+                releaseDate: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.",
+                  ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
             zod.null(),
@@ -2230,6 +2260,12 @@ export const GetReplayManifestResponse = zod
                   .nullish()
                   .describe(
                     "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                  ),
+                releaseDate: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.",
                   ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
@@ -2886,6 +2922,12 @@ export const GetPickerRunResponse = zod.object({
                   .describe(
                     "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
                   ),
+                releaseDate: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.",
+                  ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
             zod.null(),
@@ -3511,6 +3553,12 @@ export const GetStationsRecentSpinsResponse = zod
                 .nullish()
                 .describe(
                   "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                ),
+              releaseDate: zod
+                .string()
+                .nullish()
+                .describe(
+                  "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`). Used by the Dial First (premiere) tier. Null when unknown or unresolved.",
                 ),
               isFirstSpin: zod
                 .boolean()

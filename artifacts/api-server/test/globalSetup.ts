@@ -88,6 +88,14 @@ export async function setup(): Promise<void> {
     );
     await applyReleaseYearMigration();
 
+    // Ensures release_date / release_date_checked_at columns exist — required
+    // by any test that reads recordings.releaseDate after the schema added
+    // them. Runs after the release-year migration to mirror boot order.
+    const { applyReleaseDateMigration } = await import(
+      "../src/lore/release-date-migration.js"
+    );
+    await applyReleaseDateMigration();
+
     // Ensures spins.observed_at exists — required by any test that inserts
     // into spinsTable with an explicit observation timestamp (freshness /
     // fast-lane coverage).

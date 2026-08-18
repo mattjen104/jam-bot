@@ -54,6 +54,9 @@ export async function backfillGenreBatch(batchSize = 25): Promise<{
         .set({
           ...(g.genres.length ? { genres: g.genres } : {}),
           ...(g.year != null ? { releaseYear: g.year } : {}),
+          // Store the full partial-ISO date alongside the year so premiere
+          // (First-tier) detection isn't limited to whole-year comparisons.
+          ...(g.releaseDate != null ? { releaseDate: g.releaseDate } : {}),
           genreEnrichedAt: sql`now()`,
           updatedAt: sql`now()`,
         })

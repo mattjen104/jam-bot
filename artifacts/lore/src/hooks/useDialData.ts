@@ -71,6 +71,8 @@ export interface DialSpin {
   isFirstSpin: boolean;
   /** MusicBrainz first-release year for the recording; null when unknown/unresolved. */
   releaseYear: number | null;
+  /** MusicBrainz first-release date in partial-ISO form; null when unknown/unresolved. */
+  releaseDate?: string | null;
   /**
    * Age tier derived from releaseYear + isFirstSpin, powering the Dial's
    * First/Current/Catalog/Deep filter. Null when the release year is unknown
@@ -526,6 +528,8 @@ interface SseSpinEntry {
   isFirstSpin: boolean;
   /** MusicBrainz first-release year (from the SSE payload); null when unknown. */
   releaseYear: number | null;
+  /** MusicBrainz first-release date in partial-ISO form (from the SSE payload); null when unknown. */
+  releaseDate: string | null;
   /** Server-computed hit flags — sent in the spin-changed SSE payload. */
   isLibraryHit: boolean;
   isArtistHit: boolean;
@@ -724,6 +728,7 @@ export function useDialData(
     artist: string;
     playedAt: string;
     releaseYear: number | null;
+    releaseDate?: string | null;
   }) => void;
 } {
   const today = todayStr();
@@ -800,6 +805,7 @@ export function useDialData(
                   artist: existing.artist,
                   playedAt: existing.playedAt,
                   releaseYear: existing.releaseYear,
+                  releaseDate: existing.releaseDate,
                   isFirstSpin: existing.isFirstSpin,
                   isLibraryHit: existing.isLibraryHit,
                   isArtistHit: existing.isArtistHit,
@@ -812,6 +818,7 @@ export function useDialData(
             artist: ev.rawArtist ?? "",
             playedAt: observedAt,
             releaseYear: ev.releaseYear ?? null,
+            releaseDate: ev.releaseDate ?? null,
             isFirstSpin: ev.isFirstSpin ?? false,
             // Hit flags are unknown until resolution completes.
             isLibraryHit: false,
@@ -835,6 +842,7 @@ export function useDialData(
           artist: ev.rawArtist ?? "",
           playedAt: ev.observedAt ?? new Date().toISOString(),
           releaseYear: ev.releaseYear ?? null,
+          releaseDate: ev.releaseDate ?? null,
           isFirstSpin: ev.isFirstSpin ?? false,
           // Hit flags computed server-side per listener at spin-write time.
           isLibraryHit: ev.isLibraryHit ?? false,
@@ -860,6 +868,7 @@ export function useDialData(
     artist: string;
     playedAt: string;
     releaseYear: number | null;
+    releaseDate?: string | null;
   }) => {
     setSseOverrides((prev) => {
       const next = new Map(prev);
@@ -867,6 +876,7 @@ export function useDialData(
       const sameTrack = existing != null && existing.mbid != null && existing.mbid === entry.mbid;
       next.set(slug, {
         ...entry,
+        releaseDate: entry.releaseDate ?? null,
         isFirstSpin: sameTrack ? existing.isFirstSpin : false,
         isLibraryHit: sameTrack ? existing.isLibraryHit : false,
         isArtistHit: sameTrack ? existing.isArtistHit : false,
@@ -1129,9 +1139,10 @@ export function useDialData(
       if (!title && !artist) continue;
       const mbid = (np as { mbid?: string | null }).mbid ?? null;
       const artistMbid = (np as { artistMbid?: string | null }).artistMbid ?? null;
-      // releaseYear lives on the resolved recording sub-object.
-      const releaseYear =
-        (np as { recording?: { releaseYear?: number | null } | null }).recording?.releaseYear ?? null;
+      // releaseYear/releaseDate live on the resolved recording sub-object.
+      const recording = (np as { recording?: { releaseYear?: number | null; releaseDate?: string | null } | null }).recording;
+      const releaseYear = recording?.releaseYear ?? null;
+      const releaseDate = recording?.releaseDate ?? null;
       const isFirstSpin = (np as { isFirstSpin?: boolean }).isFirstSpin ?? false;
       // Server-computed freshness gate: a stale observation is never counted
       // as a confirmed live crossing — hit flags are downgraded here, at the
@@ -1151,7 +1162,9 @@ export function useDialData(
         isArtistHit: gated.isArtistHit,
         isFirstSpin,
         releaseYear,
-        ageTier: spinAgeTier(isFirstSpin, releaseYear),
+        releaseDate,
+        // Live rows: playedAt is ~now, so spinAgeTier's default (now) applies.
+        ageTier: spinAgeTier(isFirstSpin, releaseYear, releaseDate),
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
@@ -1169,7 +1182,8 @@ export function useDialData(
         isArtistHit: entry.isArtistHit,
         isFirstSpin: entry.isFirstSpin,
         releaseYear: entry.releaseYear,
-        ageTier: spinAgeTier(entry.isFirstSpin, entry.releaseYear),
+        releaseDate: entry.releaseDate,
+        ageTier: spinAgeTier(entry.isFirstSpin, entry.releaseYear, entry.releaseDate, entry.playedAt),
         // Propagate the resolving flag so FrontDoorRow can show the visual cue.
         ...(entry.resolving ? { resolving: true } : {}),
       });
@@ -1332,6 +1346,8 @@ export function useDialData(
           .map((sp) => {
             const isFirstSpin = sp.isFirstSpin ?? false;
             const releaseYear = sp.releaseYear ?? null;
+            const releaseDate =
+              (sp as { releaseDate?: string | null }).releaseDate ?? null;
             return {
               mbid: sp.mbid,
               artistMbid: sp.artistMbid ?? null,
@@ -1344,7 +1360,8 @@ export function useDialData(
               isArtistHit: sp.isArtistHit,
               isFirstSpin,
               releaseYear,
-              ageTier: spinAgeTier(isFirstSpin, releaseYear),
+              releaseDate,
+              ageTier: spinAgeTier(isFirstSpin, releaseYear, releaseDate, sp.playedAt),
             };
           });
 

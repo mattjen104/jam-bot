@@ -26,4 +26,9 @@ export interface NowPlayingRecording {
    * @nullable
    */
   releaseYear?: number | null;
+  /**
+   * MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native granularity. Used by the Dial First (premiere) tier, which reads partial dates permissively. Null when unknown or unresolved.
+   * @nullable
+   */
+  releaseDate?: string | null;
 }

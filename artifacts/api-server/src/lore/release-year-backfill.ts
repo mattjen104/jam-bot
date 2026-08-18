@@ -1,20 +1,37 @@
 import { db, recordingsTable, spinsTable } from "@workspace/db";
-import { isNull, and, sql, notLike } from "drizzle-orm";
+import { isNull, and, sql, notLike, gte } from "drizzle-orm";
 import { createMbResolver, musicbrainzEnabled } from "@workspace/song-enrichment";
 
 /**
- * Release-year backfill — fills `recordings.release_year` for recently-spun
- * recordings that still have no year after the genre-backfill pass.
+ * Release-year/-date backfill — fills `recordings.release_year` (and now the
+ * full partial-ISO `release_date`) for recently-spun recordings that still
+ * have no year after the genre-backfill pass.
  *
- * Target set: recordings with `release_year IS NULL` AND `year_checked_at IS NULL`
- * that have at least one spin AND are not synthetic Spotify-only MBIDs (those
- * can never be looked up on MusicBrainz).
+ * Two target sets, processed most-recently-spun first within one batch:
+ *
+ *   A. Year targets: `release_year IS NULL` AND `year_checked_at IS NULL`
+ *      with at least one spin — the original target set. Rows processed here
+ *      store BOTH year and full date going forward.
+ *
+ *   B. Date re-check targets (bounded): recordings whose
+ *      `release_year >= currentYear - 1` AND `release_date IS NULL` AND
+ *      `release_date_checked_at IS NULL` — regardless of how the year was
+ *      obtained (the year backfill sets `year_checked_at`; the genre/live
+ *      enrichment path writes `release_year` without it, and those rows must
+ *      still converge). Only recently-released tracks can qualify as Dial
+ *      "First" (premiere) plays, so these are the only rows whose missing
+ *      date can change First-tier classification — the full back-catalog is
+ *      deliberately NOT re-checked.
+ *
+ * Both sets exclude synthetic Spotify-only MBIDs (`sp:%` — they can never be
+ * looked up on MusicBrainz).
  *
  * Uses an isolated MusicBrainz resolver chain (createMbResolver — own ≥1.1 s
  * pacing, wall-clock budget cap) so this job never competes with the import
  * worker or the live enrichment pipeline. Sentinel logic:
- *   - Year found or legitimate MB "no date"  → set yearCheckedAt (don't retry)
- *   - MB 5xx / network error                 → do NOT set yearCheckedAt (retry)
+ *   - Definitive answer (data found OR genuine MB "no date") → set
+ *     yearCheckedAt + releaseDateCheckedAt (don't retry)
+ *   - MB 5xx / network error → do NOT set either sentinel (retry next tick)
  */
 
 const resolver = createMbResolver();
@@ -30,22 +47,39 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
   found: number;
   remaining: number;
 }> {
-  const targetWhere = and(
+  // Shared predicates for both target sets.
+  const notSynthetic = notLike(recordingsTable.mbid, "sp:%");
+  // Restrict to recordings that have actually aired — prioritises real
+  // listener-facing content and avoids touching picker-only catalogue rows
+  // that the genre-backfill will eventually reach in its own order.
+  const hasSpins = sql`EXISTS (
+    SELECT 1 FROM ${spinsTable}
+    WHERE ${spinsTable.mbid} = ${recordingsTable.mbid}
+  )`;
+
+  const yearTarget = and(
     isNull(recordingsTable.releaseYear),
     isNull(recordingsTable.yearCheckedAt),
-    // Synthetic `sp:` MBIDs can't be looked up on MusicBrainz — skip them.
-    notLike(recordingsTable.mbid, "sp:%"),
-    // Restrict to recordings that have actually aired — prioritises real
-    // listener-facing content and avoids touching picker-only catalogue rows
-    // that the genre-backfill will eventually reach in its own order.
-    sql`EXISTS (
-      SELECT 1 FROM ${spinsTable}
-      WHERE ${spinsTable.mbid} = ${recordingsTable.mbid}
-    )`,
+    notSynthetic,
+    hasSpins,
   );
 
+  // Set B: recent enough to ever be a premiere, and the date lookup hasn't
+  // definitively answered yet. Deliberately NOT gated on year_checked_at:
+  // the genre/live enrichment path persists release_year without that
+  // sentinel, and those rows would otherwise never obtain a full date.
+  const dateTarget = and(
+    gte(recordingsTable.releaseYear, new Date().getFullYear() - 1),
+    isNull(recordingsTable.releaseDate),
+    isNull(recordingsTable.releaseDateCheckedAt),
+    notSynthetic,
+    hasSpins,
+  );
+
+  const targetWhere = sql`(${yearTarget}) OR (${dateTarget})`;
+
   // Order by most-recently-spun first so tracks currently in rotation get
-  // years before older historical recordings.
+  // years/dates before older historical recordings.
   const rows = await db
     .select({ mbid: recordingsTable.mbid })
     .from(recordingsTable)
@@ -64,25 +98,28 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
       break;
     }
     try {
-      const year = await resolver.fetchReleaseYear(
+      const info = await resolver.fetchReleaseDateInfo(
         row.mbid,
         AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
       );
-      // Definitive answer (year found OR genuine MB "no date") — mark checked
-      // so this row isn't re-queried on every tick.
-      if (year != null) found++;
+      // Definitive answer (data found OR genuine MB "no date") — mark checked
+      // so this row isn't re-queried on every tick. Both sentinels are set:
+      // the lookup answered for year and date in a single call.
+      if (info?.year != null || info?.releaseDate != null) found++;
       await db
         .update(recordingsTable)
         .set({
-          ...(year != null ? { releaseYear: year } : {}),
+          ...(info?.year != null ? { releaseYear: info.year } : {}),
+          ...(info?.releaseDate != null ? { releaseDate: info.releaseDate } : {}),
           yearCheckedAt: sql`now()`,
+          releaseDateCheckedAt: sql`now()`,
           updatedAt: sql`now()`,
         })
         .where(sql`${recordingsTable.mbid} = ${row.mbid}`);
     } catch (err) {
-      // 5xx / network error — do NOT set yearCheckedAt so the row is retried
-      // on the next tick. Log and continue so one bad row doesn't wedge the
-      // whole batch.
+      // 5xx / network error — do NOT set the checked sentinels so the row is
+      // retried on the next tick. Log and continue so one bad row doesn't
+      // wedge the whole batch.
       console.error("[lore] release-year backfill row failed", row.mbid, err);
     }
   }

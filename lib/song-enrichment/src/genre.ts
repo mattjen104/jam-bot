@@ -7,6 +7,12 @@ export interface GenreYear {
   genres: string[];
   /** First-release year, or null when unknown. */
   year: number | null;
+  /**
+   * Raw MusicBrainz `first-release-date` in partial-ISO form
+   * (`YYYY` / `YYYY-MM` / `YYYY-MM-DD`), or null when unknown. Preserved at
+   * MB's native granularity for premiere (First-tier) detection.
+   */
+  releaseDate: string | null;
 }
 
 /**
@@ -39,12 +45,14 @@ export async function fetchGenreAndYear(
 
   let genres: string[] = [];
   let year: number | null = null;
+  let releaseDate: string | null = null;
 
   if (isMbId) {
     try {
       const mb = await fetchRecordingGenreYear(recordingId);
       genres = mb.genres;
       year = mb.year;
+      releaseDate = mb.releaseDate;
     } catch (err) {
       logger.warn("MusicBrainz genre/year enrichment failed", {
         recordingId,
@@ -61,5 +69,5 @@ export async function fetchGenreAndYear(
     }
   }
 
-  return { genres, year };
+  return { genres, year, releaseDate };
 }

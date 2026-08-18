@@ -85,9 +85,11 @@ beforeAll(async () => {
     .returning({ id: stationsTable.id });
   stationIdB = sB!.id;
 
-  // Insert recordings for both MBIDs.
+  // Insert recordings for both MBIDs. The fresh one carries a full
+  // partial-ISO release date so the response assertions can prove the new
+  // releaseDate field flows from the recordings table to the payload.
   await db.insert(recordingsTable).values([
-    { mbid: FRESH_MBID, title: "Fresh Track", artist: `Test FS Artist ${run}` },
+    { mbid: FRESH_MBID, title: "Fresh Track", artist: `Test FS Artist ${run}`, releaseYear: 2026, releaseDate: "2026-08-14" },
     { mbid: OLD_MBID,   title: "Old Track",   artist: `Test FS Artist ${run}` },
   ]);
 
@@ -141,7 +143,7 @@ afterAll(async () => {
 }, 90_000);
 
 // Helpers to pick out a specific station's item from the multi-station response.
-type NowPlayingItem = { slug: string; nowPlaying: { isFirstSpin: boolean; recording: { mbid: string } | null } | null };
+type NowPlayingItem = { slug: string; nowPlaying: { isFirstSpin: boolean; recording: { mbid: string; releaseDate?: string | null } | null } | null };
 type ListNowPlayingResponse = { items: NowPlayingItem[] };
 
 function findItem(items: NowPlayingItem[], slug: string) {
@@ -163,6 +165,9 @@ describe("GET /api/stations/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(FRESH_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(true);
+    // The full partial-ISO release date flows through for premiere (First
+    // tier) detection on the client.
+    expect(item!.nowPlaying!.recording?.releaseDate).toBe("2026-08-14");
   }, 240_000);
 
   it("returns isFirstSpin: false for an MBID that aired yesterday", async (ctx) => {

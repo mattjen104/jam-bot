@@ -68,6 +68,21 @@ export const recordingsTable = pgTable("recordings", {
    */
   releaseYear: integer("release_year"),
   /**
+   * Full first-release date in MusicBrainz's own partial-ISO form (`YYYY`,
+   * `YYYY-MM`, or `YYYY-MM-DD`), validated at write time. Null means never
+   * enriched or MusicBrainz had no dated release. Preserved at MB's native
+   * granularity so coarse data stays honest; the Dial's First (premiere)
+   * tier reads partial dates permissively (year-only counts to year-end).
+   */
+  releaseDate: text("release_date"),
+  /**
+   * When a release-date lookup last received a definitive answer from
+   * MusicBrainz (date found OR genuine "no date"). NOT set on 5xx/network
+   * errors so transient failures are retried on the next backfill tick.
+   * Mirrors `yearCheckedAt` semantics.
+   */
+  releaseDateCheckedAt: timestamp("release_date_checked_at"),
+  /**
    * When genre/year enrichment was last attempted for this recording (set
    * regardless of whether MusicBrainz/Last.fm actually returned data). Null
    * means never attempted — the backfill target set. This is distinct from

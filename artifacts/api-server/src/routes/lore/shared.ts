@@ -336,6 +336,8 @@ export function toNowPlaying(row: {
   links: unknown;
   genres?: string[] | null;
   releaseYear?: number | null;
+  /** MusicBrainz first-release date in partial-ISO form (YYYY / YYYY-MM / YYYY-MM-DD). */
+  releaseDate?: string | null;
   showName: string | null;
   showDj: string | null;
   stationName?: string | null;
@@ -368,6 +370,7 @@ export function toNowPlaying(row: {
           links: row.links ?? [],
           genres: row.genres ?? null,
           releaseYear: row.releaseYear ?? null,
+          releaseDate: row.releaseDate ?? null,
         }
       : null,
     show: row.showName

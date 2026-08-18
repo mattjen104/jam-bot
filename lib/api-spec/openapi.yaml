@@ -4422,6 +4422,13 @@ components:
             MusicBrainz first-release year for the recording, used by the Dial
             age-tier (Current/Catalog/Deep) filter. Null when unknown or
             unresolved.
+        releaseDate:
+          type: ["string", "null"]
+          description: >-
+            MusicBrainz first-release date in partial-ISO form (`YYYY`,
+            `YYYY-MM`, or `YYYY-MM-DD`), preserving MusicBrainz's native
+            granularity. Used by the Dial First (premiere) tier, which reads
+            partial dates permissively. Null when unknown or unresolved.
       required:
         - mbid
         - title
@@ -7241,6 +7248,12 @@ components:
         releaseYear:
           type: ["integer", "null"]
           description: MusicBrainz first-release year for the recording, used by the Dial age-tier (Current/Catalog/Deep) filter. Null when unknown or unresolved.
+        releaseDate:
+          type: ["string", "null"]
+          description: >-
+            MusicBrainz first-release date in partial-ISO form (`YYYY`,
+            `YYYY-MM`, or `YYYY-MM-DD`). Used by the Dial First (premiere)
+            tier. Null when unknown or unresolved.
         isFirstSpin:
           type: boolean
           description: True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved).

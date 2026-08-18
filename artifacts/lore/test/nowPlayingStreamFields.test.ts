@@ -66,7 +66,7 @@ function pushRaw(data: Record<string, unknown>): void {
 // ---------------------------------------------------------------------------
 
 describe("nowPlayingStream — openStream parser field pass-through", () => {
-  it("passes artistMbid, releaseYear, and isFirstSpin through on a resolved spin-changed frame", () => {
+  it("passes artistMbid, releaseYear, releaseDate, and isFirstSpin through on a resolved spin-changed frame", () => {
     const received: SpinStreamEvent[] = [];
     subscribeSpinStream((ev) => received.push(ev));
     FakeEventSource.last().onopen?.();
@@ -78,6 +78,7 @@ describe("nowPlayingStream — openStream parser field pass-through", () => {
       mbid: "aaaaaaaa-0000-0000-0000-000000000001",
       artistMbid: "bbbbbbbb-0000-0000-0000-000000000002",
       releaseYear: 2021,
+      releaseDate: "2021-06-25",
       isFirstSpin: true,
       isLibraryHit: true,
       isArtistHit: false,
@@ -87,6 +88,7 @@ describe("nowPlayingStream — openStream parser field pass-through", () => {
     const ev = received[0]!;
     expect(ev.artistMbid).toBe("bbbbbbbb-0000-0000-0000-000000000002");
     expect(ev.releaseYear).toBe(2021);
+    expect(ev.releaseDate).toBe("2021-06-25");
     expect(ev.isFirstSpin).toBe(true);
     expect(ev.isLibraryHit).toBe(true);
     expect(ev.isArtistHit).toBe(false);
@@ -118,7 +120,7 @@ describe("nowPlayingStream — openStream parser field pass-through", () => {
     expect(ev.isFirstSpin).toBe(false);
   });
 
-  it("omits artistMbid, releaseYear, and isFirstSpin keys when absent from the server frame", () => {
+  it("omits artistMbid, releaseYear, releaseDate, and isFirstSpin keys when absent from the server frame", () => {
     const received: SpinStreamEvent[] = [];
     subscribeSpinStream((ev) => received.push(ev));
     FakeEventSource.last().onopen?.();
@@ -137,6 +139,7 @@ describe("nowPlayingStream — openStream parser field pass-through", () => {
     const ev = received[0]!;
     expect("artistMbid" in ev).toBe(false);
     expect("releaseYear" in ev).toBe(false);
+    expect("releaseDate" in ev).toBe(false);
     expect("isFirstSpin" in ev).toBe(false);
   });
 
