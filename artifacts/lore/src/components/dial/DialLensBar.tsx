@@ -1,5 +1,5 @@
 /**
- * DialLensBar — the Dial's lens toggle: Radio | Press | Shows.
+ * DialLensBar — the Dial's lens toggle: Radio | Press | Shows | Scan.
  *
  * Lenses are exclusive views over the same feed surface. Same pipe-separated
  * button style as the filter bar, same aria-pressed semantics. Unlike the
@@ -29,6 +29,7 @@ const LENS_LABELS: { lens: DialLens; label: string; title: string }[] = [
   { lens: "radio", label: "Radio", title: "Live stations crossing your Stack" },
   { lens: "press", label: "Press", title: "Blog picks, best-of lists, and liner claims mentioning your Stack" },
   { lens: "shows", label: "Shows", title: "Upcoming concerts for artists in your Stack" },
+  { lens: "scan", label: "Scan", title: "Browse every category at a glance" },
 ];
 
 export function DialLensBar({ lens, onSetLens, className, radioMode = false }: DialLensBarProps) {

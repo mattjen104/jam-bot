@@ -37,7 +37,7 @@ import {
   scrapedShowsTable,
   stationQualityTable,
 } from "@workspace/db";
-import { eq, ne, and, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
+import { eq, ne, and, or, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
 import { inferTimezone } from "../../lore/timezone.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -100,6 +100,9 @@ type NpBaseCache = {
 };
 
 let npBaseCache: NpBaseCache | null = null;
+// Parallel live cache for the inclusive (mode-pool) variant — the Scan lens
+// polls with ?includeModePools=true and must not evict the dial's base cache.
+let npBaseCacheInclusive: NpBaseCache | null = null;
 
 // Date-filtered (ghost-dial) base results share the same 30s TTL, keyed by
 // date. The default "today" sweep position hits this map instead of re-running
@@ -111,6 +114,7 @@ const NP_DATE_CACHE_MAX_ENTRIES = 16;
 /** Invalidate the now-playing base cache — called by the SSE push path when a new spin lands. */
 export function invalidateNowPlayingBaseCache(): void {
   npBaseCache = null;
+  npBaseCacheInclusive = null;
   // A new spin only changes "today", but clearing the whole map is cheap and
   // avoids timezone hair-splitting about which date string "today" is.
   npDateCache.clear();
@@ -137,7 +141,11 @@ const npFillInFlight = new Map<string, Promise<NpBaseCache>>();
 // its (cheap) query returns — i.e. seconds before the heavy spins scan
 // finishes. Used by the cold-start partial response so it doesn't have to run
 // its own stations query against a DB pool saturated by boot work.
+// Two variants: the default crossing-eligible list, and an inclusive variant
+// that also covers the sleep / era-genre mode pools (the Scan lens tunes
+// those stations too, so it needs their now-playing rows).
 let npStationsSnapshot: { id: number; slug: string }[] | null = null;
+let npStationsSnapshotInclusive: { id: number; slug: string }[] | null = null;
 
 // Single-flight for the stations stage itself: the boot prewarm, concurrent
 // cold fills, and the partial-response fallback all join ONE stations query
@@ -145,24 +153,47 @@ let npStationsSnapshot: { id: number; slug: string }[] | null = null;
 // promise clears so the next caller retries; the error propagates to whoever
 // awaited it (a failed partial request returns 500 rather than a silent []).
 let npStationsInFlight: Promise<{ id: number; slug: string }[]> | null = null;
+let npStationsInFlightInclusive: Promise<{ id: number; slug: string }[]> | null = null;
 
-function fetchNpStations(): Promise<{ id: number; slug: string }[]> {
-  if (npStationsInFlight) return npStationsInFlight;
+function fetchNpStations(includeModePools = false): Promise<{ id: number; slug: string }[]> {
+  const inFlight = includeModePools ? npStationsInFlightInclusive : npStationsInFlight;
+  if (inFlight) return inFlight;
+  // Inclusive = the default dial predicate UNION the mode pools (mirrors
+  // GET /api/stations ?mode=sleep / ?mode=era-genre, whose stations are
+  // intentionally hidden from the default list).
+  const where = includeModePools
+    ? and(
+        eq(stationsTable.active, true),
+        or(
+          and(
+            eq(stationsTable.hidden, false),
+            eq(stationsTable.crossingEligible, true),
+          ),
+          eq(stationsTable.sleepMode, true),
+          eq(stationsTable.eraGenreMode, true),
+        ),
+      )
+    : and(
+        eq(stationsTable.active, true),
+        eq(stationsTable.hidden, false),
+        eq(stationsTable.crossingEligible, true),
+      );
   const p = db
     .select({ id: stationsTable.id, slug: stationsTable.slug })
     .from(stationsTable)
-    .where(and(
-      eq(stationsTable.active, true),
-      eq(stationsTable.hidden, false),
-      eq(stationsTable.crossingEligible, true),
-    ))
+    .where(where)
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name))
     .then((stations) => {
-      npStationsSnapshot = stations;
+      if (includeModePools) npStationsSnapshotInclusive = stations;
+      else npStationsSnapshot = stations;
       return stations;
     })
-    .finally(() => { npStationsInFlight = null; });
-  npStationsInFlight = p;
+    .finally(() => {
+      if (includeModePools) npStationsInFlightInclusive = null;
+      else npStationsInFlight = null;
+    });
+  if (includeModePools) npStationsInFlightInclusive = p;
+  else npStationsInFlight = p;
   return p;
 }
 
@@ -177,13 +208,16 @@ export function _testOnly_getNpBuildCount(): number {
 /** Tests only: drop every now-playing cache layer (base, per-date, stations snapshot). */
 export function _testOnly_resetNpCaches(): void {
   npBaseCache = null;
+  npBaseCacheInclusive = null;
   npDateCache.clear();
   npStationsSnapshot = null;
+  npStationsSnapshotInclusive = null;
 }
 
 /** Tests only: mark the live base cache as expired (keeps its data for SWR checks). */
 export function _testOnly_expireNpBaseCache(): void {
   if (npBaseCache) npBaseCache.builtAt = 0;
+  if (npBaseCacheInclusive) npBaseCacheInclusive.builtAt = 0;
 }
 
 /** How long a cold live request waits for the base fill before serving a stations-only partial. */
@@ -198,9 +232,9 @@ export function _testOnly_setNpColdFillWaitMs(ms: number): () => void {
   return () => { npColdFillWaitMs = prev; };
 }
 
-async function buildNpBase(dateFilter: string | null): Promise<NpBaseCache> {
+async function buildNpBase(dateFilter: string | null, includeModePools = false): Promise<NpBaseCache> {
   npBuildCount++;
-  const stations = await fetchNpStations();
+  const stations = await fetchNpStations(includeModePools);
 
   const rows = await db
     .selectDistinctOn([spinsTable.stationId], {
@@ -279,7 +313,8 @@ async function buildNpBase(dateFilter: string | null): Promise<NpBaseCache> {
 
   const base: NpBaseCache = { builtAt: Date.now(), stations, rows, seenBefore, rgMap };
   if (!dateFilter) {
-    npBaseCache = base;
+    if (includeModePools) npBaseCacheInclusive = base;
+    else npBaseCache = base;
   } else {
     // Per-date cache with a small LRU-ish cap: evict expired entries first,
     // then the oldest, so the map stays bounded during long date sweeps.
@@ -306,11 +341,11 @@ async function buildNpBase(dateFilter: string | null): Promise<NpBaseCache> {
 }
 
 /** Start (or join) the base fill for a cache key. Single-flight per key. */
-function fillNpBase(dateFilter: string | null): Promise<NpBaseCache> {
-  const key = dateFilter ?? "";
+function fillNpBase(dateFilter: string | null, includeModePools = false): Promise<NpBaseCache> {
+  const key = `${dateFilter ?? ""}${includeModePools ? "|all" : ""}`;
   const existing = npFillInFlight.get(key);
   if (existing) return existing;
-  const promise = buildNpBase(dateFilter).finally(() => {
+  const promise = buildNpBase(dateFilter, includeModePools).finally(() => {
     npFillInFlight.delete(key);
   });
   npFillInFlight.set(key, promise);
@@ -427,9 +462,16 @@ router.get("/stations", h(async (req, res) => {
 // GET /api/stations/now-playing — latest spin per station (the dial pulse).
 // Optional ?date=YYYY-MM-DD returns the last spin per station on that calendar
 // day instead of the global latest — powers the ghost-dial date sweep.
+// Optional ?includeModePools=true unions the sleep / era-genre mode pools
+// (intentionally hidden from the default list) into the station set — the
+// Scan lens tunes those stations too, so it needs their now-playing rows.
+// Ignored for date-filtered (ghost-dial) requests.
 router.get("/stations/now-playing", h(async (req, res) => {
   const rawDate = typeof req.query.date === "string" ? req.query.date.trim() : null;
   const dateFilter = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  const includeModePools =
+    !dateFilter &&
+    (req.query.includeModePools === "true" || req.query.includeModePools === "1");
 
   // Soft auth: enrich with library hit flags when the listener has a session;
   // unauthenticated requests receive isLibraryHit=false, isArtistHit=false.
@@ -442,12 +484,14 @@ router.get("/stations/now-playing", h(async (req, res) => {
     : EMPTY_HIT_CONTEXT;
 
   // ── Base query cache (user-independent, 30-second TTL) ───────────────────
-  // Live requests share npBaseCache; date-filtered (ghost-dial) requests share
-  // a small per-date map with the same TTL so the default "today" position
-  // doesn't re-run the heavy base scan on every request.
+  // Live requests share npBaseCache (or npBaseCacheInclusive for the
+  // mode-pool variant); date-filtered (ghost-dial) requests share a small
+  // per-date map with the same TTL so the default "today" position doesn't
+  // re-run the heavy base scan on every request.
+  const liveCache = includeModePools ? npBaseCacheInclusive : npBaseCache;
   let base: NpBaseCache | null = null;
-  if (!dateFilter && npBaseCache && Date.now() - npBaseCache.builtAt < NP_BASE_CACHE_TTL_MS) {
-    base = npBaseCache;
+  if (!dateFilter && liveCache && Date.now() - liveCache.builtAt < NP_BASE_CACHE_TTL_MS) {
+    base = liveCache;
   } else if (dateFilter) {
     const dated = npDateCache.get(dateFilter);
     if (dated && Date.now() - dated.builtAt < NP_BASE_CACHE_TTL_MS) {
@@ -458,14 +502,14 @@ router.get("/stations/now-playing", h(async (req, res) => {
   if (base === null) {
     // Single-flight: join any in-flight fill for this key instead of running
     // a duplicate heavy scan. The fill promise writes the cache itself.
-    const fill = fillNpBase(dateFilter);
+    const fill = fillNpBase(dateFilter, includeModePools);
 
-    if (!dateFilter && npBaseCache) {
+    if (!dateFilter && liveCache) {
       // Stale-while-revalidate: an expired live cache is still current within
       // the last poll cycle or two — serve it immediately and let the
       // background fill refresh it for the next request.
       fill.catch(() => { /* background refresh failure; next cold request retries */ });
-      base = npBaseCache;
+      base = liveCache;
     } else if (!dateFilter) {
       // True cold start (nothing cached at all, e.g. right after a server
       // restart before the boot prewarm finishes). Wait briefly for the fill;
@@ -476,9 +520,10 @@ router.get("/stations/now-playing", h(async (req, res) => {
       // stations stage publishes before the heavy scan; when it hasn't landed
       // yet (request racing the very first fill), join the SAME single-flight
       // stations query the fill is running — never issue a duplicate one.
-      const stationsOnly = npStationsSnapshot
-        ? Promise.resolve(npStationsSnapshot)
-        : fetchNpStations();
+      const snapshot = includeModePools ? npStationsSnapshotInclusive : npStationsSnapshot;
+      const stationsOnly = snapshot
+        ? Promise.resolve(snapshot)
+        : fetchNpStations(includeModePools);
       stationsOnly.catch(() => { /* re-thrown below if actually needed */ });
       const winner = await Promise.race([
         fill.then((b) => ({ kind: "base" as const, base: b })),

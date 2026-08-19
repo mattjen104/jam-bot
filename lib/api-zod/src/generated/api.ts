@@ -595,6 +595,17 @@ export const ListStationsAtDateResponse = zod.object({
 
  * @summary Current track on every station, in one call (dial pulse)
  */
+export const listStationsNowPlayingQueryIncludeModePoolsDefault = false;
+
+export const ListStationsNowPlayingQueryParams = zod.object({
+  includeModePools: zod.coerce
+    .boolean()
+    .default(listStationsNowPlayingQueryIncludeModePoolsDefault)
+    .describe(
+      "When true, the station set is the default dial list UNION the sleep and era-genre mode pools (stations intentionally hidden from the default list). Powers the Scan lens, which tunes those stations too. Ignored when `date` is supplied.\n",
+    ),
+});
+
 export const ListStationsNowPlayingResponse = zod.object({
   items: zod.array(
     zod

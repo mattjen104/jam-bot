@@ -31,3 +31,17 @@ into the same range.
    with `request_fresh_code_review: true`.
 4. Reverting someone else's in-flight work inside your task can conflict with
    other active tasks building on that state.
+
+**Rebase variant — ours/theirs are swapped during `git rebase`:**
+when the completion flow rebases your task branch onto main and stops on
+conflicts, `git checkout --ours` selects MAIN's version and `--theirs` selects
+YOUR replayed commit's version (opposite of merge intuition). If your commit
+bundled stale in-flight copies of other tasks' files, the correct resolution
+for those files is main's version.
+**Why:** a Scan-lens task kept its own stale bundled copies of two
+remote-button components via `--theirs`, silently reverting a merged mainline
+feature; the mismatch surfaced only as an unrelated-looking test failure.
+**How to apply:** after the rebase completes, audit `git diff <main-tip> HEAD
+--stat` and restore every file outside your task's scope to the main-tip
+version (`git checkout <main-tip> -- <path>`), not just the files that
+conflicted textually — clean merges can still carry stale copies.

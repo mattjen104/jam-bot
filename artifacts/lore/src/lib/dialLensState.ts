@@ -1,5 +1,5 @@
 /**
- * dialLensState — the Dial's lens toggle (Radio | Press | Shows).
+ * dialLensState — the Dial's lens toggle (Radio | Press | Shows | Scan).
  *
  * Lenses are exclusive views over the same feed surface:
  *   - "radio": the live-station crossing feed (default, today's behavior)
@@ -7,6 +7,9 @@
  *     year-end lists, track claims)
  *   - "shows": upcoming concerts for artists in the listener's Stack,
  *     powered by Bandsintown
+ *   - "scan": one now-playing button per station category, rotating through
+ *     each category's live stations — a parallel discovery surface that
+ *     ignores the category filter
  *
  * The active lens is local-first listener state: persisted in localStorage,
  * never sent to the server (like dial pins and the journal). Reading falls
@@ -17,9 +20,9 @@
  * the component tree.
  */
 
-export type DialLens = "radio" | "press" | "shows";
+export type DialLens = "radio" | "press" | "shows" | "scan";
 
-export const DIAL_LENSES: readonly DialLens[] = ["radio", "press", "shows"] as const;
+export const DIAL_LENSES: readonly DialLens[] = ["radio", "press", "shows", "scan"] as const;
 
 const LS_LENS_KEY = "lore:dialLens";
 
@@ -27,6 +30,7 @@ const LS_LENS_KEY = "lore:dialLens";
 export function parseDialLens(raw: string | null | undefined): DialLens {
   if (raw === "press") return "press";
   if (raw === "shows") return "shows";
+  if (raw === "scan") return "scan";
   return "radio";
 }
 

@@ -256,6 +256,18 @@ paths:
         raw title/artist, best-effort recording resolution, and show/DJ
         attribution when the source exposes it. Powers the dial's live album
         covers. Stations with nothing logged yet return a null `nowPlaying`.
+      parameters:
+        - in: query
+          name: includeModePools
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: >
+            When true, the station set is the default dial list UNION the
+            sleep and era-genre mode pools (stations intentionally hidden
+            from the default list). Powers the Scan lens, which tunes those
+            stations too. Ignored when `date` is supplied.
       responses:
         "200":
           description: Latest spin per station

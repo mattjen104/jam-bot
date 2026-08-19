@@ -70,6 +70,7 @@ import type {
   ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
   ListPickersParams,
+  ListStationsNowPlayingParams,
   ListStationsParams,
   LookupPickedMbidsParams,
   ManualSpinRequest,
@@ -959,42 +960,63 @@ export function useListStationsAtDate<
 
  * @summary Current track on every station, in one call (dial pulse)
  */
-export const getListStationsNowPlayingUrl = () => {
-  return `/api/stations/now-playing`;
+export const getListStationsNowPlayingUrl = (
+  params?: ListStationsNowPlayingParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/now-playing?${stringifiedParams}`
+    : `/api/stations/now-playing`;
 };
 
 export const listStationsNowPlaying = async (
+  params?: ListStationsNowPlayingParams,
   options?: RequestInit,
 ): Promise<StationPulseList> => {
-  return customFetch<StationPulseList>(getListStationsNowPlayingUrl(), {
+  return customFetch<StationPulseList>(getListStationsNowPlayingUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListStationsNowPlayingQueryKey = () => {
-  return [`/api/stations/now-playing`] as const;
+export const getListStationsNowPlayingQueryKey = (
+  params?: ListStationsNowPlayingParams,
+) => {
+  return [`/api/stations/now-playing`, ...(params ? [params] : [])] as const;
 };
 
 export const getListStationsNowPlayingQueryOptions = <
   TData = Awaited<ReturnType<typeof listStationsNowPlaying>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listStationsNowPlaying>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: ListStationsNowPlayingParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStationsNowPlaying>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getListStationsNowPlayingQueryKey();
+    queryOptions?.queryKey ?? getListStationsNowPlayingQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listStationsNowPlaying>>
-  > = ({ signal }) => listStationsNowPlaying({ signal, ...requestOptions });
+  > = ({ signal }) =>
+    listStationsNowPlaying(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listStationsNowPlaying>>,
@@ -1015,15 +1037,18 @@ export type ListStationsNowPlayingQueryError = ErrorType<unknown>;
 export function useListStationsNowPlaying<
   TData = Awaited<ReturnType<typeof listStationsNowPlaying>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listStationsNowPlaying>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListStationsNowPlayingQueryOptions(options);
+>(
+  params?: ListStationsNowPlayingParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStationsNowPlaying>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStationsNowPlayingQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

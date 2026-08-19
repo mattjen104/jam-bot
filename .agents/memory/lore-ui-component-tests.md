@@ -18,3 +18,11 @@ The lore vitest suite defaults to `environment: "node"`; UI tests opt into jsdom
 **Gotcha — memoryLocation searchPath must NOT start with `?`.**
 **Why:** wouter joins `path + "?" + searchPath`; a leading `?` yields `path??query`, and its `split("?")` destructuring then reads the search as empty — pages silently see no query params and tests fail mysteriously (renders fine, params absent).
 **How to apply:** pass `searchPath: "play=1&from=x"` (bare), and prefer `static: true` for read-only page tests.
+
+**Gotcha — no RTL auto-cleanup (vitest globals are off).** Render containers
+accumulate across tests AND across vitest retries of the same test, so
+`screen.getByText` sees duplicates ("Found multiple elements") or stale DOM.
+**How to apply:** add `afterEach(cleanup)` from `@testing-library/react`, and
+scope assertions to the render result (`const view = render(...)` →
+`view.getByText`) instead of `screen` when a file mixes `renderHook` +
+`render`.

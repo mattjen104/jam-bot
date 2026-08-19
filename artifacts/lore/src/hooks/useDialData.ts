@@ -194,6 +194,45 @@ const LIVE_WINDOW_MS = 20 * 60 * 1000; // 20 min — generous window for slow po
 const FUTURE_THRESHOLD_MS = 60 * 1000; // 1 min lookahead
 const LS_PINS_KEY = "lore:dialPins";
 
+// A station is "live" only if its most-recent spin arrived within the last
+// 60 minutes. The now-playing endpoint returns the all-time latest spin per
+// station, so a stale entry (hours/days old) must not be treated as currently
+// on-air. 60 min is generous enough to cover slow-polling hosts while still
+// reliably excluding stations that are genuinely off-air.
+// NB: different from LIVE_WINDOW_MS (20 min show-state window) above.
+export const LIVE_PULSE_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * Scan lens now-playing map: only entries whose observation is inside the
+ * 60-minute live-pulse window.
+ *
+ * `rest` must carry the SOURCE observation time in `playedAt` (the shared
+ * `nowPlayingBySlug` map stamps REST rows with ~now for live-chip display,
+ * which would make stale entries look fresh — never pass it here). SSE rows
+ * carry their event `playedAt`, which is already the honest spin time.
+ *
+ * Pure and exported so the freshness gate is unit-testable without the hook.
+ */
+export function buildScanNowPlaying(
+  rest: ReadonlyMap<string, DialSpin>,
+  sseFinal: ReadonlyMap<string, DialSpin>,
+  nowMs: number,
+): Map<string, DialSpin> {
+  const isFresh = (playedAt: string): boolean => {
+    const t = new Date(playedAt).getTime();
+    return !Number.isNaN(t) && nowMs - t <= LIVE_PULSE_WINDOW_MS;
+  };
+  const m = new Map<string, DialSpin>();
+  for (const [slug, spin] of rest) {
+    if (isFresh(spin.playedAt)) m.set(slug, spin);
+  }
+  // SSE rows win over the REST baseline, mirroring nowPlayingBySlug's merge.
+  for (const [slug, spin] of sseFinal) {
+    if (isFresh(spin.playedAt)) m.set(slug, spin);
+  }
+  return m;
+}
+
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -699,9 +738,29 @@ export function useDialData(
      * every other consumer keep the curated filtering.
      */
     includeAllStations?: boolean;
+    /**
+     * When true, the unfiltered base station list is fetched (even when the
+     * category filter would skip it) and returned as `scanStations` for the
+     * Scan lens, which always shows every category regardless of the active
+     * category filter. Defaults to false.
+     */
+    scanActive?: boolean;
   } = {},
 ): {
   stations: DialStation[];
+  /**
+   * Raw curated station list, unfiltered by the category filter — the Scan
+   * lens's data source. Empty unless `scanActive` (or the base list was
+   * already being fetched for the filter).
+   */
+  scanStations: Station[];
+  /**
+   * Freshness-gated live now-playing track per station slug (REST poll + SSE
+   * overrides), for the Scan lens. Only spins whose source observation is
+   * inside the 60-minute live-pulse window appear — stale/off-air last spins
+   * are excluded so Scan never presents an old track as live.
+   */
+  scanNowPlaying: Map<string, DialSpin>;
   isLoading: boolean;
   isCoreLoading: boolean;
   liveLoading: boolean;
@@ -910,6 +969,9 @@ export function useDialData(
   // `sleepMode`/`eraGenreMode` flags stay supported for the hidden gesture modes.
   const categories = opts.categories;
   const includeAllStations = opts.includeAllStations === true;
+  // Scan lens: needs the full curated list (and the global now-playing pulse)
+  // even when the category filter would skip the base list entirely.
+  const scanActive = opts.scanActive === true;
   // Additive multi-select taxonomy: any subset of categories may be checked.
   //  - "ambient"    → sleep server mode list
   //  - "specialist" → era-genre server mode list
@@ -939,26 +1001,39 @@ export function useDialData(
   const wantNormalList = !categories || categories.size === 0 || metaCategories.length > 0;
   const { data: stationsData, isLoading: stationsLoading, isError: stationsError, refetch: refetchStations } = useListStations(
     baseParam,
-    { query: { queryKey: getListStationsQueryKey(baseParam), enabled: wantNormalList } },
+    { query: { queryKey: getListStationsQueryKey(baseParam), enabled: wantNormalList || scanActive } },
   );
-  // Union pools: fetched only when their category is explicitly checked.
+  // Union pools: fetched when their category is explicitly checked — and
+  // whenever the Scan lens is active, since Scan covers every category
+  // (ambient/specialist stations only exist in these pools; they are
+  // intentionally hidden from the default list).
   const { data: ambientData, isLoading: ambientLoading, isError: ambientError, refetch: refetchAmbient } = useListStations(
     { mode: "sleep" } as const,
-    { query: { queryKey: getListStationsQueryKey({ mode: "sleep" }), enabled: categories != null && wantAmbient } },
+    { query: { queryKey: getListStationsQueryKey({ mode: "sleep" }), enabled: (categories != null && wantAmbient) || scanActive } },
   );
   const { data: specialistData, isLoading: specialistLoading, isError: specialistError, refetch: refetchSpecialist } = useListStations(
     { mode: "era-genre" } as const,
-    { query: { queryKey: getListStationsQueryKey({ mode: "era-genre" }), enabled: categories != null && wantSpecialist } },
+    { query: { queryKey: getListStationsQueryKey({ mode: "era-genre" }), enabled: (categories != null && wantSpecialist) || scanActive } },
   );
 
   // ── live pulse (30s polling) ─────────────────────────────────────────────
-  const { data: liveData, isLoading: liveLoading } = useListStationsNowPlaying({
-    query: {
-      queryKey: getListStationsNowPlayingQueryKey(),
-      refetchInterval: 30_000,
-      refetchIntervalInBackground: false,
+  // While Scan is active, poll the inclusive variant so stations that only
+  // exist in the sleep / era-genre mode pools get now-playing rows too. The
+  // payload is a superset of the default, and every downstream consumer looks
+  // spins up per-slug, so the dial feed is unaffected by the switch.
+  const npParams = scanActive
+    ? ({ includeModePools: true } as const)
+    : undefined;
+  const { data: liveData, isLoading: liveLoading } = useListStationsNowPlaying(
+    npParams,
+    {
+      query: {
+        queryKey: getListStationsNowPlayingQueryKey(npParams),
+        refetchInterval: 30_000,
+        refetchIntervalInBackground: false,
+      },
     },
-  });
+  );
 
   // ── schedule runs (today + yesterday for rolling 24h window) ────────────
   const { data: scheduleData, isLoading: schedLoading } = useGetStationsSchedule(
@@ -1123,13 +1198,8 @@ export function useDialData(
   }, [pickerOverlapItems]);
 
   // ── index by station slug ─────────────────────────────────────────────────
-  // A station is "live" only if its most-recent spin arrived within the last
-  // 60 minutes.  The endpoint returns the all-time latest spin per station,
-  // so a stale entry (hours/days old) must not be treated as currently on-air.
-  // 60 min is generous enough to cover slow-polling hosts while still reliably
-  // excluding stations that are genuinely off-air.
-  // NB: different from module-level LIVE_WINDOW_MS (20 min show-state window).
-  const LIVE_PULSE_WINDOW_MS = 60 * 60 * 1000;
+  // liveBySlug applies the LIVE_PULSE_WINDOW_MS freshness gate (see module
+  // scope) to the source playedAt of each station's latest spin.
   const liveBySlug = useMemo(() => {
     const m = new Map<string, boolean>();
     // Current wall-clock time is intentional here: this memo recomputes on
@@ -1157,7 +1227,11 @@ export function useDialData(
   // isLibraryHit / isArtistHit are now server-computed per listener and
   // returned in both the now-playing REST response and the SSE event payload.
   // No client-side library set membership is needed here.
-  const nowPlayingBySlug = useMemo((): Map<string, DialSpin> => {
+  // REST parse with the SOURCE observation time preserved. Entries without a
+  // parseable playedAt are dropped: liveBySlug already marks them not-live
+  // (so no existing consumer loses a row), and the Scan lens must never
+  // present an observation whose freshness can't be vouched for.
+  const restNowPlaying = useMemo((): Map<string, DialSpin> => {
     const m = new Map<string, DialSpin>();
 
     for (const item of liveData?.items ?? []) {
@@ -1173,6 +1247,8 @@ export function useDialData(
       const releaseYear = recording?.releaseYear ?? null;
       const releaseDate = recording?.releaseDate ?? null;
       const isFirstSpin = (np as { isFirstSpin?: boolean }).isFirstSpin ?? false;
+      const sourcePlayedAt = (np as { playedAt?: string | null }).playedAt ?? null;
+      if (!sourcePlayedAt || Number.isNaN(new Date(sourcePlayedAt).getTime())) continue;
       // Server-computed freshness gate: a stale observation is never counted
       // as a confirmed live crossing — hit flags are downgraded here, at the
       // single point where the live snapshot becomes currentTrack/liveTrack,
@@ -1186,7 +1262,7 @@ export function useDialData(
         artistMbid,
         title,
         artist,
-        playedAt: new Date().toISOString(),
+        playedAt: sourcePlayedAt,
         isLibraryHit: gated.isLibraryHit,
         isArtistHit: gated.isArtistHit,
         isFirstSpin,
@@ -1195,6 +1271,18 @@ export function useDialData(
         // Live rows: playedAt is ~now, so spinAgeTier's default (now) applies.
         ageTier: spinAgeTier(isFirstSpin, releaseYear, releaseDate),
       });
+    }
+    return m;
+  }, [liveData]);
+
+  const nowPlayingBySlug = useMemo((): Map<string, DialSpin> => {
+    const m = new Map<string, DialSpin>();
+
+    // REST rows are stamped ~now for live-chip display (pre-existing display
+    // semantics); the honest source timestamp lives on restNowPlaying and is
+    // what the Scan lens's freshness gate reads.
+    for (const [slug, spin] of restNowPlaying) {
+      m.set(slug, { ...spin, playedAt: new Date().toISOString() });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
     // chip reflects the current on-air track the moment it is logged.
@@ -1218,7 +1306,20 @@ export function useDialData(
       });
     }
     return m;
-  }, [liveData, sseOverrides]);
+  }, [restNowPlaying, sseOverrides]);
+
+  // Scan lens: the freshness-gated subset of now-playing data. Only spins
+  // whose SOURCE observation is inside the 60-minute live-pulse window appear,
+  // so a stale/off-air last spin is never rotated in as "live".
+  const scanNowPlaying = useMemo((): Map<string, DialSpin> => {
+    const sseFinal = new Map<string, DialSpin>();
+    for (const slug of sseOverrides.keys()) {
+      const spin = nowPlayingBySlug.get(slug);
+      if (spin) sseFinal.set(slug, spin);
+    }
+    // eslint-disable-next-line react-hooks/purity -- freshness is defined relative to "now", recomputed on each poll/SSE event
+    return buildScanNowPlaying(restNowPlaying, sseFinal, Date.now());
+  }, [restNowPlaying, sseOverrides, nowPlayingBySlug]);
 
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();
@@ -1570,8 +1671,26 @@ export function useDialData(
     [artistFrequencyData, liveArtistSuggestions],
   );
 
+  // Scan lens source: the raw base list, unfiltered by the category filter,
+  // UNION the ambient/specialist mode pools (Scan covers every category, and
+  // those stations only exist in their mode pools). Deduped by id — a
+  // station can be both crossing-eligible and in a mode pool. Only
+  // meaningful when the base list was fetched (scanActive or a filter that
+  // includes the normal list); otherwise an empty array.
+  const scanStations = useMemo((): Station[] => {
+    if (!(wantNormalList || scanActive)) return [];
+    if (!scanActive) return stationsData?.stations ?? [];
+    const byId = new Map<number, Station>();
+    for (const s of stationsData?.stations ?? []) byId.set(s.id, s);
+    for (const s of ambientData?.stations ?? []) byId.set(s.id, s);
+    for (const s of specialistData?.stations ?? []) byId.set(s.id, s);
+    return [...byId.values()];
+  }, [wantNormalList, scanActive, stationsData, ambientData, specialistData]);
+
   return {
     stations,
+    scanStations,
+    scanNowPlaying,
     isLoading,
     isCoreLoading,
     liveLoading,

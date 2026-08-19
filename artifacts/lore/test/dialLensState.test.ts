@@ -14,6 +14,11 @@ describe("parseDialLens", () => {
     expect(parseDialLens("shows")).toBe("shows");
   });
 
+  it("returns scan only for the exact 'scan' value", () => {
+    expect(parseDialLens("scan")).toBe("scan");
+    expect(parseDialLens("SCAN")).toBe("radio");
+  });
+
   it("falls back to radio for anything else", () => {
     expect(parseDialLens("radio")).toBe("radio");
     expect(parseDialLens(null)).toBe("radio");
@@ -53,7 +58,7 @@ describe("read/write round trip", () => {
 });
 
 describe("DIAL_LENSES", () => {
-  it("lists radio first (the default), then press, then shows", () => {
-    expect(DIAL_LENSES).toEqual(["radio", "press", "shows"]);
+  it("lists radio first (the default), then press, shows, and scan", () => {
+    expect(DIAL_LENSES).toEqual(["radio", "press", "shows", "scan"]);
   });
 });

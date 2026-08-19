@@ -3588,6 +3588,14 @@ export const ListStationsMode = {
   "era-genre": "era-genre",
 } as const;
 
+export type ListStationsNowPlayingParams = {
+  /**
+ * When true, the station set is the default dial list UNION the sleep and era-genre mode pools (stations intentionally hidden from the default list). Powers the Scan lens, which tunes those stations too. Ignored when `date` is supplied.
+
+ */
+  includeModePools?: boolean;
+};
+
 export type GetRecordingsAvailabilityParams = {
   /**
    * Comma-separated recording MBIDs (max 100).

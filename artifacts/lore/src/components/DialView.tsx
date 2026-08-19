@@ -29,6 +29,7 @@ import { DialCliBar, type MattCliStatus } from "./dial/DialCliBar";
 import { DialLensBar } from "./dial/DialLensBar";
 import { PressFeedLane } from "./dial/PressFeedLane";
 import { ShowsFeedLane } from "./dial/ShowsFeedLane";
+import { CategoryScanLane } from "./dial/CategoryScanLane";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import {
   DEFAULT_ACTIVE_AGE_TIERS,
@@ -1623,6 +1624,8 @@ export function DialView() {
 
   const {
     stations,
+    scanStations: scanStationsOpt,
+    scanNowPlaying: scanNowPlayingOpt,
     isLoading,
     isCoreLoading,
     liveLoading,
@@ -1646,7 +1649,18 @@ export function DialView() {
     // Category-driven fetching only applies outside the hidden gesture modes:
     // while sleep or era-genre is active the legacy single-mode flags win.
     categories: hiddenModeActive ? undefined : activeCategories,
+    // Scan lens needs the full curated list regardless of the category
+    // filter; only fetch it while the lens is actually selected.
+    scanActive: dialLens === "scan",
   });
+  // Defensive defaults: older test mocks of useDialData don't provide the
+  // Scan fields.
+  const scanStations = useMemo(() => scanStationsOpt ?? [], [scanStationsOpt]);
+  // Freshness-gated by useDialData: stale/off-air last spins never appear.
+  const scanNowPlaying = useMemo(
+    () => scanNowPlayingOpt ?? new Map<string, DialSpin>(),
+    [scanNowPlayingOpt],
+  );
   // Defensive default keeps older mocks (which don't provide the phase) on the
   // legacy behavior; the real hook always supplies it.
   const cxPhase = crossingsPhase ?? "settled";
@@ -2749,6 +2763,20 @@ export function DialView() {
       fastLane.landOnStation(row.ds.station.slug, fastLaneCandidate(row.ds.liveTrack));
     }
   }, [scan, radio, fastLane, fastLaneCandidate]);
+  // Scan lens: tune to the station whose now-playing line is shown on the
+  // category button. Same tune path as a direct feed-row click.
+  const tuneScanStation = useCallback((slug: string) => {
+    const station =
+      scanStations.find((s) => s.slug === slug)
+      ?? stations.find((ds) => ds.station.slug === slug)?.station;
+    if (!station) return;
+    scan.stop();
+    if (resolvePlaybackSource(station) == null) return;
+    if (radio.station?.slug !== slug || radio.status !== "playing") {
+      void radio.toggle(station);
+      fastLane.landOnStation(slug, fastLaneCandidate(scanNowPlaying.get(slug) ?? null));
+    }
+  }, [scanStations, stations, scan, radio, fastLane, fastLaneCandidate, scanNowPlaying]);
   const popLineFor = useCallback((slug: string) =>
     popHasContent(slug)
       ? <PopCrossingLine artists={popMap.get(slug)!} seedsLower={seedsLower} onAdd={addSeed} />
@@ -3047,6 +3075,19 @@ export function DialView() {
                           />
                         )}
                       </>
+                    )}
+
+                    {/* ── Scan lens: one now-playing button per category ──
+                        Parallel discovery surface — always shows every
+                        category, ignoring the category filter, and stays
+                        available while radioMode is active. */}
+                    {!inContext && dialLens === "scan" && (
+                      <CategoryScanLane
+                        stations={scanStations}
+                        nowPlayingBySlug={scanNowPlaying}
+                        activeSlug={radio.station?.slug ?? null}
+                        onTuneIn={tuneScanStation}
+                      />
                     )}
 
                     {/* ── Radio lens: the live feed exactly as today ─────── */}
