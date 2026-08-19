@@ -14,6 +14,7 @@ import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station 
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { useStationFastLane, type FastLaneNow, type FastLaneCandidate } from "../hooks/useStationFastLane";
 import { LandingConfirmationNote } from "./dial/LandingConfirmationNote";
+import { StationScanPanel } from "./StationScanPanel";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -1006,6 +1007,7 @@ function StationDetailView({
 
   return (
     <div className="dial-fat-list">
+      <StationScanPanel slug={dialStation.station.slug} />
       {shows.map((show, i) => {
         const isLive = show.state === "live";
         const _isPast = show.state === "past";

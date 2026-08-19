@@ -11,5 +11,11 @@ export type GetStationsRecentSpinsParams = {
    * Calendar day in YYYY-MM-DD format (UTC).
    * @pattern ^\d{4}-\d{2}-\d{2}$
    */
-  date: string;
+  date?: string;
+  /**
+   * Rolling window in hours ending now (1-168). When present, the date filter is ignored and spins from the last N hours are returned.
+   * @minimum 1
+   * @maximum 168
+   */
+  hours?: number;
 };

@@ -53,6 +53,14 @@ export interface LibraryProvenance {
   pickerHandle?: string;
   /** Display name of the picker/DJ (joined from spins → pickers) */
   pickerName?: string;
+  /**
+   * Client surface the keep came from (e.g. "stationScan"). Analytics-only
+   * context — the server whitelists it (KEEP_CONTEXT_KEYS) but never uses it
+   * for attribution.
+   */
+  surface?: string;
+  /** Entry point within the surface, when finer-grained than `surface`. */
+  entryPoint?: string;
 }
 
 export interface LibraryItem {

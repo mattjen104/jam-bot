@@ -3514,20 +3514,33 @@ export const GetStationsRollingGenresResponse = zod
   );
 
 /**
- * Returns the 8 most-recently-played distinct tracks per station for the given UTC calendar day, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Powers track-chip timelines on showless station cards.
+ * Returns recently-played distinct tracks per station, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Two window modes: `date` selects one UTC calendar day (powers track-chip timelines on showless station cards); `hours` selects a rolling window ending now (powers the station new-music scan). Exactly one of `date` or `hours` should be provided; `hours` wins when both are present.
 
- * @summary Last 8 spins per station for a given calendar day
+ * @summary Recent spins per station (calendar day or rolling window)
  */
 export const getStationsRecentSpinsQueryDateRegExp = new RegExp(
   "^\\d{4}-\\d{2}-\\d{2}$",
 );
+export const getStationsRecentSpinsQueryHoursMax = 168;
 
 export const GetStationsRecentSpinsQueryParams = zod.object({
   date: zod.coerce
     .string()
     .regex(getStationsRecentSpinsQueryDateRegExp)
+    .optional()
     .describe("Calendar day in YYYY-MM-DD format (UTC)."),
+  hours: zod.coerce
+    .number()
+    .min(1)
+    .max(getStationsRecentSpinsQueryHoursMax)
+    .optional()
+    .describe(
+      "Rolling window in hours ending now (1-168). When present, the date filter is ignored and spins from the last N hours are returned.",
+    ),
 });
+
+export const getStationsRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMin = 0;
+export const getStationsRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMax = 23;
 
 export const GetStationsRecentSpinsResponse = zod
   .object({
@@ -3574,6 +3587,29 @@ export const GetStationsRecentSpinsResponse = zod
                 .boolean()
                 .describe(
                   "True when the spin's artist is in the listener's library but the exact track\/album is not. Always false for unauthenticated requests.",
+                ),
+              playedAtHour: zod
+                .number()
+                .min(
+                  getStationsRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMin,
+                )
+                .max(
+                  getStationsRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMax,
+                )
+                .describe(
+                  'UTC hour of day (0-23) the spin aired. Discovery metadata for the station new-music scan (e.g. \"WKCR plays new jazz 2-4 PM\").',
+                ),
+              djName: zod
+                .string()
+                .nullable()
+                .describe(
+                  "DJ attribution for the show airing when this spin played, when a valid schedule join exists. Null when unattributed.",
+                ),
+              showName: zod
+                .string()
+                .nullable()
+                .describe(
+                  "Name of the show airing when this spin played, when a valid schedule join exists. Null when unattributed.",
                 ),
             })
             .describe("One deduped spin chip for a station on a given day."),

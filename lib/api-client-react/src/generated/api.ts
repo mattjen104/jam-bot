@@ -4821,12 +4821,12 @@ export function useGetStationsRollingGenres<
 }
 
 /**
- * Returns the 8 most-recently-played distinct tracks per station for the given UTC calendar day, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Powers track-chip timelines on showless station cards.
+ * Returns recently-played distinct tracks per station, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Two window modes: `date` selects one UTC calendar day (powers track-chip timelines on showless station cards); `hours` selects a rolling window ending now (powers the station new-music scan). Exactly one of `date` or `hours` should be provided; `hours` wins when both are present.
 
- * @summary Last 8 spins per station for a given calendar day
+ * @summary Recent spins per station (calendar day or rolling window)
  */
 export const getGetStationsRecentSpinsUrl = (
-  params: GetStationsRecentSpinsParams,
+  params?: GetStationsRecentSpinsParams,
 ) => {
   const normalizedParams = new URLSearchParams();
 
@@ -4844,7 +4844,7 @@ export const getGetStationsRecentSpinsUrl = (
 };
 
 export const getStationsRecentSpins = async (
-  params: GetStationsRecentSpinsParams,
+  params?: GetStationsRecentSpinsParams,
   options?: RequestInit,
 ): Promise<StationsRecentSpinsResult> => {
   return customFetch<StationsRecentSpinsResult>(
@@ -4866,7 +4866,7 @@ export const getGetStationsRecentSpinsQueryOptions = <
   TData = Awaited<ReturnType<typeof getStationsRecentSpins>>,
   TError = ErrorType<ApiError>,
 >(
-  params: GetStationsRecentSpinsParams,
+  params?: GetStationsRecentSpinsParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getStationsRecentSpins>>,
@@ -4899,14 +4899,14 @@ export type GetStationsRecentSpinsQueryResult = NonNullable<
 export type GetStationsRecentSpinsQueryError = ErrorType<ApiError>;
 
 /**
- * @summary Last 8 spins per station for a given calendar day
+ * @summary Recent spins per station (calendar day or rolling window)
  */
 
 export function useGetStationsRecentSpins<
   TData = Awaited<ReturnType<typeof getStationsRecentSpins>>,
   TError = ErrorType<ApiError>,
 >(
-  params: GetStationsRecentSpinsParams,
+  params?: GetStationsRecentSpinsParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getStationsRecentSpins>>,

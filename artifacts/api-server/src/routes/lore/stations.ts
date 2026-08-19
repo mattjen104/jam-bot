@@ -1420,14 +1420,26 @@ router.get("/stations/:slug/overlaps/pickers", h(async (req, res) => {
   );
 }));
 
-// GET /api/stations/recent-spins?date=YYYY-MM-DD
-// Last 8 spins per station for the given calendar day, ordered newest first.
+// GET /api/stations/recent-spins?date=YYYY-MM-DD  (calendar-day window)
+// GET /api/stations/recent-spins?hours=48         (rolling window ending now)
+// Recent spins per station ordered newest first.
 // Uses a window function so all stations are fetched in one query.
-// Powers the track-chip timeline on showless station cards (e.g. Radio Paradise).
+// Date mode powers the track-chip timeline on showless station cards
+// (e.g. Radio Paradise); hours mode powers the station new-music scan.
 router.get("/stations/recent-spins", h(async (req, res) => {
   const rawDate = typeof req.query.date === "string" ? req.query.date.trim() : null;
   const dateFilter = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
-  if (!dateFilter) {
+  // Optional rolling-hours window (1-168). When valid, it replaces the
+  // calendar-day filter with `played_at >= NOW() - interval`.
+  const rawHours = typeof req.query.hours === "string" ? Number(req.query.hours) : null;
+  const hoursFilter =
+    rawHours != null && Number.isInteger(rawHours) && rawHours >= 1 && rawHours <= 168
+      ? rawHours
+      : null;
+  if (rawHours != null && hoursFilter == null) {
+    return res.status(400).json({ error: "hours must be an integer between 1 and 168" });
+  }
+  if (!dateFilter && !hoursFilter) {
     return res.status(400).json({ error: "date query param required (YYYY-MM-DD)" });
   }
 
@@ -1436,6 +1448,11 @@ router.get("/stations/recent-spins", h(async (req, res) => {
   const hitCtx = user
     ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
     : EMPTY_HIT_CONTEXT;
+
+  // Window predicate: rolling hours takes precedence over the calendar day.
+  const windowPredicate = hoursFilter
+    ? sql`sp.played_at >= NOW() - make_interval(hours => ${hoursFilter})`
+    : sql`sp.played_at::date = ${dateFilter}::date`;
 
   const rows = await db.execute<{
     station_slug: string;
@@ -1449,10 +1466,13 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     release_year: number | null;
     release_date: string | null;
     played_at: string;
+    show_name: string | null;
+    dj_name: string | null;
   }>(sql`
     WITH ranked AS (
       SELECT
         s.slug AS station_slug,
+        s.name AS station_name,
         sp.mbid,
         r.artist_mbid,
         (
@@ -1468,14 +1488,18 @@ router.get("/stations/recent-spins", h(async (req, res) => {
         r.release_year,
         r.release_date,
         sp.played_at,
+        sh.name AS show_name,
+        sh.dj_name,
         ROW_NUMBER() OVER (PARTITION BY sp.station_id ORDER BY sp.played_at DESC) AS rn
       FROM spins sp
       JOIN stations s ON s.id = sp.station_id AND s.hidden = false
       LEFT JOIN recordings r ON r.mbid = sp.mbid
-      WHERE sp.played_at::date = ${dateFilter}::date
+      LEFT JOIN shows sh ON sh.id = sp.show_id
+        AND ${validScheduleShowAttribution(sql`sp.station_id`, sql`sp.played_at`, sql`sh.name`, sql`sh.picker_id`)}
+      WHERE ${windowPredicate}
         AND sp.station_id IS NOT NULL
     )
-    SELECT station_slug, mbid, artist_mbid, release_group_mbid, title, artist, raw_title, raw_artist, release_year, release_date, played_at
+    SELECT station_slug, station_name, mbid, artist_mbid, release_group_mbid, title, artist, raw_title, raw_artist, release_year, release_date, played_at, show_name, dj_name
     FROM ranked
     -- Over-fetch beyond the 8 we actually want to render: some stations log
     -- the same track more than once in a row (metadata re-announces, ad-break
@@ -1492,7 +1516,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
   // library crossings against the FULL show history, not just the latest 8.
   // The chip strip limits display client-side via slice(0, 28).
   const CHIPS_PER_STATION = 80;
-  const bySlug = new Map<string, { mbid: string | null; artistMbid: string | null; releaseGroupMbid: string | null; title: string; artist: string; releaseYear: number | null; releaseDate: string | null; playedAt: string }[]>();
+  const bySlug = new Map<string, { mbid: string | null; artistMbid: string | null; releaseGroupMbid: string | null; title: string; artist: string; releaseYear: number | null; releaseDate: string | null; playedAt: string; playedAtHour: number; djName: string | null; showName: string | null }[]>();
   const seenBySlug = new Map<string, Set<string>>();
   for (const row of rows.rows) {
     const title = row.title ?? row.raw_title ?? "";
@@ -1512,6 +1536,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     if (arr.length >= CHIPS_PER_STATION) continue;
     seen.add(dedupeKey);
 
+    const playedAtDate = new Date(row.played_at);
     const spin = {
       mbid: row.mbid ?? null,
       artistMbid: row.artist_mbid ?? null,
@@ -1520,14 +1545,26 @@ router.get("/stations/recent-spins", h(async (req, res) => {
       artist,
       releaseYear: row.release_year ?? null,
       releaseDate: row.release_date ?? null,
-      playedAt: new Date(row.played_at).toISOString(),
+      playedAt: playedAtDate.toISOString(),
+      // UTC hour of day — discovery metadata for the new-music scan
+      // ("this station airs new jazz 2-4 PM").
+      playedAtHour: playedAtDate.getUTCHours(),
+      // Attribution gate: generic/colliding DJ values are filtered the same
+      // way every other surface does it (one pure normalized rule).
+      djName: eligibleDjName(row.dj_name, {
+        showTitle: row.show_name ?? undefined,
+        title,
+        artist,
+      }),
+      showName: row.show_name ?? null,
     };
     if (bySlug.has(row.station_slug)) arr.push(spin);
     else bySlug.set(row.station_slug, [spin]);
   }
 
-  // Batch-check which resolved mbids have been seen in the archive before today.
-  // A single ANY() query is cheaper than N correlated sub-selects.
+  // Batch-check which resolved mbids have been seen in the archive before the
+  // window start. A single ANY() query is cheaper than N correlated sub-selects.
+  // Date mode: "before today"; hours mode: "before the rolling window opened".
   const allMbids = new Set<string>();
   for (const spins of bySlug.values()) {
     for (const sp of spins) { if (sp.mbid) allMbids.add(sp.mbid); }
@@ -1536,10 +1573,13 @@ router.get("/stations/recent-spins", h(async (req, res) => {
   if (allMbids.size > 0) {
     const mbidArr = [...allMbids];
     const mbidSql = sql.join(mbidArr.map((m) => sql`${m}`), sql`, `);
+    const beforeWindowPredicate = hoursFilter
+      ? sql`played_at < NOW() - make_interval(hours => ${hoursFilter})`
+      : sql`played_at::date < ${dateFilter}::date`;
     const seenRows = await db.execute<{ mbid: string }>(sql`
       SELECT DISTINCT mbid FROM spins
       WHERE mbid = ANY(ARRAY[${mbidSql}]::text[])
-        AND played_at::date < ${dateFilter}::date
+        AND ${beforeWindowPredicate}
     `);
     for (const row of seenRows.rows) seenBeforeToday.add(row.mbid);
   }

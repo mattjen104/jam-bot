@@ -55,6 +55,8 @@ vi.mock("../src/hooks/useRadioPlayer", () => ({
     setVolume: vi.fn(),
     toggle: vi.fn(),
     stop: vi.fn(),
+    duck: vi.fn(),
+    restoreDuck: vi.fn(),
   })),
 }));
 

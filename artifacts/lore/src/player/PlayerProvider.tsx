@@ -232,6 +232,19 @@ interface RadioApi {
   scanning: boolean;
   stop: () => void;
   setVolume: (v: number) => void;
+  /**
+   * Duck the live-stream volume to a background level (≈15%) so an iTunes
+   * preview can play over it without stopping the stream. Stores the
+   * current volume so `restoreDuck()` can return to it. No-op if already
+   * ducked.
+   */
+  duck: () => void;
+  /**
+   * Restore the stream volume saved by the last `duck()` call. If
+   * `setVolume` was called while ducked, the new preference is honoured.
+   * No-op if duck was never called.
+   */
+  restoreDuck: () => void;
 }
 
 export interface RideApi {
@@ -611,8 +624,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         clearScanTimer();
         scanTokenRef.current += 1;
         // `scanCurrent` derives to null once `scanActive` flips false below.
-        // Silence the preview audio element used by the scan.
+        // Silence the preview audio element used by the scan and restore the
+        // live-stream volume that was ducked while previews played.
         stopScanAudio(audioRef.current);
+        radioRef.current.restoreDuck();
         return false;
       }
       // Don't start a preview scan while a ride is active — they share the
@@ -635,8 +650,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const el = audioRef.current;
     const token = scanTokenRef.current;
 
-    // Stop any live broadcast — scan uses the preview audio element exclusively.
-    radioRef.current.stop();
+    // Duck the live broadcast instead of stopping it — the stream stays alive
+    // so there is no reconnect cost when the listener lands.  The preview
+    // audio element plays the iTunes clip at full volume on top.
+    radioRef.current.duck();
 
     // Display info (`scanCurrent`) is derived during render from `scanIdx`, so
     // the UI already reflects this hop — no imperative state update needed here.
@@ -673,7 +690,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (scanTokenRef.current !== token) return;
-        // Error fetching preview — skip to next station quickly.
+        // Error fetching preview — restore duck in case no preview played.
+        radioRef.current.restoreDuck();
+        // Skip to next station quickly.
         scanTimerRef.current = setTimeout(() => {
           setScanIdx((i) => {
             const n = scannableStations.length;
@@ -682,7 +701,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }, SCAN_SKIP_MS);
       });
 
-    return clearScanTimer;
+    return () => {
+      clearScanTimer();
+    };
   }, [scanActive, scanIdx, scanDir, scannableStations, clearScanTimer]);
 
   const [active, setActive] = useState(false);
@@ -962,6 +983,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       scanTokenRef.current += 1;
       setScanActive(false);
       stopScanAudio(audioRef.current);
+      // A scan may have ducked the live stream; restore the saved volume
+      // before the ride pauses it (no-op when nothing is ducked).
+      radioRef.current.restoreDuck();
       // The ride takes over audio: pause the live stream (resumable) so two
       // sources never play at once — enqueue-never-cut, but audio is exclusive.
       pauseRadio?.();
@@ -1095,6 +1119,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       scanTokenRef.current += 1;
       setScanActive(false);
       stopScanAudio(audioRef.current);
+      // A scan may have ducked the live stream; restore the saved volume
+      // before the ride pauses it (no-op when nothing is ducked).
+      radioRef.current.restoreDuck();
       pauseRadio?.();
       rideRef.current += 1;
       previewFetchingRef.current.clear();
@@ -1279,6 +1306,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // external-sync work triggered by a ride taking over the shared audio
     // element — not a value derivable during render.
     stopScanAudio(audioRef.current);
+    // The scan ducked the live stream; the ride is taking over audio, so
+    // restore the saved volume (the ride's own pauseRadio handles silencing).
+    radioRef.current.restoreDuck();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting scan when a ride claims the shared audio element is a legit external reset, not a derivable value
     setScanActive(false);
   }, [active, scanActive, clearScanTimer, stopScanAudio]);
@@ -3262,6 +3292,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         scanning: isScanPreview,
         stop: stopRadio,
         setVolume: radio.setVolume,
+        duck: radio.duck,
+        restoreDuck: radio.restoreDuck,
       },
       ride: {
         active,
@@ -3337,6 +3369,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.volume,
       radio.error,
       radio.setVolume,
+      radio.duck,
+      radio.restoreDuck,
       castStatus,
       castFallbackReason,
       castPaused,

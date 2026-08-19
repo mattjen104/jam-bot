@@ -33,4 +33,20 @@ export interface StationRecentSpin {
   isLibraryHit: boolean;
   /** True when the spin's artist is in the listener's library but the exact track/album is not. Always false for unauthenticated requests. */
   isArtistHit: boolean;
+  /**
+   * UTC hour of day (0-23) the spin aired. Discovery metadata for the station new-music scan (e.g. "WKCR plays new jazz 2-4 PM").
+   * @minimum 0
+   * @maximum 23
+   */
+  playedAtHour: number;
+  /**
+   * DJ attribution for the show airing when this spin played, when a valid schedule join exists. Null when unattributed.
+   * @nullable
+   */
+  djName: string | null;
+  /**
+   * Name of the show airing when this spin played, when a valid schedule join exists. Null when unattributed.
+   * @nullable
+   */
+  showName: string | null;
 }

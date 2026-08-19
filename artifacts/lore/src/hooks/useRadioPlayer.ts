@@ -40,6 +40,10 @@ export function resolvePlaybackSource(station: Station): string | null {
 export function useRadioPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hlsRef = useRef<unknown>(null);
+  // Non-null while the live stream is ducked (see duck()/restoreDuck()); holds
+  // the volume to restore. setVolume during a duck retargets this instead of
+  // the live element, so the user's change survives the restore.
+  const savedVolumeRef = useRef<number | null>(null);
   const [state, setState] = useState<PlayerState>({
     status: "idle",
     station: null,
@@ -63,7 +67,9 @@ export function useRadioPlayer() {
   useEffect(() => {
     const el = ensureAudio();
     if (!el) return;
-    el.volume = state.volume;
+    // While ducked, the element stays at DUCK_VOLUME — state.volume is the
+    // user's preferred (restore) level, applied by restoreDuck() instead.
+    if (savedVolumeRef.current === null) el.volume = state.volume;
     const onPlaying = () =>
       setState((s) => ({ ...s, status: "playing", error: null }));
     const onWaiting = () => setState((s) => ({ ...s, status: "loading" }));
@@ -206,9 +212,54 @@ export function useRadioPlayer() {
     }
   }, []);
 
-  const setVolume = useCallback((v: number) => {
+  /**
+   * Temporarily lower the live-stream volume to a background level so an
+   * iTunes preview can play over it without stopping the stream.
+   *
+   * Stores the current `state.volume` in a ref so `setVolume` calls during a
+   * duck still update the saved restore target (user-visible volume is
+   * preserved).  The audio element itself is set to DUCK_VOLUME; `state.volume`
+   * is NOT changed, so the UI volume knob shows the real value throughout.
+   */
+  const DUCK_VOLUME = 0.15;
+
+  const duck = useCallback(() => {
     const el = audioRef.current;
-    if (el) el.volume = v;
+    if (!el) return;
+    // Only duck once; a second call while already ducked is a no-op.
+    if (savedVolumeRef.current !== null) return;
+    savedVolumeRef.current = el.volume;
+    el.volume = DUCK_VOLUME;
+  }, []);
+
+  /**
+   * Restore the stream volume that was in effect before `duck()` was called.
+   * Uses the saved ref value so intermediate `setVolume` calls during the duck
+   * are honoured on restore.  No-op if duck was never called.
+   */
+  const restoreDuck = useCallback(() => {
+    const el = audioRef.current;
+    if (savedVolumeRef.current === null) return;
+    // savedVolumeRef holds the restore target: the pre-duck volume, or the
+    // user's newer preference if setVolume was called during the duck
+    // (setVolumeWithDuck retargets the ref while ducked).
+    const target = savedVolumeRef.current;
+    savedVolumeRef.current = null;
+    if (el) el.volume = target;
+  }, []);
+
+  // Override setVolume: when ducked, update the saved-volume target too so
+  // the user's new preference is the value restored on restoreDuck.
+  const setVolumeWithDuck = useCallback((v: number) => {
+    const el = audioRef.current;
+    if (el) {
+      if (savedVolumeRef.current !== null) {
+        // Currently ducked — update saved target and keep element ducked.
+        savedVolumeRef.current = v;
+      } else {
+        el.volume = v;
+      }
+    }
     setState((s) => ({ ...s, volume: v }));
   }, []);
 
@@ -224,6 +275,8 @@ export function useRadioPlayer() {
     stop,
     pause,
     resume,
-    setVolume,
+    setVolume: setVolumeWithDuck,
+    duck,
+    restoreDuck,
   };
 }
