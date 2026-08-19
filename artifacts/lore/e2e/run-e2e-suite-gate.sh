@@ -16,6 +16,9 @@
 #                                       intercepted with fixtures)
 #   - cornerNavTappability.spec.ts     (corner nav links visible + clickable above the
 #                                       player dock at 360×640 portrait and 640×360 landscape)
+#   - microDialRemote.spec.ts          (15-key Micro remote paging, page-two
+#                                       tune-in, and no keypad overflow at
+#                                       mobile + desktop viewport sizes)
 #   - firstRunSidebarOnboarding.spec.ts (first-time visitor sees .frb__block sentences,
 #                                       NOT .z1-placeholder__seedchip chips; data-rung
 #                                       order non-decreasing)
@@ -101,6 +104,7 @@ RUN_SPECS=(
   e2e/fallbackNotice.spec.ts
   e2e/cornerNavTappability.spec.ts
   e2e/mobileFrontDoor.spec.ts
+  e2e/microDialRemote.spec.ts
   e2e/firstRunSidebarOnboarding.spec.ts
   e2e/dialInfiniteScroll.spec.ts
   e2e/compactCrossingLabels.spec.ts
