@@ -115,6 +115,13 @@ export async function setup(): Promise<void> {
       "../src/lore/artist-events-migration.js"
     );
     await applyArtistEventsMigration();
+
+    // Ensures station_exclusions exists — required by the permanent-removal
+    // endpoint tests and by upsertRadioBrowserStations' exclusion lookup.
+    const { applyStationExclusionsMigration } = await import(
+      "../src/lore/station-exclusions-migration.js"
+    );
+    await applyStationExclusionsMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

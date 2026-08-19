@@ -27,6 +27,7 @@ import { type DialStation, type DialShow, type DialDisplayMode } from "../../hoo
 import { type StationPresence } from "../../hooks/useStationPresence";
 import { rowPassesAgeTierFilter, type AgeTier } from "../../lib/dialAgeFilter";
 import { FrontDoorRow } from "./FrontDoorRow";
+import { StationAdminContextMenu } from "./StationAdminContextMenu";
 import { CompactPlayButton } from "../CompactPlayButton";
 import { resolvePlaybackSource, type PlayerStatus } from "../../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../../lib/utils";
@@ -94,6 +95,11 @@ export interface DialFeedLaneProps {
   onPlay?: (row: DialLaneRow) => void;
   /** Player status for the active station (play-button spinner/pause state). */
   playerStatus?: PlayerStatus;
+  /**
+   * Called after an admin permanently removes a station via the right-click
+   * context menu, so DialView can refetch the station list immediately.
+   */
+  onStationRemoved?: () => void;
 }
 
 interface FeedEntry {
@@ -124,6 +130,7 @@ export function DialFeedLane({
   crossingScope = DEFAULT_CROSSING_SCOPE,
   onPlay,
   playerStatus,
+  onStationRemoved,
 }: DialFeedLaneProps) {
   // Flat display order mirrors the scrubber: ▲ reason → dj → rest;
   // ▼ rest → dj → reason (reason rows arrive pre-inverted from DialView).
@@ -241,8 +248,13 @@ export function DialFeedLane({
           </a>
         ) : null);
         return (
-        <div
+        <StationAdminContextMenu
           key={slug}
+          stationId={row.ds.station.id}
+          stationName={row.ds.station.name}
+          onRemoved={onStationRemoved}
+        >
+        <div
           data-feed-band={band}
           className={actionSlot ? "dial-feed-row" : undefined}
         >
@@ -288,6 +300,7 @@ export function DialFeedLane({
             />
           )}
         </div>
+        </StationAdminContextMenu>
         );
       })}
       {/* Sentinel — triggers the next page load when scrolled into view. */}

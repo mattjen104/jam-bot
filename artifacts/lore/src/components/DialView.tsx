@@ -2796,6 +2796,7 @@ export function DialView() {
       crossingScope={crossingScope}
       onPlay={(row) => { void radio.toggle(row.ds.station); }}
       playerStatus={radio.status}
+      onStationRemoved={() => { void refetchStations(); }}
     />
   );
 

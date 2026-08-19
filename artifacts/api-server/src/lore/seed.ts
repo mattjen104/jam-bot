@@ -8,6 +8,7 @@ import {
   listSourcesTable,
   listsTable,
   listEntriesTable,
+  stationExclusionsTable,
   type InsertStation,
 } from "@workspace/db";
 import { and, count, eq, sql } from "drizzle-orm";
@@ -2205,7 +2206,24 @@ export async function seedSpinitronRoster(): Promise<void> {
  * immediately confirms activation in the console without digging through config.
  */
 export async function seedStations(): Promise<void> {
+  // Permanent-removal tombstones ("Remove from Lore"): a seed station whose
+  // slug is excluded must NOT be re-created or re-activated on boot — the
+  // permanent-remove endpoint leaves the row hidden+inactive and the exclusion
+  // row keeps it that way across restarts. Fails open (empty set) so a DB
+  // hiccup here can never block seeding, mirroring the discovery worker.
+  let excludedSlugs = new Set<string>();
+  try {
+    const rows = await db
+      .select({ slug: stationExclusionsTable.stationSlug })
+      .from(stationExclusionsTable);
+    excludedSlugs = new Set(
+      rows.map((r) => r.slug).filter((s): s is string => s != null),
+    );
+  } catch (err) {
+    console.warn("[seed] station exclusion lookup failed (failing open)", err);
+  }
   for (const s of SEED_STATIONS) {
+    if (excludedSlugs.has(s.slug)) continue;
     const computedTimezone = inferTimezone(s.city ?? null, s.country ?? null);
     await db
       .insert(stationsTable)

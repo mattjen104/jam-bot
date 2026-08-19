@@ -208,8 +208,94 @@ function RadioBrowserPanel({
               </div>
             )}
           </div>
+
+          <RemovedStationsSection token={token} />
         </div>
       </div>
+    </div>
+  );
+}
+
+interface StationExclusionRow {
+  id: number;
+  radioBrowserUuid: string | null;
+  stationSlug: string | null;
+  stationName: string;
+  removedAt: string;
+}
+
+/**
+ * Permanent-removal tombstone list. Read-only by design — un-removing is a
+ * manual DB operation (delete the exclusion row); this list exists so an
+ * accidental "Remove from Lore" can be diagnosed.
+ */
+function RemovedStationsSection({ token }: { token: string }) {
+  const [rows, setRows] = useState<StationExclusionRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/station-exclusions", {
+          headers: { "x-admin-token": token },
+        });
+        if (!res.ok) {
+          const body = (await res.json()) as { error?: string };
+          if (!cancelled) setError(body.error ?? `HTTP ${res.status}`);
+          return;
+        }
+        const body = (await res.json()) as { exclusions: StationExclusionRow[] };
+        if (!cancelled) setRows(body.exclusions);
+      } catch (err) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load removals");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  return (
+    <div>
+      <h2 className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
+        Removed stations
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Permanently removed via "Remove from Lore" — never re-discovered or
+        re-seeded. Un-remove by deleting the exclusion row in the database.
+      </p>
+      {error ? (
+        <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
+          {error}
+        </div>
+      ) : rows == null ? (
+        <div className="mt-3 flex items-center gap-2 text-base text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading…
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="mt-3 text-base text-muted-foreground">
+          No stations have been removed.
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-2">
+          {rows.map((r) => (
+            <div
+              key={r.id}
+              className="rounded-lg border border-card-border bg-card px-3 py-2"
+              data-testid={`removed-station-${r.id}`}
+            >
+              <div className="text-base text-foreground">{r.stationName}</div>
+              <div className="mt-0.5 font-mono text-[12px] text-muted-foreground">
+                {r.radioBrowserUuid ?? r.stationSlug ?? "—"} · removed{" "}
+                {new Date(r.removedAt).toLocaleDateString()}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

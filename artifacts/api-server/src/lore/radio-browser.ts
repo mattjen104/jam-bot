@@ -1,4 +1,4 @@
-import { db, stationsTable, radioBrowserStationsTable } from "@workspace/db";
+import { db, stationsTable, radioBrowserStationsTable, stationExclusionsTable } from "@workspace/db";
 import { sql, eq, and, isNull } from "drizzle-orm";
 
 /**
@@ -429,12 +429,38 @@ export function filterStations(
  * New longtail rows start as active=false; the health worker promotes them
  * once the stream passes a live check and meets the bitrate threshold.
  */
+/**
+ * Radio Browser UUIDs the admin has permanently removed ("Remove from Lore").
+ * Consulted by the discovery upsert so an excluded station is never
+ * re-enrolled, regardless of quality filters or genre tags. Errors fail open
+ * (empty set) so a transient DB hiccup never blocks a discovery pass — the
+ * exclusion is re-checked on every run.
+ */
+export async function getExcludedRadioBrowserUuids(): Promise<Set<string>> {
+  try {
+    const rows = await db
+      .select({ uuid: stationExclusionsTable.radioBrowserUuid })
+      .from(stationExclusionsTable);
+    return new Set(
+      rows.map((r) => r.uuid).filter((u): u is string => u != null),
+    );
+  } catch (err) {
+    console.warn("[radio-browser] exclusion lookup failed (failing open)", err);
+    return new Set();
+  }
+}
+
 export async function upsertRadioBrowserStations(
   stations: RadioBrowserStation[],
   tag: string,
 ): Promise<number> {
   let upserted = 0;
+  // Permanent-removal tombstones — an excluded UUID must never be re-enrolled.
+  // Loaded once per upsert batch (covers both the discovery worker and the
+  // for-you genre-expansion call site).
+  const excludedUuids = await getExcludedRadioBrowserUuids();
   for (const s of stations) {
+    if (s.stationuuid && excludedUuids.has(s.stationuuid)) continue;
     const streamUrl = (s.url_resolved || s.url || "").trim();
     if (!streamUrl || !s.name?.trim()) continue;
     // Belt-and-suspenders: filterStations should have caught these, but guard

@@ -3211,6 +3211,33 @@ export type InsertLoreSetting = typeof loreSettingsTable.$inferInsert;
  * created by an idempotent boot migration in api-server; it is declared here
  * so drizzle-kit push does not see it as an unknown table and try to drop it.
  */
+/**
+ * Permanent station removals (admin "Remove from Lore").
+ *
+ * Rows here are a tombstone ledger consulted by:
+ *   • the Radio Browser discovery worker — an excluded radio_browser_uuid is
+ *     never re-upserted/re-enrolled, no matter what quality filters say;
+ *   • seedStations() — an excluded station_slug (curated seed stations) is
+ *     skipped on boot so a removed seed station stays hidden+inactive.
+ *
+ * Un-removing is a manual operation: delete the exclusion row (and, for
+ * curated stations, un-hide/re-activate the stations row). No UI by design.
+ * Created via an idempotent boot migration in api-server.
+ */
+export const stationExclusionsTable = pgTable("station_exclusions", {
+  id: serial("id").primaryKey(),
+  /** Radio Browser UUID — set for removed radio_browser stations. */
+  radioBrowserUuid: text("radio_browser_uuid").unique(),
+  /** Station slug — set for removed curated seed stations. */
+  stationSlug: text("station_slug").unique(),
+  /** Display name at removal time, for diagnostics. */
+  stationName: text("station_name").notNull(),
+  removedAt: timestamp("removed_at").defaultNow().notNull(),
+});
+
+export type StationExclusion = typeof stationExclusionsTable.$inferSelect;
+export type InsertStationExclusion = typeof stationExclusionsTable.$inferInsert;
+
 export const jobTimestampsTable = pgTable("job_timestamps", {
   /** Stable job identifier, e.g. 'pitchfork-pass'. */
   key: text("key").primaryKey(),

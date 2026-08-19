@@ -78,6 +78,7 @@ import {
   embedResolutionMetricsTable,
   embedResolutionQueueTable,
   loreSettingsTable,
+  stationExclusionsTable,
 } from "@workspace/db";
 import { bustConfigCache } from "../config.js";
 import { eq, and, asc, desc, sql, isNull, isNotNull, gt, gte } from "drizzle-orm";
@@ -1267,6 +1268,172 @@ router.delete("/admin/radio-browser/stations/:id", h(async (req, res) => {
     .where(eq(radioBrowserStationsTable.id, params.data.id));
 
   return res.status(204).send();
+}));
+
+// ---------------------------------------------------------------------------
+// Permanent station removal ("Remove from Lore")
+// ---------------------------------------------------------------------------
+
+/** Parse a positive-integer path param, or null. */
+function parseStationId(raw: string | string[] | undefined): number | null {
+  if (typeof raw !== "string") return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// GET /api/admin/stations/:id/removal-preview — what a permanent removal
+// would do: station name, spin count, and whether it's a curated seed station
+// (those get hidden+excluded instead of deleted). Feeds the confirm step in
+// the listener-UI context menu.
+router.get("/admin/stations/:id/removal-preview", h(async (req, res) => {
+  const id = parseStationId(req.params["id"]);
+  if (id === null) return res.status(400).json({ error: "Invalid station id" });
+
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.id, id))
+    .limit(1);
+  if (!station) return res.status(404).json({ error: "Station not found" });
+
+  const [spinRow] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(spinsTable)
+    .where(eq(spinsTable.stationId, id));
+
+  return res.json({
+    id: station.id,
+    name: station.name,
+    slug: station.slug,
+    source: station.source,
+    curated: station.source !== "radio_browser",
+    spinCount: spinRow?.n ?? 0,
+  });
+}));
+
+// DELETE /api/admin/stations/:id/permanent — permanently remove a station.
+//
+// radio_browser stations: unenroll the live poller, delete every dependent in
+// FK order inside one transaction, delete the stations row, and tombstone the
+// Radio Browser UUID in station_exclusions so discovery can never re-enroll it.
+//
+// Curated seed stations: deleting the row is pointless (seed.ts would re-create
+// it on boot), so instead mark it hidden+inactive and tombstone the slug —
+// seedStations() skips excluded slugs, keeping it gone across restarts.
+router.delete("/admin/stations/:id/permanent", h(async (req, res) => {
+  const id = parseStationId(req.params["id"]);
+  if (id === null) return res.status(400).json({ error: "Invalid station id" });
+
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.id, id))
+    .limit(1);
+  if (!station) return res.status(404).json({ error: "Station not found" });
+
+  // Stop live polling/watchers immediately — no restart needed.
+  unenrollStationPoller(id);
+
+  if (station.source !== "radio_browser") {
+    // Curated seed station: soft removal (hidden + inactive) + seed tombstone.
+    await db
+      .insert(stationExclusionsTable)
+      .values({ stationSlug: station.slug, stationName: station.name })
+      .onConflictDoNothing();
+    await db
+      .update(stationsTable)
+      .set({
+        hidden: true,
+        active: false,
+        favorite: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(stationsTable.id, id));
+    console.info(
+      `[lore] station permanently removed (curated, soft): id=${id} slug=${station.slug} name="${station.name}"`,
+    );
+    return res.json({ mode: "hidden", id, name: station.name });
+  }
+
+  // Capture the Radio Browser UUID before the enrollment row is deleted.
+  const [rbRow] = await db
+    .select({ uuid: radioBrowserStationsTable.radioBrowserUuid })
+    .from(radioBrowserStationsTable)
+    .where(eq(radioBrowserStationsTable.stationId, id))
+    .limit(1);
+
+  await db.transaction(async (tx) => {
+    // Same lock as purgeNonQualifyingStations: block concurrent discovery
+    // INSERTs into radio_browser_stations until this transaction commits.
+    await tx.execute(sql`LOCK TABLE radio_browser_stations IN EXCLUSIVE MODE`);
+
+    // Dependents beyond the documented purge order — these reference spins/
+    // shows/stations without CASCADE and would otherwise 23503 the delete.
+    await tx.execute(sql`
+      DELETE FROM attendance
+      WHERE spin_id IN (SELECT id FROM spins WHERE station_id = ${id})
+    `);
+    await tx.execute(sql`
+      UPDATE listens SET spin_id = NULL
+      WHERE spin_id IN (SELECT id FROM spins WHERE station_id = ${id})
+    `);
+    await tx.execute(sql`
+      UPDATE listens SET show_id = NULL
+      WHERE show_id IN (SELECT id FROM shows WHERE station_id = ${id})
+    `);
+    await tx.execute(sql`
+      UPDATE library_items SET spin_id = NULL
+      WHERE spin_id IN (SELECT id FROM spins WHERE station_id = ${id})
+    `);
+    await tx.execute(sql`DELETE FROM listen_sessions WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM song_bottles WHERE station_id = ${id}`);
+    await tx.execute(sql`UPDATE list_sources SET station_id = NULL WHERE station_id = ${id}`);
+    await tx.execute(sql`UPDATE embed_resolution_metrics SET station_id = NULL WHERE station_id = ${id}`);
+    await tx.execute(sql`UPDATE embed_resolution_queue SET station_id = NULL WHERE station_id = ${id}`);
+
+    // Documented FK order (see lore-station-deletion-fk-order): spins, then
+    // segue_edges (references shows too, so before shows), shows,
+    // radio_browser_stations, station_quality, scraped_shows, stations.
+    await tx.execute(sql`DELETE FROM spins WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM segue_edges WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM shows WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM radio_browser_stations WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM station_quality WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM scraped_shows WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM stations WHERE id = ${id}`);
+
+    // Tombstone the UUID inside the same transaction so a concurrent
+    // discovery pass after commit already sees the exclusion.
+    if (rbRow?.uuid) {
+      await tx
+        .insert(stationExclusionsTable)
+        .values({ radioBrowserUuid: rbRow.uuid, stationName: station.name })
+        .onConflictDoNothing();
+    }
+  });
+
+  console.info(
+    `[lore] station permanently removed: id=${id} slug=${station.slug} name="${station.name}" uuid=${rbRow?.uuid ?? "none"}`,
+  );
+  return res.json({ mode: "deleted", id, name: station.name });
+}));
+
+// GET /api/admin/station-exclusions — the permanent-removal tombstone list,
+// for the "Removed stations" section on the AdminRadioBrowser page.
+router.get("/admin/station-exclusions", h(async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(stationExclusionsTable)
+    .orderBy(desc(stationExclusionsTable.removedAt));
+  return res.json({
+    exclusions: rows.map((r) => ({
+      id: r.id,
+      radioBrowserUuid: r.radioBrowserUuid,
+      stationSlug: r.stationSlug,
+      stationName: r.stationName,
+      removedAt: r.removedAt.toISOString(),
+    })),
+  });
 }));
 
 // ---------------------------------------------------------------------------

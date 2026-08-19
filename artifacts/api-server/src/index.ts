@@ -31,6 +31,7 @@ import {
 } from "./lore/radio-browser.js";
 import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
+import { applyStationExclusionsMigration } from "./lore/station-exclusions-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { applyShowDjNamesMigration } from "./lore/show-djnames-migration.js";
 import { applyCollegeTagMigration } from "./lore/college-tag-migration.js";
@@ -153,6 +154,7 @@ async function bootLore(): Promise<void> {
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
+    await runMigration("applyStationExclusionsMigration", applyStationExclusionsMigration);
     await runMigration("applyPickerDiscoveryMigration", applyPickerDiscoveryMigration);
     await runMigration("applyStationScheduleMigration", applyStationScheduleMigration);
     await runMigration("applyDeviceIdentityMigration", applyDeviceIdentityMigration);
