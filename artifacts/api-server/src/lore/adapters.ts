@@ -514,10 +514,18 @@ export function parseNtsLive(
 const ntsLive: NowPlayingAdapter = async (config) => {
   try {
     const channel = str(config.channel) ?? "1";
-    const body = await getJson(
-      `https://www.nts.live/api/v2/live/${encodeURIComponent(channel)}`,
-    );
-    return parseNtsLive(body);
+    // The NTS API dropped the per-channel path (`/live/{channel}` now 400s);
+    // `/live/` returns all channels in a `results` array keyed by channel_name.
+    const body = (await getJson(
+      "https://www.nts.live/api/v2/live/",
+    )) as Record<string, unknown>;
+    const results = Array.isArray(body?.results)
+      ? (body.results as Array<Record<string, unknown>>)
+      : undefined;
+    if (!results) return null;
+    const entry = results.find((r) => str(r.channel_name) === channel);
+    if (!entry) return null;
+    return parseNtsLive(entry);
   } catch {
     return null;
   }

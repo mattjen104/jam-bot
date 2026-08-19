@@ -397,6 +397,41 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(body)).toBeNull();
   });
 
+  it("handles the new multi-channel /live/ response shape per channel", () => {
+    // New endpoint: https://www.nts.live/api/v2/live/ returns a `results`
+    // array with one element per channel; the adapter finds the entry by
+    // channel_name and passes it (with its `now` sub-object) to parseNtsLive.
+    const multiBody = {
+      results: [
+        {
+          channel_name: "1",
+          now: {
+            broadcast_title: "Floating Points",
+            embeds: { details: { name: "Sam Shepherd" } },
+          },
+        },
+        {
+          channel_name: "2",
+          now: { broadcast_title: "Late Night Tales" },
+        },
+      ],
+    };
+    const findChannel = (name: string) =>
+      multiBody.results.find((r) => r.channel_name === name);
+
+    expect(parseNtsLive(findChannel("1"))).toEqual({
+      rawArtist: "Sam Shepherd",
+      rawTitle: "Floating Points",
+      show: { name: "Floating Points", djName: "Sam Shepherd" },
+    });
+    expect(parseNtsLive(findChannel("2"))).toEqual({
+      rawArtist: "Late Night Tales",
+      rawTitle: "Late Night Tales",
+      show: { name: "Late Night Tales" },
+    });
+    expect(parseNtsLive(findChannel("3"))).toBeNull();
+  });
+
   it("returns null when start_timestamp is in the future (stale pre-handoff data)", () => {
     const futureTs = new Date(Date.now() + 60_000).toISOString();
     const body = {
