@@ -107,6 +107,7 @@ RUN_SPECS=(
   e2e/adminHealthRecovery.spec.ts
   e2e/liveTrackChange.spec.ts
   e2e/compactStackBand.spec.ts
+  e2e/stationAdminRemoval.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
