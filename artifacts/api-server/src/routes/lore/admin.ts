@@ -1475,6 +1475,61 @@ router.get("/admin/station-exclusions", h(async (_req, res) => {
   });
 }));
 
+// DELETE /api/admin/station-exclusions/:id — restore a permanently removed
+// station. Radio Browser tombstones can be removed directly; curated seed
+// tombstones also reactivate and un-hide the retained stations row so the next
+// seed pass can restore it normally.
+router.delete("/admin/station-exclusions/:id", h(async (req, res) => {
+  const id = parseStationId(req.params["id"]);
+  if (id === null) {
+    res.status(400).json({ error: "Invalid station exclusion id" });
+    return;
+  }
+
+  const restored = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(stationExclusionsTable)
+      .where(eq(stationExclusionsTable.id, id))
+      .returning();
+    if (!row) return null;
+
+    let station = null;
+    if (row.stationSlug) {
+      [station] = await tx
+        .update(stationsTable)
+        .set({
+          hidden: false,
+          active: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(stationsTable.slug, row.stationSlug))
+        .returning();
+    }
+
+    return { exclusion: row, station };
+  });
+
+  if (!restored) {
+    res.status(404).json({ error: "Station exclusion not found" });
+    return;
+  }
+
+  // The permanent-removal path tears down its poller. Re-enroll only after the
+  // transaction commits so the first poll sees the restored, visible row.
+  if (restored.station) {
+    enrollStationPoller(restored.station);
+  }
+
+  const { exclusion } = restored;
+  res.json({
+    restored: true,
+    mode: exclusion.stationSlug ? "curated" : "radio_browser",
+    stationName: exclusion.stationName,
+    radioBrowserUuid: exclusion.radioBrowserUuid,
+    stationSlug: exclusion.stationSlug,
+  });
+}));
+
 // ---------------------------------------------------------------------------
 // List provenance admin endpoints
 // ---------------------------------------------------------------------------

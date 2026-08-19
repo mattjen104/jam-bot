@@ -604,6 +604,11 @@ export function enrollStationPoller(station: Station): void {
   routePollingTier(station, 0);
 }
 
+/** Test seam: whether this process currently owns a poller or watcher for a station. */
+export function _testOnlyHasStationPoller(stationId: number): boolean {
+  return stationTimers.has(stationId) || stationWatchers.has(stationId);
+}
+
 /**
  * Grant a station a leased persistent watcher (crossing-score leasing).
  * Tears down its interval poller first (unenroll), so promotion is live and

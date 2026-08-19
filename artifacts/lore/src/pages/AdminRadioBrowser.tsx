@@ -224,14 +224,12 @@ interface StationExclusionRow {
   removedAt: string;
 }
 
-/**
- * Permanent-removal tombstone list. Read-only by design — un-removing is a
- * manual DB operation (delete the exclusion row); this list exists so an
- * accidental "Remove from Lore" can be diagnosed.
- */
+/** Permanent-removal tombstone list with an admin restore action. */
 function RemovedStationsSection({ token }: { token: string }) {
   const [rows, setRows] = useState<StationExclusionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,6 +255,28 @@ function RemovedStationsSection({ token }: { token: string }) {
     };
   }, [token]);
 
+  const restoreStation = async (row: StationExclusionRow) => {
+    if (restoringId !== null) return;
+    setRestoringId(row.id);
+    setRestoreError(null);
+    try {
+      const res = await fetch(`/api/admin/station-exclusions/${row.id}`, {
+        method: "DELETE",
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        setRestoreError(body.error ?? `Restore failed (HTTP ${res.status})`);
+        return;
+      }
+      setRows((current) => current?.filter((item) => item.id !== row.id) ?? current);
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
   return (
     <div>
       <h2 className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
@@ -264,7 +284,8 @@ function RemovedStationsSection({ token }: { token: string }) {
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Permanently removed via "Remove from Lore" — never re-discovered or
-        re-seeded. Un-remove by deleting the exclusion row in the database.
+        re-seeded. Restored curated stations resume tracking immediately; Radio
+        Browser stations become eligible for the next discovery pass.
       </p>
       {error ? (
         <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
@@ -287,13 +308,41 @@ function RemovedStationsSection({ token }: { token: string }) {
               className="rounded-lg border border-card-border bg-card px-3 py-2"
               data-testid={`removed-station-${r.id}`}
             >
-              <div className="text-base text-foreground">{r.stationName}</div>
-              <div className="mt-0.5 font-mono text-[12px] text-muted-foreground">
-                {r.radioBrowserUuid ?? r.stationSlug ?? "—"} · removed{" "}
-                {new Date(r.removedAt).toLocaleDateString()}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-base text-foreground">{r.stationName}</div>
+                  <div className="mt-0.5 font-mono text-[12px] text-muted-foreground">
+                    {r.radioBrowserUuid ?? r.stationSlug ?? "—"} · removed{" "}
+                    {new Date(r.removedAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 px-3 py-1 font-mono text-[12px] uppercase tracking-wide text-primary transition-colors hover:bg-primary/10 disabled:cursor-wait disabled:opacity-50"
+                  disabled={restoringId !== null}
+                  onClick={() => void restoreStation(r)}
+                  data-testid={`restore-station-${r.id}`}
+                  title={
+                    r.stationSlug
+                      ? "Restore and resume tracking"
+                      : "Restore discovery eligibility"
+                  }
+                >
+                  {restoringId === r.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  Restore
+                </button>
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {restoreError && (
+        <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
+          {restoreError}
         </div>
       )}
     </div>

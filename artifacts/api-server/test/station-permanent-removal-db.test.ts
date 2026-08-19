@@ -12,6 +12,7 @@
  *   - discovery upsert skips an excluded UUID (never re-enrolled)
  *   - curated station: soft removal (hidden + inactive) + slug tombstone
  *   - exclusions list endpoint returns the tombstones
+ *   - restore endpoint deletes tombstones and reactivates curated stations
  *   - 404 for unknown ids, 400 for garbage ids
  *
  * Self-skips when no Postgres is reachable.
@@ -31,6 +32,10 @@ import {
   spinsTable,
   showsTable,
 } from "@workspace/db";
+import {
+  _testOnlyHasStationPoller,
+  unenrollStationPoller,
+} from "../src/lore/poller.js";
 
 const ADMIN_TOKEN = `test-permremove-${randomUUID().slice(0, 8)}`;
 process.env.LORE_ADMIN_TOKEN = ADMIN_TOKEN;
@@ -95,6 +100,8 @@ beforeAll(async () => {
       source: "curated",
       active: true,
       stationClass: "community",
+      nowPlayingSource: "station_page",
+      nowPlayingConfig: {},
     })
     .returning({ id: stationsTable.id });
   curatedStationId = cur!.id;
@@ -112,6 +119,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   if (!dbAvailable) return;
+  if (curatedStationId !== null) {
+    unenrollStationPoller(curatedStationId);
+  }
   // Cleanup — tolerate rows already deleted by the endpoint under test.
   const ids = [rbStationId, curatedStationId].filter((n): n is number => n != null);
   if (ids.length > 0) {
@@ -162,6 +172,13 @@ describe("permanent station removal", () => {
     expect(
       (await authed(`/api/admin/stations/abc/permanent`, { method: "DELETE" }))
         .status,
+    ).toBe(400);
+    expect(
+      (
+        await authed(`/api/admin/station-exclusions/abc`, {
+          method: "DELETE",
+        })
+      ).status,
     ).toBe(400);
     expect(
       (
@@ -274,5 +291,63 @@ describe("permanent station removal", () => {
     expect(
       body.exclusions.some((e) => e.stationSlug === CURATED_SLUG),
     ).toBe(true);
+  });
+
+  it("restores Radio Browser and curated stations from their tombstones", async () => {
+    if (!dbAvailable) return;
+
+    const [rbExclusion] = await db
+      .select()
+      .from(stationExclusionsTable)
+      .where(eq(stationExclusionsTable.radioBrowserUuid, RB_UUID));
+    const [curatedExclusion] = await db
+      .select()
+      .from(stationExclusionsTable)
+      .where(eq(stationExclusionsTable.stationSlug, CURATED_SLUG));
+    expect(rbExclusion).toBeDefined();
+    expect(curatedExclusion).toBeDefined();
+
+    const rbRes = await authed(
+      `/api/admin/station-exclusions/${rbExclusion!.id}`,
+      { method: "DELETE" },
+    );
+    expect(rbRes.status).toBe(200);
+    expect(((await rbRes.json()) as { mode: string; restored: boolean })).toEqual(
+      expect.objectContaining({ mode: "radio_browser", restored: true }),
+    );
+
+    const curatedRes = await authed(
+      `/api/admin/station-exclusions/${curatedExclusion!.id}`,
+      { method: "DELETE" },
+    );
+    expect(curatedRes.status).toBe(200);
+    expect(((await curatedRes.json()) as { mode: string; restored: boolean })).toEqual(
+      expect.objectContaining({ mode: "curated", restored: true }),
+    );
+
+    const [curatedRow] = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.id, curatedStationId!));
+    expect(curatedRow!.hidden).toBe(false);
+    expect(curatedRow!.active).toBe(true);
+    expect(_testOnlyHasStationPoller(curatedStationId!)).toBe(true);
+
+    const remaining = await db
+      .select()
+      .from(stationExclusionsTable)
+      .where(
+        sql`${stationExclusionsTable.radioBrowserUuid} = ${RB_UUID}
+          OR ${stationExclusionsTable.stationSlug} = ${CURATED_SLUG}`,
+      );
+    expect(remaining).toHaveLength(0);
+
+    expect(
+      (
+        await authed(`/api/admin/station-exclusions/${curatedExclusion!.id}`, {
+          method: "DELETE",
+        })
+      ).status,
+    ).toBe(404);
   });
 });

@@ -3228,8 +3228,8 @@ export type InsertLoreSetting = typeof loreSettingsTable.$inferInsert;
  *   • seedStations() — an excluded station_slug (curated seed stations) is
  *     skipped on boot so a removed seed station stays hidden+inactive.
  *
- * Un-removing is a manual operation: delete the exclusion row (and, for
- * curated stations, un-hide/re-activate the stations row). No UI by design.
+ * Un-removing deletes the exclusion row and, for curated stations, un-hides
+ * and re-activates the retained stations row.
  * Created via an idempotent boot migration in api-server.
  */
 export const stationExclusionsTable = pgTable("station_exclusions", {
