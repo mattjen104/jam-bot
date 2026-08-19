@@ -1,5 +1,5 @@
 import { db, recordingsTable, libraryItemsTable } from "@workspace/db";
-import { isNull, and, sql, exists, eq } from "drizzle-orm";
+import { isNull, and, sql, exists, eq, inArray } from "drizzle-orm";
 import { createMbResolver, musicbrainzEnabled } from "@workspace/song-enrichment";
 
 /**
@@ -19,7 +19,10 @@ const resolver = createMbResolver();
 /** Per-lookup hard cap so one hung call can't wedge the batch. */
 const LOOKUP_TIMEOUT_MS = 15_000;
 
-export async function enrichIsrcBatch(batchSize = 25): Promise<{
+export async function enrichIsrcBatch(
+  batchSize = 25,
+  _testUserIds?: number[],
+): Promise<{
   scanned: number;
   found: number;
   remaining: number;
@@ -31,7 +34,14 @@ export async function enrichIsrcBatch(batchSize = 25): Promise<{
       db
         .select({ one: sql`1` })
         .from(libraryItemsTable)
-        .where(eq(libraryItemsTable.mbid, recordingsTable.mbid)),
+        .where(
+          and(
+            eq(libraryItemsTable.mbid, recordingsTable.mbid),
+            _testUserIds?.length
+              ? inArray(libraryItemsTable.userId, _testUserIds)
+              : undefined,
+          ),
+        ),
     ),
   );
 

@@ -45,7 +45,7 @@ the real test user IDs.
 | `runPhase3RetryPass` | `src/routes/me/library.ts` | ✅ yes | Pass test user IDs from every Phase-3 retry test |
 | `markOrphanedSyncJobsAsError` | `src/routes/me/library.ts` | ❌ no hook | Boot-only utility; targets `status IN ('running','pending')` rows. Tests that leave jobs in those states (e.g., `sync-job-lifecycle-db.test.ts`) must reset status in `afterEach` before this can be safely called from test code |
 | `markOrphanedImportJobsAsError` | `src/routes/me/library.ts` | ✅ yes | Pass test user IDs from every test that calls this function |
-| `enrichIsrcBatch` | `src/lore/isrc-enrichment.ts` | ❌ no hook | Scans all recordings that have no ISRC and are referenced by any `library_items` row. Tests that insert un-enriched recordings should either set `isrcCheckedAt = now()` on insert to opt out, or not call `enrichIsrcBatch` directly |
+| `enrichIsrcBatch` | `src/lore/isrc-enrichment.ts` | ✅ yes | Pass test user IDs from every ISRC-enrichment DB test |
 
 ### Adding a new global-scan function
 
