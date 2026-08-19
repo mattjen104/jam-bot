@@ -3091,7 +3091,13 @@
 /* ── Zone 1 loading placeholder ── */
 .z1-placeholder {
   padding: 18px 15px;
-  border-bottom: 1px solid hsl(var(--border) / 0.35);
+   border-bottom: 1px solid hsl(var(--border) / 0.35);
+}
+.compact-dial__row:has(.fdrow--expanded) {
+  flex: 0 0 auto;
+  min-height: 20%;
+  overflow: visible;
+  align-items: stretch;
 }
 .z1-placeholder--loading {
   display: flex;

@@ -108,8 +108,9 @@ export function StackPagerBar({
         >
           {stackPageSize(stackDensity)}
         </button>
-        {/* Page selectors — the Dial's styling, labeled by each window's
-            first album when the caller supplies pageLabels. */}
+        {/* Page selectors — always numeric like the Dial's page controls.
+            Album labels remain available in the accessible name and tooltip
+            so they add context without replacing the page number visually. */}
         <div className="home-cli-strip__page-selectors" role="group" aria-label="Stack page">
           {Array.from({ length: Math.max(1, stackPageCount) }, (_, i) => {
             const isCurrentPage = currentPage === i;
@@ -125,13 +126,13 @@ export function StackPagerBar({
               <button
                 key={i}
                 type="button"
-                className={`home-cli-strip__page-btn${album ? " home-cli-strip__page-btn--album" : ""}${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
+                className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
                 aria-pressed={isCurrentPage}
                 aria-label={ariaLabel}
                 title={album ? ariaLabel : undefined}
                 onClick={() => onSelectStackPage(i * pageSize)}
               >
-                {album ?? i + 1}
+                {i + 1}
               </button>
             );
           })}

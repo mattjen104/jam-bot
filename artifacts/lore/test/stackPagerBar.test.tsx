@@ -7,8 +7,8 @@
  *     selector per stack page) with the same styling hooks as the Dial's
  *     page buttons.
  *  2. The active page is exposed via aria-pressed; clicks route offsets.
- *  2b. Page buttons can lead with each window's first album title (numeric
- *     fallback), keeping the page number + "+N more" in the aria-label.
+ *  2b. Page buttons stay numeric while each window's first album title is
+ *     retained in the aria-label and tooltip.
  *  3. Shuffle / Shuffle all route their callbacks, expose active state, and
  *     become Stop controls while a shuffle runs; both disable on an empty
  *     library.
@@ -61,18 +61,18 @@ describe("StackPagerBar", () => {
     expect(screen.queryByRole("button", { name: "stack page 2" })).toBeNull();
   });
 
-  it("labels each page button with the first album title in its window", () => {
+  it("keeps page buttons numeric while exposing the first album in context", () => {
     const { props } = renderPager({
       stackPageCount: 4,
       totalGroups: 18,
       pageLabels: ["Rumours", "Blue Lines", null, "Third"],
     });
 
-    // Visible text leads with the album title; a null label falls back to
-    // the bare page number.
+    // Visible text is always the page number; album context is not used as the
+    // selector label because it makes the pager look like an artist/album list.
     const pageGroup = screen.getByRole("group", { name: "Stack page" });
     const buttons = [...pageGroup.querySelectorAll("button")];
-    expect(buttons.map((b) => b.textContent)).toEqual(["Rumours", "Blue Lines", "3", "Third"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4"]);
 
     // Accessible labels keep the page number and add the window's album
     // count ("+N more"); the last page's short window counts down.
@@ -81,7 +81,7 @@ describe("StackPagerBar", () => {
     screen.getByRole("button", { name: "stack page 3" });
     screen.getByRole("button", { name: "stack page 4: Third, +2 more" });
 
-    // Clicks still route offsets by page index, not by label.
+    // Clicks still route offsets by page index.
     fireEvent.click(screen.getByRole("button", { name: "stack page 4: Third, +2 more" }));
     expect(props.onSelectStackPage).toHaveBeenCalledWith(15);
   });
