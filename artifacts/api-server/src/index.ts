@@ -117,6 +117,9 @@ import { applyJobTimestampsMigration } from "./lore/job-timestamps-migration.js"
 import { applyBeatoMissSentinelMigration } from "./lore/beato-miss-sentinel-migration.js";
 import { startBeatoJob } from "./lore/beato.js";
 import { applyArtistEventsMigration } from "./lore/artist-events-migration.js";
+import { applyRbOrphanCleanupMigration } from "./lore/rb-orphan-cleanup-migration.js";
+import { applyFingerprintScoutMigration } from "./lore/fingerprint-scout-migration.js";
+import { startFingerprintScout } from "./lore/fingerprint-scout.js";
 
 const rawPort = process.env["PORT"];
 
@@ -222,6 +225,11 @@ async function bootLore(): Promise<void> {
     // discovered before ingest-time detection was added. Idempotent (jsonb
     // containment guard skips already-tagged rows).
     await runMigration("applyCollegeTagMigration", applyCollegeTagMigration);
+    // Delete icy_unsupported radio_browser rows whose station also has an
+    // active row (stale duplicates inflating the unsupported count), then
+    // create the fingerprint-scout tallies table.
+    await runMigration("applyRbOrphanCleanupMigration", applyRbOrphanCleanupMigration);
+    await runMigration("applyFingerprintScoutMigration", applyFingerprintScoutMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     await runMigration("applyBeatoMissSentinelMigration", applyBeatoMissSentinelMigration);
@@ -343,6 +351,9 @@ async function bootLore(): Promise<void> {
     await wireImageExtractor();
     startDiscoveryScoreJob();
     startQualityRecomputeJob();
+    // Rotating audio-fingerprint scout for metadata-dark stations.
+    // Fails closed without AUDD_API_KEY (single info line, no scheduler).
+    await startFingerprintScout();
     await runMigration("applyLifetimeCrossingsMigration", applyLifetimeCrossingsMigration);
     await runMigration("applyAppleLibraryItemsMigration", applyAppleLibraryItemsMigration);
     startLifetimeCrossingsJob();

@@ -98,6 +98,19 @@ export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
   "chill beats",
   "relaxing music",
   "background music",
+  // Saudi Broadcasting Authority / commercial Gulf stations arriving through
+  // the "world" tag — state/commercial pop programming, not human-curated
+  // music discovery ("Saudia Radio 87.7 FM", "SBA Riyadh Radio 91.5 FM",
+  // "MBC Loud 94.3 FM", "Galaxy FM KSA 99.9").
+  "saudia radio",
+  "sba riyadh",
+  "sba jeddah",
+  "sba saudia",
+  "mbc loud",
+  "galaxy fm ksa",
+  // "#1 Splash <MOOD>" is an algorithmic background-channel brand (Spa, Jazz,
+  // Coffee, …); only the Coffee variant was caught by the "coffee" entry.
+  "#1 splash",
 ] as const);
 
 /**

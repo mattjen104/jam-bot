@@ -81,6 +81,15 @@ export async function applyStationBlocklistHideMigration(): Promise<void> {
         OR LOWER(name) LIKE '%chill beats%'
         OR LOWER(name) LIKE '%relaxing music%'
         OR LOWER(name) LIKE '%background music%'
+        -- Saudi commercial/state stations that slipped in via the "world" tag,
+        -- plus the "#1 Splash" algorithmic background-channel family.
+        OR LOWER(name) LIKE '%saudia radio%'
+        OR LOWER(name) LIKE '%sba riyadh%'
+        OR LOWER(name) LIKE '%sba jeddah%'
+        OR LOWER(name) LIKE '%sba saudia%'
+        OR LOWER(name) LIKE '%mbc loud%'
+        OR LOWER(name) LIKE '%galaxy fm ksa%'
+        OR LOWER(name) LIKE '%#1 splash%'
         -- Only hide CHMR/CISM while they still lack a now-playing source.
         -- Once an operator has configured one (via PATCH .../now-playing-source)
         -- and unhidden the station, this predicate becomes false and the

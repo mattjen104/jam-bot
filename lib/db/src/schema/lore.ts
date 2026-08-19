@@ -3246,3 +3246,38 @@ export const jobTimestampsTable = pgTable("job_timestamps", {
     .defaultNow()
     .notNull(),
 });
+
+/**
+ * Per-station tallies for the rotating audio-fingerprint scout.
+ *
+ * The scout cycles through metadata-dark stations (all radio_browser rows
+ * icy_unsupported), sampling ONE station per tick on a fixed budget and
+ * recognizing the audio via AudD. These tallies persist the sample /
+ * recognition counts so the admin scout report survives restarts; the
+ * recognized tracks themselves are ordinary spins tagged source='audd_scout'.
+ *
+ * Created by an idempotent boot migration in api-server; declared here so
+ * drizzle-kit push does not see it as an unknown table and try to drop it.
+ */
+export const fingerprintScoutTalliesTable = pgTable(
+  "fingerprint_scout_tallies",
+  {
+    /** Canonical stations.id — one tally row per scouted station. */
+    stationId: integer("station_id")
+      .primaryKey()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    /** Total fingerprint samples attempted (including failed captures). */
+    samples: integer("samples").notNull().default(0),
+    /** Samples that AudD recognized as a track. */
+    recognitions: integer("recognitions").notNull().default(0),
+    /** When the scout last sampled this station. */
+    lastSampledAt: timestamp("last_sampled_at"),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+);
+
+export type InsertFingerprintScoutTally =
+  typeof fingerprintScoutTalliesTable.$inferInsert;
+
+export type FingerprintScoutTally =
+  typeof fingerprintScoutTalliesTable.$inferSelect;

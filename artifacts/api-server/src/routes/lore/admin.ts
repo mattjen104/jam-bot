@@ -98,6 +98,9 @@ import {
   SLOW_THRESHOLD_MS,
 } from "../../lore/resolution-latency-health.js";
 import { clearIcyErrorBackoff, isPollable } from "../../lore/adapters.js";
+import { startBulkReprobe, getBulkReprobeStatus } from "../../lore/bulk-reprobe.js";
+import { getScoutReport } from "../../lore/fingerprint-scout.js";
+import { auddAvailable } from "../../lore/audd.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
 import {
   upsertPicker,
@@ -1189,6 +1192,42 @@ router.patch("/admin/scraped-shows/:id/void", h(async (req, res) => {
       voidReason: updated.voidReason,
     }),
   );
+}));
+
+// POST /api/admin/radio-browser/bulk-reprobe — start a background re-probe of
+// EVERY icy_unsupported radio_browser row (sequential, ~3s between probes).
+// Streams that answer with icy-metaint are reset to active and their pollers
+// re-enrolled live. Single-flight: 409 when a run is already in progress.
+// Plain JSON, outside the OpenAPI surface (admin-only tool, like the health
+// endpoints). Progress + final { probed, recovered, stillBad } summary come
+// from the companion GET status endpoint, which the admin page polls.
+router.post("/admin/radio-browser/bulk-reprobe", h(async (_req, res) => {
+  const started = startBulkReprobe();
+  if (!started) {
+    return res.status(409).json({
+      error: "A bulk re-probe is already running",
+      status: getBulkReprobeStatus(),
+    });
+  }
+  return res.status(202).json({ started: true, status: getBulkReprobeStatus() });
+}));
+
+// GET /api/admin/radio-browser/bulk-reprobe/status — progress/summary of the
+// current (or last) bulk re-probe run. Plain JSON, outside OpenAPI.
+router.get("/admin/radio-browser/bulk-reprobe/status", h(async (_req, res) => {
+  return res.json(getBulkReprobeStatus());
+}));
+
+// GET /api/admin/fingerprint-scout/report — the rotating fingerprint scout's
+// per-station report: samples, recognitions, taste crossings, first plays,
+// and the computed promote/remove/still-scouting flag. The report only flags;
+// the admin decides — nothing is auto-removed. Plain JSON, outside OpenAPI.
+router.get("/admin/fingerprint-scout/report", h(async (_req, res) => {
+  const stations = await getScoutReport();
+  return res.json({
+    available: auddAvailable(),
+    stations,
+  });
 }));
 
 // POST /api/admin/radio-browser/stations/:id/reenroll — reset a suspended ICY

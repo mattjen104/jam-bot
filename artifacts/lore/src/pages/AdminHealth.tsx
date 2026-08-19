@@ -426,6 +426,10 @@ function HealthPanel({
           <ReleaseYearErrorBanner kind={ryError.kind} message={ryError.message} />
         )}
 
+        {/* Radio Browser bulk re-probe + fingerprint scout — admin tools */}
+        {!loading && <BulkReprobeSection token={token} />}
+        {!loading && <ScoutReportSection token={token} />}
+
         {/* Healthy sub-sections when one section is OK but the other is stale */}
         {!loading && !ffError && !swError && totalStale > 0 && (
           <div className="mt-8 flex flex-col gap-2">
@@ -939,6 +943,290 @@ function ReleaseYearHealthSection({
             </span>
           )}
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Radio Browser bulk re-probe ───────────────────────────────────────────
+
+interface BulkReprobeStatus {
+  running: boolean;
+  total: number;
+  probed: number;
+  recovered: number;
+  stillBad: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+}
+
+/**
+ * Admin tool: re-probe every icy_unsupported Radio Browser station. The POST
+ * starts a background run on the server (single-flight); this section polls
+ * the status endpoint while a run is in flight and renders the final
+ * probed/recovered/stillBad summary.
+ */
+function BulkReprobeSection({ token }: { token: string }) {
+  const [status, setStatus] = useState<BulkReprobeStatus | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/radio-browser/bulk-reprobe/status", {
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as BulkReprobeStatus;
+      setStatus(data);
+      if (!data.running && pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    } catch {
+      // transient poll failure — keep the last status
+    }
+  }, [token]);
+
+  useEffect(() => {
+    // Defer into a microtask so state updates happen asynchronously rather
+    // than synchronously in the effect body (same pattern as fetchAll above).
+    void Promise.resolve().then(() => fetchStatus());
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [fetchStatus]);
+
+  // When this page opens or reloads during a server-side re-probe run, the
+  // initial GET may already report running=true. Keep polling in that case
+  // too; previously only the browser that initiated the POST polled progress.
+  useEffect(() => {
+    if (!status?.running) return;
+    if (!pollRef.current) {
+      pollRef.current = setInterval(() => void fetchStatus(), 5_000);
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [status?.running, fetchStatus]);
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => void fetchStatus(), 5_000);
+  }, [fetchStatus]);
+
+  const handleStart = useCallback(async () => {
+    setStarting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/radio-browser/bulk-reprobe", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        status?: BulkReprobeStatus;
+      };
+      if (!res.ok && res.status !== 409) {
+        setError(body.error ?? `HTTP ${res.status}`);
+      } else {
+        if (body.status) setStatus(body.status);
+        startPolling();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setStarting(false);
+    }
+  }, [token, startPolling]);
+
+  const running = status?.running ?? false;
+
+  return (
+    <section className="mt-10" data-testid="bulk-reprobe-section">
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-500">
+          <RefreshCw className="h-4 w-4" />
+        </span>
+        <h2 className="font-normal text-foreground">Re-probe unsupported streams</h2>
+      </div>
+      <p className="mt-1 text-base text-muted-foreground">
+        Radio Browser stations marked ICY-unsupported are never re-checked
+        automatically. This probes each one again (~3s apart), reactivates
+        streams that now answer with metadata, and re-enrolls their pollers
+        live.
+      </p>
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <button
+            onClick={() => void handleStart()}
+            disabled={starting || running}
+            className="rounded-full border border-border bg-secondary/40 px-4 py-1.5 text-sm text-foreground transition hover:bg-secondary disabled:opacity-50"
+            data-testid="bulk-reprobe-start"
+          >
+            {running ? "Re-probing…" : "Re-probe all unsupported"}
+          </button>
+          {status && (status.running || status.finishedAt) && (
+            <span className="text-sm text-muted-foreground" data-testid="bulk-reprobe-summary">
+              {status.running
+                ? `${status.probed} of ${status.total} probed · ${status.recovered} recovered`
+                : `Done: ${status.probed} probed · ${status.recovered} recovered · ${status.stillBad} still unsupported`}
+            </span>
+          )}
+        </div>
+        {(error ?? status?.error) && (
+          <p className="mt-2 text-sm text-destructive">{error ?? status?.error}</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── Fingerprint scout report ──────────────────────────────────────────────
+
+interface ScoutReportRow {
+  stationId: number;
+  stationName: string;
+  samples: number;
+  recognitions: number;
+  crossings: number;
+  firstPlays: number;
+  lastSampledAt: string | null;
+  flag: "promote" | "remove" | "scouting";
+}
+
+interface ScoutReport {
+  available: boolean;
+  stations: ScoutReportRow[];
+}
+
+const SCOUT_FLAG_LABEL: Record<ScoutReportRow["flag"], string> = {
+  promote: "Promote candidate",
+  remove: "Remove candidate",
+  scouting: "Still scouting",
+};
+
+const SCOUT_FLAG_CLASS: Record<ScoutReportRow["flag"], string> = {
+  promote: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  remove: "bg-red-500/15 text-red-600 dark:text-red-400",
+  scouting: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
+};
+
+/**
+ * Per-station results from the rotating audio-fingerprint scout: samples
+ * taken, recognition rate, taste crossings, first plays, and the computed
+ * promote/remove/still-scouting flag. The report only flags — the admin
+ * decides; nothing is auto-removed.
+ */
+function ScoutReportSection({ token }: { token: string }) {
+  const [report, setReport] = useState<ScoutReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/admin/fingerprint-scout/report", {
+          headers: { "x-admin-token": token },
+        });
+        if (!res.ok) {
+          if (!cancelled) setError(`HTTP ${res.status}`);
+          return;
+        }
+        const data = (await res.json()) as ScoutReport;
+        if (!cancelled) {
+          setReport(data);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Request failed");
+      }
+    };
+    // Defer into a microtask so state updates happen asynchronously rather
+    // than synchronously in the effect body (same pattern as fetchAll above).
+    void Promise.resolve().then(() => load());
+    const timer = setInterval(() => void load(), REFRESH_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [token]);
+
+  return (
+    <section className="mt-10" data-testid="scout-report-section">
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-500">
+          <Radio className="h-4 w-4" />
+        </span>
+        <h2 className="font-normal text-foreground">Fingerprint scout</h2>
+        {report && report.stations.length > 0 && (
+          <span className="rounded-full bg-zinc-500/15 px-2 py-0.5 text-sm font-normal text-zinc-600 dark:text-zinc-400">
+            {report.stations.length} scouted
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-base text-muted-foreground">
+        The scout rotates through metadata-dark stations, fingerprinting one
+        every couple of minutes. High crossings or first plays flag a station
+        worth keeping; nothing recognized after enough samples flags a
+        removal candidate. You decide — nothing is removed automatically.
+      </p>
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {!error && report && !report.available && (
+          <p className="text-base text-muted-foreground">
+            Scout disabled — no AudD API key configured.
+          </p>
+        )}
+        {!error && report && report.stations.length === 0 && report.available && (
+          <p className="text-base text-muted-foreground">
+            No stations sampled yet. The scout starts on the next tick.
+          </p>
+        )}
+        {!error && report && report.stations.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-4 font-normal">Station</th>
+                  <th className="py-2 pr-4 font-normal">Samples</th>
+                  <th className="py-2 pr-4 font-normal">Recognized</th>
+                  <th className="py-2 pr-4 font-normal">Crossings</th>
+                  <th className="py-2 pr-4 font-normal">First plays</th>
+                  <th className="py-2 font-normal">Flag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.stations.map((row) => (
+                  <tr key={row.stationId} className="border-t border-border/60" data-testid={`scout-row-${row.stationId}`}>
+                    <td className="py-2 pr-4 text-foreground">{row.stationName}</td>
+                    <td className="py-2 pr-4 font-mono">{row.samples}</td>
+                    <td className="py-2 pr-4 font-mono">
+                      {row.recognitions}
+                      {row.samples > 0 && (
+                        <span className="ml-1 text-muted-foreground">
+                          ({Math.round((row.recognitions / row.samples) * 100)}%)
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 font-mono">{row.crossings}</td>
+                    <td className="py-2 pr-4 font-mono">{row.firstPlays}</td>
+                    <td className="py-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[13px] ${SCOUT_FLAG_CLASS[row.flag]}`}>
+                        {SCOUT_FLAG_LABEL[row.flag]}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
