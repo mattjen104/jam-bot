@@ -621,6 +621,18 @@ export default function SplitHome() {
 
   const stackPageCount = Math.max(1, Math.ceil(activeStackGroups.length / 5));
 
+  // Pager labels: each stack page introduces itself by the first album in
+  // its five-album window ("Rumours", "Blue Lines"…) instead of a bare
+  // page number. Windows are over ACTIVE groups only — the same list the
+  // pager pages and the CompactStack band windows.
+  const stackPageLabels = useMemo(
+    () =>
+      Array.from({ length: stackPageCount }, (_, i) =>
+        activeStackGroups[i * 5]?.albumTitle ?? null,
+      ),
+    [activeStackGroups, stackPageCount],
+  );
+
   // Stack page selection clamps to the last valid page (same contract as the
   // dial's handleSelectPage) and stops any running shuffle — the listener
   // explicitly navigated, so the shuffle cursor is now incompatible.
@@ -752,6 +764,7 @@ export default function SplitHome() {
         stackOffset={stackOffset}
         stackPageCount={stackPageCount}
         totalGroups={activeStackGroups.length}
+        pageLabels={stackPageLabels}
         shuffleMode={shuffleMode}
         onSelectStackPage={handleSelectStackPage}
         onShufflePage={onShufflePage}

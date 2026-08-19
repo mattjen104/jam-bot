@@ -18,6 +18,14 @@ export interface StackPagerBarProps {
   stackPageCount: number;
   /** Total album groups in the library (drives the Shuffle disabled state). */
   totalGroups: number;
+  /**
+   * Per-page primary label: the album title of the FIRST album in each
+   * five-album window (index i ↔ page i+1), so the pager reads as music
+   * ("Rumours", "Blue Lines"…) instead of bare numbers. Null/absent entries
+   * fall back to the numeric page label. The accessible label keeps the
+   * page number and adds the window's album count ("…, +2 more").
+   */
+  pageLabels?: (string | null)[];
   /** Active shuffle: "page" = current page, "all" = whole library, null = off. */
   shuffleMode: ShuffleMode;
   /** Called when the user selects a page (offset = (page - 1) * 5). */
@@ -32,6 +40,7 @@ export function StackPagerBar({
   stackOffset,
   stackPageCount,
   totalGroups,
+  pageLabels,
   shuffleMode,
   onSelectStackPage,
   onShufflePage,
@@ -50,16 +59,25 @@ export function StackPagerBar({
         <div className="home-cli-strip__page-selectors" role="group" aria-label="Stack page">
           {Array.from({ length: Math.max(1, stackPageCount) }, (_, i) => {
             const isCurrentPage = currentPage === i;
+            const album = pageLabels?.[i] ?? null;
+            // Albums in this window (the last page may be short) — the
+            // accessible label carries the "+N more" count so two pages
+            // opening with the same album title stay unambiguous.
+            const windowCount = Math.min(5, Math.max(0, totalGroups - i * 5));
+            const ariaLabel = album
+              ? `stack page ${i + 1}: ${album}${windowCount > 1 ? `, +${windowCount - 1} more` : ""}`
+              : `stack page ${i + 1}`;
             return (
               <button
                 key={i}
                 type="button"
-                className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
+                className={`home-cli-strip__page-btn${album ? " home-cli-strip__page-btn--album" : ""}${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
                 aria-pressed={isCurrentPage}
-                aria-label={`stack page ${i + 1}`}
+                aria-label={ariaLabel}
+                title={album ? ariaLabel : undefined}
                 onClick={() => onSelectStackPage(i * 5)}
               >
-                {i + 1}
+                {album ?? i + 1}
               </button>
             );
           })}

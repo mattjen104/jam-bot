@@ -7866,6 +7866,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   border-bottom: none;
 }
+/* Album-titled page buttons truncate instead of widening the rail past the
+   viewport (the full title stays on the aria-label / hover title). */
+.stack-pager-bar .home-cli-strip__page-btn--album {
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Sampling highlight on a compact-stack row during a stack shuffle — the
    library-section counterpart of the dial's --live scan highlight. */
@@ -8055,6 +8062,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Secondary station byline — present only while a now-playing artist leads
+   the key; yields space to the artist name before ellipsizing itself. */
+.compact-dial__remote-station {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--faint));
+}
 .compact-dial__remote-row--active .compact-dial__remote-name {
   color: hsl(var(--accent));
 }
@@ -8104,8 +8121,29 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-size: var(--lore-size-small);
   line-height: 1.2;
   white-space: nowrap;
+  /* Ordinal badge + artist name share the key; the name ellipsizes first. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  overflow: hidden;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   -webkit-tap-highlight-color: transparent;
+}
+.compact-dial__micro-ordinal {
+  flex: 0 0 auto;
+  color: hsl(var(--faint));
+}
+.compact-dial__micro-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The lit (active) key inverts, so its ordinal badge inverts with it. */
+.compact-dial__micro-btn--active .compact-dial__micro-ordinal {
+  color: hsl(var(--background) / 0.72);
 }
 .compact-dial__micro-btn + .compact-dial__micro-btn {
   margin-left: -1px;

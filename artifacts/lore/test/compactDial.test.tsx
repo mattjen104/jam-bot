@@ -17,7 +17,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { CompactDial, type CompactDialProps } from "../src/components/CompactDial";
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { Station } from "@workspace/api-client-react";
-import type { DialStation } from "../src/hooks/useDialData";
+import type { DialShow, DialSpin, DialStation } from "../src/hooks/useDialData";
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -80,6 +80,63 @@ function makeRow(stationOverrides: Partial<Station> = {}): DialLaneRow {
   return {
     ds: makeDialStation({ station: makeStation(stationOverrides) }),
     show: null,
+    effectiveDjName: null,
+  };
+}
+
+function makeSpin(overrides: Partial<DialSpin> = {}): DialSpin {
+  return {
+    mbid: null,
+    artistMbid: null,
+    title: "Some Track",
+    artist: "Some Artist",
+    playedAt: "2026-08-18T00:00:00Z",
+    isLibraryHit: false,
+    isArtistHit: false,
+    isFirstSpin: false,
+    releaseYear: null,
+    ageTier: null,
+    ...overrides,
+  };
+}
+
+function makeShow(currentTrack: DialSpin | null): DialShow {
+  return {
+    runId: 1,
+    showName: "Some Show",
+    djName: null,
+    startedAt: "2026-08-18T00:00:00Z",
+    endedAt: "2026-08-18T01:00:00Z",
+    ianaTimezone: null,
+    state: "live",
+    spins: [],
+    crossings: 0,
+    artistCrossings: 0,
+    topArtists: [],
+    topArtistNames: [],
+    currentTrack,
+    isPickerShow: false,
+    pickerId: null,
+  };
+}
+
+/**
+ * A row with a now-playing artist — via the live pulse (default) or via the
+ * live show's last spin (`via: "show"`), the two sources the remote rows
+ * read in priority order.
+ */
+function makeRowWithTrack(
+  stationOverrides: Partial<Station>,
+  track: Partial<DialSpin>,
+  via: "liveTrack" | "show" = "liveTrack",
+): DialLaneRow {
+  const spin = makeSpin(track);
+  return {
+    ds: makeDialStation({
+      station: makeStation(stationOverrides),
+      liveTrack: via === "liveTrack" ? spin : null,
+    }),
+    show: via === "show" ? makeShow(spin) : null,
     effectiveDjName: null,
   };
 }
@@ -302,6 +359,39 @@ describe("CompactDial compact density", () => {
     expect(container.querySelectorAll(".compact-dial__remote-row--empty")).toHaveLength(8);
   });
 
+  it("shows the now-playing artist as the primary label, station demoted to a muted byline", () => {
+    const row = makeRowWithTrack(
+      { slug: "kcrw", name: "KCRW" },
+      { artist: "Wet Leg", title: "Chaise Longue" },
+    );
+    renderDial({ activeRows: [row], density: "compact" });
+
+    const btn = screen.getByRole("button", { name: "1. Wet Leg on KCRW — tune in" });
+    expect(btn.querySelector(".compact-dial__remote-name")!.textContent).toBe("Wet Leg");
+    expect(btn.querySelector(".compact-dial__remote-station")!.textContent).toBe("KCRW");
+    // The ordinal is retained as the muted secondary label.
+    expect(btn.querySelector(".compact-dial__remote-ordinal")!.textContent).toBe("1");
+  });
+
+  it("falls back to the live show's current track when the live pulse has none", () => {
+    const row = makeRowWithTrack(
+      { slug: "kcrw", name: "KCRW" },
+      { artist: "Wet Leg" },
+      "show",
+    );
+    renderDial({ activeRows: [row], density: "compact" });
+    screen.getByRole("button", { name: "1. Wet Leg on KCRW — tune in" });
+  });
+
+  it("falls back to the station name (no byline) when no track is playing", () => {
+    const row = makeRow({ slug: "kcrw", name: "KCRW" });
+    renderDial({ activeRows: [row], density: "compact" });
+
+    const btn = screen.getByRole("button", { name: "1. KCRW — tune in" });
+    expect(btn.querySelector(".compact-dial__remote-name")!.textContent).toBe("KCRW");
+    expect(btn.querySelector(".compact-dial__remote-station")).toBeNull();
+  });
+
   it("tapping a compact row tunes in (no separate play control)", () => {
     const onTuneIn = vi.fn();
     const onPlay = vi.fn();
@@ -337,7 +427,14 @@ describe("CompactDial micro density", () => {
     const { container } = renderDial({ activeRows: rows, density: "micro" });
 
     const buttons = [...container.querySelectorAll(".compact-dial__micro-btn")];
-    expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    // Ordinal badge + station name (no now-playing artist in these fixtures).
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "1Station 1",
+      "2Station 2",
+      "3Station 3",
+      "4Station 4",
+      "5Station 5",
+    ]);
     expect(container.querySelector(".compact-dial__micro-grid")).toBeTruthy();
     // Grouped 3 per row of keys: triads of 3 + 2.
     const triads = container.querySelectorAll(".compact-dial__micro-triad");
@@ -349,6 +446,29 @@ describe("CompactDial micro density", () => {
     // No rows, no checkboxes, no FrontDoorRow detail.
     expect(container.querySelector(".compact-dial__row")).toBeNull();
     expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("shows the now-playing artist beside the ordinal, station name in the label and title", () => {
+    const row = makeRowWithTrack(
+      { slug: "kcrw", name: "KCRW" },
+      { artist: "Wet Leg", title: "Chaise Longue" },
+    );
+    renderDial({ activeRows: [row], density: "micro" });
+
+    const btn = screen.getByRole("button", { name: "1. Wet Leg on KCRW — tune in" });
+    expect(btn.querySelector(".compact-dial__micro-name")!.textContent).toBe("Wet Leg");
+    expect(btn.querySelector(".compact-dial__micro-ordinal")!.textContent).toBe("1");
+    expect(btn.getAttribute("title")).toBe("Wet Leg — KCRW");
+  });
+
+  it("falls back to the show's current track artist on the keypad", () => {
+    const row = makeRowWithTrack(
+      { slug: "kcrw", name: "KCRW" },
+      { artist: "Wet Leg" },
+      "show",
+    );
+    renderDial({ activeRows: [row], density: "micro" });
+    screen.getByRole("button", { name: "1. Wet Leg on KCRW — tune in" });
   });
 
   it("tapping a keypad button tunes in that station", () => {
@@ -373,7 +493,13 @@ describe("CompactDial micro density", () => {
     });
 
     const buttons = [...container.querySelectorAll(".compact-dial__micro-btn")];
-    expect(buttons.map((b) => b.textContent)).toEqual(["16", "17", "18", "19", "20"]);
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "16Station 1",
+      "17Station 2",
+      "18Station 3",
+      "19Station 4",
+      "20Station 5",
+    ]);
     screen.getByRole("button", { name: "16. Station 1 — tune in" });
   });
 

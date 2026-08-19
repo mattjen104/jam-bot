@@ -408,17 +408,17 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 
     // Page 1: ten name-only remote rows numbered 1–10, no FrontDoorRow detail.
     expect(document.querySelectorAll("button.compact-dial__remote-row")).toHaveLength(10);
-    screen.getByRole("button", { name: "1. Station st-1 — tune in" });
-    screen.getByRole("button", { name: "10. Station st-10 — tune in" });
-    expect(screen.queryByRole("button", { name: "11. Station st-11 — tune in" })).toBeNull();
+    screen.getByRole("button", { name: "1. Artist on Station st-1 — tune in" });
+    screen.getByRole("button", { name: "10. Artist on Station st-10 — tune in" });
+    expect(screen.queryByRole("button", { name: "11. Artist on Station st-11 — tune in" })).toBeNull();
 
     typeCommand("/scan2");
 
     // Page 2 at the 10-row page size — not offset 5 snapping back to page 1.
-    screen.getByRole("button", { name: "11. Station st-11 — tune in" });
-    screen.getByRole("button", { name: "20. Station st-20 — tune in" });
-    expect(screen.queryByRole("button", { name: "10. Station st-10 — tune in" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "21. Station st-21 — tune in" })).toBeNull();
+    screen.getByRole("button", { name: "11. Artist on Station st-11 — tune in" });
+    screen.getByRole("button", { name: "20. Artist on Station st-20 — tune in" });
+    expect(screen.queryByRole("button", { name: "10. Artist on Station st-10 — tune in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "21. Artist on Station st-21 — tune in" })).toBeNull();
     expect(
       screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
     ).toBe("true");
@@ -433,9 +433,9 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 
     // Page 1: fifteen keypad buttons numbered 1–15; 23 stations → 2 pages.
     expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(15);
-    screen.getByRole("button", { name: "1. Station st-1 — tune in" });
-    screen.getByRole("button", { name: "15. Station st-15 — tune in" });
-    expect(screen.queryByRole("button", { name: "16. Station st-16 — tune in" })).toBeNull();
+    screen.getByRole("button", { name: "1. Artist on Station st-1 — tune in" });
+    screen.getByRole("button", { name: "15. Artist on Station st-15 — tune in" });
+    expect(screen.queryByRole("button", { name: "16. Artist on Station st-16 — tune in" })).toBeNull();
     expect(screen.getByRole("group", { name: "Page" }).querySelectorAll("button")).toHaveLength(2);
     // The count label is still on the remote.
     expect(screen.getByRole("group", { name: "Scan commands" }).textContent).toContain("23 stations");
@@ -444,9 +444,9 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 
     // Page 2 at the 15-key page size — ordinals continue from 16.
     expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(8);
-    screen.getByRole("button", { name: "16. Station st-16 — tune in" });
-    screen.getByRole("button", { name: "23. Station st-23 — tune in" });
-    expect(screen.queryByRole("button", { name: "15. Station st-15 — tune in" })).toBeNull();
+    screen.getByRole("button", { name: "16. Artist on Station st-16 — tune in" });
+    screen.getByRole("button", { name: "23. Artist on Station st-23 — tune in" });
+    expect(screen.queryByRole("button", { name: "15. Artist on Station st-15 — tune in" })).toBeNull();
     expect(
       screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
     ).toBe("true");
@@ -463,14 +463,14 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     render(<SplitHome />);
 
     typeCommand("/scan2");
-    screen.getByRole("button", { name: "11. Station st-11 — tune in" });
+    screen.getByRole("button", { name: "11. Artist on Station st-11 — tune in" });
 
     fireEvent.click(screen.getByRole("button", { name: "density 10 rows — switch to 15" }));
 
     expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(15);
-    screen.getByRole("button", { name: "1. Station st-1 — tune in" });
-    screen.getByRole("button", { name: "15. Station st-15 — tune in" });
-    expect(screen.queryByRole("button", { name: "16. Station st-16 — tune in" })).toBeNull();
+    screen.getByRole("button", { name: "1. Artist on Station st-1 — tune in" });
+    screen.getByRole("button", { name: "15. Artist on Station st-15 — tune in" });
+    expect(screen.queryByRole("button", { name: "16. Artist on Station st-16 — tune in" })).toBeNull();
     expect(
       screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed"),
     ).toBe("true");

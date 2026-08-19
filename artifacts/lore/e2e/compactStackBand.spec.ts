@@ -385,12 +385,12 @@ test.describe("CompactStack — album checkboxes", () => {
     await installBaseRoutes(page);
     await loadAndWaitForStack(page);
 
-    // 6 albums → 2 pages initially.
+    // 6 albums → 2 pages initially, each labelled by its window's first album.
     await expect(
-      page.getByRole("button", { name: "stack page 1" }),
+      page.getByRole("button", { name: "stack page 1: Dummy, +4 more" }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(
-      page.getByRole("button", { name: "stack page 2" }),
+      page.getByRole("button", { name: "stack page 2: Third" }),
     ).toBeVisible();
     // No third page.
     await expect(
@@ -405,9 +405,10 @@ test.describe("CompactStack — album checkboxes", () => {
       name: "Skip Blue Lines · Massive Attack in the Stack window",
     }).click();
 
-    // With 4 active albums there is exactly 1 page.
+    // With 4 active albums there is exactly 1 page, now led by OK Computer
+    // (Dummy and Blue Lines were skipped out of the active window).
     await expect(
-      page.getByRole("button", { name: "stack page 1" }),
+      page.getByRole("button", { name: "stack page 1: OK Computer, +3 more" }),
     ).toBeVisible({ timeout: 5_000 });
     await expect(
       page.getByRole("button", { name: "stack page 2" }),

@@ -69,6 +69,36 @@ describe("StackPagerBar", () => {
     expect(props.onSelectStackPage).toHaveBeenCalledWith(0);
   });
 
+  it("labels each page button with the first album title in its window", () => {
+    const { props } = renderPager({
+      stackPageCount: 4,
+      totalGroups: 18,
+      pageLabels: ["Rumours", "Blue Lines", null, "Third"],
+    });
+
+    // Visible text leads with the album title; a null label falls back to
+    // the bare page number.
+    const pageGroup = screen.getByRole("group", { name: "Stack page" });
+    const buttons = [...pageGroup.querySelectorAll("button")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["Rumours", "Blue Lines", "3", "Third"]);
+
+    // Accessible labels keep the page number and add the window's album
+    // count ("+N more"); the last page's short window counts down.
+    screen.getByRole("button", { name: "stack page 1: Rumours, +4 more" });
+    screen.getByRole("button", { name: "stack page 2: Blue Lines, +4 more" });
+    screen.getByRole("button", { name: "stack page 3" });
+    screen.getByRole("button", { name: "stack page 4: Third, +2 more" });
+
+    // Clicks still route offsets by page index, not by label.
+    fireEvent.click(screen.getByRole("button", { name: "stack page 4: Third, +2 more" }));
+    expect(props.onSelectStackPage).toHaveBeenCalledWith(15);
+  });
+
+  it("labels a single-album page without a '+N more' count", () => {
+    renderPager({ stackPageCount: 1, totalGroups: 1, pageLabels: ["Rumours"] });
+    screen.getByRole("button", { name: "stack page 1: Rumours" });
+  });
+
   it("wraps the controls in a horizontally scrollable rail so later pages stay reachable", () => {
     // A big library yields many page buttons; the rail (overflow-x: auto,
     // same pattern as the CLI seam's filter rows) keeps them scrollable
