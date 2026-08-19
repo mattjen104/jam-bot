@@ -925,58 +925,70 @@ async function writeBlendedL2Cache(data: BlendedCrossingsRow[], builtAt: Date): 
 export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> {
   const presenceCutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
   const spinCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const activeUsers = activeSocialUsers(presenceCutoff);
+  // Name the active audience and each taste slice once per aggregate query.
+  // PostgreSQL materializes multiply-referenced CTEs, so the score FILTERs
+  // below reuse active taste rather than re-reading every listener's library.
+  const activeUsers = db.$with("active_social_users").as(
+    activeSocialUsers(presenceCutoff),
+  );
 
-  const activeLibraryMbids = db
-    .select({ mbid: libraryItemsTable.mbid })
-    .from(libraryItemsTable)
-    .where(and(sql`${libraryItemsTable.userId} in (${activeUsers})`, isNull(libraryItemsTable.removedAt)));
-  const activeLibraryRgs = db
-    .select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
-    .from(recordingReleaseGroupsTable)
-    .innerJoin(libraryItemsTable, eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid))
-    .where(and(sql`${libraryItemsTable.userId} in (${activeUsers})`, isNull(libraryItemsTable.removedAt)));
-  const activeLibraryArtists = db
-    .select({ artistMbid: recordingsTable.artistMbid })
-    .from(recordingsTable)
-    .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
-    .where(and(
-      sql`${libraryItemsTable.userId} in (${activeUsers})`,
-      isNull(libraryItemsTable.removedAt),
-      isNotNull(recordingsTable.artistMbid),
-    ));
-  const activeSoftArtists = db
-    .selectDistinct({ artistLower: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))` })
-    .from(spotifyLibraryItemsTable)
-    .where(and(
-      sql`${spotifyLibraryItemsTable.userId} in (${activeUsers})`,
-      isNull(spotifyLibraryItemsTable.mbid),
-      isNull(spotifyLibraryItemsTable.removedAt),
-      ne(spotifyLibraryItemsTable.artist, ""),
-    ));
-  const activeSeedArtists = db
-    .selectDistinct({ artistLower: sql<string>`lower(trim(${tasteSeedsTable.artistName}))` })
-    .from(tasteSeedsTable)
-    .where(sql`${tasteSeedsTable.userId} in (${activeUsers})`);
+  const activeLibraryMbids = db.$with("active_library_mbids").as(
+    db.selectDistinct({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .innerJoin(activeUsers, eq(libraryItemsTable.userId, activeUsers.id))
+      .where(isNull(libraryItemsTable.removedAt)),
+  );
+  const activeLibraryRgs = db.$with("active_library_release_groups").as(
+    db.selectDistinct({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+      .from(recordingReleaseGroupsTable)
+      .innerJoin(libraryItemsTable, eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid))
+      .innerJoin(activeUsers, eq(libraryItemsTable.userId, activeUsers.id))
+      .where(isNull(libraryItemsTable.removedAt)),
+  );
+  const activeLibraryArtists = db.$with("active_library_artists").as(
+    db.selectDistinct({ artistMbid: recordingsTable.artistMbid })
+      .from(recordingsTable)
+      .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
+      .innerJoin(activeUsers, eq(libraryItemsTable.userId, activeUsers.id))
+      .where(and(
+        isNull(libraryItemsTable.removedAt),
+        isNotNull(recordingsTable.artistMbid),
+      )),
+  );
+  const activeSoftArtists = db.$with("active_soft_artists").as(
+    db.selectDistinct({ artistLower: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))`.as("artist_lower") })
+      .from(spotifyLibraryItemsTable)
+      .innerJoin(activeUsers, eq(spotifyLibraryItemsTable.userId, activeUsers.id))
+      .where(and(
+        isNull(spotifyLibraryItemsTable.mbid),
+        isNull(spotifyLibraryItemsTable.removedAt),
+        ne(spotifyLibraryItemsTable.artist, ""),
+      )),
+  );
+  const activeSeedArtists = db.$with("active_seed_artists").as(
+    db.selectDistinct({ artistLower: sql<string>`lower(trim(${tasteSeedsTable.artistName}))`.as("artist_lower") })
+      .from(tasteSeedsTable)
+      .innerJoin(activeUsers, eq(tasteSeedsTable.userId, activeUsers.id)),
+  );
 
   const aggregateLibHit = sql`(
-    ${spinsTable.mbid} in (${activeLibraryMbids})
+    ${spinsTable.mbid} in (select ${activeLibraryMbids.mbid} from ${activeLibraryMbids})
     or (
       ${recordingReleaseGroupsTable.releaseGroupMbid} is not null
-      and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${activeLibraryRgs})
+      and ${recordingReleaseGroupsTable.releaseGroupMbid} in (select ${activeLibraryRgs.releaseGroupMbid} from ${activeLibraryRgs})
     )
   )`;
   const aggregateNotLibHit = sql`(
-    ${spinsTable.mbid} not in (${activeLibraryMbids})
+    ${spinsTable.mbid} not in (select ${activeLibraryMbids.mbid} from ${activeLibraryMbids})
     and (
       ${recordingReleaseGroupsTable.releaseGroupMbid} is null
-      or ${recordingReleaseGroupsTable.releaseGroupMbid} not in (${activeLibraryRgs})
+      or ${recordingReleaseGroupsTable.releaseGroupMbid} not in (select ${activeLibraryRgs.releaseGroupMbid} from ${activeLibraryRgs})
     )
   )`;
   const aggregateArtistMatch = sql`(
-    ${recordingsTable.artistMbid} in (${activeLibraryArtists})
-    or lower(trim(${recordingsTable.artist})) in (${activeSoftArtists})
-    or lower(trim(${recordingsTable.artist})) in (${activeSeedArtists})
+    ${recordingsTable.artistMbid} in (select ${activeLibraryArtists.artistMbid} from ${activeLibraryArtists})
+    or lower(trim(${recordingsTable.artist})) in (select ${activeSoftArtists.artistLower} from ${activeSoftArtists})
+    or lower(trim(${recordingsTable.artist})) in (select ${activeSeedArtists.artistLower} from ${activeSeedArtists})
   )`;
   const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
   const blendedWeekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
@@ -995,7 +1007,15 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
   )`;
   const aggregateCrossingHit = sql`(${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch}))`;
 
-  const blendedRows = await db
+  const blendedRowsQuery = db
+    .with(
+      activeUsers,
+      activeLibraryMbids,
+      activeLibraryRgs,
+      activeLibraryArtists,
+      activeSoftArtists,
+      activeSeedArtists,
+    )
     .select({
       stationSlug:         stationsTable.slug,
       crossings:           sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
@@ -1035,24 +1055,30 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
   // recording MBIDs so Postgres probes spins_mbid_played_at_idx per matching
   // MBID (nested-loop semi-join).
   const blendedRelevantMbids = sql`(
-    select ${libraryItemsTable.mbid} from ${libraryItemsTable}
-      where ${libraryItemsTable.userId} in (${activeUsers})
-        and ${libraryItemsTable.removedAt} is null
+    select ${activeLibraryMbids.mbid} from ${activeLibraryMbids}
     union
     select ${recordingReleaseGroupsTable.recordingMbid} from ${recordingReleaseGroupsTable}
       where ${recordingReleaseGroupsTable.isPrimary} = true
-        and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${activeLibraryRgs})
+        and ${recordingReleaseGroupsTable.releaseGroupMbid} in (select ${activeLibraryRgs.releaseGroupMbid} from ${activeLibraryRgs})
     union
     select ${recordingsTable.mbid} from ${recordingsTable}
       where ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
         and (
-          ${recordingsTable.artistMbid} in (${activeLibraryArtists})
-          or lower(trim(${recordingsTable.artist})) in (${activeSoftArtists})
-          or lower(trim(${recordingsTable.artist})) in (${activeSeedArtists})
+          ${recordingsTable.artistMbid} in (select ${activeLibraryArtists.artistMbid} from ${activeLibraryArtists})
+          or lower(trim(${recordingsTable.artist})) in (select ${activeSoftArtists.artistLower} from ${activeSoftArtists})
+          or lower(trim(${recordingsTable.artist})) in (select ${activeSeedArtists.artistLower} from ${activeSeedArtists})
         )
   )`;
 
-  const lifetimeRows = await db
+  const lifetimeRowsQuery = db
+    .with(
+      activeUsers,
+      activeLibraryMbids,
+      activeLibraryRgs,
+      activeLibraryArtists,
+      activeSoftArtists,
+      activeSeedArtists,
+    )
     .select({
       stationSlug: stationsTable.slug,
       lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
@@ -1079,6 +1105,13 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
       sql`count(*) filter (where ${aggregateLibHit}) > 0
        or count(*) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch}) > 0`,
     );
+  // These lanes have no dependency on one another. A cold refresh should wait
+  // for the slower index-backed lane, never the sum of rolling and lifetime
+  // aggregate time.
+  const [blendedRows, lifetimeRows] = await Promise.all([
+    blendedRowsQuery,
+    lifetimeRowsQuery,
+  ]);
 
   // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
   // A station whose only matching spins are old (>30 days) appears via the

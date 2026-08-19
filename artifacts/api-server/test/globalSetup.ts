@@ -61,6 +61,16 @@ export async function setup(): Promise<void> {
     );
     await applyCrossingsCacheMigration();
 
+    const { applyBlendedCrossingsPerformanceIndexMigration } = await import(
+      "../src/lore/blended-crossings-performance-index-migration.js"
+    );
+    await applyBlendedCrossingsPerformanceIndexMigration();
+
+    const { applySpinsPlayedAtIndexMigration } = await import(
+      "../src/lore/spins-played-at-index-migration.js"
+    );
+    await applySpinsPlayedAtIndexMigration();
+
     const { applyLifetimeCrossingsMigration } = await import(
       "../src/lore/lifetime-crossings-migration.js"
     );

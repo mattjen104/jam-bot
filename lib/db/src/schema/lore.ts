@@ -106,7 +106,11 @@ export const recordingsTable = pgTable("recordings", {
   yearCheckedAt: timestamp("year_checked_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => [
+  // Blended crossings expands active listeners' artist taste into recording
+  // MBIDs before probing the spin archive.
+  index("recordings_artist_mbid_idx").on(t.artistMbid),
+]);
 
 export type Recording = typeof recordingsTable.$inferSelect;
 export type InsertRecording = typeof recordingsTable.$inferInsert;
@@ -565,6 +569,8 @@ export const spinsTable = pgTable(
   },
   (t) => [
     index("spins_mbid_played_at_idx").on(t.mbid, t.playedAt),
+    // The blended rolling lane starts from its 30-day time window.
+    index("spins_played_at_idx").on(t.playedAt),
     index("spins_station_played_at_idx").on(t.stationId, t.playedAt),
     // Selector/run read-models group spins by show + time.
     index("spins_show_played_at_idx").on(t.showId, t.playedAt),
@@ -1201,7 +1207,13 @@ export const loreUsersTable = pgTable("lore_users", {
   avatarVisitStartedAt: timestamp("avatar_visit_started_at"),
   avatarVisitRecordingMbid: text("avatar_visit_recording_mbid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => [
+  // Finds the short-lived opted-in audience without scanning every listener.
+  index("lore_users_social_presence_last_seen_idx").on(
+    t.socialParticipation,
+    t.lastSeenAt,
+  ),
+]);
 
 export type LoreUser = typeof loreUsersTable.$inferSelect;
 export type InsertLoreUser = typeof loreUsersTable.$inferInsert;
@@ -1652,6 +1664,8 @@ export const recordingReleaseGroupsTable = pgTable(
       t.releaseGroupMbid,
     ),
     index("rrg_recording_primary_idx").on(t.recordingMbid, t.isPrimary),
+    // Expands active listeners' saved release groups back to recording MBIDs.
+    index("rrg_release_group_primary_idx").on(t.releaseGroupMbid, t.isPrimary),
   ],
 );
 

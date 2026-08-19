@@ -144,3 +144,4 @@
 - [Radio duck/restore contract](radio-duck-contract.md) — duck writes element volume only; setVolume-while-ducked updates the saved target; BOTH ride-start paths restore before pauseRadio; hand-written useRadioPlayer mocks break on new methods.
 - [Global scan test fixtures](global-scan-test-fixtures.md) — shared-DB background-job tests assert fixture effects and relative batch invariants, never absolute global totals.
 - [Blended first-play cache compatibility](blended-first-play-cache.md) — global/blended Dial aggregates must evolve with personal ones; reject legacy blended cache rows missing new score fields.
+- [Drizzle CTE raw-column aliases](drizzle-cte-raw-column-aliases.md) — downstream CTE references to raw SQL selections require explicit aliases; shared taste CTEs prevent repeated active-audience scans.

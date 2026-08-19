@@ -1244,6 +1244,49 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     expect(SOCIAL_PRESENCE_TTL_MS).toBeGreaterThan(0);
     expect(SOCIAL_PRESENCE_TTL_MS).toBeLessThanOrEqual(5 * 60 * 1000);
   });
+
+  it("keeps blended rolling and lifetime lanes on their time and MBID indexes", async () => {
+    if (!dbAvailable) return;
+
+    // This profiles the two archive access lanes used by the blended
+    // aggregate, with the same active-social-user → library-MBID expansion as
+    // computeBlendedCrossings. Index preference makes this stable on a small
+    // local fixture while still failing if either index or query shape drifts.
+    const rollingPlan = await db.transaction(async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
+      return tx.execute(sql`
+        explain (format json, costs off)
+        select s.id
+        from spins s
+        where s.played_at >= now() - interval '30 days'
+          and s.mbid is not null
+      `);
+    });
+    expect(JSON.stringify(rollingPlan)).toContain("spins_played_at_idx");
+
+    const lifetimePlan = await db.transaction(async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
+      return tx.execute(sql`
+        explain (format json, costs off)
+        with active_social_users as (
+          select id
+          from lore_users
+          where social_participation = true
+            and last_seen_at >= now() - interval '3 minutes'
+        ),
+        active_library_mbids as (
+          select distinct li.mbid
+          from library_items li
+          inner join active_social_users u on u.id = li.user_id
+          where li.removed_at is null
+        )
+        select s.id
+        from spins s
+        where s.mbid in (select mbid from active_library_mbids)
+      `);
+    });
+    expect(JSON.stringify(lifetimePlan)).toContain("spins_mbid_played_at_idx");
+  }, TEST_TIMEOUT);
 });
 
 // ── Cold-compute bounding (fast front-door first load) ───────────────────────
