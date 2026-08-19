@@ -4771,7 +4771,7 @@ export function useGetDjShows<
  * @summary Rolling per-song genre chips for the schedule page
  */
 export const getGetStationsRollingGenresUrl = () => {
-  return `/api/api/stations/rolling-genres`;
+  return `/api/stations/rolling-genres`;
 };
 
 export const getStationsRollingGenres = async (
@@ -4787,7 +4787,7 @@ export const getStationsRollingGenres = async (
 };
 
 export const getGetStationsRollingGenresQueryKey = () => {
-  return [`/api/api/stations/rolling-genres`] as const;
+  return [`/api/stations/rolling-genres`] as const;
 };
 
 export const getGetStationsRollingGenresQueryOptions = <

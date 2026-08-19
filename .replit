@@ -54,6 +54,14 @@ args = "lore-lint"
 task = "workflow.run"
 args = "server-lint"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "api-contract"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "api-codegen-repro"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -138,6 +146,28 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run lint"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "api-contract"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-spec run check"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "api-codegen-repro"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-spec run check:generated"
 
 [workflows.workflow.metadata]
 isValidation = true

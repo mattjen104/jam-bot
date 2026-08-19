@@ -1484,7 +1484,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /api/stations/rolling-genres:
+  /stations/rolling-genres:
     get:
       operationId: getStationsRollingGenres
       tags: [stations]
