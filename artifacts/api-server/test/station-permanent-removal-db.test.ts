@@ -18,7 +18,7 @@
  * Self-skips when no Postgres is reachable.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql, inArray } from "drizzle-orm";
 import type { AddressInfo } from "node:net";
@@ -123,7 +123,15 @@ afterAll(async () => {
     unenrollStationPoller(curatedStationId);
   }
   // Cleanup — tolerate rows already deleted by the endpoint under test.
-  const ids = [rbStationId, curatedStationId].filter((n): n is number => n != null);
+  const restoredRbRows = await db
+    .select({ stationId: radioBrowserStationsTable.stationId })
+    .from(radioBrowserStationsTable)
+    .where(eq(radioBrowserStationsTable.radioBrowserUuid, RB_UUID));
+  const ids = [
+    rbStationId,
+    curatedStationId,
+    ...restoredRbRows.map((row) => row.stationId),
+  ].filter((n): n is number => n != null);
   if (ids.length > 0) {
     await db.delete(spinsTable).where(inArray(spinsTable.stationId, ids));
     await db.delete(showsTable).where(inArray(showsTable.stationId, ids));
@@ -307,14 +315,80 @@ describe("permanent station removal", () => {
     expect(rbExclusion).toBeDefined();
     expect(curatedExclusion).toBeDefined();
 
-    const rbRes = await authed(
-      `/api/admin/station-exclusions/${rbExclusion!.id}`,
-      { method: "DELETE" },
+    const originalFetch = globalThis.fetch.bind(globalThis);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes(`/json/stations/byuuid/${RB_UUID}`)) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                stationuuid: RB_UUID,
+                name: `Test PermRemove RB ${run}`,
+                url_resolved: `https://stream.example.com/permremove-restored-${run}`,
+                url: `https://stream.example.com/permremove-restored-${run}`,
+                tags: "ambient",
+                country: "US",
+                homepage: "https://example.com",
+                favicon: "",
+                codec: "MP3",
+                bitrate: 128,
+                votes: 250,
+                clickcount: 200,
+                lastcheckok: 1,
+              },
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      }
+      return originalFetch(input, init);
+    });
+    try {
+      const rbRes = await authed(
+        `/api/admin/station-exclusions/${rbExclusion!.id}`,
+        { method: "DELETE" },
+      );
+      expect(rbRes.status).toBe(200);
+      expect(
+        (await rbRes.json()) as {
+          mode: string;
+          restored: boolean;
+          returnState: string;
+        },
+      ).toEqual(
+        expect.objectContaining({
+          mode: "radio_browser",
+          restored: true,
+          returnState: "enrolled",
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+
+    const [restoredRbRow] = await db
+      .select()
+      .from(radioBrowserStationsTable)
+      .where(eq(radioBrowserStationsTable.radioBrowserUuid, RB_UUID));
+    expect(restoredRbRow).toBeDefined();
+    const [restoredStation] = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.id, restoredRbRow!.stationId!));
+    expect(restoredStation).toEqual(
+      expect.objectContaining({
+        active: true,
+        hidden: false,
+        nowPlayingSource: "radio_browser_icy",
+      }),
     );
-    expect(rbRes.status).toBe(200);
-    expect(((await rbRes.json()) as { mode: string; restored: boolean })).toEqual(
-      expect.objectContaining({ mode: "radio_browser", restored: true }),
-    );
+    expect(_testOnlyHasStationPoller(restoredStation!.id)).toBe(true);
 
     const curatedRes = await authed(
       `/api/admin/station-exclusions/${curatedExclusion!.id}`,
@@ -332,6 +406,7 @@ describe("permanent station removal", () => {
     expect(curatedRow!.hidden).toBe(false);
     expect(curatedRow!.active).toBe(true);
     expect(_testOnlyHasStationPoller(curatedStationId!)).toBe(true);
+    unenrollStationPoller(restoredStation!.id);
 
     const remaining = await db
       .select()

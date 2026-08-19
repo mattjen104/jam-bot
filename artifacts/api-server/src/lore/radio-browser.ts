@@ -1,4 +1,10 @@
-import { db, stationsTable, radioBrowserStationsTable, stationExclusionsTable } from "@workspace/db";
+import {
+  db,
+  stationsTable,
+  radioBrowserStationsTable,
+  stationExclusionsTable,
+  type Station,
+} from "@workspace/db";
 import { sql, eq, and, isNull } from "drizzle-orm";
 
 /**
@@ -598,6 +604,87 @@ export async function upsertRadioBrowserStations(
     }
   }
   return upserted;
+}
+
+/**
+ * Outcome of trying to bring a permanently removed Radio Browser station back
+ * immediately. Removing its tombstone still lets the normal discovery pass
+ * find it later, but an operator restore should not have to wait for that pass.
+ */
+export type RadioBrowserRestoreOutcome =
+  | { state: "enrolled"; station: Station }
+  | { state: "directory_unavailable" | "ineligible" | "enrollment_failed" };
+
+/**
+ * Recreate an eligible Radio Browser station from its directory UUID.
+ *
+ * This intentionally applies the same quality, blocklist, tag, and special
+ * browse-mode rules as discovery. A station that no longer qualifies remains
+ * eligible for a later directory pass only when its metadata changes; it is
+ * not silently reintroduced to normal tracking by an admin restore.
+ *
+ * The caller must remove the exclusion tombstone before calling this helper:
+ * `upsertRadioBrowserStations` consults that tombstone at its DB boundary.
+ */
+export async function restoreRadioBrowserStation(
+  uuid: string,
+): Promise<RadioBrowserRestoreOutcome> {
+  const remote = await fetchRadioBrowserStation(uuid);
+  if (!remote) return { state: "directory_unavailable" };
+
+  const [candidate] = filterStations([remote]);
+  if (!candidate) return { state: "ineligible" };
+
+  const candidateSlug = slugify(candidate.name);
+  if (
+    !candidateSlug ||
+    isSleepStation(candidate.name, candidateSlug) ||
+    isEraGenreStation(candidate.name, candidateSlug)
+  ) {
+    return { state: "ineligible" };
+  }
+
+  const remoteTags = new Set(
+    candidate.tags
+      .split(",")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const discoveryTag = RADIO_BROWSER_GENRE_WHITELIST.find((tag) =>
+    remoteTags.has(tag),
+  );
+  if (!discoveryTag) return { state: "ineligible" };
+
+  try {
+    const upserted = await upsertRadioBrowserStations([candidate], discoveryTag);
+    if (upserted !== 1) return { state: "enrollment_failed" };
+
+    const [enrollment] = await db
+      .select({ stationId: radioBrowserStationsTable.stationId })
+      .from(radioBrowserStationsTable)
+      .where(eq(radioBrowserStationsTable.radioBrowserUuid, candidate.stationuuid))
+      .limit(1);
+    if (!enrollment?.stationId) return { state: "enrollment_failed" };
+
+    // This station was previously accepted into Lore. Its current directory
+    // metadata has passed the discovery gate above, so restore its visible,
+    // active state rather than making the operator wait for stream-health's
+    // next promotion cycle.
+    const [station] = await db
+      .update(stationsTable)
+      .set({ active: true, hidden: false, updatedAt: new Date() })
+      .where(eq(stationsTable.id, enrollment.stationId))
+      .returning();
+    return station
+      ? { state: "enrolled", station }
+      : { state: "enrollment_failed" };
+  } catch (err) {
+    console.warn(
+      `[radio-browser] could not immediately restore uuid="${uuid}"`,
+      err,
+    );
+    return { state: "enrollment_failed" };
+  }
 }
 
 /**

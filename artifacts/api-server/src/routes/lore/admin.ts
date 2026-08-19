@@ -89,7 +89,11 @@ import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/
 import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { ingestAllBookSources, BOOK_SOURCE_HANDLE } from "../../lore/book-knowledge.js";
-import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
+import {
+  fetchRadioBrowserStation,
+  restoreRadioBrowserStation,
+  slugify as rbSlugify,
+} from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, getFeedFreshnessStaleStations, coverageClassFor } from "../../lore/poller.js";
 import { monitoringSince } from "../../lore/feed-freshness-health.js";
 import {
@@ -1476,9 +1480,9 @@ router.get("/admin/station-exclusions", h(async (_req, res) => {
 }));
 
 // DELETE /api/admin/station-exclusions/:id — restore a permanently removed
-// station. Radio Browser tombstones can be removed directly; curated seed
-// tombstones also reactivate and un-hide the retained stations row so the next
-// seed pass can restore it normally.
+// station. Curated seed tombstones reactivate their retained row. Radio Browser
+// rows were deleted at removal, so after lifting their tombstone we fetch the
+// UUID and immediately recreate an eligible enrollment when possible.
 router.delete("/admin/station-exclusions/:id", h(async (req, res) => {
   const id = parseStationId(req.params["id"]);
   if (id === null) {
@@ -1521,9 +1525,17 @@ router.delete("/admin/station-exclusions/:id", h(async (req, res) => {
   }
 
   const { exclusion } = restored;
+  const radioBrowserRestore = exclusion.radioBrowserUuid
+    ? await restoreRadioBrowserStation(exclusion.radioBrowserUuid)
+    : null;
+  if (radioBrowserRestore?.state === "enrolled") {
+    enrollStationPoller(radioBrowserRestore.station);
+  }
+
   res.json({
     restored: true,
     mode: exclusion.stationSlug ? "curated" : "radio_browser",
+    returnState: radioBrowserRestore?.state ?? "enrolled",
     stationName: exclusion.stationName,
     radioBrowserUuid: exclusion.radioBrowserUuid,
     stationSlug: exclusion.stationSlug,

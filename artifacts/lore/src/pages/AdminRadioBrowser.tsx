@@ -209,7 +209,10 @@ function RadioBrowserPanel({
             )}
           </div>
 
-          <RemovedStationsSection token={token} />
+          <RemovedStationsSection
+            token={token}
+            onRestored={() => void loadStations()}
+          />
         </div>
       </div>
     </div>
@@ -225,11 +228,18 @@ interface StationExclusionRow {
 }
 
 /** Permanent-removal tombstone list with an admin restore action. */
-function RemovedStationsSection({ token }: { token: string }) {
+function RemovedStationsSection({
+  token,
+  onRestored,
+}: {
+  token: string;
+  onRestored: () => void;
+}) {
   const [rows, setRows] = useState<StationExclusionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -259,6 +269,7 @@ function RemovedStationsSection({ token }: { token: string }) {
     if (restoringId !== null) return;
     setRestoringId(row.id);
     setRestoreError(null);
+    setRestoreNotice(null);
     try {
       const res = await fetch(`/api/admin/station-exclusions/${row.id}`, {
         method: "DELETE",
@@ -269,7 +280,29 @@ function RemovedStationsSection({ token }: { token: string }) {
         setRestoreError(body.error ?? `Restore failed (HTTP ${res.status})`);
         return;
       }
+      const body = (await res.json()) as {
+        mode?: "curated" | "radio_browser";
+        returnState?: string;
+      };
       setRows((current) => current?.filter((item) => item.id !== row.id) ?? current);
+      onRestored();
+      if (body.mode === "radio_browser") {
+        const messages: Record<string, string> = {
+          enrolled: "Restored and tracking now.",
+          directory_unavailable:
+            "Restored. Radio Browser could not verify it just now; discovery will try again later.",
+          ineligible:
+            "Restored, but it no longer meets Lore’s discovery criteria, so tracking did not restart.",
+          enrollment_failed:
+            "Restored. It could not be re-enrolled just now; discovery will try again later.",
+        };
+        setRestoreNotice(
+          messages[body.returnState ?? ""] ??
+            "Restored. Discovery will determine when it returns to tracking.",
+        );
+      } else {
+        setRestoreNotice("Restored and tracking now.");
+      }
     } catch (err) {
       setRestoreError(err instanceof Error ? err.message : "Restore failed");
     } finally {
@@ -284,8 +317,8 @@ function RemovedStationsSection({ token }: { token: string }) {
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Permanently removed via "Remove from Lore" — never re-discovered or
-        re-seeded. Restored curated stations resume tracking immediately; Radio
-        Browser stations become eligible for the next discovery pass.
+        re-seeded. Restored curated stations resume tracking immediately. Eligible
+        Radio Browser stations are re-enrolled and start tracking right away.
       </p>
       {error ? (
         <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
@@ -325,7 +358,7 @@ function RemovedStationsSection({ token }: { token: string }) {
                   title={
                     r.stationSlug
                       ? "Restore and resume tracking"
-                      : "Restore discovery eligibility"
+                      : "Restore and resume tracking when eligible"
                   }
                 >
                   {restoringId === r.id ? (
@@ -343,6 +376,14 @@ function RemovedStationsSection({ token }: { token: string }) {
       {restoreError && (
         <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
           {restoreError}
+        </div>
+      )}
+      {restoreNotice && (
+        <div
+          className="mt-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-base text-foreground"
+          data-testid="restore-station-status"
+        >
+          {restoreNotice}
         </div>
       )}
     </div>
