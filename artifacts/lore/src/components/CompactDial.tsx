@@ -18,7 +18,7 @@
  *                         overflow region regardless of alphabetical position
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationPresence } from "../hooks/useStationPresence";
 import type { DialDisplayMode } from "../hooks/useDialData";
@@ -39,6 +39,12 @@ import {
 import type { DialDensity } from "../lib/dialDensityState";
 import type { LastSetSummary } from "../lib/latestSet";
 import { STATION_CATEGORY_DEFINITIONS, type StationCategory } from "../lib/dialCategories";
+import {
+  SPECIALIST_SUBCATEGORY_DEFINITIONS,
+  specialistSubcategoryForStation,
+  specialistSubcategoryLabel,
+  type SpecialistSubcategory,
+} from "../lib/specialistCategories";
 import { cleanLiveValue } from "./dialViewHelpers";
 
 const COMPACT_DIAL_SIZE = 5;
@@ -229,6 +235,12 @@ interface CategoryScopeMetrics {
   firstPlays: number;
 }
 
+interface SpecialistSubcategoryGroup {
+  id: SpecialistSubcategory;
+  label: string;
+  rows: CategoryGroup["rows"];
+}
+
 /**
  * Category totals include skipped stations because those stations remain
  * represented by the category summary and are still reachable when expanded.
@@ -307,6 +319,110 @@ function buildCompactCategoryGroups(
   return [...groups.values()].sort((a, b) =>
     (editorialOrder.get(a.category as StationCategory) ?? Number.MAX_SAFE_INTEGER)
     - (editorialOrder.get(b.category as StationCategory) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function buildSpecialistSubcategoryGroups(
+  rows: CategoryGroup["rows"],
+): SpecialistSubcategoryGroup[] {
+  const groups = new Map<SpecialistSubcategory, SpecialistSubcategoryGroup>();
+  for (const entry of rows) {
+    const id = specialistSubcategoryForStation(entry.row.ds.station);
+    const group = groups.get(id);
+    if (group) {
+      group.rows.push(entry);
+    } else {
+      groups.set(id, {
+        id,
+        label: specialistSubcategoryLabel(id),
+        rows: [entry],
+      });
+    }
+  }
+  const order = new Map(
+    SPECIALIST_SUBCATEGORY_DEFINITIONS.map((definition, index) => [definition.id, index]),
+  );
+  return [...groups.values()].sort(
+    (a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER)
+      - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+function specialistNowPlaying(
+  rows: SpecialistSubcategoryGroup["rows"],
+): Array<{ stationName: string; artist: string | null; title: string | null }> {
+  return rows.map(({ row }) => {
+    if (!row.ds.isLive) return { stationName: row.ds.station.name, artist: null, title: null };
+    const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
+    const artist = cleanLiveValue(track?.artist);
+    const title = cleanLiveValue(track?.title);
+    return artist || title
+      ? { stationName: row.ds.station.name, artist, title }
+      : { stationName: row.ds.station.name, artist: null, title: null };
+  });
+}
+
+function SpecialistSubcategoryCard({
+  group,
+  expanded,
+  onToggle,
+  renderRows,
+}: {
+  group: SpecialistSubcategoryGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  renderRows: (group: CategoryGroup) => ReactNode;
+}) {
+  const nowPlaying = specialistNowPlaying(group.rows);
+  const liveCount = nowPlaying.filter((entry) => entry.artist || entry.title).length;
+  const categoryGroup: CategoryGroup = {
+    category: "other",
+    label: group.label,
+    rows: group.rows,
+  };
+  return (
+    <section className="compact-specialist-dial__subgroup" data-testid={`compact-specialist-${group.id}`}>
+      <button
+        type="button"
+        className={`compact-specialist-dial__subsummary${expanded ? " compact-specialist-dial__subsummary--expanded" : ""}`}
+        aria-expanded={expanded}
+        aria-controls={`compact-specialist-${group.id}-stations`}
+        onClick={onToggle}
+      >
+        <span className="compact-specialist-dial__sublabel">{group.label}</span>
+        <span className="compact-specialist-dial__subcount">
+          {group.rows.length} {group.rows.length === 1 ? "station" : "stations"} · {liveCount} now playing
+        </span>
+        <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+      </button>
+      <div className="compact-specialist-dial__now-playing" aria-label={`${group.label} now playing`}>
+        <div className="compact-specialist-dial__now-playing-heading">
+          Now playing across {group.rows.length} {group.rows.length === 1 ? "station" : "stations"}
+        </div>
+        <div className="compact-specialist-dial__now-playing-list">
+          {nowPlaying.map((entry) => (
+            <div className="compact-specialist-dial__now-playing-row" key={entry.stationName}>
+              <span>
+                {entry.artist || entry.title
+                  ? `${entry.artist ?? entry.title}${entry.artist && entry.title ? ` — ${entry.title}` : ""}`
+                  : "Now playing unavailable"}
+              </span>
+              <b>{entry.stationName}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+      {expanded && (
+        <div
+          className="compact-specialist-dial__stations"
+          id={`compact-specialist-${group.id}-stations`}
+          role="region"
+          aria-label={`${group.label} station controls`}
+        >
+          {renderRows(categoryGroup)}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function CategorySummary({
@@ -404,6 +520,12 @@ function CategoryFirstDial({
     [activeRows, skippedRows],
   );
   const [expandedCategory, setExpandedCategory] = useState<CompactCategory | null>(null);
+  const [expandedSpecialist, setExpandedSpecialist] = useState<SpecialistSubcategory | null>(null);
+  const specialistGroup = groups.find((group) => group.category === "specialist") ?? null;
+  const specialistGroups = useMemo(
+    () => (specialistGroup ? buildSpecialistSubcategoryGroups(specialistGroup.rows) : []),
+    [specialistGroup],
+  );
   const sampledRow = samplingRowIdx != null ? activeRows[samplingRowIdx] ?? null : null;
   const sampledSlug = sampledRow?.ds.station.slug ?? null;
   const sampledCategory = sampledRow ? categoryForRow(sampledRow) : null;
@@ -446,6 +568,7 @@ function CategoryFirstDial({
         // A running station scan keeps its current station visible, but does
         // not overwrite the listener's manually chosen category once it ends.
         const isExpanded = sampledCategory === group.category || expandedCategory === group.category;
+        const isSpecialist = group.category === "specialist";
         return (
           <section className="compact-category-dial__group" key={group.category}>
             <CategorySummary
@@ -455,14 +578,29 @@ function CategoryFirstDial({
               onToggle={() => setExpandedCategory((current) => current === group.category ? null : group.category)}
             />
             {isExpanded && (
-              <div
-                className="compact-category-dial__stations"
-                id={`compact-category-${group.category}`}
-                role="region"
-                aria-label={`${group.label} stations`}
-              >
-                {renderRows(group)}
-              </div>
+              isSpecialist ? (
+                <div className="compact-specialist-dial__subgroups" aria-label="Specialist subcategories">
+                  {specialistGroups.map((subcategory) => (
+                    <SpecialistSubcategoryCard
+                      key={subcategory.id}
+                      group={subcategory}
+                      expanded={expandedSpecialist === subcategory.id}
+                      onToggle={() => setExpandedSpecialist((current) =>
+                        current === subcategory.id ? null : subcategory.id)}
+                      renderRows={renderRows}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="compact-category-dial__stations"
+                  id={`compact-category-${group.category}`}
+                  role="region"
+                  aria-label={`${group.label} stations`}
+                >
+                  {renderRows(group)}
+                </div>
+              )
             )}
           </section>
         );
