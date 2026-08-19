@@ -142,6 +142,7 @@ export * from "./manualSpinResponse";
 export * from "./manualSpinResponseConfidence";
 export * from "./mattStarterLibraryResult";
 export * from "./meBlendedCrossingsResult";
+export * from "./meCrossingsResult";
 export * from "./meOverlapRunsResponse";
 export * from "./mePickerOverlapResult";
 export * from "./mePressCrossingsResponse";

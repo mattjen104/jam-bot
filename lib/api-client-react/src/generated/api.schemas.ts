@@ -2889,16 +2889,30 @@ export interface DialCrossingItem {
   stationSlug: string;
   crossings: number;
   artistCrossings: number;
+  /** First-ever Lore plays that are also crossings in the rolling 24h window. */
+  firstPlayCrossings?: number;
   weekCrossings: number;
   weekArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings in the rolling 7d window. */
+  weekFirstPlayCrossings?: number;
   monthCrossings: number;
   monthArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings in the rolling 30d window. */
+  monthFirstPlayCrossings?: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings over the full archive. */
+  lifetimeFirstPlayCrossings?: number;
 }
 
 export interface MeBlendedCrossingsResult {
   items: DialCrossingItem[];
+}
+
+export interface MeCrossingsResult {
+  items: DialCrossingItem[];
+  computing?: boolean;
+  failed?: boolean;
 }
 
 export type StationsScheduleResultItemsItem = {

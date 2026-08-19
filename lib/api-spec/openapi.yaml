@@ -2965,6 +2965,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MePickerOverlapResult"
+  /me/crossings:
+    get:
+      operationId: getMyCrossings
+      tags: [me]
+      summary: Listener crossing and first-play counts by station
+      description: >
+        Returns server-aggregated station counts for the listener's taste
+        crossings and first-ever Lore plays that are also crossings. Rolling
+        windows cover 24 hours, 7 days, and 30 days; lifetime counts use an
+        MBID-driven lookup rather than a full spin-history scan.
+      responses:
+        "200":
+          description: Station-level crossing metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeCrossingsResult"
   /me/press-crossings:
     get:
       operationId: getMyPressCrossings
@@ -7463,6 +7480,18 @@ components:
           items:
             $ref: "#/components/schemas/DialCrossingItem"
       required: [items]
+    MeCrossingsResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DialCrossingItem"
+        computing:
+          type: boolean
+        failed:
+          type: boolean
+      required: [items]
     DialCrossingItem:
       type: object
       properties:
@@ -7472,18 +7501,30 @@ components:
           type: integer
         artistCrossings:
           type: integer
+        firstPlayCrossings:
+          type: integer
+          description: First-ever Lore plays that are also crossings in the rolling 24h window.
         weekCrossings:
           type: integer
         weekArtistCrossings:
           type: integer
+        weekFirstPlayCrossings:
+          type: integer
+          description: First-ever Lore plays that are also crossings in the rolling 7d window.
         monthCrossings:
           type: integer
         monthArtistCrossings:
           type: integer
+        monthFirstPlayCrossings:
+          type: integer
+          description: First-ever Lore plays that are also crossings in the rolling 30d window.
         lifetimeCrossings:
           type: integer
         lifetimeArtistCrossings:
           type: integer
+        lifetimeFirstPlayCrossings:
+          type: integer
+          description: First-ever Lore plays that are also crossings over the full archive.
       required: [stationSlug, crossings, artistCrossings, weekCrossings, weekArtistCrossings, monthCrossings, monthArtistCrossings, lifetimeCrossings, lifetimeArtistCrossings]
     StationsScheduleResult:
       type: object

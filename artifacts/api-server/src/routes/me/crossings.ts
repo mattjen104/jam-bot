@@ -370,6 +370,18 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   const inWindow           = sql`${spinsTable.playedAt} >= ${cutoff}`;
   const inWeek             = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
   const inMonth            = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
+  // A first play belongs to the station that logged the first resolved
+  // occurrence in Lore's archive. The correlated lookup is MBID-driven and
+  // uses spins_mbid_played_at_idx; `id` makes timestamp ties deterministic.
+  const firstEverPlay = sql`not exists (
+    select 1 from spins prior
+    where prior.mbid = ${spinsTable.mbid}
+      and (
+        prior.played_at < ${spinsTable.playedAt}
+        or (prior.played_at = ${spinsTable.playedAt} and prior.id < ${spinsTable.id})
+      )
+  )`;
+  const crossingHit = sql`(${libHit} or (${notLibHit} and ${artistMatch}))`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
@@ -401,10 +413,13 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         stationSlug: stationsTable.slug,
         crossings:            sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
         artistCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
+        firstPlayCrossings:   sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${crossingHit} and ${firstEverPlay})::int`,
         weekCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${libHit})::int`,
         weekArtistCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${notLibHit} and ${artistMatch})::int`,
+        weekFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${crossingHit} and ${firstEverPlay})::int`,
         monthCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${libHit})::int`,
         monthArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${notLibHit} and ${artistMatch})::int`,
+        monthFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${crossingHit} and ${firstEverPlay})::int`,
         // Collect all matching artist names (with repeats) per window so we
         // can rank by frequency in JS.  FILTER keeps only crossing spins.
         topArtistNamesRaw24h: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${libHit} or (${notLibHit} and ${artistMatch})))`,
@@ -445,6 +460,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         stationSlug: stationsTable.slug,
         lifetimeCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
         lifetimeArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
+        lifetimeFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${crossingHit} and ${firstEverPlay})::int`,
         // Collect all matching artist names so we can rank by frequency in JS.
         topArtistNamesRawLifetime:  sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${libHit} or (${notLibHit} and ${artistMatch}))`,
       })
@@ -486,12 +502,16 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       stationSlug:             slug,
       crossings:               r?.crossings               ?? 0,
       artistCrossings:         r?.artistCrossings         ?? 0,
+      firstPlayCrossings:      r?.firstPlayCrossings      ?? 0,
       weekCrossings:           r?.weekCrossings           ?? 0,
       weekArtistCrossings:     r?.weekArtistCrossings     ?? 0,
+      weekFirstPlayCrossings:  r?.weekFirstPlayCrossings  ?? 0,
       monthCrossings:          r?.monthCrossings          ?? 0,
       monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
+      monthFirstPlayCrossings: r?.monthFirstPlayCrossings ?? 0,
       lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+      lifetimeFirstPlayCrossings: l?.lifetimeFirstPlayCrossings ?? 0,
       topArtistNames24h:       topArtistsFromRaw(r?.topArtistNamesRaw24h ?? null),
       topArtistNames7d:        topArtistsFromRaw(r?.topArtistNamesRaw7d  ?? null),
       topArtistNamesLifetime:  topArtistsFromRaw(l?.topArtistNamesRawLifetime ?? null),
@@ -778,8 +798,16 @@ const BLENDED_CACHE_ROW_ID = 1;
 
 router.get("/me/crossings/blended", h(async (_req, res) => {
   // ── L1: single-entry short-TTL in-process cache ───────────────────────────
-  if (blendedCrossingsCache && Date.now() - blendedCrossingsCache.builtAt < BLENDED_CROSSINGS_CACHE_TTL_MS) {
+  if (
+    blendedCrossingsCache
+    && Date.now() - blendedCrossingsCache.builtAt < BLENDED_CROSSINGS_CACHE_TTL_MS
+    && hasBlendedFirstPlayFields(blendedCrossingsCache.data)
+  ) {
     return res.json({ items: blendedCrossingsCache.data });
+  }
+  // A hot-reloaded process can retain the legacy L1 shape, too.
+  if (blendedCrossingsCache && !hasBlendedFirstPlayFields(blendedCrossingsCache.data)) {
+    blendedCrossingsCache = null;
   }
 
   // ── L2: Postgres persistent cache (survives restarts) ─────────────────────
@@ -844,11 +872,25 @@ async function readBlendedL2Cache(): Promise<BlendedCrossingsRow[] | null> {
     if (rows.length === 0) return null;
     const row = rows[0]!;
     if (Date.now() - row.builtAt.getTime() >= BLENDED_CROSSINGS_CACHE_TTL_MS) return null;
+    if (!hasBlendedFirstPlayFields(row.data)) return null;
     return row.data;
   } catch {
     // L2 read errors are non-fatal: fall through to full compute.
     return null;
   }
+}
+
+/**
+ * First-play counts were added after the initial blended cache shape. Reject a
+ * legacy row so a listener never sees durable zeroes until the TTL expires.
+ */
+function hasBlendedFirstPlayFields(rows: BlendedCrossingsRow[]): boolean {
+  return rows.every((row) =>
+    typeof row.firstPlayCrossings === "number"
+    && typeof row.weekFirstPlayCrossings === "number"
+    && typeof row.monthFirstPlayCrossings === "number"
+    && typeof row.lifetimeFirstPlayCrossings === "number",
+  );
 }
 
 /**
@@ -943,16 +985,28 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
   const blendedScanCutoff = blendedMonthCutoff;
   const inWeek            = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
   const inMonth           = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
+  const firstEverPlay = sql`not exists (
+    select 1 from spins prior
+    where prior.mbid = ${spinsTable.mbid}
+      and (
+        prior.played_at < ${spinsTable.playedAt}
+        or (prior.played_at = ${spinsTable.playedAt} and prior.id < ${spinsTable.id})
+      )
+  )`;
+  const aggregateCrossingHit = sql`(${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch}))`;
 
   const blendedRows = await db
     .select({
       stationSlug:         stationsTable.slug,
       crossings:           sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
       artistCrossings:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      firstPlayCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateCrossingHit} and ${firstEverPlay})::int`,
       weekCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateLibHit})::int`,
       weekArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      weekFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${aggregateCrossingHit} and ${firstEverPlay})::int`,
       monthCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
       monthArtistCrossings:sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      monthFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateCrossingHit} and ${firstEverPlay})::int`,
       // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
       topArtistNamesRaw:   sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
@@ -1003,6 +1057,7 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
       stationSlug: stationsTable.slug,
       lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
       lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      lifetimeFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateCrossingHit} and ${firstEverPlay})::int`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -1039,12 +1094,16 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
       stationSlug:             slug,
       crossings:               r?.crossings               ?? 0,
       artistCrossings:         r?.artistCrossings         ?? 0,
+      firstPlayCrossings:      r?.firstPlayCrossings      ?? 0,
       weekCrossings:           r?.weekCrossings           ?? 0,
       weekArtistCrossings:     r?.weekArtistCrossings     ?? 0,
+      weekFirstPlayCrossings:  r?.weekFirstPlayCrossings  ?? 0,
       monthCrossings:          r?.monthCrossings          ?? 0,
       monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
+      monthFirstPlayCrossings: r?.monthFirstPlayCrossings ?? 0,
       lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+      lifetimeFirstPlayCrossings: l?.lifetimeFirstPlayCrossings ?? 0,
       topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
     };
   });

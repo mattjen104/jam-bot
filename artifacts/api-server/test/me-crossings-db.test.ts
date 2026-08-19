@@ -394,7 +394,13 @@ beforeAll(async () => {
   // All sort spins are 25h old (outside the 24h window) so they count only
   // toward lifetimeArtistCrossings, not the rolling artistCrossings.
   const ago25hSort = new Date(now.getTime() - 25 * 60 * 60 * 1000);
+  const firstPlayTie = new Date(now.getTime() - 60 * 60 * 1000);
   await db.insert(spinsTable).values([
+    // The exact same crossed recording first airs on A, then on B at the
+    // same timestamp (id breaks the tie), and later on the main station.
+    // First-play counts must belong to A alone for user RG.
+    { stationId: stationSortAId!, mbid: MBID_SPIN_RG, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: firstPlayTie },
+    { stationId: stationSortBId!, mbid: MBID_SPIN_RG, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: firstPlayTie },
     // Station A — 3 distinct tracks by ARTIST_MBID_SORT
     { stationId: stationSortAId!, mbid: MBID_SORT_A1, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25hSort },
     { stationId: stationSortAId!, mbid: MBID_SORT_A2, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(ago25hSort.getTime() - 60_000) },
@@ -522,6 +528,36 @@ describe("GET /api/me/crossings — release-group widening", () => {
     // The endpoint must widen via recording_release_groups and count it.
     expect(row).toBeDefined();
     expect(row!.crossings).toBeGreaterThanOrEqual(1);
+  }, TEST_TIMEOUT);
+
+  it("assigns a first-play crossing only to its earliest station, including timestamp ties", async () => {
+    if (!dbAvailable) return;
+    await _testOnly_clearCrossingsCache(userRgId!);
+
+    const { status, body } = await get("/api/me/crossings", SID_RG);
+    expect(status).toBe(200);
+    const rows = body.items as Array<{
+      stationSlug: string;
+      firstPlayCrossings?: number;
+      weekFirstPlayCrossings?: number;
+      monthFirstPlayCrossings?: number;
+      lifetimeFirstPlayCrossings?: number;
+    }>;
+    const rowA = rows.find((item) => item.stationSlug === STATION_SLUG_SORT_A);
+    const rowB = rows.find((item) => item.stationSlug === STATION_SLUG_SORT_B);
+    const rowLater = rows.find((item) => item.stationSlug === STATION_SLUG);
+
+    expect(rowA).toBeDefined();
+    expect(rowB).toBeDefined();
+    expect(rowLater).toBeDefined();
+    expect(rowA!.firstPlayCrossings).toBe(1);
+    expect(rowA!.weekFirstPlayCrossings).toBe(1);
+    expect(rowA!.monthFirstPlayCrossings).toBe(1);
+    expect(rowA!.lifetimeFirstPlayCrossings).toBe(1);
+    expect(rowB!.firstPlayCrossings).toBe(0);
+    expect(rowB!.lifetimeFirstPlayCrossings).toBe(0);
+    expect(rowLater!.firstPlayCrossings).toBe(0);
+    expect(rowLater!.lifetimeFirstPlayCrossings).toBe(0);
   }, TEST_TIMEOUT);
 
   it("returns empty items for a user with no library", async () => {
@@ -940,7 +976,15 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
-      items: Array<{ stationSlug: string; crossings: number; lifetimeCrossings: number }>;
+      items: Array<{
+        stationSlug: string;
+        crossings: number;
+        lifetimeCrossings: number;
+        firstPlayCrossings: number;
+        weekFirstPlayCrossings: number;
+        monthFirstPlayCrossings: number;
+        lifetimeFirstPlayCrossings: number;
+      }>;
     };
     const row = body.items.find((r) => r.stationSlug === BSLUG);
     expect(row).toBeDefined();
@@ -948,6 +992,11 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     expect(row!.crossings).toBe(1);
     // BMBID_OLD aired 25h ago — outside window → only lifetimeCrossings
     expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(2);
+    // The same server aggregation powers first-play sorting in blended mode.
+    expect(row!.firstPlayCrossings).toBe(1);
+    expect(row!.weekFirstPlayCrossings).toBe(2);
+    expect(row!.monthFirstPlayCrossings).toBe(2);
+    expect(row!.lifetimeFirstPlayCrossings).toBe(2);
   }, TEST_TIMEOUT);
 
   it("includes a spin older than 180 days in blended lifetimeCrossings with rolling counts 0", async () => {
@@ -1044,9 +1093,13 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     const l2Row = {
       stationSlug: marker,
       crossings: 7, artistCrossings: 3,
+      firstPlayCrossings: 2,
       weekCrossings: 7, weekArtistCrossings: 3,
+      weekFirstPlayCrossings: 2,
       monthCrossings: 7, monthArtistCrossings: 3,
+      monthFirstPlayCrossings: 2,
       lifetimeCrossings: 42, lifetimeArtistCrossings: 9,
+      lifetimeFirstPlayCrossings: 4,
       topArtistNames: ["L2 Marker Artist"],
     };
     await db
@@ -1071,6 +1124,36 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     _testOnly_clearBlendedCrossingsCache();
   }, TEST_TIMEOUT);
 
+  it("recomputes a fresh legacy blended cache row that lacks first-play counts", async () => {
+    if (!dbAvailable) return;
+
+    const marker = `blended-legacy-shape-${run}`;
+    const legacyRow = {
+      stationSlug: marker,
+      crossings: 1, artistCrossings: 0,
+      weekCrossings: 1, weekArtistCrossings: 0,
+      monthCrossings: 1, monthArtistCrossings: 0,
+      lifetimeCrossings: 1, lifetimeArtistCrossings: 0,
+      topArtistNames: [],
+    };
+    await db
+      .insert(blendedCrossingsCacheTable)
+      .values({ id: 1, data: [legacyRow], builtAt: new Date() })
+      .onConflictDoUpdate({ target: blendedCrossingsCacheTable.id, set: { data: [legacyRow], builtAt: new Date() } });
+    _testOnly_clearBlendedCrossingsCache();
+
+    const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      items: Array<{ stationSlug: string; firstPlayCrossings?: number }>;
+    };
+    expect(body.items.find((item) => item.stationSlug === marker)).toBeUndefined();
+    expect(body.items.every((item) => typeof item.firstPlayCrossings === "number")).toBe(true);
+
+    await _testOnly_clearBlendedCrossingsL2Cache();
+    _testOnly_clearBlendedCrossingsCache();
+  }, TEST_TIMEOUT);
+
   it("ignores a stale L2 row and recomputes instead of serving expired data", async () => {
     if (!dbAvailable) return;
 
@@ -1078,9 +1161,13 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     const staleRow = {
       stationSlug: marker,
       crossings: 1, artistCrossings: 0,
+      firstPlayCrossings: 1,
       weekCrossings: 1, weekArtistCrossings: 0,
+      weekFirstPlayCrossings: 1,
       monthCrossings: 1, monthArtistCrossings: 0,
+      monthFirstPlayCrossings: 1,
       lifetimeCrossings: 1, lifetimeArtistCrossings: 0,
+      lifetimeFirstPlayCrossings: 1,
       topArtistNames: [],
     };
     // builtAt 10 minutes ago — well past the 60s TTL.
@@ -1119,9 +1206,13 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     const markerRow = {
       stationSlug: marker,
       crossings: 5, artistCrossings: 0,
+      firstPlayCrossings: 1,
       weekCrossings: 5, weekArtistCrossings: 0,
+      weekFirstPlayCrossings: 1,
       monthCrossings: 5, monthArtistCrossings: 0,
+      monthFirstPlayCrossings: 1,
       lifetimeCrossings: 5, lifetimeArtistCrossings: 0,
+      lifetimeFirstPlayCrossings: 1,
       topArtistNames: [],
     };
     await db

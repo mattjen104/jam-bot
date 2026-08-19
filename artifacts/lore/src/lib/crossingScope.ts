@@ -31,7 +31,7 @@ export const CROSSING_SCOPE_ORDER: readonly CrossingScope[] = [
   "lifetime",
 ];
 
-export const DEFAULT_CROSSING_SCOPE: CrossingScope = "set";
+export const DEFAULT_CROSSING_SCOPE: CrossingScope = "lifetime";
 
 /** Short pill/detail label for each scope. */
 export function crossingScopeLabel(scope: CrossingScope): string {
@@ -229,6 +229,70 @@ export function hasAnyCrossing(ds: DialStation, scope: CrossingScope): boolean {
     case "lifetime":
       return ((ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0)) > 0;
   }
+}
+
+/** The server-backed/listener-visible crossing total for a scope. */
+export function crossingCountForScope(ds: DialStation, scope: CrossingScope): number {
+  const show = liveShow(ds);
+  switch (scope) {
+    case "now":
+      return liveHit(ds) ? 1 : 0;
+    case "set":
+      return Math.max(
+        (show?.crossings ?? 0) + (show?.artistCrossings ?? 0),
+        liveHit(ds) ? 1 : 0,
+      );
+    case "24h":
+      return ds.crossings + ds.artistCrossings;
+    case "7d":
+      return (ds.weekCrossings ?? 0) + (ds.weekArtistCrossings ?? 0);
+    case "lifetime":
+      return (ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0);
+  }
+}
+
+function isFirstPlayCrossing(spin: DialSpin | null | undefined): spin is DialSpin {
+  return !!spin
+    && !spin.resolving
+    && spin.isFirstSpin
+    && (spin.isLibraryHit || spin.isArtistHit);
+}
+
+/** First-play crossing total matching the active scope. Wider scopes are API aggregates. */
+export function firstPlayCountForScope(ds: DialStation, scope: CrossingScope): number {
+  const show = liveShow(ds);
+  if (scope === "now") {
+    return isFirstPlayCrossing(ds.liveTrack ?? show?.currentTrack) ? 1 : 0;
+  }
+  if (scope === "set") {
+    const firsts = new Set<string>();
+    for (const spin of show?.spins ?? []) {
+      if (isFirstPlayCrossing(spin)) {
+        firsts.add(spin.mbid ?? `${spin.playedAt}::${spin.artist}::${spin.title}`);
+      }
+    }
+    const live = ds.liveTrack ?? show?.currentTrack;
+    if (isFirstPlayCrossing(live)) {
+      firsts.add(live.mbid ?? `${live.playedAt}::${live.artist}::${live.title}`);
+    }
+    return firsts.size;
+  }
+  if (scope === "24h") return ds.firstPlayCrossings ?? 0;
+  if (scope === "7d") return ds.weekFirstPlayCrossings ?? 0;
+  return ds.lifetimeFirstPlayCrossings ?? 0;
+}
+
+export type StationSortMetric = "crossings" | "firstPlays";
+
+/** Shared Dial sort key so the selected metric always follows the scope chip. */
+export function stationSortCount(
+  ds: DialStation,
+  scope: CrossingScope,
+  metric: StationSortMetric,
+): number {
+  return metric === "crossings"
+    ? crossingCountForScope(ds, scope)
+    : firstPlayCountForScope(ds, scope);
 }
 
 export interface CrossingScopeDetail {

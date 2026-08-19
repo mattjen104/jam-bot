@@ -8,9 +8,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   CROSSING_SCOPE_ORDER,
   DEFAULT_CROSSING_SCOPE,
+  crossingCountForScope,
   crossingScopeDetail,
   crossingScopeLabel,
   crossingSpinsForScope,
+  firstPlayCountForScope,
   hasAnyCrossing,
   nextCrossingScope,
   parseCrossingScope,
@@ -43,9 +45,13 @@ function makeDs(overrides: Partial<DialStation> = {}): DialStation {
     station: { slug: "kexp", name: "KEXP" } as DialStation["station"],
     isLive: true, shows: [],
     crossings: 0, artistCrossings: 0,
+    firstPlayCrossings: 0,
     weekCrossings: 0, weekArtistCrossings: 0,
+    weekFirstPlayCrossings: 0,
     monthCrossings: 0, monthArtistCrossings: 0,
+    monthFirstPlayCrossings: 0,
     lifetimeCrossings: 0, lifetimeArtistCrossings: 0,
+    lifetimeFirstPlayCrossings: 0,
     topArtistNames: [],
     topArtistNames24h: [],
     topArtistNames7d: [],
@@ -72,17 +78,17 @@ describe("scope cycle & labels", () => {
 describe("persistence", () => {
   beforeEach(() => localStorage.clear());
 
-  it("defaults to 'set' and round-trips through localStorage", () => {
+  it("defaults to 'lifetime' and round-trips through localStorage", () => {
     expect(readCrossingScope()).toBe(DEFAULT_CROSSING_SCOPE);
     writeCrossingScope("7d");
     expect(readCrossingScope()).toBe("7d");
   });
 
   it("falls back to the default on corrupt values", () => {
-    expect(parseCrossingScope("!!junk!!")).toBe("set");
-    expect(parseCrossingScope(null)).toBe("set");
+    expect(parseCrossingScope("!!junk!!")).toBe("lifetime");
+    expect(parseCrossingScope(null)).toBe("lifetime");
     localStorage.setItem("lore:crossingScope", "yesteryear");
-    expect(readCrossingScope()).toBe("set");
+    expect(readCrossingScope()).toBe("lifetime");
   });
 });
 
@@ -124,6 +130,38 @@ describe("hasAnyCrossing", () => {
     expect(hasAnyCrossing(makeDs({ lifetimeCrossings: 9 }), "lifetime")).toBe(true);
     expect(hasAnyCrossing(makeDs({ lifetimeArtistCrossings: 1 }), "lifetime")).toBe(true);
     expect(hasAnyCrossing(makeDs({ weekCrossings: 5 }), "lifetime")).toBe(false);
+  });
+});
+
+describe("scope count helpers", () => {
+  it("keeps crossing and first-play counts aligned with every scope", () => {
+    const firstLive = makeSpin({ mbid: "first-live", isLibraryHit: true, isFirstSpin: true });
+    const firstSet = makeSpin({ mbid: "first-set", isArtistHit: true, isFirstSpin: true });
+    const repeatSet = makeSpin({ mbid: "first-set", isArtistHit: true, isFirstSpin: true });
+    const ds = makeDs({
+      liveTrack: firstLive,
+      shows: [makeShow({ spins: [firstSet, repeatSet], crossings: 3, artistCrossings: 2 })],
+      crossings: 4,
+      artistCrossings: 1,
+      firstPlayCrossings: 2,
+      weekCrossings: 7,
+      weekArtistCrossings: 1,
+      weekFirstPlayCrossings: 3,
+      lifetimeCrossings: 12,
+      lifetimeArtistCrossings: 4,
+      lifetimeFirstPlayCrossings: 5,
+    });
+
+    expect(crossingCountForScope(ds, "now")).toBe(1);
+    expect(firstPlayCountForScope(ds, "now")).toBe(1);
+    expect(crossingCountForScope(ds, "set")).toBe(5);
+    expect(firstPlayCountForScope(ds, "set")).toBe(2);
+    expect(crossingCountForScope(ds, "24h")).toBe(5);
+    expect(firstPlayCountForScope(ds, "24h")).toBe(2);
+    expect(crossingCountForScope(ds, "7d")).toBe(8);
+    expect(firstPlayCountForScope(ds, "7d")).toBe(3);
+    expect(crossingCountForScope(ds, "lifetime")).toBe(16);
+    expect(firstPlayCountForScope(ds, "lifetime")).toBe(5);
   });
 });
 

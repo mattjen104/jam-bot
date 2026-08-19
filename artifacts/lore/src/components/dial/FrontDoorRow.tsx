@@ -35,6 +35,7 @@ import {
   DEFAULT_CROSSING_SCOPE,
   crossingScopeDetail,
   crossingSpinsForScope,
+  firstPlayCountForScope,
 } from "../../lib/crossingScope";
 import { type StationPresence } from "../../hooks/useStationPresence";
 import { ListenerAvatarStack } from "../ListenerAvatarStack";
@@ -475,6 +476,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   const [inlineDetail, setInlineDetail] = useState(false);
   const showDot = compactSentence && hasCrossing && !suppressCrossings;
   const detail = showDot && inlineDetail ? crossingScopeDetail(ds, crossingScope) : null;
+  const firstPlayCount = detail ? firstPlayCountForScope(ds, crossingScope) : 0;
 
   // Spins drill-down: null = closed; "" = show all crossing spins; non-empty
   // string = show only spins by that artist name.
@@ -793,6 +795,9 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             )}
             <span className="fdrow__crossing-detail-count">
               {detail.count} crossing{detail.count === 1 ? "" : "s"}
+            </span>
+            <span className="fdrow__crossing-detail-count">
+              {firstPlayCount} first play{firstPlayCount === 1 ? "" : "s"}
             </span>
             <button
               type="button"

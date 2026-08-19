@@ -280,6 +280,8 @@ beforeEach(() => {
   // (crossings off) is the default now, so pin crossings on globally. Tests
   // that exercise radio mode set "true" themselves after this hook.
   localStorage.setItem("lore:radioMode", "false");
+  // Zone fixtures model crossing evidence inside the current set.
+  localStorage.setItem("lore:crossingScope", "set");
 });
 
 afterEach(() => {

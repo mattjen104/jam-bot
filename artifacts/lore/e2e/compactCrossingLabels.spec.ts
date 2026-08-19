@@ -262,6 +262,7 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
     // off) is the default now.
     await page.addInitScript(() => {
       window.localStorage.setItem("lore:radioMode", "false");
+      window.localStorage.setItem("lore:crossingScope", "set");
     });
     await page.goto("/lore/");
 
@@ -312,6 +313,7 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
     // off) is the default now.
     await page.addInitScript(() => {
       window.localStorage.setItem("lore:radioMode", "false");
+      window.localStorage.setItem("lore:crossingScope", "set");
     });
     await page.goto("/lore/");
 
@@ -343,6 +345,7 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
     // is the default now.
     await page.addInitScript(() => {
       window.localStorage.setItem("lore:radioMode", "false");
+      window.localStorage.setItem("lore:crossingScope", "set");
     });
     await page.goto("/lore/");
 

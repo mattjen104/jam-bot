@@ -4885,6 +4885,53 @@ export const GetMyPickerOverlapResponse = zod.object({
 });
 
 /**
+ * Returns server-aggregated station counts for the listener's taste crossings and first-ever Lore plays that are also crossings. Rolling windows cover 24 hours, 7 days, and 30 days; lifetime counts use an MBID-driven lookup rather than a full spin-history scan.
+
+ * @summary Listener crossing and first-play counts by station
+ */
+export const GetMyCrossingsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      stationSlug: zod.string(),
+      crossings: zod.number(),
+      artistCrossings: zod.number(),
+      firstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings in the rolling 24h window.",
+        ),
+      weekCrossings: zod.number(),
+      weekArtistCrossings: zod.number(),
+      weekFirstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings in the rolling 7d window.",
+        ),
+      monthCrossings: zod.number(),
+      monthArtistCrossings: zod.number(),
+      monthFirstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings in the rolling 30d window.",
+        ),
+      lifetimeCrossings: zod.number(),
+      lifetimeArtistCrossings: zod.number(),
+      lifetimeFirstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings over the full archive.",
+        ),
+    }),
+  ),
+  computing: zod.boolean().optional(),
+  failed: zod.boolean().optional(),
+});
+
+/**
  * Returns scraped-metadata mentions of the listener's taste set (library items, taste seeds, unresolved Spotify artists) from picks (blog posts, curated lists), list entries (year-end / best-of lists), and published track claims. Ordered newest-first. Cursor-based pagination via `cursor`; 30 items per page. Returns `hasTaste: false` when the listener has no library or seeds, so the client can show a taste-seeding nudge instead of an empty state. Returns `computing: true` during cold-cache computes (rare; Press is cheap). Returns `failed: true` when the compute crashes.
 
  * @summary Press lens — listener taste × scraped-metadata mentions
@@ -5116,12 +5163,36 @@ export const GetMyBlendedCrossingsResponse = zod.object({
       stationSlug: zod.string(),
       crossings: zod.number(),
       artistCrossings: zod.number(),
+      firstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings in the rolling 24h window.",
+        ),
       weekCrossings: zod.number(),
       weekArtistCrossings: zod.number(),
+      weekFirstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings in the rolling 7d window.",
+        ),
       monthCrossings: zod.number(),
       monthArtistCrossings: zod.number(),
+      monthFirstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings in the rolling 30d window.",
+        ),
       lifetimeCrossings: zod.number(),
       lifetimeArtistCrossings: zod.number(),
+      lifetimeFirstPlayCrossings: zod
+        .number()
+        .optional()
+        .describe(
+          "First-ever Lore plays that are also crossings over the full archive.",
+        ),
     }),
   ),
 });

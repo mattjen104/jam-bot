@@ -44,7 +44,9 @@ import {
   nextCrossingScope,
   readCrossingScope,
   writeCrossingScope,
+  stationSortCount,
   type CrossingScope,
+  type StationSortMetric,
 } from "../lib/crossingScope";
 import {
   cleanLiveValue,
@@ -1614,6 +1616,7 @@ export function DialView() {
   // a ⬤ dot means and which window the crossing-positive filter uses. Only
   // meaningful while crossings are on (i.e. not radio mode).
   const [crossingScope, setCrossingScope] = useState<CrossingScope>(() => readCrossingScope());
+  const [stationSortMetric, setStationSortMetric] = useState<StationSortMetric>("crossings");
   const cycleCrossingScope = useCallback(() => {
     setCrossingScope((prev) => {
       const next = nextCrossingScope(prev);
@@ -1951,17 +1954,24 @@ export function DialView() {
         const at = a.effectiveDjName != null ? 0 : 1;
         const bt = b.effectiveDjName != null ? 0 : 1;
         if (at !== bt) return at - bt;
-        // 3. Within each band, overlap desc.
+        // 3. Within each band, order by the listener-selected metric at the
+        // active scope. Attribution bands stay intact so a dark stream never
+        // jumps above an on-air selector just because it has more history.
+        const aMetric = stationSortCount(a.ds, crossingScope, stationSortMetric);
+        const bMetric = stationSortCount(b.ds, crossingScope, stationSortMetric);
+        if (aMetric !== bMetric) return bMetric - aMetric;
+        // 4. Within a metric tie, use the established overlap fallback.
         //    DJ band: pickerId-first overlap (name bridge fallback).
         //    Stream band: lifetime station crossings (all-time, same scale).
         const aOv = a.effectiveDjName != null ? pickerOv(a.show?.pickerId ?? null, a.effectiveDjName) : a.ds.lifetimeCrossings;
         const bOv = b.effectiveDjName != null ? pickerOv(b.show?.pickerId ?? null, b.effectiveDjName) : b.ds.lifetimeCrossings;
         if (aOv !== bOv) return bOv - aOv;
-        // 4. Rung asc as final tiebreaker; r=0 ("no data") sorts last of all.
+        // 5. Rung asc as final tiebreaker; r=0 ("no data") sorts last of all.
         const sortR = (r: number) => r === 0 ? 99 : r;
-        return sortR(a.rz.r) - sortR(b.rz.r);
+        if (sortR(a.rz.r) !== sortR(b.rz.r)) return sortR(a.rz.r) - sortR(b.rz.r);
+        return a.ds.station.name.localeCompare(b.ds.station.name);
       });
-  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode]);
+  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric]);
 
   // Unified live feed — the zones are collapsed into ONE flat station list.
   // Ranking segments (internal only, no visual zones):
@@ -3125,6 +3135,8 @@ export function DialView() {
                         onToggleCrossings={() => setRadioMode(!radioMode)}
                         crossingScope={crossingScope}
                         onCycleCrossingScope={cycleCrossingScope}
+                        sortMetric={stationSortMetric}
+                        onSortMetric={setStationSortMetric}
                       />
                     )}
 

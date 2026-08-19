@@ -125,4 +125,16 @@ describe("DialFilterBar", () => {
     // badge reads the checked count, so crossings-on shows · 1.
     expect(screen.getByRole("button", { name: /^Crossings/ }).textContent).toContain("· 1");
   });
+
+  it("lets listeners choose crossings or first plays as the scoped station sort", () => {
+    const { props } = renderBar({
+      crossingScope: "lifetime",
+      onCycleCrossingScope: vi.fn(),
+      sortMetric: "crossings",
+      onSortMetric: vi.fn(),
+    });
+    openMenu("Sort");
+    fireEvent.click(screen.getByRole("checkbox", { name: /First plays/ }));
+    expect(props.onSortMetric).toHaveBeenCalledWith("firstPlays");
+  });
 });

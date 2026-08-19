@@ -259,6 +259,9 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
   });
 
   it("/crossings turns crossings on: the ⬤ dot carries the meaning, never a crossing sentence", () => {
+    // This fixture supplies set-level crossing evidence. Pin the scope rather
+    // than relying on the app default, which is intentionally lifetime.
+    localStorage.setItem("lore:crossingScope", "set");
     mockDialData();
     renderDial();
     runCommand("/crossings");
@@ -298,6 +301,7 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
   });
 
   it("/crossings restores the crossing-ranked view", () => {
+    localStorage.setItem("lore:crossingScope", "set");
     mockDialData();
     renderDial();
     runCommand("/radio");
@@ -342,6 +346,7 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
   });
 
   it("crossings on filters the feed to crossing-positive stations only", () => {
+    localStorage.setItem("lore:crossingScope", "set");
     const noCrossing: DialStation = {
       ...makeCrossingStation("quiet-fm"),
       shows: [makeShow({
@@ -367,6 +372,7 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
   it("scope pill cycles the scope and re-filters; disabled in radio mode", () => {
     // kexp only has a SET-level crossing (ds-level counters are all zero),
     // so cycling the scope past "this set" empties the crossing filter.
+    localStorage.setItem("lore:crossingScope", "set");
     mockDialData();
     renderDial();
     const pill = () => document.querySelector(".crossing-scope-pill") as HTMLButtonElement;

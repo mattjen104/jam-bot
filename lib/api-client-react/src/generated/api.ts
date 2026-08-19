@@ -77,6 +77,7 @@ import type {
   ManualSpinResponse,
   MattStarterLibraryResult,
   MeBlendedCrossingsResult,
+  MeCrossingsResult,
   MeOverlapRunsResponse,
   MePickerOverlapResult,
   MePressCrossingsResponse,
@@ -8340,6 +8341,83 @@ export function useGetMyPickerOverlap<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyPickerOverlapQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns server-aggregated station counts for the listener's taste crossings and first-ever Lore plays that are also crossings. Rolling windows cover 24 hours, 7 days, and 30 days; lifetime counts use an MBID-driven lookup rather than a full spin-history scan.
+
+ * @summary Listener crossing and first-play counts by station
+ */
+export const getGetMyCrossingsUrl = () => {
+  return `/api/me/crossings`;
+};
+
+export const getMyCrossings = async (
+  options?: RequestInit,
+): Promise<MeCrossingsResult> => {
+  return customFetch<MeCrossingsResult>(getGetMyCrossingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyCrossingsQueryKey = () => {
+  return [`/api/me/crossings`] as const;
+};
+
+export const getGetMyCrossingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyCrossings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyCrossings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyCrossingsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyCrossings>>> = ({
+    signal,
+  }) => getMyCrossings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyCrossings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyCrossingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyCrossings>>
+>;
+export type GetMyCrossingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Listener crossing and first-play counts by station
+ */
+
+export function useGetMyCrossings<
+  TData = Awaited<ReturnType<typeof getMyCrossings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyCrossings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyCrossingsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

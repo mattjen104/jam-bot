@@ -541,12 +541,16 @@ export interface DialCrossing {
   stationSlug: string;
   crossings: number;
   artistCrossings: number;
+  firstPlayCrossings?: number;
   weekCrossings: number;
   weekArtistCrossings: number;
+  weekFirstPlayCrossings?: number;
   monthCrossings: number;
   monthArtistCrossings: number;
+  monthFirstPlayCrossings?: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
+  lifetimeFirstPlayCrossings?: number;
   /** Top 5 crossing artist names by frequency. Only populated by the blended endpoint. */
   topArtistNames?: string[];
   /** Top crossing artist names for the 24h window (personal mode; up to 3). */

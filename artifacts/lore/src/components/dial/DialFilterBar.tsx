@@ -26,7 +26,7 @@ import {
 } from "../../lib/dialCategories";
 import { FilterDropdownMenu } from "./FilterDropdownMenu";
 import { CrossingScopePill } from "./CrossingScopePill";
-import type { CrossingScope } from "../../lib/crossingScope";
+import type { CrossingScope, StationSortMetric } from "../../lib/crossingScope";
 
 export type { AgeTier };
 export type { StationCategory };
@@ -54,6 +54,10 @@ const CROSSINGS_OPTIONS = [
 ] as const;
 const CROSSINGS_ACTIVE = new Set<string>([CROSSINGS_VALUE]);
 const CROSSINGS_INACTIVE = new Set<string>();
+const SORT_OPTIONS = [
+  { value: "crossings", label: "Crossings", title: "Order stations by crossings in the selected time range" },
+  { value: "firstPlays", label: "First plays", title: "Order stations by first-play crossings in the selected time range" },
+] as const;
 
 export interface DialFilterBarProps {
   activeTiers: Set<AgeTier>;
@@ -68,6 +72,9 @@ export interface DialFilterBarProps {
   crossingScope?: CrossingScope;
   /** Cycles the scope: now → this set → 24h → 7d → lifetime. */
   onCycleCrossingScope?: () => void;
+  /** Sort metric for the selected crossing scope. */
+  sortMetric?: StationSortMetric;
+  onSortMetric?: (metric: StationSortMetric) => void;
   className?: string;
 }
 
@@ -80,6 +87,8 @@ export function DialFilterBar({
   onToggleCrossings,
   crossingScope,
   onCycleCrossingScope,
+  sortMetric,
+  onSortMetric,
   className,
 }: DialFilterBarProps) {
   return (
@@ -98,6 +107,16 @@ export function DialFilterBar({
           scope={crossingScope}
           enabled={crossingsActive}
           onCycle={onCycleCrossingScope}
+        />
+      )}
+      {sortMetric && onSortMetric && (
+        <FilterDropdownMenu
+          label="Sort"
+          ariaLabel="Sort stations"
+          options={SORT_OPTIONS}
+          active={new Set<string>([sortMetric])}
+          onToggle={(value) => onSortMetric(value as StationSortMetric)}
+          variant="bar"
         />
       )}
       <FilterDropdownMenu

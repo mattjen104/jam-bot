@@ -2260,12 +2260,20 @@ export interface CrossingsRow {
   stationSlug: string;
   crossings: number;
   artistCrossings: number;
+  /** First-ever Lore plays that are also crossings, in the rolling 24h window. */
+  firstPlayCrossings?: number;
   weekCrossings: number;
   weekArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings, in the rolling 7d window. */
+  weekFirstPlayCrossings?: number;
   monthCrossings: number;
   monthArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings, in the rolling 30d window. */
+  monthFirstPlayCrossings?: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings, over the full archive. */
+  lifetimeFirstPlayCrossings?: number;
   /**
    * Top crossing artist names for the 24h window (up to 3, ranked by
    * play-frequency).  Optional so old cached rows without this field still

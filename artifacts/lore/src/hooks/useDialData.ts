@@ -129,18 +129,26 @@ export interface DialStation {
   crossings: number;
   /** rolling 24h artist-level crossings (exact track not in library) */
   artistCrossings: number;
+  /** First-ever Lore plays that are also crossings, in the rolling 24h window. */
+  firstPlayCrossings: number;
   /** rolling 7-day exact-MBID/release-group crossings — sort key for Recent tab "Last Week" filter */
   weekCrossings: number;
   /** rolling 7-day artist-level crossings */
   weekArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings, in the rolling 7d window. */
+  weekFirstPlayCrossings: number;
   /** rolling 30-day exact-MBID/release-group crossings — sort key for Recent tab "Last Month" filter */
   monthCrossings: number;
   /** rolling 30-day artist-level crossings */
   monthArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings, in the rolling 30d window. */
+  monthFirstPlayCrossings: number;
   /** lifetime (all-time) exact-MBID/release-group crossings — primary sort key for unattributed rows */
   lifetimeCrossings: number;
   /** lifetime artist-level crossings — all-time equivalent of artistCrossings */
   lifetimeArtistCrossings: number;
+  /** First-ever Lore plays that are also crossings, over the full archive. */
+  lifetimeFirstPlayCrossings: number;
   /** Current track from the live pulse, even when schedule data is unavailable. */
   liveTrack?: DialSpin | null;
   /**
@@ -1143,12 +1151,16 @@ export function useDialData(
     const m = new Map<string, {
       crossings: number;
       artistCrossings: number;
+      firstPlayCrossings: number;
       weekCrossings: number;
       weekArtistCrossings: number;
+      weekFirstPlayCrossings: number;
       monthCrossings: number;
       monthArtistCrossings: number;
+      monthFirstPlayCrossings: number;
       lifetimeCrossings: number;
       lifetimeArtistCrossings: number;
+      lifetimeFirstPlayCrossings: number;
       topArtistNames: string[];
       topArtistNames24h: string[];
       topArtistNames7d: string[];
@@ -1158,12 +1170,16 @@ export function useDialData(
       m.set(cx.stationSlug, {
         crossings: cx.crossings,
         artistCrossings: cx.artistCrossings,
+        firstPlayCrossings: cx.firstPlayCrossings ?? 0,
         weekCrossings: cx.weekCrossings ?? 0,
         weekArtistCrossings: cx.weekArtistCrossings ?? 0,
+        weekFirstPlayCrossings: cx.weekFirstPlayCrossings ?? 0,
         monthCrossings: cx.monthCrossings ?? 0,
         monthArtistCrossings: cx.monthArtistCrossings ?? 0,
+        monthFirstPlayCrossings: cx.monthFirstPlayCrossings ?? 0,
         lifetimeCrossings: cx.lifetimeCrossings,
         lifetimeArtistCrossings: cx.lifetimeArtistCrossings,
+        lifetimeFirstPlayCrossings: cx.lifetimeFirstPlayCrossings ?? 0,
         topArtistNames: cx.topArtistNames ?? [],
         topArtistNames24h: cx.topArtistNames24h ?? [],
         topArtistNames7d: cx.topArtistNames7d ?? [],
@@ -1581,6 +1597,10 @@ export function useDialData(
       const weekArtistCrossings = serverCx !== undefined ? serverCx.weekArtistCrossings : 0;
       const monthCrossings = serverCx !== undefined ? serverCx.monthCrossings : 0;
       const monthArtistCrossings = serverCx !== undefined ? serverCx.monthArtistCrossings : 0;
+      const firstPlayCrossings = serverCx?.firstPlayCrossings ?? 0;
+      const weekFirstPlayCrossings = serverCx?.weekFirstPlayCrossings ?? 0;
+      const monthFirstPlayCrossings = serverCx?.monthFirstPlayCrossings ?? 0;
+      const lifetimeFirstPlayCrossings = serverCx?.lifetimeFirstPlayCrossings ?? 0;
 
       // In blended mode the server returns cumulative top artist names across all
       // active listeners; in personal mode leave empty (DialView reads per-show data).
@@ -1605,12 +1625,16 @@ export function useDialData(
         shows,
         crossings,
         artistCrossings,
+        firstPlayCrossings,
         weekCrossings,
         weekArtistCrossings,
+        weekFirstPlayCrossings,
         monthCrossings,
         monthArtistCrossings,
+        monthFirstPlayCrossings,
         lifetimeCrossings,
         lifetimeArtistCrossings,
+        lifetimeFirstPlayCrossings,
         topArtistNames,
         topArtistNames24h,
         topArtistNames7d,
