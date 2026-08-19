@@ -30,6 +30,8 @@
 #                                       immediately; spin-changed/spin-raw-failed clear it
 #                                       on WebPlayer ON AIR row; PlayerDock test skipped
 #                                       pending fdrow infrastructure recovery)
+#   - stackDensityPager.spec.ts        (Stack 5/10/15 density paging,
+#                                       localStorage persistence, and page artwork)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -108,6 +110,7 @@ RUN_SPECS=(
   e2e/liveTrackChange.spec.ts
   e2e/compactStackBand.spec.ts
   e2e/stationAdminRemoval.spec.ts
+  e2e/stackDensityPager.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
