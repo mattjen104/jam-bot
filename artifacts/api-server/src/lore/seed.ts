@@ -155,7 +155,9 @@ function indieInternetStations(): InsertStation[] {
   return [
     // Dublab — LA-based non-profit internet radio, launched 1999. Weekly
     // show schedule published at dublab.com/schedule.
-    // Stream: Airtime Pro ICY confirmed 200/audio-mpeg from the Replit container.
+    // Stream: Airtime Pro's direct TLS Icecast mount (explicit port 8000).
+    // Verified with GET + Icy-MetaData:1 on 2026-08-19; the default-port URL
+    // was intermittently unreachable while this direct mount kept answering.
     // ICY health row: synthetic UUID "manual-dublab" (not in radio-browser).
     {
       slug: "dublab",
@@ -163,20 +165,25 @@ function indieInternetStations(): InsertStation[] {
       name: "Dublab",
       org: "Dublab",
       country: "US",
-      streamUrl: "https://dublab.out.airtime.pro/dublab_a",
+      streamUrl: "https://dublab.out.airtime.pro:8000/dublab_a",
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://dublab.com",
       scheduleUrl: "https://dublab.com/schedule",
       donateUrl: "https://dublab.com/membership/",
       nowPlayingSource: "radio_browser_icy",
-      nowPlayingConfig: { streamUrl: "https://dublab.out.airtime.pro/dublab_a" },
+      nowPlayingConfig: {
+        streamUrl: "https://dublab.out.airtime.pro:8000/dublab_a",
+      },
       stationClass: "community",
       sortOrder: 560,
     },
     // Rinse FM — London-based station, seminal for grime, garage, UKB and
     // forward club sounds. Weekly schedule at rinse.fm/schedule.
-    // Stream: Centova Cast proxy confirmed by radio-browser (128kbps AAC+).
+    // Stream: the current official Rinse UK player mount, re-verified with
+    // GET + Icy-MetaData:1 on 2026-08-19 (128kbps AAC+). It currently emits
+    // only a placeholder StreamTitle, so the coverage ledger honestly marks
+    // it no_source rather than unavailable until real track metadata returns.
     // ICY health row: synthetic UUID "manual-rinse-fm". The stream is AAC+
     // via an HE-AAC container; if ICY is unsupported the adapter degrades
     // to icy_unsupported gracefully and the stream still plays in-browser.
@@ -279,26 +286,28 @@ function indieInternetStations(): InsertStation[] {
       stationClass: "community",
       sortOrder: 580,
     },
-    // Balamii — South London community station, detailed weekly schedule at
-    // balamii.com. Stream: Airtime Pro ICY confirmed via online-radio.eu PLS
-    // export (https://balamii.out.airtime.pro/balamii_a, 128kbps MP3). Same
-    // Airtime Pro platform as Dublab. ICY health row: synthetic UUID
-    // "manual-balamii" (not in radio-browser).
+    // Balamii — South London community station. Its former Airtime Pro audio
+    // host and the official site's matching /api/live-info host both stopped
+    // resolving by 2026-08-19. Retire the dead URL from playback/polling while
+    // retaining it as provenance in config. The source-probe migration seeds
+    // the verified unreachable outcome so a clean deployment reports this as
+    // unavailable. Mixcloud archives are not a live public audio mount.
     {
       slug: "balamii",
       tags: ["indie"],
       name: "Balamii",
       org: "Balamii",
       country: "GB",
-      streamUrl: "https://balamii.out.airtime.pro/balamii_a",
+      streamUrl: "",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://balamii.com",
       scheduleUrl: "https://balamii.com/schedule",
       donateUrl: null,
-      nowPlayingSource: "radio_browser_icy",
+      nowPlayingSource: null,
       nowPlayingConfig: {
-        streamUrl: "https://balamii.out.airtime.pro/balamii_a",
+        knownUnavailable: true,
+        retiredStreamUrl: "https://balamii.out.airtime.pro/balamii_a",
       },
       stationClass: "community",
       sortOrder: 585,
@@ -704,6 +713,7 @@ export const ICY_REPAIR_STATIONS: ReadonlyArray<{
   { slug: "wusb", callsign: "WUSB", streamUrl: "https://stream.wusb.stonybrook.edu:8092/listen.pl" },
   { slug: "ckcu", callsign: "CKCU", streamUrl: "https://stream2.statsradio.com:8124/stream" },
   { slug: "wnur", callsign: "WNUR", streamUrl: "https://stream.rcs.revma.com/w4pmmfkdx4zuv" },
+  { slug: "wbgo", callsign: "WBGO", streamUrl: "https://ais-sa8.cdnstream1.com/3629_128.mp3" },
 ];
 
 /**
@@ -1599,10 +1609,10 @@ function spinitronJazzStations(): InsertStation[] {
       name: "WBGO 88.3 FM",
       org: "Newark Public Radio",
       country: "US",
-      // StreamGuys CDN — same CDN as WPRB and WKCR. WBGO is a major public
-      // jazz station with professional CDN infrastructure; /wbgo128.mp3 is the
-      // standard 128 kbps MP3 mount name used with StreamGuys hosting.
-      streamUrl: "https://wbgo.streamguys1.com/wbgo128.mp3",
+      // WBGO's official listening page explicitly marks its old StreamGuys
+      // addresses dead and publishes this 128kbps MP3 replacement. Verified
+      // with GET + Icy-MetaData:1 on 2026-08-19, including a real track pair.
+      streamUrl: "https://ais-sa8.cdnstream1.com/3629_128.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wbgo.org",
@@ -2245,6 +2255,11 @@ export async function seedStations(): Promise<void> {
   for (const s of SEED_STATIONS) {
     if (excludedSlugs.has(s.slug)) continue;
     const computedTimezone = inferTimezone(s.city ?? null, s.country ?? null);
+    const forceKnownUnavailable =
+      !!s.nowPlayingConfig &&
+      typeof s.nowPlayingConfig === "object" &&
+      !Array.isArray(s.nowPlayingConfig) &&
+      (s.nowPlayingConfig as Record<string, unknown>).knownUnavailable === true;
     await db
       .insert(stationsTable)
       .values({ ...s, ianaTimezone: computedTimezone })
@@ -2271,8 +2286,12 @@ export async function seedStations(): Promise<void> {
           // COALESCE alone can't do this because CHMR/CISM seed config is {}
           // (a valid non-null object), so COALESCE would always pick {} and
           // silently erase any adapter callsign/stream-id the operator set.
-          nowPlayingSource: sql`CASE WHEN EXCLUDED.now_playing_source IS NULL THEN ${stationsTable.nowPlayingSource} ELSE EXCLUDED.now_playing_source END`,
-          nowPlayingConfig: sql`CASE WHEN EXCLUDED.now_playing_source IS NULL THEN ${stationsTable.nowPlayingConfig} ELSE EXCLUDED.now_playing_config END`,
+          nowPlayingSource: forceKnownUnavailable
+            ? null
+            : sql`CASE WHEN EXCLUDED.now_playing_source IS NULL THEN ${stationsTable.nowPlayingSource} ELSE EXCLUDED.now_playing_source END`,
+          nowPlayingConfig: forceKnownUnavailable
+            ? s.nowPlayingConfig
+            : sql`CASE WHEN EXCLUDED.now_playing_source IS NULL THEN ${stationsTable.nowPlayingConfig} ELSE EXCLUDED.now_playing_config END`,
           stationClass: s.stationClass ?? "curated",
           // crossingEligible is intentionally omitted from the UPDATE set.
           // The seed only writes it on INSERT (DB default = true). Once a
@@ -2315,6 +2334,18 @@ export async function seedStations(): Promise<void> {
           updatedAt: sql`now()`,
         },
       });
+    if (forceKnownUnavailable) {
+      // A previously configured ICY row must not survive retirement: even
+      // though the null source keeps it out of the poller, deleting the stale
+      // health row ensures enrollment/coverage surfaces agree with the seed.
+      await db
+        .delete(radioBrowserStationsTable)
+        .where(
+          sql`${radioBrowserStationsTable.stationId} IN (
+            SELECT id FROM ${stationsTable} WHERE ${stationsTable.slug} = ${s.slug}
+          )`,
+        );
+    }
   }
 
   // ICY-polled curated stations additionally need a health row whose id is

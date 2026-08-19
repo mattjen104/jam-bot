@@ -5,6 +5,11 @@ import {
   isRealRosterStation,
   type CoverageInput,
 } from "../src/lore/source-coverage.js";
+import {
+  ICY_REPAIR_STATIONS,
+  SEED_STATIONS,
+} from "../src/lore/seed.js";
+import { VERIFIED_STATION_SOURCE_PROBES } from "../src/lore/source-probe-migration.js";
 
 /**
  * Pure classification tests for the source-coverage ledger — no DB, no
@@ -141,6 +146,73 @@ describe("classifySourceCoverage", () => {
       probe: { outcome: "unreachable", probedAt: new Date(NOW.getTime() - 3600_000) },
     });
     expect(out.class).toBe("healthy");
+  });
+});
+
+describe("verified station source audit seed", () => {
+  const auditedSlugs = ["dublab", "rinse-fm", "balamii", "wbgo"] as const;
+  const expectedClasses = {
+    dublab: "no_source",
+    "rinse-fm": "no_source",
+    balamii: "unavailable",
+    wbgo: "recoverable",
+  } as const;
+
+  it("reproduces the audited ledger classes without runtime-only evidence", () => {
+    for (const slug of auditedSlugs) {
+      const station = SEED_STATIONS.find((candidate) => candidate.slug === slug);
+      const probe = VERIFIED_STATION_SOURCE_PROBES.find(
+        (candidate) => candidate.slug === slug,
+      );
+      expect(station, `missing seed station ${slug}`).toBeDefined();
+      expect(probe, `missing seed probe ${slug}`).toBeDefined();
+
+      const verdict = classifySourceCoverage({
+        station: {
+          id: 1,
+          slug,
+          nowPlayingSource: station!.nowPlayingSource ?? null,
+          streamUrl: station!.streamUrl ?? null,
+          hidden: station!.hidden ?? false,
+        },
+        latestUsableSpin: null,
+        rbHealth: null,
+        probe: {
+          outcome: probe!.outcome,
+          probedAt: probe!.probedAt,
+        },
+        now: NOW,
+      });
+      expect(verdict.class, slug).toBe(expectedClasses[slug]);
+    }
+  });
+
+  it("retires Balamii from playback and polling while retaining dead-URL provenance", () => {
+    const balamii = SEED_STATIONS.find((station) => station.slug === "balamii")!;
+    expect(balamii.streamUrl).toBe("");
+    expect(balamii.nowPlayingSource).toBeNull();
+    expect(balamii.nowPlayingConfig).toMatchObject({
+      knownUnavailable: true,
+      retiredStreamUrl: "https://balamii.out.airtime.pro/balamii_a",
+    });
+  });
+
+  it("keeps the verified Dublab, Rinse, and WBGO URLs wired for repair", () => {
+    const bySlug = new Map(SEED_STATIONS.map((station) => [station.slug, station]));
+    expect(bySlug.get("dublab")?.streamUrl).toBe(
+      "https://dublab.out.airtime.pro:8000/dublab_a",
+    );
+    expect(bySlug.get("rinse-fm")?.streamUrl).toBe(
+      "https://admin.stream.rinse.fm/proxy/rinse_uk/stream",
+    );
+    expect(bySlug.get("wbgo")?.streamUrl).toBe(
+      "https://ais-sa8.cdnstream1.com/3629_128.mp3",
+    );
+    expect(ICY_REPAIR_STATIONS).toContainEqual({
+      slug: "wbgo",
+      callsign: "WBGO",
+      streamUrl: "https://ais-sa8.cdnstream1.com/3629_128.mp3",
+    });
   });
 });
 
