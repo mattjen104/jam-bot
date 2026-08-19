@@ -65,12 +65,16 @@ function makeDialStation(overrides: Partial<DialStation> = {}): DialStation {
     shows: [],
     crossings: 0,
     artistCrossings: 0,
+    firstPlayCrossings: 0,
     weekCrossings: 0,
     weekArtistCrossings: 0,
+    weekFirstPlayCrossings: 0,
     monthCrossings: 0,
     monthArtistCrossings: 0,
+    monthFirstPlayCrossings: 0,
     lifetimeCrossings: 0,
     lifetimeArtistCrossings: 0,
+    lifetimeFirstPlayCrossings: 0,
     topArtistNames: [],
     ...overrides,
   };
@@ -170,6 +174,52 @@ describe("CompactDial empty state", () => {
 // ---------------------------------------------------------------------------
 
 describe("CompactDial category-first home Feed", () => {
+  it("aggregates crossings and first plays by scope, including skipped stations", () => {
+    const active = makeRow({
+      slug: "active",
+      name: "Active",
+      stationCategories: ["anchor"],
+    });
+    active.ds.crossings = 2;
+    active.ds.artistCrossings = 1;
+    active.ds.firstPlayCrossings = 1;
+    active.ds.lifetimeCrossings = 7;
+    active.ds.lifetimeArtistCrossings = 2;
+    active.ds.lifetimeFirstPlayCrossings = 3;
+    const skipped = makeRow({
+      slug: "skipped",
+      name: "Skipped",
+      stationCategories: ["anchor"],
+    });
+    skipped.ds.crossings = 4;
+    skipped.ds.firstPlayCrossings = 2;
+
+    const { rerender } = renderDial({
+      activeRows: [active],
+      skippedRows: [skipped],
+      categoryFirst: true,
+      crossingScope: "24h",
+    });
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("7 crossings");
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("3 first plays");
+
+    rerender(
+      <CompactDial
+        activeRows={[active]}
+        skippedRows={[skipped]}
+        activeSlug={null}
+        playerStatus="idle"
+        presenceMap={new Map()}
+        onTuneIn={vi.fn()}
+        onPlay={vi.fn()}
+        categoryFirst
+        crossingScope="lifetime"
+      />,
+    );
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("9 crossings");
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("3 first plays");
+  });
+
   it("renders editorial category cards with fresh now-playing previews", () => {
     const ambient = makeRowWithTrack(
       { slug: "sleep", name: "Sleep Radio", stationCategories: ["ambient"] },
@@ -190,6 +240,56 @@ describe("CompactDial category-first home Feed", () => {
       .toContain("The Smile — Bending Hectic · KEXP");
     expect(screen.getByTestId("compact-category-anchor").textContent)
       .toContain("1 station");
+  });
+
+  it("renders accessible scope-labelled metric badges, including honest zeroes", () => {
+    const row = makeRow({
+      slug: "kexp",
+      name: "KEXP",
+      stationCategories: ["anchor"],
+    });
+    renderDial({ activeRows: [row], categoryFirst: true, crossingScope: "7d" });
+
+    const summary = screen.getByTestId("compact-category-anchor");
+    expect(summary.textContent).toContain("0 crossings");
+    expect(summary.textContent).toContain("0 first plays");
+    expect(screen.getByLabelText("0 crossings in 7d")).toBeTruthy();
+    expect(screen.getByLabelText("0 first plays in 7d")).toBeTruthy();
+  });
+
+  it("recomputes category badges when the active scope changes", () => {
+    const row = makeRow({
+      slug: "kexp",
+      name: "KEXP",
+      stationCategories: ["anchor"],
+    });
+    row.ds.crossings = 2;
+    row.ds.firstPlayCrossings = 1;
+    row.ds.lifetimeCrossings = 8;
+    row.ds.lifetimeFirstPlayCrossings = 4;
+    const { rerender } = renderDial({
+      activeRows: [row],
+      categoryFirst: true,
+      crossingScope: "24h",
+    });
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("2 crossings");
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("1 first plays");
+
+    rerender(
+      <CompactDial
+        activeRows={[row]}
+        skippedRows={[]}
+        activeSlug={null}
+        playerStatus="idle"
+        presenceMap={new Map()}
+        onTuneIn={vi.fn()}
+        onPlay={vi.fn()}
+        categoryFirst
+        crossingScope="lifetime"
+      />,
+    );
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("8 crossings");
+    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("4 first plays");
   });
 
   it("uses an honest unavailable state when a category has no live metadata", () => {

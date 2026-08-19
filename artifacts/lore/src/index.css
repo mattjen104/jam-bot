@@ -8112,6 +8112,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--muted-foreground) / 0.72);
   white-space: nowrap;
 }
+.compact-category-dial__metrics {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: hsl(var(--accent) / 0.86);
+}
+.compact-category-dial__metric {
+  padding: 2px 5px;
+  border: 1px solid hsl(var(--accent) / 0.28);
+  border-radius: 3px;
+  font-size: var(--lore-size-small);
+}
+.compact-category-dial__metric b {
+  color: hsl(var(--accent));
+  font-weight: 500;
+}
 .compact-category-dial__chevron {
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-mono);
@@ -8145,6 +8163,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .compact-category-dial__meta {
     grid-column: 1 / -1;
     justify-content: space-between;
+    flex-wrap: wrap;
   }
   .compact-category-dial__label { white-space: normal; }
 }

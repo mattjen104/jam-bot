@@ -28,7 +28,14 @@ import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { CompactPlayButton } from "./CompactPlayButton";
 import { CompactDialRemote } from "./CompactDialRemote";
 import { MicroDialRemote } from "./MicroDialRemote";
-import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../lib/crossingScope";
+import {
+  type CrossingScope,
+  DEFAULT_CROSSING_SCOPE,
+  crossingCountForScope,
+  crossingScopeLabel,
+  firstPlayCountForScope,
+  hasAnyCrossing,
+} from "../lib/crossingScope";
 import type { DialDensity } from "../lib/dialDensityState";
 import type { LastSetSummary } from "../lib/latestSet";
 import { STATION_CATEGORY_DEFINITIONS, type StationCategory } from "../lib/dialCategories";
@@ -217,6 +224,29 @@ interface CategoryPreview {
   stationName: string;
 }
 
+interface CategoryScopeMetrics {
+  crossings: number;
+  firstPlays: number;
+}
+
+/**
+ * Category totals include skipped stations because those stations remain
+ * represented by the category summary and are still reachable when expanded.
+ * The separate "in scan" count below continues to describe active rows only.
+ */
+function categoryScopeMetrics(
+  rows: CategoryGroup["rows"],
+  scope: CrossingScope,
+): CategoryScopeMetrics {
+  return rows.reduce(
+    (totals, { row }) => ({
+      crossings: totals.crossings + crossingCountForScope(row.ds, scope),
+      firstPlays: totals.firstPlays + firstPlayCountForScope(row.ds, scope),
+    }),
+    { crossings: 0, firstPlays: 0 },
+  );
+}
+
 function categoryForRow(row: DialLaneRow): CompactCategory {
   const category = row.ds.station.stationCategories?.[0];
   return STATION_CATEGORY_DEFINITIONS.some((definition) => definition.cat === category)
@@ -283,14 +313,18 @@ function CategorySummary({
   group,
   expanded,
   onToggle,
+  crossingScope,
 }: {
   group: CategoryGroup;
   expanded: boolean;
   onToggle: () => void;
+  crossingScope: CrossingScope;
 }) {
   const preview = categoryPreview(group.rows);
   const activeCount = group.rows.filter(({ isSkipped }) => !isSkipped).length;
   const stationCountLabel = `${group.rows.length} ${group.rows.length === 1 ? "station" : "stations"}`;
+  const metrics = categoryScopeMetrics(group.rows, crossingScope);
+  const scopeLabel = crossingScopeLabel(crossingScope);
   return (
     <button
       type="button"
@@ -317,6 +351,25 @@ function CategorySummary({
         </span>
         <span className="compact-category-dial__count">
           {stationCountLabel}{activeCount !== group.rows.length ? ` · ${activeCount} in scan` : ""}
+        </span>
+        <span
+          className="compact-category-dial__metrics"
+          aria-label={`${group.label} metrics for ${scopeLabel}`}
+        >
+          <span
+            className="compact-category-dial__metric"
+            aria-label={`${metrics.crossings} crossings in ${scopeLabel}`}
+            title={`${metrics.crossings} crossings · ${scopeLabel}`}
+          >
+            <b aria-hidden="true">{metrics.crossings}</b> crossings
+          </span>
+          <span
+            className="compact-category-dial__metric"
+            aria-label={`${metrics.firstPlays} first plays in ${scopeLabel}`}
+            title={`${metrics.firstPlays} first plays · ${scopeLabel}`}
+          >
+            <b aria-hidden="true">{metrics.firstPlays}</b> first plays
+          </span>
         </span>
       </span>
       <span className="compact-category-dial__chevron" aria-hidden="true">
@@ -398,6 +451,7 @@ function CategoryFirstDial({
             <CategorySummary
               group={group}
               expanded={isExpanded}
+              crossingScope={crossingScope ?? DEFAULT_CROSSING_SCOPE}
               onToggle={() => setExpandedCategory((current) => current === group.category ? null : group.category)}
             />
             {isExpanded && (
