@@ -103,6 +103,11 @@ import {
 } from "../../lore/resolution-latency-health.js";
 import { clearIcyErrorBackoff, isPollable } from "../../lore/adapters.js";
 import { startBulkReprobe, getBulkReprobeStatus } from "../../lore/bulk-reprobe.js";
+import { getSourceCoverageLedger } from "../../lore/source-coverage.js";
+import {
+  startSourceCoverageProbeRun,
+  getSourceCoverageProbeStatus,
+} from "../../lore/source-probe.js";
 import { getScoutReport } from "../../lore/fingerprint-scout.js";
 import { auddAvailable } from "../../lore/audd.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
@@ -1220,6 +1225,43 @@ router.post("/admin/radio-browser/bulk-reprobe", h(async (_req, res) => {
 // current (or last) bulk re-probe run. Plain JSON, outside OpenAPI.
 router.get("/admin/radio-browser/bulk-reprobe/status", h(async (_req, res) => {
   return res.json(getBulkReprobeStatus());
+}));
+
+// GET /api/admin/source-coverage — the source-coverage ledger for the real,
+// non-longtail roster: every station classified as healthy / recoverable /
+// no_source / unavailable, with its configured source, last usable
+// artist/title observation, latest probe evidence, recovery guidance, and
+// the residual fingerprint-candidate count. Plain JSON, outside OpenAPI
+// (admin-only read model, like the other health endpoints).
+router.get("/admin/source-coverage", h(async (_req, res) => {
+  const ledger = await getSourceCoverageLedger();
+  return res.json(ledger);
+}));
+
+// POST /api/admin/source-coverage/probe — start a background probe-and-repair
+// pass over every non-healthy roster station (sequential, ~2s between
+// probes). Stations whose public ICY/platform surface verifiably publishes a
+// usable artist/title pair are repaired (direct stream + source config) and
+// enrolled for live polling without a restart; everything else is recorded
+// in the station_source_probes ledger as evidence. Single-flight: 409 when a
+// run is already in progress. Plain JSON, outside OpenAPI.
+router.post("/admin/source-coverage/probe", h(async (_req, res) => {
+  const started = startSourceCoverageProbeRun();
+  if (!started) {
+    return res.status(409).json({
+      error: "A source-coverage probe run is already in progress",
+      status: getSourceCoverageProbeStatus(),
+    });
+  }
+  return res
+    .status(202)
+    .json({ started: true, status: getSourceCoverageProbeStatus() });
+}));
+
+// GET /api/admin/source-coverage/probe/status — progress/summary of the
+// current (or last) probe run. Plain JSON, outside OpenAPI.
+router.get("/admin/source-coverage/probe/status", h(async (_req, res) => {
+  return res.json(getSourceCoverageProbeStatus());
 }));
 
 // GET /api/admin/fingerprint-scout/report — the rotating fingerprint scout's

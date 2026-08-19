@@ -1054,7 +1054,16 @@ function spinitronCollegeStations(): InsertStation[] {
       // Listener-supported non-profit; runs annual pledge drives. /support is
       // their canonical giving page (confirmed path from their nav).
       donateUrl: "https://wprb.com/support",
-      ...spinSource("WPRB"),
+      // ICY-verified by the 2026-08 source-coverage probe: the StreamGuys CDN
+      // stream publishes per-track artist/title metadata directly, while the
+      // spinitron_web scrape had stopped producing usable spins. A
+      // SPINITRON_KEY_WPRB API key (spinitron source) would still win if one
+      // is ever configured — edit both places together.
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://wprb.streamguys1.com/live",
+        callsign: "WPRB",
+      },
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 300,

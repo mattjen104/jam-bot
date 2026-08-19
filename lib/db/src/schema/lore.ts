@@ -3303,3 +3303,47 @@ export type InsertFingerprintScoutTally =
 
 export type FingerprintScoutTally =
   typeof fingerprintScoutTalliesTable.$inferSelect;
+
+/**
+ * Source-coverage ledger: the persisted outcome of the most recent free
+ * public-metadata probe per station (ICY / supported platform now-playing).
+ * Written by the admin-triggered probe run (lore/source-probe.ts); read by
+ * the source-coverage read model (lore/source-coverage.ts) to classify each
+ * real roster station as healthy / recoverable / no_source / unavailable.
+ * Declared here (not only in the boot migration) so drizzle-kit push does
+ * not try to drop it.
+ */
+export const stationSourceProbesTable = pgTable(
+  "station_source_probes",
+  {
+    /** Canonical stations.id — one probe ledger row per station. */
+    stationId: integer("station_id")
+      .primaryKey()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    /** What was probed: "icy" (raw stream metadata) or "radiojar". */
+    probeKind: text("probe_kind").notNull(),
+    /**
+     * What the public metadata surface actually supplied:
+     *   usable_pair     — a real artist AND title were published
+     *   blank_metadata  — reachable, but empty / junk / show-only metadata
+     *   unsupported     — the surface does not expose track metadata at all
+     *   unreachable     — network/timeout/HTTP failure (may be transient)
+     */
+    outcome: text("outcome").notNull(),
+    /** Human-readable detail (error message, what was observed). */
+    detail: text("detail"),
+    /** Direct stream URL after redirect resolution, when one was verified. */
+    resolvedUrl: text("resolved_url"),
+    /** The artist/title pair observed at probe time (evidence, not a spin). */
+    sampleArtist: text("sample_artist"),
+    sampleTitle: text("sample_title"),
+    probedAt: timestamp("probed_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+);
+
+export type InsertStationSourceProbe =
+  typeof stationSourceProbesTable.$inferInsert;
+
+export type StationSourceProbe =
+  typeof stationSourceProbesTable.$inferSelect;

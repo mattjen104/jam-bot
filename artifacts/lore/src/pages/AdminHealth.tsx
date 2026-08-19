@@ -507,6 +507,9 @@ function HealthPanel({
         {!loading && <BulkReprobeSection token={token} />}
         {!loading && <ScoutReportSection token={token} />}
 
+        {/* Free-metadata source coverage ledger + probe/repair tool */}
+        {!loading && <SourceCoverageSection token={token} />}
+
         {/* Healthy sub-sections when one section is OK but the other is stale */}
         {!loading && !ffError && !swError && totalStale > 0 && (
           <div className="mt-8 flex flex-col gap-2">
@@ -1322,6 +1325,320 @@ function ScoutReportSection({ token }: { token: string }) {
           </div>
         )}
       </div>
+    </section>
+  );
+}
+
+// ─── Source coverage ───────────────────────────────────────────────────────
+
+interface SourceCoverageStation {
+  id: number;
+  slug: string;
+  name: string;
+  hidden: boolean;
+  source: string | null;
+  streamUrl: string | null;
+  class: "healthy" | "recoverable" | "no_source" | "unavailable";
+  fingerprintCandidate: boolean;
+  guidance: string;
+  lastUsableAt: string | null;
+  lastArtist: string | null;
+  lastTitle: string | null;
+  probe: {
+    kind: string;
+    outcome: string;
+    detail: string | null;
+    resolvedUrl: string | null;
+    sampleArtist: string | null;
+    sampleTitle: string | null;
+    probedAt: string;
+  } | null;
+}
+
+interface SourceCoverageLedger {
+  generatedAt: string;
+  rosterSize: number;
+  counts: Record<string, number>;
+  fingerprintCandidateCount: number;
+  stations: SourceCoverageStation[];
+}
+
+interface SourceProbeRunStatus {
+  running: boolean;
+  total: number;
+  probed: number;
+  usable: number;
+  blank: number;
+  unsupported: number;
+  unreachable: number;
+  repaired: number;
+  skippedHidden: number;
+  skippedOverride: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+}
+
+const COVERAGE_CLASS_LABEL: Record<SourceCoverageStation["class"], string> = {
+  healthy: "Healthy",
+  recoverable: "Recoverable",
+  no_source: "No public source",
+  unavailable: "Off-air / unreachable",
+};
+
+const COVERAGE_CLASS_STYLE: Record<SourceCoverageStation["class"], string> = {
+  healthy: "text-zinc-500",
+  recoverable: "text-amber-600 dark:text-amber-400",
+  no_source: "text-destructive",
+  unavailable: "text-muted-foreground",
+};
+
+function SourceCoverageSection({ token }: { token: string }) {
+  const [ledger, setLedger] = useState<SourceCoverageLedger | null>(null);
+  const [status, setStatus] = useState<SourceProbeRunStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchLedger = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/source-coverage", {
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setLoadError(body.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setLedger((await res.json()) as SourceCoverageLedger);
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Network error");
+    }
+  }, [token]);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/source-coverage/probe/status", {
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as SourceProbeRunStatus;
+      setStatus(data);
+      if (!data.running) {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        // A finished run changes the ledger — refresh it.
+        void fetchLedger();
+      }
+    } catch {
+      // transient poll failure — keep the last status
+    }
+  }, [token, fetchLedger]);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      void fetchLedger();
+      void fetchStatus();
+    });
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [fetchLedger, fetchStatus]);
+
+  // Keep polling while a run is in flight — including a run started by
+  // another browser session (the initial GET may already report running).
+  useEffect(() => {
+    if (!status?.running) return;
+    if (!pollRef.current) {
+      pollRef.current = setInterval(() => void fetchStatus(), 5_000);
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [status?.running, fetchStatus]);
+
+  const handleProbe = useCallback(async () => {
+    setStarting(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/admin/source-coverage/probe", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        status?: SourceProbeRunStatus;
+      };
+      if (!res.ok && res.status !== 409) {
+        setActionError(body.error ?? `HTTP ${res.status}`);
+      } else {
+        if (body.status) setStatus(body.status);
+        if (!pollRef.current) {
+          pollRef.current = setInterval(() => void fetchStatus(), 5_000);
+        }
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setStarting(false);
+    }
+  }, [token, fetchStatus]);
+
+  const nonHealthy = (ledger?.stations ?? []).filter((s) => s.class !== "healthy");
+
+  return (
+    <section className="mt-10" data-testid="source-coverage-section">
+      <SectionHeading
+        icon={<Wifi className="h-4 w-4" />}
+        title="Free metadata coverage"
+        badge={ledger ? ledger.counts["healthy"] ?? 0 : 0}
+        description="Real-roster stations classified by what their public metadata surfaces supply. Only stations with no usable public source are fingerprint candidates."
+      />
+
+      {loadError && (
+        <div
+          className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4"
+          role="alert"
+          data-testid="sc-error-banner"
+        >
+          <p className="text-base font-normal text-destructive">
+            Could not load source coverage
+          </p>
+          <p className="mt-1 text-sm text-destructive/80">{loadError}</p>
+        </div>
+      )}
+
+      {ledger && (
+        <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-base sm:grid-cols-5">
+            <div>
+              <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                Healthy
+              </dt>
+              <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+                {ledger.counts["healthy"] ?? 0}
+              </dd>
+              <dd className="text-sm text-muted-foreground">public metadata flowing</dd>
+            </div>
+            <div>
+              <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                Recoverable
+              </dt>
+              <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+                {ledger.counts["recoverable"] ?? 0}
+              </dd>
+              <dd className="text-sm text-muted-foreground">free fix verified or plausible</dd>
+            </div>
+            <div>
+              <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                No public source
+              </dt>
+              <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+                {ledger.counts["no_source"] ?? 0}
+              </dd>
+              <dd className="text-sm text-muted-foreground">publishes nothing usable</dd>
+            </div>
+            <div>
+              <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                Off-air
+              </dt>
+              <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+                {ledger.counts["unavailable"] ?? 0}
+              </dd>
+              <dd className="text-sm text-muted-foreground">stream did not answer</dd>
+            </div>
+            <div>
+              <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                Fingerprint candidates
+              </dt>
+              <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+                {ledger.fingerprintCandidateCount}
+              </dd>
+              <dd className="text-sm text-muted-foreground">residual paid-fallback set</dd>
+            </div>
+          </dl>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+            <p className="flex-1 text-sm text-muted-foreground">
+              {ledger.rosterSize} real stations tracked · probe run{" "}
+              {status?.finishedAt
+                ? `finished ${formatTimestamp(status.finishedAt)} — ${status.probed} probed, ${status.usable} usable, ${status.repaired} repaired`
+                : "has not run since boot"}
+            </p>
+            <button
+              onClick={() => void handleProbe()}
+              disabled={starting || status?.running === true}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+              data-testid="sc-run-probe"
+            >
+              <RefreshCw
+                className={`h-3 w-3 ${starting || status?.running ? "animate-spin" : ""}`}
+              />
+              {status?.running
+                ? `Probing ${status.probed}/${status.total}…`
+                : "Run free-metadata probe"}
+            </button>
+          </div>
+          {status?.error && (
+            <p className="mt-2 text-sm text-destructive">Last run error: {status.error}</p>
+          )}
+          {actionError && (
+            <p className="mt-2 text-sm text-destructive">{actionError}</p>
+          )}
+        </div>
+      )}
+
+      {ledger && nonHealthy.length > 0 && (
+        <div className="mt-4 flex flex-col gap-3">
+          {nonHealthy.map((s) => (
+            <div
+              key={s.id}
+              className="rounded-xl border border-card-border bg-card px-5 py-4"
+              data-testid={`sc-station-${s.slug}`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-base font-normal text-foreground">{s.name}</span>
+                <span
+                  className={`shrink-0 text-sm font-normal ${COVERAGE_CLASS_STYLE[s.class]}`}
+                >
+                  {COVERAGE_CLASS_LABEL[s.class]}
+                  {s.fingerprintCandidate ? " · fingerprint candidate" : ""}
+                  {s.hidden ? " · hidden" : ""}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">{s.guidance}</p>
+              <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+                <span>Source: {s.source ?? "none"}</span>
+                {s.lastUsableAt && (
+                  <span>
+                    Last usable track: {s.lastArtist} — {s.lastTitle} (
+                    {formatTimestamp(s.lastUsableAt)})
+                  </span>
+                )}
+                {s.probe && (
+                  <span>
+                    Probe {s.probe.kind}: {s.probe.outcome}
+                    {s.probe.sampleArtist
+                      ? ` — heard “${s.probe.sampleArtist} — ${s.probe.sampleTitle}”`
+                      : ""}
+                    {` (${formatTimestamp(s.probe.probedAt)})`}
+                  </span>
+                )}
+              </div>
+              {s.probe?.detail && (
+                <p className="mt-1 text-sm text-muted-foreground/80">{s.probe.detail}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

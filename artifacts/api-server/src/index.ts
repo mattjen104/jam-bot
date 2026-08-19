@@ -123,6 +123,7 @@ import { startBeatoJob } from "./lore/beato.js";
 import { applyArtistEventsMigration } from "./lore/artist-events-migration.js";
 import { applyRbOrphanCleanupMigration } from "./lore/rb-orphan-cleanup-migration.js";
 import { applyFingerprintScoutMigration } from "./lore/fingerprint-scout-migration.js";
+import { applyStationSourceProbeMigration } from "./lore/source-probe-migration.js";
 import { startFingerprintScout } from "./lore/fingerprint-scout.js";
 
 const rawPort = process.env["PORT"];
@@ -239,6 +240,7 @@ async function bootLore(): Promise<void> {
     // create the fingerprint-scout tallies table.
     await runMigration("applyRbOrphanCleanupMigration", applyRbOrphanCleanupMigration);
     await runMigration("applyFingerprintScoutMigration", applyFingerprintScoutMigration);
+    await runMigration("applyStationSourceProbeMigration", applyStationSourceProbeMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     await runMigration("applyBeatoMissSentinelMigration", applyBeatoMissSentinelMigration);
