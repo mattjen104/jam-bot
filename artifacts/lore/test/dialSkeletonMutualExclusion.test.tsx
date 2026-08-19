@@ -225,6 +225,11 @@ function mockDialData(crossingsLoading: boolean, stations: DialStation[] = []) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  // This file exercises the crossings-on feed (skeletons, placeholders,
+  // transitions). Radio mode (crossings off) is the default now, so pin
+  // crossings on globally; tests that exercise radio mode set "true"
+  // themselves after this hook.
+  localStorage.setItem("lore:radioMode", "false");
 });
 
 afterEach(() => {
@@ -681,9 +686,10 @@ describe("Zone 3 (also-on-air rows) — skeleton guard during live refresh", () 
 
   it("keeps Zone 3 rows visible while crossings reload (progressive render)", () => {
     // This test needs the Zone 1 skeleton, which radio mode suppresses — so
-    // instead pin the scope to lifetime and give the fixture a lifetime
-    // crossing to survive the crossing-positive filter once scores settle.
-    localStorage.removeItem("lore:radioMode");
+    // pin crossings on (radio mode is the default now, so removing the key
+    // is no longer enough) and give the fixture a lifetime crossing to
+    // survive the crossing-positive filter once scores settle.
+    localStorage.setItem("lore:radioMode", "false");
     localStorage.setItem("lore:crossingScope", "lifetime");
     const station = { ...makeZone3Station("kcrw"), lifetimeArtistCrossings: 1 };
     setupZone3(false, [station]);

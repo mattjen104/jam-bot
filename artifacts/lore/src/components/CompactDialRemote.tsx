@@ -19,6 +19,9 @@ export interface CompactDialRemoteProps {
   isSampling: boolean;
   isActive: boolean;
   onTuneIn: (row: DialLaneRow) => void;
+  /** True when the station is still playing whatever the listener's last
+   *  scan sampled — dims the key and notes it in the tooltip. */
+  unchanged?: boolean;
 }
 
 export function CompactDialRemote({
@@ -27,6 +30,7 @@ export function CompactDialRemote({
   isSampling,
   isActive,
   onTuneIn,
+  unchanged = false,
 }: CompactDialRemoteProps) {
   const name = row.ds.station.name;
   return (
@@ -36,8 +40,10 @@ export function CompactDialRemote({
         "compact-dial__remote-row",
         isSampling ? "compact-dial__remote-row--sampling" : "",
         isActive ? "compact-dial__remote-row--active" : "",
+        unchanged ? "compact-dial__remote-row--unchanged" : "",
       ].filter(Boolean).join(" ")}
       aria-label={`${ordinal}. ${name} — tune in`}
+      title={unchanged ? `${name} — same song as your last scan` : name}
       onClick={() => onTuneIn(row)}
     >
       <span className="compact-dial__remote-ordinal" aria-hidden="true">{ordinal}</span>

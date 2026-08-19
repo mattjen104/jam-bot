@@ -188,6 +188,12 @@ test.describe("Dial infinite scroll — sentinel triggers row reveal on scroll",
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
 
+    // Ghost rows are a crossings-feed surface; radio mode (crossings off) is
+    // the default now, so pin crossings on.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
+    });
+
     // 4 live backdrop stations (different slugs from ghosts so none are filtered).
     const backdrop = BACKDROP_SLUGS.map(makeLiveStation);
     await installRoutes(page, backdrop);

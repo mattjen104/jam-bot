@@ -20,6 +20,8 @@ export interface MicroDialRemoteProps {
   samplingRowIdx?: number | null;
   activeSlug: string | null;
   onTuneIn: (row: DialLaneRow) => void;
+  /** Stations still playing whatever the listener's last scan sampled. */
+  unchangedSlugs?: ReadonlySet<string>;
 }
 
 export function MicroDialRemote({
@@ -28,6 +30,7 @@ export function MicroDialRemote({
   samplingRowIdx = null,
   activeSlug,
   onTuneIn,
+  unchangedSlugs,
 }: MicroDialRemoteProps) {
   const triads: DialLaneRow[][] = [];
   for (let i = 0; i < rows.length; i += 3) {
@@ -42,6 +45,7 @@ export function MicroDialRemote({
             const ordinal = firstOrdinal + idx;
             const slug = row.ds.station.slug;
             const name = row.ds.station.name;
+            const unchanged = unchangedSlugs?.has(slug) === true;
             return (
               <button
                 key={slug}
@@ -50,9 +54,10 @@ export function MicroDialRemote({
                   "compact-dial__micro-btn",
                   samplingRowIdx === idx ? "compact-dial__micro-btn--sampling" : "",
                   slug === activeSlug ? "compact-dial__micro-btn--active" : "",
+                  unchanged ? "compact-dial__micro-btn--unchanged" : "",
                 ].filter(Boolean).join(" ")}
                 aria-label={`${ordinal}. ${name} — tune in`}
-                title={name}
+                title={unchanged ? `${name} — same song as your last scan` : name}
                 onClick={() => onTuneIn(row)}
               >
                 {ordinal}

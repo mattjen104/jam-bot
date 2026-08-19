@@ -360,8 +360,9 @@ test.describe("CompactStack — album checkboxes", () => {
       timeout: 5_000,
     });
 
-    // Reload the page.
-    await page.reload();
+    // Reload the page. "load" hangs on this dev-server page (pre-existing);
+    // domcontentloaded + the 20s skipped-region wait below is sufficient.
+    await page.reload({ waitUntil: "domcontentloaded" });
 
     // After reload the skipped album must still appear in the skipped region.
     const skippedRegion = page.locator(".compact-stack__skipped-region");

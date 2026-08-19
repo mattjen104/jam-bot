@@ -22,6 +22,7 @@ import {
   reason,
 } from "../dialViewHelpers";
 import { proxyArtUrl } from "../../lib/proxyArt";
+import { formatSetHours, type LastSetSummary } from "../../lib/latestSet";
 import { resolvePlaybackSource } from "../../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../../lib/utils";
 import {
@@ -356,9 +357,19 @@ export interface FrontDoorRowProps {
   crossingScope?: CrossingScope;
   /** Called when the ⬤ dot is tapped (in addition to toggling the detail). */
   onCrossingDetail?: () => void;
+  /** Opens the station's last-set scanner. When provided, the expanded row
+   *  shows a "Last set" affordance (omitted when lastSetSummary is null —
+   *  the station has no completed set). */
+  onOpenLastSet?: () => void;
+  /** Latest-completed-set summary for the affordance label; undefined while
+   *  unknown (still loading), null when the station has no completed set. */
+  lastSetSummary?: LastSetSummary | null;
+  /** True when the station is still playing whatever the listener's last
+   *  scan sampled — renders the "unchanged since your last scan" cue. */
+  unchangedSinceScan?: boolean;
 }
 
-export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, siteLinkInTier1 = true, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false, hasCrossing = false, crossingScope = DEFAULT_CROSSING_SCOPE, onCrossingDetail }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, siteLinkInTier1 = true, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false, hasCrossing = false, crossingScope = DEFAULT_CROSSING_SCOPE, onCrossingDetail, onOpenLastSet, lastSetSummary, unchangedSinceScan = false }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -409,6 +420,8 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   const detailTitle = cleanLiveValue(show?.currentTrack?.title ?? null);
   // Station description for the detail panel.
   const stationBlurb = ds.station.homepageBlurb?.trim() || null;
+  // Lifetime crossings (exact + artist-level) for the Last set affordance.
+  const lifetimeCrossingCount = (ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0);
 
   // Clickable-"and" expansion: probe the sentence first to learn which artist
   // names it already shows, derive the rest of the set (setlist order, library
@@ -512,6 +525,15 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         )}
         {hasArtistLead && (
           <span className="fdrow__compact-separator" aria-hidden="true">·</span>
+        )}
+        {/* ≈ scan-memory cue — the station is still playing whatever the
+            listener's last scan sampled. Indicator only; never blocks. */}
+        {unchangedSinceScan && hasArtistLead && (
+          <span
+            className="fdrow__unchanged-cue"
+            title="Same song as your last scan"
+            aria-label="Same song as your last scan"
+          >≈</span>
         )}
       </span>
       {/* Right cluster — the station is always visible at the far right edge;
@@ -715,6 +737,31 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
               >
                 ↗ {ds.station.name}
               </a>
+            )}
+          </div>
+        )}
+
+        {/* Last set affordance — opens the station's most recent completed
+            set in the scanner, with the set's hours, track count, and the
+            listener's lifetime crossing count for the station. Hidden when
+            the station has no completed set (summary === null). */}
+        {compactSentence && expanded && onOpenLastSet && lastSetSummary !== null && (
+          <div className="fdrow__lastset" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="fdrow__lastset-btn"
+              data-testid={`fdrow-lastset-${ds.station.slug}`}
+              onClick={(e) => { e.stopPropagation(); onOpenLastSet(); }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              Last set{lastSetSummary
+                ? ` · ${formatSetHours(lastSetSummary.startedAt, lastSetSummary.endedAt)} · ${lastSetSummary.spinCount} tracks`
+                : ""}
+            </button>
+            {lifetimeCrossingCount > 0 && (
+              <span className="fdrow__lastset-crossings">
+                {lifetimeCrossingCount} crossing{lifetimeCrossingCount === 1 ? "" : "s"} all-time
+              </span>
             )}
           </div>
         )}

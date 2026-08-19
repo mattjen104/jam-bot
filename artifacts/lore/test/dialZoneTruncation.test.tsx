@@ -275,6 +275,13 @@ function renderDial() {
 // Teardown
 // ---------------------------------------------------------------------------
 
+beforeEach(() => {
+  // Most of this file exercises the crossings feed's zone layout; radio mode
+  // (crossings off) is the default now, so pin crossings on globally. Tests
+  // that exercise radio mode set "true" themselves after this hook.
+  localStorage.setItem("lore:radioMode", "false");
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

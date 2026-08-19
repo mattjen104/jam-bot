@@ -29,6 +29,7 @@ import { CompactDialRemote } from "./CompactDialRemote";
 import { MicroDialRemote } from "./MicroDialRemote";
 import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../lib/crossingScope";
 import type { DialDensity } from "../lib/dialDensityState";
+import type { LastSetSummary } from "../lib/latestSet";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
@@ -78,6 +79,16 @@ export interface CompactDialProps {
    * the whole list rather than within the visible page. Default 1.
    */
   firstOrdinal?: number;
+  /** Opens the station's last-set scanner (normal-density rows only). */
+  onOpenLastSet?: (row: DialLaneRow) => void;
+  /**
+   * Latest-completed-set summary per station slug — undefined while loading,
+   * null when the station has no completed set (affordance hidden).
+   */
+  lastSetSummaries?: ReadonlyMap<string, LastSetSummary | null>;
+  /** Stations still playing whatever the listener's last scan sampled —
+   *  drives the "unchanged since your last scan" cue on rows and keys. */
+  unchangedSlugs?: ReadonlySet<string>;
 }
 
 function DialRow({
@@ -95,6 +106,9 @@ function DialRow({
   displayMode,
   seedsLower,
   onAddArtist,
+  onOpenLastSet,
+  lastSetSummaries,
+  unchangedSlugs,
 }: {
   row: DialLaneRow;
   isSampling: boolean;
@@ -110,6 +124,9 @@ function DialRow({
   displayMode?: DialDisplayMode;
   seedsLower?: Set<string>;
   onAddArtist?: (name: string) => void;
+  onOpenLastSet?: (row: DialLaneRow) => void;
+  lastSetSummaries?: ReadonlyMap<string, LastSetSummary | null>;
+  unchangedSlugs?: ReadonlySet<string>;
 }) {
   const slug = row.ds.station.slug;
   return (
@@ -145,6 +162,9 @@ function DialRow({
         suppressCrossings={suppressCrossings}
         crossingScope={crossingScope}
         hasCrossing={!suppressCrossings && hasAnyCrossing(row.ds, crossingScope)}
+        onOpenLastSet={onOpenLastSet ? () => onOpenLastSet(row) : undefined}
+        lastSetSummary={lastSetSummaries?.get(slug)}
+        unchangedSinceScan={unchangedSlugs?.has(slug) === true}
       />
       {onToggleSkip && (
         <input
@@ -186,6 +206,9 @@ export function CompactDial({
   onAddArtist,
   density = "normal",
   firstOrdinal = 1,
+  onOpenLastSet,
+  lastSetSummaries,
+  unchangedSlugs,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -209,6 +232,7 @@ export function CompactDial({
           samplingRowIdx={samplingRowIdx}
           activeSlug={activeSlug}
           onTuneIn={onTuneIn}
+          unchangedSlugs={unchangedSlugs}
         />
       </div>
     );
@@ -227,6 +251,7 @@ export function CompactDial({
             isSampling={samplingRowIdx === i}
             isActive={row.ds.station.slug === activeSlug}
             onTuneIn={onTuneIn}
+            unchanged={unchangedSlugs?.has(row.ds.station.slug) === true}
           />
         ))}
         {/* Empty filler slots so the grid always spans 10 rows */}
@@ -263,6 +288,9 @@ export function CompactDial({
           displayMode={displayMode}
           seedsLower={seedsLower}
           onAddArtist={onAddArtist}
+          onOpenLastSet={onOpenLastSet}
+          lastSetSummaries={lastSetSummaries}
+          unchangedSlugs={unchangedSlugs}
         />
       ))}
       {/* Empty filler slots so the grid always spans 5 rows */}

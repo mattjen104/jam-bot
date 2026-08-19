@@ -226,6 +226,11 @@ test.describe("First-run sidebar — station sentences for new visitors", () => 
     page,
   }) => {
     await installFirstRunRoutes(page);
+    // The first-run sidebar is a crossings-feed surface; radio mode
+    // (crossings off) is the default now, so pin crossings on.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
+    });
     await page.goto("/lore/feed");
 
     // Wait for the first sentence block to appear — indicates FirstRunSidebar
@@ -246,6 +251,11 @@ test.describe("First-run sidebar — station sentences for new visitors", () => 
     page,
   }) => {
     await installFirstRunRoutes(page);
+    // The first-run sidebar is a crossings-feed surface; radio mode
+    // (crossings off) is the default now, so pin crossings on.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
+    });
     await page.goto("/lore/feed");
 
     // Wait for blocks to settle.
@@ -270,6 +280,11 @@ test.describe("First-run sidebar — station sentences for new visitors", () => 
     page,
   }) => {
     await installFirstRunRoutes(page);
+    // The first-run sidebar is a crossings-feed surface; radio mode
+    // (crossings off) is the default now, so pin crossings on.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
+    });
     await page.goto("/lore/feed");
 
     await expect(page.locator(".frb__block").first()).toBeVisible({

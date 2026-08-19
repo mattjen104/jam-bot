@@ -245,17 +245,30 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Dial radio mode (/radio ↔ /crossings)", () => {
-  it("defaults to crossings on: the crossing station shows the ⬤ dot, never a crossing sentence", () => {
+  it("defaults to radio mode (crossings off): no ⬤ dot, plain live identity, nothing persisted", () => {
     mockDialData();
     renderDial();
-    // The row identity is always the now-playing artist · station — crossing
-    // artist names never lead the sentence; the ⬤ dot carries the meaning.
-    expect(feedText()).not.toContain("Portishead");
+    // The crossings checkbox is opt-in: a first-time visitor sees the pure
+    // station view — the now-playing identity only, no crossing evidence —
+    // and no preference is written until they explicitly toggle.
     expect(feedText()).not.toContain("this set");
     expect(feedText()).toContain("Some Other");
     expect(feedText()).toContain("Station kexp");
-    expect(document.querySelector("#dial-feed-rows .fdrow__crossing-dot")).not.toBeNull();
+    expect(document.querySelector("#dial-feed-rows .fdrow__crossing-dot")).toBeNull();
     expect(localStorage.getItem("lore:radioMode")).toBeNull();
+  });
+
+  it("/crossings turns crossings on: the ⬤ dot carries the meaning, never a crossing sentence", () => {
+    mockDialData();
+    renderDial();
+    runCommand("/crossings");
+    // The row identity is always the now-playing artist · station — crossing
+    // artist names never lead the sentence; the ⬤ dot carries the meaning.
+    expect(feedText()).not.toContain("Portishead");
+    expect(feedText()).toContain("Some Other");
+    expect(feedText()).toContain("Station kexp");
+    expect(document.querySelector("#dial-feed-rows .fdrow__crossing-dot")).not.toBeNull();
+    expect(localStorage.getItem("lore:radioMode")).toBe("false");
   });
 
   it("/radio suppresses crossing evidence: no ⬤ dot, plain live identity", () => {
@@ -271,10 +284,13 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
     expect(cliInput().value).toBe("");
   });
 
-  it("/radio marks the Radio lens with the dimmed · pure indicator", () => {
+  it("marks the Radio lens with the dimmed · pure indicator whenever radio mode is on", () => {
     mockDialData();
     renderDial();
     const radioBtn = screen.getByRole("button", { name: "Radio" });
+    // Radio mode is the default: the indicator is present from first render.
+    expect(radioBtn.textContent).toContain("· pure");
+    runCommand("/crossings");
     expect(radioBtn.textContent).not.toContain("pure");
     runCommand("/radio");
     expect(radioBtn.textContent).toContain("· pure");
@@ -318,11 +334,11 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
     expect(screen.getByRole("button", { name: "Radio" }).textContent).toContain("· pure");
   });
 
-  it("a corrupted stored value falls back to the crossing-ranked view", () => {
+  it("a corrupted stored value falls back to the default radio mode (crossings off)", () => {
     localStorage.setItem("lore:radioMode", "!!corrupt!!");
     mockDialData();
     renderDial();
-    expect(document.querySelector("#dial-feed-rows .fdrow__crossing-dot")).not.toBeNull();
+    expect(document.querySelector("#dial-feed-rows .fdrow__crossing-dot")).toBeNull();
   });
 
   it("crossings on filters the feed to crossing-positive stations only", () => {
@@ -337,14 +353,15 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
     mockDialData({ stations: [makeCrossingStation("kexp"), noCrossing] });
     renderDial();
 
-    // Crossings on (default): the zero-crossing station is hidden.
-    expect(feedText()).toContain("Station kexp");
-    expect(feedText()).not.toContain("Station quiet-fm");
-
-    // /radio (crossings off): no filter — both stations render.
-    runCommand("/radio");
+    // Radio mode (crossings off) is the default: no filter — both stations
+    // render.
     expect(feedText()).toContain("Station kexp");
     expect(feedText()).toContain("Station quiet-fm");
+
+    // /crossings (crossings on): the zero-crossing station is hidden.
+    runCommand("/crossings");
+    expect(feedText()).toContain("Station kexp");
+    expect(feedText()).not.toContain("Station quiet-fm");
   });
 
   it("scope pill cycles the scope and re-filters; disabled in radio mode", () => {
@@ -354,6 +371,13 @@ describe("Dial radio mode (/radio ↔ /crossings)", () => {
     renderDial();
     const pill = () => document.querySelector(".crossing-scope-pill") as HTMLButtonElement;
     expect(pill()).not.toBeNull();
+
+    // Radio mode is the default: the pill starts disabled, no filter.
+    expect(pill().disabled).toBe(true);
+    expect(feedText()).toContain("Station kexp");
+
+    // Crossings on: the pill enables at the default scope.
+    runCommand("/crossings");
     expect(pill().disabled).toBe(false);
     expect(pill().textContent).toContain("this set");
     expect(feedText()).toContain("Station kexp");

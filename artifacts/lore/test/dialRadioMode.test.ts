@@ -9,18 +9,18 @@ import { parseRadioMode, readRadioMode, writeRadioMode } from "../src/lib/dialRa
 import { readDialLens, writeDialLens } from "../src/lib/dialLensState";
 
 describe("parseRadioMode", () => {
-  it("returns true only for the exact 'true' value", () => {
-    expect(parseRadioMode("true")).toBe(true);
+  it("returns false only for the exact 'false' value (crossings explicitly on)", () => {
+    expect(parseRadioMode("false")).toBe(false);
   });
 
-  it("falls back to false for anything else", () => {
-    expect(parseRadioMode("false")).toBe(false);
-    expect(parseRadioMode(null)).toBe(false);
-    expect(parseRadioMode(undefined)).toBe(false);
-    expect(parseRadioMode("")).toBe(false);
-    expect(parseRadioMode("TRUE")).toBe(false); // exact match only
-    expect(parseRadioMode("1")).toBe(false);
-    expect(parseRadioMode("garbage{{{")).toBe(false);
+  it("falls back to true (radio mode) for anything else — the default", () => {
+    expect(parseRadioMode("true")).toBe(true);
+    expect(parseRadioMode(null)).toBe(true);
+    expect(parseRadioMode(undefined)).toBe(true);
+    expect(parseRadioMode("")).toBe(true);
+    expect(parseRadioMode("TRUE")).toBe(true); // exact match only
+    expect(parseRadioMode("1")).toBe(true);
+    expect(parseRadioMode("garbage{{{")).toBe(true);
   });
 });
 
@@ -29,8 +29,8 @@ describe("read/write round trip", () => {
     localStorage.clear();
   });
 
-  it("defaults to false with no stored value", () => {
-    expect(readRadioMode()).toBe(false);
+  it("defaults to radio mode with no stored value", () => {
+    expect(readRadioMode()).toBe(true);
   });
 
   it("persists true across reads (reload survival)", () => {
@@ -39,16 +39,15 @@ describe("read/write round trip", () => {
     expect(localStorage.getItem("lore:radioMode")).toBe("true");
   });
 
-  it("switching back to crossings persists too", () => {
-    writeRadioMode(true);
+  it("switching to crossings persists too", () => {
     writeRadioMode(false);
     expect(readRadioMode()).toBe(false);
     expect(localStorage.getItem("lore:radioMode")).toBe("false");
   });
 
-  it("a corrupted stored value can never force the blank-radio mode", () => {
+  it("a corrupted stored value falls back to the default radio mode", () => {
     localStorage.setItem("lore:radioMode", "!!corrupt!!");
-    expect(readRadioMode()).toBe(false);
+    expect(readRadioMode()).toBe(true);
   });
 
   it("lives under its own key and never disturbs the lens state", () => {

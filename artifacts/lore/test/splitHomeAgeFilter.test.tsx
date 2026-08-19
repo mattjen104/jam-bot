@@ -228,7 +228,9 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
   });
 
   it("radio mode forces the Radio lens even when the listener was on Press or Shows", () => {
-    // Simulate a returning visitor who previously selected the Press lens.
+    // Simulate a returning visitor from before the radio-mode default flip:
+    // crossings on, previously on the Press lens.
+    localStorage.setItem("lore:radioMode", "false");
     writeDialLens("press");
     expect(readDialLens()).toBe("press");
 
@@ -583,6 +585,12 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 // ---------------------------------------------------------------------------
 
 describe("SplitHome — crossing-positive filter progressive loading", () => {
+  beforeEach(() => {
+    // The crossing-positive filter only exists in the crossings-on feed;
+    // radio mode (crossings off) is the default now, so pin crossings on.
+    localStorage.setItem("lore:radioMode", "false");
+  });
+
   it("does not blank the feed while crossing scores are still loading", () => {
     // A zero-crossing station (scope pinned to "set" by default → the fixture
     // has no live show, so hasAnyCrossing is false once scores settle).

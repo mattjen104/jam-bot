@@ -258,6 +258,11 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
       }),
       schedule: makeSchedule("kcrw", { djName: DJ_NAME, showName: SHOW_NAME }),
     });
+    // Crossing-dot tests need the crossings-on feed; radio mode (crossings
+    // off) is the default now.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
+    });
     await page.goto("/lore/");
 
     const row = page.locator(".fdrow").first();
@@ -303,6 +308,11 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
       schedule: makeSchedule("kexp", { djName: DJ_NAME, showName: SHOW_NAME }),
       recentSpins: makeRecentSpins("kexp", ["Wet Leg", "Deftones"]),
     });
+    // Crossing-dot tests need the crossings-on feed; radio mode (crossings
+    // off) is the default now.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
+    });
     await page.goto("/lore/");
 
     const row = page.locator(".fdrow").first();
@@ -328,6 +338,11 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
       nowPlaying: makeNowPlaying({ artist: "Someone Else", isArtistHit: false }),
       schedule: makeSchedule("kexp", { djName: "John Richards" }),
       recentSpins: makeRecentSpins("kexp", ["Wet Leg"]),
+    });
+    // The scope pill is a crossings-on control; radio mode (crossings off)
+    // is the default now.
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
     });
     await page.goto("/lore/");
 

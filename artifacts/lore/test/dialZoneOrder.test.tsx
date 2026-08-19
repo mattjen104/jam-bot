@@ -173,6 +173,12 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Dial front-door zone order — crossingsLoading=true", () => {
+  beforeEach(() => {
+    // The loading placeholder belongs to the crossings-on feed; radio mode
+    // (crossings off) is the default now, so pin crossings on here.
+    localStorage.setItem("lore:radioMode", "false");
+  });
+
   it("renders the Zone 1 loading placeholder while crossings are loading", () => {
     mockDialDataLoading();
     renderDial();

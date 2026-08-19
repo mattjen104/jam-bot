@@ -61,6 +61,13 @@ import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
+import { LastSetScanner } from "../components/LastSetScanner";
+import { fetchLatestSetSummaries, type LastSetSummary } from "../lib/latestSet";
+import {
+  liveScanIdentity,
+  recordLiveScan,
+  useScanMemory,
+} from "../lib/scanMemory";
 import { CompactStack } from "../components/CompactStack";
 import { HomeCliStrip, type ScanMode } from "../components/HomeCliStrip";
 import { RadioRemoteBar } from "../components/RadioRemoteBar";
@@ -90,8 +97,8 @@ export default function SplitHome() {
     setActiveCategories((prev) => toggleStationCategory(prev, cat));
   }, []);
 
-  // Feed mode (persisted): false = /crossings (default), true = /radio.
-  // Drives the pressed state of the remote's feed-mode toggles.
+  // Feed mode (persisted): true = /radio (default — crossings off),
+  // false = /crossings (explicit opt-in). Drives the remote's toggles.
   const [radioMode, setRadioMode] = useState<boolean>(() => readRadioMode());
 
   // Crossing scope (persisted): what a ⬤ dot on a row means and which window
@@ -362,6 +369,12 @@ export default function SplitHome() {
         const row = rows[globalIdx];
         if (row && resolvePlaybackSource(row.ds.station) != null) {
           void radioRef.current.preview(row.ds.station);
+          // Scan memory: remember the song this hop sampled so a station
+          // still on it shows the "unchanged since your last scan" cue.
+          recordLiveScan(
+            row.ds.station.slug,
+            liveScanIdentity(row.ds.liveTrack ?? row.show?.currentTrack),
+          );
         }
         // An all-scan drives the visible window along with it, so the sampled
         // station is always rendered and highlighted (CompactDial only shows
@@ -399,6 +412,10 @@ export default function SplitHome() {
     const row = rows[globalIdx];
     if (row && resolvePlaybackSource(row.ds.station) != null) {
       void radioRef.current.preview(row.ds.station);
+      recordLiveScan(
+        row.ds.station.slug,
+        liveScanIdentity(row.ds.liveTrack ?? row.show?.currentTrack),
+      );
     }
     setScanRowIdx(globalIdx);
     scheduleNextHop(0, mode);
@@ -456,6 +473,70 @@ export default function SplitHome() {
   );
   const presenceMap = useStationPresence(liveStationIds);
 
+  // ── Scan memory: live freshness cue + last-set scanner state ──────────
+  const scanMemory = useScanMemory();
+
+  // Stations still playing whatever the last scan sampled — drives the
+  // "unchanged since your last scan" cue on rows and remote keys.
+  const unchangedSlugs = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of activeRows) {
+      const identity = liveScanIdentity(row.ds.liveTrack ?? row.show?.currentTrack);
+      if (identity && scanMemory.live[row.ds.station.slug]?.id === identity) {
+        set.add(row.ds.station.slug);
+      }
+    }
+    return set;
+  }, [activeRows, scanMemory]);
+
+  // Latest-completed-set summaries for the visible page (the "Last set"
+  // affordance label needs hours + track count). Normal density only —
+  // remote densities never expand a row.
+  const visibleSlugs = useMemo(
+    () =>
+      activeRows
+        .slice(scanOffset, scanOffset + pageSize)
+        .map((r) => r.ds.station.slug),
+    [activeRows, scanOffset, pageSize],
+  );
+  const [lastSetSummaries, setLastSetSummaries] = useState<
+    ReadonlyMap<string, LastSetSummary | null>
+  >(new Map());
+  useEffect(() => {
+    if (density !== "normal" || visibleSlugs.length === 0) return;
+    let cancelled = false;
+    void fetchLatestSetSummaries(visibleSlugs).then((items) => {
+      if (cancelled) return;
+      setLastSetSummaries((prev) => {
+        const next = new Map(prev);
+        for (const [slug, summary] of Object.entries(items)) next.set(slug, summary);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [density, visibleSlugs]);
+
+  // Last-set scanner sheet: the slug of the station being scanned, or null.
+  const [lastSetSlug, setLastSetSlug] = useState<string | null>(null);
+  const openLastSet = useCallback(
+    (row: DialLaneRow) => {
+      stopCompactScan();
+      setLastSetSlug(row.ds.station.slug);
+    },
+    [stopCompactScan],
+  );
+  const lastSetRow = useMemo(
+    () =>
+      lastSetSlug
+        ? ([...activeRows, ...skippedRows].find(
+            (r) => r.ds.station.slug === lastSetSlug,
+          ) ?? null)
+        : null,
+    [lastSetSlug, activeRows, skippedRows],
+  );
+
   const tuneRow = useCallback((row: DialLaneRow) => {
     if (resolvePlaybackSource(row.ds.station) == null) return;
     stopCompactScan();
@@ -489,6 +570,18 @@ export default function SplitHome() {
     () => buildAlbumGroups(stackData?.pages[0]?.items ?? []),
     [stackData],
   );
+
+  // artist (lowercase) → artwork from the cached library page — the set
+  // scanner paints this art behind crossing rows (Library header treatment).
+  const libraryArtwork = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of stackData?.pages[0]?.items ?? []) {
+      const artist = item.recording?.artist?.trim().toLowerCase();
+      const art = item.recording?.artworkUrl;
+      if (artist && art && !map.has(artist)) map.set(artist, art);
+    }
+    return map;
+  }, [stackData]);
 
   // Per-album Stack-skip preference (localStorage "lore:stackSkipped").
   // Unchecked albums leave the five-slot active window for the below-fold
@@ -584,6 +677,19 @@ export default function SplitHome() {
 
       {finderOpen && <StationFinderSheet onClose={closeFinder} />}
 
+      {lastSetSlug && (
+        <LastSetScanner
+          slug={lastSetSlug}
+          density={density}
+          libraryArtwork={libraryArtwork}
+          lifetimeCrossings={
+            (lastSetRow?.ds.lifetimeCrossings ?? 0) +
+            (lastSetRow?.ds.lifetimeArtistCrossings ?? 0)
+          }
+          onClose={() => setLastSetSlug(null)}
+        />
+      )}
+
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
         <CompactDial
           activeRows={activeRows.slice(scanOffset, scanOffset + pageSize)}
@@ -601,6 +707,9 @@ export default function SplitHome() {
           onAddArtist={addSeed}
           density={density}
           firstOrdinal={scanOffset + 1}
+          onOpenLastSet={openLastSet}
+          lastSetSummaries={lastSetSummaries}
+          unchangedSlugs={unchangedSlugs}
         />
       </section>
 

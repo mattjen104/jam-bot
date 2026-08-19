@@ -21,6 +21,7 @@ import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
 import { classifyFreshness } from "../lore/freshness.js";
 import { estimateExpiry } from "../lore/expiry.js";
 import { pollStation } from "../lore/poller.js";
+import { spinDayExpr } from "../lore/runs.js";
 import { h } from "../middlewares/asyncHandler.js";
 
 /**
@@ -892,6 +893,221 @@ router.get("/player/schedule", h(async (_req, res) => {
   };
   _scheduleCache = { builtAt: Date.now(), body };
   return res.json(body);
+}));
+
+// ---------------------------------------------------------------------------
+// Latest completed set ("Last set" scanner) — plain JSON, no orval.
+//
+// Runs are derived groupings of spins by (station, show, UTC day) — runId is
+// the group's min(spins.id) anchor, matching the archive station-runs model.
+// A run counts as COMPLETED when its last spin is older than SET_LIVE_GAP_MS:
+// pollers tick every 5–15 min, so a 30-minute silence means the set ended.
+// When the station's newest run is still live, the scanner falls back to the
+// previous run so the listener never scans a set that is still being played.
+// ---------------------------------------------------------------------------
+
+/** A run whose last spin is newer than this is treated as still on the air. */
+const SET_LIVE_GAP_MS = 30 * 60 * 1000;
+/** How far back to look for a station's latest set. */
+const SET_LOOKBACK_DAYS = 14;
+/** Max station slugs accepted by the batch summary endpoint (one dial page). */
+const LATEST_SETS_MAX_SLUGS = 20;
+
+interface LatestSetRow {
+  stationId: number;
+  runId: number;
+  day: string;
+  showName: string | null;
+  djName: string | null;
+  spinCount: number;
+  resolvedCount: number;
+  startedAt: string;
+  endedAt: string;
+}
+
+/**
+ * Latest COMPLETED run group per station, keyed by station id. Stations whose
+ * newest run is still live (or which have no spins in the lookback window)
+ * are simply absent from the map.
+ */
+async function latestCompletedRuns(stationIds: number[]): Promise<Map<number, LatestSetRow>> {
+  const out = new Map<number, LatestSetRow>();
+  if (stationIds.length === 0) return out;
+  const cutoff = new Date(Date.now() - SET_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const liveThreshold = new Date(Date.now() - SET_LIVE_GAP_MS);
+
+  // Step 1 — pick each station's latest COMPLETED partition key (station +
+  // show + UTC day). The lookback bounds SELECTION only: any spin inside the
+  // window makes its whole partition eligible.
+  const candidates = await db
+    .select({
+      stationId: spinsTable.stationId,
+      showId: spinsTable.showId,
+      day: spinDayExpr,
+      endedAt: sql<string>`max(${spinsTable.playedAt})`,
+    })
+    .from(spinsTable)
+    .where(and(inArray(spinsTable.stationId, stationIds), gte(spinsTable.playedAt, cutoff)))
+    .groupBy(spinsTable.stationId, spinsTable.showId, spinDayExpr)
+    // Newest group first — per station we scan down to the first one whose
+    // last spin is older than the live gap.
+    .orderBy(spinsTable.stationId, desc(sql`max(${spinsTable.playedAt})`));
+
+  const picked: { stationId: number; showId: number | null; day: string }[] = [];
+  const seen = new Set<number>();
+  for (const c of candidates) {
+    if (seen.has(c.stationId)) continue;
+    if (new Date(c.endedAt) >= liveThreshold) continue; // still on the air
+    seen.add(c.stationId);
+    picked.push({ stationId: c.stationId, showId: c.showId, day: c.day });
+  }
+  if (picked.length === 0) return out;
+
+  // Step 2 — aggregate the FULL picked partitions with no played_at bound.
+  // A set that straddles the lookback boundary still reports its complete
+  // tracklist, counts, and true min-id anchor, so the summary and the detail
+  // endpoint (which serves the whole partition) never disagree.
+  const partitionMatch = sql.join(
+    picked.map((p) =>
+      sql`(${spinsTable.stationId} = ${p.stationId} and ${
+        p.showId == null
+          ? sql`${spinsTable.showId} is null`
+          : sql`${spinsTable.showId} = ${p.showId}`
+      } and ${spinDayExpr} = ${p.day})`,
+    ),
+    sql` or `,
+  );
+  const rows = await db
+    .select({
+      stationId: spinsTable.stationId,
+      runId: sql<number>`min(${spinsTable.id})`,
+      day: spinDayExpr,
+      showName: showsTable.name,
+      djName: showsTable.djName,
+      spinCount: sql<number>`count(*)::int`,
+      resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
+      startedAt: sql<string>`min(${spinsTable.playedAt})`,
+      endedAt: sql<string>`max(${spinsTable.playedAt})`,
+    })
+    .from(spinsTable)
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
+    .where(sql`(${partitionMatch})`)
+    .groupBy(spinsTable.stationId, spinsTable.showId, spinDayExpr, showsTable.name, showsTable.djName);
+  for (const r of rows) out.set(r.stationId, r);
+  return out;
+}
+
+// GET /api/player/latest-sets?slugs=a,b,c — one summary per requested station,
+// for the "Last set" affordance on expanded dial rows. Null per slug when the
+// station has no completed set in the lookback window (or is unknown/hidden).
+router.get("/player/latest-sets", h(async (req, res) => {
+  const raw = typeof req.query.slugs === "string" ? req.query.slugs : "";
+  const slugs = [...new Set(raw.split(",").map((s) => s.trim()).filter(Boolean))]
+    .slice(0, LATEST_SETS_MAX_SLUGS);
+  if (slugs.length === 0) return res.json({ items: {} });
+
+  const stations = await db
+    .select()
+    .from(stationsTable)
+    .where(and(inArray(stationsTable.slug, slugs), eq(stationsTable.hidden, false)));
+  const runs = await latestCompletedRuns(stations.map((s) => s.id));
+
+  const items: Record<string, unknown> = {};
+  for (const slug of slugs) {
+    const st = stations.find((s) => s.slug === slug);
+    const run = st ? runs.get(st.id) : undefined;
+    items[slug] = st && run
+      ? {
+          runId: run.runId,
+          date: run.day,
+          show: run.showName ? { name: run.showName, djName: run.djName ?? null } : null,
+          spinCount: run.spinCount,
+          resolvedCount: run.resolvedCount,
+          startedAt: new Date(run.startedAt).toISOString(),
+          endedAt: new Date(run.endedAt).toISOString(),
+        }
+      : null;
+  }
+  return res.json({ items });
+}));
+
+// GET /api/player/stations/:slug/latest-set — the full tracklist of the
+// station's latest completed set, in broadcast order, for the set scanner.
+// spinId is included so unresolved tracks can use the pending-keep flow.
+// 404 when the station is unknown/hidden or has no completed set.
+router.get("/player/stations/:slug/latest-set", h(async (req, res) => {
+  const rawSlug: unknown = req.params.slug;
+  const slug = typeof rawSlug === "string" ? rawSlug : "";
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(and(eq(stationsTable.slug, slug), eq(stationsTable.hidden, false)))
+    .limit(1);
+  if (!station) return res.status(404).json({ error: "No completed set" });
+
+  const runs = await latestCompletedRuns([station.id]);
+  const run = runs.get(station.id);
+  if (!run) return res.status(404).json({ error: "No completed set" });
+
+  // The anchor spin defines the run boundary (station + show + UTC day),
+  // identical to /api/archive/station-runs/:runId.
+  const [anchor] = await db
+    .select({ showId: spinsTable.showId, day: spinDayExpr })
+    .from(spinsTable)
+    .where(eq(spinsTable.id, run.runId))
+    .limit(1);
+  if (!anchor) return res.status(404).json({ error: "No completed set" });
+
+  const rows = await db
+    .select({
+      id: spinsTable.id,
+      playedAt: spinsTable.playedAt,
+      rawArtist: spinsTable.rawArtist,
+      rawTitle: spinsTable.rawTitle,
+      confidence: spinsTable.confidence,
+      mbid: recordingsTable.mbid,
+      recTitle: recordingsTable.title,
+      recArtist: recordingsTable.artist,
+      artworkUrl: recordingsTable.artworkUrl,
+    })
+    .from(spinsTable)
+    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .where(
+      and(
+        eq(spinsTable.stationId, station.id),
+        anchor.showId == null
+          ? isNull(spinsTable.showId)
+          : eq(spinsTable.showId, anchor.showId),
+        sql`${spinDayExpr} = ${anchor.day}`,
+      ),
+    )
+    .orderBy(asc(spinsTable.playedAt), asc(spinsTable.id));
+  if (!rows.length) return res.status(404).json({ error: "No completed set" });
+
+  return res.json({
+    station: { slug: station.slug, name: station.name },
+    run: {
+      runId: run.runId,
+      date: run.day,
+      show: run.showName ? { name: run.showName, djName: run.djName ?? null } : null,
+      spinCount: rows.length,
+      resolvedCount: rows.filter((r) => r.mbid != null).length,
+      startedAt: rows[0]!.playedAt.toISOString(),
+      endedAt: rows[rows.length - 1]!.playedAt.toISOString(),
+    },
+    tracks: rows.map((r, i) => ({
+      spinId: r.id,
+      position: i,
+      playedAt: r.playedAt.toISOString(),
+      artist: r.recArtist ?? r.rawArtist ?? "",
+      title: r.recTitle ?? r.rawTitle ?? "",
+      mbid: r.mbid ?? null,
+      artworkUrl: r.artworkUrl ?? null,
+    })),
+  });
 }));
 
 export default router;

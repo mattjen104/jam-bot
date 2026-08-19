@@ -234,6 +234,10 @@ function renderDial() {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  // This file exercises the crossings-feed nudge; radio mode (crossings off)
+  // is the default now, so pin crossings on globally. Tests that exercise
+  // radio mode set "true" themselves after this hook.
+  localStorage.setItem("lore:radioMode", "false");
 });
 
 afterEach(() => {

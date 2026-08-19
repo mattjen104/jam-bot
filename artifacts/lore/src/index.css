@@ -9024,3 +9024,290 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-size: var(--lore-size-small);
   font-family: var(--lore-font-display);
 }
+
+/* ── Last-set scanner + scan-memory cues (Task #332) ─────────────────────── */
+
+/* "Same song as your last scan" cue — a muted ≈ after the artist lead. */
+.fdrow__unchanged-cue {
+  color: hsl(var(--muted-foreground) / 0.75);
+  font-size: 0.85em;
+  margin-left: 0.15em;
+  cursor: help;
+}
+
+/* Remote-key variant: dim the key so unchanged stations recede while
+   scanning — an indicator only, keys stay fully tappable. */
+.compact-dial__remote-row--unchanged .compact-dial__remote-name,
+.compact-dial__micro-btn--unchanged {
+  opacity: 0.55;
+}
+
+/* Expanded-row "Last set" affordance. */
+.fdrow__lastset {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0 0;
+  font-size: var(--lore-size-small);
+  font-family: var(--lore-font-display);
+}
+.fdrow__lastset-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: hsl(var(--primary));
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fdrow__lastset-btn:hover {
+  color: hsl(var(--foreground));
+}
+.fdrow__lastset-crossings {
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Scanner sheet ───────────────────────────────────────────────────────── */
+.setscanner {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: hsl(var(--background) / 0.72);
+}
+@media (min-width: 700px) {
+  .setscanner {
+    align-items: center;
+  }
+}
+.setscanner__panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px 12px 0 0;
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (min-width: 700px) {
+  .setscanner__panel {
+    border-radius: 12px;
+  }
+}
+.setscanner__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.setscanner__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.setscanner__station {
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-body);
+  color: hsl(var(--foreground));
+}
+.setscanner__meta {
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--muted-foreground));
+}
+.setscanner__close {
+  background: none;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  padding: 4px;
+}
+.setscanner__close:hover {
+  color: hsl(var(--foreground));
+}
+.setscanner__note {
+  margin: 0;
+  font-size: var(--lore-size-small);
+  font-family: var(--lore-font-display);
+  color: hsl(var(--muted-foreground));
+}
+.setscanner__status {
+  margin: 12px 0;
+  font-size: var(--lore-size-small);
+  font-family: var(--lore-font-display);
+  color: hsl(var(--muted-foreground));
+}
+.setscanner__status--error {
+  color: hsl(var(--destructive-foreground, var(--muted-foreground)));
+}
+
+/* Hour jumps + scrubber */
+.setscanner__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setscanner__hours {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.setscanner__hour {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--primary));
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.setscanner__hour:hover {
+  color: hsl(var(--foreground));
+}
+.setscanner__scrubber {
+  width: 100%;
+  accent-color: hsl(var(--primary));
+}
+
+/* Track rows */
+.setscanner__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.setscanner__track {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-small);
+}
+.setscanner__track > * {
+  position: relative;
+  z-index: 1;
+}
+/* Library behind-row art for crossing tracks (mirrors lib-album-group). */
+.setscanner__track-bg-art,
+.setscanner__track-bg-overlay {
+  position: absolute !important;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.setscanner__track-bg-art {
+  z-index: 0 !important;
+  object-fit: cover;
+  filter: saturate(0.85) brightness(0.5);
+  transform: scale(1.03);
+}
+.setscanner__track-bg-overlay {
+  z-index: 0 !important;
+  background: linear-gradient(
+    to right,
+    hsl(var(--background) / 0.78),
+    hsl(var(--background) / 0.5) 48%,
+    hsl(var(--background) / 0.7)
+  );
+}
+.setscanner__track--scanned .setscanner__track-text,
+.setscanner__track--scanned .setscanner__track-time {
+  opacity: 0.55;
+}
+.setscanner__preview {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--border));
+  background: none;
+  color: hsl(var(--foreground));
+  font-size: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.setscanner__preview:hover {
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+}
+.setscanner__preview:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.setscanner__track-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setscanner__track-artist {
+  color: hsl(var(--foreground));
+}
+.setscanner__track-title {
+  color: hsl(var(--muted-foreground));
+}
+.setscanner__track-time {
+  flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+}
+.setscanner__scanned-mark {
+  flex-shrink: 0;
+  color: hsl(var(--primary));
+  cursor: help;
+}
+.setscanner__no-preview {
+  flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+/* Pager — covered pages get a filled marker so the listener can skip ahead. */
+.setscanner__pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  padding-top: 4px;
+}
+.setscanner__page {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid hsl(var(--border));
+  background: none;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-small);
+  cursor: pointer;
+}
+.setscanner__page:hover {
+  border-color: hsl(var(--primary));
+  color: hsl(var(--foreground));
+}
+.setscanner__page--current {
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+}
+.setscanner__page--covered {
+  background: hsl(var(--primary) / 0.18);
+  color: hsl(var(--muted-foreground));
+}
