@@ -9,6 +9,7 @@ import {
   parseSpinitronPlaylists,
   parseBbcSegments,
   parseNtsLive,
+  mergeNtsIcyTrackWithLiveShow,
   parseFipSteps,
   stationArchiveUrl,
   supportsBackfill,
@@ -476,6 +477,36 @@ describe("parseNtsLive", () => {
   });
 });
 
+describe("mergeNtsIcyTrackWithLiveShow", () => {
+  const liveShow = {
+    rawArtist: "Sam Shepherd",
+    rawTitle: "Floating Points",
+    show: { name: "Floating Points", djName: "Sam Shepherd" },
+  };
+
+  it("keeps ICY artist/title while attaching the live NTS show", () => {
+    expect(
+      mergeNtsIcyTrackWithLiveShow(
+        { rawArtist: "Alice Coltrane", rawTitle: "Journey in Satchidananda" },
+        liveShow,
+      ),
+    ).toEqual({
+      rawArtist: "Alice Coltrane",
+      rawTitle: "Journey in Satchidananda",
+      show: { name: "Floating Points", djName: "Sam Shepherd" },
+    });
+  });
+
+  it("falls back to the legacy NTS live result when ICY is unavailable", () => {
+    expect(mergeNtsIcyTrackWithLiveShow(null, liveShow)).toEqual(liveShow);
+  });
+
+  it("still returns the ICY track when live show attribution is unavailable", () => {
+    const track = { rawArtist: "Alice Coltrane", rawTitle: "Journey in Satchidananda" };
+    expect(mergeNtsIcyTrackWithLiveShow(track, null)).toEqual(track);
+  });
+});
+
 describe("stationArchiveUrl", () => {
   it("builds KEXP's dated playlist URL with unpadded month/day", () => {
     expect(stationArchiveUrl("kexp_api", "2026-07-01")).toBe(
@@ -484,6 +515,18 @@ describe("stationArchiveUrl", () => {
     expect(stationArchiveUrl("kexp_api", "2024-12-25")).toBe(
       "https://www.kexp.org/playlist/2024/12/25/",
     );
+  });
+
+  it("keeps the NTS archive link after NTS switches to ICY track metadata", () => {
+    const config = {
+      streamUrl: "https://stream-relay-geo.ntslive.net/stream",
+      fallbackSource: "nts_live",
+      channel: "1",
+    };
+    expect(stationArchiveUrl("radio_browser_icy", "2026-07-01", config)).toBe(
+      "https://www.nts.live/explore?type=episode&broadcast=2026-07-01",
+    );
+    expect(stationArchiveUrl("radio_browser_icy", "2026-07-01", {})).toBeNull();
   });
 
   it("builds Spinitron's per-station calendar URL when stationHandle present", () => {

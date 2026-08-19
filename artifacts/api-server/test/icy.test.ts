@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   parseIcyStreamTitle,
   parseTildeStreamTitle,
@@ -479,18 +479,32 @@ describe("parseStreamTitle — leading delimiter stripping", () => {
   });
 });
 
-// ---- resolveStreamUrl ------------------------------------------------------
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
 
+// ---- resolveStreamUrl ------------------------------------------------------
 import { resolveStreamUrl } from "../src/lore/icy.js";
-import { vi, afterEach } from "vitest";
 
 describe("resolveStreamUrl", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
+  let redirectProbe: (
+    url: string,
+    address: string,
+  ) => Promise<{ status: number; location: string | null }>;
+
   function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
-    vi.stubGlobal("fetch", vi.fn(impl));
+    redirectProbe = async (url) => {
+      const response = await impl(url);
+      return { status: response.status, location: response.headers.get("location") };
+    };
+  }
+
+  function resolve(url: string) {
+    return resolveStreamUrl(url, redirectProbe);
   }
 
   it("follows one 302 redirect and returns the Location URL", async () => {
@@ -500,7 +514,7 @@ describe("resolveStreamUrl", () => {
         headers: { location: "https://cdn.example.com/signed/stream?tok=abc" },
       }),
     );
-    const resolved = await resolveStreamUrl("https://stream.rcs.revma.com/w4pmmfkdx4zuv");
+    const resolved = await resolve("https://stream.rcs.revma.com/w4pmmfkdx4zuv");
     expect(resolved).toBe("https://cdn.example.com/signed/stream?tok=abc");
   });
 
@@ -508,20 +522,20 @@ describe("resolveStreamUrl", () => {
     stubFetch(async () =>
       new Response(null, { status: 301, headers: { location: "/other-mount" } }),
     );
-    const resolved = await resolveStreamUrl("https://icecast.example.org:8443/main");
-    expect(resolved).toBe("https://icecast.example.org:8443/other-mount");
+    const resolved = await resolve("https://example.com:8443/main");
+    expect(resolved).toBe("https://example.com:8443/other-mount");
   });
 
   it("returns the original URL on a 2xx response (no redirect)", async () => {
     stubFetch(async () => new Response(null, { status: 200 }));
     const url = "https://streaming.wrek.org/main/128kb.mp3";
-    expect(await resolveStreamUrl(url)).toBe(url);
+    expect(await resolve(url)).toBe(url);
   });
 
   it("returns the original URL on a 400 (healthy Icecast servers reject bare HEAD)", async () => {
     stubFetch(async () => new Response(null, { status: 400 }));
     const url = "https://wmbr.org:8002/hi";
-    expect(await resolveStreamUrl(url)).toBe(url);
+    expect(await resolve(url)).toBe(url);
   });
 
   it("returns the original URL when the HEAD request throws (timeout/network)", async () => {
@@ -529,38 +543,125 @@ describe("resolveStreamUrl", () => {
       throw new Error("network unreachable");
     });
     const url = "https://audio-mp3.ibiblio.org/wxyc.mp3";
-    expect(await resolveStreamUrl(url)).toBe(url);
+    expect(await resolve(url)).toBe(url);
   });
 
   it("returns the original URL on a 3xx without a Location header", async () => {
     stubFetch(async () => new Response(null, { status: 302 }));
     const url = "https://example.com/stream";
-    expect(await resolveStreamUrl(url)).toBe(url);
+    expect(await resolve(url)).toBe(url);
   });
 
-  it("issues a HEAD request with manual redirect handling", async () => {
-    const seen: Array<{ url: string; init?: RequestInit }> = [];
-    stubFetch(async (url, init) => {
-      seen.push({ url: String(url), init });
+  it("probes the stream URL without automatically following redirects", async () => {
+    const seen: string[] = [];
+    stubFetch(async (url) => {
+      seen.push(String(url));
       return new Response(null, { status: 200 });
     });
-    await resolveStreamUrl("https://example.com/stream");
-    expect(seen).toHaveLength(1);
-    expect(seen[0].init?.method).toBe("HEAD");
-    expect(seen[0].init?.redirect).toBe("manual");
+    await resolve("https://example.com/stream");
+    expect(seen).toEqual(["https://example.com/stream"]);
   });
 
-  it("resolves only ONE hop — a redirect chain is not followed further", async () => {
+  it("follows a bounded redirect chain to the stream edge", async () => {
+    const redirects = [
+      "https://hop2.example.com/next",
+      "https://edge.example.com/mount",
+    ];
+    let calls = 0;
+    stubFetch(async () => {
+      const location = redirects[calls];
+      calls += 1;
+      return location
+        ? new Response(null, { status: 302, headers: { location } })
+        : new Response(null, { status: 200 });
+    });
+    const resolved = await resolve("https://hop1.example.com/start");
+    expect(resolved).toBe("https://edge.example.com/mount");
+    expect(calls).toBe(3);
+  });
+
+  it("stops after three redirect hops", async () => {
     let calls = 0;
     stubFetch(async () => {
       calls += 1;
       return new Response(null, {
         status: 302,
-        headers: { location: "https://hop2.example.com/next" },
+        headers: { location: `https://hop${calls + 1}.example.com/stream` },
       });
     });
-    const resolved = await resolveStreamUrl("https://hop1.example.com/start");
-    expect(resolved).toBe("https://hop2.example.com/next");
-    expect(calls).toBe(1);
+
+    expect(await resolve("https://hop1.example.com/stream")).toBe(
+      "https://hop4.example.com/stream",
+    );
+    expect(calls).toBe(3);
+  });
+
+  it("stops on a redirect cycle instead of returning a known redirect URL", async () => {
+    let calls = 0;
+    stubFetch(async () => {
+      calls += 1;
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location:
+            calls === 1
+              ? "https://example.com/b"
+              : "https://hop1.example.com/stream",
+        },
+      });
+    });
+
+    expect(await resolve("https://hop1.example.com/stream")).toBe(
+      "https://example.com/b",
+    );
+    expect(calls).toBe(2);
+  });
+
+  it("rejects a redirect to a private address", async () => {
+    const seen: string[] = [];
+    stubFetch(async (url) => {
+      seen.push(url);
+      return new Response(null, {
+        status: 302,
+        headers: { location: "http://127.0.0.1:8080/admin" },
+      });
+    });
+
+    expect(await resolve("https://example.com/stream")).toBe(
+      "https://example.com/stream",
+    );
+    expect(seen).toEqual(["https://example.com/stream"]);
+  });
+
+  it("rejects hexadecimal IPv4-mapped IPv6 loopback redirect targets", async () => {
+    const seen: string[] = [];
+    stubFetch(async (url) => {
+      seen.push(url);
+      return new Response(null, {
+        status: 302,
+        headers: { location: "http://[::ffff:7f00:1]/admin" },
+      });
+    });
+
+    expect(await resolve("https://example.com/stream")).toBe(
+      "https://example.com/stream",
+    );
+    expect(seen).toEqual(["https://example.com/stream"]);
+  });
+
+  it("passes the DNS-validated address to every redirect probe", async () => {
+    const seen: Array<{ url: string; address: string }> = [];
+    redirectProbe = async (url, address) => {
+      seen.push({ url, address });
+      return seen.length === 1
+        ? { status: 302, location: "https://edge.example.com/stream" }
+        : { status: 200, location: null };
+    };
+
+    await resolve("https://relay.example.com/stream");
+    expect(seen).toEqual([
+      { url: "https://relay.example.com/stream", address: "93.184.216.34" },
+      { url: "https://edge.example.com/stream", address: "93.184.216.34" },
+    ]);
   });
 });

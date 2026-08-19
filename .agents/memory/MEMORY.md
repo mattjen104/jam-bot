@@ -1,4 +1,5 @@
 // hint: Logic changed on both sides. Requires understanding intent of each change.
+- [NTS ICY redirect routing](nts-icy-redirect-routing.md) — NTS relay reaches metadata through two redirects; a valid instant can still have an empty title between tracks.
 - [List provenance admin workflow](list-provenance-workflow.md) — 4-table layer: scrape list → enrich recording release-groups → provenance appears; bridge table must be seeded first.
 - [Synced-listening strategy](social-listening-strategy.md) — jam-bot "agnostic spicetify": coordinate-never-redistribute, monetize the conductor, desktop-only, ban-risk reality.
 - [jam-bot persona & escalation](jam-bot-persona.md) — music-teacher voice that escalates when razzed; uses in-memory turn buffer (no Slack history scope) fed to askLLM.

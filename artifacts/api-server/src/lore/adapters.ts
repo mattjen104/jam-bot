@@ -451,7 +451,7 @@ const kcrw: HistoryAdapter = async (config, opts) => {
   return parseKcrwTrack(body, feed);
 };
 
-// ---- NTS Radio (now-playing, show-level, change-detection) --------------
+// ---- NTS Radio (live show attribution fallback) --------------------------
 
 /**
  * Pure: shape the NTS Live API response body into a NowPlayingRaw.
@@ -505,9 +505,9 @@ export function parseNtsLive(
 
 /**
  * NTS Live — show-level attribution from the NTS Live API. NTS does not
- * publish per-track data in the live endpoint; real track data flows from
- * the existing NTS archive poller. Returns null when nothing is on air or
- * the API is unreachable.
+ * publish per-track data in the live endpoint; the NTS ICY stream supplies
+ * live tracks and the existing NTS archive poller supplies past tracklists.
+ * Returns null when nothing is on air or the API is unreachable.
  *
  * Config: `{ channel: "1" }` (or "2" for NTS 2).
  */
@@ -530,6 +530,23 @@ const ntsLive: NowPlayingAdapter = async (config) => {
     return null;
   }
 };
+
+/**
+ * Preserve NTS's live programme attribution alongside an ICY-sourced track.
+ *
+ * When ICY is unavailable, returning the live result deliberately retains the
+ * legacy `nts_live` behavior. When ICY succeeds, its artist/title remain the
+ * track identity while the NTS API contributes only the show/DJ context.
+ */
+export function mergeNtsIcyTrackWithLiveShow(
+  icyTrack: NowPlayingRaw | null,
+  ntsLiveTrack: NowPlayingRaw | null,
+): NowPlayingRaw | null {
+  if (!icyTrack) return ntsLiveTrack;
+  return ntsLiveTrack?.show
+    ? { ...icyTrack, show: ntsLiveTrack.show }
+    : icyTrack;
+}
 
 // ---- FIP (Radio France) now-playing, change-detection -------------------
 
@@ -711,6 +728,11 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
   const streamUrl = str(config.streamUrl);
   const rbId =
     typeof config.radioBrowserId === "number" ? config.radioBrowserId : null;
+  // NTS exposes tracks in ICY but keeps the current programme in its live API.
+  // Keeping this opt-in means ordinary ICY stations retain their existing
+  // fetch, health, and suspension behavior.
+  const ntsChannel =
+    str(config.fallbackSource) === "nts_live" ? str(config.channel) : undefined;
 
   if (!streamUrl) return null;
 
@@ -754,9 +776,19 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
   }
 
   // --- Fetch ----------------------------------------------------------------
+  // Start this beside the ICY request so show attribution adds no extra
+  // round-trip to the track path. It is deliberately after health gates, so a
+  // suspended non-NTS ICY station never makes an unnecessary live API request.
+  const ntsLiveResult = ntsChannel ? ntsLive({ channel: ntsChannel }) : null;
   const result = await fetchIcyMetadata(streamUrl);
 
   if (!result.ok) {
+    // NTS stream URLs are CDN-routed and may be temporarily unreachable. Its
+    // public live API remains a complete show-level source, so preserve the
+    // former nts_live behavior rather than marking the station unsupported or
+    // dropping it from the poller.
+    if (ntsLiveResult) return ntsLiveResult;
+
     if (result.kind === "icy_unsupported") {
       // Permanent: the stream does not support ICY metadata at all.
       if (rbId !== null) {
@@ -814,7 +846,9 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
   }
 
   if (!result.streamTitle) return null; // between tracks — no change to log
-  return parseIcyNowPlaying(result.streamTitle);
+  const icyTrack = parseIcyNowPlaying(result.streamTitle);
+  if (!ntsLiveResult) return icyTrack;
+  return mergeNtsIcyTrackWithLiveShow(icyTrack, await ntsLiveResult);
 };
 
 // ---- Radiojar (now-playing, change-detection) ---------------------------
@@ -1147,6 +1181,13 @@ export function stationArchiveUrl(
     // NTS publishes a dated episode/broadcast archive.
     case "nts_live":
       return `https://www.nts.live/explore?type=episode&broadcast=${year}-${month}-${dayOfMonth}`;
+    // NTS live stations use ICY for track metadata but retain an nts_live
+    // fallback in config. Keep their archive citation after the source switch.
+    case "radio_browser_icy":
+      if (config?.fallbackSource === "nts_live") {
+        return `https://www.nts.live/explore?type=episode&broadcast=${year}-${month}-${dayOfMonth}`;
+      }
+      return null;
     // FIP (Radio France) publishes a dated programme grid.
     case "fip":
       return `https://www.radiofrance.fr/fip/grille-programmes?date=${year}-${month}-${dayOfMonth}`;

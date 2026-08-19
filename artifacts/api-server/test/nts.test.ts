@@ -5,6 +5,25 @@ import {
   ntsExternalId,
   ntsEpisodeUrl,
 } from "../src/lore/nts.js";
+import { SEED_STATIONS } from "../src/lore/seed.js";
+
+describe("NTS live station seeds", () => {
+  it("uses ICY track metadata with the NTS live API as a show-level fallback", () => {
+    for (const [slug, channel, streamUrl] of [
+      ["nts-1", "1", "https://stream-relay-geo.ntslive.net/stream"],
+      ["nts-2", "2", "https://stream-relay-geo.ntslive.net/stream2"],
+    ] as const) {
+      const station = SEED_STATIONS.find((seed) => seed.slug === slug);
+      expect(station?.nowPlayingSource).toBe("radio_browser_icy");
+      expect(station?.nowPlayingConfig).toEqual({
+        streamUrl,
+        fallbackSource: "nts_live",
+        channel,
+      });
+      expect(station?.automationClass).toBe("mixed");
+    }
+  });
+});
 
 describe("parseNtsEpisodes", () => {
   it("handles malformed bodies without throwing", () => {

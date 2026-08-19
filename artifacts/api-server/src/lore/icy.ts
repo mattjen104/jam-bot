@@ -1,5 +1,6 @@
 import * as net from "node:net";
 import * as tls from "node:tls";
+import { lookup as dnsLookup } from "node:dns/promises";
 
 /**
  * ICY / Shoutcast stream metadata fetcher.
@@ -516,52 +517,211 @@ export class IcyStreamParser {
 }
 
 /**
- * Resolve a stream URL through at most ONE HTTP redirect hop.
+ * Resolve a stream URL through a small, bounded number of HTTP redirect hops.
  *
  * Some streams (e.g. WNUR's RevMA CDN) answer a plain request with a 302 to a
- * signed CDN URL, and the ICY socket path treats any non-2xx as
- * icy_unsupported. This helper issues a lightweight HEAD request (3 s timeout,
- * `redirect: "manual"`) and, when the response is a 3xx with a Location
- * header, returns the redirect target (resolved against the original URL).
+ * signed CDN URL, and NTS currently routes through both its relay and
+ * RadioMast before reaching the regional stream edge. The ICY socket path
+ * treats any remaining non-2xx response as icy_unsupported. This helper
+ * issues lightweight HEAD requests (3 s timeout, `redirect: "manual"`) and
+ * follows up to three Location headers.
  *
  * On any failure — timeout, network error, non-3xx status (many healthy
  * Icecast servers reply 400 to a bare HEAD), or a missing Location header —
- * the ORIGINAL URL is returned unchanged, so currently-working non-redirect
- * streams are unaffected. Never throws.
+ * the last usable URL is returned, so currently-working non-redirect streams
+ * are unaffected. Redirect loops stop early. Never throws.
  */
-export async function resolveStreamUrl(url: string): Promise<string> {
+const MAX_STREAM_REDIRECT_HOPS = 3;
+
+type StreamUrlResolution = {
+  url: string;
+  /** A public DNS answer pinned for the raw TCP/TLS connection. */
+  address?: string;
+  /** Redirects that cannot safely reach an ICY source are retryable. */
+  failure?: string;
+};
+
+function isNonPublicIpv4(ip: string): boolean {
+  const [a, b] = ip.split(".").map(Number) as [number, number];
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+  );
+}
+
+/**
+ * Resolves a public IPv4 answer once and pins it for every connection. IPv6 is
+ * intentionally not supported here: rejecting it is safer than attempting a
+ * partial special-use range classifier that misses mapped loopback encodings.
+ */
+async function safeRedirectAddress(rawUrl: string): Promise<string | null> {
+  let url: URL;
   try {
-    const res = await fetch(url, {
-      method: "HEAD",
-      redirect: "manual",
-      headers: { "User-Agent": "Lore-ICY-fetcher/1.0" },
-      signal: AbortSignal.timeout(3_000),
-    });
-    // Drain/cancel any body so the socket is released promptly.
-    try {
-      await res.body?.cancel();
-    } catch {}
-    if (res.status >= 300 && res.status < 400) {
-      const location = res.headers.get("location");
-      if (location) {
-        try {
-          return new URL(location, url).toString();
-        } catch {
-          return url;
-        }
-      }
-    }
-    return url;
+    url = new URL(rawUrl);
   } catch {
-    return url;
+    return null;
   }
+  if (
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.username ||
+    url.password
+  ) {
+    return null;
+  }
+
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (
+    !host ||
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    return null;
+  }
+  if (net.isIP(host)) return net.isIPv4(host) && !isNonPublicIpv4(host) ? host : null;
+
+  try {
+    const addresses = await dnsLookup(host, { all: true, verbatim: true });
+    return (
+      addresses.find(
+        (entry) => net.isIPv4(entry.address) && !isNonPublicIpv4(entry.address),
+      )?.address ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+type RedirectProbeResult = { status: number; location: string | null };
+type RedirectProbe = (url: string, address: string) => Promise<RedirectProbeResult>;
+
+/**
+ * Make a HEAD request directly to a DNS-pinned address, retaining the
+ * URL-derived hostname for HTTP Host and TLS SNI. Native fetch cannot pin DNS,
+ * so using it here would allow a redirect hostname to rebind between
+ * validation and the probe.
+ */
+function probeRedirect(url: string, address: string): Promise<RedirectProbeResult> {
+  const parsed = parseUrl(url);
+  if (!parsed) return Promise.resolve({ status: 0, location: null });
+  const originalHost = new URL(url).host;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const socketOptions = { host: address, port: parsed.port };
+    const socket: net.Socket | tls.TLSSocket =
+      parsed.protocol === "https:"
+        ? tls.connect({
+            ...socketOptions,
+            servername: net.isIP(parsed.host) ? undefined : parsed.host,
+          })
+        : net.connect(socketOptions);
+    const finish = (result?: RedirectProbeResult, error?: Error) => {
+      if (settled) return;
+      settled = true;
+      socket.setTimeout(0);
+      socket.destroy();
+      if (error) reject(error);
+      else resolve(result!);
+    };
+
+    socket.once("error", (error) => finish(undefined, error));
+    socket.setTimeout(3_000);
+    socket.once("timeout", () => finish(undefined, new Error("redirect probe timeout")));
+    socket.once(parsed.protocol === "https:" ? "secureConnect" : "connect", () => {
+      socket.write(
+        [
+          `HEAD ${parsed.path} HTTP/1.1`,
+          `Host: ${originalHost}`,
+          "User-Agent: Lore-ICY-fetcher/1.0",
+          "Connection: close",
+          "",
+          "",
+        ].join("\r\n"),
+      );
+    });
+
+    const chunks: Buffer[] = [];
+    let length = 0;
+    socket.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+      length += chunk.length;
+      if (length > 64 * 1024) {
+        finish({ status: 0, location: null });
+        return;
+      }
+      const response = Buffer.concat(chunks, length);
+      const headerEnd = response.indexOf("\r\n\r\n");
+      if (headerEnd === -1) return;
+      const headers = response.subarray(0, headerEnd).toString("latin1");
+      const [statusLine] = headers.split("\r\n");
+      const status = Number(statusLine?.split(" ")[1]) || 0;
+      const location = /^location:\s*(.+)$/im.exec(headers)?.[1]?.trim() ?? null;
+      finish({ status, location });
+    });
+  });
+}
+
+async function resolveStreamUrlResult(
+  url: string,
+  redirectProbe: RedirectProbe = probeRedirect,
+): Promise<StreamUrlResolution> {
+  let resolvedUrl = url;
+  let address = await safeRedirectAddress(url);
+  if (!address) return { url, failure: "unsafe stream URL" };
+  const visited = new Set([url]);
+  for (let hop = 0; hop < MAX_STREAM_REDIRECT_HOPS; hop += 1) {
+    try {
+      const response = await redirectProbe(resolvedUrl, address);
+      if (response.status < 300 || response.status >= 400) {
+        return { url: resolvedUrl, address };
+      }
+      const location = response.location;
+      if (!location) return { url: resolvedUrl, address };
+
+      let nextUrl: string;
+      try {
+        nextUrl = new URL(location, resolvedUrl).toString();
+      } catch {
+        return { url: resolvedUrl, address, failure: "invalid redirect URL" };
+      }
+      if (visited.has(nextUrl)) {
+        return { url: resolvedUrl, address, failure: "redirect loop" };
+      }
+      const nextAddress = await safeRedirectAddress(nextUrl);
+      if (!nextAddress) {
+        return { url: resolvedUrl, address, failure: "unsafe redirect target" };
+      }
+      visited.add(nextUrl);
+      resolvedUrl = nextUrl;
+      address = nextAddress;
+    } catch {
+      return { url: resolvedUrl, address };
+    }
+  }
+  return { url: resolvedUrl, address, failure: "redirect limit reached" };
+}
+
+export async function resolveStreamUrl(
+  url: string,
+  redirectProbe: RedirectProbe = probeRedirect,
+): Promise<string> {
+  return (await resolveStreamUrlResult(url, redirectProbe)).url;
 }
 
 /**
  * Fetch ICY metadata from a stream URL.
  *
- * Resolves one redirect hop first (see resolveStreamUrl), so CDN streams that
- * 302 to a signed URL work without special casing at the call site.
+ * Resolves a bounded redirect chain first (see resolveStreamUrl), so CDN
+ * streams that 302 through relay hosts work without special casing at the call
+ * site.
  *
  * Returns a discriminated `IcyFetchResult`:
  *   - `{ ok: true, streamTitle, icyMetaint }` on success (streamTitle may be
@@ -573,8 +733,11 @@ export async function resolveStreamUrl(url: string): Promise<string> {
  * Never throws.
  */
 export async function fetchIcyMetadata(streamUrl: string): Promise<IcyFetchResult> {
-  const resolvedUrl = await resolveStreamUrl(streamUrl);
-  const parsed = parseUrl(resolvedUrl);
+  const resolution = await resolveStreamUrlResult(streamUrl);
+  if (resolution.failure) {
+    return { ok: false, kind: "transient_error", message: resolution.failure };
+  }
+  const parsed = parseUrl(resolution.url);
   if (!parsed) {
     return { ok: false, kind: "icy_unsupported", message: "unparseable URL" };
   }
@@ -599,7 +762,7 @@ export async function fetchIcyMetadata(streamUrl: string): Promise<IcyFetchResul
     );
     let readTimer: NodeJS.Timeout;
 
-    const socketOpts = { host: parsed.host, port: parsed.port };
+    const socketOpts = { host: resolution.address ?? parsed.host, port: parsed.port };
     const socket =
       parsed.protocol === "https:"
         ? tls.connect({ ...socketOpts, servername: parsed.host })

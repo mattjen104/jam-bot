@@ -78,9 +78,9 @@ export const SEED_STATIONS: InsertStation[] = [
     stationClass: "community",
     sortOrder: 50,
   },
-  // NTS Radio (London) — streams confirmed reachable (302 redirect). NTS live
-  // API publishes show-level metadata only; per-track data comes from the
-  // existing NTS archive poller.
+  // NTS Radio (London) — ICY streams expose per-track metadata behind a
+  // redirecting CDN. The radio_browser_icy adapter merges programme attribution
+  // from the NTS Live API and falls back to it if the stream is unavailable.
   ...ntsliveStations(),
   // BBC 6 Music — metadata arrives via the existing bbc_api adapter (confirmed
   // live). Stream URL returns 400 from the Replit container (geo-block), so
@@ -791,11 +791,10 @@ export async function repairMisconfiguredSpinitronStations(): Promise<void> {
 
 /**
  * NTS Radio (London) — two channels, each a continuous 24/7 stream of
- * curated, genre-fluid programming. The NTS live API publishes show-level
- * attribution (show title + host); per-track tracklists come from the
- * existing NTS archive poller (Zakia, Floating Points, etc.). Stream URLs
- * return 302 redirects from the Replit container, which is normal for audio
- * streams behind a geo-load-balancer — confirmed reachable.
+ * curated, genre-fluid programming. Their ICY streams publish live per-track
+ * artist/title metadata; the NTS Live API augments each spin with its current
+ * show title and host, and remains the show-level fallback during a stream
+ * outage. The archive poller continues to ingest dated episode tracklists.
  */
 function ntsliveStations(): InsertStation[] {
   return [
@@ -811,8 +810,15 @@ function ntsliveStations(): InsertStation[] {
       homepageUrl: "https://www.nts.live",
       scheduleUrl: "https://www.nts.live/schedule",
       donateUrl: "https://www.nts.live/membership",
-      nowPlayingSource: "nts_live",
-      nowPlayingConfig: { channel: "1" },
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://stream-relay-geo.ntslive.net/stream",
+        fallbackSource: "nts_live",
+        channel: "1",
+      },
+      // Seed explicitly because the one-time automation-class migration runs
+      // before stations are inserted on a clean deployment.
+      automationClass: "mixed",
       stationClass: "community",
       sortOrder: 55,
     },
@@ -828,8 +834,13 @@ function ntsliveStations(): InsertStation[] {
       homepageUrl: "https://www.nts.live",
       scheduleUrl: "https://www.nts.live/schedule",
       donateUrl: "https://www.nts.live/membership",
-      nowPlayingSource: "nts_live",
-      nowPlayingConfig: { channel: "2" },
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://stream-relay-geo.ntslive.net/stream2",
+        fallbackSource: "nts_live",
+        channel: "2",
+      },
+      automationClass: "mixed",
       stationClass: "community",
       sortOrder: 56,
     },
