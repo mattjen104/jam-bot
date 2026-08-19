@@ -16,8 +16,11 @@ the same commands completed reliably under the validation harness.
   `clearValidationCommand({ name })` so `.replit` isn't left dirty.
 - A single run's poll budget is ~600 polls (~10 min). A command longer than
   that dies with `POLL_BUDGET_EXCEEDED` and the harness kills the child —
-  split big suites into chunks of files that each finish inside the budget
-  (98-file DB suite → 7 chunks of 14 worked).
+  split big suites by observed runtime, not equal file counts; a few DB files
+  can consume more than five minutes alone.
 - Multiple `commandIds` in one `startValidationRun` execute **in parallel** —
   do not batch DB-bound or otherwise contending suites in one run (parallel
   e2e + vitest caused resource flakes). Run them one call at a time.
+- Stop the live API workflow before DB-heavy validation. If the broad gate
+  times out in unrelated files, run the task-relevant DB files in isolation
+  before deciding whether the implementation itself is broken.

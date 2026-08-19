@@ -914,38 +914,101 @@ const radiojar: NowPlayingAdapter = async (config) => {
  * now-playing widget for the current spin. We extract artist + song title via a
  * sequence of regex patterns that cover their known HTML variants:
  *
- *  Pattern A — structured data block (`data-artist` / `data-song` attributes).
- *  Pattern B — class-scoped spans (`.spin-artist`, `.spin-song`).
- *  Pattern C — generic `.artist` / `.song` (older Spinitron page template).
- *  Pattern D — `<meta property="music:musician">` + `<title>` combo.
+ *  Pattern A — canonical `tr.spin-item[data-spin]` JSON record.
+ *  Pattern B — structured data block (`data-artist` / `data-song` attributes).
+ *  Pattern C — class-scoped `.artist` / `.song` spans.
+ *  Pattern D — JSON island or OpenGraph title.
  *
  * Returns null when none of the patterns fire or either field is blank.
  * Never throws — any parse failure produces null.
  */
 export function parseSpinitronWebPage(html: string): NowPlayingRaw | null {
-  // Pattern A — data attributes on the spin container (future-proofing)
-  const dataArtist = /data-artist="([^"]+)"/.exec(html)?.[1];
-  const dataSong = /data-song="([^"]+)"/.exec(html)?.[1];
-  if (dataArtist && dataSong) {
-    return { rawArtist: dataArtist.trim(), rawTitle: dataSong.trim() };
+  const decodeHtml = (value: string): string =>
+    value
+      .replace(/&quot;/gi, '"')
+      .replace(/&#0*39;|&apos;/gi, "'")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">");
+  const pair = (
+    rawArtist: string | undefined,
+    rawTitle: string | undefined,
+  ): NowPlayingRaw | null => {
+    const artist = rawArtist ? decodeHtml(rawArtist).trim() : "";
+    const title = rawTitle ? decodeHtml(rawTitle).trim() : "";
+    return artist && title ? { rawArtist: artist, rawTitle: title } : null;
+  };
+
+  // Pattern A — current Spinitron pages put the authoritative current record
+  // in the first spin-item row. `data-spin` is HTML-escaped JSON, so parsing
+  // it avoids accidentally pairing artist and song spans from different rows.
+  const spinRow =
+    /<tr\b[^>]*\bclass=(["'])[^"']*\bspin-item\b[^"']*\1[^>]*>[\s\S]*?<\/tr>/i.exec(
+      html,
+    )?.[0];
+  const spinRowStart = spinRow?.match(/^<tr\b[^>]*>/i)?.[0];
+  const dataSpin = spinRowStart?.match(/\bdata-spin=(["'])([\s\S]*?)\1/i)?.[2];
+  if (dataSpin) {
+    try {
+      const record = JSON.parse(decodeHtml(dataSpin)) as {
+        a?: unknown;
+        s?: unknown;
+      };
+      const parsed = pair(
+        typeof record.a === "string" ? record.a : undefined,
+        typeof record.s === "string" ? record.s : undefined,
+      );
+      if (parsed) return parsed;
+    } catch {
+      // A malformed row can occur while a page is being rendered. Its rendered
+      // fields may still be usable, but only from this same current row.
+    }
   }
 
-  // Pattern B — Spinitron's actual HTML structure (confirmed live):
+  if (spinRow) {
+    const rowDataArtist = /data-artist="([^"]+)"/.exec(spinRow)?.[1];
+    const rowDataSong = /data-song="([^"]+)"/.exec(spinRow)?.[1];
+    const rowDataPair = pair(rowDataArtist, rowDataSong);
+    if (rowDataPair) return rowDataPair;
+
+    const rowArtist = /class="artist">([^<]+)</.exec(spinRow)?.[1];
+    const rowSong = /class="song">([^<]+)</.exec(spinRow)?.[1];
+    const rowClassPair = pair(rowArtist, rowSong);
+    if (rowClassPair) return rowClassPair;
+
+    const rowJsonIsland =
+      /"artist"\s*:\s*"([^"]+)"[^}]*"song"\s*:\s*"([^"]+)"/.exec(spinRow);
+    if (rowJsonIsland) {
+      const [, rawArtist, rawTitle] = rowJsonIsland;
+      const parsed = pair(rawArtist, rawTitle);
+      if (parsed) return parsed;
+    }
+
+    // The first canonical row is authoritative. Do not combine one of its
+    // fields with historical content elsewhere on the page.
+    return null;
+  }
+
+  // Pattern B — data attributes on the spin container (future-proofing)
+  const dataArtist = /data-artist="([^"]+)"/.exec(html)?.[1];
+  const dataSong = /data-song="([^"]+)"/.exec(html)?.[1];
+  const dataPair = pair(dataArtist, dataSong);
+  if (dataPair) return dataPair;
+
+  // Pattern C — Spinitron's older public HTML structure:
   //   <span class="artist">Artist Name</span> <span class="song">Song Title</span>
   // The first occurrence in the page is the current/most-recent spin.
   const artistMatch = /class="artist">([^<]+)</.exec(html)?.[1];
   const songMatch = /class="song">([^<]+)</.exec(html)?.[1];
-  if (artistMatch && songMatch) {
-    return { rawArtist: artistMatch.trim(), rawTitle: songMatch.trim() };
-  }
+  const classPair = pair(artistMatch, songMatch);
+  if (classPair) return classPair;
 
-  // Pattern C — JSON island with artist/song keys (may appear in embedded data)
+  // Pattern D — JSON island with artist/song keys (may appear in embedded data)
   const jsonIsland = /"artist"\s*:\s*"([^"]+)"[^}]*"song"\s*:\s*"([^"]+)"/.exec(html);
   if (jsonIsland) {
     const [, rawArtist, rawTitle] = jsonIsland;
-    if (rawArtist && rawTitle) {
-      return { rawArtist: rawArtist.trim(), rawTitle: rawTitle.trim() };
-    }
+    const parsed = pair(rawArtist, rawTitle);
+    if (parsed) return parsed;
   }
 
   // Pattern D — OpenGraph / Twitter card meta tags as last resort
@@ -959,7 +1022,7 @@ export function parseSpinitronWebPage(html: string): NowPlayingRaw | null {
       const rawTitle = parts[1].replace(/\s+on\s+\w+\s*$/, "").trim();
       const rawArtist = parts[0].trim();
       if (rawArtist && rawTitle) {
-        return { rawArtist, rawTitle };
+        return pair(rawArtist, rawTitle);
       }
     }
   }

@@ -752,6 +752,27 @@ describe("parseIcyNowPlaying", () => {
 });
 
 describe("parseSpinitronWebPage", () => {
+  it("parses the current canonical data-spin row and decodes its HTML entities", () => {
+    const html = `<tr id="sp-1" class="spin-item" data-spin="{&quot;i&quot;:&quot;US123&quot;,&quot;a&quot;:&quot;Joan&#039;s Band&quot;,&quot;s&quot;:&quot;Rock &amp; Roll&quot;}"><td><span class="artist">Wrong Artist</span><span class="song">Wrong Song</span></td></tr>`;
+    expect(parseSpinitronWebPage(html)).toEqual({
+      rawArtist: "Joan's Band",
+      rawTitle: "Rock & Roll",
+    });
+  });
+
+  it("does not pair text from a malformed current row with a later spin", () => {
+    const html = `<tr class="spin-item" data-spin="{&quot;a&quot;:&quot;&quot;,&quot;s&quot;:&quot;&quot;}"><td><span class="artist">Incomplete</span></td></tr><tr class="spin-item" data-spin="{&quot;a&quot;:&quot;Later Artist&quot;,&quot;s&quot;:&quot;Later Song&quot;}"><td><span class="song">Later Song</span></td></tr>`;
+    expect(parseSpinitronWebPage(html)).toBeNull();
+  });
+
+  it("uses rendered artist and song from the same current row when data-spin is malformed", () => {
+    const html = `<tr class="spin-item" data-spin="{&quot;a&quot;:"><td><span class="artist">Current Artist</span><span class="song">Current Song</span></td></tr><tr class="spin-item"><td><span class="artist">Later Artist</span><span class="song">Later Song</span></td></tr>`;
+    expect(parseSpinitronWebPage(html)).toEqual({
+      rawArtist: "Current Artist",
+      rawTitle: "Current Song",
+    });
+  });
+
   it("parses the live Spinitron HTML structure (class='artist' / class='song')", () => {
     const html = `<td class="spin-text"><div class="spin"><span class="artist">Matt Borghi</span> <span class="song">Silence Beneath Memory</span></div></td>`;
     const result = parseSpinitronWebPage(html);
@@ -768,13 +789,13 @@ describe("parseSpinitronWebPage", () => {
     expect(result?.rawTitle).toBe("First Song");
   });
 
-  it("parses data-artist / data-song attributes (Pattern A)", () => {
+  it("parses data-artist / data-song attributes (Pattern B)", () => {
     const html = `<div data-artist="Khruangbin" data-song="Maria También"></div>`;
     const result = parseSpinitronWebPage(html);
     expect(result).toEqual({ rawArtist: "Khruangbin", rawTitle: "Maria También" });
   });
 
-  it("falls through to JSON island when class patterns are absent (Pattern C)", () => {
+  it("falls through to JSON island when class patterns are absent (Pattern D)", () => {
     const html = `<script>{"artist":"Grouper","song":"Alien Observer"}</script>`;
     const result = parseSpinitronWebPage(html);
     expect(result).toEqual({ rawArtist: "Grouper", rawTitle: "Alien Observer" });

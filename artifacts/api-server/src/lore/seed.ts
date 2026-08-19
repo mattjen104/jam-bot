@@ -11,7 +11,7 @@ import {
   stationExclusionsTable,
   type InsertStation,
 } from "@workspace/db";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { upsertPicker } from "./picks.js";
 import { inferTimezone } from "./timezone.js";
 
@@ -22,11 +22,12 @@ import { inferTimezone } from "./timezone.js";
  * carries homepage + donate links because attribution is non-negotiable.
  */
 /**
- * Callsigns confirmed to actually be hosted on spinitron.com (curl batch
- * against `https://spinitron.com/<CALLSIGN>` returned 200 for each of these).
+ * Callsigns confirmed to be hosted on spinitron.com and to publish actual
+ * `spin-item` rows (curl batch against `https://spinitron.com/<CALLSIGN>`).
  * `spinSource()` only ever emits the `spinitron_web` scrape source for
  * callsigns in this set — a scrape of a callsign NOT on Spinitron 404s on
- * every poll and silently produces zero spins forever.
+ * every poll and silently produces zero spins forever. A reachable station
+ * page with only empty playlists does not qualify either.
  */
 export const SPINITRON_CALLSIGNS: ReadonlySet<string> = new Set([
   "WPRB",
@@ -40,9 +41,15 @@ export const SPINITRON_CALLSIGNS: ReadonlySet<string> = new Set([
   "WBRS",
   "WZBC",
   "WTBU",
-  "WPTS",
 ]);
 
+export function spinitronWebSourceForCallsign(
+  callsign: string,
+): "spinitron_web" | null {
+  return SPINITRON_CALLSIGNS.has(callsign.toUpperCase())
+    ? "spinitron_web"
+    : null;
+}
 export const SEED_STATIONS: InsertStation[] = [
   {
     slug: "kexp",
@@ -730,10 +737,9 @@ export const ICY_REPAIR_STATIONS: ReadonlyArray<{
  * Skips stations upgraded to the authenticated `spinitron` adapter (a real
  * SPINITRON_KEY_* beats ICY scraping). Idempotent — safe on every boot.
  *
- * The remaining zero-spin `spinitron_web` stations NOT in this list (and not
- * in SPINITRON_CALLSIGNS) are intentionally left as-is: they have no verified
- * ICY-capable stream URL, and need stream URLs and/or Spinitron enrollment
- * before they can produce now-playing data.
+ * Remaining zero-spin rows without a verified fallback are retired to a null
+ * source by `retireUnverifiedSpinitronWebSources()` rather than left polling
+ * a 404 or empty page forever.
  */
 export async function repairMisconfiguredSpinitronStations(): Promise<void> {
   let repaired = 0;
@@ -953,7 +959,7 @@ function spinSource(
       nowPlayingConfig: { apiKey: key, callsign, stationHandle: callsign },
     };
   }
-  if (SPINITRON_CALLSIGNS.has(callsign)) {
+  if (spinitronWebSourceForCallsign(callsign)) {
     return {
       nowPlayingSource: "spinitron_web",
       nowPlayingConfig: { callsign },
@@ -1917,11 +1923,12 @@ async function fetchSpinitronHtmlDirectory(): Promise<
 }
 
 /**
- * Embedded fallback: a curated list of well-known Spinitron stations used when
+ * Embedded fallback: a broad legacy list of college stations used when
  * both the public API and HTML directory are unavailable. Callsigns here have
- * been verified against spinitron.com. The list includes the 15 already-seeded
- * curated stations (harmless — `onConflictDoNothing` skips existing slugs) plus
- * ~80 additional stations spanning US college and community radio.
+ * their web-scrape eligibility checked against SPINITRON_CALLSIGNS before they
+ * are assigned a source. The list includes the already-seeded curated stations
+ * (harmless — `onConflictDoNothing` skips existing slugs) plus ~80 additional
+ * stations spanning US college and community radio.
  *
  * The quality-scoring companion task will tier these; this list is intentionally
  * broad. Stream URLs are left empty (per task spec — stream discovery is separate).
@@ -2069,17 +2076,16 @@ export async function fetchSpinitronDirectory(): Promise<
 
   if (!stations || stations.length === 0) {
     // Both live network sources are unavailable (Spinitron API requires auth;
-    // HTML directory returns 404). Fall back to the vetted embedded dataset —
-    // 84 hand-verified Spinitron stations — so boot is always deterministic
-    // and the `spinitron_web` adapter has stations to poll. A WARN log marks
-    // this as a fallback, not a silent degradation. Full ~300+ station import
-    // requires setting SPINITRON_API_KEY.
+    // HTML directory returns 404). Fall back to the legacy embedded station
+    // list so boot is deterministic. Web-scrape eligibility is still gated by
+    // SPINITRON_CALLSIGNS below; entries outside it remain honest no-source
+    // rows. Full ~300+ station import requires setting SPINITRON_API_KEY.
     stations = EMBEDDED_SPINITRON_STATIONS;
     // eslint-disable-next-line no-useless-assignment
-    source = "embedded-vetted";
+    source = "embedded-fallback";
     console.warn(
       `[lore/spinitron] directory: live sources unavailable (API 401, HTML 404). ` +
-        `Using vetted embedded fallback (${stations.length} stations). ` +
+        `Using legacy embedded fallback (${stations.length} stations; web scraping remains allowlisted). ` +
         `Set SPINITRON_API_KEY to import the full ~300+ station directory.`,
     );
   } else {
@@ -2110,7 +2116,12 @@ async function runSpinitronKeyUpgradePass(): Promise<number> {
       nowPlayingConfig: stationsTable.nowPlayingConfig,
     })
     .from(stationsTable)
-    .where(eq(stationsTable.nowPlayingSource, "spinitron_web"));
+    .where(
+      and(
+        sql`now_playing_config->>'callsign' is not null`,
+        sql`(${stationsTable.nowPlayingSource} is null or ${stationsTable.nowPlayingSource} = 'spinitron_web')`,
+      ),
+    );
 
   let upgraded = 0;
   for (const row of webStations) {
@@ -2139,6 +2150,50 @@ async function runSpinitronKeyUpgradePass(): Promise<number> {
   return upgraded;
 }
 
+/**
+ * Stop polling public Spinitron pages that have not been verified to publish
+ * spin rows. Existing rows may predate the allowlist and must be repaired at
+ * boot because the roster insert is intentionally conflict-safe.
+ *
+ * The callsign stays in nowPlayingConfig so archive links and a future
+ * SPINITRON_KEY_<CALLSIGN> upgrade continue to work.
+ */
+export async function retireUnverifiedSpinitronWebSources(): Promise<number> {
+  const webStations = await db
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      nowPlayingConfig: stationsTable.nowPlayingConfig,
+    })
+    .from(stationsTable)
+    .where(eq(stationsTable.nowPlayingSource, "spinitron_web"));
+
+  const retireIds = webStations
+    .filter((row) => {
+      const config = row.nowPlayingConfig as Record<string, unknown> | null;
+      const callsign =
+        typeof config?.callsign === "string"
+          ? config.callsign.trim().toUpperCase()
+          : "";
+      return !callsign || !SPINITRON_CALLSIGNS.has(callsign);
+    })
+    .map((row) => row.id);
+
+  if (retireIds.length === 0) return 0;
+
+  await db
+    .update(stationsTable)
+    .set({
+      nowPlayingSource: null,
+      updatedAt: sql`now()`,
+    })
+    .where(inArray(stationsTable.id, retireIds));
+
+  console.info(
+    `[lore/spinitron] retired ${retireIds.length} unverified web-scrape source(s) to honest no-source state`,
+  );
+  return retireIds.length;
+}
 /**
  * Seed the Spinitron station roster idempotently.
  *
@@ -2179,7 +2234,7 @@ export async function seedSpinitronRoster(): Promise<void> {
       org: station.org ?? null,
       country: station.country ?? "US",
       streamUrl: "",
-      nowPlayingSource: "spinitron_web",
+      nowPlayingSource: spinitronWebSourceForCallsign(station.callsign),
       nowPlayingConfig: { callsign: station.callsign },
       source: "curated",
       stationClass: "community",
@@ -2201,6 +2256,7 @@ export async function seedSpinitronRoster(): Promise<void> {
   }
 
   await runSpinitronKeyUpgradePass();
+  await retireUnverifiedSpinitronWebSources();
 
   // Directory-wide diagnostic: query DB for accurate totals — these reflect the
   // cumulative state (all prior runs + this one), not just what changed this run.
@@ -2220,7 +2276,7 @@ export async function seedSpinitronRoster(): Promise<void> {
   console.info(
     `[lore/spinitron] roster: ${total} total stations in DB ` +
       `(${dbTotals?.webOnly ?? 0} web-scrape-only, ${dbTotals?.keyActive ?? 0} API-key active); ` +
-      `directory: ${stations.length} (source: ${stations.length <= 84 ? "embedded-vetted" : "live-api"}), ` +
+      `directory: ${stations.length} (source: ${stations.length <= 84 ? "embedded-fallback" : "live-api"}), ` +
       `${inserted} added this boot, ${skipped} already existed`,
   );
 }

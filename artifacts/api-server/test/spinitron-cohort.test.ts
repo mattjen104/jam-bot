@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { SEED_STATIONS } from "../src/lore/seed.js";
+import {
+  SEED_STATIONS,
+  spinitronWebSourceForCallsign,
+} from "../src/lore/seed.js";
 import { stationArchiveUrl } from "../src/lore/adapters.js";
 
 /**
@@ -142,6 +145,53 @@ const NULL_SOURCE_SLUGS = [
 ] as const;
 
 describe("new Spinitron stations: nowPlayingSource and nowPlayingConfig", () => {
+  it("does not assign the web scraper to college callsigns whose pages are missing or carry no spins", () => {
+    const unavailable = [
+      "KASC",
+      "KCRH",
+      "KGRG",
+      "KLCC",
+      "KMNR",
+      "KSDT",
+      "KUAZ",
+      "KUCI",
+      "KUNM",
+      "KZSU",
+      "WBMB",
+      "WDET",
+      "WERS",
+      "WGAM",
+      "WGSU",
+      "WITR",
+      "WIUX",
+      "WMHW",
+      "WMTU",
+      "WMWM",
+      "WPTS",
+      "WRCU",
+      "WREX",
+      "WRGP",
+      "WRHU",
+      "WRPI",
+      "WSAM",
+      "WSBU",
+      "WUFT",
+      "WUSC",
+      "WUVT",
+      "WVFS",
+    ];
+    for (const callsign of unavailable) {
+      expect(
+        spinitronWebSourceForCallsign(callsign),
+        `${callsign} source`,
+      ).toBeNull();
+    }
+  });
+
+  it("keeps the web scraper for a control callsign with live spin rows", () => {
+    expect(spinitronWebSourceForCallsign("WPRB")).toBe("spinitron_web");
+  });
+
   it("allowlisted callsigns use spinitron or spinitron_web as nowPlayingSource", () => {
     for (const slug of ALLOWLISTED_SLUGS) {
       const station = SEED_STATIONS.find((s) => s.slug === slug)!;
