@@ -56,9 +56,12 @@ interface FlagStation {
   source: string | null;
   nowPlayingSource: string | null;
   logoUrl: string | null;
+  streamUrl: string | null;
   favorite: boolean;
   hidden: boolean;
 }
+
+type StreamFilter = "all" | "playable" | "missing";
 
 export default function AdminStations() {
   const { token, saveToken, clearToken } = useAdminToken();
@@ -117,6 +120,7 @@ function StationsPanel({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [streamFilter, setStreamFilter] = useState<StreamFilter>("all");
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
@@ -214,20 +218,27 @@ function StationsPanel({
     () => stations.filter((s) => s.favorite && !s.hidden).length,
     [stations],
   );
-  const visible = useMemo(() => {
+  const matchesFilters = useCallback((station: FlagStation) => {
     const q = search.trim().toLowerCase();
-    const list = stations.filter((s) => !s.hidden);
-    if (!q) return list;
-    return list.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.slug.toLowerCase().includes(q) ||
-        (s.org ?? "").toLowerCase().includes(q),
-    );
-  }, [stations, search]);
+    const matchesSearch =
+      !q ||
+      station.name.toLowerCase().includes(q) ||
+      station.slug.toLowerCase().includes(q) ||
+      (station.org ?? "").toLowerCase().includes(q);
+    const hasStream = Boolean(station.streamUrl?.trim());
+    const matchesStream =
+      streamFilter === "all" ||
+      (streamFilter === "playable" && hasStream) ||
+      (streamFilter === "missing" && !hasStream);
+    return matchesSearch && matchesStream;
+  }, [search, streamFilter]);
+  const visible = useMemo(
+    () => stations.filter((s) => !s.hidden && matchesFilters(s)),
+    [stations, matchesFilters],
+  );
   const hiddenStations = useMemo(
-    () => stations.filter((s) => s.hidden),
-    [stations],
+    () => stations.filter((s) => s.hidden && matchesFilters(s)),
+    [stations, matchesFilters],
   );
 
   return (
@@ -388,6 +399,34 @@ function StationsPanel({
             className="w-full rounded-full border border-border bg-card py-2 pl-9 pr-4 text-base text-foreground placeholder-muted-foreground/50 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-1.5"
+          aria-label="Filter by stream status"
+        >
+          <span className="mr-1 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
+            Stream
+          </span>
+          {([
+            ["all", "All"],
+            ["playable", "Playable"],
+            ["missing", "⚠ Missing"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStreamFilter(value)}
+              aria-pressed={streamFilter === value}
+              data-testid={`stream-filter-${value}`}
+              className={`rounded-full border px-2.5 py-1 font-mono text-[12px] transition-colors ${
+                streamFilter === value
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {loading ? (
           <div className="mt-6 flex items-center gap-2 text-base text-muted-foreground">
@@ -498,14 +537,32 @@ function StationIdentity({
       )}
       <div className="min-w-0">
         <p
-          className={`truncate text-base font-normal ${
+          className={`flex min-w-0 items-center gap-2 text-base font-normal ${
             dimmed ? "text-muted-foreground" : "text-foreground"
           }`}
         >
-          {station.name}
+          <span className="min-w-0 truncate">{station.name}</span>
           {!station.active && (
-            <span className="ml-2 font-mono text-[12px] uppercase text-muted-foreground/60">
+            <span className="shrink-0 font-mono text-[12px] uppercase text-muted-foreground/60">
               inactive
+            </span>
+          )}
+          {station.streamUrl?.trim() ? (
+            <span
+              className="shrink-0 font-mono text-[12px] uppercase text-emerald-700 dark:text-emerald-400"
+              title="A playable stream URL is configured"
+              data-testid={`playable-stream-${station.slug}`}
+            >
+              Stream ready
+            </span>
+          ) : (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 font-mono text-[12px] uppercase text-amber-600 dark:text-amber-400"
+              title="No playable stream URL is configured"
+              data-testid={`missing-stream-${station.slug}`}
+            >
+              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+              No stream
             </span>
           )}
         </p>

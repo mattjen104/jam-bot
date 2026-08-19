@@ -2070,7 +2070,8 @@ router.get("/admin/stations", h(async (_req, res) => {
 // the curation flags. Plain JSON (deliberately outside the OpenAPI surface —
 // consumed only by the admin UI via plain fetch).
 // Includes nowPlayingConfig so operators can verify the full source state when
-// evaluating whether a hidden station (e.g. CHMR/CISM) is ready to restore.
+// evaluating whether a hidden station (e.g. CHMR/CISM) is ready to restore,
+// and streamUrl so they can spot stations that have no browser-playable audio.
 router.get("/admin/stations/flags", h(async (_req, res) => {
   const rows = await db
     .select({
@@ -2084,6 +2085,7 @@ router.get("/admin/stations/flags", h(async (_req, res) => {
       nowPlayingSource: stationsTable.nowPlayingSource,
       nowPlayingConfig: stationsTable.nowPlayingConfig,
       logoUrl: stationsTable.logoUrl,
+      streamUrl: stationsTable.streamUrl,
       favorite: stationsTable.favorite,
       hidden: stationsTable.hidden,
     })
