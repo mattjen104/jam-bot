@@ -46,7 +46,9 @@ const STATION = {
   logoUrl: null,
   attribution: true,
   tags: null,
-  stationCategories: ["anchor"],
+  // Keep this mobile-shell fixture on the direct station-row fallback; the
+  // spec is about bottom navigation, not category-card expansion.
+  stationCategories: [],
   mayHaveAds: false,
   votes: 0,
   clickcount: 0,

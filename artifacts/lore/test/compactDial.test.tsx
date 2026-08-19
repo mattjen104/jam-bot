@@ -166,6 +166,95 @@ describe("CompactDial empty state", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Category-first home Feed
+// ---------------------------------------------------------------------------
+
+describe("CompactDial category-first home Feed", () => {
+  it("renders editorial category cards with fresh now-playing previews", () => {
+    const ambient = makeRowWithTrack(
+      { slug: "sleep", name: "Sleep Radio", stationCategories: ["ambient"] },
+      { artist: "Brian Eno", title: "An Ending" },
+    );
+    const anchor = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+
+    renderDial({ activeRows: [anchor, ambient], categoryFirst: true });
+
+    const lane = screen.getByTestId("compact-category-dial");
+    const labels = [...lane.querySelectorAll(".compact-category-dial__label")]
+      .map((element) => element.textContent);
+    expect(labels).toEqual(["Ambient & Sleep", "Anchor Stations"]);
+    expect(screen.getByTestId("compact-category-anchor").textContent)
+      .toContain("The Smile — Bending Hectic · KEXP");
+    expect(screen.getByTestId("compact-category-anchor").textContent)
+      .toContain("1 station");
+  });
+
+  it("uses an honest unavailable state when a category has no live metadata", () => {
+    const quiet = makeRow({
+      slug: "quiet",
+      name: "Quiet Station",
+      stationCategories: ["ambient"],
+    });
+    renderDial({ activeRows: [quiet], categoryFirst: true });
+
+    expect(screen.getByTestId("compact-category-ambient").textContent)
+      .toContain("Now playing unavailable");
+  });
+
+  it("expands exactly one category inline and keeps its station row controls", () => {
+    const anchor = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const campus = makeRowWithTrack(
+      { slug: "wvum", name: "WVUM", stationCategories: ["campus"] },
+      { artist: "Floating Points", title: "Bias" },
+    );
+    const onToggleSkip = vi.fn();
+
+    renderDial({
+      activeRows: [anchor, campus],
+      categoryFirst: true,
+      onToggleSkip,
+    });
+
+    const anchorButton = screen.getByTestId("compact-category-anchor");
+    const campusButton = screen.getByTestId("compact-category-campus");
+    expect(screen.queryByTestId("fdrow-kexp")).toBeNull();
+
+    fireEvent.click(anchorButton);
+    expect(anchorButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("fdrow-kexp")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Play KEXP" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip KEXP in scan" }));
+    expect(onToggleSkip).toHaveBeenCalledWith("kexp");
+
+    fireEvent.click(campusButton);
+    expect(campusButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("fdrow-wvum")).toBeTruthy();
+    expect(screen.queryByTestId("fdrow-kexp")).toBeNull();
+
+    fireEvent.click(campusButton);
+    expect(campusButton.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("fdrow-wvum")).toBeNull();
+  });
+
+  it("keeps uncategorized listener-pinned stations directly reachable", () => {
+    const personal = makeRowWithTrack(
+      { slug: "my-station", name: "My Station", stationCategories: [] },
+      { artist: "Autechre", title: "Rae" },
+    );
+    renderDial({ activeRows: [personal], categoryFirst: true });
+
+    expect(screen.getByTestId("fdrow-my-station")).toBeTruthy();
+    expect(screen.queryByTestId("compact-category-other")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Trailing scan checkbox (far-right edge)
 // ---------------------------------------------------------------------------
 

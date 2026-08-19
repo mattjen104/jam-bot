@@ -4,11 +4,9 @@
  *   top edge  — RadioRemoteBar: the radio remote (/crossings /radio /lore
  *               plus the age-tier and station-category chips), pinned above
  *               the Dial band where the controls are most reachable.
- *   top ~50%  — CompactDial: a page of stations from the all-stations
- *               alphabetical sort (same order for every listener), windowed
- *               by the active scan (page size follows the density: 5 normal,
- *               10 compact, 15 micro — the page count grows with the
- *               filtered list).
+ *   top ~50%  — CompactDial: concise category cards with honest now-playing
+ *               metadata. Opening one reveals its individual station rows
+ *               inline without losing the existing station controls.
  *   middle    — HomeCliStrip: the CLI seam. Only the Dial page selectors,
  *               Scan / Scan all, the slash-command input, and the /add
  *               affordance live here now — a true seam between the bands.
@@ -68,6 +66,7 @@ import { spineArtUrl } from "../components/CompactStack";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
+import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { LastSetScanner } from "../components/LastSetScanner";
@@ -274,6 +273,16 @@ export default function SplitHome() {
     () => filteredRows.filter((r) => skipped.has(r.ds.station.slug)),
     [filteredRows, skipped],
   );
+  // Category-first is only meaningful when at least one editorial category is
+  // represented. A purely personal/unclassified list retains the established
+  // normal/compact/micro pager rather than inventing a single "Other" card.
+  const hasEditorialCategory = useMemo(
+    () => activeRows.some((row) =>
+      STATION_CATEGORY_DEFINITIONS.some(
+        (definition) => definition.cat === row.ds.station.stationCategories?.[0],
+      )),
+    [activeRows],
+  );
 
   // Rows per scan page at the current density: 5 (normal), 10 (compact), or
   // 15 (micro). Drives the window slice, the page count,
@@ -472,15 +481,26 @@ export default function SplitHome() {
   }, []);
 
   const liveStationIds = useMemo(
-    () => activeRows
-      .slice(scanOffset, scanOffset + pageSize)
+    () => [...activeRows, ...skippedRows]
       .map((row) => row.ds.station.id)
       // Personal (listener-pinned) stations carry negative synthetic ids and
       // have no server-side presence — leave them out of the presence query.
       .filter((id) => id > 0),
-    [activeRows, scanOffset, pageSize],
+    [activeRows, skippedRows],
   );
   const presenceMap = useStationPresence(liveStationIds);
+
+  // Editorial category cards deliberately remain all visible; the direct
+  // ungrouped/personal fallback still respects the selected Feed page. This
+  // keeps /scanN useful without making category discovery depend on pagination.
+  const visibleUncategorizedSlugs = useMemo(
+    () => new Set(
+      activeRows
+        .slice(scanOffset, scanOffset + pageSize)
+        .map((row) => row.ds.station.slug),
+    ),
+    [activeRows, scanOffset, pageSize],
+  );
 
   // ── Scan memory: live freshness cue + last-set scanner state ──────────
   const scanMemory = useScanMemory();
@@ -498,15 +518,14 @@ export default function SplitHome() {
     return set;
   }, [activeRows, scanMemory]);
 
-  // Latest-completed-set summaries for the visible page (the "Last set"
-  // affordance label needs hours + track count). Normal density only —
-  // remote densities never expand a row.
+  // Latest-completed-set summaries for every reachable category station.
+  // Category cards stay lightweight, while their expanded rows retain the
+  // full Last set label and track count.
   const visibleSlugs = useMemo(
     () =>
       activeRows
-        .slice(scanOffset, scanOffset + pageSize)
         .map((r) => r.ds.station.slug),
-    [activeRows, scanOffset, pageSize],
+    [activeRows],
   );
   const [lastSetSummaries, setLastSetSummaries] = useState<
     ReadonlyMap<string, LastSetSummary | null>
@@ -745,9 +764,13 @@ export default function SplitHome() {
 
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
         <CompactDial
-          activeRows={activeRows.slice(scanOffset, scanOffset + pageSize)}
+          activeRows={hasEditorialCategory
+            ? activeRows
+            : activeRows.slice(scanOffset, scanOffset + pageSize)}
           skippedRows={skippedRows}
-          samplingRowIdx={scanRowIdx != null ? scanRowIdx - scanOffset : null}
+          samplingRowIdx={hasEditorialCategory
+            ? scanRowIdx
+            : scanRowIdx != null ? scanRowIdx - scanOffset : null}
           activeSlug={radio.station?.slug ?? null}
           playerStatus={radio.status}
           presenceMap={presenceMap}
@@ -759,10 +782,12 @@ export default function SplitHome() {
           displayMode="personal"
           onAddArtist={addSeed}
           density={density}
-          firstOrdinal={scanOffset + 1}
+          firstOrdinal={hasEditorialCategory ? 1 : scanOffset + 1}
           onOpenLastSet={openLastSet}
           lastSetSummaries={lastSetSummaries}
           unchangedSlugs={unchangedSlugs}
+          categoryFirst={hasEditorialCategory}
+          visibleUncategorizedSlugs={visibleUncategorizedSlugs}
         />
       </section>
 

@@ -1413,27 +1413,27 @@ export function useDialData(
       addAll(stationsData?.stations, false);
     }
     // Client-side metadata filter: when anchor/campus/public/indie/discovery
-    // categories are checked, restrict the normal list to stations whose
-    // server-supplied `stationCategories` array carries a checked label.
-    // Mode-pool stations (ambient/specialist) already passed by virtue of
-    // their category being checked, so they always survive the filter.
+    // categories are checked, restrict tagged normal-list stations to a
+    // checked label. Untagged stations are deliberately preserved as the
+    // compact Feed's direct "Other stations" fallback rather than vanishing
+    // simply because they have not been editorially classified yet. Mode-pool
+    // stations (ambient/specialist) already passed by virtue of their category
+    // being checked, so they always survive the filter.
     const filteredBySlug = metaCategories.length > 0
       ? new Map(
           [...bySlugRaw].filter(([slug, s]) => {
             if (alwaysLiveSlugs.has(slug)) return true;
             const cats = (s.stationCategories ?? []) as string[];
-            return metaCategories.some((c) => cats.includes(c));
+            return cats.length === 0 || metaCategories.some((c) => cats.includes(c));
           }),
         )
       : bySlugRaw;
     // Personal (listener-pinned) stations join the raw pool here so they flow
-    // through the same enrichment below. Category semantics mirror the
-    // curated list: with no category filter active they always appear; with
-    // one or more categories checked they need a tag-mapped category match
-    // (ambient/specialist included — personal stations have no server mode
-    // pool, so the checked set itself is the filter). A personal station
-    // whose name matches a curated station is dropped — the curated row wins
-    // (the Finder already blocks adding catalog stations via inLoreCatalog).
+    // through the same enrichment below. A listener-pinned station with no
+    // editorial tag remains visible in the direct fallback; tagged personal
+    // stations follow the selected category set. A personal station whose
+    // name matches a curated station is dropped — the curated row wins (the
+    // Finder already blocks adding catalog stations via inLoreCatalog).
     const curatedNames = new Set(
       [...bySlugRaw.values()].map((s) => s.name.trim().toLowerCase()),
     );
@@ -1441,6 +1441,7 @@ export function useDialData(
       if (curatedNames.has(s.name.trim().toLowerCase())) return false;
       if (!categories || categories.size === 0) return true;
       const cats = (s.stationCategories ?? []) as string[];
+      if (cats.length === 0) return true;
       for (const c of categories) if (cats.includes(c)) return true;
       return false;
     });

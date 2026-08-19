@@ -18,6 +18,7 @@
  *                         overflow region regardless of alphabetical position
  */
 
+import { useMemo, useState } from "react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationPresence } from "../hooks/useStationPresence";
 import type { DialDisplayMode } from "../hooks/useDialData";
@@ -30,6 +31,8 @@ import { MicroDialRemote } from "./MicroDialRemote";
 import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../lib/crossingScope";
 import type { DialDensity } from "../lib/dialDensityState";
 import type { LastSetSummary } from "../lib/latestSet";
+import { STATION_CATEGORY_DEFINITIONS, type StationCategory } from "../lib/dialCategories";
+import { cleanLiveValue } from "./dialViewHelpers";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
@@ -89,9 +92,20 @@ export interface CompactDialProps {
   /** Stations still playing whatever the listener's last scan sampled —
    *  drives the "unchanged since your last scan" cue on rows and keys. */
   unchangedSlugs?: ReadonlySet<string>;
+  /**
+   * The home Feed's category-first presentation. Categories are concise by
+   * default and reveal the same full station rows on demand.
+   */
+  categoryFirst?: boolean;
+  /**
+   * Category cards are intentionally unpaged; the direct ungrouped fallback
+   * still follows the compact Feed's pager so scan/page commands retain their
+   * meaning for personal and unclassified stations.
+   */
+  visibleUncategorizedSlugs?: ReadonlySet<string>;
 }
 
-function DialRow({
+function CompactDialRow({
   row,
   isSampling,
   isSkipped,
@@ -189,6 +203,230 @@ function DialRow({
   );
 }
 
+type CompactCategory = StationCategory | "other";
+
+interface CategoryGroup {
+  category: CompactCategory;
+  label: string;
+  rows: Array<{ row: DialLaneRow; isSkipped: boolean }>;
+}
+
+interface CategoryPreview {
+  artist: string | null;
+  title: string | null;
+  stationName: string;
+}
+
+function categoryForRow(row: DialLaneRow): CompactCategory {
+  const category = row.ds.station.stationCategories?.[0];
+  return STATION_CATEGORY_DEFINITIONS.some((definition) => definition.cat === category)
+    ? category as StationCategory
+    : "other";
+}
+
+function categoryLabel(category: CompactCategory): string {
+  if (category === "other") return "Other stations";
+  return STATION_CATEGORY_DEFINITIONS.find((definition) => definition.cat === category)?.label
+    ?? "Other stations";
+}
+
+/**
+ * The home feed's now-playing display must stay honest: only a station the
+ * live data layer considers live can contribute category metadata. The source
+ * track is otherwise allowed to be partial, so a known artist without a title
+ * is still useful rather than discarded.
+ */
+function categoryPreview(rows: CategoryGroup["rows"]): CategoryPreview | null {
+  for (const { row } of rows) {
+    if (!row.ds.isLive) continue;
+    const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
+    const artist = cleanLiveValue(track?.artist);
+    const title = cleanLiveValue(track?.title);
+    if (artist || title) {
+      return { artist, title, stationName: row.ds.station.name };
+    }
+  }
+  return null;
+}
+
+function buildCompactCategoryGroups(
+  activeRows: DialLaneRow[],
+  skippedRows: DialLaneRow[],
+): CategoryGroup[] {
+  const groups = new Map<CompactCategory, CategoryGroup>();
+  const append = (row: DialLaneRow, isSkipped: boolean) => {
+    const category = categoryForRow(row);
+    const existing = groups.get(category);
+    if (existing) {
+      existing.rows.push({ row, isSkipped });
+      return;
+    }
+    groups.set(category, {
+      category,
+      label: categoryLabel(category),
+      rows: [{ row, isSkipped }],
+    });
+  };
+
+  activeRows.forEach((row) => append(row, false));
+  skippedRows.forEach((row) => append(row, true));
+
+  const editorialOrder = new Map(
+    STATION_CATEGORY_DEFINITIONS.map((definition, index) => [definition.cat, index]),
+  );
+  return [...groups.values()].sort((a, b) =>
+    (editorialOrder.get(a.category as StationCategory) ?? Number.MAX_SAFE_INTEGER)
+    - (editorialOrder.get(b.category as StationCategory) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function CategorySummary({
+  group,
+  expanded,
+  onToggle,
+}: {
+  group: CategoryGroup;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const preview = categoryPreview(group.rows);
+  const activeCount = group.rows.filter(({ isSkipped }) => !isSkipped).length;
+  const stationCountLabel = `${group.rows.length} ${group.rows.length === 1 ? "station" : "stations"}`;
+  return (
+    <button
+      type="button"
+      className={`compact-category-dial__summary${expanded ? " compact-category-dial__summary--expanded" : ""}`}
+      aria-expanded={expanded}
+      aria-controls={`compact-category-${group.category}`}
+      onClick={onToggle}
+      data-testid={`compact-category-${group.category}`}
+    >
+      <span className="compact-category-dial__label">{group.label}</span>
+      <span className="compact-category-dial__meta">
+        <span className="compact-category-dial__now">
+          {preview ? (
+            <>
+              {preview.artist ?? preview.title}
+              {preview.artist && preview.title && " — "}
+              {preview.artist && preview.title}
+              {" · "}
+              <b>{preview.stationName}</b>
+            </>
+          ) : (
+            "Now playing unavailable"
+          )}
+        </span>
+        <span className="compact-category-dial__count">
+          {stationCountLabel}{activeCount !== group.rows.length ? ` · ${activeCount} in scan` : ""}
+        </span>
+      </span>
+      <span className="compact-category-dial__chevron" aria-hidden="true">
+        {expanded ? "−" : "+"}
+      </span>
+    </button>
+  );
+}
+
+function CategoryFirstDial({
+  activeRows,
+  skippedRows,
+  samplingRowIdx,
+  activeSlug,
+  playerStatus,
+  presenceMap,
+  onTuneIn,
+  onPlay,
+  onToggleSkip,
+  crossingScope,
+  suppressCrossings,
+  displayMode,
+  seedsLower,
+  onAddArtist,
+  onOpenLastSet,
+  lastSetSummaries,
+  unchangedSlugs,
+  visibleUncategorizedSlugs,
+}: CompactDialProps) {
+  const groups = useMemo(
+    () => buildCompactCategoryGroups(activeRows, skippedRows),
+    [activeRows, skippedRows],
+  );
+  const [expandedCategory, setExpandedCategory] = useState<CompactCategory | null>(null);
+  const sampledRow = samplingRowIdx != null ? activeRows[samplingRowIdx] ?? null : null;
+  const sampledSlug = sampledRow?.ds.station.slug ?? null;
+  const sampledCategory = sampledRow ? categoryForRow(sampledRow) : null;
+  const editorialGroups = groups.filter((group) => group.category !== "other");
+  const uncategorizedGroup = groups.find((group) => group.category === "other") ?? null;
+  const visibleUncategorizedGroup = uncategorizedGroup && {
+    ...uncategorizedGroup,
+    rows: uncategorizedGroup.rows.filter(
+      ({ row, isSkipped }) =>
+        isSkipped || visibleUncategorizedSlugs == null
+        || visibleUncategorizedSlugs.has(row.ds.station.slug),
+    ),
+  };
+  const renderRows = (group: CategoryGroup) => group.rows.map(({ row, isSkipped }) => (
+    <CompactDialRow
+      key={row.ds.station.slug}
+      row={row}
+      isSampling={row.ds.station.slug === sampledSlug}
+      isSkipped={isSkipped}
+      activeSlug={activeSlug}
+      playerStatus={playerStatus}
+      presenceMap={presenceMap}
+      onTuneIn={onTuneIn}
+      onPlay={onPlay}
+      onToggleSkip={onToggleSkip}
+      crossingScope={crossingScope}
+      suppressCrossings={suppressCrossings}
+      displayMode={displayMode}
+      seedsLower={seedsLower}
+      onAddArtist={onAddArtist}
+      onOpenLastSet={onOpenLastSet}
+      lastSetSummaries={lastSetSummaries}
+      unchangedSlugs={unchangedSlugs}
+    />
+  ));
+
+  return (
+    <div className="compact-dial compact-dial--categories" data-testid="compact-category-dial">
+      {editorialGroups.map((group) => {
+        // A running station scan keeps its current station visible, but does
+        // not overwrite the listener's manually chosen category once it ends.
+        const isExpanded = sampledCategory === group.category || expandedCategory === group.category;
+        return (
+          <section className="compact-category-dial__group" key={group.category}>
+            <CategorySummary
+              group={group}
+              expanded={isExpanded}
+              onToggle={() => setExpandedCategory((current) => current === group.category ? null : group.category)}
+            />
+            {isExpanded && (
+              <div
+                className="compact-category-dial__stations"
+                id={`compact-category-${group.category}`}
+                role="region"
+                aria-label={`${group.label} stations`}
+              >
+                {renderRows(group)}
+              </div>
+            )}
+          </section>
+        );
+      })}
+      {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (
+        <section className="compact-category-dial__uncategorized" aria-label="Other stations">
+          {editorialGroups.length > 0 && (
+            <div className="compact-category-dial__uncategorized-label">Other stations</div>
+          )}
+          <div className="compact-category-dial__stations">
+            {renderRows(visibleUncategorizedGroup)}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export function CompactDial({
   activeRows,
   skippedRows,
@@ -209,6 +447,8 @@ export function CompactDial({
   onOpenLastSet,
   lastSetSummaries,
   unchangedSlugs,
+  categoryFirst = false,
+  visibleUncategorizedSlugs,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -217,6 +457,31 @@ export function CompactDial({
       <div className="compact-dial compact-dial--empty">
         <p className="compact-dial__empty-msg">No stations to show right now.</p>
       </div>
+    );
+  }
+
+  if (categoryFirst) {
+    return (
+      <CategoryFirstDial
+        activeRows={activeRows}
+        skippedRows={skippedRows}
+        samplingRowIdx={samplingRowIdx}
+        activeSlug={activeSlug}
+        playerStatus={playerStatus}
+        presenceMap={presenceMap}
+        onTuneIn={onTuneIn}
+        onPlay={onPlay}
+        onToggleSkip={onToggleSkip}
+        crossingScope={crossingScope}
+        suppressCrossings={suppressCrossings}
+        displayMode={displayMode}
+        seedsLower={seedsLower}
+        onAddArtist={onAddArtist}
+        onOpenLastSet={onOpenLastSet}
+        lastSetSummaries={lastSetSummaries}
+        unchangedSlugs={unchangedSlugs}
+        visibleUncategorizedSlugs={visibleUncategorizedSlugs}
+      />
     );
   }
 
@@ -272,7 +537,7 @@ export function CompactDial({
     <div className="compact-dial">
       {/* ── Active rows: fixed 5-slot grid ─────────────────────────────── */}
       {activeRows.map((row, i) => (
-        <DialRow
+          <CompactDialRow
           key={row.ds.station.slug}
           row={row}
           isSampling={samplingRowIdx === i}
@@ -305,7 +570,7 @@ export function CompactDial({
       {skippedRows.length > 0 && (
         <div className="compact-dial__skipped-region" aria-label="Excluded from scan">
           {skippedRows.map((row) => (
-            <DialRow
+            <CompactDialRow
               key={row.ds.station.slug}
               row={row}
               isSampling={false}

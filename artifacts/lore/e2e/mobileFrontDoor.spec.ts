@@ -41,7 +41,8 @@ function makeStation(slug: string, idx: number) {
     logoUrl: null,
     attribution: true,
     tags: null,
-    stationCategories: ["anchor"],
+    // This spec verifies individual compact rows on a phone-sized Feed.
+    stationCategories: [],
     mayHaveAds: false,
     votes: 0,
     clickcount: 0,

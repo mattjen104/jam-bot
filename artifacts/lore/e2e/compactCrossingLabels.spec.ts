@@ -35,7 +35,9 @@ function makeStation(slug: string, name: string, streamUrl = "https://stream.exa
     logoUrl: null,
     attribution: true,
     tags: null,
-    stationCategories: ["campus"],
+    // This fixture exercises the ungrouped compact-row grammar, not the
+    // category-first home presentation.
+    stationCategories: [],
     mayHaveAds: false,
     votes: 0,
     clickcount: 0,

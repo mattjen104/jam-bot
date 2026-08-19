@@ -61,6 +61,7 @@ vi.mock("../src/lib/meHooks", () => ({
 
 vi.mock("../src/components/dialViewHelpers", () => ({
   reason: () => ({ r: 0, cls: "w0", node: "on air" }),
+  cleanLiveValue: (value: string | null | undefined) => value?.trim() || null,
 }));
 
 const { mockPreview } = vi.hoisted(() => ({

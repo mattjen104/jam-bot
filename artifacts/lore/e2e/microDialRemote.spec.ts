@@ -29,7 +29,8 @@ function makeStation(index: number) {
     logoUrl: null,
     attribution: true,
     tags: null,
-    stationCategories: ["anchor"],
+    // Micro-key paging is independent of the category-first card view.
+    stationCategories: [],
     mayHaveAds: false,
     votes: 0,
     clickcount: 0,

@@ -3091,13 +3091,7 @@
 /* ── Zone 1 loading placeholder ── */
 .z1-placeholder {
   padding: 18px 15px;
-   border-bottom: 1px solid hsl(var(--border) / 0.35);
-}
-.compact-dial__row:has(.fdrow--expanded) {
-  flex: 0 0 auto;
-  min-height: 20%;
-  overflow: visible;
-  align-items: stretch;
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
 }
 .z1-placeholder--loading {
   display: flex;
@@ -8038,6 +8032,121 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid hsl(var(--border) / 0.35);
+}
+/* A normal station row expands in place after its first tap. Its surrounding
+   five-slot fold normally clips overflow, so release that fixed slot while
+   the detail panel is open. */
+.compact-dial__row:has(.fdrow--expanded) {
+  flex: 0 0 auto;
+  min-height: 20%;
+  overflow: visible;
+  align-items: stretch;
+}
+/* Category-first home Feed --------------------------------------------------
+   The category summary is the calm default view. Expanded station rows remain
+   the exact compact-row grammar, now inside the category's own scroll area. */
+.compact-dial--categories {
+  gap: 6px;
+  padding: 6px 0;
+}
+.compact-category-dial__group {
+  flex: 0 0 auto;
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-radius: 5px;
+  overflow: hidden;
+  background: hsl(var(--card) / 0.48);
+}
+.compact-category-dial__summary {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.8fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.compact-category-dial__summary:hover,
+.compact-category-dial__summary--expanded {
+  background: hsl(var(--secondary) / 0.5);
+}
+.compact-category-dial__summary:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: -2px;
+}
+.compact-category-dial__label {
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-interface);
+  color: hsl(var(--foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-category-dial__meta {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+.compact-category-dial__now {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--foreground) / 0.82);
+}
+.compact-category-dial__now b {
+  color: hsl(var(--foreground));
+  font-weight: 400;
+}
+.compact-category-dial__count {
+  flex: 0 0 auto;
+  color: hsl(var(--muted-foreground) / 0.72);
+  white-space: nowrap;
+}
+.compact-category-dial__chevron {
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-interface);
+}
+.compact-category-dial__stations {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid hsl(var(--border) / 0.4);
+}
+.compact-category-dial__uncategorized {
+  flex: 0 0 auto;
+}
+.compact-category-dial__uncategorized-label {
+  padding: 7px 12px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.compact-category-dial__stations .compact-dial__row {
+  flex: 0 0 auto;
+  min-height: 48px;
+}
+@media (max-width: 640px) {
+  .compact-category-dial__summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+  }
+  .compact-category-dial__meta {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+  .compact-category-dial__label { white-space: normal; }
 }
 /* No playing edge in the mini feed: the base .fdrow left bar (accent when
    playing, library/gray zone bars otherwise) is suppressed here — the

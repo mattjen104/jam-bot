@@ -94,7 +94,9 @@ function makeStation(slug: string, name: string, idx: number) {
     nowPlayingSource: "nts_live",
     // All three stations carry "anchor" so they pass the default category
     // filter (anchor/campus/public) without any additional setup.
-    stationCategories: ["anchor"],
+    // Age-tier commands are verified against the direct-row fallback so the
+    // spec remains focused on filtering rather than category expansion.
+    stationCategories: [],
   };
 }
 

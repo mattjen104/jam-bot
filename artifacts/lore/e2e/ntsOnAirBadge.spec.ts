@@ -38,7 +38,8 @@ const STATION = {
   logoUrl: null,
   attribution: true,
   tags: null,
-  stationCategories: ["anchor"],
+  // The on-air badge assertion uses the direct-row fallback deliberately.
+  stationCategories: [],
   mayHaveAds: false,
   votes: 0,
   clickcount: 0,
