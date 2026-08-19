@@ -36,6 +36,22 @@ interface FeedFreshnessResponse {
   stations: FeedFreshnessStation[];
 }
 
+interface ResolutionLatencyStation {
+  stationId: number;
+  slug: string;
+  sampleCount: number;
+  medianMs: number;
+  p95Ms: number;
+  maxMs: number;
+}
+
+interface ResolutionLatencyResponse {
+  monitoringSince: string;
+  slowThresholdMs: number;
+  slowCount: number;
+  stations: ResolutionLatencyStation[];
+}
+
 interface SpinitronWebStation {
   stationId: number;
   slug: string;
@@ -156,6 +172,8 @@ function HealthPanel({
 }) {
   const [feedFreshness, setFeedFreshness] = useState<FeedFreshnessResponse | null>(null);
   const [ffError, setFfError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [resolutionLatency, setResolutionLatency] = useState<ResolutionLatencyResponse | null>(null);
+  const [rlError, setRlError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [spiWeb, setSpiWeb] = useState<SpinitronWebResponse | null>(null);
   const [swError, setSwError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
@@ -197,6 +215,33 @@ function HealthPanel({
           message: body.error ?? `HTTP ${ffRes.status}`,
         });
         setFeedFreshness(null);
+        return false;
+      })();
+
+      // ── Resolution latency (independent error path) ─────────────────────
+      const rlPromise = (async () => {
+        let rlRes: Response;
+        try {
+          rlRes = await fetch("/api/admin/resolution-latency-health", { headers });
+        } catch (err) {
+          setRlError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setResolutionLatency(null);
+          return false;
+        }
+        if (rlRes.ok) {
+          setResolutionLatency((await rlRes.json()) as ResolutionLatencyResponse);
+          setRlError(null);
+          return true;
+        }
+        const body = (await rlRes.json().catch(() => ({}))) as { error?: string };
+        setRlError({
+          kind: rlRes.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${rlRes.status}`,
+        });
+        setResolutionLatency(null);
         return false;
       })();
 
@@ -263,11 +308,11 @@ function HealthPanel({
       })();
 
       try {
-        const [ffOk, swOk, ryOk] = await Promise.all([ffPromise, swPromise, ryPromise]);
+        const [ffOk, rlOk, swOk, ryOk] = await Promise.all([ffPromise, rlPromise, swPromise, ryPromise]);
         // Only show the top-level error when every endpoint fails at once.
         // Each section already renders its own per-section banner; the shared
         // top-level banner is a last-resort "nothing works at all" indicator.
-        if (!ffOk && !swOk && !ryOk) {
+        if (!ffOk && !rlOk && !swOk && !ryOk) {
           setLoadError("All health endpoints failed — check server logs");
         }
         setLastRefreshed(new Date());
@@ -389,6 +434,38 @@ function HealthPanel({
                 <FeedFreshnessCard key={s.stationId} station={s} />
               ))}
             </div>
+          </section>
+        )}
+
+        {/* Resolution latency section — independent of feed freshness */}
+        {!loading && rlError && (
+          <SectionErrorBanner
+            icon={<Clock className="h-4 w-4" />}
+            title="Slow track resolution"
+            kind={rlError.kind}
+            message={rlError.message}
+            data-testid="rl-error-banner"
+          />
+        )}
+        {!loading && !rlError && resolutionLatency && (
+          <section className="mt-10" data-testid="resolution-latency-section">
+            <SectionHeading
+              icon={<Clock className="h-4 w-4" />}
+              title="Slow track resolution"
+              badge={resolutionLatency.slowCount}
+              description={`Stations whose rolling median source-to-resolved latency exceeds ${formatDuration(resolutionLatency.slowThresholdMs)}.`}
+            />
+            {resolutionLatency.slowCount === 0 ? (
+              <div className="mt-4">
+                <HealthyRow label="Resolution latency" detail="All stations resolving quickly" />
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-col gap-3">
+                {resolutionLatency.stations.map((s) => (
+                  <ResolutionLatencyCard key={s.stationId} station={s} />
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -558,6 +635,23 @@ function FeedFreshnessCard({ station }: { station: FeedFreshnessStation }) {
         <DataRow label="Consecutive empty" value={String(station.consecutiveEmpties)} />
         <DataRow label="Poll interval" value={pollInterval} />
         <DataRow label="Alert threshold" value={threshold} />
+      </dl>
+    </div>
+  );
+}
+
+function ResolutionLatencyCard({ station }: { station: ResolutionLatencyStation }) {
+  return (
+    <div className="rounded-xl border border-zinc-500/30 bg-zinc-500/5 px-5 py-4">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+        <span className="font-mono text-base font-normal text-foreground">{station.slug}</span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-base sm:grid-cols-4">
+        <DataRow label="Samples" value={String(station.sampleCount)} />
+        <DataRow label="Median" value={formatDuration(station.medianMs)} />
+        <DataRow label="p95" value={formatDuration(station.p95Ms)} />
+        <DataRow label="Max" value={formatDuration(station.maxMs)} />
       </dl>
     </div>
   );

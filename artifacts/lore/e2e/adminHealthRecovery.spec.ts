@@ -88,6 +88,16 @@ async function fulfillCoreHealth(route: Route): Promise<void> {
       },
     });
   }
+  if (url.endsWith("/resolution-latency-health")) {
+    return route.fulfill({
+      json: {
+        monitoringSince: "2026-08-19T11:00:00.000Z",
+        slowThresholdMs: 15_000,
+        slowCount: 0,
+        stations: [],
+      },
+    });
+  }
   if (url.endsWith("/spinitron-web-health")) {
     return route.fulfill({ json: { staleCount: 0, stations: [] } });
   }
@@ -110,6 +120,48 @@ async function fulfillCoreHealth(route: Route): Promise<void> {
 }
 
 test.describe("Admin health recovery tools", () => {
+  test("shows slow-resolution stations with their rolling latency summary", async ({ page }) => {
+    await page.route("**/api/admin/**", async (route) => {
+      const url = new URL(route.request().url()).pathname;
+      if (url.endsWith("/resolution-latency-health")) {
+        return route.fulfill({
+          json: {
+            monitoringSince: "2026-08-19T11:00:00.000Z",
+            slowThresholdMs: 15_000,
+            slowCount: 1,
+            stations: [
+              {
+                stationId: 3201,
+                slug: "slow-fm",
+                sampleCount: 42,
+                medianMs: 16_500,
+                p95Ms: 28_400,
+                maxMs: 35_000,
+              },
+            ],
+          },
+        });
+      }
+      if (url.endsWith("/radio-browser/bulk-reprobe/status")) {
+        return route.fulfill({ json: IDLE_REPROBE_STATUS });
+      }
+      if (url.endsWith("/fingerprint-scout/report")) {
+        return route.fulfill({ json: SCOUT_REPORT });
+      }
+      return fulfillCoreHealth(route);
+    });
+
+    await page.goto("/lore/admin/health");
+
+    const section = page.getByTestId("resolution-latency-section");
+    await expect(section).toBeVisible();
+    await expect(section).toContainText("slow-fm");
+    await expect(section).toContainText("42");
+    await expect(section).toContainText("16s");
+    await expect(section).toContainText("28s");
+    await expect(section).toContainText("35s");
+  });
+
   test("keeps polling an active re-probe after reload and shows its final result", async ({
     page,
   }) => {
