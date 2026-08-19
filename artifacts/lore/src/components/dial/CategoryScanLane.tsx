@@ -29,6 +29,8 @@ export interface CategoryScanLaneProps {
   /** Slug of the station the listener is currently tuned to, if any. */
   activeSlug: string | null;
   onTuneIn: (slug: string) => void;
+  categoryCounts?: Partial<Record<StationCategory, number>>;
+  onScanCategory?: (category: StationCategory) => void;
 }
 
 export function CategoryScanLane({
@@ -36,6 +38,8 @@ export function CategoryScanLane({
   nowPlayingBySlug,
   activeSlug,
   onTuneIn,
+  categoryCounts = {},
+  onScanCategory,
 }: CategoryScanLaneProps) {
   const byCategory = useMemo(() => {
     const groups = new Map<StationCategory, Station[]>();
@@ -67,6 +71,8 @@ export function CategoryScanLane({
           nowPlayingBySlug={nowPlayingBySlug}
           activeSlug={activeSlug}
           onTuneIn={onTuneIn}
+          newMusicCount={categoryCounts[def.cat] ?? 0}
+          onScanCategory={onScanCategory}
         />
       ))}
     </div>

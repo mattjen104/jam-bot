@@ -8,6 +8,8 @@ import type {
 } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
+import { KeepButton } from "./KeepButton";
+import type { ScanHop } from "../player/PlayerProvider";
 import {
   Cast,
   ExternalLink,
@@ -44,8 +46,7 @@ interface PlayerBarProps {
    */
   provisionalNowPlaying?: { artist: string; title: string; resolving: boolean } | null;
   scanActive?: boolean;
-  scanCurrent?: number;
-  scanTotal?: number;
+  scanCurrent?: ScanHop | null;
   onScanToggle?: () => void;
   scanDir?: 1 | -1;
   onScanDirToggle?: () => void;
@@ -69,8 +70,7 @@ export function PlayerBar({
   provisionalNowPlaying = null,
   spotify,
   scanActive = false,
-  scanCurrent = 1,
-  scanTotal = 0,
+  scanCurrent = null,
   onScanToggle,
   scanDir = 1,
   onScanDirToggle,
@@ -87,8 +87,12 @@ export function PlayerBar({
   // Metadata for the ticker
   // Layout (top→bottom): song (dim) · album (mid) · artist (lime, most prominent)
   // Station name is already shown in the player-bar-info block above.
-  const metaSong   = provisionalNowPlaying?.title  ?? nowPlaying?.recording?.title   ?? nowPlaying?.rawTitle  ?? null;
-  const metaArtist = provisionalNowPlaying?.artist ?? nowPlaying?.recording?.artist  ?? nowPlaying?.rawArtist ?? null;
+  const metaSong   = scanActive && scanCurrent
+    ? scanCurrent.title
+    : provisionalNowPlaying?.title  ?? nowPlaying?.recording?.title   ?? nowPlaying?.rawTitle  ?? null;
+  const metaArtist = scanActive && scanCurrent
+    ? scanCurrent.artist
+    : provisionalNowPlaying?.artist ?? nowPlaying?.recording?.artist  ?? nowPlaying?.rawArtist ?? null;
   const metaAlbum: string | null = null; // album title not yet in NowPlaying type
   // Subtle cue while a provisional track is still resolving — dim the
   // provisional text so it never reads with full confidence.
@@ -98,7 +102,7 @@ export function PlayerBar({
   const statusText = error
     ? error
     : scanActive
-      ? `Scanning · ${scanCurrent} of ${scanTotal}`
+      ? `Preview scan · ${scanCurrent?.category ?? "new music"} · ${scanCurrent?.stationName ?? "loading"}`
       : isCasting
         ? (castPaused ? `Paused on ${castDeviceName}` : `Live · casting to ${castDeviceName}`)
         : casting === "connecting"
@@ -302,9 +306,26 @@ export function PlayerBar({
             {metaAlbum ?? "—"}
           </div>
           <div className="player-ticker__meta-line player-ticker__meta-station">
-            {metaArtist ?? "—"}
+            {scanActive && scanCurrent
+              ? `${metaArtist ?? "—"} · ${scanCurrent.stationName}`
+              : (metaArtist ?? "—")}
           </div>
         </div>
+        {scanActive && scanCurrent?.mbid ? (
+          <div className="mt-2">
+            <KeepButton
+              mbid={scanCurrent.mbid}
+              compact
+              provenance={{
+                kind: "scan",
+                stationSlug: scanCurrent.stationSlug,
+                stationName: scanCurrent.stationName,
+                surface: "categoryScan",
+                entryPoint: "newMusic",
+              }}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

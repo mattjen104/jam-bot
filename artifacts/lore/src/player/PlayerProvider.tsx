@@ -115,6 +115,8 @@ import {
 } from "./sectionMemory";
 import { useAppConfig } from "../lib/meHooks";
 import { getPreviewCached, prefetchPreview } from "./previewCache";
+import type { CategoryPreviewCandidate } from "./categoryPreviewScan";
+import type { StationCategory } from "../lib/dialCategories";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
 export interface RideAttribution {
@@ -496,6 +498,7 @@ export interface ScanHop {
   mbid: string;
   stationName: string;
   stationSlug: string;
+  category?: StationCategory;
 }
 
 export interface ScanApi {
@@ -507,6 +510,8 @@ export interface ScanApi {
   dir: 1 | -1;
   /** Flip scan direction without stopping. */
   toggleDir: () => void;
+  startCategory: (category: StationCategory, queue: CategoryPreviewCandidate[]) => void;
+  categoryCounts: Partial<Record<StationCategory, number>>;
 }
 
 interface PlayerContextValue {
@@ -565,12 +570,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [scanActive, setScanActive] = useState(false);
   const [scanIdx, setScanIdx] = useState(0);
   const [scanDir, setScanDir] = useState<1 | -1>(1);
+  const [categoryQueue, setCategoryQueue] = useState<CategoryPreviewCandidate[]>([]);
+  const [categoryActive, setCategoryActive] = useState(false);
+  const [categoryIdx, setCategoryIdx] = useState(0);
+  const [categoryDecks] = useState<[HTMLAudioElement | null, HTMLAudioElement | null]>(() => {
+    if (typeof Audio === "undefined") return [null, null];
+    const a = new Audio(); const b = new Audio();
+    a.preload = "auto"; b.preload = "auto";
+    return [a, b];
+  });
+  const categoryDeckRef = useRef(0);
 
   // Display info for the current scan hop — derived during render from the
   // active scan index. It is null whenever scanning is off (all the old
   // imperative `setScanCurrent(null)` sites also toggled `scanActive` off).
   const scanCurrent = useMemo<ScanHop | null>(() => {
-    if (!scanActive || scannableStations.length === 0) return null;
+    if (!scanActive) return null;
+    if (categoryActive) {
+      const entry = categoryQueue[categoryIdx];
+      if (!entry) return null;
+      return { ...entry };
+    }
+    if (scannableStations.length === 0) return null;
     const entry = scannableStations[scanIdx % scannableStations.length];
     if (!entry) return null;
     return {
@@ -580,7 +601,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       stationName: entry.station.name,
       stationSlug: entry.station.slug,
     };
-  }, [scanActive, scanIdx, scannableStations]);
+  }, [scanActive, scanIdx, scannableStations, categoryActive, categoryQueue, categoryIdx]);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every toggle so stale async preview fetches are discarded.
   const scanTokenRef = useRef(0);
@@ -627,6 +648,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Silence the preview audio element used by the scan and restore the
         // live-stream volume that was ducked while previews played.
         stopScanAudio(audioRef.current);
+        for (const deck of categoryDecks) stopScanAudio(deck);
+        setCategoryActive(false);
+        setCategoryQueue([]);
         radioRef.current.restoreDuck();
         return false;
       }
@@ -637,10 +661,84 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setScanIdx(0);
       return true;
     });
+  }, [clearScanTimer, stopScanAudio, categoryDecks]);
+
+  const startCategory = useCallback((category: StationCategory, queue: CategoryPreviewCandidate[]) => {
+    if (rideActiveRef.current || queue.length === 0) return;
+    clearScanTimer();
+    scanTokenRef.current += 1;
+    stopScanAudio(audioRef.current);
+    setScanActive(true);
+    setCategoryQueue(queue);
+    setCategoryIdx(0);
+    setCategoryActive(true);
+    radioRef.current.duck();
   }, [clearScanTimer, stopScanAudio]);
 
+  // Category scans own two bounded preview decks. Metadata is derived from
+  // categoryIdx, which advances only at the same handoff that starts the next
+  // deck, so Keep can never target the queued item instead of the sounding one.
   useEffect(() => {
-    if (!scanActive || scannableStations.length === 0) {
+    if (!scanActive || !categoryActive || categoryQueue.length === 0) return;
+    const token = ++scanTokenRef.current;
+    const current = categoryQueue[categoryIdx];
+    if (!current) return;
+    const deckIndex = categoryDeckRef.current;
+    const currentDeck = categoryDecks[deckIndex];
+    const next = categoryQueue[categoryIdx + 1];
+    const nextDeck = categoryDecks[1 - deckIndex];
+    if (!currentDeck) return;
+    let cancelled = false;
+    const advance = () => {
+      if (cancelled || scanTokenRef.current !== token) return;
+      if (!next) {
+        currentDeck.pause();
+        return;
+      }
+      categoryDeckRef.current = 1 - deckIndex;
+      setCategoryIdx((i) => i + 1);
+    };
+    void getPreviewCached(current.mbid).then((preview) => {
+      if (cancelled || scanTokenRef.current !== token) return;
+      if (!preview.previewUrl) { advance(); return; }
+      currentDeck.src = preview.previewUrl;
+      currentDeck.volume = 1;
+      currentDeck.load();
+      void currentDeck.play().catch(() => undefined);
+      if (next?.mbid && nextDeck) {
+        prefetchPreview(next.mbid);
+        void getPreviewCached(next.mbid).then((p) => {
+          if (p.previewUrl && !cancelled && scanTokenRef.current === token) {
+            nextDeck.src = p.previewUrl;
+            nextDeck.load();
+          }
+        }).catch(() => undefined);
+      }
+      const duration = Math.max(1000, (currentDeck.duration || 10) * 1000);
+      const timer = window.setTimeout(() => {
+        if (nextDeck?.src) {
+          void nextDeck.play().catch(() => undefined);
+          const start = performance.now();
+          const fade = () => {
+            const progress = Math.min(1, (performance.now() - start) / 1200);
+            currentDeck.volume = 1 - progress;
+            nextDeck.volume = progress;
+            if (progress < 1 && !cancelled) requestAnimationFrame(fade);
+            else { currentDeck.pause(); advance(); }
+          };
+          fade();
+        } else advance();
+      }, Math.max(0, duration - 1200));
+      return () => window.clearTimeout(timer);
+    }).catch(() => advance());
+    return () => {
+      cancelled = true;
+      currentDeck.pause();
+    };
+  }, [scanActive, categoryActive, categoryQueue, categoryIdx, categoryDecks]);
+
+  useEffect(() => {
+    if (!scanActive || categoryActive || scannableStations.length === 0) {
       clearScanTimer();
       return;
     }
@@ -704,7 +802,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       clearScanTimer();
     };
-  }, [scanActive, scanIdx, scanDir, scannableStations, clearScanTimer]);
+  }, [scanActive, categoryActive, scanIdx, scanDir, scannableStations, clearScanTimer]);
 
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState<RideStatus>("idle");
@@ -983,6 +1081,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       scanTokenRef.current += 1;
       setScanActive(false);
       stopScanAudio(audioRef.current);
+      for (const deck of categoryDecks) stopScanAudio(deck);
+      setCategoryActive(false);
+      setCategoryQueue([]);
       // A scan may have ducked the live stream; restore the saved volume
       // before the ride pauses it (no-op when nothing is ducked).
       radioRef.current.restoreDuck();
@@ -1119,6 +1220,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       scanTokenRef.current += 1;
       setScanActive(false);
       stopScanAudio(audioRef.current);
+      for (const deck of categoryDecks) stopScanAudio(deck);
+      setCategoryActive(false);
+      setCategoryQueue([]);
       // A scan may have ducked the live stream; restore the saved volume
       // before the ride pauses it (no-op when nothing is ducked).
       radioRef.current.restoreDuck();
@@ -3361,6 +3465,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         current: scanCurrent,
         dir: scanDir,
         toggleDir: () => setScanDir((d) => (d === 1 ? -1 : 1)),
+        startCategory,
+        categoryCounts: {},
       },
     }),
     [
@@ -3431,6 +3537,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       toggleScan,
       scanCurrent,
       scanDir,
+      startCategory,
     ],
   );
 

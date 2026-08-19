@@ -769,6 +769,7 @@ export function useDialData(
    * are excluded so Scan never presents an old track as live.
    */
   scanNowPlaying: Map<string, DialSpin>;
+  spinsBySlug: Map<string, StationRecentSpin[]>;
   isLoading: boolean;
   isCoreLoading: boolean;
   liveLoading: boolean;
@@ -1729,6 +1730,7 @@ export function useDialData(
     stations,
     scanStations,
     scanNowPlaying,
+    spinsBySlug,
     isLoading,
     isCoreLoading,
     liveLoading,

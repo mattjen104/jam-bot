@@ -173,6 +173,7 @@ export function PlayerDock() {
           provisionalNowPlaying={provisional}
           spotify={spotify}
           scanActive={scan.active}
+          scanCurrent={scan.current}
           onScanToggle={scan.toggle}
           scanDir={scan.dir}
           onScanDirToggle={scan.toggleDir}

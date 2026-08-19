@@ -47,6 +47,8 @@ export interface CategoryScanButtonProps {
   /** Slug of the station the listener is currently tuned to, if any. */
   activeSlug: string | null;
   onTuneIn: (slug: string) => void;
+  newMusicCount?: number;
+  onScanCategory?: (category: StationCategory) => void;
 }
 
 export function CategoryScanButton({
@@ -56,6 +58,8 @@ export function CategoryScanButton({
   nowPlayingBySlug,
   activeSlug,
   onTuneIn,
+  newMusicCount = 0,
+  onScanCategory,
 }: CategoryScanButtonProps) {
   // Only stations airing a known artist right now participate — the rotation
   // and the "N live" badge both draw from this list. cleanLiveValue drops
@@ -90,7 +94,8 @@ export function CategoryScanButton({
       disabled={current == null}
       data-testid={`dial-scan-${category}`}
       onClick={() => {
-        if (current) onTuneIn(current.station.slug);
+        if (newMusicCount > 0 && onScanCategory) onScanCategory(category);
+        else if (current) onTuneIn(current.station.slug);
       }}
     >
       <span className="dial-scan__label">{label}</span>
@@ -105,7 +110,9 @@ export function CategoryScanButton({
           "Quiet right now"
         )}
       </span>
-      <span className="dial-scan__count" aria-hidden="true">{live.length} live</span>
+       <span className="dial-scan__count">
+         {newMusicCount > 0 ? `${newMusicCount} new · preview` : `${live.length} live`}
+       </span>
     </button>
   );
 }

@@ -30,7 +30,9 @@ import { DialLensBar } from "./dial/DialLensBar";
 import { PressFeedLane } from "./dial/PressFeedLane";
 import { ShowsFeedLane } from "./dial/ShowsFeedLane";
 import { CategoryScanLane } from "./dial/CategoryScanLane";
+import { buildCategoryPreviewQueue } from "../player/categoryPreviewScan";
 import { type AgeTier } from "../lib/dialAgeFilter";
+import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import {
   DEFAULT_ACTIVE_AGE_TIERS,
   DEFAULT_ACTIVE_STATION_CATEGORIES,
@@ -1629,6 +1631,7 @@ export function DialView() {
     stations,
     scanStations: scanStationsOpt,
     scanNowPlaying: scanNowPlayingOpt,
+    spinsBySlug: spinsBySlugOpt,
     isLoading,
     isCoreLoading,
     liveLoading,
@@ -1664,6 +1667,14 @@ export function DialView() {
     () => scanNowPlayingOpt ?? new Map<string, DialSpin>(),
     [scanNowPlayingOpt],
   );
+  const scanSpinsBySlug = useMemo(() => spinsBySlugOpt ?? new Map(), [spinsBySlugOpt]);
+  const scanCategoryQueues = useMemo(() => {
+    const map = new Map<StationCategory, ReturnType<typeof buildCategoryPreviewQueue>>();
+    for (const def of STATION_CATEGORY_DEFINITIONS) {
+      map.set(def.cat, buildCategoryPreviewQueue(def.cat, scanStations, scanSpinsBySlug));
+    }
+    return map;
+  }, [scanStations, scanSpinsBySlug]);
   // Defensive default keeps older mocks (which don't provide the phase) on the
   // legacy behavior; the real hook always supplies it.
   const cxPhase = crossingsPhase ?? "settled";
@@ -1874,7 +1885,7 @@ export function DialView() {
   // crossings compute never blanks the whole front door.
   const zone1Settled = !isCoreLoading;
   const isSpotifyConnected = useSpotifyLibraryConnected();
-  const { radio, ride } = usePlayer();
+  const { radio, ride, scan: playerScan } = usePlayer();
   const { data: weeklyRecapData } = useMyWeeklyRecap();
   // Artwork for the now-playing row indicator
   const activeSlug = radio.station?.slug ?? "";
@@ -3097,6 +3108,13 @@ export function DialView() {
                         nowPlayingBySlug={scanNowPlaying}
                         activeSlug={radio.station?.slug ?? null}
                         onTuneIn={tuneScanStation}
+                        categoryCounts={Object.fromEntries(
+                          [...scanCategoryQueues.entries()].map(([category, queue]) => [category, queue.length]),
+                        )}
+                        onScanCategory={(category) => {
+                          const queue = scanCategoryQueues.get(category) ?? [];
+                          if (queue.length > 0) playerScan.startCategory(category, queue);
+                        }}
                       />
                     )}
 
