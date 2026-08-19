@@ -5920,6 +5920,12 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* Intentional minimal state for stations whose own site does not expose
+   usable copy. The detail disclosure stays useful without inventing a blurb. */
+#dial-feed-rows .fdrow__detail-empty {
+  color: hsl(var(--dial-fg) / 0.55);
+  font-style: italic;
+}
 #dial-feed-rows .fdrow__detail-link {
   color: hsl(var(--dial-fg) / 0.75);
   text-decoration: none;

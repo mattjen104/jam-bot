@@ -765,7 +765,7 @@ describe("compact Dial feed identity", () => {
     expect(container.querySelector(".fdrow__byline")).toBeNull();
   });
 
-  it("whitespace-only station blurb does not appear in detail panel", () => {
+  it("shows an intentional live-broadcast state when no station detail is available", () => {
     const { container } = renderCompactRow(
       makeDialStation({
         name: "KEXP",
@@ -778,8 +778,10 @@ describe("compact Dial feed identity", () => {
       }),
     );
     fireEvent.click(container.querySelector(".fdrow")!);
-    // Whitespace blurb is excluded; no detail-blurb element.
+    // Whitespace blurb is excluded, but the expanded disclosure is never blank.
     expect(container.querySelector(".fdrow__detail-blurb")).toBeNull();
+    expect(container.querySelector(".fdrow__detail-empty")?.textContent)
+      .toBe("Live broadcast — tune in for the set.");
   });
 
   it("station name stays pinned in the right cluster in both modes", () => {

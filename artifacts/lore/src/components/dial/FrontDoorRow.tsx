@@ -717,9 +717,10 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         )}
 
         {/* Expanded detail panel: song title, station description, site link.
-            Only visible when the compact row is expanded. Each field is
-            omitted when unavailable. */}
-        {compactSentence && expanded && (detailTitle || stationBlurb || (playable && siteHref)) && (
+            It is always present once a playable compact row is expanded: when
+            a station has no scraped description, current title, or homepage,
+            the intentional live-broadcast state prevents an empty disclosure. */}
+        {compactSentence && expanded && (
           <div className="fdrow__detail" onClick={(e) => e.stopPropagation()}>
             {detailTitle && (
               <span className="fdrow__detail-title">{detailTitle}</span>
@@ -739,6 +740,11 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
               >
                 ↗ {ds.station.name}
               </a>
+            )}
+            {!detailTitle && !stationBlurb && !(playable && siteHref) && (
+              <span className="fdrow__detail-empty">
+                Live broadcast — tune in for the set.
+              </span>
             )}
           </div>
         )}
