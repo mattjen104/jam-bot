@@ -111,6 +111,41 @@ let npBaseCacheInclusive: NpBaseCache | null = null;
 const npDateCache = new Map<string, NpBaseCache>();
 const NP_DATE_CACHE_MAX_ENTRIES = 16;
 
+// ---------------------------------------------------------------------------
+// Shared station-directory snapshot.
+//
+// Personal-crossings warm passes can occupy most of the shared pg pool for
+// seconds at a time. The old GET /stations path entered that same queue on
+// every request, even though the station directory changes infrequently. Keep
+// one full joined snapshot for all public modes and refresh it single-flight.
+//
+// The now-playing prewarm is the first Lore DB work started at boot, so it
+// publishes this snapshot before the background warmers begin. GET /stations
+// can therefore remain entirely off the DB hot path during contention.
+// ---------------------------------------------------------------------------
+
+type StationDirectoryMode = "default" | "sleep" | "era-genre";
+type StationDirectoryRow = {
+  station: typeof stationsTable.$inferSelect;
+  qualityTier: string | null;
+};
+type StationDirectoryCacheEntry = {
+  builtAt: number;
+  response: ReturnType<typeof ListStationsResponse.parse>;
+};
+
+const STATION_DIRECTORY_CACHE_TTL_MS = 30 * 1000;
+const stationDirectoryCache = new Map<StationDirectoryMode, StationDirectoryCacheEntry>();
+const stationDirectoryFillInFlight = new Map<StationDirectoryMode, Promise<StationDirectoryCacheEntry>>();
+const stationDirectoryEnhancementInFlight = new Map<StationDirectoryMode, Promise<void>>();
+
+let stationRowsSnapshot: StationDirectoryRow[] | null = null;
+let stationRowsSnapshotBuiltAt = 0;
+let stationRowsInFlight: Promise<StationDirectoryRow[]> | null = null;
+let stationRowsRefreshGate: Promise<void> | null = null;
+let stationDirectoryBuildCount = 0;
+let stationRowsRefreshCount = 0;
+
 /** Invalidate the now-playing base cache — called by the SSE push path when a new spin lands. */
 export function invalidateNowPlayingBaseCache(): void {
   npBaseCache = null;
@@ -152,49 +187,99 @@ let npStationsSnapshotInclusive: { id: number; slug: string }[] | null = null;
 // instead of racing their own copies against a contended pool. On failure the
 // promise clears so the next caller retries; the error propagates to whoever
 // awaited it (a failed partial request returns 500 rather than a silent []).
-let npStationsInFlight: Promise<{ id: number; slug: string }[]> | null = null;
-let npStationsInFlightInclusive: Promise<{ id: number; slug: string }[]> | null = null;
-
-function fetchNpStations(includeModePools = false): Promise<{ id: number; slug: string }[]> {
-  const inFlight = includeModePools ? npStationsInFlightInclusive : npStationsInFlight;
-  if (inFlight) return inFlight;
-  // Inclusive = the default dial predicate UNION the mode pools (mirrors
-  // GET /api/stations ?mode=sleep / ?mode=era-genre, whose stations are
-  // intentionally hidden from the default list).
-  const where = includeModePools
-    ? and(
-        eq(stationsTable.active, true),
-        or(
-          and(
-            eq(stationsTable.hidden, false),
-            eq(stationsTable.crossingEligible, true),
+function refreshStationRows(): Promise<StationDirectoryRow[]> {
+  if (stationRowsInFlight) return stationRowsInFlight;
+  const p = (async () => {
+    if (stationRowsRefreshGate) await stationRowsRefreshGate;
+    stationRowsRefreshCount++;
+    return db
+      .select({
+        station: stationsTable,
+        qualityTier: stationQualityTable.qualityTier,
+      })
+      .from(stationsTable)
+      .leftJoin(
+        stationQualityTable,
+        eq(stationQualityTable.stationId, stationsTable.id),
+      )
+      .where(
+        and(
+          eq(stationsTable.active, true),
+          or(
+            and(
+              eq(stationsTable.hidden, false),
+              eq(stationsTable.crossingEligible, true),
+            ),
+            eq(stationsTable.sleepMode, true),
+            eq(stationsTable.eraGenreMode, true),
           ),
-          eq(stationsTable.sleepMode, true),
-          eq(stationsTable.eraGenreMode, true),
         ),
       )
-    : and(
-        eq(stationsTable.active, true),
-        eq(stationsTable.hidden, false),
-        eq(stationsTable.crossingEligible, true),
+      .orderBy(
+        asc(stationsTable.sortOrder),
+        asc(stationsTable.name),
       );
-  const p = db
-    .select({ id: stationsTable.id, slug: stationsTable.slug })
-    .from(stationsTable)
-    .where(where)
-    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name))
-    .then((stations) => {
-      if (includeModePools) npStationsSnapshotInclusive = stations;
-      else npStationsSnapshot = stations;
-      return stations;
+  })()
+    .then((rows) => {
+      stationRowsSnapshot = rows;
+      stationRowsSnapshotBuiltAt = Date.now();
+      // If any mode response was built from an older snapshot while this query
+      // was queued, replace it immediately. Do not extend stale membership for
+      // another full directory TTL after fresh rows arrive.
+      for (const mode of stationDirectoryCache.keys()) {
+        publishStationDirectoryCache(mode, rows);
+      }
+      return rows;
     })
     .finally(() => {
-      if (includeModePools) npStationsInFlightInclusive = null;
-      else npStationsInFlight = null;
+      stationRowsInFlight = null;
     });
-  if (includeModePools) npStationsInFlightInclusive = p;
-  else npStationsInFlight = p;
+  stationRowsInFlight = p;
   return p;
+}
+
+function rowsForDirectoryMode(
+  rows: StationDirectoryRow[],
+  mode: StationDirectoryMode,
+): StationDirectoryRow[] {
+  if (mode === "sleep") {
+    return rows.filter(({ station }) => station.active && station.sleepMode);
+  }
+  if (mode === "era-genre") {
+    return rows.filter(({ station }) => station.active && station.eraGenreMode);
+  }
+  return rows.filter(
+    ({ station }) =>
+      station.active &&
+      !station.hidden &&
+      station.crossingEligible,
+  );
+}
+
+function rowsForNowPlaying(
+  rows: StationDirectoryRow[],
+  includeModePools: boolean,
+): { id: number; slug: string }[] {
+  const selected = includeModePools
+    ? rows
+    : rowsForDirectoryMode(rows, "default");
+  return selected.map(({ station }) => ({ id: station.id, slug: station.slug }));
+}
+
+function fetchNpStations(includeModePools = false): Promise<{ id: number; slug: string }[]> {
+  const snapshot = stationRowsSnapshot;
+  const snapshotIsFresh =
+    snapshot !== null &&
+    Date.now() - stationRowsSnapshotBuiltAt < STATION_DIRECTORY_CACHE_TTL_MS;
+  const rowsPromise = snapshotIsFresh
+    ? Promise.resolve(snapshot)
+    : refreshStationRows();
+  return rowsPromise.then((rows) => {
+    const stations = rowsForNowPlaying(rows, includeModePools);
+    if (includeModePools) npStationsSnapshotInclusive = stations;
+    else npStationsSnapshot = stations;
+    return stations;
+  });
 }
 
 // Counts buildNpBase executions — exposed for tests to assert single-flight.
@@ -212,6 +297,8 @@ export function _testOnly_resetNpCaches(): void {
   npDateCache.clear();
   npStationsSnapshot = null;
   npStationsSnapshotInclusive = null;
+  stationRowsSnapshot = null;
+  stationRowsSnapshotBuiltAt = 0;
 }
 
 /** Tests only: mark the live base cache as expired (keeps its data for SWR checks). */
@@ -368,6 +455,165 @@ export function prewarmNowPlayingBaseCache(): void {
     });
 }
 
+function stationDirectoryResponse(
+  rows: StationDirectoryRow[],
+  resolvedClasses?: Map<number, string | null>,
+): ReturnType<typeof ListStationsResponse.parse> {
+  const stations = rows.map(({ station, qualityTier }) => {
+    const resolvedClass = resolvedClasses?.get(station.id);
+    return toStation(
+      station,
+      qualityTier,
+      resolvedClass !== undefined
+        ? resolvedClass
+        : station.automationClass === "mixed"
+          ? "automated"
+          : station.automationClass,
+    );
+  });
+  return ListStationsResponse.parse({ stations });
+}
+
+function enhanceStationDirectoryCache(
+  mode: StationDirectoryMode,
+  rows: StationDirectoryRow[],
+  entry: StationDirectoryCacheEntry,
+): void {
+  if (stationDirectoryEnhancementInFlight.has(mode)) return;
+  const mixedRows = rows.filter(
+    ({ station }) =>
+      station.automationClass === "mixed" &&
+      station.ianaTimezone != null,
+  );
+  if (mixedRows.length === 0) return;
+
+  const enhancement = Promise.all(
+    mixedRows.map(async ({ station }) => {
+      const value = await resolveAutomationClass(
+        station.id,
+        station.ianaTimezone,
+        station.automationClass ?? null,
+      );
+      return [station.id, value] as const;
+    }),
+  )
+    .then((resolved) => {
+      // A newer refresh may have replaced this entry while the schedule
+      // lookups were queued. Never overwrite newer station data.
+      if (stationDirectoryCache.get(mode) !== entry) return;
+      entry.response = stationDirectoryResponse(rows, new Map(resolved));
+    })
+    .catch(() => {
+      // The fast cached response already contains the pessimistic
+      // "automated" fallback. A later directory refresh retries enrichment.
+    })
+    .finally(() => {
+      stationDirectoryEnhancementInFlight.delete(mode);
+    });
+  stationDirectoryEnhancementInFlight.set(mode, enhancement);
+}
+
+async function buildStationDirectoryCache(
+  mode: StationDirectoryMode,
+): Promise<StationDirectoryCacheEntry> {
+  stationDirectoryBuildCount++;
+
+  // A previously published raw snapshot remains safe to serve while a refresh
+  // waits behind contended background work. True cold boot joins the early
+  // prewarm query, which starts before those jobs are scheduled.
+  let rows = stationRowsSnapshot;
+  if (rows) {
+    if (Date.now() - stationRowsSnapshotBuiltAt >= STATION_DIRECTORY_CACHE_TTL_MS) {
+      void refreshStationRows().catch(() => {
+        // Keep the last-known snapshot; the next expiry retries.
+      });
+    }
+  } else {
+    rows = await refreshStationRows();
+  }
+
+  return publishStationDirectoryCache(mode, rows);
+}
+
+function publishStationDirectoryCache(
+  mode: StationDirectoryMode,
+  rows: StationDirectoryRow[],
+): StationDirectoryCacheEntry {
+  const selected = rowsForDirectoryMode(rows, mode);
+  const entry: StationDirectoryCacheEntry = {
+    builtAt: Date.now(),
+    response: stationDirectoryResponse(selected),
+  };
+  stationDirectoryCache.set(mode, entry);
+
+  // Resolving "mixed" schedules may need DB work. It must never hold the
+  // station list response open; enrich the cached entry after publishing the
+  // safe pessimistic value.
+  enhanceStationDirectoryCache(mode, selected, entry);
+  return entry;
+}
+
+function fillStationDirectoryCache(
+  mode: StationDirectoryMode,
+): Promise<StationDirectoryCacheEntry> {
+  const existing = stationDirectoryFillInFlight.get(mode);
+  if (existing) return existing;
+  const fill = buildStationDirectoryCache(mode).finally(() => {
+    stationDirectoryFillInFlight.delete(mode);
+  });
+  stationDirectoryFillInFlight.set(mode, fill);
+  return fill;
+}
+
+/**
+ * Populate every public directory mode at boot. The three fills share the
+ * same station-row query and finish before the later crossings warmers begin.
+ */
+export async function prewarmStationDirectoryCache(): Promise<void> {
+  await Promise.all(
+    (["default", "sleep", "era-genre"] as const).map((mode) =>
+      fillStationDirectoryCache(mode).catch(() => {
+        // Best-effort: a request retries the fill if boot raced a migration.
+      }),
+    ),
+  );
+}
+
+/** Tests only: clear directory responses while optionally retaining the shared raw snapshot. */
+export function _testOnly_resetStationDirectoryCaches(dropRows = false): void {
+  stationDirectoryCache.clear();
+  if (dropRows) {
+    stationRowsSnapshot = null;
+    stationRowsSnapshotBuiltAt = 0;
+  }
+}
+
+/** Tests only: expire both response and row snapshots without discarding their data. */
+export function _testOnly_expireStationDirectoryCaches(): void {
+  for (const entry of stationDirectoryCache.values()) entry.builtAt = 0;
+  stationRowsSnapshotBuiltAt = 0;
+}
+
+/** Tests only: pause the next raw-row refresh to model a saturated DB pool. */
+export function _testOnly_setStationRowsRefreshGate(gate: Promise<void> | null): void {
+  stationRowsRefreshGate = gate;
+}
+
+/** Tests only: wait for any gated raw-row refresh to settle. */
+export async function _testOnly_waitForStationRowsRefresh(): Promise<void> {
+  await stationRowsInFlight;
+}
+
+/** Tests only: number of station-directory cache builds. */
+export function _testOnly_getStationDirectoryBuildCount(): number {
+  return stationDirectoryBuildCount;
+}
+
+/** Tests only: number of full station-row DB refreshes. */
+export function _testOnly_getStationRowsRefreshCount(): number {
+  return stationRowsRefreshCount;
+}
+
 // Rate limit for client-reported now-playing: this is the only write path on
 // an otherwise read-only public router, so it needs its own abuse guard.
 // 20 req/min per IP comfortably covers one browser polling several Icecast
@@ -412,51 +658,24 @@ router.get("/stations", h(async (req, res) => {
   if (rawMode !== undefined && rawMode !== "sleep" && rawMode !== "era-genre") {
     return res.status(400).json({ error: `Unknown mode: "${rawMode}". Supported values: sleep, era-genre` });
   }
-  const isSleepMode = rawMode === "sleep";
-  const isEraGenreMode = rawMode === "era-genre";
+  const mode: StationDirectoryMode = rawMode ?? "default";
+  const cached = stationDirectoryCache.get(mode);
+  if (cached && Date.now() - cached.builtAt < STATION_DIRECTORY_CACHE_TTL_MS) {
+    return res.json(cached.response);
+  }
 
-  const whereClause = isSleepMode
-    ? and(
-        eq(stationsTable.active, true),
-        eq(stationsTable.sleepMode, true),
-      )
-    : isEraGenreMode
-    ? and(
-        eq(stationsTable.active, true),
-        eq(stationsTable.eraGenreMode, true),
-      )
-    : and(
-        eq(stationsTable.active, true),
-        eq(stationsTable.hidden, false),
-        eq(stationsTable.crossingEligible, true),
-      );
+  const fill = fillStationDirectoryCache(mode);
+  if (cached) {
+    // Stale-while-revalidate: return known-good rows immediately instead of
+    // joining a refresh queued behind background crossings work.
+    void fill.catch(() => {
+      // Keep serving stale; the next request retries.
+    });
+    return res.json(cached.response);
+  }
 
-  const rows = await db
-    .select({
-      station: stationsTable,
-      qualityTier: stationQualityTable.qualityTier,
-    })
-    .from(stationsTable)
-    .leftJoin(
-      stationQualityTable,
-      eq(stationQualityTable.stationId, stationsTable.id),
-    )
-    .where(whereClause)
-    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
-
-  const now = new Date();
-  const stations = await Promise.all(
-    rows.map(async (r) => {
-      const resolvedClass = await resolveAutomationClass(
-        r.station.id,
-        r.station.ianaTimezone,
-        r.station.automationClass ?? null,
-        now,
-      );
-      return toStation(r.station, r.qualityTier, resolvedClass);
-    }),
-  );
-  return res.json(ListStationsResponse.parse({ stations }));
+  const entry = await fill;
+  return res.json(entry.response);
 }));
 
 // GET /api/stations/now-playing — latest spin per station (the dial pulse).
