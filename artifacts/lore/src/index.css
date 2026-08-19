@@ -7854,6 +7854,41 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 29px;
   border-top: 1px solid hsl(var(--border) / 0.6);
   background: hsl(var(--background));
+  /* The album-art backdrop is absolutely positioned inside the bar and
+     clipped to it. */
+  position: relative;
+  overflow: hidden;
+}
+/* Every control sits above the decorative backdrop art. */
+.stack-pager-bar > * {
+  position: relative;
+  z-index: 1;
+}
+/* Thin album-art backdrop behind the pager controls: the first visible
+   album's cover, darkened + blurred so the buttons stay clearly readable.
+   The keyed remount on page change fades the next album's art in
+   (suppressed under prefers-reduced-motion below). */
+.stack-pager-bar__backdrop-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  filter: brightness(0.35) saturate(0.7) blur(2px);
+  pointer-events: none;
+  border-radius: inherit;
+  animation: stack-pager-art-fade 0.45s ease;
+}
+@keyframes stack-pager-art-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stack-pager-bar__backdrop-art {
+    animation: none;
+  }
 }
 .stack-pager-bar .home-cli-strip__scan-remote {
   flex: 1;
@@ -8712,6 +8747,27 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   grid-template-rows: repeat(5, minmax(0, 1fr));
   position: relative;
   overflow: hidden;
+}
+/* Density zoom: compact packs ten half-height rows into the band, micro
+   packs fifteen one-third-height rows. The reduced row height naturally
+   truncates the single text line; micro additionally drops the row text
+   to the small size so the year + title stay legible. */
+.compact-stack--compact {
+  grid-template-rows: repeat(10, minmax(0, 1fr));
+}
+.compact-stack--micro {
+  grid-template-rows: repeat(15, minmax(0, 1fr));
+}
+.compact-stack--micro .compact-stack__text {
+  font-size: var(--lore-size-small);
+}
+/* Skipped rows keep the same slot height as the active slots at every
+   density (20% of the band at normal → 10% / ~6.7% in the denser modes). */
+.compact-stack--compact.compact-stack--has-skipped {
+  grid-auto-rows: minmax(0, 10%);
+}
+.compact-stack--micro.compact-stack--has-skipped {
+  grid-auto-rows: minmax(0, 6.6667%);
 }
 /* With skipped albums present the collapsed band scrolls so the below-fold
    overflow region is reachable; skipped rows keep the same 20%-of-band slot

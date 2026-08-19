@@ -466,6 +466,123 @@ describe("CompactStack collapsed rows", () => {
   });
 });
 
+describe("CompactStack density zoom", () => {
+  /** N one-track albums, newest first, each with a distinct title/artist. */
+  function fillLibrary(n: number) {
+    libraryItems = Array.from({ length: n }, (_, i) =>
+      makeItem({
+        mbid: `m${i}`,
+        albumTitle: `Album ${i + 1}`,
+        artist: `Artist ${i + 1}`,
+        releaseYear: 1970 + i,
+        addedAt: `2026-08-${String(20 - i).padStart(2, "0")}T00:00:00Z`,
+      }),
+    );
+  }
+
+  it("defaults to the five-row normal density", () => {
+    fillLibrary(8);
+    const { container } = renderStack();
+    const root = container.querySelector(".compact-stack")!;
+    expect(root.className).not.toContain("compact-stack--compact");
+    expect(root.className).not.toContain("compact-stack--micro");
+    expect(container.querySelectorAll(".compact-stack__row")).toHaveLength(5);
+  });
+
+  it("shows ten rows per page at compact density and drops the credit segment", async () => {
+    fillLibrary(12);
+    knowledgeByMbid.set("m0", {
+      knowledge: makeKnowledge({ relationships: [SAMPLES_REL] }),
+      claims: [],
+    });
+    const { container } = renderStack({ density: "compact" });
+
+    // Ten half-height rows, styled by the compact modifier.
+    const root = container.querySelector(".compact-stack")!;
+    expect(root.className).toContain("compact-stack--compact");
+    expect(container.querySelectorAll(".compact-stack__row")).toHaveLength(10);
+
+    // The relationship credit is fetched but never rendered at compact.
+    await screen.findByRole("button", { name: "Play Album 1 · Artist 1" });
+    expect(container.querySelectorAll(".compact-stack__credit")).toHaveLength(0);
+    // The artist segment survives at compact.
+    expect(container.querySelectorAll(".compact-stack__artist").length).toBeGreaterThan(0);
+    // The year segment survives too.
+    expect(container.querySelectorAll(".compact-stack__year").length).toBeGreaterThan(0);
+  });
+
+  it("shows fifteen rows per page at micro density with only year + title", () => {
+    fillLibrary(20);
+    const { container } = renderStack({ density: "micro" });
+
+    const root = container.querySelector(".compact-stack")!;
+    expect(root.className).toContain("compact-stack--micro");
+    expect(container.querySelectorAll(".compact-stack__row")).toHaveLength(15);
+
+    // Micro rows are year + album title only — no artist, no credit.
+    expect(container.querySelectorAll(".compact-stack__artist")).toHaveLength(0);
+    expect(container.querySelectorAll(".compact-stack__credit")).toHaveLength(0);
+    expect(container.querySelectorAll(".compact-stack__year")).toHaveLength(15);
+    expect(container.querySelectorAll(".compact-stack__album")).toHaveLength(15);
+    expect(screen.getByText("Album 1")).toBeTruthy();
+    expect(screen.queryByText("Artist 1")).toBeNull();
+  });
+
+  it("plays the album directly instead of expanding at compact density", async () => {
+    fillLibrary(2);
+    albumTracksByMbid.set("m0", {
+      tracks: [{ mbid: "t1", title: "Song One", artist: "Artist 1" }],
+      rgTitle: "Album 1",
+    });
+    renderStack({ density: "compact" });
+
+    const row = await screen.findByRole("button", { name: "Play Album 1 · Artist 1" });
+    await act(async () => {
+      fireEvent.click(row);
+    });
+
+    // The album launched…
+    expect(albumTracksCalls).toEqual(["m0"]);
+    expect(startReplay).toHaveBeenCalledTimes(1);
+    // …and nothing expanded — no liner-notes region, still collapsed rows.
+    expect(screen.queryByRole("region", { name: /liner notes/ })).toBeNull();
+    expect(document.querySelector(".compact-stack--expanded")).toBeNull();
+  });
+
+  it("plays the album directly instead of expanding at micro density", async () => {
+    fillLibrary(2);
+    albumTracksByMbid.set("m0", {
+      tracks: [{ mbid: "t1", title: "Song One", artist: "Artist 1" }],
+    });
+    renderStack({ density: "micro" });
+
+    await act(async () => {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Play Album 1 · Artist 1" }),
+      );
+    });
+    expect(startReplay).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".compact-stack--expanded")).toBeNull();
+  });
+
+  it("drops an open expansion when the density leaves normal", async () => {
+    fillLibrary(2);
+    const { rerender, qc } = renderStack({ density: "normal" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand Album 1 · Artist 1" }),
+    );
+    await screen.findByRole("region", { name: /liner notes/ });
+
+    rerender(
+      <QueryClientProvider client={qc}>
+        <CompactStack density="compact" />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByRole("region", { name: /liner notes/ })).toBeNull();
+    expect(document.querySelector(".compact-stack--expanded")).toBeNull();
+  });
+});
+
 describe("CompactStack expansion", () => {
   it("expands a non-top row in place with metadata cards and a Stack link, then collapses", async () => {
     libraryItems = [

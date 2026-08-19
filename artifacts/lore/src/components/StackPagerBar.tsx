@@ -3,32 +3,53 @@
  * below the Stack band (and above the player dock / bottom shell).
  *
  * Mirrors the Dial's compact scan remote in the middle seam, but pages the
- * Stack: numeric page selectors (one per five-album window of the library),
- * a Shuffle button that samples random albums from the current page, and a
- * Shuffle all button that random-walks the whole library. An active shuffle
- * turns its button into a Stop control.
+ * Stack: a live album count, a density cycle key (5 / 10 / 15 rows per
+ * page), page selectors labeled by each window's first album (numeric
+ * fallback), a Shuffle button that samples random albums from the current
+ * page, and a Shuffle all button that random-walks the whole library. An
+ * active shuffle turns its button into a Stop control.
+ *
+ * Behind the controls sits a thin decorative backdrop: the cover art of the
+ * first album on the current page, darkened and blurred so the buttons stay
+ * clearly readable. When the page changes the art crossfades to the next
+ * album's cover (suppressed under prefers-reduced-motion).
  */
 
 import type { ShuffleMode } from "../hooks/useCompactStackShuffle";
+import {
+  nextStackDensity,
+  stackPageSize,
+  type StackDensity,
+} from "../lib/stackDensityState";
 
 export interface StackPagerBarProps {
-  /** Zero-based offset of the visible five-album page (multiple of 5). */
+  /** Zero-based offset of the visible album page (multiple of the density's page size). */
   stackOffset: number;
-  /** Number of stack pages (library album groups / 5, min 1). */
+  /** Number of stack pages (library album groups / page size, min 1). */
   stackPageCount: number;
-  /** Total album groups in the library (drives the Shuffle disabled state). */
+  /** Total album groups in the library (drives the count label + Shuffle disabled state). */
   totalGroups: number;
   /**
    * Per-page primary label: the album title of the FIRST album in each
-   * five-album window (index i ↔ page i+1), so the pager reads as music
+   * page-sized window (index i ↔ page i+1), so the pager reads as music
    * ("Rumours", "Blue Lines"…) instead of bare numbers. Null/absent entries
    * fall back to the numeric page label. The accessible label keeps the
    * page number and adds the window's album count ("…, +2 more").
    */
   pageLabels?: (string | null)[];
+  /** Stack band display density: normal = 5 rows, compact = 10, micro = 15. */
+  stackDensity: StackDensity;
+  /** Cycles the density: normal → compact → micro → normal. */
+  onCycleStackDensity: () => void;
+  /**
+   * Cover art of the first album on the current page — rendered as a
+   * darkened, blurred decorative backdrop behind the bar's controls. Null =
+   * no backdrop.
+   */
+  firstPageArtUrl?: string | null;
   /** Active shuffle: "page" = current page, "all" = whole library, null = off. */
   shuffleMode: ShuffleMode;
-  /** Called when the user selects a page (offset = (page - 1) * 5). */
+  /** Called when the user selects a page (offset = (page - 1) * page size). */
   onSelectStackPage: (offset: number) => void;
   /** Toggles the page shuffle. */
   onShufflePage: () => void;
@@ -41,21 +62,54 @@ export function StackPagerBar({
   stackPageCount,
   totalGroups,
   pageLabels,
+  stackDensity,
+  onCycleStackDensity,
+  firstPageArtUrl = null,
   shuffleMode,
   onSelectStackPage,
   onShufflePage,
   onShuffleAll,
 }: StackPagerBarProps) {
-  const currentPage = Math.floor(stackOffset / 5); // 0-based page index
+  // Page math follows the density: 5-row pages in normal, 10 in compact,
+  // 15 in micro.
+  const pageSize = stackPageSize(stackDensity);
+  const currentPage = Math.floor(stackOffset / pageSize); // 0-based page index
+  const nextDensity = nextStackDensity(stackDensity);
 
   return (
     <div className="stack-pager-bar">
+      {/* Decorative album-art backdrop: the first visible album's cover,
+          darkened + blurred so the controls above it stay readable. */}
+      {firstPageArtUrl && (
+        <img
+          key={firstPageArtUrl}
+          className="stack-pager-bar__backdrop-art"
+          src={firstPageArtUrl}
+          alt=""
+          aria-hidden="true"
+        />
+      )}
       {/* Same bounded, horizontally scrollable rail as the CLI seam's filter
           rows — without it a long page list would overflow the viewport on
           narrow screens and strand the later stack pages. */}
       <div className="home-cli-strip__filter-rail stack-pager-bar__rail">
       <div className="home-cli-strip__filter-row home-cli-strip__scan-remote" role="group" aria-label="Stack pages">
-        {/* Compact numeric page selectors — identical styling to the Dial's. */}
+        {/* Always-visible count of albums in the Stack window's scope */}
+        <span className="home-cli-strip__station-count">
+          {totalGroups} {totalGroups === 1 ? "album" : "albums"}
+        </span>
+        {/* Density cycle key: 5 rows → 10 rows → 15 rows */}
+        <button
+          type="button"
+          className="home-cli-strip__filter-chip home-cli-strip__density-btn"
+          aria-label={`density ${stackPageSize(stackDensity)} rows — switch to ${stackPageSize(nextDensity)}`}
+          title={`Showing ${stackPageSize(stackDensity)} rows — tap for ${stackPageSize(nextDensity)}`}
+          onClick={onCycleStackDensity}
+        >
+          {stackPageSize(stackDensity)}
+        </button>
+        {/* Page selectors — the Dial's styling, labeled by each window's
+            first album when the caller supplies pageLabels. */}
         <div className="home-cli-strip__page-selectors" role="group" aria-label="Stack page">
           {Array.from({ length: Math.max(1, stackPageCount) }, (_, i) => {
             const isCurrentPage = currentPage === i;
@@ -63,7 +117,7 @@ export function StackPagerBar({
             // Albums in this window (the last page may be short) — the
             // accessible label carries the "+N more" count so two pages
             // opening with the same album title stay unambiguous.
-            const windowCount = Math.min(5, Math.max(0, totalGroups - i * 5));
+            const windowCount = Math.min(pageSize, Math.max(0, totalGroups - i * pageSize));
             const ariaLabel = album
               ? `stack page ${i + 1}: ${album}${windowCount > 1 ? `, +${windowCount - 1} more` : ""}`
               : `stack page ${i + 1}`;
@@ -75,7 +129,7 @@ export function StackPagerBar({
                 aria-pressed={isCurrentPage}
                 aria-label={ariaLabel}
                 title={album ? ariaLabel : undefined}
-                onClick={() => onSelectStackPage(i * 5)}
+                onClick={() => onSelectStackPage(i * pageSize)}
               >
                 {album ?? i + 1}
               </button>

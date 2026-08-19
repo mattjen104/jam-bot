@@ -7,6 +7,8 @@
  *     selector per stack page) with the same styling hooks as the Dial's
  *     page buttons.
  *  2. The active page is exposed via aria-pressed; clicks route offsets.
+ *  2b. Page buttons can lead with each window's first album title (numeric
+ *     fallback), keeping the page number + "+N more" in the aria-label.
  *  3. Shuffle / Shuffle all route their callbacks, expose active state, and
  *     become Stop controls while a shuffle runs; both disable on an empty
  *     library.
@@ -27,14 +29,16 @@ function renderPager(overrides: Partial<React.ComponentProps<typeof StackPagerBa
     stackOffset: 0,
     stackPageCount: 4,
     totalGroups: 18,
+    stackDensity: "normal",
+    onCycleStackDensity: vi.fn(),
     shuffleMode: null,
     onSelectStackPage: vi.fn(),
     onShufflePage: vi.fn(),
     onShuffleAll: vi.fn(),
     ...overrides,
   };
-  render(<StackPagerBar {...props} />);
-  return { props };
+  const utils = render(<StackPagerBar {...props} />);
+  return { props, ...utils };
 }
 
 describe("StackPagerBar", () => {
@@ -55,18 +59,6 @@ describe("StackPagerBar", () => {
     expect(pageGroup.querySelectorAll("button")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "stack page 1" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "stack page 2" })).toBeNull();
-  });
-
-  it("marks the current page via aria-pressed and routes clicks as offsets", () => {
-    const { props } = renderPager({ stackOffset: 5, stackPageCount: 4 });
-    expect(screen.getByRole("button", { name: "stack page 2" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "stack page 1" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("button", { name: "stack page 3" }).getAttribute("aria-pressed")).toBe("false");
-
-    fireEvent.click(screen.getByRole("button", { name: "stack page 3" }));
-    expect(props.onSelectStackPage).toHaveBeenCalledWith(10);
-    fireEvent.click(screen.getByRole("button", { name: "stack page 1" }));
-    expect(props.onSelectStackPage).toHaveBeenCalledWith(0);
   });
 
   it("labels each page button with the first album title in its window", () => {
@@ -97,6 +89,18 @@ describe("StackPagerBar", () => {
   it("labels a single-album page without a '+N more' count", () => {
     renderPager({ stackPageCount: 1, totalGroups: 1, pageLabels: ["Rumours"] });
     screen.getByRole("button", { name: "stack page 1: Rumours" });
+  });
+
+  it("marks the current page via aria-pressed and routes clicks as offsets", () => {
+    const { props } = renderPager({ stackOffset: 5, stackPageCount: 4 });
+    expect(screen.getByRole("button", { name: "stack page 2" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "stack page 1" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "stack page 3" }).getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "stack page 3" }));
+    expect(props.onSelectStackPage).toHaveBeenCalledWith(10);
+    fireEvent.click(screen.getByRole("button", { name: "stack page 1" }));
+    expect(props.onSelectStackPage).toHaveBeenCalledWith(0);
   });
 
   it("wraps the controls in a horizontally scrollable rail so later pages stay reachable", () => {
@@ -167,5 +171,97 @@ describe("StackPagerBar", () => {
     fireEvent.click(shuffleAllBtn);
     expect(props.onShufflePage).not.toHaveBeenCalled();
     expect(props.onShuffleAll).not.toHaveBeenCalled();
+  });
+
+  it("shows the live album count next to the density key", () => {
+    renderPager({ totalGroups: 42, stackPageCount: 9 });
+    expect(screen.getByText("42 albums")).toBeTruthy();
+    // Singular form for a one-album library.
+    cleanup();
+    renderPager({ totalGroups: 1, stackPageCount: 1 });
+    expect(screen.getByText("1 album")).toBeTruthy();
+  });
+
+  it("renders the density cycle key with the current and next row counts", () => {
+    renderPager({ stackDensity: "normal" });
+    const key = screen.getByRole("button", { name: "density 5 rows — switch to 10" });
+    expect(key.textContent).toBe("5");
+    expect(key.className).toContain("home-cli-strip__density-btn");
+  });
+
+  it("clicking the density key routes to the cycle callback at every step", () => {
+    // The component is controlled: the parent owns the density state and
+    // re-renders with the next value, so each click must fire the callback.
+    const { props, rerender } = renderPager({ stackDensity: "normal" });
+    fireEvent.click(screen.getByRole("button", { name: "density 5 rows — switch to 10" }));
+    expect(props.onCycleStackDensity).toHaveBeenCalledTimes(1);
+
+    rerender(<StackPagerBar {...props} stackDensity="compact" />);
+    const compactKey = screen.getByRole("button", { name: "density 10 rows — switch to 15" });
+    expect(compactKey.textContent).toBe("10");
+    fireEvent.click(compactKey);
+    expect(props.onCycleStackDensity).toHaveBeenCalledTimes(2);
+
+    rerender(<StackPagerBar {...props} stackDensity="micro" />);
+    const microKey = screen.getByRole("button", { name: "density 15 rows — switch to 5" });
+    expect(microKey.textContent).toBe("15");
+    fireEvent.click(microKey);
+    expect(props.onCycleStackDensity).toHaveBeenCalledTimes(3);
+  });
+
+  it("scales the page selectors with the density: 42 albums → 9 / 5 / 3 pages", () => {
+    // 42 albums at density 5 / 10 / 15 rows per page.
+    const { props, rerender } = renderPager({
+      totalGroups: 42,
+      stackPageCount: 9,
+      stackDensity: "normal",
+    });
+    const pageGroup = () => screen.getByRole("group", { name: "Stack page" });
+    expect(pageGroup().querySelectorAll("button")).toHaveLength(9);
+    expect(screen.getByRole("button", { name: "stack page 9" })).toBeTruthy();
+
+    rerender(<StackPagerBar {...props} stackDensity="compact" stackPageCount={5} />);
+    expect(pageGroup().querySelectorAll("button")).toHaveLength(5);
+    expect(screen.queryByRole("button", { name: "stack page 6" })).toBeNull();
+
+    rerender(<StackPagerBar {...props} stackDensity="micro" stackPageCount={3} />);
+    expect(pageGroup().querySelectorAll("button")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "stack page 4" })).toBeNull();
+  });
+
+  it("routes page clicks as density-sized offsets", () => {
+    const { props } = renderPager({
+      stackDensity: "compact",
+      stackPageCount: 5,
+      totalGroups: 42,
+    });
+    // At 10 rows per page, page 3 starts at offset 20 (not 10).
+    fireEvent.click(screen.getByRole("button", { name: "stack page 3" }));
+    expect(props.onSelectStackPage).toHaveBeenCalledWith(20);
+  });
+
+  it("marks the current page by density-sized offset", () => {
+    renderPager({ stackDensity: "compact", stackOffset: 10, stackPageCount: 5, totalGroups: 42 });
+    expect(screen.getByRole("button", { name: "stack page 2" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "stack page 1" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("renders the first page's album art as a decorative backdrop", () => {
+    const { container, rerender, props } = renderPager({
+      firstPageArtUrl: "https://example.com/first.jpg",
+    });
+    const backdrop = container.querySelector("img.stack-pager-bar__backdrop-art");
+    expect(backdrop?.getAttribute("src")).toBe("https://example.com/first.jpg");
+    expect(backdrop?.getAttribute("aria-hidden")).toBe("true");
+
+    // Page change → the backdrop crossfades to the next album's cover.
+    rerender(<StackPagerBar {...props} firstPageArtUrl="https://example.com/second.jpg" />);
+    expect(
+      container.querySelector("img.stack-pager-bar__backdrop-art")?.getAttribute("src"),
+    ).toBe("https://example.com/second.jpg");
+
+    // No art → no backdrop element at all.
+    rerender(<StackPagerBar {...props} firstPageArtUrl={null} />);
+    expect(container.querySelector("img.stack-pager-bar__backdrop-art")).toBeNull();
   });
 });

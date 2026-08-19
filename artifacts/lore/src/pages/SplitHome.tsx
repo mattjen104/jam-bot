@@ -57,6 +57,15 @@ import {
   writeDialDensity,
   type DialDensity,
 } from "../lib/dialDensityState";
+import {
+  nextStackDensity,
+  readStackDensity,
+  stackPageSize,
+  writeStackDensity,
+  type StackDensity,
+} from "../lib/stackDensityState";
+import { spineArtUrl } from "../components/CompactStack";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
@@ -592,6 +601,12 @@ export default function SplitHome() {
     () => stackGroups.filter((g) => !stackSkipped.has(g.key)),
     [stackGroups, stackSkipped],
   );
+
+  // Stack-band display density (persisted, localStorage "lore:stackDensity"):
+  // normal = 5 full rows, compact = 10 half-height rows, micro = 15
+  // one-third-height rows. Mirrors the dial band's density cycle.
+  const [stackDensity, setStackDensity] = useState<StackDensity>(() => readStackDensity());
+  const stackRowsPerPage = stackPageSize(stackDensity);
   const [stackOffset, setStackOffset] = useState<number>(0);
 
   const {
@@ -603,45 +618,71 @@ export default function SplitHome() {
   } = useCompactStackShuffle({
     groups: activeStackGroups,
     stackOffset,
+    pageSize: stackRowsPerPage,
     onSetStackOffset: setStackOffset,
   });
 
+  // Density cycle key on the stack pager. Switching density changes the page
+  // size, so any running shuffle stops — its cursor was computed for the old
+  // window. The offset re-clamps/snaps via the render-time clamp below.
+  const cycleStackDensity = useCallback(() => {
+    stopShuffle();
+    setStackDensity((prev) => {
+      const next = nextStackDensity(prev);
+      writeStackDensity(next);
+      return next;
+    });
+  }, [stopShuffle]);
+
   // Clamp the stack window when the active list shrinks (deselects/imports/
-  // skip toggles) so a stale offset never shows an empty page. Render-time
-  // adjustment, same derived-state pattern as the scan window clamp above.
-  const [prevStackCount, setPrevStackCount] = useState(activeStackGroups.length);
-  if (prevStackCount !== activeStackGroups.length) {
-    setPrevStackCount(activeStackGroups.length);
+  // skip toggles) or the density changes the page size, so a stale offset
+  // never shows an empty or misaligned page. Render-time adjustment, same
+  // derived-state pattern as the scan window clamp above.
+  const stackClampKey = `${activeStackGroups.length}:${stackRowsPerPage}`;
+  const [prevStackClampKey, setPrevStackClampKey] = useState(stackClampKey);
+  if (prevStackClampKey !== stackClampKey) {
+    setPrevStackClampKey(stackClampKey);
     if (activeStackGroups.length === 0) {
       if (stackOffset !== 0) setStackOffset(0);
-    } else if (stackOffset >= activeStackGroups.length) {
-      setStackOffset(Math.floor((activeStackGroups.length - 1) / 5) * 5);
+    } else {
+      const snapped = Math.floor(stackOffset / stackRowsPerPage) * stackRowsPerPage;
+      const maxOffset = Math.floor((activeStackGroups.length - 1) / stackRowsPerPage) * stackRowsPerPage;
+      const clamped = Math.min(snapped, maxOffset);
+      if (clamped !== stackOffset) setStackOffset(clamped);
     }
   }
 
-  const stackPageCount = Math.max(1, Math.ceil(activeStackGroups.length / 5));
+  const stackPageCount = Math.max(1, Math.ceil(activeStackGroups.length / stackRowsPerPage));
+
+  // Cover art of the first album on the current Stack page — the pager
+  // bar's decorative backdrop. Derived from the already-loaded groups (own
+  // artwork or CAA release-group fallback), so no extra fetch is needed.
+  const stackFirstArtUrl = useMemo(() => {
+    const first = activeStackGroups[stackOffset];
+    return first ? proxyArtUrl(spineArtUrl(first)) : null;
+  }, [activeStackGroups, stackOffset]);
 
   // Pager labels: each stack page introduces itself by the first album in
-  // its five-album window ("Rumours", "Blue Lines"…) instead of a bare
-  // page number. Windows are over ACTIVE groups only — the same list the
-  // pager pages and the CompactStack band windows.
+  // its window ("Rumours", "Blue Lines"…) instead of a bare page number.
+  // Windows follow the density's page size and are over ACTIVE groups only —
+  // the same list the pager pages and the CompactStack band windows.
   const stackPageLabels = useMemo(
     () =>
       Array.from({ length: stackPageCount }, (_, i) =>
-        activeStackGroups[i * 5]?.albumTitle ?? null,
+        activeStackGroups[i * stackRowsPerPage]?.albumTitle ?? null,
       ),
-    [activeStackGroups, stackPageCount],
+    [activeStackGroups, stackPageCount, stackRowsPerPage],
   );
 
   // Stack page selection clamps to the last valid page (same contract as the
   // dial's handleSelectPage) and stops any running shuffle — the listener
   // explicitly navigated, so the shuffle cursor is now incompatible.
   const handleSelectStackPage = useCallback((offset: number) => {
-    if (offset < 0 || offset % 5 !== 0) return;
-    const maxOffset = Math.max(0, Math.floor((activeStackGroups.length - 1) / 5) * 5);
+    if (offset < 0 || offset % stackRowsPerPage !== 0) return;
+    const maxOffset = Math.max(0, Math.floor((activeStackGroups.length - 1) / stackRowsPerPage) * stackRowsPerPage);
     setStackOffset(Math.min(offset, maxOffset));
     stopShuffle();
-  }, [activeStackGroups.length, stopShuffle]);
+  }, [activeStackGroups.length, stackRowsPerPage, stopShuffle]);
 
   const mattStarterMutation = useStartMattLibrary();
   const startMattLibrary = useCallback(() => {
@@ -754,6 +795,7 @@ export default function SplitHome() {
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
         <CompactStack
           offset={stackOffset}
+          density={stackDensity}
           shuffleKey={shuffleGroupKey}
           skipped={stackSkipped}
           onToggleSkip={toggleStackSkip}
@@ -764,6 +806,9 @@ export default function SplitHome() {
         stackOffset={stackOffset}
         stackPageCount={stackPageCount}
         totalGroups={activeStackGroups.length}
+        stackDensity={stackDensity}
+        onCycleStackDensity={cycleStackDensity}
+        firstPageArtUrl={stackFirstArtUrl}
         pageLabels={stackPageLabels}
         shuffleMode={shuffleMode}
         onSelectStackPage={handleSelectStackPage}

@@ -49,8 +49,7 @@ import { proxyArtUrl } from "../lib/proxyArt";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { CompactPlayButton } from "./CompactPlayButton";
-
-const COMPACT_STACK_SIZE = 5;
+import { stackPageSize, type StackDensity } from "../lib/stackDensityState";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for tests)
@@ -373,6 +372,7 @@ function CompactStackRow({
   renderSpine,
   sampling = false,
   isSkipped = false,
+  density = "normal",
   onToggleSkip,
   onExpand,
 }: {
@@ -383,6 +383,12 @@ function CompactStackRow({
   sampling?: boolean;
   /** True when the album is unchecked — row dims and lives below the fold. */
   isSkipped?: boolean;
+  /**
+   * Row display density. "compact" drops the relationship credit segment;
+   * "micro" shows only the year + album title (no artist, no credit) and
+   * tapping the row plays the album directly instead of expanding it.
+   */
+  density?: StackDensity;
   /** Trailing checkbox handler; the checkbox renders only when provided. */
   onToggleSkip?: (key: string) => void;
   onExpand: () => void;
@@ -392,6 +398,23 @@ function CompactStackRow({
   const label = group.artist
     ? `${group.albumTitle} · ${group.artist}`
     : group.albumTitle;
+  // Expansion (liner notes) exists only at normal density — in the denser
+  // modes a row tap plays the album directly, the same as the compact dial.
+  const directPlay = density !== "normal";
+  const handlePress = () => {
+    if (!directPlay) {
+      onExpand();
+      return;
+    }
+    // Same press semantics as the play button: loading = no-op, active =
+    // pause/resume, otherwise launch the album.
+    if (isLoading) return;
+    if (isActive) {
+      togglePause();
+    } else {
+      void launch();
+    }
+  };
 
   return (
     <div
@@ -399,15 +422,15 @@ function CompactStackRow({
       role="button"
       tabIndex={0}
       aria-expanded="false"
-      aria-label={`Expand ${label}`}
-      onClick={onExpand}
+      aria-label={directPlay ? `Play ${label}` : `Expand ${label}`}
+      onClick={handlePress}
       onKeyDown={(event) => {
-        // Only expand when the event originates on the row itself — interactive
+        // Only fire when the event originates on the row itself — interactive
         // descendants (e.g. the play button) stop propagation on their own
         // keydown before it reaches here.
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onExpand();
+          handlePress();
         }
       }}
     >
@@ -435,13 +458,15 @@ function CompactStackRow({
           <span className="compact-stack__year">{group.releaseYear}</span>
         )}
         <span className="compact-stack__album">{group.albumTitle}</span>
-        {group.artist && (
+        {/* Micro density is year + title only — no artist, no credit. */}
+        {group.artist && density !== "micro" && (
           <>
             <span className="compact-stack__sep" aria-hidden="true">·</span>
             <span className="compact-stack__artist">{group.artist}</span>
           </>
         )}
-        {credit && (
+        {/* The relationship credit survives only at normal density. */}
+        {credit && density === "normal" && (
           <>
             <span className="compact-stack__sep" aria-hidden="true">·</span>
             <span className="compact-stack__credit">{credit}</span>
@@ -614,10 +639,17 @@ function CompactStackFilmstrip({
 export interface CompactStackProps {
   /**
    * Zero-based offset into the full library album-group list (a multiple of
-   * COMPACT_STACK_SIZE) — the Stack pager's window. Defaults to the first
-   * page.
+   * the density's page size) — the Stack pager's window. Defaults to the
+   * first page.
    */
   offset?: number;
+  /**
+   * Display density of the collapsed band: "normal" (default) = 5 full
+   * rows with expansion, "compact" = 10 half-height rows (no credit
+   * segment), "micro" = 15 one-third-height rows (year + title only). In
+   * the denser modes tapping a row plays the album directly.
+   */
+  density?: StackDensity;
   /**
    * Key of the album group the stack shuffle is currently dwelling on; that
    * row is highlighted for the dwell interval. Null when no shuffle runs.
@@ -644,10 +676,14 @@ export interface CompactStackProps {
   onToggleSkip?: (key: string) => void;
 }
 
-export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, skipped, onToggleSkip }: CompactStackProps = {}) {
+export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { data, isLoading } = useMyLibraryInfinite({}, 100);
+
+  // Rows per page at the current density: 5 (normal), 10 (compact), or
+  // 15 (micro). Drives the window slice and the grid's row count alike.
+  const pageSize = stackPageSize(density);
 
   // The full group list splits into active (pager-windowed) and skipped
   // (below-fold overflow) albums — the Stack-side mirror of CompactDial.
@@ -664,8 +700,8 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, 
     [allGroups, skipped],
   );
   const groups = useMemo(
-    () => activeGroups.slice(offset, offset + COMPACT_STACK_SIZE),
-    [activeGroups, offset],
+    () => activeGroups.slice(offset, offset + pageSize),
+    [activeGroups, offset, pageSize],
   );
 
   // The expanded album is looked up in the visible window OR the skipped
@@ -773,8 +809,10 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, 
   // A library refetch or a page change can remove or reorder the expanded
   // album out of the visible window. Drop the stale key during render (the
   // derived-state pattern) so the collapsed strip, the upward report, and
-  // any future reappearance of the album all stay consistent.
-  if (expandedKey && !expandedGroup) {
+  // any future reappearance of the album all stay consistent. Expansion is
+  // also dropped when the density leaves "normal" — liner notes exist only
+  // at the five-row density.
+  if (expandedKey && (!expandedGroup || density !== "normal")) {
     setExpandedKey(null);
   }
 
@@ -1018,10 +1056,10 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, 
     );
   }
 
-  // ── Collapsed: five single-line rows (+ below-fold skipped region) ──────
+  // ── Collapsed: single-line rows (+ below-fold skipped region) ──────────
   return (
     <div
-      className={`compact-stack${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
+      className={`compact-stack${density !== "normal" ? ` compact-stack--${density}` : ""}${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
       aria-label="Recent keeps"
     >
       {ordered.map((group) => {
@@ -1034,6 +1072,7 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, 
             credit={credit}
             renderSpine={renderSpine}
             sampling={group.key === shuffleKey}
+            density={density}
             onToggleSkip={onToggleSkip}
             onExpand={() => changeExpanded(group.key)}
           />
@@ -1057,6 +1096,7 @@ export function CompactStack({ offset = 0, shuffleKey = null, onExpandedChange, 
                 renderSpine={renderSpine}
                 sampling={group.key === shuffleKey}
                 isSkipped
+                density={density}
                 onToggleSkip={onToggleSkip}
                 onExpand={() => changeExpanded(group.key)}
               />

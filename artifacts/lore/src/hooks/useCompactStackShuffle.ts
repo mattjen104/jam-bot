@@ -33,12 +33,19 @@ function firstMbid(group: AlbumGroup): string | null {
 export function useCompactStackShuffle({
   groups,
   stackOffset,
+  pageSize = 5,
   onSetStackOffset,
 }: {
   /** All library album groups (unwindowed). */
   groups: AlbumGroup[];
-  /** Current stack page offset (multiple of 5). */
+  /** Current stack page offset (multiple of the page size). */
   stackOffset: number;
+  /**
+   * Albums per page at the current stack density (5 normal, 10 compact,
+   * 15 micro). The "page" shuffle scope and the shuffle-all window snap
+   * both follow it.
+   */
+  pageSize?: number;
   /** Moves the stack page window (used by shuffle-all so the hop stays visible). */
   onSetStackOffset: (offset: number) => void;
 }) {
@@ -57,10 +64,12 @@ export function useCompactStackShuffle({
   // SplitHome's filteredRowsRef / scanOffsetRef).
   const groupsRef = useRef(groups);
   const offsetRef = useRef(stackOffset);
+  const pageSizeRef = useRef(pageSize);
   const offsetSetterRef = useRef(onSetStackOffset);
   useEffect(() => {
     groupsRef.current = groups;
     offsetRef.current = stackOffset;
+    pageSizeRef.current = pageSize;
     offsetSetterRef.current = onSetStackOffset;
   });
 
@@ -114,9 +123,10 @@ export function useCompactStackShuffle({
   // scope is empty (caller stops the shuffle).
   const hopToRandom = useCallback((mode: "page" | "all"): boolean => {
     const allGroups = groupsRef.current;
+    const size = pageSizeRef.current;
     const list =
       mode === "page"
-        ? allGroups.slice(offsetRef.current, offsetRef.current + 5)
+        ? allGroups.slice(offsetRef.current, offsetRef.current + size)
         : allGroups;
     if (list.length === 0) return false;
     let idx = Math.floor(Math.random() * list.length);
@@ -128,10 +138,10 @@ export function useCompactStackShuffle({
     rt.current.key = group.key;
     // A library-wide shuffle drives the visible window along with it, so the
     // sampled album is always rendered and highlighted (CompactStack only
-    // shows the current five-row page).
+    // shows the current page — 5 rows in normal, 10 in compact, 15 in micro).
     if (mode === "all") {
       const globalIdx = allGroups.indexOf(group);
-      offsetSetterRef.current(Math.floor(globalIdx / 5) * 5);
+      offsetSetterRef.current(Math.floor(globalIdx / size) * size);
     }
     setShuffleGroupKey(group.key);
     previewGroup(group);
@@ -159,7 +169,7 @@ export function useCompactStackShuffle({
     const allGroups = groupsRef.current;
     const list =
       mode === "page"
-        ? allGroups.slice(offsetRef.current, offsetRef.current + 5)
+        ? allGroups.slice(offsetRef.current, offsetRef.current + pageSizeRef.current)
         : allGroups;
     if (list.length === 0) return;
     rt.current.active = true;
