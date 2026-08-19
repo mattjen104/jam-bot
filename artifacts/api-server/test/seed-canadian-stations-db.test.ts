@@ -45,9 +45,10 @@ const ICY_SLUGS = ["cfuv", "cjsr", "ckut"] as const;
 const _NO_NP_SLUGS = ["chmr", "cism"] as const;
 
 /**
- * Stations upgraded to Spinitron after ICY investigation showed null StreamTitle.
- *  - CKCU: confirmed on spinitron.com/CKCU; now uses spinSource (spinitron_web
- *    by default, upgrades to spinitron when SPINITRON_KEY_CKCU is set).
+ * Stations routed through spinSource().
+ *  - CKCU: spinitron.com/CKCU is NOT actually hosted on Spinitron (scrape
+ *    404'd), so spinSource now falls back to radio_browser_icy using the
+ *    statsradio stream. Upgrades to spinitron when SPINITRON_KEY_CKCU is set.
  */
 const SPINITRON_SLUGS = ["ckcu"] as const;
 
@@ -94,9 +95,9 @@ describe("Canadian campus station seed enrollment", () => {
         // CFUV, CJSR, CKUT have confirmed ICY metadata streams.
         expect(row.nowPlayingSource).toBe("radio_browser_icy");
       } else if ((SPINITRON_SLUGS as readonly string[]).includes(row.slug)) {
-        // CKCU is on Spinitron — nowPlayingSource is spinitron_web (or spinitron
-        // when SPINITRON_KEY_CKCU is set).
-        expect(["spinitron_web", "spinitron"]).toContain(row.nowPlayingSource);
+        // CKCU is NOT in the Spinitron allowlist — spinSource falls back to
+        // radio_browser_icy (or spinitron when SPINITRON_KEY_CKCU is set).
+        expect(["radio_browser_icy", "spinitron"]).toContain(row.nowPlayingSource);
       } else {
         // CHMR, CISM — nowPlayingSource=null until a working API is found.
         expect(row.nowPlayingSource).toBeNull();

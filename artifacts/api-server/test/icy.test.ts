@@ -478,3 +478,89 @@ describe("parseStreamTitle — leading delimiter stripping", () => {
     expect(result?.rawTitle).toBe("-Loser");
   });
 });
+
+// ---- resolveStreamUrl ------------------------------------------------------
+
+import { resolveStreamUrl } from "../src/lore/icy.js";
+import { vi, afterEach } from "vitest";
+
+describe("resolveStreamUrl", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
+    vi.stubGlobal("fetch", vi.fn(impl));
+  }
+
+  it("follows one 302 redirect and returns the Location URL", async () => {
+    stubFetch(async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://cdn.example.com/signed/stream?tok=abc" },
+      }),
+    );
+    const resolved = await resolveStreamUrl("https://stream.rcs.revma.com/w4pmmfkdx4zuv");
+    expect(resolved).toBe("https://cdn.example.com/signed/stream?tok=abc");
+  });
+
+  it("resolves a relative Location against the original URL", async () => {
+    stubFetch(async () =>
+      new Response(null, { status: 301, headers: { location: "/other-mount" } }),
+    );
+    const resolved = await resolveStreamUrl("https://icecast.example.org:8443/main");
+    expect(resolved).toBe("https://icecast.example.org:8443/other-mount");
+  });
+
+  it("returns the original URL on a 2xx response (no redirect)", async () => {
+    stubFetch(async () => new Response(null, { status: 200 }));
+    const url = "https://streaming.wrek.org/main/128kb.mp3";
+    expect(await resolveStreamUrl(url)).toBe(url);
+  });
+
+  it("returns the original URL on a 400 (healthy Icecast servers reject bare HEAD)", async () => {
+    stubFetch(async () => new Response(null, { status: 400 }));
+    const url = "https://wmbr.org:8002/hi";
+    expect(await resolveStreamUrl(url)).toBe(url);
+  });
+
+  it("returns the original URL when the HEAD request throws (timeout/network)", async () => {
+    stubFetch(async () => {
+      throw new Error("network unreachable");
+    });
+    const url = "https://audio-mp3.ibiblio.org/wxyc.mp3";
+    expect(await resolveStreamUrl(url)).toBe(url);
+  });
+
+  it("returns the original URL on a 3xx without a Location header", async () => {
+    stubFetch(async () => new Response(null, { status: 302 }));
+    const url = "https://example.com/stream";
+    expect(await resolveStreamUrl(url)).toBe(url);
+  });
+
+  it("issues a HEAD request with manual redirect handling", async () => {
+    const seen: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch(async (url, init) => {
+      seen.push({ url: String(url), init });
+      return new Response(null, { status: 200 });
+    });
+    await resolveStreamUrl("https://example.com/stream");
+    expect(seen).toHaveLength(1);
+    expect(seen[0].init?.method).toBe("HEAD");
+    expect(seen[0].init?.redirect).toBe("manual");
+  });
+
+  it("resolves only ONE hop — a redirect chain is not followed further", async () => {
+    let calls = 0;
+    stubFetch(async () => {
+      calls += 1;
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://hop2.example.com/next" },
+      });
+    });
+    const resolved = await resolveStreamUrl("https://hop1.example.com/start");
+    expect(resolved).toBe("https://hop2.example.com/next");
+    expect(calls).toBe(1);
+  });
+});

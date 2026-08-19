@@ -20,6 +20,28 @@ import { inferTimezone } from "./timezone.js";
  * verified live. Each station plays its own sanctioned stream, unmodified, and
  * carries homepage + donate links because attribution is non-negotiable.
  */
+/**
+ * Callsigns confirmed to actually be hosted on spinitron.com (curl batch
+ * against `https://spinitron.com/<CALLSIGN>` returned 200 for each of these).
+ * `spinSource()` only ever emits the `spinitron_web` scrape source for
+ * callsigns in this set — a scrape of a callsign NOT on Spinitron 404s on
+ * every poll and silently produces zero spins forever.
+ */
+export const SPINITRON_CALLSIGNS: ReadonlySet<string> = new Set([
+  "WPRB",
+  "KDVS",
+  "WHRB",
+  "WKCR",
+  "KALX",
+  "WUOG",
+  "KVSC",
+  "WMFO",
+  "WBRS",
+  "WZBC",
+  "WTBU",
+  "WPTS",
+]);
+
 export const SEED_STATIONS: InsertStation[] = [
   {
     slug: "kexp",
@@ -438,7 +460,7 @@ function canadianCampusStations(): InsertStation[] {
       streamFormat: "aac",
       homepageUrl: "https://ckcu.ca",
       scheduleUrl: "https://ckcu.ca/schedule",
-      ...spinSource("CKCU"),
+      ...spinSource("CKCU", "https://stream2.statsradio.com:8124/stream"),
       source: "curated",
       stationClass: "community",
       tags: ["college"],
@@ -656,6 +678,117 @@ export async function ensureIcyHealthRows(): Promise<void> {
 }
 
 /**
+ * Stations verified to publish ICY metadata (GET + `Icy-MetaData: 1` probe,
+ * 2026-08 curl batch) whose DB rows were seeded with a broken
+ * `spinitron_web` source (their callsigns are not hosted on spinitron.com,
+ * so the scrape 404'd on every poll and they produced zero spins).
+ *
+ * `repairMisconfiguredSpinitronStations()` flips these to `radio_browser_icy`
+ * at boot. WNUR's RevMA stream answers with a 302 to a signed CDN URL — it
+ * works because `resolveStreamUrl()` in icy.ts follows one redirect hop.
+ */
+export const ICY_REPAIR_STATIONS: ReadonlyArray<{
+  slug: string;
+  callsign: string;
+  streamUrl: string;
+}> = [
+  { slug: "wrek", callsign: "WREK", streamUrl: "https://streaming.wrek.org/main/128kb.mp3" },
+  { slug: "wfmu", callsign: "WFMU", streamUrl: "https://stream0.wfmu.org/freeform-128k" },
+  { slug: "wxyc", callsign: "WXYC", streamUrl: "https://audio-mp3.ibiblio.org/wxyc.mp3" },
+  { slug: "wmbr", callsign: "WMBR", streamUrl: "https://wmbr.org:8002/hi" },
+  { slug: "wdiy", callsign: "WDIY", streamUrl: "https://war.streamguys1.com:7883/wdiy_7880" },
+  { slug: "whpk", callsign: "WHPK", streamUrl: "https://whpk-stream.uchicago.edu/stream" },
+  { slug: "wxdu", callsign: "WXDU", streamUrl: "https://weeping.wxdu.duke.edu:8443/wxdu128.mp3" },
+  { slug: "wicb", callsign: "WICB", streamUrl: "https://icecast.do.zufall.co/wicb_mp3_high" },
+  { slug: "wusb", callsign: "WUSB", streamUrl: "https://stream.wusb.stonybrook.edu:8092/listen.pl" },
+  { slug: "ckcu", callsign: "CKCU", streamUrl: "https://stream2.statsradio.com:8124/stream" },
+  { slug: "wnur", callsign: "WNUR", streamUrl: "https://stream.rcs.revma.com/w4pmmfkdx4zuv" },
+];
+
+/**
+ * Repair existing DB rows for stations that were seeded with a broken
+ * `spinitron_web` source but have an ICY-capable stream (ICY_REPAIR_STATIONS):
+ *
+ *  1. Upsert a radio_browser_stations health row (synthetic `manual-<slug>`
+ *     UUID, icyStatus reset to "active") linked to the station.
+ *  2. Flip the station to `now_playing_source = 'radio_browser_icy'` with
+ *     `{ callsign, streamUrl, radioBrowserId }` config, and re-activate it in
+ *     case a previous icy_unsupported verdict (pre-redirect-support) had
+ *     deactivated it.
+ *
+ * Skips stations upgraded to the authenticated `spinitron` adapter (a real
+ * SPINITRON_KEY_* beats ICY scraping). Idempotent — safe on every boot.
+ *
+ * The remaining zero-spin `spinitron_web` stations NOT in this list (and not
+ * in SPINITRON_CALLSIGNS) are intentionally left as-is: they have no verified
+ * ICY-capable stream URL, and need stream URLs and/or Spinitron enrollment
+ * before they can produce now-playing data.
+ */
+export async function repairMisconfiguredSpinitronStations(): Promise<void> {
+  let repaired = 0;
+  for (const ref of ICY_REPAIR_STATIONS) {
+    const [station] = await db
+      .select({
+        id: stationsTable.id,
+        nowPlayingSource: stationsTable.nowPlayingSource,
+        nowPlayingConfig: stationsTable.nowPlayingConfig,
+      })
+      .from(stationsTable)
+      .where(eq(stationsTable.slug, ref.slug))
+      .limit(1);
+    if (!station) continue;
+    // A real Spinitron API key beats ICY scraping — leave those rows alone.
+    if (station.nowPlayingSource === "spinitron") continue;
+
+    const [rbRow] = await db
+      .insert(radioBrowserStationsTable)
+      .values({
+        radioBrowserUuid: `manual-${ref.slug}`,
+        streamUrl: ref.streamUrl,
+        name: ref.callsign,
+        stationId: station.id,
+      })
+      .onConflictDoUpdate({
+        target: radioBrowserStationsTable.radioBrowserUuid,
+        set: {
+          streamUrl: ref.streamUrl,
+          stationId: station.id,
+          icyStatus: "active",
+          consecutiveErrors: 0,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({ id: radioBrowserStationsTable.id });
+    if (!rbRow) continue;
+
+    const baseConfig =
+      station.nowPlayingConfig && typeof station.nowPlayingConfig === "object"
+        ? (station.nowPlayingConfig as Record<string, unknown>)
+        : {};
+    await db
+      .update(stationsTable)
+      .set({
+        nowPlayingSource: "radio_browser_icy",
+        nowPlayingConfig: {
+          callsign: ref.callsign,
+          ...baseConfig,
+          streamUrl: ref.streamUrl,
+          radioBrowserId: rbRow.id,
+        },
+        active: true,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(stationsTable.id, station.id));
+    repaired += 1;
+  }
+  if (repaired > 0) {
+    console.log(
+      `[lore] repaired ${repaired} misconfigured spinitron_web station(s) → radio_browser_icy`,
+    );
+  }
+}
+
+/**
  * NTS Radio (London) — two channels, each a continuous 24/7 stream of
  * curated, genre-fluid programming. The NTS live API publishes show-level
  * attribution (show title + host); per-track tracklists come from the
@@ -768,32 +901,49 @@ function fipStations(): InsertStation[] {
   }));
 }
 
+
 /**
- * Pick the best Spinitron now-playing source for a given callsign, depending
- * on whether `SPINITRON_KEY_<CALLSIGN>` is present in the environment.
+ * Pick the best now-playing source for a given callsign.
  *
- * - Key present: `spinitron` history adapter (DJ/playlist attribution,
- *   timestamp-stable cursor, full spin history).
- * - Key absent: `spinitron_web` (unauthenticated HTML scrape of the current
- *   playlist — zero configuration, live now-playing without a key).
+ * - `SPINITRON_KEY_<CALLSIGN>` present: `spinitron` history adapter
+ *   (DJ/playlist attribution, timestamp-stable cursor, full spin history).
+ * - Callsign in SPINITRON_CALLSIGNS (verified hosted on spinitron.com):
+ *   `spinitron_web` (unauthenticated HTML scrape — zero configuration).
+ * - Otherwise, when `icyStreamUrl` is provided (a stream verified or expected
+ *   to publish ICY metadata): `radio_browser_icy`. The matching
+ *   radio_browser_stations health row and `radioBrowserId` config entry are
+ *   populated at boot by `repairMisconfiguredSpinitronStations()`.
+ * - Otherwise: no now-playing source at all — honest silence beats a scrape
+ *   URL that 404s on every poll.
  *
- * Both paths preserve `callsign` so `stationArchiveUrl` can build the
+ * All paths preserve `callsign` so `stationArchiveUrl` can build the
  * Spinitron calendar link and `seedSpinitronRoster()`'s key-upgrade pass can
  * find and upgrade the row when a key is later added.
  */
 function spinSource(
   callsign: string,
-): { nowPlayingSource: string; nowPlayingConfig: Record<string, string> } {
+  icyStreamUrl?: string,
+): { nowPlayingSource: string | null; nowPlayingConfig: Record<string, string> } {
   const key = process.env[`SPINITRON_KEY_${callsign}`];
-  return key
-    ? {
-        nowPlayingSource: "spinitron",
-        nowPlayingConfig: { apiKey: key, callsign, stationHandle: callsign },
-      }
-    : {
-        nowPlayingSource: "spinitron_web",
-        nowPlayingConfig: { callsign },
-      };
+  if (key) {
+    return {
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: { apiKey: key, callsign, stationHandle: callsign },
+    };
+  }
+  if (SPINITRON_CALLSIGNS.has(callsign)) {
+    return {
+      nowPlayingSource: "spinitron_web",
+      nowPlayingConfig: { callsign },
+    };
+  }
+  if (icyStreamUrl) {
+    return {
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: icyStreamUrl, callsign },
+    };
+  }
+  return { nowPlayingSource: null, nowPlayingConfig: { callsign } };
 }
 
 /**
@@ -913,7 +1063,7 @@ function spinitronCollegeStations(): InsertStation[] {
       // the university's portal — /donate on their own domain is the entry point.
       // Spot-check: confirm the page still resolves vs. giving.northwestern.edu.
       donateUrl: "https://wnur.northwestern.edu/donate",
-      ...spinSource("WNUR"),
+      ...spinSource("WNUR", "https://stream.rcs.revma.com/w4pmmfkdx4zuv"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 310,
@@ -933,7 +1083,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://wrek.org/shows/",
       // Listener-supported non-profit; freeform Georgia Tech station.
       donateUrl: "https://wrek.org/donate",
-      ...spinSource("WREK"),
+      ...spinSource("WREK", "https://streaming.wrek.org/main/128kb.mp3"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 320,
@@ -1012,7 +1162,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wfmu.org",
       scheduleUrl: "https://wfmu.org/schedule",
       donateUrl: "https://www.wfmu.org/donate.html",
-      ...spinSource("WFMU"),
+      ...spinSource("WFMU", "https://stream0.wfmu.org/freeform-128k"),
       stationClass: "community",
       sortOrder: 400,
     },
@@ -1031,7 +1181,7 @@ function spinitronCollegeStations(): InsertStation[] {
       // Listener-supported non-profit; UNC Chapel Hill, first internet radio
       // station (1994). Runs annual fundraising campaigns.
       donateUrl: "https://wxyc.org/support",
-      ...spinSource("WXYC"),
+      ...spinSource("WXYC", "https://audio-mp3.ibiblio.org/wxyc.mp3"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 410,
@@ -1097,7 +1247,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://wmbr.org/schedule.php",
       // Listener-supported non-profit; MIT's community radio station.
       donateUrl: "https://wmbr.org/donate",
-      ...spinSource("WMBR"),
+      ...spinSource("WMBR", "https://wmbr.org:8002/hi"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 500,
@@ -1116,7 +1266,7 @@ function spinitronCollegeStations(): InsertStation[] {
       scheduleUrl: "https://wusb.fm/schedule",
       // Listener-supported non-profit; Stony Brook University community station.
       donateUrl: "https://wusb.fm/support",
-      ...spinSource("WUSB"),
+      ...spinSource("WUSB", "https://stream.wusb.stonybrook.edu:8092/listen.pl"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 510,
@@ -1205,7 +1355,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://whpk.uchicago.edu",
       scheduleUrl: "https://whpk.uchicago.edu/schedule",
-      ...spinSource("WHPK"),
+      ...spinSource("WHPK", "https://whpk-stream.uchicago.edu/stream"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 600,
@@ -1356,7 +1506,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wxdu.duke.edu",
       scheduleUrl: "https://wxdu.duke.edu/schedule",
-      ...spinSource("WXDU"),
+      ...spinSource("WXDU", "https://weeping.wxdu.duke.edu:8443/wxdu128.mp3"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 635,
@@ -1399,7 +1549,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wicb.org",
       scheduleUrl: "https://wicb.org/schedule",
-      ...spinSource("WICB"),
+      ...spinSource("WICB", "https://icecast.do.zufall.co/wicb_mp3_high"),
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 645,
@@ -1493,7 +1643,7 @@ function spinitronJazzStations(): InsertStation[] {
       homepageUrl: "https://wdiy.org",
       scheduleUrl: "https://wdiy.org/programs",
       donateUrl: "https://wdiy.org/donate",
-      ...spinSource("WDIY"),
+      ...spinSource("WDIY", "https://war.streamguys1.com:7883/wdiy_7880"),
       stationClass: "community",
       sortOrder: 715,
     },
@@ -2132,6 +2282,13 @@ export async function seedStations(): Promise<void> {
   // ICY-polled curated stations additionally need a health row whose id is
   // environment-specific — upsert it and patch nowPlayingConfig.radioBrowserId.
   await ensureIcyHealthRows();
+
+  // Repair rows that were seeded with a broken spinitron_web source but have
+  // an ICY-capable stream (see ICY_REPAIR_STATIONS). Runs every boot AFTER
+  // the seed upsert above, because the upsert rewrites nowPlayingConfig from
+  // the seed literal (which cannot know the environment-specific
+  // radioBrowserId) — this pass re-links the health row and patches the id.
+  await repairMisconfiguredSpinitronStations();
 
   // Diagnostic: report Spinitron key coverage so adding a key + restarting
   // immediately shows up in logs without any further investigation.

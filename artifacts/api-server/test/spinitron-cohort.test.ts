@@ -128,15 +128,64 @@ describe("new Spinitron cohort metadata completeness", () => {
 
 // ── Spinitron source wiring ───────────────────────────────────────────────
 
+// spinSource() routing after the Spinitron-presence allowlist fix:
+//  - allowlisted callsigns (confirmed hosted on spinitron.com) → spinitron_web
+//  - non-allowlisted with a verified ICY-capable stream → radio_browser_icy
+//  - non-allowlisted without one → null (honest silence, no 404-ing scrape)
+// (any of them upgrade to "spinitron" when a SPINITRON_KEY_* env is set)
+const ALLOWLISTED_SLUGS = ["wzbc", "wbrs", "wmfo"] as const;
+const ICY_FALLBACK_SLUGS = ["whpk", "wxdu", "wicb", "wdiy", "ckcu"] as const;
+const NULL_SOURCE_SLUGS = [
+  "wesu", "wrct", "kxlu", "wrir",
+  "wbgo", "kcsm", "wpfw",
+  "ckua", "cjsf", "chuo",
+] as const;
+
 describe("new Spinitron stations: nowPlayingSource and nowPlayingConfig", () => {
-  it("every new station uses spinitron or spinitron_web as nowPlayingSource", () => {
-    for (const slug of ALL_NEW_SLUGS) {
+  it("allowlisted callsigns use spinitron or spinitron_web as nowPlayingSource", () => {
+    for (const slug of ALLOWLISTED_SLUGS) {
       const station = SEED_STATIONS.find((s) => s.slug === slug)!;
       expect(
         ["spinitron", "spinitron_web"],
         `${slug} nowPlayingSource`,
       ).toContain(station.nowPlayingSource);
     }
+  });
+
+  it("non-allowlisted callsigns with an ICY-capable stream fall back to radio_browser_icy", () => {
+    for (const slug of ICY_FALLBACK_SLUGS) {
+      const station = SEED_STATIONS.find((s) => s.slug === slug)!;
+      expect(
+        ["spinitron", "radio_browser_icy"],
+        `${slug} nowPlayingSource`,
+      ).toContain(station.nowPlayingSource);
+      if (station.nowPlayingSource === "radio_browser_icy") {
+        const config = station.nowPlayingConfig as Record<string, unknown>;
+        expect(
+          typeof config?.streamUrl,
+          `${slug} nowPlayingConfig.streamUrl`,
+        ).toBe("string");
+      }
+    }
+  });
+
+  it("non-allowlisted callsigns without an ICY stream get NO now-playing source", () => {
+    for (const slug of NULL_SOURCE_SLUGS) {
+      const station = SEED_STATIONS.find((s) => s.slug === slug)!;
+      expect(
+        ["spinitron", null],
+        `${slug} nowPlayingSource`,
+      ).toContain(station.nowPlayingSource ?? null);
+    }
+  });
+
+  it("the three cohort groups exactly cover ALL_NEW_SLUGS", () => {
+    const covered = new Set<string>([
+      ...ALLOWLISTED_SLUGS,
+      ...ICY_FALLBACK_SLUGS,
+      ...NULL_SOURCE_SLUGS,
+    ]);
+    expect([...covered].sort()).toEqual([...ALL_NEW_SLUGS].sort());
   });
 
   it("every new Spinitron station has a callsign in nowPlayingConfig", () => {
@@ -162,11 +211,11 @@ describe("new Spinitron stations: nowPlayingSource and nowPlayingConfig", () => 
     }
   });
 
-  it("CKCU upgraded: nowPlayingConfig carries callsign CKCU", () => {
+  it("CKCU: nowPlayingConfig carries callsign CKCU (ICY fallback keeps the archive link)", () => {
     const ckcu = SEED_STATIONS.find((s) => s.slug === "ckcu")!;
     const config = ckcu.nowPlayingConfig as Record<string, unknown>;
     expect(config.callsign).toBe("CKCU");
-    expect(["spinitron", "spinitron_web"]).toContain(ckcu.nowPlayingSource);
+    expect(["spinitron", "radio_browser_icy"]).toContain(ckcu.nowPlayingSource);
   });
 });
 

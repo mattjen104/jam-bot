@@ -6,6 +6,7 @@ import {
   parseUrl,
   parseStreamTitle,
   isJunkMetadata,
+  resolveStreamUrl,
   type ParsedStreamTitle,
 } from "./icy.js";
 
@@ -53,6 +54,13 @@ export class IcyWatcher extends EventEmitter {
   private failureTimestamps: number[] = [];
   private lastStreamTitle: string | null = null;
   private stopped = false;
+  /**
+   * The stream URL after one-hop redirect resolution (see resolveStreamUrl).
+   * Cached for the watcher's lifetime so reconnects don't re-resolve on every
+   * backoff attempt; cleared on persistent-failed so a later restart attempt
+   * re-resolves (signed CDN URLs expire).
+   */
+  private resolvedStreamUrl: string | null = null;
 
   constructor(
     private readonly stationSlug: string,
@@ -98,7 +106,16 @@ export class IcyWatcher extends EventEmitter {
 
   private connect(): void {
     if (this.stopped) return;
-    const parsed = parseUrl(this.streamUrl);
+    if (this.resolvedStreamUrl === null) {
+      // Resolve one redirect hop first (cached for the watcher lifetime).
+      void resolveStreamUrl(this.streamUrl).then((resolved) => {
+        if (this.stopped) return;
+        this.resolvedStreamUrl = resolved;
+        this.connect();
+      });
+      return;
+    }
+    const parsed = parseUrl(this.resolvedStreamUrl);
     if (!parsed) {
       this.emitPersistentFailed("unparseable stream URL");
       return;
@@ -197,6 +214,10 @@ export class IcyWatcher extends EventEmitter {
   private emitPersistentFailed(message: string): void {
     if (this.stopped) return;
     this.stopped = true;
+    // Drop the cached redirect resolution — if the caller ever restarts a
+    // watcher for this stream, the (possibly signed/expired) resolved URL
+    // must be re-resolved rather than reused.
+    this.resolvedStreamUrl = null;
     this.teardown();
     console.warn(
       `[lore] icy-watcher ${this.stationSlug} giving up: ${message}`,

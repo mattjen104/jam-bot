@@ -516,7 +516,52 @@ export class IcyStreamParser {
 }
 
 /**
+ * Resolve a stream URL through at most ONE HTTP redirect hop.
+ *
+ * Some streams (e.g. WNUR's RevMA CDN) answer a plain request with a 302 to a
+ * signed CDN URL, and the ICY socket path treats any non-2xx as
+ * icy_unsupported. This helper issues a lightweight HEAD request (3 s timeout,
+ * `redirect: "manual"`) and, when the response is a 3xx with a Location
+ * header, returns the redirect target (resolved against the original URL).
+ *
+ * On any failure — timeout, network error, non-3xx status (many healthy
+ * Icecast servers reply 400 to a bare HEAD), or a missing Location header —
+ * the ORIGINAL URL is returned unchanged, so currently-working non-redirect
+ * streams are unaffected. Never throws.
+ */
+export async function resolveStreamUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      redirect: "manual",
+      headers: { "User-Agent": "Lore-ICY-fetcher/1.0" },
+      signal: AbortSignal.timeout(3_000),
+    });
+    // Drain/cancel any body so the socket is released promptly.
+    try {
+      await res.body?.cancel();
+    } catch {}
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (location) {
+        try {
+          return new URL(location, url).toString();
+        } catch {
+          return url;
+        }
+      }
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Fetch ICY metadata from a stream URL.
+ *
+ * Resolves one redirect hop first (see resolveStreamUrl), so CDN streams that
+ * 302 to a signed URL work without special casing at the call site.
  *
  * Returns a discriminated `IcyFetchResult`:
  *   - `{ ok: true, streamTitle, icyMetaint }` on success (streamTitle may be
@@ -528,7 +573,8 @@ export class IcyStreamParser {
  * Never throws.
  */
 export async function fetchIcyMetadata(streamUrl: string): Promise<IcyFetchResult> {
-  const parsed = parseUrl(streamUrl);
+  const resolvedUrl = await resolveStreamUrl(streamUrl);
+  const parsed = parseUrl(resolvedUrl);
   if (!parsed) {
     return { ok: false, kind: "icy_unsupported", message: "unparseable URL" };
   }
