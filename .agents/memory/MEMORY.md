@@ -141,3 +141,4 @@
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
 - [Crossing-positive filter test fallout](crossing-positive-filter-tests.md) — default-on filter hides zero-crossing fixtures; pin lore:radioMode or lore:crossingScope in unrelated specs.
 - [Radio duck/restore contract](radio-duck-contract.md) — duck writes element volume only; setVolume-while-ducked updates the saved target; BOTH ride-start paths restore before pauseRadio; hand-written useRadioPlayer mocks break on new methods.
+- [Global scan test fixtures](global-scan-test-fixtures.md) — shared-DB background-job tests assert fixture effects and relative batch invariants, never absolute global totals.

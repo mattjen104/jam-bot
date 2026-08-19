@@ -23,6 +23,9 @@
 #                                       "artist · station", ⬤ crossing dot with
 #                                       tap-to-detail, scope pill cycle, and no
 #                                       DJ/show name in collapsed row)
+#   - adminHealthRecovery.spec.ts      (admin re-probe remains visible and
+#                                       completes after reload; scout verdict
+#                                       labels render from the authenticated report)
 #   - liveTrackChange.spec.ts          (SSE fast path: spin-raw provisional cue appears
 #                                       immediately; spin-changed/spin-raw-failed clear it
 #                                       on WebPlayer ON AIR row; PlayerDock test skipped
@@ -101,6 +104,7 @@ RUN_SPECS=(
   e2e/compactCrossingLabels.spec.ts
   e2e/dialCategoryFilters.spec.ts
   e2e/dialAgeFilter.spec.ts
+  e2e/adminHealthRecovery.spec.ts
   e2e/liveTrackChange.spec.ts
   e2e/compactStackBand.spec.ts
 )
