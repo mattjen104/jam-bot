@@ -8,11 +8,11 @@
  * single-value `stationCategories` array on each station.
  *
  * Contract under test (additive multi-select taxonomy):
- *  - each metadata category restricts to stations carrying exactly that label
+ *  - each metadata category restricts tagged stations to that label
  *  - multiple checked metadata categories UNION their stations (a station
  *    matching any checked category renders)
- *  - stations with stationCategories: [] (or absent) never match a metadata
- *    filter
+ *  - stations with stationCategories: [] (or absent) remain in the direct
+ *    "Other stations" fallback under every metadata filter
  *  - an empty categories set applies no filter (legacy/no-filter path)
  */
 import { describe, expect, it, vi } from "vitest";
@@ -46,12 +46,18 @@ const STATIONS = [
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const { makeApiClientMock } = await import("./helpers/apiClientMock");
   return makeApiClientMock(importOriginal, {
-    useListStations: vi.fn(() => ({
-      data: { stations: STATIONS },
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    })),
+    useListStations: vi.fn((params?: { mode?: string }) => {
+      // This suite covers editorial metadata filtering only. The hook also
+      // asks for disabled sleep/specialist queries, so return empty mode pools
+      // rather than accidentally treating the normal fixture list as one.
+      const stations = params?.mode === "sleep" || params?.mode === "era-genre" ? [] : STATIONS;
+      return {
+        data: { stations },
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      };
+    }),
   });
 });
 
@@ -76,41 +82,41 @@ describe("useDialData metadata-category filter", () => {
     );
   });
 
-  it("/anchor restricts to stations labeled anchor", () => {
-    expect(slugsFor(new Set(["anchor"]))).toEqual(["kexp", "nts-1"]);
+  it("/anchor restricts tagged stations while preserving Other stations", () => {
+    expect(slugsFor(new Set(["anchor"]))).toEqual(["kexp", "no-cats", "nts-1"]);
   });
 
-  it("/campus restricts to stations labeled campus", () => {
-    expect(slugsFor(new Set(["campus"]))).toEqual(["cfuv", "wprb"]);
+  it("/campus restricts tagged stations while preserving Other stations", () => {
+    expect(slugsFor(new Set(["campus"]))).toEqual(["cfuv", "no-cats", "wprb"]);
   });
 
-  it("/public restricts to stations labeled public", () => {
-    expect(slugsFor(new Set(["public"]))).toEqual(["wbgo"]);
+  it("/public restricts tagged stations while preserving Other stations", () => {
+    expect(slugsFor(new Set(["public"]))).toEqual(["no-cats", "wbgo"]);
   });
 
-  it("/indie restricts to stations labeled indie", () => {
-    expect(slugsFor(new Set(["indie"]))).toEqual(["balamii"]);
+  it("/indie restricts tagged stations while preserving Other stations", () => {
+    expect(slugsFor(new Set(["indie"]))).toEqual(["balamii", "no-cats"]);
   });
 
-  it("/discovery restricts to stations labeled discovery", () => {
-    expect(slugsFor(new Set(["discovery"]))).toEqual(["rb-discovery"]);
+  it("/discovery restricts tagged stations while preserving Other stations", () => {
+    expect(slugsFor(new Set(["discovery"]))).toEqual(["no-cats", "rb-discovery"]);
   });
 
-  it("stations with empty stationCategories never match a metadata filter", () => {
+  it("stations with empty stationCategories stay reachable under every metadata filter", () => {
     for (const cat of ["anchor", "campus", "public", "indie", "discovery"] as const) {
-      expect(slugsFor(new Set([cat]))).not.toContain("no-cats");
+      expect(slugsFor(new Set([cat]))).toContain("no-cats");
     }
   });
 
   it("multiple checked categories union their stations (no duplicates)", () => {
     expect(slugsFor(new Set(["campus", "anchor"]))).toEqual(
-      ["cfuv", "kexp", "nts-1", "wprb"],
+      ["cfuv", "kexp", "no-cats", "nts-1", "wprb"],
     );
   });
 
-  it("unioning every metadata category still excludes uncategorized stations", () => {
+  it("unioning every metadata category retains uncategorized stations", () => {
     expect(slugsFor(new Set(["anchor", "campus", "public", "indie", "discovery"]))).toEqual(
-      ["balamii", "cfuv", "kexp", "nts-1", "rb-discovery", "wbgo", "wprb"],
+      ["balamii", "cfuv", "kexp", "no-cats", "nts-1", "rb-discovery", "wbgo", "wprb"],
     );
   });
 });

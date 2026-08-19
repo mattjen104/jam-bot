@@ -1412,6 +1412,18 @@ export function useDialData(
     } else {
       addAll(stationsData?.stations, false);
     }
+    // A warm React Query cache may retain a mode-pool list after its mode was
+    // unchecked. Keep those known pool slugs out of the unclassified fallback
+    // until their own mode is selected again; otherwise a base-list duplicate
+    // would leak an inactive Sleep/Specialist station into a metadata view.
+    const inactiveModePoolSlugs = new Set<string>();
+    if (!wantAmbient) {
+      for (const station of ambientData?.stations ?? []) inactiveModePoolSlugs.add(station.slug);
+    }
+    if (!wantSpecialist) {
+      for (const station of specialistData?.stations ?? []) inactiveModePoolSlugs.add(station.slug);
+    }
+
     // Client-side metadata filter: when anchor/campus/public/indie/discovery
     // categories are checked, restrict tagged normal-list stations to a
     // checked label. Untagged stations are deliberately preserved as the
@@ -1424,7 +1436,8 @@ export function useDialData(
           [...bySlugRaw].filter(([slug, s]) => {
             if (alwaysLiveSlugs.has(slug)) return true;
             const cats = (s.stationCategories ?? []) as string[];
-            return cats.length === 0 || metaCategories.some((c) => cats.includes(c));
+            return (cats.length === 0 && !inactiveModePoolSlugs.has(slug))
+              || metaCategories.some((c) => cats.includes(c));
           }),
         )
       : bySlugRaw;
