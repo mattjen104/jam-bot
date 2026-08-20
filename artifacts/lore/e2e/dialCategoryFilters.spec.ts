@@ -124,12 +124,16 @@ function makeCrossings() {
       stationSlug: s.slug,
       crossings: 3 + idx,
       artistCrossings: 2,
+      firstPlayCrossings: 1 + idx,
       weekCrossings: 5 + idx,
       weekArtistCrossings: 3,
+      weekFirstPlayCrossings: 2 + idx,
       monthCrossings: 10 + idx,
       monthArtistCrossings: 5,
+      monthFirstPlayCrossings: 4 + idx,
       lifetimeCrossings: 20 + idx,
       lifetimeArtistCrossings: 12,
+      lifetimeFirstPlayCrossings: 6 + idx,
       topArtistNames: [`Artist ${idx + 1}`],
     })),
   };
@@ -166,6 +170,11 @@ async function installRoutes(page: import("@playwright/test").Page) {
   // Catch-all for remaining /api/me/* paths.
   await page.route("**/api/me/**", (route) =>
     route.fulfill({ status: 404, json: { error: "Not found" } }),
+  );
+  // Register this after the broad listener fallback so it wins for the
+  // query-string form used by the SplitHome crossings hook.
+  await page.route("**/api/me/crossings**", (route) =>
+    route.fulfill({ json: makeCrossings() }),
   );
 
   // Station directory — the four test stations.
@@ -327,6 +336,60 @@ test.describe("Dial category filters — CLI commands", () => {
     await expect(page.getByText("Campus WKRP").first()).toBeVisible();
     await expect(page.getByText("Indie FM")).not.toBeVisible();
     await expect(page.getByText("Anchor KEXP")).not.toBeVisible();
+  });
+});
+
+test.describe("Split-home category metrics — crossing scope chip", () => {
+  test("cycles every scope without dropping expanded rows or skipped totals", async ({ page }) => {
+    await installRoutes(page);
+    await page.addInitScript(() => {
+      // Keep this browser check independent of persisted state from other
+      // front-door specs and put one category station outside the scan.
+      window.localStorage.setItem("lore:radioMode", "false");
+      window.localStorage.setItem("lore:crossingScope", "lifetime");
+      window.localStorage.setItem("lore:dialSkipped", JSON.stringify(["campus-wkrp"]));
+    });
+    await page.goto("/lore/");
+    await expect(page.getByTestId("compact-category-campus")).toBeVisible({ timeout: 20_000 });
+
+    const scopePill = page.locator(".crossing-scope-pill").first();
+    const campusSummary = page.getByTestId("compact-category-campus");
+    await expect(scopePill).toBeVisible({ timeout: 15_000 });
+    await expect(scopePill).toContainText("lifetime");
+    await expect(campusSummary).toContainText("1 station · 0 in scan");
+    await expect(campusSummary).toHaveAttribute("aria-expanded", "false");
+
+    // The skipped station is still counted in the category summary and can
+    // still be reached by expanding that category.
+    await expect(campusSummary).toContainText("32 crossings");
+    await expect(campusSummary).toContainText("6 first plays");
+    await campusSummary.click();
+    await expect(campusSummary).toHaveAttribute("aria-expanded", "true");
+    const campusRow = page.locator(".fdrow").filter({ hasText: "Campus WKRP" });
+    await expect(campusRow).toBeVisible();
+
+    const expectedByScope = [
+      { label: "lifetime", crossings: "32", firstPlays: "6" },
+      { label: "now", crossings: "1", firstPlays: "0" },
+      { label: "this set", crossings: "1", firstPlays: "0" },
+      { label: "24h", crossings: "5", firstPlays: "1" },
+      { label: "7d", crossings: "8", firstPlays: "2" },
+    ];
+
+    // The chip cycles lifetime → now → this set → 24h → 7d → lifetime.
+    for (const [index, expected] of expectedByScope.entries()) {
+      if (index > 0) await scopePill.click();
+      await expect(scopePill).toContainText(expected.label);
+      await expect(
+        campusSummary.getByLabel(`${expected.crossings} crossings in ${expected.label}`),
+      ).toBeVisible();
+      await expect(
+        campusSummary.getByLabel(`${expected.firstPlays} first plays in ${expected.label}`),
+      ).toBeVisible();
+      await expect(campusSummary).toContainText("1 station · 0 in scan");
+      await expect(campusSummary).toHaveAttribute("aria-expanded", "true");
+      await expect(campusRow).toBeVisible();
+    }
   });
 });
 

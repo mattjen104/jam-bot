@@ -14,6 +14,7 @@ Fixture pitfalls learned while reviving specs (**How to apply** when writing new
 - Dial "DJs on air" band needs: live pulse in `GET /api/stations/now-playing` (fresh playedAt) + a today-schedule run bracketing now with `show.djName`. The row renders as one sentence button ("Ben UFO selected … on Hessle Audio nts-1") — station display NAME may not appear; assert on the button's accessible name, not the station name.
 - Anonymous dial (no library/seeds) shows the "Pick the artists you love" onboarding placeholder — a reliable load anchor for negative tests.
 - Register a broad `**/api/**` catch-all FIRST (most-recent handler wins), but several components crash on `{}`: /api/player/onair needs `{items:[]}`, /api/replay/*/playlist-targets needs `{targets:[]}`, /api/recordings/:mbid/entry needs `{rung:"empty",picks:[]}`, and run insights need `{genreBreakdown:null,discoveryScore:null}` (an empty array crashes on `.top`).
+- When a broad `**/api/me/**` fallback follows a specific route, re-register the specific route afterward; Playwright uses the most recently registered matching handler.
 - `/archive/picker-runs/:id` is a legacy Redirect that DROPS the query string — deep links with ?play=1&from= must use `/archive/selector-runs/:id`.
 
 - Library first-run auto-open: an empty library (+ no seeds, no avatar) auto-opens the import modal once per session — empty-state specs must pre-set `sessionStorage lore:first-run-prompted=1` via addInitScript or clicks get intercepted.
