@@ -70,6 +70,7 @@ import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { LastSetScanner } from "../components/LastSetScanner";
+import { HistoryScanner } from "../components/dial/HistoryScanner";
 import { fetchLatestSetSummaries, type LastSetSummary } from "../lib/latestSet";
 import {
   liveScanIdentity,
@@ -763,6 +764,10 @@ export default function SplitHome() {
       )}
 
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
+        <HistoryScanner
+          scope={crossingScope}
+          categories={[...activeCategories]}
+        />
         <CompactDial
           activeRows={hasEditorialCategory
             ? activeRows

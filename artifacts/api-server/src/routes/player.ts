@@ -16,7 +16,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray, isNotNull, isNull, gte } from "drizzle-orm";
 import { getUserFromSession } from "../lore/userSession.js";
-import { toStation, isPickerOptedOut, validScheduleShowAttribution } from "./lore/shared.js";
+import { toStation, isPickerOptedOut, validScheduleShowAttribution, deriveStationCategories } from "./lore/shared.js";
 import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
 import { classifyFreshness } from "../lore/freshness.js";
 import { estimateExpiry } from "../lore/expiry.js";
@@ -44,6 +44,141 @@ const EARLIER_MAX = 3;
 const LORE_COUNTS_MAX = 60;
 /** Deep-cut cards in the run drawer trove. */
 const DEEP_CUTS_MAX = 3;
+
+type HistoryScope = "now" | "set" | "24h" | "7d" | "lifetime";
+type HistoryFilter = "all" | "crossings" | "firstPlays";
+const HISTORY_SCOPES = new Set<HistoryScope>(["now", "set", "24h", "7d", "lifetime"]);
+const HISTORY_FILTERS = new Set<HistoryFilter>(["all", "crossings", "firstPlays"]);
+const HISTORY_CATEGORIES = new Set(["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"]);
+const HISTORY_PAGE_MAX = 60;
+
+/**
+ * Bounded, stable archive read model for both Dial surfaces. This deliberately
+ * stays a plain JSON endpoint: history is a read model, not a generated
+ * contract, and the scanner can continue a snapshot with a keyset cursor.
+ */
+router.get("/player/history", h(async (req, res) => {
+  const scope = (typeof req.query.scope === "string" ? req.query.scope : "lifetime") as HistoryScope;
+  const filter = (typeof req.query.filter === "string" ? req.query.filter : "all") as HistoryFilter;
+  if (!HISTORY_SCOPES.has(scope) || !HISTORY_FILTERS.has(filter)) {
+    return res.status(400).json({ error: "Invalid history scope or filter" });
+  }
+  const limitRaw = typeof req.query.limit === "string" ? Number(req.query.limit) : 40;
+  const limit = Number.isInteger(limitRaw) ? Math.min(Math.max(limitRaw, 1), HISTORY_PAGE_MAX) : 40;
+  const stationSlug = typeof req.query.station === "string" && req.query.station.trim()
+    ? req.query.station.trim()
+    : null;
+  const categories = typeof req.query.categories === "string"
+    ? req.query.categories.split(",").map((v) => v.trim()).filter((v) => HISTORY_CATEGORIES.has(v))
+    : [];
+  const before = typeof req.query.before === "string" ? new Date(req.query.before) : null;
+  const beforeId = typeof req.query.beforeId === "string" && /^\d+$/.test(req.query.beforeId)
+    ? Number(req.query.beforeId) : null;
+  const snapshot = typeof req.query.snapshot === "string" ? new Date(req.query.snapshot) : new Date();
+  if (Number.isNaN(snapshot.getTime()) || (before && Number.isNaN(before.getTime()))) {
+    return res.status(400).json({ error: "Invalid history cursor" });
+  }
+
+  const user = await getUserFromSession(req).catch(() => null);
+  const userLibrary = user
+    ? db.select({ mbid: libraryItemsTable.mbid }).from(libraryItemsTable)
+        .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)))
+    : null;
+  const userArtists = user
+    ? db.select({ artistMbid: recordingsTable.artistMbid })
+        .from(recordingsTable)
+        .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
+        .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt), isNotNull(recordingsTable.artistMbid)))
+    : null;
+
+  const stationRows = await db.select().from(stationsTable).where(eq(stationsTable.hidden, false));
+  const eligibleStations = stationRows.filter((station) => {
+    if (stationSlug && station.slug !== stationSlug) return false;
+    if (categories.length > 0 && !categories.some((cat) => deriveStationCategories(station).includes(cat))) return false;
+    return true;
+  });
+  if (stationSlug && eligibleStations.length === 0) return res.status(404).json({ error: "Station not found" });
+  if (eligibleStations.length === 0) {
+    return res.json({ snapshot: snapshot.toISOString(), items: [], nextBefore: null, partial: false, authenticated: user != null });
+  }
+
+  const stationIds = eligibleStations.map((station) => station.id);
+  const scopeSince =
+    scope === "now" ? new Date(snapshot.getTime() - 2 * 60 * 60 * 1000) :
+    scope === "set" ? new Date(Date.UTC(snapshot.getUTCFullYear(), snapshot.getUTCMonth(), snapshot.getUTCDate())) :
+    scope === "24h" ? new Date(snapshot.getTime() - 24 * 60 * 60 * 1000) :
+    scope === "7d" ? new Date(snapshot.getTime() - 7 * 24 * 60 * 60 * 1000) : null;
+  const predicates = [
+    inArray(spinsTable.stationId, stationIds),
+    isNotNull(spinsTable.mbid),
+    sql`${spinsTable.playedAt} <= ${snapshot}`,
+    scopeSince ? sql`${spinsTable.playedAt} >= ${scopeSince}` : undefined,
+    before ? (beforeId != null
+      ? sql`(${spinsTable.playedAt} > ${before} OR (${spinsTable.playedAt} = ${before} AND ${spinsTable.id} > ${beforeId}))`
+      : sql`${spinsTable.playedAt} > ${before}`) : undefined,
+  ].filter((p): p is NonNullable<typeof p> => p != null);
+  const libraryHit = userLibrary
+    ? sql`(${spinsTable.mbid} in (${userLibrary}) OR ${recordingsTable.artistMbid} in (${userArtists}))`
+    : sql`false`;
+  if (filter === "crossings") predicates.push(libraryHit);
+  if (filter === "firstPlays") {
+    predicates.push(sql`NOT EXISTS (
+      SELECT 1 FROM spins prior
+      WHERE prior.mbid = ${spinsTable.mbid}
+        AND (prior.played_at < ${spinsTable.playedAt}
+          OR (prior.played_at = ${spinsTable.playedAt} AND prior.id < ${spinsTable.id}))
+    )`);
+    if (user) predicates.push(libraryHit);
+  }
+  const rows = await db.select({
+    id: spinsTable.id,
+    mbid: recordingsTable.mbid,
+    title: recordingsTable.title,
+    artist: recordingsTable.artist,
+    artistMbid: recordingsTable.artistMbid,
+    artworkUrl: recordingsTable.artworkUrl,
+    isCrossing: libraryHit,
+    isFirstPlay: sql<boolean>`NOT EXISTS (
+      SELECT 1 FROM spins prior
+      WHERE prior.mbid = ${spinsTable.mbid}
+        AND (prior.played_at < ${spinsTable.playedAt}
+          OR (prior.played_at = ${spinsTable.playedAt} AND prior.id < ${spinsTable.id}))
+    )`,
+    playedAt: spinsTable.playedAt,
+    stationSlug: stationsTable.slug,
+    stationName: stationsTable.name,
+    showName: showsTable.name,
+    showDj: showsTable.djName,
+  }).from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .leftJoin(showsTable, and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()))
+    .where(and(...predicates))
+    .orderBy(asc(spinsTable.playedAt), asc(spinsTable.id))
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  return res.json({
+    snapshot: snapshot.toISOString(),
+    items: page.map((row) => ({
+      id: row.id,
+      mbid: row.mbid,
+      title: row.title,
+      artist: row.artist,
+      artistMbid: row.artistMbid,
+      artworkUrl: row.artworkUrl ?? null,
+      playedAt: row.playedAt.toISOString(),
+      station: { slug: row.stationSlug, name: row.stationName },
+      show: row.showName ? { name: row.showName, djName: row.showDj ?? null } : null,
+      isCrossing: Boolean(row.isCrossing),
+      isFirstPlay: Boolean(row.isFirstPlay),
+    })),
+    nextBefore: rows.length > limit && last ? last.playedAt.toISOString() : null,
+    nextBeforeId: rows.length > limit && last ? last.id : null,
+    partial: false,
+    authenticated: user != null,
+  });
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/player/onair — live stations sorted by the user's library overlap

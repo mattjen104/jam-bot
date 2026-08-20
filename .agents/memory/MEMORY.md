@@ -147,3 +147,4 @@
 - [Drizzle CTE raw-column aliases](drizzle-cte-raw-column-aliases.md) — downstream CTE references to raw SQL selections require explicit aliases; shared taste CTEs prevent repeated active-audience scans.
 - [Validation runner for long commands](validation-runner-for-long-commands.md) — detached nohup/setsid jobs get silently reaped; use startValidationRun (temp name, clear after), chunk >10-min suites, never batch contending commands in one run.
 - [Durable source-coverage evidence](source-coverage-seed-evidence.md) — verified station probe facts must reproduce on a fresh DB; seed missing evidence without overwriting newer operator probes.
+- [Dial history scanner read model](history-scanner-read-model.md) — bounded snapshot pages and selection-isolated local progress keep archive scans stable and honest.

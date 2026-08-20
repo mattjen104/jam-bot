@@ -30,6 +30,7 @@ import { DialLensBar } from "./dial/DialLensBar";
 import { PressFeedLane } from "./dial/PressFeedLane";
 import { ShowsFeedLane } from "./dial/ShowsFeedLane";
 import { CategoryScanLane } from "./dial/CategoryScanLane";
+import { HistoryScanner } from "./dial/HistoryScanner";
 import { buildCategoryPreviewQueue } from "../player/categoryPreviewScan";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
@@ -3103,7 +3104,9 @@ export function DialView() {
                         category, ignoring the category filter, and stays
                         available while radioMode is active. */}
                     {!inContext && dialLens === "scan" && (
-                      <CategoryScanLane
+                      <>
+                        <HistoryScanner scope={crossingScope} categories={[...activeCategories]} />
+                        <CategoryScanLane
                         stations={scanStations}
                         nowPlayingBySlug={scanNowPlaying}
                         activeSlug={radio.station?.slug ?? null}
@@ -3115,7 +3118,8 @@ export function DialView() {
                           const queue = scanCategoryQueues.get(category) ?? [];
                           if (queue.length > 0) playerScan.startCategory(category, queue);
                         }}
-                      />
+                        />
+                      </>
                     )}
 
                     {/* ── Radio lens: the live feed exactly as today ─────── */}

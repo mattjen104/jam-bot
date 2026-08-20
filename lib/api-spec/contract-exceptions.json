@@ -72,6 +72,7 @@
     { "method": "POST", "path": "/selectors/{pickerId}/opt-in", "kind": "plain-json", "reason": "Selector opt-in (204); hand-written fetch." },
 
     { "method": "GET", "path": "/stations/now-playing/stream", "kind": "sse", "reason": "Server-Sent Events stream of instant now-playing updates; not a JSON response." },
+    { "method": "GET", "path": "/player/history", "kind": "plain-json", "reason": "Bounded Dial archive read model consumed by the shared history scanner via hand-written fetch." },
     { "method": "GET", "path": "/stations/{slug}/relay", "kind": "media", "reason": "Server-side audio stream relay for HTTP-only stations; streams bytes, not JSON." },
     { "method": "POST", "path": "/stations/{slug}/fingerprint", "kind": "plain-json", "reason": "Client fingerprint report via hand-written fetch." },
 
