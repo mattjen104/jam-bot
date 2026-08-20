@@ -62,7 +62,10 @@ export default defineConfig({
             param: ['boolean', 'number', 'string'],
           },
         },
-        useDates: true,
+        // HTTP JSON transports date-time values as ISO strings. Keep the
+        // runtime schemas aligned with that wire representation so callers
+        // can validate fetched responses without reviving dates first.
+        useDates: false,
       },
     },
   },

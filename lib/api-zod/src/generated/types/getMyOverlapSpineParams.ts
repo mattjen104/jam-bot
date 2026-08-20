@@ -21,9 +21,9 @@ export type GetMyOverlapSpineParams = {
   /**
    * Start of the window (inclusive), ISO 8601.  Required with explicit range mode.
    */
-  from?: Date;
+  from?: string;
   /**
    * End of the window (exclusive), ISO 8601.  Required with explicit range mode.
    */
-  to?: Date;
+  to?: string;
 };

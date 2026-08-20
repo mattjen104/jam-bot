@@ -13,7 +13,7 @@ export interface OverlapRunItem {
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   day: string;
   /** First logged spin in the set. Use with station.ianaTimezone for station-local set labels and day/night slicing. */
-  startedAt: Date;
+  startedAt: string;
   station: OverlapRunItemStation;
   show: OverlapRunItemShow;
   owned: number;

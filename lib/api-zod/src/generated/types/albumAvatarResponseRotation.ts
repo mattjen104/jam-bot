@@ -8,6 +8,6 @@
 
 export type AlbumAvatarResponseRotation = {
   /** @nullable */
-  visitStartedAt: Date | null;
+  visitStartedAt: string | null;
   stableForVisit: boolean;
 };

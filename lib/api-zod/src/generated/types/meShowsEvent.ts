@@ -15,7 +15,7 @@ export interface MeShowsEvent {
   /** Display artist name from the listener's taste set. */
   artistName: string;
   /** UTC event start time (ISO 8601). */
-  eventDatetime: Date;
+  eventDatetime: string;
   /** Venue-local date string (YYYY-MM-DD) from Bandsintown. */
   eventDate: string;
   /** Venue display name, or null when not provided. */

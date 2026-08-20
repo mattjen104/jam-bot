@@ -9,5 +9,5 @@ import type { AlbumAvatarCandidate } from "./albumAvatarCandidate";
 
 export type AlbumAvatarCurrent = AlbumAvatarCandidate & {
   /** @nullable */
-  selectedAt: Date | null;
+  selectedAt: string | null;
 };

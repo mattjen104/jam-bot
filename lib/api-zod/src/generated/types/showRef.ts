@@ -17,6 +17,6 @@ export interface ShowRef {
   /** URL of the station schedule page that produced this row. */
   sourceUrl?: string;
   /** When this schedule row was extracted. */
-  scrapedAt?: Date;
+  scrapedAt?: string;
   extraction?: ShowRefExtraction;
 }

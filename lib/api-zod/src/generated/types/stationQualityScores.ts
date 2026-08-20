@@ -35,5 +35,5 @@ export interface StationQualityScores {
   sampleCount: number;
   qualityTier: QualityTier;
   /** @nullable */
-  computedAt: Date | null;
+  computedAt: string | null;
 }

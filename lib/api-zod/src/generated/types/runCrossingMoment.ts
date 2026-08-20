@@ -13,7 +13,7 @@ import type { RunCrossingMomentStation } from "./runCrossingMomentStation";
  */
 export interface RunCrossingMoment {
   spinId: number;
-  playedAt: Date;
+  playedAt: string;
   /** @nullable */
   mbid: string | null;
   /** @nullable */

@@ -12,6 +12,6 @@ export interface WeeklyRecapTrack {
   title: string;
   artist: string;
   station: WeeklyRecapStation;
-  heardAt?: Date;
-  ripenedAt?: Date;
+  heardAt?: string;
+  ripenedAt?: string;
 }

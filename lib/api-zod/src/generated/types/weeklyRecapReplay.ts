@@ -10,7 +10,7 @@ import type { WeeklyRecapStation } from "./weeklyRecapStation";
 
 export interface WeeklyRecapReplay {
   replayId: number;
-  date: Date;
+  date: string;
   station: WeeklyRecapStation;
   show: WeeklyRecapShow | null;
 }

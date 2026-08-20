@@ -18,7 +18,7 @@ export interface ListenItem {
   showId: number | null;
   context: string;
   outputService: string;
-  startedAt: Date;
+  startedAt: string;
   msPlayed: number;
   completed: boolean;
   releaseGroupMbid: string | null;

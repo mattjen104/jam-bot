@@ -14,9 +14,9 @@ export interface MeRecentSetRun {
   /** Stable opaque identifier for the run (min spin ID in the group). */
   runId: number;
   /** UTC broadcast day, YYYY-MM-DD. */
-  date: Date;
-  startedAt: Date;
-  endedAt: Date;
+  date: string;
+  startedAt: string;
+  endedAt: string;
   spinCount: number;
   /** Spins resolved to the MBID spine (replayable tracks). */
   resolvedCount: number;

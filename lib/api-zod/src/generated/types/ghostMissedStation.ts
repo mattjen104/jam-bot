@@ -20,7 +20,7 @@ export interface GhostMissedStation {
   /** The library artist name that links the listener to this station. */
   artistName: string;
   /** ISO timestamp of the matching spin. */
-  playedAt?: Date | null;
+  playedAt?: string | null;
   /** UTC broadcast day of the matching spin (YYYY-MM-DD). */
   day: string;
   /** Scheduled show name when the spin has attributable show context. */

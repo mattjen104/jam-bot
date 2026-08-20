@@ -11,7 +11,7 @@ export type VoidScrapedShowResponse = ScrapedShow & {
   id: number;
   stationId: number;
   /** @nullable */
-  voidedAt: Date | null;
+  voidedAt: string | null;
   /** @nullable */
   voidReason: string | null;
 };

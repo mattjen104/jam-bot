@@ -16,5 +16,5 @@ export interface ListenInput {
   context: string;
   /** @minLength 1 */
   outputService: string;
-  startedAt?: Date;
+  startedAt?: string;
 }

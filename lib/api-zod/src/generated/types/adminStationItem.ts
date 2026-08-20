@@ -38,5 +38,5 @@ export interface AdminStationItem {
   /** @nullable */
   sampleCount: number | null;
   /** @nullable */
-  qualityComputedAt: Date | null;
+  qualityComputedAt: string | null;
 }

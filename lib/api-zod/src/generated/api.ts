@@ -546,7 +546,8 @@ export const ListStationsAtDateResponse = zod.object({
                             "URL of the station schedule page that produced this row.",
                           ),
                         scrapedAt: zod
-                          .date()
+                          .string()
+                          .datetime({})
                           .optional()
                           .describe("When this schedule row was extracted."),
                         extraction: zod
@@ -702,7 +703,8 @@ export const ListStationsNowPlayingResponse = zod.object({
                             "URL of the station schedule page that produced this row.",
                           ),
                         scrapedAt: zod
-                          .date()
+                          .string()
+                          .datetime({})
                           .optional()
                           .describe("When this schedule row was extracted."),
                         extraction: zod
@@ -956,7 +958,8 @@ export const GetStationNowPlayingResponse = zod.object({
                       "URL of the station schedule page that produced this row.",
                     ),
                   scrapedAt: zod
-                    .date()
+                    .string()
+                    .datetime({})
                     .optional()
                     .describe("When this schedule row was extracted."),
                   extraction: zod.enum(["llm", "api", "manual"]).optional(),
@@ -1372,7 +1375,8 @@ export const GetRecordingSpinsResponse = zod.object({
                     "URL of the station schedule page that produced this row.",
                   ),
                 scrapedAt: zod
-                  .date()
+                  .string()
+                  .datetime({})
                   .optional()
                   .describe("When this schedule row was extracted."),
                 extraction: zod.enum(["llm", "api", "manual"]).optional(),
@@ -1825,7 +1829,8 @@ export const GetStationArchiveResponse = zod.object({
                     "URL of the station schedule page that produced this row.",
                   ),
                 scrapedAt: zod
-                  .date()
+                  .string()
+                  .datetime({})
                   .optional()
                   .describe("When this schedule row was extracted."),
                 extraction: zod.enum(["llm", "api", "manual"]).optional(),
@@ -2063,7 +2068,8 @@ export const GetStationRunResponse = zod.object({
                   "URL of the station schedule page that produced this row.",
                 ),
               scrapedAt: zod
-                .date()
+                .string()
+                .datetime({})
                 .optional()
                 .describe("When this schedule row was extracted."),
               extraction: zod.enum(["llm", "api", "manual"]).optional(),
@@ -2189,7 +2195,8 @@ export const GetReplayManifestResponse = zod
               "URL of the station schedule page that produced this row.",
             ),
           scrapedAt: zod
-            .date()
+            .string()
+            .datetime({})
             .optional()
             .describe("When this schedule row was extracted."),
           extraction: zod.enum(["llm", "api", "manual"]).optional(),
@@ -3037,7 +3044,8 @@ export const GetArchiveRecentRunsResponse = zod.object({
                         "URL of the station schedule page that produced this row.",
                       ),
                     scrapedAt: zod
-                      .date()
+                      .string()
+                      .datetime({})
                       .optional()
                       .describe("When this schedule row was extracted."),
                     extraction: zod.enum(["llm", "api", "manual"]).optional(),
@@ -3122,7 +3130,8 @@ export const SearchArtistRunsResponse = zod.object({
                         "URL of the station schedule page that produced this row.",
                       ),
                     scrapedAt: zod
-                      .date()
+                      .string()
+                      .datetime({})
                       .optional()
                       .describe("When this schedule row was extracted."),
                     extraction: zod.enum(["llm", "api", "manual"]).optional(),
@@ -3226,7 +3235,8 @@ export const GetAllScrapedShowsResponse = zod
                     "URL of the station schedule page that produced this row.",
                   ),
                 scrapedAt: zod
-                  .date()
+                  .string()
+                  .datetime({})
                   .describe("When this schedule row was extracted."),
                 extraction: zod.enum(["llm", "api", "manual"]),
               })
@@ -3428,7 +3438,8 @@ export const GetStationUpcomingScheduleResponse = zod
               "URL of the station schedule page that produced this row.",
             ),
           scrapedAt: zod
-            .date()
+            .string()
+            .datetime({})
             .describe("When this schedule row was extracted."),
           extraction: zod.enum(["llm", "api", "manual"]),
         })
@@ -4644,7 +4655,7 @@ export const ListAdminStationsResponse = zod.object({
         mbidResolutionRate: zod.number().nullable(),
         musicShare: zod.number().nullable(),
         sampleCount: zod.number().nullable(),
-        qualityComputedAt: zod.date().nullable(),
+        qualityComputedAt: zod.string().datetime({}).nullable(),
       })
       .describe(
         "A station row with quality scores for the admin station list.",
@@ -4684,7 +4695,10 @@ export const VoidScrapedShowResponse = zod
       .string()
       .url()
       .describe("URL of the station schedule page that produced this row."),
-    scrapedAt: zod.date().describe("When this schedule row was extracted."),
+    scrapedAt: zod
+      .string()
+      .datetime({})
+      .describe("When this schedule row was extracted."),
     extraction: zod.enum(["llm", "api", "manual"]),
   })
   .describe(
@@ -4694,7 +4708,7 @@ export const VoidScrapedShowResponse = zod
     zod.object({
       id: zod.number(),
       stationId: zod.number(),
-      voidedAt: zod.date().nullable(),
+      voidedAt: zod.string().datetime({}).nullable(),
       voidReason: zod.string().nullable(),
     }),
   );
@@ -5012,7 +5026,8 @@ export const GetMyShowsResponse = zod
               .string()
               .describe("Display artist name from the listener's taste set."),
             eventDatetime: zod
-              .date()
+              .string()
+              .datetime({})
               .describe("UTC event start time (ISO 8601)."),
             eventDate: zod
               .string()
@@ -5099,9 +5114,12 @@ export const GetMyRecentSetsResponse = zod.object({
               .describe(
                 "Stable opaque identifier for the run (min spin ID in the group).",
               ),
-            date: zod.date().describe("UTC broadcast day, YYYY-MM-DD."),
-            startedAt: zod.date(),
-            endedAt: zod.date(),
+            date: zod
+              .string()
+              .date()
+              .describe("UTC broadcast day, YYYY-MM-DD."),
+            startedAt: zod.string().datetime({}),
+            endedAt: zod.string().datetime({}),
             spinCount: zod.number(),
             resolvedCount: zod
               .number()
@@ -5298,7 +5316,8 @@ export const SetLibraryItemRemovedResponse = zod.object({
  * @summary Read the latest completed Your Week On Air recap
  */
 export const GetMyWeeklyRecapQueryParams = zod.object({
-  weekStart: zod
+  weekStart: zod.coerce
+    .string()
     .date()
     .optional()
     .describe(
@@ -5309,9 +5328,9 @@ export const GetMyWeeklyRecapQueryParams = zod.object({
 export const GetMyWeeklyRecapResponse = zod
   .object({
     week: zod.object({
-      startDate: zod.date(),
-      endDate: zod.date(),
-      endDateExclusive: zod.date(),
+      startDate: zod.string().date(),
+      endDate: zod.string().date(),
+      endDateExclusive: zod.string().date(),
       timezone: zod.enum(["UTC"]),
     }),
     available: zod.literal(true),
@@ -5335,8 +5354,8 @@ export const GetMyWeeklyRecapResponse = zod
             slug: zod.string(),
             name: zod.string(),
           }),
-          heardAt: zod.date().optional(),
-          ripenedAt: zod.date().optional(),
+          heardAt: zod.string().datetime({}).optional(),
+          ripenedAt: zod.string().datetime({}).optional(),
         }),
       ),
     }),
@@ -5351,15 +5370,15 @@ export const GetMyWeeklyRecapResponse = zod
             slug: zod.string(),
             name: zod.string(),
           }),
-          heardAt: zod.date().optional(),
-          ripenedAt: zod.date().optional(),
+          heardAt: zod.string().datetime({}).optional(),
+          ripenedAt: zod.string().datetime({}).optional(),
         }),
       ),
     }),
     missedGhostReplay: zod.union([
       zod.object({
         replayId: zod.number(),
-        date: zod.date(),
+        date: zod.string().date(),
         station: zod.object({
           slug: zod.string(),
           name: zod.string(),
@@ -5504,7 +5523,7 @@ export const ListMyListensResponse = zod.object({
       showId: zod.number().nullable(),
       context: zod.string(),
       outputService: zod.string(),
-      startedAt: zod.date(),
+      startedAt: zod.string().datetime({}),
       msPlayed: zod.number(),
       completed: zod.boolean(),
       releaseGroupMbid: zod.string().nullable(),
@@ -5547,7 +5566,7 @@ export const CreateListenBody = zod.object({
   showId: zod.number().nullish(),
   context: zod.string().min(1),
   outputService: zod.string().min(1),
-  startedAt: zod.date().optional(),
+  startedAt: zod.string().datetime({}).optional(),
 });
 
 export const CreateListenResponse = zod.object({
@@ -5623,7 +5642,7 @@ export const ListMyLibraryResponse = zod.object({
         surface: zod.string().optional(),
         entryPoint: zod.string().optional(),
       }),
-      addedAt: zod.date(),
+      addedAt: zod.string().datetime({}),
       recording: zod
         .object({
           title: zod.string(),
@@ -5639,7 +5658,7 @@ export const ListMyLibraryResponse = zod.object({
       spotifyId: zod.string().optional(),
       fuzzyMatch: zod.boolean().optional(),
       removed: zod.boolean().optional(),
-      removedAt: zod.date().nullish(),
+      removedAt: zod.string().datetime({}).nullish(),
       dualSource: zod.boolean().optional(),
     }),
   ),
@@ -5668,7 +5687,7 @@ export const GetMyAlbumAvatarResponse = zod.object({
       })
       .and(
         zod.object({
-          selectedAt: zod.date().nullable(),
+          selectedAt: zod.string().datetime({}).nullable(),
         }),
       ),
     zod.null(),
@@ -5686,7 +5705,7 @@ export const GetMyAlbumAvatarResponse = zod.object({
   eligible: zod.boolean(),
   needsChoice: zod.boolean(),
   rotation: zod.object({
-    visitStartedAt: zod.date().nullable(),
+    visitStartedAt: zod.string().datetime({}).nullable(),
     stableForVisit: zod.boolean(),
   }),
 });
@@ -5711,7 +5730,7 @@ export const SetMyAlbumAvatarResponse = zod.object({
       })
       .and(
         zod.object({
-          selectedAt: zod.date().nullable(),
+          selectedAt: zod.string().datetime({}).nullable(),
         }),
       ),
     zod.null(),
@@ -5729,7 +5748,7 @@ export const SetMyAlbumAvatarResponse = zod.object({
   eligible: zod.boolean(),
   needsChoice: zod.boolean(),
   rotation: zod.object({
-    visitStartedAt: zod.date().nullable(),
+    visitStartedAt: zod.string().datetime({}).nullable(),
     stableForVisit: zod.boolean(),
   }),
 });
@@ -5769,7 +5788,8 @@ export const GetMyOverlapRunsResponse = zod.object({
       runId: zod.number(),
       day: zod.string().regex(getMyOverlapRunsResponseItemsItemDayRegExp),
       startedAt: zod
-        .date()
+        .string()
+        .datetime({})
         .describe(
           "First logged spin in the set. Use with station.ianaTimezone for station-local set labels and day\/night slicing.",
         ),
@@ -5815,7 +5835,7 @@ export const GetMyRunCrossingsResponse = zod.object({
     zod
       .object({
         spinId: zod.number(),
-        playedAt: zod.date(),
+        playedAt: zod.string().datetime({}),
         mbid: zod.string().nullable(),
         artistName: zod.string().nullable(),
         trackTitle: zod.string().nullable(),
@@ -5859,14 +5879,16 @@ export const GetMyOverlapSpineQueryParams = zod.object({
     .describe(
       "Station primary key.  Required when using explicit `from`\/`to` range. Optional when using `day` shorthand.\n",
     ),
-  from: zod
-    .date()
+  from: zod.coerce
+    .string()
+    .datetime({})
     .optional()
     .describe(
       "Start of the window (inclusive), ISO 8601.  Required with explicit range mode.",
     ),
-  to: zod
-    .date()
+  to: zod.coerce
+    .string()
+    .datetime({})
     .optional()
     .describe(
       "End of the window (exclusive), ISO 8601.  Required with explicit range mode.",
@@ -5925,7 +5947,8 @@ export const GetMyGhostMissedResponse = zod.object({
             "The library artist name that links the listener to this station.",
           ),
         playedAt: zod
-          .date()
+          .string()
+          .datetime({})
           .nullish()
           .describe("ISO timestamp of the matching spin."),
         day: zod

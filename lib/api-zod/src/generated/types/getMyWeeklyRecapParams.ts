@@ -10,5 +10,5 @@ export type GetMyWeeklyRecapParams = {
   /**
    * Optional UTC Sunday start date (YYYY-MM-DD) for a completed week.
    */
-  weekStart?: Date;
+  weekStart?: string;
 };

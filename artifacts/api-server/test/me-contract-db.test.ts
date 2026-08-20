@@ -21,9 +21,8 @@ import app from "../src/app.js";
  * parse successful responses with the generated Zod models so a route change
  * cannot silently drift from the OpenAPI/client surface.
  *
- * The generated models use Date for date-time fields, while HTTP JSON carries
- * ISO strings. The small revivers below model the same boundary as a client
- * date parser without weakening the generated schemas.
+ * HTTP JSON carries ISO strings for date-time fields, so these parse calls
+ * intentionally validate the response body without a client-side reviver.
  */
 const run = randomUUID().slice(0, 8);
 const SID = `test-me-contract-${run}`;
@@ -49,28 +48,11 @@ async function request(path: string, init?: RequestInit) {
 }
 
 function parseListens(body: unknown) {
-  if (!body || typeof body !== "object") throw new Error("expected listen response object");
-  const page = body as { items?: Array<Record<string, unknown>> };
-  return ListMyListensResponse.parse({
-    ...page,
-    items: (page.items ?? []).map((item) => ({
-      ...item,
-      startedAt: new Date(String(item.startedAt)),
-    })),
-  });
+  return ListMyListensResponse.parse(body);
 }
 
 function parseLibrary(body: unknown) {
-  if (!body || typeof body !== "object") throw new Error("expected library response object");
-  const page = body as { items?: Array<Record<string, unknown>> };
-  return ListMyLibraryResponse.parse({
-    ...page,
-    items: (page.items ?? []).map((item) => ({
-      ...item,
-      addedAt: new Date(String(item.addedAt)),
-      removedAt: item.removedAt == null ? item.removedAt : new Date(String(item.removedAt)),
-    })),
-  });
+  return ListMyLibraryResponse.parse(body);
 }
 
 beforeAll(async () => {

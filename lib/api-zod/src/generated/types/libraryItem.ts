@@ -11,12 +11,12 @@ import type { LibraryRecording } from "./libraryRecording";
 export interface LibraryItem {
   mbid: string | null;
   provenance: LibraryProvenance;
-  addedAt: Date;
+  addedAt: string;
   recording: LibraryRecording | null;
   soft?: boolean;
   spotifyId?: string;
   fuzzyMatch?: boolean;
   removed?: boolean;
-  removedAt?: Date | null;
+  removedAt?: string | null;
   dualSource?: boolean;
 }

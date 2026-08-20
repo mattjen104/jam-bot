@@ -8,8 +8,8 @@
 import type { WeeklyRecapWeekTimezone } from "./weeklyRecapWeekTimezone";
 
 export type WeeklyRecapWeek = {
-  startDate: Date;
-  endDate: Date;
-  endDateExclusive: Date;
+  startDate: string;
+  endDate: string;
+  endDateExclusive: string;
   timezone: WeeklyRecapWeekTimezone;
 };
