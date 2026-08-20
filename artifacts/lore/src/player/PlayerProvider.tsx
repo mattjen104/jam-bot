@@ -314,7 +314,15 @@ export interface RideApi {
   startReplay: (
     seeds: RideSeed[],
     label: string,
-    opts?: { timeOrientation?: TimeOrientation; startIndex?: number; context?: string },
+    opts?: {
+      timeOrientation?: TimeOrientation;
+      startIndex?: number;
+      context?: string;
+      /** Keep this replay on the shared 30s preview transport. */
+      previewOnly?: boolean;
+      /** Dwell per preview when previewOnly is enabled. */
+      previewDwellMs?: number;
+    },
   ) => void;
   /**
    * The ledger context tag supplied to the most-recent `startReplay` call
@@ -815,6 +823,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<"trail" | "replay">("trail");
   const [replayLabel, setReplayLabel] = useState<string | null>(null);
   const [rideListenContext, setRideListenContext] = useState<string | null>(null);
+  const [previewOnlyReplay, setPreviewOnlyReplay] = useState(false);
+  const [previewDwellMs, setPreviewDwellMs] = useState(10_000);
   const [progressMs, setProgressMs] = useState<number | null>(null);
   const [durationMs, setDurationMs] = useState<number | null>(null);
   const [timeOrientation, setTimeOrientation] =
@@ -1035,6 +1045,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     // Stop whichever driver was active — each driver silences itself.
     activeDriverStopRef.current();
+    // Archive preview scans keep the live stream ducked underneath the shared
+    // preview element. Restore is idempotent, so every terminal path can
+    // safely converge here without double-raising the stream.
+    radioRef.current.restoreDuck();
     sourceRef.current = null;
     setSource(null);
     setActive(false);
@@ -1046,6 +1060,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setMode("trail");
     setReplayLabel(null);
     setRideListenContext(null);
+    setPreviewOnlyReplay(false);
+    setPreviewDwellMs(10_000);
     setTimeOrientation("curated");
     setDurationMs(null);
     // Reset options-panel state on ride end.
@@ -1172,6 +1188,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setMode("trail");
       setReplayLabel(null);
       setRideListenContext(null);
+      setPreviewOnlyReplay(false);
+      setPreviewDwellMs(10_000);
       setInterstitialArmed((prev) => {
         // Keep armed if set by the crossing above; otherwise leave untouched.
         return prev;
@@ -1212,7 +1230,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (
       seeds: RideSeed[],
       label: string,
-      opts?: { timeOrientation?: TimeOrientation; startIndex?: number; context?: string },
+      opts?: {
+        timeOrientation?: TimeOrientation;
+        startIndex?: number;
+        context?: string;
+        previewOnly?: boolean;
+        previewDwellMs?: number;
+      },
     ) => {
       if (!seeds.length) return;
       // Stop any active preview scan — it shares the ride's audio element.
@@ -1223,10 +1247,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       for (const deck of categoryDecks) stopScanAudio(deck);
       setCategoryActive(false);
       setCategoryQueue([]);
-      // A scan may have ducked the live stream; restore the saved volume
-      // before the ride pauses it (no-op when nothing is ducked).
+      // Archive scans intentionally leave the live stream underneath a ducked
+      // preview. Normal replays take exclusive ownership and restore before
+      // pausing it. Both paths are idempotent at the radio layer.
       radioRef.current.restoreDuck();
-      pauseRadio?.();
+      if (opts?.previewOnly) {
+        radioRef.current.duck();
+      } else {
+        pauseRadio?.();
+      }
       rideRef.current += 1;
       previewFetchingRef.current.clear();
       playingUrlRef.current = null;
@@ -1241,6 +1270,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setMode("replay");
       setReplayLabel(label);
       setRideListenContext(opts?.context ?? null);
+      setPreviewOnlyReplay(opts?.previewOnly === true);
+      setPreviewDwellMs(Math.max(250, opts?.previewDwellMs ?? 10_000));
       if (opts?.context === "library") {
         const remembered = seeds[Math.max(0, Math.min(opts.startIndex ?? 0, seeds.length - 1))]!;
         writeLibrarySectionMemory(
@@ -2913,6 +2944,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   ]);
 
   // Audio element lifecycle — status wiring + auto-advance on clip end.
+  // History scans use the same queue and transport as normal replays but move
+  // on after a listener-selected dwell instead of waiting for the full preview.
+  useEffect(() => {
+    if (!active || !previewOnlyReplay || !currentPreview) return undefined;
+    const token = rideRef.current;
+    const timer = setTimeout(() => {
+      if (token !== rideRef.current) return;
+      setIndex((i) => {
+        if (i + 1 < queue.length) return i + 1;
+        audioRef.current?.pause();
+        radioRef.current.restoreDuck();
+        setStatus("ended");
+        return i;
+      });
+    }, previewDwellMs);
+    return () => clearTimeout(timer);
+  }, [active, currentMbid, currentPreview, index, previewDwellMs, previewOnlyReplay, queue.length]);
+
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -2924,6 +2973,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Advance to the next staged hop; if none, the ride is over.
       setIndex((i) => {
         if (i + 1 < queue.length) return i + 1;
+        if (previewOnlyReplay) radioRef.current.restoreDuck();
         setStatus("ended");
         return i;
       });
@@ -2941,7 +2991,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       el.removeEventListener("ended", onEnded);
       el.removeEventListener("error", onError);
     };
-  }, [queue.length]);
+  }, [previewOnlyReplay, queue.length]);
 
   useEffect(() => () => stop(), [stop]);
 

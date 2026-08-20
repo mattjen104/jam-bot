@@ -1,8 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect, react-hooks/immutability */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward, Square } from "lucide-react";
 import { usePlayer } from "../../player/PlayerProvider";
-import { getPreviewCached } from "../../player/previewCache";
 import { KeepButton } from "../KeepButton";
 import type { CrossingScope } from "../../lib/crossingScope";
 import type { StationCategory } from "../../lib/dialCategories";
@@ -61,7 +59,7 @@ export function HistoryScanner({
   initialFilter?: HistoryFilter;
   onFilterChange?: (filter: HistoryFilter) => void;
 }) {
-  const { radio } = usePlayer();
+  const { ride } = usePlayer();
   const [filter, setFilter] = useState<HistoryFilter>(initialFilter);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -71,45 +69,23 @@ export function HistoryScanner({
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [dwellMs, setDwellMs] = useState<number>(7000);
-  const [paused, setPaused] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [noPreview, setNoPreview] = useState(false);
-  const token = useRef(0);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const decks = useRef<[HTMLAudioElement | null, HTMLAudioElement | null]>([null, null]);
-  const deckIndex = useRef(0);
   const selectionKey = useMemo(
     () => `${scope}|${[...categories].sort().join(",")}|${stationSlug ?? "*"}|${filter}`,
     [scope, categories, stationSlug, filter],
   );
+  const historyLabel = useMemo(
+    () => `History scan · ${scopeLabel(scope)} · ${stationSlug ?? "all"}`,
+    [scope, stationSlug],
+  );
 
-  const silenceDecks = useCallback(() => {
-    token.current += 1;
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    for (const deck of decks.current) {
-      deck?.pause();
-      if (deck) { deck.removeAttribute("src"); deck.load(); }
-    }
-    setPlaying(false);
-    setPaused(false);
-  }, []);
   const stop = useCallback(() => {
-    silenceDecks();
-    // Older provider test doubles omit the optional scan duck methods.
-    radio.restoreDuck?.();
-  }, [radio, silenceDecks]);
+    if (ride.active && ride.replayLabel === historyLabel) ride.stop();
+  }, [historyLabel, ride]);
 
   const togglePause = useCallback(() => {
-    const deck = decks.current[deckIndex.current];
-    if (!deck || !playing) return;
-    if (paused) {
-      void deck.play().then(() => setPaused(false)).catch(() => undefined);
-    } else {
-      deck.pause();
-      setPaused(true);
-    }
-  }, [paused, playing]);
+    if (!ride.active || ride.replayLabel !== historyLabel) return;
+    ride.togglePause();
+  }, [historyLabel, ride]);
 
   const loadPage = useCallback(async (reset = false) => {
     if (loading) return;
@@ -145,6 +121,7 @@ export function HistoryScanner({
   // This effect resets external playback and the selection-owned page state.
   useEffect(() => {
     stop();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems([]); setCursor(null); setSnapshot(null); setIndex(0);
     if (open) void loadPage(true);
   // loadPage is intentionally not a dependency: its cursor belongs to the old selection.
@@ -159,54 +136,47 @@ export function HistoryScanner({
     });
   }, [selectionKey, snapshot]);
 
-  // Recursive advancement is deliberate: unavailable previews are skipped
-  // without making the listener press Next repeatedly.
-  const playAt = useCallback(async (at: number) => {
+  // The provider owns the queue, preview element, ducking, and advancement.
+  // Re-starting at a position is intentional: it keeps the entire archive
+  // queue visible to the dock and expanded sheet, not just the local row.
+  const playAt = useCallback((at: number) => {
     const item = items[at];
     if (!item) return;
-    silenceDecks();
-    token.current += 1;
     markSeen(at);
-    radio.duck?.();
-    const myToken = token.current;
-    const deck = decks.current[deckIndex.current] ?? (typeof Audio === "undefined" ? null : new Audio());
-    if (!deck) return;
-    decks.current[deckIndex.current] = deck;
-    try {
-      const preview = await getPreviewCached(item.mbid);
-      if (myToken !== token.current) return;
-      if (!preview.previewUrl) {
-        setNoPreview(true);
-        if (at + 1 < items.length) void playAt(at + 1);
-        else if (cursor) void loadPage();
-        return;
-      }
-      setNoPreview(false);
-      // Audio elements are intentionally owned by this scanner's stable ref.
-      deck.src = preview.previewUrl; deck.volume = 1; deck.preload = "auto";
-      await deck.play();
-      if (myToken !== token.current) return;
-      setIndex(at); setPlaying(true);
-      timer.current = setTimeout(() => {
-        deck.pause();
-        if (at + 1 < items.length) void playAt(at + 1);
-        else if (cursor) void loadPage();
-        else { setPlaying(false); radio.restoreDuck?.(); }
-      }, dwellMs);
-    } catch {
-      if (myToken === token.current) setNoPreview(true);
-      if (at + 1 < items.length) void playAt(at + 1);
-    }
-  }, [cursor, dwellMs, items, loadPage, markSeen, radio, silenceDecks]);
+    setIndex(at);
+    ride.startReplay(
+      items.map((entry) => ({
+        mbid: entry.mbid,
+        title: entry.title,
+        artist: entry.artist,
+        artworkUrl: entry.artworkUrl,
+        links: [],
+      })),
+      historyLabel,
+      { timeOrientation: "curated", startIndex: at, previewOnly: true, previewDwellMs: dwellMs },
+    );
+  }, [dwellMs, historyLabel, items, markSeen, ride]);
 
   useEffect(() => () => stop(), [stop]);
+
+  useEffect(() => {
+    if (ride.active && ride.replayLabel === historyLabel && ride.mode === "replay") {
+      markSeen(ride.index);
+    }
+  }, [historyLabel, markSeen, ride.active, ride.index, ride.mode, ride.replayLabel, ride.status]);
 
   const start = () => {
     const saved = readProgress()[selectionKey];
     const resume = saved?.snapshot === snapshot ? Math.min(saved.furthest + 1, items.length - 1) : 0;
     void playAt(Math.max(0, resume));
   };
-  const current = items[index] ?? null;
+  const historyRideActive = ride.active && ride.replayLabel === historyLabel && ride.mode === "replay";
+  const playing = historyRideActive &&
+    (ride.status === "playing" || ride.status === "loading" || ride.status === "paused");
+  const paused = historyRideActive && ride.status === "paused";
+  const current = ride.active && ride.replayLabel === historyLabel
+    ? items[ride.index] ?? null
+    : items[index] ?? null;
 
   return (
     <section className="dial-history" data-testid="dial-history-scanner">
@@ -238,15 +208,14 @@ export function HistoryScanner({
             </article>
           )}
           <div className="dial-history__controls">
-            <button type="button" onClick={() => void playAt(Math.max(0, index - 1))} aria-label="Previous scan track"><SkipBack size={14} /></button>
-            <button type="button" onClick={() => playing ? togglePause() : start()} aria-label={playing ? (paused ? "Resume scan" : "Pause scan") : "Start history scan"}>
+             <button type="button" onClick={() => playAt(Math.max(0, (ride.replayLabel === historyLabel ? ride.index : index) - 1))} aria-label="Previous scan track"><SkipBack size={14} /></button>
+             <button type="button" onClick={() => playing ? togglePause() : start()} aria-label={playing ? (paused ? "Resume scan" : "Pause scan") : "Start history scan"}>
               {playing && !paused ? <Pause size={14} /> : <Play size={14} />}
             </button>
-            <button type="button" onClick={() => void playAt(index + 1)} aria-label="Next scan track"><SkipForward size={14} /></button>
+             <button type="button" onClick={() => playAt((ride.replayLabel === historyLabel ? ride.index : index) + 1)} aria-label="Next scan track"><SkipForward size={14} /></button>
             <button type="button" onClick={stop} aria-label="Stop history scan"><Square size={14} /></button>
             {DWELLS.map((d) => <button key={d} type="button" aria-pressed={dwellMs === d} onClick={() => setDwellMs(d)}>{d / 1000}s</button>)}
           </div>
-          {noPreview && <p role="status">No sample for that track — continuing…</p>}
           {cursor && <button type="button" onClick={() => void loadPage()} disabled={loading}>Load more history</button>}
         </>
       )}
