@@ -67,7 +67,7 @@ import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { HistoryScanner } from "../components/dial/HistoryScanner";
-import { ScanEntryButton, ScanSession } from "../components/ScanSession";
+import { ScanEntryButton, ScanSession, type ScanFilter, type ScanSource } from "../components/ScanSession";
 import { fetchLatestSetSummaries, type LastSetSummary } from "../lib/latestSet";
 import {
   liveScanIdentity,
@@ -150,6 +150,11 @@ export default function SplitHome() {
   // the full filtered list.
   const [scanMode, setScanMode] = useState<ScanMode>(null);
   const [scanSessionOpen, setScanSessionOpen] = useState(false);
+  // Scan choices intentionally live with the page, not the sheet: closing
+  // and reopening Scan retains the current session choices without persisting
+  // them beyond this page session.
+  const [scanSessionSource, setScanSessionSource] = useState<ScanSource>("archive");
+  const [scanSessionFilter, setScanSessionFilter] = useState<ScanFilter>("all");
   const [scanRowIdx, setScanRowIdx] = useState<number | null>(null);
 
   // Timer/RAF refs for the compact scan — same pattern as useFrontDoorScan.
@@ -737,6 +742,10 @@ export default function SplitHome() {
         <ScanSession
           scope={crossingScope}
           categories={[...activeCategories]}
+          source={scanSessionSource}
+          filter={scanSessionFilter}
+          onSourceChange={setScanSessionSource}
+          onFilterChange={setScanSessionFilter}
           stationSlug={scanStationSlug}
           stationName={scanStationName}
           liveStations={scanStations}

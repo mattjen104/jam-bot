@@ -31,7 +31,7 @@ import { PressFeedLane } from "./dial/PressFeedLane";
 import { ShowsFeedLane } from "./dial/ShowsFeedLane";
 import { CategoryScanLane } from "./dial/CategoryScanLane";
 import { HistoryScanner } from "./dial/HistoryScanner";
-import { ScanSession } from "./ScanSession";
+import { ScanSession, type ScanFilter, type ScanSource } from "./ScanSession";
 import { buildCategoryPreviewQueue } from "../player/categoryPreviewScan";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
@@ -1602,6 +1602,10 @@ export function DialView() {
   // Radio filter menus stay Radio-only (they render inside the radio branch).
   const [dialLens, setDialLensState] = useState<DialLens>(() => readDialLens());
   const [scanSessionOpen, setScanSessionOpen] = useState(false);
+  // Keep choices while this page remains mounted; Scan itself is a closable
+  // sheet, so its local choices must outlive the sheet without being persisted.
+  const [scanSessionSource, setScanSessionSource] = useState<ScanSource>("archive");
+  const [scanSessionFilter, setScanSessionFilter] = useState<ScanFilter>("all");
   const setDialLens = useCallback((lens: DialLens) => {
     setDialLensState(lens);
     writeDialLens(lens);
@@ -2884,6 +2888,10 @@ export function DialView() {
         <ScanSession
           scope={crossingScope}
           categories={[...activeCategories]}
+          source={scanSessionSource}
+          filter={scanSessionFilter}
+          onSourceChange={setScanSessionSource}
+          onFilterChange={setScanSessionFilter}
           onClose={() => setScanSessionOpen(false)}
         />
       )}

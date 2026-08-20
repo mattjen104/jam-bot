@@ -197,5 +197,20 @@ test.describe("unified Scan session", () => {
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
+
+    // Scan choices are session-local: closing the sheet must not reset them,
+    // but they are intentionally not persisted beyond the mounted page.
+    await scanLens.focus();
+    await page.keyboard.press("Enter");
+    const reopenedDialog = page.getByRole("dialog", { name: "Scan" });
+    await expect(reopenedDialog).toContainText("Archive · across Lore · first plays");
+    await expect(reopenedDialog.getByRole("button", { name: "Archive" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(reopenedDialog.getByRole("button", { name: "First plays" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 });

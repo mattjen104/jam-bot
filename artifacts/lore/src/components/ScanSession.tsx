@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { X } from "lucide-react";
 import type { CrossingScope } from "../lib/crossingScope";
 import type { StationCategory } from "../lib/dialCategories";
@@ -9,10 +9,15 @@ import { CategoryScanLane } from "./dial/CategoryScanLane";
 import { usePlayer } from "../player/PlayerProvider";
 
 export type ScanSource = "live" | "archive";
+export type ScanFilter = "all" | "crossings" | "firstPlays";
 
 export interface ScanSessionProps {
   scope: CrossingScope;
   categories: readonly StationCategory[];
+  source: ScanSource;
+  filter: ScanFilter;
+  onSourceChange: (source: ScanSource) => void;
+  onFilterChange: (filter: ScanFilter) => void;
   stationSlug?: string | null;
   stationName?: string | null;
   liveStations?: Station[];
@@ -30,6 +35,10 @@ export interface ScanSessionProps {
 export function ScanSession({
   scope,
   categories,
+  source,
+  filter,
+  onSourceChange,
+  onFilterChange,
   stationSlug = null,
   stationName = null,
   liveStations = [],
@@ -38,8 +47,6 @@ export function ScanSession({
   onTuneStation,
   onClose,
 }: ScanSessionProps) {
-  const [source, setSource] = useState<ScanSource>("archive");
-  const [filter, setFilter] = useState<"all" | "crossings" | "firstPlays">("all");
   const { scan } = usePlayer();
 
   useEffect(() => {
@@ -70,16 +77,16 @@ export function ScanSession({
         </header>
 
         <div className="scan-session__choices" role="group" aria-label="Scan source">
-          <button type="button" aria-pressed={source === "live"} onClick={() => setSource("live")}>
+          <button type="button" aria-pressed={source === "live"} onClick={() => onSourceChange("live")}>
             Live stations
           </button>
-          <button type="button" aria-pressed={source === "archive"} onClick={() => setSource("archive")}>
+          <button type="button" aria-pressed={source === "archive"} onClick={() => onSourceChange("archive")}>
             Archive
           </button>
         </div>
         <div className="scan-session__choices" role="group" aria-label="Archive filter">
           {(["all", "crossings", "firstPlays"] as const).map((value) => (
-            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>
+            <button key={value} type="button" aria-pressed={filter === value} onClick={() => onFilterChange(value)}>
               {value === "firstPlays" ? "First plays" : value[0].toUpperCase() + value.slice(1)}
             </button>
           ))}
@@ -92,7 +99,7 @@ export function ScanSession({
             categories={categories}
             stationSlug={stationSlug}
             initialFilter={filter}
-            onFilterChange={setFilter}
+            onFilterChange={onFilterChange}
           />
         ) : (
           <div className="scan-session__live" role="status" aria-live="polite">
