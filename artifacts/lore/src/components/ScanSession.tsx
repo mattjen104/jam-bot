@@ -7,6 +7,7 @@ import type { DialSpin } from "../hooks/useDialData";
 import { HistoryScanner } from "./dial/HistoryScanner";
 import { CategoryScanLane } from "./dial/CategoryScanLane";
 import { usePlayer } from "../player/PlayerProvider";
+import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 
 export type ScanSource = "live" | "archive";
 export type ScanFilter = "all" | "crossings" | "firstPlays";
@@ -27,6 +28,11 @@ export interface ScanSessionProps {
   onClose: () => void;
 }
 
+const FILTER_LABELS: Record<ScanFilter, string> = {
+  all: "All",
+  crossings: "Crossings",
+  firstPlays: "First plays",
+};
 /**
  * The single listener-facing scan surface. Playback stays owned by the
  * existing player/scanner implementations; this component owns only the
@@ -47,7 +53,26 @@ export function ScanSession({
   onTuneStation,
   onClose,
 }: ScanSessionProps) {
-  const { scan } = usePlayer();
+  const { scan, ride } = usePlayer();
+  const selection = selectionLabel(stationName, categories);
+  const filterLabel = FILTER_LABELS[filter];
+  const focusedStation = activeStationSlug
+    ? liveStations.find((station) => station.slug === activeStationSlug)?.name ?? null
+    : null;
+  const historyRide = ride.active && ride.replayLabel?.startsWith("History scan");
+  const status = source === "live"
+    ? focusedStation
+      ? `Focused on ${focusedStation}`
+      : scan.active
+        ? "Scanning"
+        : scan.current
+          ? "Paused"
+          : "Ready"
+    : historyRide
+      ? ride.status === "paused"
+        ? "Paused"
+        : "Scanning"
+      : "Ready";
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -64,16 +89,14 @@ export function ScanSession({
           <div>
             <p className="scan-session__eyebrow">Discovery session</p>
             <h2 id="scan-session-title">Scan</h2>
-            <p className="scan-session__summary">
-              {source === "live" ? "Live stations" : "Archive"}
-              {stationName ? ` · ${stationName}` : " · across Lore"}
-              {source === "archive" && (
-                <>
-                  {" · "}
-                  {filter === "firstPlays" ? "first plays" : filter}
-                </>
-              )}
+            <p className="scan-session__summary" data-testid="scan-selection-summary">
+              <span>{source === "live" ? "Live" : "Archive"}</span>
+              <span aria-hidden="true"> · </span>
+              <span>{selection}</span>
+              <span aria-hidden="true"> · </span>
+              <span>{filterLabel}</span>
             </p>
+            <p className="scan-session__status" role="status" aria-live="polite">{status}</p>
           </div>
           <button type="button" className="scan-session__close" onClick={onClose} aria-label="Close Scan">
             <X size={18} />
@@ -92,7 +115,7 @@ export function ScanSession({
           <div className="scan-session__choices scan-session__choices--filters" role="group" aria-label="Archive filter">
             {(["all", "crossings", "firstPlays"] as const).map((value) => (
               <button key={value} type="button" aria-pressed={filter === value} onClick={() => onFilterChange(value)}>
-                {value === "firstPlays" ? "First plays" : value[0].toUpperCase() + value.slice(1)}
+                {FILTER_LABELS[value]}
               </button>
             ))}
           </div>
@@ -177,4 +200,16 @@ export function ScanEntryButton({ onOpen, compact = false }: { onOpen: () => voi
       Scan
     </button>
   );
+}
+
+function selectionLabel(
+  stationName: string | null | undefined,
+  categories: readonly StationCategory[],
+): string {
+  if (stationName) return `Station: ${stationName}`;
+  if (categories.length === 0) return "All Lore";
+  const labels = categories.map(
+    (category) => STATION_CATEGORY_DEFINITIONS.find((definition) => definition.cat === category)?.label ?? category,
+  );
+  return `${labels.length === 1 ? "Category" : "Categories"}: ${labels.join(", ")}`;
 }

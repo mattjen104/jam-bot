@@ -2481,8 +2481,27 @@
   font-size: 1.55rem;
 }
 .scan-session__summary {
-  margin: 0.35rem 0 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem;
+  margin: 0.35rem 0 0.15rem;
   color: #c7bdca;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-interface);
+  line-height: 1.45;
+}
+.scan-session__summary span:nth-child(3) {
+  color: #eee8f0;
+  font-weight: 600;
+}
+.scan-session__status {
+  min-height: 1.3em;
+  margin: 0 0 1rem;
+  color: #b7d99a;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .scan-session__close {
   display: grid;

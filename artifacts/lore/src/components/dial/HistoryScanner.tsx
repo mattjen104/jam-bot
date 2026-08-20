@@ -24,6 +24,11 @@ const DWELLS = [3000, 7000, 15000] as const;
 const STORE_KEY = "lore:historyScan:v1";
 const STORE_CAP = 24;
 type Progress = Record<string, { snapshot: string; furthest: number; seen: number[]; at: number }>;
+const FILTER_LABELS: Record<HistoryFilter, string> = {
+  all: "All",
+  crossings: "Crossings",
+  firstPlays: "First plays",
+};
 
 function readProgress(): Progress {
   try {
@@ -192,7 +197,7 @@ export function HistoryScanner({
             {(["all", "crossings", "firstPlays"] as const).map((value) => (
               <button key={value} type="button" aria-pressed={filter === value}
                  onClick={() => { if (playing) stop(); setFilter(value); onFilterChange?.(value); }}>
-                {value === "firstPlays" ? "first plays" : value}
+                {FILTER_LABELS[value]}
               </button>
             ))}
           </div>
