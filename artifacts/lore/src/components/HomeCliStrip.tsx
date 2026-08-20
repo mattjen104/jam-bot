@@ -23,6 +23,7 @@ import { DialCliBar, type DialCliBarProps, type MattCliStatus } from "./dial/Dia
 import { CrossingScopePill } from "./dial/CrossingScopePill";
 import type { CrossingScope } from "../lib/crossingScope";
 import { dialPageSize, nextDialDensity, type DialDensity } from "../lib/dialDensityState";
+import { ScanEntryButton } from "./ScanSession";
 
 export type ScanMode = "page" | "all" | null;
 
@@ -88,6 +89,7 @@ export interface HomeCliStripProps extends Pick<DialCliBarProps,
   density: DialDensity;
   /** Cycles the density: normal → compact → micro → normal. */
   onCycleDensity: () => void;
+  onOpenScan: () => void;
 }
 
 export function HomeCliStrip({
@@ -114,6 +116,7 @@ export function HomeCliStrip({
   totalActiveCount,
   density,
   onCycleDensity,
+  onOpenScan,
 }: HomeCliStripProps) {
   const [, setLocation] = useLocation();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -213,6 +216,7 @@ export function HomeCliStrip({
           moved to the RadioRemoteBar at the top of the view. */}
       <div className="home-cli-strip__command-row">
         <div className="home-cli-strip__input-row">
+          <ScanEntryButton onOpen={onOpenScan} compact />
           <DialCliBar
             variant="strip"
             activeTiers={activeTiers}

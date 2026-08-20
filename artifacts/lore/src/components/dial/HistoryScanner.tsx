@@ -52,13 +52,17 @@ export function HistoryScanner({
   scope,
   categories,
   stationSlug = null,
+  initialFilter = "all",
+  onFilterChange,
 }: {
   scope: CrossingScope;
   categories: readonly StationCategory[];
   stationSlug?: string | null;
+  initialFilter?: HistoryFilter;
+  onFilterChange?: (filter: HistoryFilter) => void;
 }) {
   const { radio } = usePlayer();
-  const [filter, setFilter] = useState<HistoryFilter>("all");
+  const [filter, setFilter] = useState<HistoryFilter>(initialFilter);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [snapshot, setSnapshot] = useState<string | null>(null);
@@ -217,7 +221,7 @@ export function HistoryScanner({
           <div className="dial-history__filters" role="group" aria-label="History track set">
             {(["all", "crossings", "firstPlays"] as const).map((value) => (
               <button key={value} type="button" aria-pressed={filter === value}
-                onClick={() => { if (playing) stop(); setFilter(value); }}>
+                 onClick={() => { if (playing) stop(); setFilter(value); onFilterChange?.(value); }}>
                 {value === "firstPlays" ? "first plays" : value}
               </button>
             ))}

@@ -31,6 +31,7 @@ import { PressFeedLane } from "./dial/PressFeedLane";
 import { ShowsFeedLane } from "./dial/ShowsFeedLane";
 import { CategoryScanLane } from "./dial/CategoryScanLane";
 import { HistoryScanner } from "./dial/HistoryScanner";
+import { ScanSession } from "./ScanSession";
 import { buildCategoryPreviewQueue } from "../player/categoryPreviewScan";
 import { type AgeTier } from "../lib/dialAgeFilter";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
@@ -1600,6 +1601,7 @@ export function DialView() {
   // server. Radio is the default and renders the feed exactly as today; the
   // Radio filter menus stay Radio-only (they render inside the radio branch).
   const [dialLens, setDialLensState] = useState<DialLens>(() => readDialLens());
+  const [scanSessionOpen, setScanSessionOpen] = useState(false);
   const setDialLens = useCallback((lens: DialLens) => {
     setDialLensState(lens);
     writeDialLens(lens);
@@ -2878,6 +2880,13 @@ export function DialView() {
 
   return (
     <div className={`dial-root${level === "all" ? " dial-root--front" : ""}`}>
+      {scanSessionOpen && (
+        <ScanSession
+          scope={crossingScope}
+          categories={[...activeCategories]}
+          onClose={() => setScanSessionOpen(false)}
+        />
+      )}
       {/* Search overlay */}
       {searchOpen && (
         <SearchOverlay
@@ -3062,7 +3071,12 @@ export function DialView() {
                         same feed surface. Hidden in context mode and while a
                         gesture mode owns the station list. */}
                     {!inContext && !hiddenModeActive && (
-                      <DialLensBar lens={dialLens} onSetLens={setDialLens} radioMode={radioMode} />
+                      <DialLensBar
+                        lens={dialLens}
+                        onSetLens={setDialLens}
+                        radioMode={radioMode}
+                        onOpenScan={() => setScanSessionOpen(true)}
+                      />
                     )}
 
                     {/* ── Press lens: taste × scraped-metadata mentions ──── */}

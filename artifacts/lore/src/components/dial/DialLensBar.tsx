@@ -23,6 +23,7 @@ export interface DialLensBarProps {
    * dimmed "· pure" suffix so the mode is visible where the lens is.
    */
   radioMode?: boolean;
+  onOpenScan?: () => void;
 }
 
 const LENS_LABELS: { lens: DialLens; label: string; title: string }[] = [
@@ -32,7 +33,7 @@ const LENS_LABELS: { lens: DialLens; label: string; title: string }[] = [
   { lens: "scan", label: "Scan", title: "Browse every category at a glance" },
 ];
 
-export function DialLensBar({ lens, onSetLens, className, radioMode = false }: DialLensBarProps) {
+export function DialLensBar({ lens, onSetLens, className, radioMode = false, onOpenScan }: DialLensBarProps) {
   return (
     <div
       className={`dial-filter-bar dial-lens-bar${className ? ` ${className}` : ""}`}
@@ -48,7 +49,10 @@ export function DialLensBar({ lens, onSetLens, className, radioMode = false }: D
               className={`dial-filter-bar__btn${lens === l ? " dial-filter-bar__btn--on" : ""}`}
               aria-pressed={lens === l}
               title={title}
-              onClick={() => onSetLens(l)}
+              onClick={() => {
+                onSetLens(l);
+                if (l === "scan") onOpenScan?.();
+              }}
             >
               {label}
               {l === "radio" && lens === "radio" && radioMode && (

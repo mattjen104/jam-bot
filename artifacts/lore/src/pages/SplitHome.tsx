@@ -66,8 +66,8 @@ import type { StationCategory } from "../components/dial/DialFilterBar";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
-import { LastSetScanner } from "../components/LastSetScanner";
 import { HistoryScanner } from "../components/dial/HistoryScanner";
+import { ScanEntryButton, ScanSession } from "../components/ScanSession";
 import { fetchLatestSetSummaries, type LastSetSummary } from "../lib/latestSet";
 import {
   liveScanIdentity,
@@ -148,6 +148,7 @@ export default function SplitHome() {
   // through the selected page window, "all" = auto-advancing through
   // the full filtered list.
   const [scanMode, setScanMode] = useState<ScanMode>(null);
+  const [scanSessionOpen, setScanSessionOpen] = useState(false);
   const [scanRowIdx, setScanRowIdx] = useState<number | null>(null);
 
   // Timer/RAF refs for the compact scan — same pattern as useFrontDoorScan.
@@ -540,22 +541,16 @@ export default function SplitHome() {
   }, [density, visibleSlugs]);
 
   // Last-set scanner sheet: the slug of the station being scanned, or null.
-  const [lastSetSlug, setLastSetSlug] = useState<string | null>(null);
+  const [scanStationSlug, setScanStationSlug] = useState<string | null>(null);
+  const [scanStationName, setScanStationName] = useState<string | null>(null);
   const openLastSet = useCallback(
     (row: DialLaneRow) => {
       stopCompactScan();
-      setLastSetSlug(row.ds.station.slug);
+      setScanStationSlug(row.ds.station.slug);
+      setScanStationName(row.ds.station.name);
+      setScanSessionOpen(true);
     },
     [stopCompactScan],
-  );
-  const lastSetRow = useMemo(
-    () =>
-      lastSetSlug
-        ? ([...activeRows, ...skippedRows].find(
-            (r) => r.ds.station.slug === lastSetSlug,
-          ) ?? null)
-        : null,
-    [lastSetSlug, activeRows, skippedRows],
   );
 
   const tuneRow = useCallback((row: DialLaneRow) => {
@@ -730,20 +725,25 @@ export default function SplitHome() {
   // the remotes.
   return (
     <div className="split-home">
-      {lastSetSlug && (
-        <LastSetScanner
-          slug={lastSetSlug}
-          density={density}
-          libraryArtwork={libraryArtwork}
-          lifetimeCrossings={
-            (lastSetRow?.ds.lifetimeCrossings ?? 0) +
-            (lastSetRow?.ds.lifetimeArtistCrossings ?? 0)
-          }
-          onClose={() => setLastSetSlug(null)}
+      {scanSessionOpen && (
+        <ScanSession
+          scope={crossingScope}
+          categories={[...activeCategories]}
+          stationSlug={scanStationSlug}
+          stationName={scanStationName}
+          onClose={() => {
+            setScanSessionOpen(false);
+            setScanStationSlug(null);
+            setScanStationName(null);
+          }}
         />
       )}
 
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
+        <div className="split-home__scan-entry">
+          <ScanEntryButton onOpen={() => { stopCompactScan(); setScanSessionOpen(true); }} />
+          <span>One calm session for live stations and archive listening</span>
+        </div>
         <HistoryScanner
           scope={crossingScope}
           categories={[...activeCategories]}
@@ -802,6 +802,7 @@ export default function SplitHome() {
         totalActiveCount={activeRows.length}
         density={density}
         onCycleDensity={cycleDensity}
+        onOpenScan={() => { stopCompactScan(); setScanSessionOpen(true); }}
       />
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">

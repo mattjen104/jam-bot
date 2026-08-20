@@ -2422,6 +2422,132 @@
    Full-width card stack; ~80px tiles so all seven categories fit one phone
    viewport without scrolling. Card border + hover-elevate match the
    front-door row treatment. */
+.scan-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--lore-lime, #b7d99a) 42%, transparent);
+  border-radius: 999px;
+  color: var(--lore-lime, #b7d99a);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.scan-entry:hover,
+.scan-entry:focus-visible {
+  background: color-mix(in srgb, var(--lore-lime, #b7d99a) 12%, transparent);
+}
+.scan-entry--compact {
+  min-height: 1.8rem;
+  padding-inline: 0.65rem;
+}
+.scan-session {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(12 10 18 / 72%);
+}
+.scan-session__panel {
+  width: min(46rem, 100%);
+  max-height: min(90vh, 52rem);
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid rgb(183 217 154 / 24%);
+  border-radius: 1.1rem;
+  background: #17131f;
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 35%);
+}
+.scan-session__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.scan-session__eyebrow {
+  margin: 0 0 0.2rem;
+  color: #a9a0af;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.scan-session h2 {
+  margin: 0;
+  color: #eee8f0;
+  font-size: 1.55rem;
+}
+.scan-session__summary {
+  margin: 0.35rem 0 1rem;
+  color: #c7bdca;
+}
+.scan-session__close {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 0;
+  border-radius: 50%;
+  color: #d4cbd7;
+  background: transparent;
+  cursor: pointer;
+}
+.scan-session__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.55rem 0;
+}
+.scan-session__choices button {
+  padding: 0.4rem 0.7rem;
+  border: 1px solid rgb(214 203 218 / 22%);
+  border-radius: 999px;
+  color: #cfc5d2;
+  background: transparent;
+  cursor: pointer;
+}
+.scan-session__choices button[aria-pressed="true"] {
+  border-color: #b7d99a;
+  color: #151119;
+  background: #b7d99a;
+}
+.scan-session__live {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  color: #d8cfdc;
+  background: rgb(255 255 255 / 4%);
+}
+.scan-session__live p {
+  margin: 0.4rem 0 0;
+  color: #a9a0af;
+}
+.scan-session__transport {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.scan-session__transport button {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgb(183 217 154 / 42%);
+  border-radius: 999px;
+  color: #b7d99a;
+  background: transparent;
+  cursor: pointer;
+}
+.split-home__scan-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.8rem;
+  color: #a9a0af;
+  font-size: 0.8rem;
+}
+
 .dial-scan {
   display: flex;
   flex-direction: column;
