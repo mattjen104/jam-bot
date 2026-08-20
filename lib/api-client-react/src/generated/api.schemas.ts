@@ -5,6 +5,187 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface SeedBlogPickersBody {
+  urls: string[];
+}
+
+export type SeedBlogPickersResponseResultsItemStatus =
+  (typeof SeedBlogPickersResponseResultsItemStatus)[keyof typeof SeedBlogPickersResponseResultsItemStatus];
+
+export const SeedBlogPickersResponseResultsItemStatus = {
+  discovered: "discovered",
+  already_exists: "already_exists",
+  no_feed: "no_feed",
+  error: "error",
+} as const;
+
+export type SeedBlogPickersResponseResultsItem = {
+  url: string;
+  feedUrl: string | null;
+  handle: string | null;
+  status: SeedBlogPickersResponseResultsItemStatus;
+  error?: string;
+};
+
+export interface SeedBlogPickersResponse {
+  results: SeedBlogPickersResponseResultsItem[];
+}
+
+export interface EnrollNtsShowBody {
+  /** @minLength 1 */
+  alias: string;
+  name?: string;
+}
+
+export interface EnrollNtsShowResponse {
+  pickerId: number;
+  handle: string;
+  name: string;
+  alias: string;
+  homeUrl: string;
+}
+
+export interface PatchSongExploderEpisodeBody {
+  youtubeUrl: string | null;
+}
+
+export interface PatchSongExploderEpisodeResponse {
+  id: number;
+  youtubeUrl: string | null;
+}
+
+export type GetSongExploderChaptersResponseChaptersItem = {
+  positionMs: number;
+  text: string;
+};
+
+export interface GetSongExploderChaptersResponse {
+  chapters: GetSongExploderChaptersResponseChaptersItem[];
+}
+
+export interface EnrollRadioBrowserBody {
+  /** @minLength 1 */
+  uuid: string;
+}
+
+export interface EnrollRadioBrowserResponse {
+  id: number;
+  radioBrowserUuid: string;
+  name: string;
+  streamUrl: string;
+  faviconUrl: string | null;
+  icyStatus: string;
+  enrolledAt: string;
+}
+
+export type ListRadioBrowserStationsResponseStationsItem = {
+  id: number;
+  radioBrowserUuid: string;
+  name: string;
+  streamUrl: string;
+  faviconUrl: string | null;
+  icyStatus: string;
+  lastStreamTitle: string | null;
+  lastSuccessAt: string | null;
+  consecutiveErrors: number;
+  enrolledAt: string;
+};
+
+export interface ListRadioBrowserStationsResponse {
+  stations: ListRadioBrowserStationsResponseStationsItem[];
+}
+
+export interface ReenrollRadioBrowserResponse {
+  id: number;
+  icyStatus: string;
+  consecutiveErrors: number;
+  updatedAt: string;
+}
+
+export interface CreateListSourceBody {
+  /** @minLength 1 */
+  kind: string;
+  /** @minLength 1 */
+  name: string;
+  homepageUrl?: string;
+  pickerId?: number;
+  stationId?: number;
+}
+
+export interface CreateListSourceResponse {
+  id: number;
+  kind: string;
+  name: string;
+}
+
+export type ListSourcesResponseSourcesItem = { [key: string]: unknown };
+
+export interface ListSourcesResponse {
+  sources: ListSourcesResponseSourcesItem[];
+}
+
+export interface ScrapeListBody {
+  sourceId: number;
+  /** @minLength 1 */
+  title: string;
+  year?: number;
+  /** @minLength 1 */
+  kind: string;
+  isRanked: boolean;
+  listLength?: number;
+  url: string;
+}
+
+export interface ScrapeListResponse {
+  [key: string]: unknown;
+}
+
+export interface ConfirmListEntryBody {
+  confirmed: boolean;
+  releaseGroupMbid?: string;
+}
+
+export type GetEmbedCoverageResponseRowsItem = {
+  stationId: number;
+  genreCluster: string;
+  weekStart: string;
+  provider: string;
+  role: string;
+  rung: number;
+  outcome: string;
+  count: number;
+  updatedAt: string;
+};
+
+export interface GetEmbedCoverageResponse {
+  rows: GetEmbedCoverageResponseRowsItem[];
+  total: number;
+}
+
+export type GetEmbedResolutionResponseLinksItem = { [key: string]: unknown };
+
+export type GetEmbedResolutionResponseQueueItem = { [key: string]: unknown };
+
+export interface GetEmbedResolutionResponse {
+  mbid: string;
+  links: GetEmbedResolutionResponseLinksItem[];
+  queue: GetEmbedResolutionResponseQueueItem[];
+}
+
+export type PostEmbedResolutionRequeueResponseRequeuedItem = {
+  provider: string;
+  role: string;
+  status: string;
+  attempts: number;
+  nextAttemptAt: string;
+  requestedAt: string;
+};
+
+export interface PostEmbedResolutionRequeueResponse {
+  mbid: string;
+  requeued: PostEmbedResolutionRequeueResponseRequeuedItem[];
+}
+
 export interface ImportedSetUploadRequest {
   /**
    * @minLength 1
@@ -3729,6 +3910,55 @@ export type ListGeniusDraftsParams = {
    * @minLength 1
    */
   mbid: string;
+};
+
+export type EnrollNtsShow201 = {
+  pickerId: number;
+  handle: string;
+  name: string;
+  alias: string;
+  homeUrl: string;
+};
+
+export type ConfirmListEntry200 = { [key: string]: unknown };
+
+export type GetEmbedCoverageParams = {
+  /**
+   * @minimum 0
+   */
+  stationId?: number;
+  /**
+   * @minLength 1
+   */
+  genreCluster?: string;
+  weekStart?: string;
+  /**
+   * @minimum 1
+   * @maximum 2000
+   */
+  limit?: number;
+};
+
+export type GetRecordingSongExploder200Episode = {
+  id: number;
+  title: string;
+  episodeUrl: string;
+  youtubeUrl: string | null;
+  publishedAt: string | null;
+  resolvedAt: string | null;
+} | null;
+
+export type GetRecordingSongExploder200AnchorsItem = {
+  id: number;
+  positionMs: number;
+  text: string;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+};
+
+export type GetRecordingSongExploder200 = {
+  episode: GetRecordingSongExploder200Episode;
+  anchors: GetRecordingSongExploder200AnchorsItem[];
 };
 
 export type GetSpotifySavedParams = {

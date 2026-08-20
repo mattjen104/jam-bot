@@ -4720,6 +4720,224 @@ export const RecomputeStationQualityResponse = zod
     "Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.",
   );
 
+export const SeedBlogPickersBody = zod.object({
+  urls: zod.array(zod.string()),
+});
+
+export const SeedBlogPickersResponse = zod.object({
+  results: zod.array(
+    zod.object({
+      url: zod.string(),
+      feedUrl: zod.string().nullable(),
+      handle: zod.string().nullable(),
+      status: zod.enum(["discovered", "already_exists", "no_feed", "error"]),
+      error: zod.string().optional(),
+    }),
+  ),
+});
+
+export const EnrollNtsShowBody = zod.object({
+  alias: zod.string().min(1),
+  name: zod.string().optional(),
+});
+
+export const PatchSongExploderEpisodeParams = zod.object({
+  episodeId: zod.coerce.number().min(1),
+});
+
+export const PatchSongExploderEpisodeBody = zod.object({
+  youtubeUrl: zod.string().url().nullable(),
+});
+
+export const PatchSongExploderEpisodeResponse = zod.object({
+  id: zod.number(),
+  youtubeUrl: zod.string().nullable(),
+});
+
+export const GetSongExploderChaptersParams = zod.object({
+  episodeId: zod.coerce.number().min(1),
+});
+
+export const GetSongExploderChaptersResponse = zod.object({
+  chapters: zod.array(
+    zod.object({
+      positionMs: zod.number(),
+      text: zod.string(),
+    }),
+  ),
+});
+
+export const EnrollRadioBrowserBody = zod.object({
+  uuid: zod.string().min(1),
+});
+
+export const EnrollRadioBrowserResponse = zod.object({
+  id: zod.number(),
+  radioBrowserUuid: zod.string(),
+  name: zod.string(),
+  streamUrl: zod.string(),
+  faviconUrl: zod.string().nullable(),
+  icyStatus: zod.string(),
+  enrolledAt: zod.string(),
+});
+
+export const ListRadioBrowserStationsResponse = zod.object({
+  stations: zod.array(
+    zod.object({
+      id: zod.number(),
+      radioBrowserUuid: zod.string(),
+      name: zod.string(),
+      streamUrl: zod.string(),
+      faviconUrl: zod.string().nullable(),
+      icyStatus: zod.string(),
+      lastStreamTitle: zod.string().nullable(),
+      lastSuccessAt: zod.string().nullable(),
+      consecutiveErrors: zod.number(),
+      enrolledAt: zod.string(),
+    }),
+  ),
+});
+
+export const ReenrollRadioBrowserParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const ReenrollRadioBrowserResponse = zod.object({
+  id: zod.number(),
+  icyStatus: zod.string(),
+  consecutiveErrors: zod.number(),
+  updatedAt: zod.string(),
+});
+
+export const DeleteRadioBrowserParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const CreateListSourceBody = zod.object({
+  kind: zod.string().min(1),
+  name: zod.string().min(1),
+  homepageUrl: zod.string().url().optional(),
+  pickerId: zod.number().optional(),
+  stationId: zod.number().optional(),
+});
+
+export const ListSourcesResponse = zod.object({
+  sources: zod.array(zod.record(zod.string(), zod.unknown())),
+});
+
+export const ScrapeListBody = zod.object({
+  sourceId: zod.number(),
+  title: zod.string().min(1),
+  year: zod.number().optional(),
+  kind: zod.string().min(1),
+  isRanked: zod.boolean(),
+  listLength: zod.number().optional(),
+  url: zod.string().url(),
+});
+
+export const ScrapeListResponse = zod.record(zod.string(), zod.unknown());
+
+export const ConfirmListEntryParams = zod.object({
+  listId: zod.coerce.number().min(1),
+  entryId: zod.coerce.number().min(1),
+});
+
+export const ConfirmListEntryBody = zod.object({
+  confirmed: zod.boolean(),
+  releaseGroupMbid: zod.string().optional(),
+});
+
+export const ConfirmListEntryResponse = zod.record(zod.string(), zod.unknown());
+
+export const getEmbedCoverageQueryStationIdMin = 0;
+
+export const getEmbedCoverageQueryLimitMax = 2000;
+
+export const GetEmbedCoverageQueryParams = zod.object({
+  stationId: zod.coerce
+    .number()
+    .min(getEmbedCoverageQueryStationIdMin)
+    .optional(),
+  genreCluster: zod.coerce.string().min(1).optional(),
+  weekStart: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getEmbedCoverageQueryLimitMax)
+    .optional(),
+});
+
+export const GetEmbedCoverageResponse = zod.object({
+  rows: zod.array(
+    zod.object({
+      stationId: zod.number(),
+      genreCluster: zod.string(),
+      weekStart: zod.string(),
+      provider: zod.string(),
+      role: zod.string(),
+      rung: zod.number(),
+      outcome: zod.string(),
+      count: zod.number(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+export const GetEmbedResolutionParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetEmbedResolutionResponse = zod.object({
+  mbid: zod.string(),
+  links: zod.array(zod.record(zod.string(), zod.unknown())),
+  queue: zod.array(zod.record(zod.string(), zod.unknown())),
+});
+
+export const PostEmbedResolutionRequeueParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const PostEmbedResolutionRequeueResponse = zod.object({
+  mbid: zod.string(),
+  requeued: zod.array(
+    zod.object({
+      provider: zod.string(),
+      role: zod.string(),
+      status: zod.string(),
+      attempts: zod.number(),
+      nextAttemptAt: zod.string(),
+      requestedAt: zod.string(),
+    }),
+  ),
+});
+
+export const GetRecordingSongExploderParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingSongExploderResponse = zod.object({
+  episode: zod
+    .object({
+      id: zod.number(),
+      title: zod.string(),
+      episodeUrl: zod.string(),
+      youtubeUrl: zod.string().nullable(),
+      publishedAt: zod.string().nullable(),
+      resolvedAt: zod.string().nullable(),
+    })
+    .nullable(),
+  anchors: zod.array(
+    zod.object({
+      id: zod.number(),
+      positionMs: zod.number(),
+      text: zod.string(),
+      sourceUrl: zod.string().nullable(),
+      sourceLabel: zod.string().nullable(),
+    }),
+  ),
+});
+
 /**
  * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.
 

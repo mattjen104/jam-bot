@@ -31,13 +31,24 @@ import type {
   BlogIngestRequest,
   BookDraftList,
   BookIngestResponse,
+  ConfirmListEntry200,
+  ConfirmListEntryBody,
+  CreateListSourceBody,
+  CreateListSourceResponse,
   DiscogsListRequest,
   DjShows,
+  EnrollNtsShow201,
+  EnrollNtsShowBody,
+  EnrollRadioBrowserBody,
+  EnrollRadioBrowserResponse,
   EntryResult,
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
   GetArchiveRecentRunsParams,
+  GetEmbedCoverageParams,
+  GetEmbedCoverageResponse,
+  GetEmbedResolutionResponse,
   GetGuidedReplayQueueParams,
   GetMyOverlapRunsParams,
   GetMyOverlapSpineParams,
@@ -46,7 +57,9 @@ import type {
   GetMyShowsParams,
   GetMyWeeklyRecapParams,
   GetOembedParams,
+  GetRecordingSongExploder200,
   GetRecordingsAvailabilityParams,
+  GetSongExploderChaptersResponse,
   GetSpotifySavedParams,
   GetStationArchiveParams,
   GetStationSocialPresenceParams,
@@ -70,6 +83,8 @@ import type {
   ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
   ListPickersParams,
+  ListRadioBrowserStationsResponse,
+  ListSourcesResponse,
   ListStationsNowPlayingParams,
   ListStationsParams,
   LookupPickedMbidsParams,
@@ -86,6 +101,8 @@ import type {
   OEmbed,
   OverlapSpineResponse,
   PatchClaimRequest,
+  PatchSongExploderEpisodeBody,
+  PatchSongExploderEpisodeResponse,
   PickedLookup,
   Picker,
   PickerArchive,
@@ -95,6 +112,7 @@ import type {
   PickerRunInsights,
   PickerStationOverlaps,
   PickersDialResult,
+  PostEmbedResolutionRequeueResponse,
   RecomputeQualityResponse,
   RecordingKnowledge,
   RecordingListProvenanceResponse,
@@ -105,6 +123,7 @@ import type {
   RecordingSpins,
   RecordingSupportResponse,
   RecordingsAvailabilityResult,
+  ReenrollRadioBrowserResponse,
   ReplayManifest,
   ReplayMaterializationJob,
   ReplayMaterializationRequest,
@@ -115,8 +134,12 @@ import type {
   ResumeImportedSetResolution202,
   RunCrossingMomentsResponse,
   RymListRequest,
+  ScrapeListBody,
+  ScrapeListResponse,
   ScrapedStationList,
   SearchArtistRunsParams,
+  SeedBlogPickersBody,
+  SeedBlogPickersResponse,
   SegueNextList,
   SelectorInsights,
   SelectorList,
@@ -7445,6 +7468,1303 @@ export const useRecomputeStationQuality = <
 > => {
   return useMutation(getRecomputeStationQualityMutationOptions(options));
 };
+
+export const getSeedBlogPickersUrl = () => {
+  return `/api/admin/lore/pickers/seed-blog`;
+};
+
+export const seedBlogPickers = async (
+  seedBlogPickersBody: SeedBlogPickersBody,
+  options?: RequestInit,
+): Promise<SeedBlogPickersResponse> => {
+  return customFetch<SeedBlogPickersResponse>(getSeedBlogPickersUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(seedBlogPickersBody),
+  });
+};
+
+export const getSeedBlogPickersMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedBlogPickers>>,
+    TError,
+    { data: BodyType<SeedBlogPickersBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof seedBlogPickers>>,
+  TError,
+  { data: BodyType<SeedBlogPickersBody> },
+  TContext
+> => {
+  const mutationKey = ["seedBlogPickers"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof seedBlogPickers>>,
+    { data: BodyType<SeedBlogPickersBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return seedBlogPickers(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SeedBlogPickersMutationResult = NonNullable<
+  Awaited<ReturnType<typeof seedBlogPickers>>
+>;
+export type SeedBlogPickersMutationBody = BodyType<SeedBlogPickersBody>;
+export type SeedBlogPickersMutationError = ErrorType<unknown>;
+
+export const useSeedBlogPickers = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedBlogPickers>>,
+    TError,
+    { data: BodyType<SeedBlogPickersBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof seedBlogPickers>>,
+  TError,
+  { data: BodyType<SeedBlogPickersBody> },
+  TContext
+> => {
+  return useMutation(getSeedBlogPickersMutationOptions(options));
+};
+
+export const getEnrollNtsShowUrl = () => {
+  return `/api/admin/pickers/nts`;
+};
+
+export const enrollNtsShow = async (
+  enrollNtsShowBody: EnrollNtsShowBody,
+  options?: RequestInit,
+): Promise<EnrollNtsShow201> => {
+  return customFetch<EnrollNtsShow201>(getEnrollNtsShowUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(enrollNtsShowBody),
+  });
+};
+
+export const getEnrollNtsShowMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollNtsShow>>,
+    TError,
+    { data: BodyType<EnrollNtsShowBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof enrollNtsShow>>,
+  TError,
+  { data: BodyType<EnrollNtsShowBody> },
+  TContext
+> => {
+  const mutationKey = ["enrollNtsShow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof enrollNtsShow>>,
+    { data: BodyType<EnrollNtsShowBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return enrollNtsShow(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EnrollNtsShowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof enrollNtsShow>>
+>;
+export type EnrollNtsShowMutationBody = BodyType<EnrollNtsShowBody>;
+export type EnrollNtsShowMutationError = ErrorType<unknown>;
+
+export const useEnrollNtsShow = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollNtsShow>>,
+    TError,
+    { data: BodyType<EnrollNtsShowBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof enrollNtsShow>>,
+  TError,
+  { data: BodyType<EnrollNtsShowBody> },
+  TContext
+> => {
+  return useMutation(getEnrollNtsShowMutationOptions(options));
+};
+
+export const getPatchSongExploderEpisodeUrl = (episodeId: number) => {
+  return `/api/admin/song-exploder/${episodeId}`;
+};
+
+export const patchSongExploderEpisode = async (
+  episodeId: number,
+  patchSongExploderEpisodeBody: PatchSongExploderEpisodeBody,
+  options?: RequestInit,
+): Promise<PatchSongExploderEpisodeResponse> => {
+  return customFetch<PatchSongExploderEpisodeResponse>(
+    getPatchSongExploderEpisodeUrl(episodeId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(patchSongExploderEpisodeBody),
+    },
+  );
+};
+
+export const getPatchSongExploderEpisodeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof patchSongExploderEpisode>>,
+    TError,
+    { episodeId: number; data: BodyType<PatchSongExploderEpisodeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof patchSongExploderEpisode>>,
+  TError,
+  { episodeId: number; data: BodyType<PatchSongExploderEpisodeBody> },
+  TContext
+> => {
+  const mutationKey = ["patchSongExploderEpisode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof patchSongExploderEpisode>>,
+    { episodeId: number; data: BodyType<PatchSongExploderEpisodeBody> }
+  > = (props) => {
+    const { episodeId, data } = props ?? {};
+
+    return patchSongExploderEpisode(episodeId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PatchSongExploderEpisodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof patchSongExploderEpisode>>
+>;
+export type PatchSongExploderEpisodeMutationBody =
+  BodyType<PatchSongExploderEpisodeBody>;
+export type PatchSongExploderEpisodeMutationError = ErrorType<unknown>;
+
+export const usePatchSongExploderEpisode = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof patchSongExploderEpisode>>,
+    TError,
+    { episodeId: number; data: BodyType<PatchSongExploderEpisodeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof patchSongExploderEpisode>>,
+  TError,
+  { episodeId: number; data: BodyType<PatchSongExploderEpisodeBody> },
+  TContext
+> => {
+  return useMutation(getPatchSongExploderEpisodeMutationOptions(options));
+};
+
+export const getGetSongExploderChaptersUrl = (episodeId: number) => {
+  return `/api/admin/song-exploder/${episodeId}/chapters`;
+};
+
+export const getSongExploderChapters = async (
+  episodeId: number,
+  options?: RequestInit,
+): Promise<GetSongExploderChaptersResponse> => {
+  return customFetch<GetSongExploderChaptersResponse>(
+    getGetSongExploderChaptersUrl(episodeId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetSongExploderChaptersQueryKey = (episodeId: number) => {
+  return [`/api/admin/song-exploder/${episodeId}/chapters`] as const;
+};
+
+export const getGetSongExploderChaptersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSongExploderChapters>>,
+  TError = ErrorType<unknown>,
+>(
+  episodeId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSongExploderChapters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSongExploderChaptersQueryKey(episodeId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSongExploderChapters>>
+  > = ({ signal }) =>
+    getSongExploderChapters(episodeId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!episodeId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSongExploderChapters>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSongExploderChaptersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSongExploderChapters>>
+>;
+export type GetSongExploderChaptersQueryError = ErrorType<unknown>;
+
+export function useGetSongExploderChapters<
+  TData = Awaited<ReturnType<typeof getSongExploderChapters>>,
+  TError = ErrorType<unknown>,
+>(
+  episodeId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSongExploderChapters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSongExploderChaptersQueryOptions(
+    episodeId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getEnrollRadioBrowserUrl = () => {
+  return `/api/admin/radio-browser/enroll`;
+};
+
+export const enrollRadioBrowser = async (
+  enrollRadioBrowserBody: EnrollRadioBrowserBody,
+  options?: RequestInit,
+): Promise<EnrollRadioBrowserResponse> => {
+  return customFetch<EnrollRadioBrowserResponse>(getEnrollRadioBrowserUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(enrollRadioBrowserBody),
+  });
+};
+
+export const getEnrollRadioBrowserMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollRadioBrowser>>,
+    TError,
+    { data: BodyType<EnrollRadioBrowserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof enrollRadioBrowser>>,
+  TError,
+  { data: BodyType<EnrollRadioBrowserBody> },
+  TContext
+> => {
+  const mutationKey = ["enrollRadioBrowser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof enrollRadioBrowser>>,
+    { data: BodyType<EnrollRadioBrowserBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return enrollRadioBrowser(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EnrollRadioBrowserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof enrollRadioBrowser>>
+>;
+export type EnrollRadioBrowserMutationBody = BodyType<EnrollRadioBrowserBody>;
+export type EnrollRadioBrowserMutationError = ErrorType<unknown>;
+
+export const useEnrollRadioBrowser = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollRadioBrowser>>,
+    TError,
+    { data: BodyType<EnrollRadioBrowserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof enrollRadioBrowser>>,
+  TError,
+  { data: BodyType<EnrollRadioBrowserBody> },
+  TContext
+> => {
+  return useMutation(getEnrollRadioBrowserMutationOptions(options));
+};
+
+export const getListRadioBrowserStationsUrl = () => {
+  return `/api/admin/radio-browser/stations`;
+};
+
+export const listRadioBrowserStations = async (
+  options?: RequestInit,
+): Promise<ListRadioBrowserStationsResponse> => {
+  return customFetch<ListRadioBrowserStationsResponse>(
+    getListRadioBrowserStationsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListRadioBrowserStationsQueryKey = () => {
+  return [`/api/admin/radio-browser/stations`] as const;
+};
+
+export const getListRadioBrowserStationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRadioBrowserStations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRadioBrowserStations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRadioBrowserStationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRadioBrowserStations>>
+  > = ({ signal }) => listRadioBrowserStations({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRadioBrowserStations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRadioBrowserStationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRadioBrowserStations>>
+>;
+export type ListRadioBrowserStationsQueryError = ErrorType<unknown>;
+
+export function useListRadioBrowserStations<
+  TData = Awaited<ReturnType<typeof listRadioBrowserStations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRadioBrowserStations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRadioBrowserStationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getReenrollRadioBrowserUrl = (id: number) => {
+  return `/api/admin/radio-browser/stations/${id}/reenroll`;
+};
+
+export const reenrollRadioBrowser = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ReenrollRadioBrowserResponse> => {
+  return customFetch<ReenrollRadioBrowserResponse>(
+    getReenrollRadioBrowserUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getReenrollRadioBrowserMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reenrollRadioBrowser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reenrollRadioBrowser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["reenrollRadioBrowser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reenrollRadioBrowser>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return reenrollRadioBrowser(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReenrollRadioBrowserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reenrollRadioBrowser>>
+>;
+
+export type ReenrollRadioBrowserMutationError = ErrorType<unknown>;
+
+export const useReenrollRadioBrowser = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reenrollRadioBrowser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reenrollRadioBrowser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getReenrollRadioBrowserMutationOptions(options));
+};
+
+export const getDeleteRadioBrowserUrl = (id: number) => {
+  return `/api/admin/radio-browser/stations/${id}`;
+};
+
+export const deleteRadioBrowser = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteRadioBrowserUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteRadioBrowserMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRadioBrowser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteRadioBrowser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteRadioBrowser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteRadioBrowser>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteRadioBrowser(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteRadioBrowserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteRadioBrowser>>
+>;
+
+export type DeleteRadioBrowserMutationError = ErrorType<unknown>;
+
+export const useDeleteRadioBrowser = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRadioBrowser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteRadioBrowser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteRadioBrowserMutationOptions(options));
+};
+
+export const getCreateListSourceUrl = () => {
+  return `/api/admin/list-sources`;
+};
+
+export const createListSource = async (
+  createListSourceBody: CreateListSourceBody,
+  options?: RequestInit,
+): Promise<CreateListSourceResponse> => {
+  return customFetch<CreateListSourceResponse>(getCreateListSourceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createListSourceBody),
+  });
+};
+
+export const getCreateListSourceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createListSource>>,
+    TError,
+    { data: BodyType<CreateListSourceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createListSource>>,
+  TError,
+  { data: BodyType<CreateListSourceBody> },
+  TContext
+> => {
+  const mutationKey = ["createListSource"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createListSource>>,
+    { data: BodyType<CreateListSourceBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createListSource(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateListSourceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createListSource>>
+>;
+export type CreateListSourceMutationBody = BodyType<CreateListSourceBody>;
+export type CreateListSourceMutationError = ErrorType<unknown>;
+
+export const useCreateListSource = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createListSource>>,
+    TError,
+    { data: BodyType<CreateListSourceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createListSource>>,
+  TError,
+  { data: BodyType<CreateListSourceBody> },
+  TContext
+> => {
+  return useMutation(getCreateListSourceMutationOptions(options));
+};
+
+export const getListSourcesUrl = () => {
+  return `/api/admin/list-sources`;
+};
+
+export const listSources = async (
+  options?: RequestInit,
+): Promise<ListSourcesResponse> => {
+  return customFetch<ListSourcesResponse>(getListSourcesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSourcesQueryKey = () => {
+  return [`/api/admin/list-sources`] as const;
+};
+
+export const getListSourcesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSources>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSources>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSourcesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSources>>> = ({
+    signal,
+  }) => listSources({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSources>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSourcesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSources>>
+>;
+export type ListSourcesQueryError = ErrorType<unknown>;
+
+export function useListSources<
+  TData = Awaited<ReturnType<typeof listSources>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSources>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSourcesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getScrapeListUrl = () => {
+  return `/api/admin/lists/scrape`;
+};
+
+export const scrapeList = async (
+  scrapeListBody: ScrapeListBody,
+  options?: RequestInit,
+): Promise<ScrapeListResponse> => {
+  return customFetch<ScrapeListResponse>(getScrapeListUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(scrapeListBody),
+  });
+};
+
+export const getScrapeListMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scrapeList>>,
+    TError,
+    { data: BodyType<ScrapeListBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scrapeList>>,
+  TError,
+  { data: BodyType<ScrapeListBody> },
+  TContext
+> => {
+  const mutationKey = ["scrapeList"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scrapeList>>,
+    { data: BodyType<ScrapeListBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scrapeList(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScrapeListMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scrapeList>>
+>;
+export type ScrapeListMutationBody = BodyType<ScrapeListBody>;
+export type ScrapeListMutationError = ErrorType<unknown>;
+
+export const useScrapeList = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scrapeList>>,
+    TError,
+    { data: BodyType<ScrapeListBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scrapeList>>,
+  TError,
+  { data: BodyType<ScrapeListBody> },
+  TContext
+> => {
+  return useMutation(getScrapeListMutationOptions(options));
+};
+
+export const getConfirmListEntryUrl = (listId: number, entryId: number) => {
+  return `/api/admin/lists/${listId}/entries/${entryId}`;
+};
+
+export const confirmListEntry = async (
+  listId: number,
+  entryId: number,
+  confirmListEntryBody: ConfirmListEntryBody,
+  options?: RequestInit,
+): Promise<ConfirmListEntry200> => {
+  return customFetch<ConfirmListEntry200>(
+    getConfirmListEntryUrl(listId, entryId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(confirmListEntryBody),
+    },
+  );
+};
+
+export const getConfirmListEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmListEntry>>,
+    TError,
+    { listId: number; entryId: number; data: BodyType<ConfirmListEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmListEntry>>,
+  TError,
+  { listId: number; entryId: number; data: BodyType<ConfirmListEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["confirmListEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmListEntry>>,
+    { listId: number; entryId: number; data: BodyType<ConfirmListEntryBody> }
+  > = (props) => {
+    const { listId, entryId, data } = props ?? {};
+
+    return confirmListEntry(listId, entryId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmListEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmListEntry>>
+>;
+export type ConfirmListEntryMutationBody = BodyType<ConfirmListEntryBody>;
+export type ConfirmListEntryMutationError = ErrorType<unknown>;
+
+export const useConfirmListEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmListEntry>>,
+    TError,
+    { listId: number; entryId: number; data: BodyType<ConfirmListEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmListEntry>>,
+  TError,
+  { listId: number; entryId: number; data: BodyType<ConfirmListEntryBody> },
+  TContext
+> => {
+  return useMutation(getConfirmListEntryMutationOptions(options));
+};
+
+export const getGetEmbedCoverageUrl = (params?: GetEmbedCoverageParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/embed-coverage?${stringifiedParams}`
+    : `/api/admin/embed-coverage`;
+};
+
+export const getEmbedCoverage = async (
+  params?: GetEmbedCoverageParams,
+  options?: RequestInit,
+): Promise<GetEmbedCoverageResponse> => {
+  return customFetch<GetEmbedCoverageResponse>(getGetEmbedCoverageUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEmbedCoverageQueryKey = (
+  params?: GetEmbedCoverageParams,
+) => {
+  return [`/api/admin/embed-coverage`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetEmbedCoverageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEmbedCoverage>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetEmbedCoverageParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEmbedCoverage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetEmbedCoverageQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEmbedCoverage>>
+  > = ({ signal }) => getEmbedCoverage(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEmbedCoverage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEmbedCoverageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEmbedCoverage>>
+>;
+export type GetEmbedCoverageQueryError = ErrorType<unknown>;
+
+export function useGetEmbedCoverage<
+  TData = Awaited<ReturnType<typeof getEmbedCoverage>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetEmbedCoverageParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEmbedCoverage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEmbedCoverageQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetEmbedResolutionUrl = (mbid: string) => {
+  return `/api/admin/embed-resolution/${mbid}`;
+};
+
+export const getEmbedResolution = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<GetEmbedResolutionResponse> => {
+  return customFetch<GetEmbedResolutionResponse>(
+    getGetEmbedResolutionUrl(mbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetEmbedResolutionQueryKey = (mbid: string) => {
+  return [`/api/admin/embed-resolution/${mbid}`] as const;
+};
+
+export const getGetEmbedResolutionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEmbedResolution>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEmbedResolution>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetEmbedResolutionQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEmbedResolution>>
+  > = ({ signal }) => getEmbedResolution(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEmbedResolution>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEmbedResolutionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEmbedResolution>>
+>;
+export type GetEmbedResolutionQueryError = ErrorType<unknown>;
+
+export function useGetEmbedResolution<
+  TData = Awaited<ReturnType<typeof getEmbedResolution>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEmbedResolution>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEmbedResolutionQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getPostEmbedResolutionRequeueUrl = (mbid: string) => {
+  return `/api/admin/embed-resolution/${mbid}/requeue`;
+};
+
+export const postEmbedResolutionRequeue = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<PostEmbedResolutionRequeueResponse> => {
+  return customFetch<PostEmbedResolutionRequeueResponse>(
+    getPostEmbedResolutionRequeueUrl(mbid),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getPostEmbedResolutionRequeueMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postEmbedResolutionRequeue>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postEmbedResolutionRequeue>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  const mutationKey = ["postEmbedResolutionRequeue"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postEmbedResolutionRequeue>>,
+    { mbid: string }
+  > = (props) => {
+    const { mbid } = props ?? {};
+
+    return postEmbedResolutionRequeue(mbid, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostEmbedResolutionRequeueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postEmbedResolutionRequeue>>
+>;
+
+export type PostEmbedResolutionRequeueMutationError = ErrorType<unknown>;
+
+export const usePostEmbedResolutionRequeue = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postEmbedResolutionRequeue>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postEmbedResolutionRequeue>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  return useMutation(getPostEmbedResolutionRequeueMutationOptions(options));
+};
+
+export const getGetRecordingSongExploderUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/song-exploder`;
+};
+
+export const getRecordingSongExploder = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<GetRecordingSongExploder200> => {
+  return customFetch<GetRecordingSongExploder200>(
+    getGetRecordingSongExploderUrl(mbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetRecordingSongExploderQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/song-exploder`] as const;
+};
+
+export const getGetRecordingSongExploderQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingSongExploder>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSongExploder>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingSongExploderQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingSongExploder>>
+  > = ({ signal }) =>
+    getRecordingSongExploder(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingSongExploder>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingSongExploderQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingSongExploder>>
+>;
+export type GetRecordingSongExploderQueryError = ErrorType<unknown>;
+
+export function useGetRecordingSongExploder<
+  TData = Awaited<ReturnType<typeof getRecordingSongExploder>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSongExploder>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingSongExploderQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.

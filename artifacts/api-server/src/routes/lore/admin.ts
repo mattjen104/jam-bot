@@ -15,7 +15,6 @@ import {
   AddSongExploderClaimBody,
   AddRymListBody,
   EnrollNtsShowBody,
-  EnrollNtsShowResponse,
   ListAllDraftClaimsResponse,
   GetWikipediaDraftsResponse,
   PatchClaimParams,
@@ -943,15 +942,13 @@ router.post("/admin/pickers/nts", h(async (req, res) => {
     throw new HttpError(400, err instanceof Error ? err.message : "Could not save NTS picker");
   });
 
-  return res.status(201).json(
-    EnrollNtsShowResponse.parse({
-      pickerId: picker.id,
-      handle: picker.handle,
-      name: picker.name,
-      alias,
-      homeUrl,
-    }),
-  );
+  return res.status(201).json({
+    pickerId: picker.id,
+    handle: picker.handle,
+    name: picker.name,
+    alias,
+    homeUrl,
+  });
 }));
 
 // ---- Radio Browser ICY enrollment --------------------------------------
