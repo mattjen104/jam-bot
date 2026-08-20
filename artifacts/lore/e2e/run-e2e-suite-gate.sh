@@ -35,6 +35,8 @@
 #                                       pending fdrow infrastructure recovery)
 #   - stackDensityPager.spec.ts        (Stack 5/10/15 density paging,
 #                                       localStorage persistence, and page artwork)
+#   - dialSkippedScan.spec.ts          (shared skipped-station preference,
+#                                       ordering, and page/all scan exclusion)
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -115,6 +117,7 @@ RUN_SPECS=(
   e2e/compactStackBand.spec.ts
   e2e/stationAdminRemoval.spec.ts
   e2e/stackDensityPager.spec.ts
+  e2e/dialSkippedScan.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
