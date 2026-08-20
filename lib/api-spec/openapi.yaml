@@ -2637,273 +2637,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /admin/lore/pickers/seed-blog:
-    post:
-      operationId: seedBlogPickers
-      tags: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SeedBlogPickersBody"
-      responses:
-        "200":
-          description: Blog picker seed results
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SeedBlogPickersResponse"
-  /admin/pickers/nts:
-    post:
-      operationId: enrollNtsShow
-      tags: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EnrollNtsShowBody"
-      responses:
-        "201":
-          description: Enrolled NTS show
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  pickerId: { type: integer }
-                  handle: { type: string }
-                  name: { type: string }
-                  alias: { type: string }
-                  homeUrl: { type: string }
-                required: [pickerId, handle, name, alias, homeUrl]
-  /admin/song-exploder/{episodeId}:
-    patch:
-      operationId: patchSongExploderEpisode
-      tags: [admin]
-      parameters:
-        - { name: episodeId, in: path, required: true, schema: { type: integer, minimum: 1 } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PatchSongExploderEpisodeBody"
-      responses:
-        "200":
-          description: Updated episode
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PatchSongExploderEpisodeResponse"
-  /admin/song-exploder/{episodeId}/chapters:
-    get:
-      operationId: getSongExploderChapters
-      tags: [admin]
-      parameters:
-        - { name: episodeId, in: path, required: true, schema: { type: integer, minimum: 1 } }
-      responses:
-        "200":
-          description: Parsed chapter markers
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetSongExploderChaptersResponse"
-  /admin/radio-browser/enroll:
-    post:
-      operationId: enrollRadioBrowser
-      tags: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EnrollRadioBrowserBody"
-      responses:
-        "200":
-          description: Enrolled station
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EnrollRadioBrowserResponse"
-  /admin/radio-browser/stations:
-    get:
-      operationId: listRadioBrowserStations
-      tags: [admin]
-      responses:
-        "200":
-          description: Enrolled stations
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListRadioBrowserStationsResponse"
-  /admin/radio-browser/stations/{id}/reenroll:
-    post:
-      operationId: reenrollRadioBrowser
-      tags: [admin]
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
-      responses:
-        "200":
-          description: Re-enrolled station
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReenrollRadioBrowserResponse"
-  /admin/radio-browser/stations/{id}:
-    delete:
-      operationId: deleteRadioBrowser
-      tags: [admin]
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
-      responses:
-        "204":
-          description: Enrollment removed
-  /admin/list-sources:
-    post:
-      operationId: createListSource
-      tags: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateListSourceBody"
-      responses:
-        "201":
-          description: Created list source
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreateListSourceResponse"
-    get:
-      operationId: listSources
-      tags: [admin]
-      responses:
-        "200":
-          description: List sources
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListSourcesResponse"
-  /admin/lists/scrape:
-    post:
-      operationId: scrapeList
-      tags: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ScrapeListBody"
-      responses:
-        "200":
-          description: Scrape summary
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ScrapeListResponse"
-  /admin/lists/{listId}/entries/{entryId}:
-    patch:
-      operationId: confirmListEntry
-      tags: [admin]
-      parameters:
-        - { name: listId, in: path, required: true, schema: { type: integer, minimum: 1 } }
-        - { name: entryId, in: path, required: true, schema: { type: integer, minimum: 1 } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ConfirmListEntryBody"
-      responses:
-        "200":
-          description: Updated list entry
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-  /admin/embed-coverage:
-    get:
-      operationId: getEmbedCoverage
-      tags: [admin]
-      parameters:
-        - { name: stationId, in: query, required: false, schema: { type: integer, minimum: 0 } }
-        - { name: genreCluster, in: query, required: false, schema: { type: string, minLength: 1 } }
-        - { name: weekStart, in: query, required: false, schema: { type: string } }
-        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 2000 } }
-      responses:
-        "200":
-          description: Embed coverage metrics
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetEmbedCoverageResponse"
-  /admin/embed-resolution/{mbid}:
-    get:
-      operationId: getEmbedResolution
-      tags: [admin]
-      parameters:
-        - { name: mbid, in: path, required: true, schema: { type: string, minLength: 1 } }
-      responses:
-        "200":
-          description: Embed resolution state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetEmbedResolutionResponse"
-  /admin/embed-resolution/{mbid}/requeue:
-    post:
-      operationId: postEmbedResolutionRequeue
-      tags: [admin]
-      parameters:
-        - { name: mbid, in: path, required: true, schema: { type: string, minLength: 1 } }
-      responses:
-        "200":
-          description: Requeued embed jobs
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PostEmbedResolutionRequeueResponse"
-  /recordings/{mbid}/song-exploder:
-    get:
-      operationId: getRecordingSongExploder
-      tags: [lore]
-      parameters:
-        - { name: mbid, in: path, required: true, schema: { type: string, minLength: 1 } }
-      responses:
-        "200":
-          description: Song Exploder episode and published timeline anchors
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  episode:
-                    type: object
-                    nullable: true
-                    properties:
-                      id: { type: integer }
-                      title: { type: string }
-                      episodeUrl: { type: string }
-                      youtubeUrl: { type: string, nullable: true }
-                      publishedAt: { type: string, nullable: true }
-                      resolvedAt: { type: string, nullable: true }
-                    required: [id, title, episodeUrl, youtubeUrl, publishedAt, resolvedAt]
-                  anchors:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id: { type: integer }
-                        positionMs: { type: integer }
-                        text: { type: string }
-                        sourceUrl: { type: string, nullable: true }
-                        sourceLabel: { type: string, nullable: true }
-                      required: [id, positionMs, text, sourceUrl, sourceLabel]
-                required: [episode, anchors]
   /spotify/status:
     get:
       operationId: getSpotifyStatus
@@ -3543,6 +3276,212 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SupportHoldResponse"
+  /me/keep:
+    post:
+      operationId: keepRecording
+      tags: [me]
+      summary: Keep a recording or unresolved spin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KeepRecordingInput"
+      responses:
+        "200":
+          description: Keep result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeepRecordingResponse"
+        "400":
+          description: Invalid keep request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Recording or spin not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /me/keep/{mbid}:
+    delete:
+      operationId: unkeepRecording
+      tags: [me]
+      summary: Remove a recording from the library
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Removed }
+  /me/keep/spin/{spinId}:
+    delete:
+      operationId: unkeepSpin
+      tags: [me]
+      summary: Remove a spin-based save
+      parameters:
+        - name: spinId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Removed }
+  /me/keep/status:
+    get:
+      operationId: getKeepStatus
+      tags: [me]
+      summary: Get kept recording IDs
+      parameters:
+        - name: mbids
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kept recording IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeepStatusResponse"
+  /me/keep/pending-status:
+    get:
+      operationId: getPendingKeepStatus
+      tags: [me]
+      summary: Get pending and promoted spin saves
+      parameters:
+        - name: spinIds
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Spin save status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingKeepStatusResponse"
+  /me/listens:
+    get:
+      operationId: listMyListens
+      tags: [me]
+      summary: List listening history
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: stationId
+          in: query
+          schema: { type: integer }
+        - name: context
+          in: query
+          schema: { type: string }
+        - name: completed
+          in: query
+          schema: { type: boolean }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Listening history page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListenPage"
+    post:
+      operationId: createListen
+      tags: [me]
+      summary: Record a new listen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListenInput"
+      responses:
+        "200":
+          description: Created listen ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListenCreatedResponse"
+    delete:
+      operationId: deleteAllListens
+      tags: [me]
+      summary: Delete all listening history
+      parameters:
+        - name: confirm
+          in: query
+          required: true
+          schema: { type: boolean }
+      responses:
+        "204": { description: Deleted }
+  /me/listens/{id}:
+    patch:
+      operationId: updateListen
+      tags: [me]
+      summary: Update listen progress
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListenProgressInput"
+      responses:
+        "200":
+          description: Updated listen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListenProgressResponse"
+    delete:
+      operationId: deleteListen
+      tags: [me]
+      summary: Delete one listen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Deleted }
+  /me/library:
+    get:
+      operationId: listMyLibrary
+      tags: [me]
+      summary: List the listener's library
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [added, artist, title], default: added }
+        - name: source
+          in: query
+          schema: { type: string, enum: [keep, import, soft, critic, lore] }
+      responses:
+        "200":
+          description: Library page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryPage"
   /me/avatar:
     get:
       operationId: getMyAlbumAvatar
@@ -3919,209 +3858,444 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationSocialPresenceResponse"
+  /admin/lore/pickers/seed-blog:
+    post:
+      operationId: seedBlogPickers
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SeedBlogPickersBody"
+      responses:
+        "200":
+          description: Blog picker seed results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeedBlogPickersResponse"
+  /admin/pickers/nts:
+    post:
+      operationId: enrollNtsShow
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollNtsShowBody"
+      responses:
+        "201":
+          description: Enrolled NTS show
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pickerId: { type: integer }
+                  handle: { type: string }
+                  name: { type: string }
+                  alias: { type: string }
+                  homeUrl: { type: string }
+                required: [pickerId, handle, name, alias, homeUrl]
+  /admin/song-exploder/{episodeId}:
+    patch:
+      operationId: patchSongExploderEpisode
+      tags: [admin]
+      parameters:
+        - { name: episodeId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchSongExploderEpisodeBody"
+      responses:
+        "200":
+          description: Updated episode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatchSongExploderEpisodeResponse"
+  /admin/song-exploder/{episodeId}/chapters:
+    get:
+      operationId: getSongExploderChapters
+      tags: [admin]
+      parameters:
+        - { name: episodeId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Parsed chapter markers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetSongExploderChaptersResponse"
+  /admin/radio-browser/enroll:
+    post:
+      operationId: enrollRadioBrowser
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollRadioBrowserBody"
+      responses:
+        "200":
+          description: Enrolled station
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollRadioBrowserResponse"
+  /admin/radio-browser/stations:
+    get:
+      operationId: listRadioBrowserStations
+      tags: [admin]
+      responses:
+        "200":
+          description: Enrolled stations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListRadioBrowserStationsResponse"
+  /admin/radio-browser/stations/{id}/reenroll:
+    post:
+      operationId: reenrollRadioBrowser
+      tags: [admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Re-enrolled station
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReenrollRadioBrowserResponse"
+  /admin/radio-browser/stations/{id}:
+    delete:
+      operationId: deleteRadioBrowser
+      tags: [admin]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "204":
+          description: Enrollment removed
+  /admin/list-sources:
+    post:
+      operationId: createListSource
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateListSourceBody"
+      responses:
+        "201":
+          description: Created list source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateListSourceResponse"
+    get:
+      operationId: listSources
+      tags: [admin]
+      responses:
+        "200":
+          description: List sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSourcesResponse"
+  /admin/lists/scrape:
+    post:
+      operationId: scrapeList
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScrapeListBody"
+      responses:
+        "200":
+          description: Scrape summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScrapeListResponse"
+  /admin/lists/{listId}/entries/{entryId}:
+    patch:
+      operationId: confirmListEntry
+      tags: [admin]
+      parameters:
+        - { name: listId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: entryId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmListEntryBody"
+      responses:
+        "200":
+          description: Updated list entry
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /admin/embed-coverage:
+    get:
+      operationId: getEmbedCoverage
+      tags: [admin]
+      parameters:
+        - { name: stationId, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { name: genreCluster, in: query, required: false, schema: { type: string, minLength: 1 } }
+        - { name: weekStart, in: query, required: false, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 2000 } }
+      responses:
+        "200":
+          description: Embed coverage metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetEmbedCoverageResponse"
+  /admin/embed-resolution/{mbid}:
+    get:
+      operationId: getEmbedResolution
+      tags: [admin]
+      parameters:
+        - { name: mbid, in: path, required: true, schema: { type: string, minLength: 1 } }
+      responses:
+        "200":
+          description: Embed resolution state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetEmbedResolutionResponse"
+  /admin/embed-resolution/{mbid}/requeue:
+    post:
+      operationId: postEmbedResolutionRequeue
+      tags: [admin]
+      parameters:
+        - { name: mbid, in: path, required: true, schema: { type: string, minLength: 1 } }
+      responses:
+        "200":
+          description: Requeued embed jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostEmbedResolutionRequeueResponse"
+  /recordings/{mbid}/song-exploder:
+    get:
+      operationId: getRecordingSongExploder
+      tags: [lore]
+      parameters:
+        - { name: mbid, in: path, required: true, schema: { type: string, minLength: 1 } }
+      responses:
+        "200":
+          description: Song Exploder episode and published timeline anchors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  episode:
+                    type: object
+                    nullable: true
+                    properties:
+                      id: { type: integer }
+                      title: { type: string }
+                      episodeUrl: { type: string }
+                      youtubeUrl: { type: string, nullable: true }
+                      publishedAt: { type: string, nullable: true }
+                      resolvedAt: { type: string, nullable: true }
+                    required: [id, title, episodeUrl, youtubeUrl, publishedAt, resolvedAt]
+                  anchors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        positionMs: { type: integer }
+                        text: { type: string }
+                        sourceUrl: { type: string, nullable: true }
+                        sourceLabel: { type: string, nullable: true }
+                      required: [id, positionMs, text, sourceUrl, sourceLabel]
+                required: [episode, anchors]
 components:
   schemas:
-    SeedBlogPickersBody:
+    KeepRecordingInput:
       type: object
       properties:
-        urls:
+        mbid: { type: string }
+        spinId: { type: integer }
+        provenance:
+          type: object
+          additionalProperties: true
+      description: Provide mbid for a resolved recording or spinId for an unresolved spin.
+      anyOf:
+        - required: [mbid]
+        - required: [spinId]
+    KeepRecordingResponse:
+      type: object
+      properties:
+        keptToLore: { type: boolean }
+        pendingKept: { type: boolean }
+        mirrors:
+          type: array
+          items:
+            type: object
+            properties:
+              service: { type: string }
+              ok: { type: boolean }
+              linkOut: { type: string }
+            required: [service, ok]
+        showRecoveryHint: { type: boolean }
+      required: [keptToLore, mirrors]
+    KeepStatusResponse:
+      type: object
+      properties:
+        kept:
           type: array
           items: { type: string }
-      required: [urls]
-    SeedBlogPickersResponse:
+      required: [kept]
+    PendingKeepStatusResponse:
       type: object
       properties:
-        results:
+        savedSpinIds:
           type: array
-          items:
-            type: object
-            properties:
-              url: { type: string }
-              feedUrl: { type: string, nullable: true }
-              handle: { type: string, nullable: true }
-              status: { type: string, enum: [discovered, already_exists, no_feed, error] }
-              error: { type: string }
-            required: [url, feedUrl, handle, status]
-      required: [results]
-    EnrollNtsShowBody:
-      type: object
-      properties:
-        alias: { type: string, minLength: 1 }
-        name: { type: string }
-      required: [alias]
-    EnrollNtsShowResponse:
-      type: object
-      properties:
-        pickerId: { type: integer }
-        handle: { type: string }
-        name: { type: string }
-        alias: { type: string }
-        homeUrl: { type: string }
-      required: [pickerId, handle, name, alias, homeUrl]
-    PatchSongExploderEpisodeBody:
-      type: object
-      properties:
-        youtubeUrl: { type: string, format: uri, nullable: true }
-      required: [youtubeUrl]
-    PatchSongExploderEpisodeResponse:
-      type: object
-      properties:
-        id: { type: integer }
-        youtubeUrl: { type: string, nullable: true }
-      required: [id, youtubeUrl]
-    GetSongExploderChaptersResponse:
-      type: object
-      properties:
-        chapters:
+          items: { type: integer }
+        pendingSpinIds:
           type: array
-          items:
-            type: object
-            properties:
-              positionMs: { type: integer }
-              text: { type: string }
-            required: [positionMs, text]
-      required: [chapters]
-    EnrollRadioBrowserBody:
+          items: { type: integer }
+      required: [savedSpinIds, pendingSpinIds]
+    ListenInput:
       type: object
       properties:
-        uuid: { type: string, minLength: 1 }
-      required: [uuid]
-    EnrollRadioBrowserResponse:
+        mbid: { type: string, nullable: true }
+        spinId: { type: integer, nullable: true }
+        stationId: { type: integer, nullable: true }
+        pickerId: { type: integer, nullable: true }
+        showId: { type: integer, nullable: true }
+        context: { type: string, minLength: 1 }
+        outputService: { type: string, minLength: 1 }
+        startedAt: { type: string, format: date-time }
+      required: [context, outputService]
+    ListenCreatedResponse:
+      type: object
+      properties:
+        id: { type: integer, nullable: true }
+      required: [id]
+    ListenProgressInput:
+      type: object
+      properties:
+        msPlayed: { type: number, minimum: 0 }
+      required: [msPlayed]
+    ListenProgressResponse:
       type: object
       properties:
         id: { type: integer }
-        radioBrowserUuid: { type: string }
+        msPlayed: { type: number }
+        completed: { type: boolean }
+      required: [id, msPlayed, completed]
+    ListenRecording:
+      type: object
+      properties:
+        title: { type: string }
+        artist: { type: string }
+      required: [title, artist]
+    ListenStation:
+      type: object
+      properties:
         name: { type: string }
-        streamUrl: { type: string }
-        faviconUrl: { type: string, nullable: true }
-        icyStatus: { type: string }
-        enrolledAt: { type: string }
-      required: [id, radioBrowserUuid, name, streamUrl, faviconUrl, icyStatus, enrolledAt]
-    ListRadioBrowserStationsResponse:
+        slug: { type: string, nullable: true }
+      required: [name, slug]
+    ListenNamed:
       type: object
       properties:
-        stations:
+        name: { type: string }
+      required: [name]
+    ListenItem:
+      type: object
+      properties:
+        id: { type: integer }
+        mbid: { type: string, nullable: true }
+        spinId: { type: integer, nullable: true }
+        stationId: { type: integer, nullable: true }
+        pickerId: { type: integer, nullable: true }
+        showId: { type: integer, nullable: true }
+        context: { type: string }
+        outputService: { type: string }
+        startedAt: { type: string, format: date-time }
+        msPlayed: { type: number }
+        completed: { type: boolean }
+        releaseGroupMbid: { type: string, nullable: true }
+        recording: { $ref: "#/components/schemas/ListenRecording", nullable: true }
+        station: { $ref: "#/components/schemas/ListenStation", nullable: true }
+        picker: { $ref: "#/components/schemas/ListenNamed", nullable: true }
+        show: { $ref: "#/components/schemas/ListenNamed", nullable: true }
+      required: [id, mbid, spinId, stationId, pickerId, showId, context, outputService, startedAt, msPlayed, completed, releaseGroupMbid, recording, station, picker, show]
+    ListenPage:
+      type: object
+      properties:
+        items:
           type: array
-          items:
-            type: object
-            properties:
-              id: { type: integer }
-              radioBrowserUuid: { type: string }
-              name: { type: string }
-              streamUrl: { type: string }
-              faviconUrl: { type: string, nullable: true }
-              icyStatus: { type: string }
-              lastStreamTitle: { type: string, nullable: true }
-              lastSuccessAt: { type: string, nullable: true }
-              consecutiveErrors: { type: integer }
-              enrolledAt: { type: string }
-            required: [id, radioBrowserUuid, name, streamUrl, faviconUrl, icyStatus, lastStreamTitle, lastSuccessAt, consecutiveErrors, enrolledAt]
-      required: [stations]
-    ReenrollRadioBrowserResponse:
+          items: { $ref: "#/components/schemas/ListenItem" }
+        nextCursor: { type: string, nullable: true }
+      required: [items, nextCursor]
+    LibraryProvenance:
       type: object
       properties:
-        id: { type: integer }
-        icyStatus: { type: string }
-        consecutiveErrors: { type: integer }
-        updatedAt: { type: string }
-      required: [id, icyStatus, consecutiveErrors, updatedAt]
-    CreateListSourceBody:
-      type: object
-      properties:
-        kind: { type: string, minLength: 1 }
-        name: { type: string, minLength: 1 }
-        homepageUrl: { type: string, format: uri }
-        pickerId: { type: integer }
-        stationId: { type: integer }
-      required: [kind, name]
-    CreateListSourceResponse:
-      type: object
-      properties:
-        id: { type: integer }
         kind: { type: string }
-        name: { type: string }
-      required: [id, kind, name]
-    ListSourcesResponse:
-      type: object
-      properties:
-        sources:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-      required: [sources]
-    ScrapeListBody:
-      type: object
-      properties:
-        sourceId: { type: integer }
-        title: { type: string, minLength: 1 }
-        year: { type: integer }
-        kind: { type: string, minLength: 1 }
-        isRanked: { type: boolean }
-        listLength: { type: integer }
-        url: { type: string, format: uri }
-      required: [sourceId, title, kind, isRanked, url]
-    ScrapeListResponse:
-      type: object
+        service: { type: string }
+        stationSlug: { type: string }
+        stationName: { type: string }
+        pickerHandle: { type: string }
+        pickerName: { type: string }
+        surface: { type: string }
+        entryPoint: { type: string }
       additionalProperties: true
-    ConfirmListEntryBody:
+      required: [kind]
+    LibraryRecording:
       type: object
       properties:
-        confirmed: { type: boolean }
-        releaseGroupMbid: { type: string }
-      required: [confirmed]
-    GetEmbedCoverageResponse:
+        title: { type: string }
+        artist: { type: string }
+        artworkUrl: { type: string, nullable: true }
+        albumTitle: { type: string, nullable: true }
+        releaseGroupMbid: { type: string, nullable: true }
+        releaseYear: { type: integer, nullable: true }
+        spotifyUrl: { type: string, nullable: true }
+      required: [title, artist, artworkUrl, albumTitle, releaseGroupMbid, releaseYear, spotifyUrl]
+    LibraryItem:
       type: object
       properties:
-        rows:
+        mbid: { type: string, nullable: true }
+        provenance: { $ref: "#/components/schemas/LibraryProvenance" }
+        addedAt: { type: string, format: date-time }
+        recording: { $ref: "#/components/schemas/LibraryRecording", nullable: true }
+        soft: { type: boolean }
+        spotifyId: { type: string }
+        fuzzyMatch: { type: boolean }
+        removed: { type: boolean }
+        removedAt: { type: string, format: date-time, nullable: true }
+        dualSource: { type: boolean }
+      required: [mbid, provenance, addedAt, recording]
+    LibraryPage:
+      type: object
+      properties:
+        items:
           type: array
-          items:
-            type: object
-            properties:
-              stationId: { type: integer }
-              genreCluster: { type: string }
-              weekStart: { type: string }
-              provider: { type: string }
-              role: { type: string }
-              rung: { type: integer }
-              outcome: { type: string }
-              count: { type: integer }
-              updatedAt: { type: string }
-            required: [stationId, genreCluster, weekStart, provider, role, rung, outcome, count, updatedAt]
+          items: { $ref: "#/components/schemas/LibraryItem" }
+        nextCursor: { type: string, nullable: true }
         total: { type: integer }
-      required: [rows, total]
-    GetEmbedResolutionResponse:
-      type: object
-      properties:
-        mbid: { type: string }
-        links:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        queue:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-      required: [mbid, links, queue]
-    PostEmbedResolutionRequeueResponse:
-      type: object
-      properties:
-        mbid: { type: string }
-        requeued:
-          type: array
-          items:
-            type: object
-            properties:
-              provider: { type: string }
-              role: { type: string }
-              status: { type: string }
-              attempts: { type: integer }
-              nextAttemptAt: { type: string }
-              requestedAt: { type: string }
-            required: [provider, role, status, attempts, nextAttemptAt, requestedAt]
-      required: [mbid, requeued]
+        keepCount: { type: integer }
+        softCount: { type: integer }
+        criticCount: { type: integer }
+      required: [items, nextCursor]
     ImportedSetUploadRequest:
       type: object
       properties:
@@ -9025,3 +9199,204 @@ components:
         - events
         - computing
         - hasTaste
+    SeedBlogPickersBody:
+      type: object
+      properties:
+        urls:
+          type: array
+          items: { type: string }
+      required: [urls]
+    SeedBlogPickersResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              url: { type: string }
+              feedUrl: { type: string, nullable: true }
+              handle: { type: string, nullable: true }
+              status: { type: string, enum: [discovered, already_exists, no_feed, error] }
+              error: { type: string }
+            required: [url, feedUrl, handle, status]
+      required: [results]
+    EnrollNtsShowBody:
+      type: object
+      properties:
+        alias: { type: string, minLength: 1 }
+        name: { type: string }
+      required: [alias]
+    EnrollNtsShowResponse:
+      type: object
+      properties:
+        pickerId: { type: integer }
+        handle: { type: string }
+        name: { type: string }
+        alias: { type: string }
+        homeUrl: { type: string }
+      required: [pickerId, handle, name, alias, homeUrl]
+    PatchSongExploderEpisodeBody:
+      type: object
+      properties:
+        youtubeUrl: { type: string, format: uri, nullable: true }
+      required: [youtubeUrl]
+    PatchSongExploderEpisodeResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        youtubeUrl: { type: string, nullable: true }
+      required: [id, youtubeUrl]
+    GetSongExploderChaptersResponse:
+      type: object
+      properties:
+        chapters:
+          type: array
+          items:
+            type: object
+            properties:
+              positionMs: { type: integer }
+              text: { type: string }
+            required: [positionMs, text]
+      required: [chapters]
+    EnrollRadioBrowserBody:
+      type: object
+      properties:
+        uuid: { type: string, minLength: 1 }
+      required: [uuid]
+    EnrollRadioBrowserResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        radioBrowserUuid: { type: string }
+        name: { type: string }
+        streamUrl: { type: string }
+        faviconUrl: { type: string, nullable: true }
+        icyStatus: { type: string }
+        enrolledAt: { type: string }
+      required: [id, radioBrowserUuid, name, streamUrl, faviconUrl, icyStatus, enrolledAt]
+    ListRadioBrowserStationsResponse:
+      type: object
+      properties:
+        stations:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              radioBrowserUuid: { type: string }
+              name: { type: string }
+              streamUrl: { type: string }
+              faviconUrl: { type: string, nullable: true }
+              icyStatus: { type: string }
+              lastStreamTitle: { type: string, nullable: true }
+              lastSuccessAt: { type: string, nullable: true }
+              consecutiveErrors: { type: integer }
+              enrolledAt: { type: string }
+            required: [id, radioBrowserUuid, name, streamUrl, faviconUrl, icyStatus, lastStreamTitle, lastSuccessAt, consecutiveErrors, enrolledAt]
+      required: [stations]
+    ReenrollRadioBrowserResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        icyStatus: { type: string }
+        consecutiveErrors: { type: integer }
+        updatedAt: { type: string }
+      required: [id, icyStatus, consecutiveErrors, updatedAt]
+    CreateListSourceBody:
+      type: object
+      properties:
+        kind: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        homepageUrl: { type: string, format: uri }
+        pickerId: { type: integer }
+        stationId: { type: integer }
+      required: [kind, name]
+    CreateListSourceResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        kind: { type: string }
+        name: { type: string }
+      required: [id, kind, name]
+    ListSourcesResponse:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [sources]
+    ScrapeListBody:
+      type: object
+      properties:
+        sourceId: { type: integer }
+        title: { type: string, minLength: 1 }
+        year: { type: integer }
+        kind: { type: string, minLength: 1 }
+        isRanked: { type: boolean }
+        listLength: { type: integer }
+        url: { type: string, format: uri }
+      required: [sourceId, title, kind, isRanked, url]
+    ScrapeListResponse:
+      type: object
+      additionalProperties: true
+    ConfirmListEntryBody:
+      type: object
+      properties:
+        confirmed: { type: boolean }
+        releaseGroupMbid: { type: string }
+      required: [confirmed]
+    GetEmbedCoverageResponse:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              stationId: { type: integer }
+              genreCluster: { type: string }
+              weekStart: { type: string }
+              provider: { type: string }
+              role: { type: string }
+              rung: { type: integer }
+              outcome: { type: string }
+              count: { type: integer }
+              updatedAt: { type: string }
+            required: [stationId, genreCluster, weekStart, provider, role, rung, outcome, count, updatedAt]
+        total: { type: integer }
+      required: [rows, total]
+    GetEmbedResolutionResponse:
+      type: object
+      properties:
+        mbid: { type: string }
+        links:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        queue:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [mbid, links, queue]
+    PostEmbedResolutionRequeueResponse:
+      type: object
+      properties:
+        mbid: { type: string }
+        requeued:
+          type: array
+          items:
+            type: object
+            properties:
+              provider: { type: string }
+              role: { type: string }
+              status: { type: string }
+              attempts: { type: integer }
+              nextAttemptAt: { type: string }
+              requestedAt: { type: string }
+            required: [provider, role, status, attempts, nextAttemptAt, requestedAt]
+      required: [mbid, requeued]

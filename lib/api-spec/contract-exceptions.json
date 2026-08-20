@@ -70,19 +70,9 @@
     { "method": "POST", "path": "/me/connect/{service}/start", "kind": "redirect", "reason": "OAuth connect initiation — browser navigation/redirect, not a JSON API." },
     { "method": "GET", "path": "/me/connect/{service}/callback", "kind": "redirect", "reason": "OAuth callback — browser redirect, not a JSON API." },
 
-    { "method": "POST", "path": "/me/keep", "kind": "plain-json", "reason": "Keep (save track) write via hand-written fetch." },
-    { "method": "DELETE", "path": "/me/keep/spin/{spinId}", "kind": "plain-json", "reason": "Un-keep by spin via hand-written fetch." },
-    { "method": "GET", "path": "/me/keep/pending-status", "kind": "plain-json", "reason": "Pending-keep status read model via hand-written fetch." },
-    { "method": "DELETE", "path": "/me/keep/{mbid}", "kind": "plain-json", "reason": "Un-keep by recording via hand-written fetch." },
-    { "method": "GET", "path": "/me/keep/status", "kind": "plain-json", "reason": "Keep status read model via hand-written fetch." },
 
     { "method": "PATCH", "path": "/me/preferences", "kind": "plain-json", "reason": "Listener preference write via hand-written fetch." },
     { "method": "GET", "path": "/me/preferences", "kind": "plain-json", "reason": "Listener preference read model via hand-written fetch." },
-    { "method": "POST", "path": "/me/listens", "kind": "plain-json", "reason": "Listening-ledger write via hand-written fetch." },
-    { "method": "PATCH", "path": "/me/listens/{id}", "kind": "plain-json", "reason": "Listening-ledger edit via hand-written fetch." },
-    { "method": "GET", "path": "/me/listens", "kind": "plain-json", "reason": "Listening-ledger read model via hand-written fetch." },
-    { "method": "DELETE", "path": "/me/listens/{id}", "kind": "plain-json", "reason": "Listening-ledger delete via hand-written fetch." },
-    { "method": "DELETE", "path": "/me/listens", "kind": "plain-json", "reason": "Listening-ledger bulk delete via hand-written fetch." },
     { "method": "GET", "path": "/me/albums/completed", "kind": "plain-json", "reason": "Completed-albums read model via hand-written fetch." },
 
     { "method": "GET", "path": "/me/library/import", "kind": "plain-json", "reason": "Latest import job read model via hand-written fetch." },
@@ -92,7 +82,6 @@
     { "method": "POST", "path": "/me/library/extract-images", "kind": "plain-json", "reason": "Screenshot import (image extraction) via hand-written fetch." },
     { "method": "GET", "path": "/me/library/import/{jobId}", "kind": "plain-json", "reason": "Import job status read model via hand-written fetch." },
     { "method": "POST", "path": "/me/library/import/listenbrainz", "kind": "plain-json", "reason": "ListenBrainz import trigger via hand-written fetch." },
-    { "method": "GET", "path": "/me/library", "kind": "plain-json", "reason": "Library (Stack) read model via hand-written fetch with keyset cursors." },
     { "method": "GET", "path": "/me/library/mbids", "kind": "plain-json", "reason": "Library MBID set read model via hand-written fetch." },
     { "method": "GET", "path": "/me/library/export", "kind": "media", "reason": "File download (library export), not a JSON API response shape." },
     { "method": "GET", "path": "/me/library/investigation-coverage", "kind": "plain-json", "reason": "Investigation-coverage read model via hand-written fetch." },

@@ -5,185 +5,147 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface SeedBlogPickersBody {
-  urls: string[];
-}
+export type KeepRecordingInputProvenance = { [key: string]: unknown };
 
-export type SeedBlogPickersResponseResultsItemStatus =
-  (typeof SeedBlogPickersResponseResultsItemStatus)[keyof typeof SeedBlogPickersResponseResultsItemStatus];
-
-export const SeedBlogPickersResponseResultsItemStatus = {
-  discovered: "discovered",
-  already_exists: "already_exists",
-  no_feed: "no_feed",
-  error: "error",
-} as const;
-
-export type SeedBlogPickersResponseResultsItem = {
-  url: string;
-  feedUrl: string | null;
-  handle: string | null;
-  status: SeedBlogPickersResponseResultsItemStatus;
-  error?: string;
+/**
+ * Provide mbid for a resolved recording or spinId for an unresolved spin.
+ */
+export type KeepRecordingInput = unknown & {
+  mbid?: string;
+  spinId?: number;
+  provenance?: KeepRecordingInputProvenance;
 };
 
-export interface SeedBlogPickersResponse {
-  results: SeedBlogPickersResponseResultsItem[];
-}
-
-export interface EnrollNtsShowBody {
-  /** @minLength 1 */
-  alias: string;
-  name?: string;
-}
-
-export interface EnrollNtsShowResponse {
-  pickerId: number;
-  handle: string;
-  name: string;
-  alias: string;
-  homeUrl: string;
-}
-
-export interface PatchSongExploderEpisodeBody {
-  youtubeUrl: string | null;
-}
-
-export interface PatchSongExploderEpisodeResponse {
-  id: number;
-  youtubeUrl: string | null;
-}
-
-export type GetSongExploderChaptersResponseChaptersItem = {
-  positionMs: number;
-  text: string;
+export type KeepRecordingResponseMirrorsItem = {
+  service: string;
+  ok: boolean;
+  linkOut?: string;
 };
 
-export interface GetSongExploderChaptersResponse {
-  chapters: GetSongExploderChaptersResponseChaptersItem[];
+export interface KeepRecordingResponse {
+  keptToLore: boolean;
+  pendingKept?: boolean;
+  mirrors: KeepRecordingResponseMirrorsItem[];
+  showRecoveryHint?: boolean;
 }
 
-export interface EnrollRadioBrowserBody {
+export interface KeepStatusResponse {
+  kept: string[];
+}
+
+export interface PendingKeepStatusResponse {
+  savedSpinIds: number[];
+  pendingSpinIds: number[];
+}
+
+export interface ListenInput {
+  mbid?: string | null;
+  spinId?: number | null;
+  stationId?: number | null;
+  pickerId?: number | null;
+  showId?: number | null;
   /** @minLength 1 */
-  uuid: string;
-}
-
-export interface EnrollRadioBrowserResponse {
-  id: number;
-  radioBrowserUuid: string;
-  name: string;
-  streamUrl: string;
-  faviconUrl: string | null;
-  icyStatus: string;
-  enrolledAt: string;
-}
-
-export type ListRadioBrowserStationsResponseStationsItem = {
-  id: number;
-  radioBrowserUuid: string;
-  name: string;
-  streamUrl: string;
-  faviconUrl: string | null;
-  icyStatus: string;
-  lastStreamTitle: string | null;
-  lastSuccessAt: string | null;
-  consecutiveErrors: number;
-  enrolledAt: string;
-};
-
-export interface ListRadioBrowserStationsResponse {
-  stations: ListRadioBrowserStationsResponseStationsItem[];
-}
-
-export interface ReenrollRadioBrowserResponse {
-  id: number;
-  icyStatus: string;
-  consecutiveErrors: number;
-  updatedAt: string;
-}
-
-export interface CreateListSourceBody {
+  context: string;
   /** @minLength 1 */
-  kind: string;
-  /** @minLength 1 */
-  name: string;
-  homepageUrl?: string;
-  pickerId?: number;
-  stationId?: number;
+  outputService: string;
+  startedAt?: string;
 }
 
-export interface CreateListSourceResponse {
+export interface ListenCreatedResponse {
+  id: number | null;
+}
+
+export interface ListenProgressInput {
+  /** @minimum 0 */
+  msPlayed: number;
+}
+
+export interface ListenProgressResponse {
   id: number;
-  kind: string;
-  name: string;
+  msPlayed: number;
+  completed: boolean;
 }
 
-export type ListSourcesResponseSourcesItem = { [key: string]: unknown };
-
-export interface ListSourcesResponse {
-  sources: ListSourcesResponseSourcesItem[];
-}
-
-export interface ScrapeListBody {
-  sourceId: number;
-  /** @minLength 1 */
+export interface ListenRecording {
   title: string;
-  year?: number;
-  /** @minLength 1 */
-  kind: string;
-  isRanked: boolean;
-  listLength?: number;
-  url: string;
+  artist: string;
 }
 
-export interface ScrapeListResponse {
+export interface ListenStation {
+  name: string;
+  slug: string | null;
+}
+
+export interface ListenNamed {
+  name: string;
+}
+
+export interface ListenItem {
+  id: number;
+  mbid: string | null;
+  spinId: number | null;
+  stationId: number | null;
+  pickerId: number | null;
+  showId: number | null;
+  context: string;
+  outputService: string;
+  startedAt: string;
+  msPlayed: number;
+  completed: boolean;
+  releaseGroupMbid: string | null;
+  recording: ListenRecording | null;
+  station: ListenStation | null;
+  picker: ListenNamed | null;
+  show: ListenNamed | null;
+}
+
+export interface ListenPage {
+  items: ListenItem[];
+  nextCursor: string | null;
+}
+
+export interface LibraryProvenance {
+  kind: string;
+  service?: string;
+  stationSlug?: string;
+  stationName?: string;
+  pickerHandle?: string;
+  pickerName?: string;
+  surface?: string;
+  entryPoint?: string;
   [key: string]: unknown;
 }
 
-export interface ConfirmListEntryBody {
-  confirmed: boolean;
-  releaseGroupMbid?: string;
+export interface LibraryRecording {
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  albumTitle: string | null;
+  releaseGroupMbid: string | null;
+  releaseYear: number | null;
+  spotifyUrl: string | null;
 }
 
-export type GetEmbedCoverageResponseRowsItem = {
-  stationId: number;
-  genreCluster: string;
-  weekStart: string;
-  provider: string;
-  role: string;
-  rung: number;
-  outcome: string;
-  count: number;
-  updatedAt: string;
-};
-
-export interface GetEmbedCoverageResponse {
-  rows: GetEmbedCoverageResponseRowsItem[];
-  total: number;
+export interface LibraryItem {
+  mbid: string | null;
+  provenance: LibraryProvenance;
+  addedAt: string;
+  recording: LibraryRecording | null;
+  soft?: boolean;
+  spotifyId?: string;
+  fuzzyMatch?: boolean;
+  removed?: boolean;
+  removedAt?: string | null;
+  dualSource?: boolean;
 }
 
-export type GetEmbedResolutionResponseLinksItem = { [key: string]: unknown };
-
-export type GetEmbedResolutionResponseQueueItem = { [key: string]: unknown };
-
-export interface GetEmbedResolutionResponse {
-  mbid: string;
-  links: GetEmbedResolutionResponseLinksItem[];
-  queue: GetEmbedResolutionResponseQueueItem[];
-}
-
-export type PostEmbedResolutionRequeueResponseRequeuedItem = {
-  provider: string;
-  role: string;
-  status: string;
-  attempts: number;
-  nextAttemptAt: string;
-  requestedAt: string;
-};
-
-export interface PostEmbedResolutionRequeueResponse {
-  mbid: string;
-  requeued: PostEmbedResolutionRequeueResponseRequeuedItem[];
+export interface LibraryPage {
+  items: LibraryItem[];
+  nextCursor: string | null;
+  total?: number;
+  keepCount?: number;
+  softCount?: number;
+  criticCount?: number;
 }
 
 export interface ImportedSetUploadRequest {
@@ -3753,6 +3715,187 @@ export interface MeShowsResponse {
   hasTaste: boolean;
 }
 
+export interface SeedBlogPickersBody {
+  urls: string[];
+}
+
+export type SeedBlogPickersResponseResultsItemStatus =
+  (typeof SeedBlogPickersResponseResultsItemStatus)[keyof typeof SeedBlogPickersResponseResultsItemStatus];
+
+export const SeedBlogPickersResponseResultsItemStatus = {
+  discovered: "discovered",
+  already_exists: "already_exists",
+  no_feed: "no_feed",
+  error: "error",
+} as const;
+
+export type SeedBlogPickersResponseResultsItem = {
+  url: string;
+  feedUrl: string | null;
+  handle: string | null;
+  status: SeedBlogPickersResponseResultsItemStatus;
+  error?: string;
+};
+
+export interface SeedBlogPickersResponse {
+  results: SeedBlogPickersResponseResultsItem[];
+}
+
+export interface EnrollNtsShowBody {
+  /** @minLength 1 */
+  alias: string;
+  name?: string;
+}
+
+export interface EnrollNtsShowResponse {
+  pickerId: number;
+  handle: string;
+  name: string;
+  alias: string;
+  homeUrl: string;
+}
+
+export interface PatchSongExploderEpisodeBody {
+  youtubeUrl: string | null;
+}
+
+export interface PatchSongExploderEpisodeResponse {
+  id: number;
+  youtubeUrl: string | null;
+}
+
+export type GetSongExploderChaptersResponseChaptersItem = {
+  positionMs: number;
+  text: string;
+};
+
+export interface GetSongExploderChaptersResponse {
+  chapters: GetSongExploderChaptersResponseChaptersItem[];
+}
+
+export interface EnrollRadioBrowserBody {
+  /** @minLength 1 */
+  uuid: string;
+}
+
+export interface EnrollRadioBrowserResponse {
+  id: number;
+  radioBrowserUuid: string;
+  name: string;
+  streamUrl: string;
+  faviconUrl: string | null;
+  icyStatus: string;
+  enrolledAt: string;
+}
+
+export type ListRadioBrowserStationsResponseStationsItem = {
+  id: number;
+  radioBrowserUuid: string;
+  name: string;
+  streamUrl: string;
+  faviconUrl: string | null;
+  icyStatus: string;
+  lastStreamTitle: string | null;
+  lastSuccessAt: string | null;
+  consecutiveErrors: number;
+  enrolledAt: string;
+};
+
+export interface ListRadioBrowserStationsResponse {
+  stations: ListRadioBrowserStationsResponseStationsItem[];
+}
+
+export interface ReenrollRadioBrowserResponse {
+  id: number;
+  icyStatus: string;
+  consecutiveErrors: number;
+  updatedAt: string;
+}
+
+export interface CreateListSourceBody {
+  /** @minLength 1 */
+  kind: string;
+  /** @minLength 1 */
+  name: string;
+  homepageUrl?: string;
+  pickerId?: number;
+  stationId?: number;
+}
+
+export interface CreateListSourceResponse {
+  id: number;
+  kind: string;
+  name: string;
+}
+
+export type ListSourcesResponseSourcesItem = { [key: string]: unknown };
+
+export interface ListSourcesResponse {
+  sources: ListSourcesResponseSourcesItem[];
+}
+
+export interface ScrapeListBody {
+  sourceId: number;
+  /** @minLength 1 */
+  title: string;
+  year?: number;
+  /** @minLength 1 */
+  kind: string;
+  isRanked: boolean;
+  listLength?: number;
+  url: string;
+}
+
+export interface ScrapeListResponse {
+  [key: string]: unknown;
+}
+
+export interface ConfirmListEntryBody {
+  confirmed: boolean;
+  releaseGroupMbid?: string;
+}
+
+export type GetEmbedCoverageResponseRowsItem = {
+  stationId: number;
+  genreCluster: string;
+  weekStart: string;
+  provider: string;
+  role: string;
+  rung: number;
+  outcome: string;
+  count: number;
+  updatedAt: string;
+};
+
+export interface GetEmbedCoverageResponse {
+  rows: GetEmbedCoverageResponseRowsItem[];
+  total: number;
+}
+
+export type GetEmbedResolutionResponseLinksItem = { [key: string]: unknown };
+
+export type GetEmbedResolutionResponseQueueItem = { [key: string]: unknown };
+
+export interface GetEmbedResolutionResponse {
+  mbid: string;
+  links: GetEmbedResolutionResponseLinksItem[];
+  queue: GetEmbedResolutionResponseQueueItem[];
+}
+
+export type PostEmbedResolutionRequeueResponseRequeuedItem = {
+  provider: string;
+  role: string;
+  status: string;
+  attempts: number;
+  nextAttemptAt: string;
+  requestedAt: string;
+};
+
+export interface PostEmbedResolutionRequeueResponse {
+  mbid: string;
+  requeued: PostEmbedResolutionRequeueResponseRequeuedItem[];
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1
@@ -3912,55 +4055,6 @@ export type ListGeniusDraftsParams = {
   mbid: string;
 };
 
-export type EnrollNtsShow201 = {
-  pickerId: number;
-  handle: string;
-  name: string;
-  alias: string;
-  homeUrl: string;
-};
-
-export type ConfirmListEntry200 = { [key: string]: unknown };
-
-export type GetEmbedCoverageParams = {
-  /**
-   * @minimum 0
-   */
-  stationId?: number;
-  /**
-   * @minLength 1
-   */
-  genreCluster?: string;
-  weekStart?: string;
-  /**
-   * @minimum 1
-   * @maximum 2000
-   */
-  limit?: number;
-};
-
-export type GetRecordingSongExploder200Episode = {
-  id: number;
-  title: string;
-  episodeUrl: string;
-  youtubeUrl: string | null;
-  publishedAt: string | null;
-  resolvedAt: string | null;
-} | null;
-
-export type GetRecordingSongExploder200AnchorsItem = {
-  id: number;
-  positionMs: number;
-  text: string;
-  sourceUrl: string | null;
-  sourceLabel: string | null;
-};
-
-export type GetRecordingSongExploder200 = {
-  episode: GetRecordingSongExploder200Episode;
-  anchors: GetRecordingSongExploder200AnchorsItem[];
-};
-
 export type GetSpotifySavedParams = {
   /**
    * @minLength 1
@@ -4015,6 +4109,62 @@ export type GetMyWeeklyRecapParams = {
    */
   weekStart?: string;
 };
+
+export type GetKeepStatusParams = {
+  mbids: string;
+};
+
+export type GetPendingKeepStatusParams = {
+  spinIds: string;
+};
+
+export type ListMyListensParams = {
+  cursor?: string;
+  stationId?: number;
+  context?: string;
+  completed?: boolean;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+};
+
+export type DeleteAllListensParams = {
+  confirm: boolean;
+};
+
+export type ListMyLibraryParams = {
+  cursor?: string;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  q?: string;
+  sort?: ListMyLibrarySort;
+  source?: ListMyLibrarySource;
+};
+
+export type ListMyLibrarySort =
+  (typeof ListMyLibrarySort)[keyof typeof ListMyLibrarySort];
+
+export const ListMyLibrarySort = {
+  added: "added",
+  artist: "artist",
+  title: "title",
+} as const;
+
+export type ListMyLibrarySource =
+  (typeof ListMyLibrarySource)[keyof typeof ListMyLibrarySource];
+
+export const ListMyLibrarySource = {
+  keep: "keep",
+  import: "import",
+  soft: "soft",
+  critic: "critic",
+  lore: "lore",
+} as const;
 
 export type SetMyAlbumAvatarBody = {
   recordingMbid: string;
@@ -4072,4 +4222,53 @@ export type GetStationSocialPresenceParams = {
    * Comma-separated station IDs.
    */
   ids: string;
+};
+
+export type EnrollNtsShow201 = {
+  pickerId: number;
+  handle: string;
+  name: string;
+  alias: string;
+  homeUrl: string;
+};
+
+export type ConfirmListEntry200 = { [key: string]: unknown };
+
+export type GetEmbedCoverageParams = {
+  /**
+   * @minimum 0
+   */
+  stationId?: number;
+  /**
+   * @minLength 1
+   */
+  genreCluster?: string;
+  weekStart?: string;
+  /**
+   * @minimum 1
+   * @maximum 2000
+   */
+  limit?: number;
+};
+
+export type GetRecordingSongExploder200Episode = {
+  id: number;
+  title: string;
+  episodeUrl: string;
+  youtubeUrl: string | null;
+  publishedAt: string | null;
+  resolvedAt: string | null;
+} | null;
+
+export type GetRecordingSongExploder200AnchorsItem = {
+  id: number;
+  positionMs: number;
+  text: string;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+};
+
+export type GetRecordingSongExploder200 = {
+  episode: GetRecordingSongExploder200Episode;
+  anchors: GetRecordingSongExploder200AnchorsItem[];
 };

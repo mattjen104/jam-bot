@@ -1,5 +1,18 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiError, getListStationsNowPlayingQueryKey } from "@workspace/api-client-react";
+import {
+  ApiError,
+  createListen,
+  deleteAllListens as deleteAllListensRequest,
+  deleteListen as deleteListenRequest,
+  getKeepStatus,
+  getPendingKeepStatus,
+  getListStationsNowPlayingQueryKey,
+  keepRecording,
+  listMyLibrary,
+  updateListen as updateListenRequest,
+  unkeepRecording,
+  unkeepSpin,
+} from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
 
 // ---------------------------------------------------------------------------
@@ -211,6 +224,16 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 async function fetchOrNull<T>(url: string, options?: RequestInit): Promise<T | null> {
   try {
     return await apiFetch<T>(url, options);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) return null;
+    throw err;
+  }
+}
+
+/** Preserve anonymous-listener behavior for generated API requests. */
+async function generatedOrNull<T>(request: Promise<T>): Promise<T | null> {
+  try {
+    return await request;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return null;
     throw err;
@@ -942,13 +965,9 @@ export function useMyLibrarySearch(
   return useQuery({
     queryKey: ["me", "library", "search", trimmed, limit] as const,
     queryFn: () => {
-      const params = new URLSearchParams();
-      params.set("q", trimmed);
-      params.set("source", "keep");
-      params.set("limit", String(limit));
-      return fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null }>(
-        `/api/me/library?${params}`,
-      ).then((d) => d?.items ?? []);
+      return generatedOrNull(listMyLibrary({ q: trimmed, source: "keep", limit })).then(
+        (d) => d?.items ?? [],
+      );
     },
     enabled: enabled && trimmed.length > 0,
     staleTime: 30_000,
@@ -961,16 +980,12 @@ export function useMyLibrarySearch(
  * Returns an empty list when unauthenticated.
  */
 export function useMyLibrary(cursor?: string, limit = 50) {
-  const params = new URLSearchParams();
-  if (cursor) params.set("cursor", cursor);
-  params.set("limit", String(limit));
-
   return useQuery({
     queryKey: ME_LIBRARY_KEY(cursor),
     queryFn: () =>
-      fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null }>(
-        `/api/me/library?${params}`,
-      ).then((d) => d ?? { items: [], nextCursor: null }),
+      generatedOrNull(listMyLibrary({ ...(cursor ? { cursor } : {}), limit })).then(
+        (d) => d ?? { items: [], nextCursor: null },
+      ),
     staleTime: 30_000,
     retry: false,
   });
@@ -1001,15 +1016,13 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
   return useInfiniteQuery({
     queryKey: ["me", "library", "infinite", limit, q, sort, source] as const,
     queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams();
-      if (pageParam) params.set("cursor", pageParam);
-      params.set("limit", String(limit));
-      if (q) params.set("q", q);
-      if (sort !== "added") params.set("sort", sort);
-      if (source) params.set("source", source);
-      return fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null; total?: number; keepCount?: number; softCount?: number; criticCount?: number }>(
-        `/api/me/library?${params}`,
-      ).then((d) => d ?? { items: [], nextCursor: null });
+      return generatedOrNull(listMyLibrary({
+        ...(pageParam ? { cursor: pageParam } : {}),
+        limit,
+        ...(q ? { q } : {}),
+        ...(sort !== "added" ? { sort } : {}),
+        ...(source ? { source } : {}),
+      })).then((d) => d ?? { items: [], nextCursor: null });
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -1028,12 +1041,9 @@ export function useMyImportStats() {
   return useQuery({
     queryKey: ["me", "library", "import-stats"] as const,
     queryFn: () =>
-      fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null; total?: number; softCount?: number }>(
-        "/api/me/library?source=import&limit=1",
-      ).then((d) => {
-        if (d == null) return null;
-        return { total: d.total ?? 0, softCount: d.softCount ?? 0 };
-      }),
+      generatedOrNull(listMyLibrary({ source: "import", limit: 1 })).then((d) =>
+        d == null ? null : { total: d.total ?? 0, softCount: d.softCount ?? 0 },
+      ),
     staleTime: 30_000,
     retry: false,
   });
@@ -1087,7 +1097,7 @@ export function useMyKeepStatus(mbids: string[]) {
   return useQuery({
     queryKey: ME_KEEP_STATUS_KEY(joined),
     queryFn: () =>
-      fetchOrNull<{ kept: string[] }>(`/api/me/keep/status?mbids=${encodeURIComponent(joined)}`).then(
+      generatedOrNull(getKeepStatus({ mbids: joined })).then(
         (d) => new Set(d?.kept ?? []),
       ),
     enabled: mbids.length > 0,
@@ -1110,13 +1120,11 @@ export function useMutationKeep() {
       spinId?: number | null;
       provenance?: Partial<LibraryProvenance>;
     }) =>
-      apiFetch<{ keptToLore: boolean; mirrors: unknown[]; showRecoveryHint?: boolean }>(
-        "/api/me/keep",
-        {
-          method: "POST",
-          body: JSON.stringify({ mbid, ...(spinId != null ? { spinId } : {}), provenance }),
-        },
-      ),
+      keepRecording({
+        mbid,
+        ...(spinId != null ? { spinId } : {}),
+        provenance,
+      }),
     onSuccess: (data, { mbid }) => {
       maybeShowRecoveryHint(data.showRecoveryHint);
       // Optimistically update all keep-status query caches that include this mbid.
@@ -1147,15 +1155,7 @@ export function useMutationKeepSpin() {
       spinId: number;
       provenance?: Partial<LibraryProvenance>;
     }) =>
-      apiFetch<{
-        keptToLore: boolean;
-        pendingKept: boolean;
-        mirrors: unknown[];
-        showRecoveryHint?: boolean;
-      }>("/api/me/keep", {
-        method: "POST",
-        body: JSON.stringify({ spinId, provenance }),
-      }),
+      keepRecording({ spinId, provenance }),
     onSuccess: (data, { spinId }) => {
       maybeShowRecoveryHint(data.showRecoveryHint);
       queryClient.setQueriesData<{ saved: Set<number>; pending: Set<number> }>(
@@ -1176,8 +1176,7 @@ export function useMutationKeepSpin() {
 export function useMutationUnkeepSpin() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (spinId: number) =>
-      apiFetch<null>(`/api/me/keep/spin/${spinId}`, { method: "DELETE" }),
+    mutationFn: (spinId: number) => unkeepSpin(spinId),
     onSuccess: (_data, spinId) => {
       queryClient.setQueriesData<{ saved: Set<number>; pending: Set<number> }>(
         { queryKey: ["me", "pending-keep-status"] },
@@ -1205,9 +1204,7 @@ export function useMySpinKeepStatus(spinIds: number[]) {
   return useQuery({
     queryKey: ["me", "pending-keep-status", joined],
     queryFn: () =>
-      fetchOrNull<{ savedSpinIds: number[]; pendingSpinIds: number[] }>(
-        `/api/me/keep/pending-status?spinIds=${encodeURIComponent(joined)}`,
-      ).then((d) => ({
+      generatedOrNull(getPendingKeepStatus({ spinIds: joined })).then((d) => ({
         saved: new Set(d?.savedSpinIds ?? []),
         pending: new Set(d?.pendingSpinIds ?? []),
       })),
@@ -1221,10 +1218,7 @@ export function useMySpinKeepStatus(spinIds: number[]) {
 export function useMutationUnkeep() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (mbid: string) =>
-      apiFetch<null>(`/api/me/keep/${encodeURIComponent(mbid)}`, {
-        method: "DELETE",
-      }),
+    mutationFn: (mbid: string) => unkeepRecording(mbid),
     onSuccess: (_data, mbid) => {
       queryClient.setQueriesData<Set<string>>(
         { queryKey: ["me", "keep-status"] },
@@ -1627,28 +1621,22 @@ export async function postListen(body: {
   outputService: string;
   startedAt?: string;
 }): Promise<{ id: number | null }> {
-  return apiFetch<{ id: number | null }>("/api/me/listens", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return createListen(body);
 }
 
 export async function patchListen(
   listenId: number,
   msPlayed: number,
 ): Promise<{ id: number; msPlayed: number; completed: boolean }> {
-  return apiFetch(`/api/me/listens/${listenId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ msPlayed }),
-  });
+  return updateListenRequest(listenId, { msPlayed });
 }
 
 export async function deleteListen(listenId: number): Promise<void> {
-  return apiFetch(`/api/me/listens/${listenId}`, { method: "DELETE" });
+  return deleteListenRequest(listenId);
 }
 
 export async function deleteAllListens(): Promise<void> {
-  return apiFetch("/api/me/listens?confirm=true", { method: "DELETE" });
+  return deleteAllListensRequest({ confirm: true });
 }
 
 const RECOVERY_HINT_KEY = "lore:recovery_hint_until";

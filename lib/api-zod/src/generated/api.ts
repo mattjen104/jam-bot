@@ -4720,224 +4720,6 @@ export const RecomputeStationQualityResponse = zod
     "Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.",
   );
 
-export const SeedBlogPickersBody = zod.object({
-  urls: zod.array(zod.string()),
-});
-
-export const SeedBlogPickersResponse = zod.object({
-  results: zod.array(
-    zod.object({
-      url: zod.string(),
-      feedUrl: zod.string().nullable(),
-      handle: zod.string().nullable(),
-      status: zod.enum(["discovered", "already_exists", "no_feed", "error"]),
-      error: zod.string().optional(),
-    }),
-  ),
-});
-
-export const EnrollNtsShowBody = zod.object({
-  alias: zod.string().min(1),
-  name: zod.string().optional(),
-});
-
-export const PatchSongExploderEpisodeParams = zod.object({
-  episodeId: zod.coerce.number().min(1),
-});
-
-export const PatchSongExploderEpisodeBody = zod.object({
-  youtubeUrl: zod.string().url().nullable(),
-});
-
-export const PatchSongExploderEpisodeResponse = zod.object({
-  id: zod.number(),
-  youtubeUrl: zod.string().nullable(),
-});
-
-export const GetSongExploderChaptersParams = zod.object({
-  episodeId: zod.coerce.number().min(1),
-});
-
-export const GetSongExploderChaptersResponse = zod.object({
-  chapters: zod.array(
-    zod.object({
-      positionMs: zod.number(),
-      text: zod.string(),
-    }),
-  ),
-});
-
-export const EnrollRadioBrowserBody = zod.object({
-  uuid: zod.string().min(1),
-});
-
-export const EnrollRadioBrowserResponse = zod.object({
-  id: zod.number(),
-  radioBrowserUuid: zod.string(),
-  name: zod.string(),
-  streamUrl: zod.string(),
-  faviconUrl: zod.string().nullable(),
-  icyStatus: zod.string(),
-  enrolledAt: zod.string(),
-});
-
-export const ListRadioBrowserStationsResponse = zod.object({
-  stations: zod.array(
-    zod.object({
-      id: zod.number(),
-      radioBrowserUuid: zod.string(),
-      name: zod.string(),
-      streamUrl: zod.string(),
-      faviconUrl: zod.string().nullable(),
-      icyStatus: zod.string(),
-      lastStreamTitle: zod.string().nullable(),
-      lastSuccessAt: zod.string().nullable(),
-      consecutiveErrors: zod.number(),
-      enrolledAt: zod.string(),
-    }),
-  ),
-});
-
-export const ReenrollRadioBrowserParams = zod.object({
-  id: zod.coerce.number().min(1),
-});
-
-export const ReenrollRadioBrowserResponse = zod.object({
-  id: zod.number(),
-  icyStatus: zod.string(),
-  consecutiveErrors: zod.number(),
-  updatedAt: zod.string(),
-});
-
-export const DeleteRadioBrowserParams = zod.object({
-  id: zod.coerce.number().min(1),
-});
-
-export const CreateListSourceBody = zod.object({
-  kind: zod.string().min(1),
-  name: zod.string().min(1),
-  homepageUrl: zod.string().url().optional(),
-  pickerId: zod.number().optional(),
-  stationId: zod.number().optional(),
-});
-
-export const ListSourcesResponse = zod.object({
-  sources: zod.array(zod.record(zod.string(), zod.unknown())),
-});
-
-export const ScrapeListBody = zod.object({
-  sourceId: zod.number(),
-  title: zod.string().min(1),
-  year: zod.number().optional(),
-  kind: zod.string().min(1),
-  isRanked: zod.boolean(),
-  listLength: zod.number().optional(),
-  url: zod.string().url(),
-});
-
-export const ScrapeListResponse = zod.record(zod.string(), zod.unknown());
-
-export const ConfirmListEntryParams = zod.object({
-  listId: zod.coerce.number().min(1),
-  entryId: zod.coerce.number().min(1),
-});
-
-export const ConfirmListEntryBody = zod.object({
-  confirmed: zod.boolean(),
-  releaseGroupMbid: zod.string().optional(),
-});
-
-export const ConfirmListEntryResponse = zod.record(zod.string(), zod.unknown());
-
-export const getEmbedCoverageQueryStationIdMin = 0;
-
-export const getEmbedCoverageQueryLimitMax = 2000;
-
-export const GetEmbedCoverageQueryParams = zod.object({
-  stationId: zod.coerce
-    .number()
-    .min(getEmbedCoverageQueryStationIdMin)
-    .optional(),
-  genreCluster: zod.coerce.string().min(1).optional(),
-  weekStart: zod.coerce.string().optional(),
-  limit: zod.coerce
-    .number()
-    .min(1)
-    .max(getEmbedCoverageQueryLimitMax)
-    .optional(),
-});
-
-export const GetEmbedCoverageResponse = zod.object({
-  rows: zod.array(
-    zod.object({
-      stationId: zod.number(),
-      genreCluster: zod.string(),
-      weekStart: zod.string(),
-      provider: zod.string(),
-      role: zod.string(),
-      rung: zod.number(),
-      outcome: zod.string(),
-      count: zod.number(),
-      updatedAt: zod.string(),
-    }),
-  ),
-  total: zod.number(),
-});
-
-export const GetEmbedResolutionParams = zod.object({
-  mbid: zod.coerce.string().min(1),
-});
-
-export const GetEmbedResolutionResponse = zod.object({
-  mbid: zod.string(),
-  links: zod.array(zod.record(zod.string(), zod.unknown())),
-  queue: zod.array(zod.record(zod.string(), zod.unknown())),
-});
-
-export const PostEmbedResolutionRequeueParams = zod.object({
-  mbid: zod.coerce.string().min(1),
-});
-
-export const PostEmbedResolutionRequeueResponse = zod.object({
-  mbid: zod.string(),
-  requeued: zod.array(
-    zod.object({
-      provider: zod.string(),
-      role: zod.string(),
-      status: zod.string(),
-      attempts: zod.number(),
-      nextAttemptAt: zod.string(),
-      requestedAt: zod.string(),
-    }),
-  ),
-});
-
-export const GetRecordingSongExploderParams = zod.object({
-  mbid: zod.coerce.string().min(1),
-});
-
-export const GetRecordingSongExploderResponse = zod.object({
-  episode: zod
-    .object({
-      id: zod.number(),
-      title: zod.string(),
-      episodeUrl: zod.string(),
-      youtubeUrl: zod.string().nullable(),
-      publishedAt: zod.string().nullable(),
-      resolvedAt: zod.string().nullable(),
-    })
-    .nullable(),
-  anchors: zod.array(
-    zod.object({
-      id: zod.number(),
-      positionMs: zod.number(),
-      text: zod.string(),
-      sourceUrl: zod.string().nullable(),
-      sourceLabel: zod.string().nullable(),
-    }),
-  ),
-});
-
 /**
  * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.
 
@@ -5628,6 +5410,247 @@ export const UnholdRecordingSupportResponse = zod.object({
 });
 
 /**
+ * @summary Keep a recording or unresolved spin
+ */
+export const KeepRecordingBody = zod
+  .union([zod.unknown(), zod.unknown()])
+  .and(
+    zod.object({
+      mbid: zod.string().optional(),
+      spinId: zod.number().optional(),
+      provenance: zod.record(zod.string(), zod.unknown()).optional(),
+    }),
+  )
+  .describe(
+    "Provide mbid for a resolved recording or spinId for an unresolved spin.",
+  );
+
+export const KeepRecordingResponse = zod.object({
+  keptToLore: zod.boolean(),
+  pendingKept: zod.boolean().optional(),
+  mirrors: zod.array(
+    zod.object({
+      service: zod.string(),
+      ok: zod.boolean(),
+      linkOut: zod.string().optional(),
+    }),
+  ),
+  showRecoveryHint: zod.boolean().optional(),
+});
+
+/**
+ * @summary Remove a recording from the library
+ */
+export const UnkeepRecordingParams = zod.object({
+  mbid: zod.coerce.string(),
+});
+
+/**
+ * @summary Remove a spin-based save
+ */
+export const UnkeepSpinParams = zod.object({
+  spinId: zod.coerce.number(),
+});
+
+/**
+ * @summary Get kept recording IDs
+ */
+export const GetKeepStatusQueryParams = zod.object({
+  mbids: zod.coerce.string(),
+});
+
+export const GetKeepStatusResponse = zod.object({
+  kept: zod.array(zod.string()),
+});
+
+/**
+ * @summary Get pending and promoted spin saves
+ */
+export const GetPendingKeepStatusQueryParams = zod.object({
+  spinIds: zod.coerce.string(),
+});
+
+export const GetPendingKeepStatusResponse = zod.object({
+  savedSpinIds: zod.array(zod.number()),
+  pendingSpinIds: zod.array(zod.number()),
+});
+
+/**
+ * @summary List listening history
+ */
+export const listMyListensQueryLimitDefault = 50;
+export const listMyListensQueryLimitMax = 100;
+
+export const ListMyListensQueryParams = zod.object({
+  cursor: zod.coerce.string().optional(),
+  stationId: zod.coerce.number().optional(),
+  context: zod.coerce.string().optional(),
+  completed: zod.coerce.boolean().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listMyListensQueryLimitMax)
+    .default(listMyListensQueryLimitDefault),
+});
+
+export const ListMyListensResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      mbid: zod.string().nullable(),
+      spinId: zod.number().nullable(),
+      stationId: zod.number().nullable(),
+      pickerId: zod.number().nullable(),
+      showId: zod.number().nullable(),
+      context: zod.string(),
+      outputService: zod.string(),
+      startedAt: zod.date(),
+      msPlayed: zod.number(),
+      completed: zod.boolean(),
+      releaseGroupMbid: zod.string().nullable(),
+      recording: zod
+        .object({
+          title: zod.string(),
+          artist: zod.string(),
+        })
+        .nullable(),
+      station: zod
+        .object({
+          name: zod.string(),
+          slug: zod.string().nullable(),
+        })
+        .nullable(),
+      picker: zod
+        .object({
+          name: zod.string(),
+        })
+        .nullable(),
+      show: zod
+        .object({
+          name: zod.string(),
+        })
+        .nullable(),
+    }),
+  ),
+  nextCursor: zod.string().nullable(),
+});
+
+/**
+ * @summary Record a new listen
+ */
+
+export const CreateListenBody = zod.object({
+  mbid: zod.string().nullish(),
+  spinId: zod.number().nullish(),
+  stationId: zod.number().nullish(),
+  pickerId: zod.number().nullish(),
+  showId: zod.number().nullish(),
+  context: zod.string().min(1),
+  outputService: zod.string().min(1),
+  startedAt: zod.date().optional(),
+});
+
+export const CreateListenResponse = zod.object({
+  id: zod.number().nullable(),
+});
+
+/**
+ * @summary Delete all listening history
+ */
+export const DeleteAllListensQueryParams = zod.object({
+  confirm: zod.coerce.boolean(),
+});
+
+/**
+ * @summary Update listen progress
+ */
+export const UpdateListenParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const updateListenBodyMsPlayedMin = 0;
+
+export const UpdateListenBody = zod.object({
+  msPlayed: zod.number().min(updateListenBodyMsPlayedMin),
+});
+
+export const UpdateListenResponse = zod.object({
+  id: zod.number(),
+  msPlayed: zod.number(),
+  completed: zod.boolean(),
+});
+
+/**
+ * @summary Delete one listen
+ */
+export const DeleteListenParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List the listener's library
+ */
+export const listMyLibraryQueryLimitDefault = 50;
+export const listMyLibraryQueryLimitMax = 100;
+
+export const listMyLibraryQuerySortDefault = `added`;
+
+export const ListMyLibraryQueryParams = zod.object({
+  cursor: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listMyLibraryQueryLimitMax)
+    .default(listMyLibraryQueryLimitDefault),
+  q: zod.coerce.string().optional(),
+  sort: zod
+    .enum(["added", "artist", "title"])
+    .default(listMyLibraryQuerySortDefault),
+  source: zod.enum(["keep", "import", "soft", "critic", "lore"]).optional(),
+});
+
+export const ListMyLibraryResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      mbid: zod.string().nullable(),
+      provenance: zod.object({
+        kind: zod.string(),
+        service: zod.string().optional(),
+        stationSlug: zod.string().optional(),
+        stationName: zod.string().optional(),
+        pickerHandle: zod.string().optional(),
+        pickerName: zod.string().optional(),
+        surface: zod.string().optional(),
+        entryPoint: zod.string().optional(),
+      }),
+      addedAt: zod.date(),
+      recording: zod
+        .object({
+          title: zod.string(),
+          artist: zod.string(),
+          artworkUrl: zod.string().nullable(),
+          albumTitle: zod.string().nullable(),
+          releaseGroupMbid: zod.string().nullable(),
+          releaseYear: zod.number().nullable(),
+          spotifyUrl: zod.string().nullable(),
+        })
+        .nullable(),
+      soft: zod.boolean().optional(),
+      spotifyId: zod.string().optional(),
+      fuzzyMatch: zod.boolean().optional(),
+      removed: zod.boolean().optional(),
+      removedAt: zod.date().nullish(),
+      dualSource: zod.boolean().optional(),
+    }),
+  ),
+  nextCursor: zod.string().nullable(),
+  total: zod.number().optional(),
+  keepCount: zod.number().optional(),
+  softCount: zod.number().optional(),
+  criticCount: zod.number().optional(),
+});
+
+/**
  * Returns server-validated album-cover candidates plus the current anonymous listener identity. The selected cover is stable for an active visit; candidates never expose another listener's identity.
 
  * @summary Read the listener's anonymous album-cover identity
@@ -6105,4 +6128,222 @@ export const GetStationSocialPresenceResponse = zod.object({
     .describe(
       "Anonymous cover tokens only for stations with fewer than ten active distinct users. Never includes listener IDs, handles, or mappings.\n",
     ),
+});
+
+export const SeedBlogPickersBody = zod.object({
+  urls: zod.array(zod.string()),
+});
+
+export const SeedBlogPickersResponse = zod.object({
+  results: zod.array(
+    zod.object({
+      url: zod.string(),
+      feedUrl: zod.string().nullable(),
+      handle: zod.string().nullable(),
+      status: zod.enum(["discovered", "already_exists", "no_feed", "error"]),
+      error: zod.string().optional(),
+    }),
+  ),
+});
+
+export const EnrollNtsShowBody = zod.object({
+  alias: zod.string().min(1),
+  name: zod.string().optional(),
+});
+
+export const PatchSongExploderEpisodeParams = zod.object({
+  episodeId: zod.coerce.number().min(1),
+});
+
+export const PatchSongExploderEpisodeBody = zod.object({
+  youtubeUrl: zod.string().url().nullable(),
+});
+
+export const PatchSongExploderEpisodeResponse = zod.object({
+  id: zod.number(),
+  youtubeUrl: zod.string().nullable(),
+});
+
+export const GetSongExploderChaptersParams = zod.object({
+  episodeId: zod.coerce.number().min(1),
+});
+
+export const GetSongExploderChaptersResponse = zod.object({
+  chapters: zod.array(
+    zod.object({
+      positionMs: zod.number(),
+      text: zod.string(),
+    }),
+  ),
+});
+
+export const EnrollRadioBrowserBody = zod.object({
+  uuid: zod.string().min(1),
+});
+
+export const EnrollRadioBrowserResponse = zod.object({
+  id: zod.number(),
+  radioBrowserUuid: zod.string(),
+  name: zod.string(),
+  streamUrl: zod.string(),
+  faviconUrl: zod.string().nullable(),
+  icyStatus: zod.string(),
+  enrolledAt: zod.string(),
+});
+
+export const ListRadioBrowserStationsResponse = zod.object({
+  stations: zod.array(
+    zod.object({
+      id: zod.number(),
+      radioBrowserUuid: zod.string(),
+      name: zod.string(),
+      streamUrl: zod.string(),
+      faviconUrl: zod.string().nullable(),
+      icyStatus: zod.string(),
+      lastStreamTitle: zod.string().nullable(),
+      lastSuccessAt: zod.string().nullable(),
+      consecutiveErrors: zod.number(),
+      enrolledAt: zod.string(),
+    }),
+  ),
+});
+
+export const ReenrollRadioBrowserParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const ReenrollRadioBrowserResponse = zod.object({
+  id: zod.number(),
+  icyStatus: zod.string(),
+  consecutiveErrors: zod.number(),
+  updatedAt: zod.string(),
+});
+
+export const DeleteRadioBrowserParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const CreateListSourceBody = zod.object({
+  kind: zod.string().min(1),
+  name: zod.string().min(1),
+  homepageUrl: zod.string().url().optional(),
+  pickerId: zod.number().optional(),
+  stationId: zod.number().optional(),
+});
+
+export const ListSourcesResponse = zod.object({
+  sources: zod.array(zod.record(zod.string(), zod.unknown())),
+});
+
+export const ScrapeListBody = zod.object({
+  sourceId: zod.number(),
+  title: zod.string().min(1),
+  year: zod.number().optional(),
+  kind: zod.string().min(1),
+  isRanked: zod.boolean(),
+  listLength: zod.number().optional(),
+  url: zod.string().url(),
+});
+
+export const ScrapeListResponse = zod.record(zod.string(), zod.unknown());
+
+export const ConfirmListEntryParams = zod.object({
+  listId: zod.coerce.number().min(1),
+  entryId: zod.coerce.number().min(1),
+});
+
+export const ConfirmListEntryBody = zod.object({
+  confirmed: zod.boolean(),
+  releaseGroupMbid: zod.string().optional(),
+});
+
+export const ConfirmListEntryResponse = zod.record(zod.string(), zod.unknown());
+
+export const getEmbedCoverageQueryStationIdMin = 0;
+
+export const getEmbedCoverageQueryLimitMax = 2000;
+
+export const GetEmbedCoverageQueryParams = zod.object({
+  stationId: zod.coerce
+    .number()
+    .min(getEmbedCoverageQueryStationIdMin)
+    .optional(),
+  genreCluster: zod.coerce.string().min(1).optional(),
+  weekStart: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getEmbedCoverageQueryLimitMax)
+    .optional(),
+});
+
+export const GetEmbedCoverageResponse = zod.object({
+  rows: zod.array(
+    zod.object({
+      stationId: zod.number(),
+      genreCluster: zod.string(),
+      weekStart: zod.string(),
+      provider: zod.string(),
+      role: zod.string(),
+      rung: zod.number(),
+      outcome: zod.string(),
+      count: zod.number(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+export const GetEmbedResolutionParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetEmbedResolutionResponse = zod.object({
+  mbid: zod.string(),
+  links: zod.array(zod.record(zod.string(), zod.unknown())),
+  queue: zod.array(zod.record(zod.string(), zod.unknown())),
+});
+
+export const PostEmbedResolutionRequeueParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const PostEmbedResolutionRequeueResponse = zod.object({
+  mbid: zod.string(),
+  requeued: zod.array(
+    zod.object({
+      provider: zod.string(),
+      role: zod.string(),
+      status: zod.string(),
+      attempts: zod.number(),
+      nextAttemptAt: zod.string(),
+      requestedAt: zod.string(),
+    }),
+  ),
+});
+
+export const GetRecordingSongExploderParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingSongExploderResponse = zod.object({
+  episode: zod
+    .object({
+      id: zod.number(),
+      title: zod.string(),
+      episodeUrl: zod.string(),
+      youtubeUrl: zod.string().nullable(),
+      publishedAt: zod.string().nullable(),
+      resolvedAt: zod.string().nullable(),
+    })
+    .nullable(),
+  anchors: zod.array(
+    zod.object({
+      id: zod.number(),
+      positionMs: zod.number(),
+      text: zod.string(),
+      sourceUrl: zod.string().nullable(),
+      sourceLabel: zod.string().nullable(),
+    }),
+  ),
 });
