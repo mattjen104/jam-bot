@@ -8274,15 +8274,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 4px 8px 2px 12px;
+  padding: 4px 8px 1px 10px;
 }
 .compact-category-dial__summary-button {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 0;
+  padding: 2px 0;
   border: 0;
   background: transparent;
   color: hsl(var(--foreground));
@@ -8343,7 +8343,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  padding: 0;
+  padding: 0 3px 0 0;
 }
 .compact-category-dial__include input {
   width: 14px;
@@ -8408,10 +8408,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .compact-category-dial__meta {
   min-width: 0;
-  padding: 0 12px 5px;
+  padding: 0 10px 4px;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 5px;
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);
@@ -8444,7 +8444,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--accent) / 0.86);
 }
 .compact-category-dial__metric {
-  padding: 2px 5px;
+  padding: 1px 4px;
   border: 1px solid hsl(var(--accent) / 0.28);
   border-radius: 3px;
   font-size: var(--lore-size-small);
@@ -8727,11 +8727,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 48px;
 }
 @media (max-width: 640px) {
-  .compact-category-dial__summary-button .compact-category-dial__label { white-space: normal; }
-  .compact-category-dial__meta { flex-wrap: wrap; }
+  .compact-category-dial__meta { flex-wrap: nowrap; gap: 3px; }
+  .compact-category-dial__metric { padding-inline: 3px; }
   .compact-category-dial__now-header-line {
-    overflow-x: auto;
-    text-overflow: clip;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .compact-specialist-dial__subsummary {
     grid-template-columns: minmax(0, 1fr) auto;

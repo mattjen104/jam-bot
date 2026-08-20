@@ -137,31 +137,23 @@ async function installRoutes(page: Page) {
 }
 
 test.describe("unified Scan session", () => {
-  test("compact home opens the station-scoped session and carries context into archive", async ({
+  test("compact home reaches archive history through the universal Scan session", async ({
     page,
   }) => {
     const { historyRequests } = await installRoutes(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/lore/");
 
-    await page.getByTestId("compact-category-anchor").focus();
-    await page.keyboard.press("Enter");
-    const row = page.locator(`[data-station-slug="${STATION.slug}"]`).first();
-    await expect(row).toBeVisible();
-    await row.focus();
-    await page.keyboard.press("Enter");
-    const lastSet = page.getByTestId(`fdrow-lastset-${STATION.slug}`);
-    await expect(lastSet).toBeVisible();
-    await lastSet.focus();
+    await page.getByTestId("scan-entry").first().focus();
     await page.keyboard.press("Enter");
 
     const dialog = page.getByRole("dialog", { name: "Scan" });
-    await expect(dialog).toContainText(`Archive · ${STATION.name} · all`);
+    await expect(dialog.getByTestId("scan-selection-summary")).toContainText("Archive");
     const history = dialog.getByTestId("dial-history-scanner");
     await history.getByRole("button", { name: "History scan · all time" }).focus();
     await page.keyboard.press("Enter");
     await expect(history).toContainText("Archive Track");
-    expect(historyRequests.at(-1)?.searchParams.get("station")).toBe(STATION.slug);
+    expect(historyRequests.at(-1)?.searchParams.get("station")).toBeNull();
   });
 
   test("Feed opens Scan, supports source/filter choices, Escape, and live transport by keyboard", async ({
@@ -180,8 +172,8 @@ test.describe("unified Scan session", () => {
 
     await dialog.getByRole("button", { name: "Live stations" }).focus();
     await page.keyboard.press("Enter");
-    await expect(dialog).toContainText("Live stations · across Lore");
-    await expect(dialog).not.toContainText("Archive · across Lore");
+    await expect(dialog.getByTestId("scan-selection-summary")).toContainText("Live");
+    await expect(dialog.getByTestId("scan-selection-summary")).not.toContainText("Archive");
     await expect(dialog.getByRole("group", { name: "Archive filter" })).toBeHidden();
     const liveToggle = dialog.getByRole("button", { name: "Start live scan" });
     await liveToggle.focus();
@@ -197,7 +189,8 @@ test.describe("unified Scan session", () => {
     await expect(dialog.getByRole("group", { name: "Live scan controls" })).toBeHidden();
     await dialog.getByRole("button", { name: "First plays" }).focus();
     await page.keyboard.press("Enter");
-    await expect(dialog).toContainText("Archive · across Lore · first plays");
+    await expect(dialog.getByTestId("scan-selection-summary")).toContainText("Archive");
+    await expect(dialog.getByTestId("scan-selection-summary")).toContainText("First plays");
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
@@ -207,7 +200,8 @@ test.describe("unified Scan session", () => {
     await scanLens.focus();
     await page.keyboard.press("Enter");
     const reopenedDialog = page.getByRole("dialog", { name: "Scan" });
-    await expect(reopenedDialog).toContainText("Archive · across Lore · first plays");
+    await expect(reopenedDialog.getByTestId("scan-selection-summary")).toContainText("Archive");
+    await expect(reopenedDialog.getByTestId("scan-selection-summary")).toContainText("First plays");
     await expect(reopenedDialog.getByRole("button", { name: "Archive" })).toHaveAttribute(
       "aria-pressed",
       "true",

@@ -195,13 +195,14 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
-  it("removes the old controls above the history scanner", () => {
+  it("removes the old controls and leaves Scan as the archive entry point", () => {
     render(<SplitHome />);
     expect(screen.queryByRole("button", { name: /^Crossings/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Station type/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Track age/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Find stations/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /History scan/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /History scan/ })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Open Scan" }).length).toBeGreaterThan(0);
   });
 
   it.each([
@@ -333,12 +334,13 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     );
     render(<SplitHome />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Show more scan controls/ }));
     const pageGroup = screen.getByRole("group", { name: "Page" });
     expect(pageGroup.querySelectorAll("button")).toHaveLength(5);
-    // The scan remote has exactly two scan actions plus the density key and
-    // the crossing-scope pill — no per-page scan buttons.
+    // The scan command group now keeps only the two scan actions; density,
+    // page selection, and crossing scope live in the expanded controls.
     const scanRow = screen.getByRole("group", { name: "Scan commands" });
-    expect(scanRow.querySelectorAll("button")).toHaveLength(9); // 5 pages + density + Scan + Scan all + scope pill
+    expect(scanRow.querySelectorAll("button")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "scan this page" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "scan all stations" })).toBeTruthy();
 
@@ -372,9 +374,9 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     screen.getByRole("button", { name: "20. Artist on Station st-20 — tune in" });
     expect(screen.queryByRole("button", { name: "10. Artist on Station st-10 — tune in" })).toBeNull();
     expect(screen.queryByRole("button", { name: "21. Artist on Station st-21 — tune in" })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(screen.getByRole("button", {
+      name: "Show more scan controls — 10 rows, page 2 / 3",
+    })).toBeTruthy();
   });
 
   it("micro density pages by 15 — /scan2 shows keypad buttons 16–23 with full-list ordinals", () => {
@@ -389,6 +391,7 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     screen.getByRole("button", { name: "1. Artist on Station st-1 — tune in" });
     screen.getByRole("button", { name: "15. Artist on Station st-15 — tune in" });
     expect(screen.queryByRole("button", { name: "16. Artist on Station st-16 — tune in" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Show more scan controls/ }));
     expect(screen.getByRole("group", { name: "Page" }).querySelectorAll("button")).toHaveLength(2);
     // The count label is still on the remote.
     expect(screen.getByRole("group", { name: "Scan commands" }).textContent).toContain("23 stations");
@@ -400,9 +403,8 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     screen.getByRole("button", { name: "16. Artist on Station st-16 — tune in" });
     screen.getByRole("button", { name: "23. Artist on Station st-23 — tune in" });
     expect(screen.queryByRole("button", { name: "15. Artist on Station st-15 — tune in" })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(screen.getByRole("button", { name: /Hide more scan controls — 15 rows, page 2 \/ 2/ }))
+      .toBeTruthy();
   });
 
   it("switching density mid-list re-snaps the offset to the new page size", () => {
@@ -418,6 +420,7 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     typeCommand("/scan2");
     screen.getByRole("button", { name: "11. Artist on Station st-11 — tune in" });
 
+    fireEvent.click(screen.getByRole("button", { name: /Show more scan controls/ }));
     fireEvent.click(screen.getByRole("button", { name: "density 10 rows — switch to 15" }));
 
     expect(document.querySelectorAll(".compact-dial__micro-btn")).toHaveLength(15);

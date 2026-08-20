@@ -599,18 +599,6 @@ export default function SplitHome() {
     [stackData],
   );
 
-  // artist (lowercase) → artwork from the cached library page — the set
-  // scanner paints this art behind crossing rows (Library header treatment).
-  const libraryArtwork = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const item of stackData?.pages[0]?.items ?? []) {
-      const artist = item.recording?.artist?.trim().toLowerCase();
-      const art = item.recording?.artworkUrl;
-      if (artist && art && !map.has(artist)) map.set(artist, art);
-    }
-    return map;
-  }, [stackData]);
-
   // Per-album Stack-skip preference (localStorage "lore:stackSkipped").
   // Unchecked albums leave the five-slot active window for the below-fold
   // overflow region; the pager and the shuffle only see active albums —

@@ -207,8 +207,8 @@ describe("CompactDial category-first home Feed", () => {
       categoryFirst: true,
       crossingScope: "24h",
     });
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("7 crossings");
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("3 first plays");
+    expect(screen.getByLabelText("7 crossings in 24h")).toBeTruthy();
+    expect(screen.getByLabelText("3 first plays in 24h")).toBeTruthy();
 
     rerender(
       <CompactDial
@@ -223,8 +223,8 @@ describe("CompactDial category-first home Feed", () => {
         crossingScope="lifetime"
       />,
     );
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("9 crossings");
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("3 first plays");
+    expect(screen.getByLabelText("9 crossings in lifetime")).toBeTruthy();
+    expect(screen.getByLabelText("3 first plays in lifetime")).toBeTruthy();
   });
 
   it("renders editorial category cards with fresh now-playing previews", () => {
@@ -244,9 +244,11 @@ describe("CompactDial category-first home Feed", () => {
       .map((element) => element.textContent);
     expect(labels).toEqual(["Ambient & Sleep", "Anchor Stations"]);
     expect(screen.getByTestId("compact-category-anchor").textContent)
-      .toContain("The Smile — Bending Hectic · KEXP");
-    expect(screen.getByTestId("compact-category-anchor").textContent)
-      .toContain("1 station");
+      .toContain("KEXP: The Smile — Bending Hectic");
+    expect(screen.getByTestId("compact-category-anchor")
+      .closest(".compact-category-dial__summary")
+      ?.querySelector(".compact-category-dial__count")?.textContent)
+      .toBe("1 station");
   });
 
   it("renders accessible scope-labelled metric badges, including honest zeroes", () => {
@@ -257,9 +259,6 @@ describe("CompactDial category-first home Feed", () => {
     });
     renderDial({ activeRows: [row], categoryFirst: true, crossingScope: "7d" });
 
-    const summary = screen.getByTestId("compact-category-anchor");
-    expect(summary.textContent).toContain("0 crossings");
-    expect(summary.textContent).toContain("0 first plays");
     expect(screen.getByLabelText("0 crossings in 7d")).toBeTruthy();
     expect(screen.getByLabelText("0 first plays in 7d")).toBeTruthy();
   });
@@ -279,8 +278,8 @@ describe("CompactDial category-first home Feed", () => {
       categoryFirst: true,
       crossingScope: "24h",
     });
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("2 crossings");
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("1 first plays");
+    expect(screen.getByLabelText("2 crossings in 24h")).toBeTruthy();
+    expect(screen.getByLabelText("1 first plays in 24h")).toBeTruthy();
 
     rerender(
       <CompactDial
@@ -295,8 +294,8 @@ describe("CompactDial category-first home Feed", () => {
         crossingScope="lifetime"
       />,
     );
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("8 crossings");
-    expect(screen.getByTestId("compact-category-anchor").textContent).toContain("4 first plays");
+    expect(screen.getByLabelText("8 crossings in lifetime")).toBeTruthy();
+    expect(screen.getByLabelText("4 first plays in lifetime")).toBeTruthy();
   });
 
   it("uses an honest unavailable state when a category has no live metadata", () => {
@@ -324,11 +323,11 @@ describe("CompactDial category-first home Feed", () => {
     renderDial({ activeRows: [playable, unavailable], categoryFirst: true, onPlay, onTuneIn });
 
     expect(screen.queryByRole("button", { name: "Play KEXP" })).toBeNull();
-    expect(screen.getByTestId("compact-category-anchor-now-header").textContent)
+    expect(screen.getByTestId("compact-category-anchor").textContent)
       .toContain("KEXP: The Smile — Bending Hectic");
-    expect(screen.getByTestId("compact-category-anchor-now-header").textContent)
+    expect(screen.getByTestId("compact-category-anchor").textContent)
       .not.toContain("Quiet Station");
-    fireEvent.click(screen.getByTestId("compact-category-anchor-now-header"));
+    fireEvent.click(screen.getByTestId("compact-category-anchor"));
     expect(screen.getByRole("button", { name: "Play KEXP" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Play Quiet Station" })).toBeNull();
     screen.getByRole("button", { name: "The Smile — Bending Hectic · KEXP — tune in" });
@@ -351,7 +350,7 @@ describe("CompactDial category-first home Feed", () => {
       activeRows: [first, second],
       categoryFirst: true,
     });
-    fireEvent.click(screen.getByTestId("compact-category-anchor-now-header"));
+    fireEvent.click(screen.getByTestId("compact-category-anchor"));
     const feed = screen.getByTestId("compact-category-anchor-now-feed");
     expect([...feed.querySelectorAll(".compact-category-dial__feed-tune b")]
       .map((element) => element.textContent))
@@ -387,28 +386,74 @@ describe("CompactDial category-first home Feed", () => {
     );
     renderDial({ activeRows: [oldTrack, newTrack], categoryFirst: true });
 
-    const header = screen.getByTestId("compact-category-anchor-now-header");
+    const header = screen.getByTestId("compact-category-anchor");
     expect(header.textContent).toContain("New Station: New Artist — Just Now");
     expect(header.textContent).not.toContain("Old Station");
   });
 
-  it("keeps category and now-playing controls separate and mutually exclusive", () => {
-    const row = makeRowWithTrack(
+  it("uses one category now-playing control and closes the previous feed", () => {
+    const anchor = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
       { artist: "The Smile", title: "Bending Hectic" },
     );
-    renderDial({ activeRows: [row], categoryFirst: true });
+    const campus = makeRowWithTrack(
+      { slug: "wvum", name: "WVUM", stationCategories: ["campus"] },
+      { artist: "Floating Points", title: "Bias" },
+    );
+    renderDial({ activeRows: [anchor, campus], categoryFirst: true });
 
-    const category = screen.getByTestId("compact-category-anchor");
-    const nowHeader = screen.getByTestId("compact-category-anchor-now-header");
-    fireEvent.click(nowHeader);
-    expect(nowHeader.getAttribute("aria-expanded")).toBe("true");
-    expect(category.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(category);
-    expect(category.getAttribute("aria-expanded")).toBe("true");
-    expect(nowHeader.getAttribute("aria-expanded")).toBe("false");
+    const anchorButton = screen.getByTestId("compact-category-anchor");
+    const campusButton = screen.getByTestId("compact-category-campus");
+    expect(anchorButton.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(anchorButton);
+    expect(anchorButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
+    fireEvent.click(campusButton);
+    expect(campusButton.getAttribute("aria-expanded")).toBe("true");
+    expect(anchorButton.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
-    expect(screen.getByTestId("fdrow-kexp")).toBeTruthy();
+  });
+
+  it("keeps category selection beside its label and age pie beside its metrics", () => {
+    const row = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic", ageTier: "recent" },
+    );
+    const onToggleCategory = vi.fn();
+    const { container } = renderDial({
+      activeRows: [row],
+      categoryFirst: true,
+      activeCategories: new Set(["anchor"]),
+      onToggleCategory,
+    });
+
+    const summary = container.querySelector(".compact-category-dial__summary")!;
+    const topLine = summary.querySelector(".compact-category-dial__topline")!;
+    expect(topLine.querySelector(".compact-category-dial__label")?.textContent).toBe("Anchor Stations");
+    const categoryBox = screen.getByRole("checkbox", { name: "Include Anchor Stations" });
+    expect(categoryBox.parentElement?.parentElement).toBe(topLine);
+    fireEvent.click(categoryBox);
+    expect(onToggleCategory).toHaveBeenCalledWith("anchor");
+
+    const metrics = summary.querySelector(".compact-category-dial__metrics")!;
+    expect(metrics.nextElementSibling?.classList.contains("dial-age-badge")).toBe(true);
+  });
+
+  it("shows five category summaries per page before paging", () => {
+    const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
+    const rows = categories.map((category) => makeRow({
+      slug: `${category}-station`,
+      name: `${category} station`,
+      stationCategories: [category],
+    }));
+
+    renderDial({ activeRows: rows, categoryFirst: true });
+
+    const lane = screen.getByTestId("compact-category-dial");
+    expect(lane.querySelectorAll(".compact-category-dial__group")).toHaveLength(5);
+    expect(screen.getByRole("group", { name: "category pages" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next category page" }));
+    expect(lane.querySelectorAll(".compact-category-dial__group")).toHaveLength(2);
   });
 
   it("uses the compact remote density for category station lists", () => {
@@ -421,14 +466,14 @@ describe("CompactDial category-first home Feed", () => {
     );
     const { container } = renderDial({ activeRows: rows, categoryFirst: true, density: "compact" });
 
-    fireEvent.click(screen.getByTestId("compact-category-anchor-now-header"));
+    fireEvent.click(screen.getByTestId("compact-category-anchor"));
     expect(container.querySelector(".compact-category-dial__now-feed--remote")).toBeTruthy();
     expect(container.querySelectorAll(".compact-category-dial__feed-row")).toHaveLength(10);
     expect(screen.getByRole("group", { name: "Anchor Stations now-playing feed pages" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Next Anchor Stations now-playing feed page" })).toBeTruthy();
   });
 
-  it("expands exactly one category inline and keeps its station row controls", () => {
+  it("expands exactly one category now-playing feed and keeps its controls", () => {
     const anchor = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
       { artist: "The Smile", title: "Bending Hectic" },
@@ -447,23 +492,23 @@ describe("CompactDial category-first home Feed", () => {
 
     const anchorButton = screen.getByTestId("compact-category-anchor");
     const campusButton = screen.getByTestId("compact-category-campus");
-    expect(screen.queryByTestId("fdrow-kexp")).toBeNull();
+    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
 
     fireEvent.click(anchorButton);
     expect(anchorButton.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("fdrow-kexp")).toBeTruthy();
+    expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Play KEXP" })).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Skip KEXP in scan" }));
     expect(onToggleSkip).toHaveBeenCalledWith("kexp");
 
     fireEvent.click(campusButton);
     expect(campusButton.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("fdrow-wvum")).toBeTruthy();
-    expect(screen.queryByTestId("fdrow-kexp")).toBeNull();
+    expect(screen.getByTestId("compact-category-campus-now-feed")).toBeTruthy();
+    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
 
     fireEvent.click(campusButton);
     expect(campusButton.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByTestId("fdrow-wvum")).toBeNull();
+    expect(screen.queryByTestId("compact-category-campus-now-feed")).toBeNull();
   });
 
   it("keeps uncategorized listener-pinned stations directly reachable", () => {
