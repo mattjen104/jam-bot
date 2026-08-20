@@ -311,6 +311,43 @@ describe("CompactDial category-first home Feed", () => {
       .toContain("Now playing unavailable");
   });
 
+  it("shows dense playable station entries before expansion and keeps unavailable entries honest", () => {
+    const playable = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const unavailable = makeRow({
+      slug: "quiet", name: "Quiet Station", streamUrl: "", relayUrl: null, stationCategories: ["anchor"],
+    });
+    const onPlay = vi.fn();
+    const onTuneIn = vi.fn();
+    renderDial({ activeRows: [playable, unavailable], categoryFirst: true, onPlay, onTuneIn });
+
+    expect(screen.getByRole("button", { name: "Play KEXP" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Play Quiet Station" })).toBeNull();
+    screen.getByRole("button", { name: "The Smile — Bending Hectic · KEXP — tune in" });
+    screen.getByRole("button", { name: "Now playing unavailable · Quiet Station — tune in" });
+    fireEvent.click(screen.getByRole("button", { name: "Play KEXP" }));
+    expect(onPlay).toHaveBeenCalledWith(playable);
+    expect(onTuneIn).not.toHaveBeenCalled();
+  });
+
+  it("uses the compact remote density for category station lists", () => {
+    const rows = Array.from({ length: 11 }, (_, index) =>
+      makeRow({
+        slug: `anchor-${index + 1}`,
+        name: `Anchor ${index + 1}`,
+        stationCategories: ["anchor"],
+      }),
+    );
+    const { container } = renderDial({ activeRows: rows, categoryFirst: true, density: "compact" });
+
+    expect(container.querySelector(".compact-category-dial__dense-list--remote")).toBeTruthy();
+    expect(container.querySelectorAll(".compact-category-dial__dense-row")).toHaveLength(10);
+    expect(screen.getByRole("group", { name: "Anchor Stations now playing pages" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next Anchor Stations now playing page" })).toBeTruthy();
+  });
+
   it("expands exactly one category inline and keeps its station row controls", () => {
     const anchor = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },

@@ -8232,6 +8232,89 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex: 0 0 auto;
   min-height: 48px;
 }
+.compact-category-dial__dense-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid hsl(var(--border) / 0.35);
+}
+.compact-category-dial__dense-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 3px 10px;
+  border-bottom: 1px solid hsl(var(--border) / 0.2);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+.compact-category-dial__dense-row--active {
+  background: hsl(var(--live) / 0.08);
+}
+.compact-category-dial__dense-row--sampling {
+  outline: 1px solid hsl(var(--live) / 0.28);
+  outline-offset: -1px;
+}
+.compact-category-dial__dense-row--skipped {
+  opacity: .55;
+}
+.compact-category-dial__dense-row .compact-play-btn {
+  width: 25px;
+  min-width: 25px;
+  height: 25px;
+}
+.compact-category-dial__dense-tune {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.compact-category-dial__dense-tune:hover,
+.compact-category-dial__dense-tune:focus-visible {
+  color: hsl(var(--foreground));
+}
+.compact-category-dial__dense-tune:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: 2px;
+}
+.compact-category-dial__dense-track {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--foreground) / .86);
+}
+.compact-category-dial__dense-tune b {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+.compact-category-dial__dense-list--remote .compact-category-dial__dense-row {
+  min-height: 27px;
+  padding-block: 1px;
+}
+.compact-category-dial__dense-list--remote .compact-category-dial__dense-row .compact-play-btn {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+}
+.compact-category-dial__dense-list--remote .compact-category-dial__dense-tune {
+  gap: 5px;
+}
 .compact-specialist-dial__subgroups {
   display: grid;
   gap: 7px;
@@ -8347,6 +8430,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     gap: 1px;
   }
   .compact-specialist-dial__now-playing-row b { text-align: left; }
+  .compact-category-dial__dense-tune {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+  }
 }
 /* No playing edge in the mini feed: the base .fdrow left bar (accent when
    playing, library/gray zone bars otherwise) is suppressed here — the

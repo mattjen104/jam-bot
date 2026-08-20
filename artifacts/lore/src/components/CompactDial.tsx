@@ -245,6 +245,86 @@ interface SpecialistSubcategoryGroup {
   rows: CategoryGroup["rows"];
 }
 
+function DenseCategoryStationList({
+  group,
+  density,
+  activeSlug,
+  playerStatus,
+  onTuneIn,
+  onPlay,
+  sampledSlug,
+}: {
+  group: CategoryGroup;
+  density: DialDensity;
+  activeSlug: string | null;
+  playerStatus: PlayerStatus;
+  onTuneIn: (row: DialLaneRow) => void;
+  onPlay: (row: DialLaneRow) => void;
+  sampledSlug: string | null;
+}) {
+  const pageSize = density === "compact" ? COMPACT_REMOTE_SIZE : COMPACT_DIAL_SIZE;
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(group.rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const rows = group.rows.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+
+  return (
+    <div className={`compact-category-dial__dense-list${density === "compact" ? " compact-category-dial__dense-list--remote" : ""}`}
+      aria-label={`${group.label} now playing`}>
+      {rows.map(({ row, isSkipped }) => {
+        const track = row.ds.isLive ? row.ds.liveTrack ?? row.show?.currentTrack : null;
+        const artist = cleanLiveValue(track?.artist);
+        const title = cleanLiveValue(track?.title);
+        const stationName = row.ds.station.name;
+        const isPlayable = resolvePlaybackSource(row.ds.station) != null;
+        const isActive = row.ds.station.slug === activeSlug;
+        const nowPlaying = artist || title
+          ? `${artist ?? title}${artist && title ? ` — ${title}` : ""}`
+          : "Now playing unavailable";
+        return (
+          <div
+            className={[
+              "compact-category-dial__dense-row",
+              isSkipped ? "compact-category-dial__dense-row--skipped" : "",
+              isActive ? "compact-category-dial__dense-row--active" : "",
+              row.ds.station.slug === sampledSlug ? "compact-category-dial__dense-row--sampling" : "",
+            ].filter(Boolean).join(" ")}
+            key={row.ds.station.slug}
+          >
+            {isPlayable && (
+              <CompactPlayButton
+                title={stationName}
+                isPlaying={isActive && playerStatus === "playing"}
+                isLoading={isActive && playerStatus === "loading"}
+                onClick={() => onPlay(row)}
+                testId={`compact-category-play-${row.ds.station.slug}`}
+              />
+            )}
+            <button
+              type="button"
+              className="compact-category-dial__dense-tune"
+              onClick={() => onTuneIn(row)}
+              aria-label={`${nowPlaying} · ${stationName} — tune in`}
+            >
+              <span className="compact-category-dial__dense-track">{nowPlaying}</span>
+              <b>{stationName}</b>
+            </button>
+          </div>
+        );
+      })}
+      {pageCount > 1 && (
+        <div className="compact-dial__pager" role="group" aria-label={`${group.label} now playing pages`}>
+          <button type="button" disabled={currentPage === 0} onClick={() => setPage((value) => value - 1)}
+            aria-label={`Previous ${group.label} now playing page`}>←</button>
+          <span>Page {currentPage + 1} of {pageCount}</span>
+          <button type="button" disabled={currentPage >= pageCount - 1} onClick={() => setPage((value) => value + 1)}
+            aria-label={`Next ${group.label} now playing page`}>→</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Category totals include skipped stations because those stations remain
  * represented by the category summary and are still reachable when expanded.
@@ -545,6 +625,7 @@ function CategoryFirstDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
+  density = "normal",
 }: CompactDialProps) {
   const groups = useMemo(
     () => buildCompactCategoryGroups(activeRows, skippedRows),
@@ -630,6 +711,17 @@ function CategoryFirstDial({
               }
               onToggle={() => setExpandedCategory((current) => current === group.category ? null : group.category)}
             />
+            {!isExpanded && (
+              <DenseCategoryStationList
+                group={group}
+                density={density}
+                activeSlug={activeSlug}
+                playerStatus={playerStatus}
+                onTuneIn={onTuneIn}
+                onPlay={onPlay}
+                sampledSlug={sampledSlug}
+              />
+            )}
             {isExpanded && (
               isSpecialist ? (
                 <div
@@ -709,6 +801,8 @@ export function CompactDial({
   unchangedSlugs,
   categoryFirst = false,
   visibleUncategorizedSlugs,
+  onToggleCategory,
+  activeCategories,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -741,6 +835,9 @@ export function CompactDial({
         lastSetSummaries={lastSetSummaries}
         unchangedSlugs={unchangedSlugs}
         visibleUncategorizedSlugs={visibleUncategorizedSlugs}
+        onToggleCategory={onToggleCategory}
+        activeCategories={activeCategories}
+        density={density}
       />
     );
   }
