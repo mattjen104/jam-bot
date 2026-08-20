@@ -118,6 +118,7 @@ RUN_SPECS=(
   e2e/stationAdminRemoval.spec.ts
   e2e/stackDensityPager.spec.ts
   e2e/dialSkippedScan.spec.ts
+  e2e/unifiedScanSession.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
