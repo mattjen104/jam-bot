@@ -66,7 +66,6 @@ import type { StationCategory } from "../components/dial/DialFilterBar";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
-import { HistoryScanner } from "../components/dial/HistoryScanner";
 import { ScanEntryButton, ScanSession, type ScanFilter, type ScanSource } from "../components/ScanSession";
 import { fetchLatestSetSummaries, type LastSetSummary } from "../lib/latestSet";
 import {
@@ -765,10 +764,6 @@ export default function SplitHome() {
           <ScanEntryButton onOpen={() => { stopCompactScan(); setScanSessionOpen(true); }} />
           <span>One calm session for live stations and archive listening</span>
         </div>
-        <HistoryScanner
-          scope={crossingScope}
-          categories={[...activeCategories]}
-        />
         <CompactDial
           activeRows={hasEditorialCategory
             ? activeRows
