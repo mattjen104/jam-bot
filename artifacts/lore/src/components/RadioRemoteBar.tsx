@@ -19,22 +19,9 @@
 
 import { useCallback } from "react";
 import { useLocation } from "wouter";
-import { AGE_TIER_DEFINITIONS, type AgeTier } from "../lib/dialAgeFilter";
-import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
+import type { AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "./dial/DialFilterBar";
 import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
-
-const AGE_OPTIONS = AGE_TIER_DEFINITIONS.map(({ tier, label, title }) => ({
-  value: tier,
-  label,
-  title,
-}));
-
-const CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(({ cat, label, title }) => ({
-  value: cat,
-  label,
-  title,
-}));
 
 const CROSSINGS_VALUE = "on";
 const CROSSINGS_OPTIONS = [
@@ -61,10 +48,10 @@ export interface RadioRemoteBarProps {
 }
 
 export function RadioRemoteBar({
-  activeTiers,
-  activeCategories,
-  onToggleTier,
-  onToggleCategory,
+  activeTiers: _activeTiers,
+  activeCategories: _activeCategories,
+  onToggleTier: _onToggleTier,
+  onToggleCategory: _onToggleCategory,
   onRadioMode,
   radioMode = false,
   onFindStations,
@@ -94,25 +81,6 @@ export function RadioRemoteBar({
         variant="chips"
       />
 
-      {/* Track age: additive multi-select, empty = all ages */}
-      <FilterDropdownMenu
-        label="Track age"
-        ariaLabel="Track age"
-        options={AGE_OPTIONS}
-        active={activeTiers}
-        onToggle={onToggleTier}
-        variant="chips"
-      />
-
-      {/* Station type: additive multi-select, empty = all stations */}
-      <FilterDropdownMenu
-        label="Station type"
-        ariaLabel="Station type"
-        options={CATEGORY_OPTIONS}
-        active={activeCategories}
-        onToggle={onToggleCategory}
-        variant="chips"
-      />
 
       {/* Find stations opens the Station Finder — an action, not a filter,
           so it renders only when the host provides the handler. */}

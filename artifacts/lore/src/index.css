@@ -8071,6 +8071,83 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-align: left;
   font: inherit;
 }
+.compact-category-dial__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compact-category-dial__summary-button {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.8fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.compact-category-dial__summary-button:hover,
+.compact-category-dial__summary-button:focus-visible {
+  background: hsl(var(--secondary) / 0.5);
+  outline: 2px solid hsl(var(--live));
+  outline-offset: -2px;
+}
+.compact-category-dial__include {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 8px 0;
+}
+.compact-category-dial__include input {
+  width: 14px;
+  height: 14px;
+  accent-color: hsl(var(--accent));
+}
+.dial-age-badge {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  outline: 1px solid hsl(var(--foreground) / .22);
+  outline-offset: 1px;
+  cursor: help;
+}
+.dial-age-badge:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: 3px;
+}
+.dial-age-badge__hole {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: hsl(var(--card));
+}
+.compact-dial__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 5px 8px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+.compact-dial__pager button {
+  min-width: 28px;
+  min-height: 26px;
+  border: 1px solid hsl(var(--border) / .6);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+}
+.compact-dial__pager button:disabled { opacity: .35; }
 .compact-category-dial__summary:hover,
 .compact-category-dial__summary--expanded {
   background: hsl(var(--secondary) / 0.5);
@@ -8249,16 +8326,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 48px;
 }
 @media (max-width: 640px) {
-  .compact-category-dial__summary {
+  .compact-category-dial__summary-button {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 4px 8px;
   }
-  .compact-category-dial__meta {
+  .compact-category-dial__summary-button .compact-category-dial__meta {
     grid-column: 1 / -1;
     justify-content: space-between;
     flex-wrap: wrap;
   }
-  .compact-category-dial__label { white-space: normal; }
+  .compact-category-dial__summary-button .compact-category-dial__label { white-space: normal; }
   .compact-specialist-dial__subsummary {
     grid-template-columns: minmax(0, 1fr) auto;
   }

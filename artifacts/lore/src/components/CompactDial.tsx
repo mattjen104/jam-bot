@@ -46,6 +46,8 @@ import {
   type SpecialistSubcategory,
 } from "../lib/specialistCategories";
 import { cleanLiveValue } from "./dialViewHelpers";
+import { AgeDistributionBadge } from "./dial/AgeDistributionBadge";
+import { ageDistribution } from "../lib/dialAgeDistribution";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
@@ -76,6 +78,8 @@ export interface CompactDialProps {
   onPlay: (row: DialLaneRow) => void;
   /** Toggle skip state for a station slug (checks ↔ unchecks). */
   onToggleSkip?: (slug: string) => void;
+  onToggleCategory?: (category: StationCategory) => void;
+  activeCategories?: ReadonlySet<StationCategory>;
   /** Active crossing scope — drives the per-row ⬤ dot meaning. */
   crossingScope?: CrossingScope;
   /** When true (crossings off), no ⬤ dots render. */
@@ -372,6 +376,7 @@ function SpecialistSubcategoryCard({
   onToggle: () => void;
   renderRows: (group: CategoryGroup) => ReactNode;
 }) {
+  const [page, setPage] = useState(0);
   const nowPlaying = specialistNowPlaying(group.rows);
   const liveCount = nowPlaying.filter((entry) => entry.artist || entry.title).length;
   const categoryGroup: CategoryGroup = {
@@ -418,7 +423,19 @@ function SpecialistSubcategoryCard({
           role="region"
           aria-label={`${group.label} station controls`}
         >
-          {renderRows(categoryGroup)}
+          {renderRows({
+            ...categoryGroup,
+            rows: categoryGroup.rows.slice(page * 5, page * 5 + 5),
+          })}
+          {group.rows.length > 5 && (
+            <div className="compact-dial__pager" role="group" aria-label={`${group.label} pages`}>
+              <button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}
+                aria-label={`Previous ${group.label} page`}>←</button>
+              <span>Page {page + 1} of {Math.ceil(group.rows.length / 5)}</span>
+              <button type="button" disabled={page >= Math.ceil(group.rows.length / 5) - 1}
+                onClick={() => setPage((value) => value + 1)} aria-label={`Next ${group.label} page`}>→</button>
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -430,26 +447,30 @@ function CategorySummary({
   expanded,
   onToggle,
   crossingScope,
+  active,
+  onToggleCategory,
 }: {
   group: CategoryGroup;
   expanded: boolean;
   onToggle: () => void;
   crossingScope: CrossingScope;
+  active: boolean;
+  onToggleCategory?: () => void;
 }) {
   const preview = categoryPreview(group.rows);
   const activeCount = group.rows.filter(({ isSkipped }) => !isSkipped).length;
   const stationCountLabel = `${group.rows.length} ${group.rows.length === 1 ? "station" : "stations"}`;
   const metrics = categoryScopeMetrics(group.rows, crossingScope);
   const scopeLabel = crossingScopeLabel(crossingScope);
+  const age = ageDistribution(group.rows.flatMap(({ row }) => {
+    const spins = row.show?.spins;
+    return spins?.length ? spins : row.ds.liveTrack ? [row.ds.liveTrack] : [];
+  }));
   return (
-    <button
-      type="button"
-      className={`compact-category-dial__summary${expanded ? " compact-category-dial__summary--expanded" : ""}`}
-      aria-expanded={expanded}
-      aria-controls={`compact-category-${group.category}`}
-      onClick={onToggle}
-      data-testid={`compact-category-${group.category}`}
-    >
+    <div className={`compact-category-dial__summary${expanded ? " compact-category-dial__summary--expanded" : ""}`}>
+    <button type="button" className="compact-category-dial__summary-button"
+      aria-expanded={expanded} aria-controls={`compact-category-${group.category}`}
+      onClick={onToggle} data-testid={`compact-category-${group.category}`}>
       <span className="compact-category-dial__label">{group.label}</span>
       <span className="compact-category-dial__meta">
         <span className="compact-category-dial__now">
@@ -492,6 +513,14 @@ function CategorySummary({
         {expanded ? "−" : "+"}
       </span>
     </button>
+    {group.category !== "other" && onToggleCategory && (
+      <label className="compact-category-dial__include">
+        <input type="checkbox" checked={active} aria-label={`${active ? "Include" : "Exclude"} ${group.label}`}
+          onChange={onToggleCategory} onClick={(event) => event.stopPropagation()} />
+      </label>
+    )}
+    <AgeDistributionBadge distribution={age} label={`${group.label} track age`} />
+    </div>
   );
 }
 
@@ -514,6 +543,8 @@ function CategoryFirstDial({
   lastSetSummaries,
   unchangedSlugs,
   visibleUncategorizedSlugs,
+  onToggleCategory,
+  activeCategories,
 }: CompactDialProps) {
   const groups = useMemo(
     () => buildCompactCategoryGroups(activeRows, skippedRows),
@@ -521,6 +552,8 @@ function CategoryFirstDial({
   );
   const [expandedCategory, setExpandedCategory] = useState<CompactCategory | null>(null);
   const [expandedSpecialist, setExpandedSpecialist] = useState<SpecialistSubcategory | null>(null);
+  const [categoryPage, setCategoryPage] = useState(0);
+  const [stationPages, setStationPages] = useState<Record<string, number>>({});
   const specialistGroup = groups.find((group) => group.category === "specialist") ?? null;
   const specialistGroups = useMemo(
     () => (specialistGroup ? buildSpecialistSubcategoryGroups(specialistGroup.rows) : []),
@@ -539,6 +572,20 @@ function CategoryFirstDial({
         || visibleUncategorizedSlugs.has(row.ds.station.slug),
     ),
   };
+  const categoryPageCount = Math.max(1, Math.ceil(editorialGroups.length / 5));
+  const visibleGroups = editorialGroups.slice(categoryPage * 5, categoryPage * 5 + 5);
+  const pageFor = (key: string, length: number) =>
+    Math.min(stationPages[key] ?? 0, Math.max(0, Math.ceil(length / 5) - 1));
+  const pager = (label: string, page: number, pageCount: number, onPage: (next: number) => void) =>
+    pageCount > 1 ? (
+      <div className="compact-dial__pager" role="group" aria-label={`${label} pages`}>
+        <button type="button" disabled={page === 0} onClick={() => onPage(page - 1)}
+          aria-label={`Previous ${label} page`}>←</button>
+        <span>Page {page + 1} of {pageCount}</span>
+        <button type="button" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)}
+          aria-label={`Next ${label} page`}>→</button>
+      </div>
+    ) : null;
   const renderRows = (group: CategoryGroup) => group.rows.map(({ row, isSkipped }) => (
     <CompactDialRow
       key={row.ds.station.slug}
@@ -564,7 +611,7 @@ function CategoryFirstDial({
 
   return (
     <div className="compact-dial compact-dial--categories" data-testid="compact-category-dial">
-      {editorialGroups.map((group) => {
+      {visibleGroups.map((group) => {
         // A running station scan keeps its current station visible, but does
         // not overwrite the listener's manually chosen category once it ends.
         const isExpanded = sampledCategory === group.category || expandedCategory === group.category;
@@ -575,6 +622,12 @@ function CategoryFirstDial({
               group={group}
               expanded={isExpanded}
               crossingScope={crossingScope ?? DEFAULT_CROSSING_SCOPE}
+              active={activeCategories?.has(group.category as StationCategory) ?? true}
+              onToggleCategory={
+                onToggleCategory && group.category !== "other"
+                  ? () => onToggleCategory(group.category as StationCategory)
+                  : undefined
+              }
               onToggle={() => setExpandedCategory((current) => current === group.category ? null : group.category)}
             />
             {isExpanded && (
@@ -602,13 +655,24 @@ function CategoryFirstDial({
                   role="region"
                   aria-label={`${group.label} stations`}
                 >
-                  {renderRows(group)}
+                  {renderRows({
+                    ...group,
+                    rows: group.rows.slice(pageFor(String(group.category), group.rows.length) * 5,
+                      pageFor(String(group.category), group.rows.length) * 5 + 5),
+                  })}
                 </div>
               )
+            )}
+            {isExpanded && !isSpecialist && pager(
+              group.label,
+              pageFor(String(group.category), group.rows.length),
+              Math.max(1, Math.ceil(group.rows.length / 5)),
+              (next) => setStationPages((prev) => ({ ...prev, [String(group.category)]: next })),
             )}
           </section>
         );
       })}
+      {pager("category", categoryPage, categoryPageCount, setCategoryPage)}
       {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (
         <section className="compact-category-dial__uncategorized" aria-label="Other stations">
           {editorialGroups.length > 0 && (

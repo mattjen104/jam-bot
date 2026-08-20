@@ -16,32 +16,14 @@
  * Pure presentational: filter state is managed by DialView.
  */
 
-import {
-  AGE_TIER_DEFINITIONS,
-  type AgeTier,
-} from "../../lib/dialAgeFilter";
-import {
-  STATION_CATEGORY_DEFINITIONS,
-  type StationCategory,
-} from "../../lib/dialCategories";
+import type { AgeTier } from "../../lib/dialAgeFilter";
+import type { StationCategory } from "../../lib/dialCategories";
 import { FilterDropdownMenu } from "./FilterDropdownMenu";
 import { CrossingScopePill } from "./CrossingScopePill";
 import type { CrossingScope, StationSortMetric } from "../../lib/crossingScope";
 
 export type { AgeTier };
 export type { StationCategory };
-
-const AGE_OPTIONS = AGE_TIER_DEFINITIONS.map(({ tier, label, title }) => ({
-  value: tier,
-  label,
-  title,
-}));
-
-const CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(({ cat, label, title }) => ({
-  value: cat,
-  label,
-  title,
-}));
 
 /** The Crossings menu has exactly one member: the mode itself. */
 const CROSSINGS_VALUE = "on";
@@ -79,11 +61,11 @@ export interface DialFilterBarProps {
 }
 
 export function DialFilterBar({
-  activeTiers,
-  activeCategories,
+  activeTiers: _activeTiers,
+  activeCategories: _activeCategories,
   crossingsActive,
-  onToggleTier,
-  onToggleCategory,
+  onToggleTier: _onToggleTier,
+  onToggleCategory: _onToggleCategory,
   onToggleCrossings,
   crossingScope,
   onCycleCrossingScope,
@@ -119,23 +101,6 @@ export function DialFilterBar({
           variant="bar"
         />
       )}
-      <FilterDropdownMenu
-        label="Track age"
-        ariaLabel="Track age"
-        options={AGE_OPTIONS}
-        active={activeTiers}
-        onToggle={onToggleTier}
-        variant="bar"
-      />
-      <FilterDropdownMenu
-        label="Station type"
-        ariaLabel="Station type"
-        options={CATEGORY_OPTIONS}
-        active={activeCategories}
-        onToggle={onToggleCategory}
-        variant="bar"
-        className="dial-filter-bar__group--right"
-      />
     </div>
   );
 }

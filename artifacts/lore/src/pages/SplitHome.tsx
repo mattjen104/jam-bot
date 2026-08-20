@@ -64,7 +64,7 @@ import {
 } from "../lib/stackDensityState";
 import { spineArtUrl } from "../components/CompactStack";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
+import type { AgeTier } from "../lib/dialAgeFilter";
 import type { StationCategory } from "../components/dial/DialFilterBar";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
@@ -244,13 +244,6 @@ export default function SplitHome() {
   // matching rows.
   const filteredRows = useMemo(() => {
     let rows = sortedRows;
-    if (activeTiers.size > 0) {
-      rows = rows.filter((row) => {
-        const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
-        if (!track) return true;
-        return rowPassesAgeTierFilter(track.ageTier, activeTiers);
-      });
-    }
     // Crossing-positive filter: with crossings on, only stations with ≥1
     // crossing at the active scope remain — "show me only stations that have
     // played my music in the chosen window". Off (radio mode) = no filter.
@@ -261,7 +254,7 @@ export default function SplitHome() {
       rows = rows.filter((row) => hasAnyCrossing(row.ds, crossingScope));
     }
     return rows;
-  }, [sortedRows, activeTiers, crossingsOn, crossingsLoading, crossingScope]);
+  }, [sortedRows, crossingsOn, crossingsLoading, crossingScope]);
 
   // Split into active (not skipped) and skipped after age-tier filtering.
   // Scan pagination and page count are based on activeRows only; skipped rows
@@ -782,6 +775,8 @@ export default function SplitHome() {
           onTuneIn={tuneRow}
           onPlay={playRow}
           onToggleSkip={toggleSkip}
+          activeCategories={activeCategories}
+          onToggleCategory={toggleCategory}
           crossingScope={crossingScope}
           suppressCrossings={!crossingsOn}
           displayMode="personal"

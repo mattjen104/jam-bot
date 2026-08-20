@@ -39,6 +39,7 @@ import {
 } from "../../lib/crossingScope";
 import { type StationPresence } from "../../hooks/useStationPresence";
 import { ListenerAvatarStack } from "../ListenerAvatarStack";
+import { AgeDistributionBadge } from "./AgeDistributionBadge";
 
 export function agoLabel(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -423,6 +424,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   const stationBlurb = ds.station.homepageBlurb?.trim() || null;
   // Lifetime crossings (exact + artist-level) for the Last set affordance.
   const lifetimeCrossingCount = (ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0);
+  const ageSamples = show?.spins?.length ? show.spins : (ds.liveTrack ? [ds.liveTrack] : []);
 
   // Clickable-"and" expansion: probe the sentence first to learn which artist
   // names it already shows, derive the rest of the set (setlist order, library
@@ -541,6 +543,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
       {/* Right cluster — the station is always visible at the far right edge;
           the Keep affordance joins it while the row is expanded. */}
       <span className="fdrow__compact-right">
+        {compactSentence && <AgeDistributionBadge samples={ageSamples} label={`${ds.station.name} track age`} />}
         {expanded && onKeep && (
           <button
             type="button"
