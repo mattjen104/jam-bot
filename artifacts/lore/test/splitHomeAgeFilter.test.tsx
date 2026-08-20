@@ -196,24 +196,13 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
-  function clickCrossingsCheckbox() {
-    fireEvent.click(screen.getByRole("button", { name: /^Crossings/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
-  }
-
-  it.each([
-    ["crossings", false],
-    ["radio", true],
-  ] as const)("Crossings dropdown (%s) persists its mode and opens the full feed", (_name, mode) => {
-    // Start in the opposite mode so the checkbox flip lands on `mode`.
-    localStorage.setItem("lore:radioMode", mode ? "false" : "true");
+  it("removes the old controls above the history scanner", () => {
     render(<SplitHome />);
-
-    clickCrossingsCheckbox();
-
-    expect(readRadioMode()).toBe(mode);
-    expect(localStorage.getItem("lore:radioMode")).toBe(mode ? "true" : "false");
-    expect(mockSetLocation).toHaveBeenCalledWith("/feed");
+    expect(screen.queryByRole("button", { name: /^Crossings/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Station type/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Track age/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Find stations/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /History scan/ })).toBeTruthy();
   });
 
   it.each([
@@ -225,42 +214,6 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
     typeCommand(command);
 
     expect(readRadioMode()).toBe(mode);
-    expect(mockSetLocation).toHaveBeenCalledWith("/feed");
-  });
-
-  it("radio mode forces the Radio lens even when the listener was on Press or Shows", () => {
-    // Simulate a returning visitor from before the radio-mode default flip:
-    // crossings on, previously on the Press lens.
-    localStorage.setItem("lore:radioMode", "false");
-    writeDialLens("press");
-    expect(readDialLens()).toBe("press");
-
-    render(<SplitHome />);
-
-    // Unchecking "Crossings on" (switching to radio mode) must clobber the
-    // persisted Press lens.
-    fireEvent.click(screen.getByRole("button", { name: /^Crossings/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
-
-    expect(readRadioMode()).toBe(true);
-    expect(readDialLens()).toBe("radio");
-    expect(localStorage.getItem("lore:dialLens")).toBe("radio");
-    expect(mockSetLocation).toHaveBeenCalledWith("/feed");
-  });
-
-  it("crossings mode does not clobber the active lens — it only changes the radio-mode flag", () => {
-    // A Press-lens visitor switching back to crossings should still land on
-    // Press (only the crossing-ranked sort is toggled, not the lens).
-    writeDialLens("press");
-    localStorage.setItem("lore:radioMode", "true");
-
-    render(<SplitHome />);
-
-    fireEvent.click(screen.getByRole("button", { name: /^Crossings/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Crossings on/ }));
-
-    expect(readRadioMode()).toBe(false);
-    expect(readDialLens()).toBe("press");
     expect(mockSetLocation).toHaveBeenCalledWith("/feed");
   });
 

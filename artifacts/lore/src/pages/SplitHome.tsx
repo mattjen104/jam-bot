@@ -1,9 +1,6 @@
 /**
  * SplitHome — the Lore front door as a fixed five-slot split view.
  *
- *   top edge  — RadioRemoteBar: the radio remote (/crossings /radio /lore
- *               plus the age-tier and station-category chips), pinned above
- *               the Dial band where the controls are most reachable.
  *   top ~50%  — CompactDial: concise category cards with honest now-playing
  *               metadata. Opening one reveals its individual station rows
  *               inline without losing the existing station controls.
@@ -79,8 +76,6 @@ import {
 } from "../lib/scanMemory";
 import { CompactStack } from "../components/CompactStack";
 import { HomeCliStrip, type ScanMode } from "../components/HomeCliStrip";
-import { RadioRemoteBar } from "../components/RadioRemoteBar";
-import { StationFinderSheet } from "../components/StationFinderSheet";
 import { StackPagerBar } from "../components/StackPagerBar";
 import { useCompactStackShuffle } from "../hooks/useCompactStackShuffle";
 import { useMyLibraryInfinite, useStartMattLibrary } from "../lib/meHooks";
@@ -127,11 +122,6 @@ export default function SplitHome() {
   // normal = 5 full rows, compact = 10 name-only remote rows, micro = 15
   // numbered keypad buttons.
   const [density, setDensity] = useState<DialDensity>(() => readDialDensity());
-
-  // Station Finder sheet (Radio Browser search → pin personal stations).
-  const [finderOpen, setFinderOpen] = useState(false);
-  const openFinder = useCallback(() => setFinderOpen(true), []);
-  const closeFinder = useCallback(() => setFinderOpen(false), []);
 
   // Per-station scan-skip preference (localStorage "lore:dialSkipped").
   // Skipped stations sort to the last scan pages and are excluded from
@@ -731,18 +721,6 @@ export default function SplitHome() {
   // the remotes.
   return (
     <div className="split-home">
-      <RadioRemoteBar
-        activeTiers={activeTiers}
-        activeCategories={activeCategories}
-        onToggleTier={toggleTier}
-        onToggleCategory={toggleCategory}
-        onRadioMode={handleRadioMode}
-        radioMode={radioMode}
-        onFindStations={openFinder}
-      />
-
-      {finderOpen && <StationFinderSheet onClose={closeFinder} />}
-
       {lastSetSlug && (
         <LastSetScanner
           slug={lastSetSlug}
