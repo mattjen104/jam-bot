@@ -131,13 +131,14 @@ async function loadMicroRemote(page: Page) {
   // Cycle normal → compact → micro through the control a listener uses.
   const scanCommands = page.getByRole("group", { name: "Scan commands" });
   await scanCommands.getByRole("button", { name: /Show more scan controls/ }).click();
-  const normalDensity = scanCommands.getByRole("button", {
+  const advancedControls = page.getByRole("group", { name: "More scan controls" });
+  const normalDensity = advancedControls.getByRole("button", {
     name: "density 5 rows — switch to 10",
   });
   await expect(normalDensity).toBeVisible({ timeout: 20_000 });
   await normalDensity.click();
 
-  const compactDensity = scanCommands.getByRole("button", {
+  const compactDensity = advancedControls.getByRole("button", {
     name: "density 10 rows — switch to 15",
   });
   await expect(compactDensity).toBeVisible();
@@ -193,7 +194,7 @@ test.describe("Micro station remote — real browser paging", () => {
 
     const keypad = page.getByRole("group", { name: "Station keypad" });
     const pageSelectors = page
-      .getByRole("group", { name: "Scan commands" })
+      .getByRole("group", { name: "More scan controls" })
       .locator(".home-cli-strip__page-selectors");
     await expect(keypad.getByRole("button")).toHaveCount(15);
     await expect(pageSelectors.getByRole("button")).toHaveCount(2);
@@ -204,7 +205,7 @@ test.describe("Micro station remote — real browser paging", () => {
 
     await pageSelectors.getByRole("button", { name: "page 2 /scan2" }).click();
     const sixteenthKey = keypad.getByRole("button", {
-      name: "16. Artist 16 on Station 16 — tune in",
+      name: "16. Station 16 — tune in",
     });
     await expect(keypad.getByRole("button")).toHaveCount(1);
     await expect(sixteenthKey).toBeVisible();
@@ -233,7 +234,7 @@ test.describe("Micro station remote — real browser paging", () => {
 
     const keypad = page.getByRole("group", { name: "Station keypad" });
     const pageSelectors = page
-      .getByRole("group", { name: "Scan commands" })
+      .getByRole("group", { name: "More scan controls" })
       .locator(".home-cli-strip__page-selectors");
     await expect(keypad.getByRole("button")).toHaveCount(15);
     await expect(pageSelectors.getByRole("button")).toHaveCount(2);

@@ -18,7 +18,7 @@
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { HomeCliStrip } from "../src/components/HomeCliStrip";
 import type { StationCategory } from "../src/components/dial/DialFilterBar";
@@ -146,6 +146,26 @@ describe("HomeCliStrip", () => {
     expect(props.onScanAll).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the primary rail quiet until more scan controls are requested", () => {
+    renderStrip();
+
+    const primary = screen.getByRole("group", { name: "Scan commands" });
+    expect(primary.textContent).toContain("13 stations");
+    expect(within(primary).getByRole("button", { name: "scan this page" })).toBeTruthy();
+
+    const more = within(primary).getByRole("button", {
+      name: "Show more scan controls — 5 rows, page 1 / 3",
+    });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("group", { name: "More scan controls" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "scan all stations" })).toBeNull();
+
+    fireEvent.click(more);
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("group", { name: "More scan controls" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "scan all stations" })).toBeTruthy();
+  });
+
   it("turns the Scan control into a Stop action while a page scan is active", () => {
     const { props, openAdvancedControls } = renderStrip({ scanMode: "page" });
     openAdvancedControls();
@@ -206,7 +226,7 @@ describe("HomeCliStrip", () => {
     expect(scanRow.querySelectorAll("button")).toHaveLength(2);
     expect(screen.queryByRole("group", { name: "More scan controls" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Show more scan controls/ }));
-    expect(screen.getByRole("group", { name: "More scan controls" })).toBeVisible();
+    expect(screen.getByRole("group", { name: "More scan controls" })).toBeTruthy();
     // The advanced group retains the density key, page selectors, and Scan all.
     expect(screen.getByRole("group", { name: "More scan controls" }).querySelectorAll("button")).toHaveLength(5);
     // The age/category chip groups and the feed-mode buttons live in the
