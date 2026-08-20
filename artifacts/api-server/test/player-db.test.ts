@@ -25,6 +25,7 @@ import app from "../src/app.js";
 const run = randomUUID().slice(0, 8);
 const MBID_A = `test-wp-a-${run}`;
 const MBID_B = `test-wp-b-${run}`;
+const MBID_C = `test-wp-c-${run}`;
 const MIN = 60 * 1000;
 
 let base = Date.now() + 2 * MIN;
@@ -140,7 +141,7 @@ afterAll(async () => {
     .where(inArray(trackClaimsTable.mbid, [MBID_A, MBID_B]));
   await db
     .delete(recordingsTable)
-    .where(inArray(recordingsTable.mbid, [MBID_A, MBID_B]));
+    .where(inArray(recordingsTable.mbid, [MBID_A, MBID_B, MBID_C]));
   await db.delete(stationsTable).where(inArray(stationsTable.id, stationIds));
 });
 
@@ -229,6 +230,64 @@ describe("GET /api/player/run/:slug", () => {
     if (!dbAvailable) return ctx.skip();
     const res = await fetch(`${baseUrl}/api/player/run/${slug}?runId=999999999`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/player/history", () => {
+  it("keeps a lifetime first-play scan stable when a newer station spin is inserted", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const snapshot = new Date(base + 3 * MIN);
+    const firstResponse = await fetch(
+      `${baseUrl}/api/player/history?scope=lifetime&filter=firstPlays&station=${slug}&limit=1&snapshot=${encodeURIComponent(snapshot.toISOString())}`,
+    );
+    expect(firstResponse.status).toBe(200);
+    const firstBody = (await firstResponse.json()) as {
+      snapshot: string;
+      items: Array<{ mbid: string; id: number }>;
+      nextBefore: string | null;
+      nextBeforeId: number | null;
+    };
+    expect(firstBody.snapshot).toBe(snapshot.toISOString());
+    expect(firstBody.items).toHaveLength(1);
+    expect(firstBody.items[0]!.mbid).toBe(MBID_B);
+    expect(firstBody.nextBefore).not.toBeNull();
+    expect(firstBody.nextBeforeId).not.toBeNull();
+
+    await db.insert(recordingsTable).values({
+      mbid: MBID_C,
+      title: "Newer Song",
+      artist: `Newer Artist ${run}`,
+    });
+    await db.insert(spinsTable).values({
+      stationId: stationIds[0]!,
+      showId: showIds[0]!,
+      mbid: MBID_C,
+      confidence: "text",
+      rawArtist: "raw-c",
+      rawTitle: "raw-c-t",
+      playedAt: new Date(base + 4 * MIN),
+    });
+
+    const params = new URLSearchParams({
+      scope: "lifetime",
+      filter: "firstPlays",
+      station: slug,
+      limit: "1",
+      snapshot: firstBody.snapshot,
+      before: firstBody.nextBefore!,
+      beforeId: String(firstBody.nextBeforeId),
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/player/history?${params}`);
+    expect(secondResponse.status).toBe(200);
+    const secondBody = (await secondResponse.json()) as {
+      snapshot: string;
+      items: Array<{ mbid: string }>;
+    };
+
+    expect(secondBody.snapshot).toBe(firstBody.snapshot);
+    expect(secondBody.items.map((item) => item.mbid)).toEqual([MBID_A]);
+    expect(secondBody.items.map((item) => item.mbid)).not.toContain(MBID_C);
   });
 });
 
