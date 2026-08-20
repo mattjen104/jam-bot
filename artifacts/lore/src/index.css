@@ -8155,6 +8155,99 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex: 0 0 auto;
   min-height: 48px;
 }
+.compact-specialist-dial__subgroups {
+  display: grid;
+  gap: 7px;
+  padding: 7px;
+  border-top: 1px solid hsl(var(--border) / 0.4);
+  background: hsl(var(--background) / 0.18);
+}
+.compact-specialist-dial__subgroup {
+  border: 1px solid hsl(var(--border) / 0.48);
+  border-radius: 4px;
+  overflow: hidden;
+  background: hsl(var(--card) / 0.38);
+}
+.compact-specialist-dial__subsummary {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.compact-specialist-dial__subsummary:hover,
+.compact-specialist-dial__subsummary--expanded {
+  background: hsl(var(--secondary) / 0.48);
+}
+.compact-specialist-dial__subsummary:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: -2px;
+}
+.compact-specialist-dial__sublabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-small);
+}
+.compact-specialist-dial__subcount {
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  white-space: nowrap;
+}
+.compact-specialist-dial__now-playing {
+  border-top: 1px solid hsl(var(--border) / 0.34);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+.compact-specialist-dial__now-playing-heading {
+  padding: 6px 10px 4px;
+  color: hsl(var(--foreground) / 0.72);
+}
+.compact-specialist-dial__now-playing-list {
+  max-height: 9rem;
+  overflow-y: auto;
+  border-top: 1px solid hsl(var(--border) / 0.22);
+}
+.compact-specialist-dial__now-playing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(6.5rem, auto);
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid hsl(var(--border) / 0.18);
+}
+.compact-specialist-dial__now-playing-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--foreground) / 0.82);
+}
+.compact-specialist-dial__now-playing-row b {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+.compact-specialist-dial__stations {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid hsl(var(--border) / 0.4);
+}
+.compact-specialist-dial__stations .compact-dial__row {
+  flex: 0 0 auto;
+  min-height: 48px;
+}
 @media (max-width: 640px) {
   .compact-category-dial__summary {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -8166,6 +8259,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     flex-wrap: wrap;
   }
   .compact-category-dial__label { white-space: normal; }
+  .compact-specialist-dial__subsummary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .compact-specialist-dial__subcount {
+    grid-column: 1 / -1;
+  }
+  .compact-specialist-dial__now-playing-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+  }
+  .compact-specialist-dial__now-playing-row b { text-align: left; }
 }
 /* No playing edge in the mini feed: the base .fdrow left bar (accent when
    playing, library/gray zone bars otherwise) is suppressed here — the

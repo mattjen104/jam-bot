@@ -1385,13 +1385,25 @@ export function useDialData(
     // In the legacy single-mode path (no categories), only the base list is
     // present.
     const alwaysLiveSlugs = new Set<string>();
+    // `mode=era-genre` returns each station's normal editorial label (ambient,
+    // discovery, etc.). Once the listener deliberately selects Specialist,
+    // that mode-pool membership must become the Feed's primary grouping so the
+    // complete pool reaches its subcategory cards rather than leaking into
+    // several unrelated top-level cards. This is a display-only clone below;
+    // the raw API response and default Dial semantics remain untouched.
+    const selectedSpecialistSlugs = new Set<string>();
     const bySlugRaw = new Map<string, Station>();
     const seenIds = new Set<number | string>();
-    const addAll = (list: Station[] | undefined, poolIsAlwaysLive: boolean) => {
+    const addAll = (
+      list: Station[] | undefined,
+      poolIsAlwaysLive: boolean,
+      isSpecialistPool = false,
+    ) => {
       for (const s of list ?? []) {
         // Record pool membership BEFORE the dedup check: a duplicate from the
         // normal list must still be treated as a mode-pool station.
         if (poolIsAlwaysLive) alwaysLiveSlugs.add(s.slug);
+        if (isSpecialistPool) selectedSpecialistSlugs.add(s.slug);
         // Dedupe by station id; tolerate id-less fixtures by falling back to
         // the slug (both are unique per station).
         const key: number | string = s.id ?? s.slug;
@@ -1409,7 +1421,7 @@ export function useDialData(
       // Mode pools join the union only when their category is checked; every
       // station they contribute renders as always-live.
       if (wantAmbient) addAll(ambientData?.stations, true);
-      if (wantSpecialist) addAll(specialistData?.stations, true);
+      if (wantSpecialist) addAll(specialistData?.stations, true, true);
     } else {
       addAll(stationsData?.stations, false);
     }
@@ -1460,7 +1472,12 @@ export function useDialData(
       return false;
     });
     const personalSlugs = new Set(personalRaw.map((s) => s.slug));
-    const raw = [...filteredBySlug.values(), ...personalRaw];
+    const curatedRaw = [...filteredBySlug.values()].map((station) =>
+      selectedSpecialistSlugs.has(station.slug)
+        ? { ...station, stationCategories: ["specialist"] }
+        : station,
+    );
+    const raw = [...curatedRaw, ...personalRaw];
     // Rolling 24-hour cutoff for crossings. We fetch both today's and
     // yesterday's data so that overnight shows are present, but only spins
     // within the past 24 hours count toward crossings — spins from earlier

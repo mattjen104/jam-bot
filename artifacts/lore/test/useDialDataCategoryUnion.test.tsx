@@ -53,6 +53,9 @@ const SLEEP = [
 ];
 const ERA_GENRE = [
   makeStation(20, "fip-jazz", []),
+  // Specialist mode deliberately includes normal-dial-hidden genre stations.
+  // The explicit Specialist category is their listener-facing escape hatch.
+  { ...makeStation(21, "hidden-ambient", []), hidden: true },
 ];
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
@@ -97,8 +100,10 @@ describe("useDialData category union — mode pools", () => {
     expect(slugsFor(new Set(["ambient"]))).toEqual(["dual", "sleepy"]);
   });
 
-  it("specialist-only shows only the era-genre pool", () => {
-    expect(slugsFor(new Set(["specialist"]))).toEqual(["fip-jazz"]);
+  it("specialist-only shows the complete era-genre pool, including normal-dial-hidden stations", () => {
+    expect(slugsFor(new Set(["specialist"]))).toEqual(["fip-jazz", "hidden-ambient"]);
+    expect(dialData(new Set(["specialist"])).map((station) => station.station.stationCategories))
+      .toEqual([["specialist"], ["specialist"]]);
   });
 
   it("mode-pool stations render as always-live; normal-list-only stations follow the live pulse", () => {
@@ -121,7 +126,7 @@ describe("useDialData category union — mode pools", () => {
 
   it("ambient + specialist unions both pools without touching the normal list", () => {
     expect(slugsFor(new Set(["ambient", "specialist"]))).toEqual(
-      ["dual", "fip-jazz", "sleepy"],
+      ["dual", "fip-jazz", "hidden-ambient", "sleepy"],
     );
   });
 

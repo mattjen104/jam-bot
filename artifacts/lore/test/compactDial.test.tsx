@@ -18,6 +18,7 @@ import { CompactDial, type CompactDialProps } from "../src/components/CompactDia
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { Station } from "@workspace/api-client-react";
 import type { DialShow, DialSpin, DialStation } from "../src/hooks/useDialData";
+import { specialistSubcategoryForStation } from "../src/lib/specialistCategories";
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -174,6 +175,12 @@ describe("CompactDial empty state", () => {
 // ---------------------------------------------------------------------------
 
 describe("CompactDial category-first home Feed", () => {
+  it("uses the stable specialist taxonomy, including named edge cases and a visible fallback", () => {
+    expect(specialistSubcategoryForStation(makeStation({ name: "FIP Groove" }))).toBe("groove");
+    expect(specialistSubcategoryForStation(makeStation({ name: "t67-4fdb1912 Jazz FM" }))).toBe("jazz");
+    expect(specialistSubcategoryForStation(makeStation({ name: "Unclassifiable Signal" }))).toBe("other");
+  });
+
   it("aggregates crossings and first plays by scope, including skipped stations", () => {
     const active = makeRow({
       slug: "active",
@@ -351,6 +358,54 @@ describe("CompactDial category-first home Feed", () => {
 
     expect(screen.getByTestId("fdrow-my-station")).toBeTruthy();
     expect(screen.queryByTestId("compact-category-other")).toBeNull();
+  });
+
+  it("splits Specialist into ordered subcards with shared fresh now-playing and preserved row controls", () => {
+    const ambient = makeRowWithTrack(
+      { slug: "ambient-one", name: "Ambient One", stationCategories: ["specialist"] },
+      { artist: "Grouper", title: "Heavy Water" },
+    );
+    const jazzQuiet = makeRow({
+      slug: "jazz-quiet",
+      name: "Jazz FM",
+      stationCategories: ["specialist"],
+    });
+    jazzQuiet.ds.isLive = false;
+    const groove = makeRowWithTrack(
+      { slug: "fip-groove", name: "FIP Groove", stationCategories: ["specialist"] },
+      { artist: "Roy Ayers", title: "Everybody Loves the Sunshine" },
+    );
+    const onToggleSkip = vi.fn();
+
+    renderDial({
+      activeRows: [groove, jazzQuiet, ambient],
+      categoryFirst: true,
+      onToggleSkip,
+    });
+
+    fireEvent.click(screen.getByTestId("compact-category-specialist"));
+    const lane = screen.getByTestId("compact-category-dial");
+    const subcards = [...lane.querySelectorAll("[data-testid^='compact-specialist-']")]
+      .map((element) => element.getAttribute("data-testid"));
+    expect(subcards).toEqual([
+      "compact-specialist-ambient",
+      "compact-specialist-jazz",
+      "compact-specialist-groove",
+    ]);
+    expect(screen.getByTestId("compact-specialist-ambient").textContent)
+      .toContain("Grouper — Heavy Water");
+    expect(screen.getByTestId("compact-specialist-jazz").textContent)
+      .toContain("Now playing unavailable");
+    expect(screen.getByTestId("compact-specialist-jazz").textContent)
+      .toContain("Jazz FM");
+
+    const ambientButton = screen.getByTestId("compact-specialist-ambient").querySelector("button");
+    expect(ambientButton).toBeTruthy();
+    fireEvent.click(ambientButton!);
+    expect(screen.getByTestId("fdrow-ambient-one")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Play Ambient One" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip Ambient One in scan" }));
+    expect(onToggleSkip).toHaveBeenCalledWith("ambient-one");
   });
 });
 

@@ -579,7 +579,11 @@ function CategoryFirstDial({
             />
             {isExpanded && (
               isSpecialist ? (
-                <div className="compact-specialist-dial__subgroups" aria-label="Specialist subcategories">
+                <div
+                  className="compact-specialist-dial__subgroups"
+                  id={`compact-category-${group.category}`}
+                  aria-label="Specialist subcategories"
+                >
                   {specialistGroups.map((subcategory) => (
                     <SpecialistSubcategoryCard
                       key={subcategory.id}
