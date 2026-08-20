@@ -51,7 +51,10 @@ function renderStrip(overrides: Partial<React.ComponentProps<typeof HomeCliStrip
   };
   const utils = render(<HomeCliStrip {...props} />);
   const input = screen.getByRole("textbox", { name: "Dial command" }) as HTMLInputElement;
-  return { ...utils, props, input };
+  const openAdvancedControls = () => {
+    fireEvent.click(screen.getByRole("button", { name: /Show more scan controls/ }));
+  };
+  return { ...utils, props, input, openAdvancedControls };
 }
 
 describe("HomeCliStrip", () => {
@@ -102,7 +105,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders numeric page selectors that fire onSelectPage and show the selected page", () => {
-    const { props } = renderStrip();
+    const { props, openAdvancedControls } = renderStrip();
+    openAdvancedControls();
 
     const page1 = screen.getByRole("button", { name: "page 1 /scan1" });
     const page2 = screen.getByRole("button", { name: "page 2 /scan2" });
@@ -126,7 +130,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders one Scan and one Scan all control that route to their callbacks", () => {
-    const { props } = renderStrip();
+    const { props, openAdvancedControls } = renderStrip();
+    openAdvancedControls();
 
     const scanBtn = screen.getByRole("button", { name: "scan this page" });
     const scanAllBtn = screen.getByRole("button", { name: "scan all stations" });
@@ -142,7 +147,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("turns the Scan control into a Stop action while a page scan is active", () => {
-    const { props } = renderStrip({ scanMode: "page" });
+    const { props, openAdvancedControls } = renderStrip({ scanMode: "page" });
+    openAdvancedControls();
 
     const stopBtn = screen.getByRole("button", { name: "stop page scan" });
     expect(stopBtn.textContent).toBe("Stop");
@@ -156,7 +162,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("turns the Scan all control into a Stop action while an all-scan is active", () => {
-    const { props } = renderStrip({ scanMode: "all" });
+    const { props, openAdvancedControls } = renderStrip({ scanMode: "all" });
+    openAdvancedControls();
 
     const stopBtn = screen.getByRole("button", { name: "stop scan all" });
     expect(stopBtn.textContent).toBe("Stop");
@@ -169,7 +176,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("disables both scan actions when the filtered list is empty", () => {
-    const { props } = renderStrip({ totalRows: 0, pageCount: 1 });
+    const { props, openAdvancedControls } = renderStrip({ totalRows: 0, pageCount: 1 });
+    openAdvancedControls();
 
     const scanBtn = screen.getByRole("button", { name: "scan this page" }) as HTMLButtonElement;
     const scanAllBtn = screen.getByRole("button", { name: "scan all stations" }) as HTMLButtonElement;
@@ -194,9 +202,13 @@ describe("HomeCliStrip", () => {
     expect(scanRow.compareDocumentPosition(commandRow) & FOLLOWING).toBeTruthy();
     expect(commandRow.compareDocumentPosition(addRow) & FOLLOWING).toBeTruthy();
 
-    // The scan remote is the density key + pageCount numeric selectors +
-    // Scan + Scan all (the station count is a label, not a button).
-    expect(scanRow.querySelectorAll("button")).toHaveLength(6);
+    // The primary rail is the station count + Scan + one disclosure control.
+    expect(scanRow.querySelectorAll("button")).toHaveLength(2);
+    expect(screen.queryByRole("group", { name: "More scan controls" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Show more scan controls/ }));
+    expect(screen.getByRole("group", { name: "More scan controls" })).toBeVisible();
+    // The advanced group retains the density key, page selectors, and Scan all.
+    expect(screen.getByRole("group", { name: "More scan controls" }).querySelectorAll("button")).toHaveLength(5);
     // The age/category chip groups and the feed-mode buttons live in the
     // RadioRemoteBar now — not in the seam.
     expect(screen.queryByRole("group", { name: "Age commands" })).toBeNull();
@@ -207,7 +219,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders exactly pageCount numeric page selectors — no /scanN button per page", () => {
-    renderStrip({ pageCount: 5, totalRows: 23 });
+    const { openAdvancedControls } = renderStrip({ pageCount: 5, totalRows: 23 });
+    openAdvancedControls();
     const pageGroup = screen.getByRole("group", { name: "Page" });
     const buttons = [...pageGroup.querySelectorAll("button")];
     expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4", "5"]);
@@ -216,7 +229,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders a single page selector for a one-page filtered list", () => {
-    renderStrip({ pageCount: 1, totalRows: 4 });
+    const { openAdvancedControls } = renderStrip({ pageCount: 1, totalRows: 4 });
+    openAdvancedControls();
     const pageGroup = screen.getByRole("group", { name: "Page" });
     expect(pageGroup.querySelectorAll("button")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "page 1 /scan1" })).toBeTruthy();
@@ -226,7 +240,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("marks the selected page via aria-pressed regardless of page count", () => {
-    renderStrip({ pageCount: 5, totalRows: 23, scanOffset: 15 });
+    const { openAdvancedControls } = renderStrip({ pageCount: 5, totalRows: 23, scanOffset: 15 });
+    openAdvancedControls();
     expect(screen.getByRole("button", { name: "page 4 /scan4" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed")).toBe("false");
     expect(screen.getByRole("button", { name: "page 5 /scan5" }).getAttribute("aria-pressed")).toBe("false");
@@ -246,7 +261,8 @@ describe("HomeCliStrip", () => {
   });
 
   it("renders a density cycle key that shows the current page size and fires onCycleDensity", () => {
-    const { props } = renderStrip({ density: "normal" });
+    const { props, openAdvancedControls } = renderStrip({ density: "normal" });
+    openAdvancedControls();
     const densityBtn = screen.getByRole("button", { name: "density 5 rows — switch to 10" });
     expect(densityBtn.textContent).toBe("5");
 
@@ -255,28 +271,33 @@ describe("HomeCliStrip", () => {
   });
 
   it("labels the density key for each mode in the cycle", () => {
-    const { unmount } = renderStrip({ density: "compact" });
+    const { unmount, openAdvancedControls } = renderStrip({ density: "compact" });
+    openAdvancedControls();
     expect(screen.getByRole("button", { name: "density 10 rows — switch to 15" }).textContent).toBe("10");
     unmount();
 
-    renderStrip({ density: "micro" });
+    const second = renderStrip({ density: "micro" });
+    second.openAdvancedControls();
     expect(screen.getByRole("button", { name: "density 15 rows — switch to 5" }).textContent).toBe("15");
   });
 
   it("pages by 10-row offsets in compact density", () => {
-    const { props } = renderStrip({ density: "compact", pageCount: 2, totalRows: 13, totalActiveCount: 13 });
+    const { props, openAdvancedControls } = renderStrip({ density: "compact", pageCount: 2, totalRows: 13, totalActiveCount: 13 });
+    openAdvancedControls();
     fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
     expect(props.onSelectPage).toHaveBeenCalledWith(10);
   });
 
   it("marks the current page from the scan offset at the density's page size", () => {
-    renderStrip({ density: "compact", pageCount: 2, totalRows: 13, totalActiveCount: 13, scanOffset: 10 });
+    const { openAdvancedControls } = renderStrip({ density: "compact", pageCount: 2, totalRows: 13, totalActiveCount: 13, scanOffset: 10 });
+    openAdvancedControls();
     expect(screen.getByRole("button", { name: "page 2 /scan2" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "page 1 /scan1" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("pages by 15-key offsets in micro density", () => {
-    const { props } = renderStrip({ density: "micro", pageCount: 2, totalRows: 20, totalActiveCount: 20 });
+    const { props, openAdvancedControls } = renderStrip({ density: "micro", pageCount: 2, totalRows: 20, totalActiveCount: 20 });
+    openAdvancedControls();
     fireEvent.click(screen.getByRole("button", { name: "page 2 /scan2" }));
     expect(props.onSelectPage).toHaveBeenCalledWith(15);
     // Scan controls and the count survive alongside the page selectors.

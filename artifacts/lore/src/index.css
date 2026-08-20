@@ -9058,11 +9058,32 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 
 /* ── Compact scan remote — numeric page selectors + Scan / Scan all ─────── */
 .home-cli-strip__scan-remote {
-  /* Keep the actions in the viewport while only the page list scrolls. */
+  /* Keep the primary actions in the viewport; advanced controls open below. */
   width: 100%;
   min-width: 0;
   justify-content: flex-start;
   gap: 0;
+}
+.home-cli-strip__more-controls {
+  margin-left: 6px;
+  min-width: 0;
+}
+.home-cli-strip__advanced-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+  padding: 2px 8px 3px;
+  box-sizing: border-box;
+  border-top: 1px solid hsl(var(--border) / 0.35);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.home-cli-strip__advanced-controls::-webkit-scrollbar { display: none; }
+.home-cli-strip__advanced-controls .home-cli-strip__page-selectors {
+  flex: 1 1 auto;
 }
 .home-cli-strip__page-selectors {
   display: flex;

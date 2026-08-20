@@ -122,6 +122,7 @@ export function HomeCliStrip({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [prefill, setPrefill] = useState<{ token: number; text: string } | null>(null);
   const prefillToken = useRef(0);
+  const [advancedControlsOpen, setAdvancedControlsOpen] = useState(false);
 
   const goLibrary = useCallback(() => setLocation("/library"), [setLocation]);
   const goHome = useCallback(() => setLocation("/"), [setLocation]);
@@ -136,48 +137,19 @@ export function HomeCliStrip({
   const pageSize = dialPageSize(density);
   const currentPage = Math.floor(scanOffset / pageSize); // 0-based page index
   const nextDensity = nextDialDensity(density);
+  const currentPageLabel = `${Math.min(currentPage + 1, Math.max(1, pageCount))} / ${Math.max(1, pageCount)}`;
 
   return (
     <div className="home-cli-strip">
       {/* The scan remote is the seam's Dial-side row: the active-station
-          count, the density cycle key, numeric page selectors, plus the
-          Scan / Scan all controls. The rail stays bounded so the
-          max-content row remains horizontally scrollable on narrow screens. */}
+          count and primary page Scan stay visible. Secondary navigation opens
+          from one compact disclosure so the rail stays calm on narrow screens. */}
       <div className="home-cli-strip__filter-rail">
         <div className="home-cli-strip__filter-row home-cli-strip__scan-remote" role="group" aria-label="Scan commands">
           {/* Always-visible count of scan-included stations */}
           <span className="home-cli-strip__station-count">
             {totalActiveCount} {totalActiveCount === 1 ? "station" : "stations"}
           </span>
-          {/* Density cycle key: 5 rows → 10 rows → numbered keypad */}
-          <button
-            type="button"
-            className="home-cli-strip__filter-chip home-cli-strip__density-btn"
-            aria-label={`density ${DENSITY_KEY_LABEL[density]} rows — switch to ${DENSITY_KEY_LABEL[nextDensity]}`}
-            title={`Showing ${DENSITY_KEY_LABEL[density]} rows — tap for ${DENSITY_KEY_LABEL[nextDensity]}`}
-            onClick={onCycleDensity}
-          >
-            {DENSITY_KEY_LABEL[density]}
-          </button>
-          {/* Numeric page selectors — one per page at the density's page
-              size (5 / 10 / 15 rows), at every density including micro. */}
-          <div className="home-cli-strip__page-selectors" role="group" aria-label="Page">
-            {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
-              const isCurrentPage = currentPage === i;
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
-                  aria-pressed={isCurrentPage}
-                  aria-label={`page ${i + 1} /scan${i + 1}`}
-                  onClick={() => onSelectPage(i * pageSize)}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
-          </div>
           {/* Scan (page) button */}
           <button
             type="button"
@@ -189,27 +161,76 @@ export function HomeCliStrip({
           >
             {scanMode === "page" ? "Stop" : "Scan"}
           </button>
-          {/* Scan all button */}
           <button
             type="button"
-            className={`home-cli-strip__filter-chip home-cli-strip__scan-btn home-cli-strip__scan-all-btn${scanMode === "all" ? " home-cli-strip__scan-btn--active" : ""}`}
-            aria-pressed={scanMode === "all"}
-            aria-label={scanMode === "all" ? "stop scan all" : "scan all stations"}
-            disabled={totalRows === 0}
-            onClick={onScanAll}
+            className="home-cli-strip__filter-chip home-cli-strip__more-controls"
+            aria-expanded={advancedControlsOpen}
+            aria-controls="home-cli-strip-advanced-controls"
+            aria-label={`${advancedControlsOpen ? "Hide" : "Show"} more scan controls — ${DENSITY_KEY_LABEL[density]} rows, page ${currentPageLabel}`}
+            onClick={() => setAdvancedControlsOpen((open) => !open)}
           >
-            {scanMode === "all" ? "Stop" : "Scan all"}
+            {advancedControlsOpen ? "Less" : "More"} <span aria-hidden="true">·</span>{" "}
+            {DENSITY_KEY_LABEL[density]}r · {currentPageLabel}
           </button>
-          {/* Crossing scope pill — cycles now → this set → 24h → 7d →
-              lifetime. Grayed/inert when crossings are off. */}
-          {crossingScope && onCycleCrossingScope && (
-            <CrossingScopePill
-              scope={crossingScope}
-              enabled={crossingsOn}
-              onCycle={onCycleCrossingScope}
-            />
-          )}
         </div>
+        {advancedControlsOpen && (
+          <div
+            id="home-cli-strip-advanced-controls"
+            className="home-cli-strip__advanced-controls"
+            role="group"
+            aria-label="More scan controls"
+          >
+            {/* Density cycle key: 5 rows → 10 rows → numbered keypad */}
+            <button
+              type="button"
+              className="home-cli-strip__filter-chip home-cli-strip__density-btn"
+              aria-label={`density ${DENSITY_KEY_LABEL[density]} rows — switch to ${DENSITY_KEY_LABEL[nextDensity]}`}
+              title={`Showing ${DENSITY_KEY_LABEL[density]} rows — tap for ${DENSITY_KEY_LABEL[nextDensity]}`}
+              onClick={onCycleDensity}
+            >
+              {DENSITY_KEY_LABEL[density]}
+            </button>
+            {/* Numeric page selectors — one per page at the density's page
+                size (5 / 10 / 15 rows), at every density including micro. */}
+            <div className="home-cli-strip__page-selectors" role="group" aria-label="Page">
+              {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
+                const isCurrentPage = currentPage === i;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`home-cli-strip__page-btn${isCurrentPage ? " home-cli-strip__page-btn--active" : ""}`}
+                    aria-pressed={isCurrentPage}
+                    aria-label={`page ${i + 1} /scan${i + 1}`}
+                    onClick={() => onSelectPage(i * pageSize)}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Scan all button */}
+            <button
+              type="button"
+              className={`home-cli-strip__filter-chip home-cli-strip__scan-btn home-cli-strip__scan-all-btn${scanMode === "all" ? " home-cli-strip__scan-btn--active" : ""}`}
+              aria-pressed={scanMode === "all"}
+              aria-label={scanMode === "all" ? "stop scan all" : "scan all stations"}
+              disabled={totalRows === 0}
+              onClick={onScanAll}
+            >
+              {scanMode === "all" ? "Stop" : "Scan all"}
+            </button>
+            {/* Crossing scope pill — cycles now → this set → 24h → 7d →
+                lifetime. Grayed/inert when crossings are off. */}
+            {crossingScope && onCycleCrossingScope && (
+              <CrossingScopePill
+                scope={crossingScope}
+                enabled={crossingsOn}
+                onCycle={onCycleCrossingScope}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {/* The CLI field is the whole command row now — the feed-mode shortcuts

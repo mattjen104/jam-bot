@@ -130,6 +130,7 @@ async function loadMicroRemote(page: Page) {
 
   // Cycle normal → compact → micro through the control a listener uses.
   const scanCommands = page.getByRole("group", { name: "Scan commands" });
+  await scanCommands.getByRole("button", { name: /Show more scan controls/ }).click();
   const normalDensity = scanCommands.getByRole("button", {
     name: "density 5 rows — switch to 10",
   });
