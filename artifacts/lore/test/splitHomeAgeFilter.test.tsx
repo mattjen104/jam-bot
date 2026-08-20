@@ -112,7 +112,6 @@ vi.mock("../src/hooks/useDialData", () => ({
 import SplitHome from "../src/pages/SplitHome";
 import type { AgeTier } from "../src/lib/dialAgeFilter";
 import { readRadioMode } from "../src/lib/dialRadioMode";
-import { readDialLens, writeDialLens } from "../src/lib/dialLensState";
 
 // ---------------------------------------------------------------------------
 // Factories
