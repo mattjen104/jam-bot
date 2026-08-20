@@ -39,6 +39,7 @@ import {
   DEFAULT_ACTIVE_STATION_CATEGORIES,
   toggleAgeTier,
   toggleStationCategory,
+  useDialSkipped,
 } from "../lib/dialFilterState";
 import { readDialLens, writeDialLens, readShowsCity, writeShowsCity, type DialLens } from "../lib/dialLensState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
@@ -1583,6 +1584,9 @@ export function DialView() {
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
   );
+  // Shared with SplitHome: skipped station slugs are local-first preferences
+  // that must affect the full /feed list and its scan cursor too.
+  const { skipped } = useDialSkipped();
   const toggleTier = useCallback((tier: AgeTier) => {
     setActiveTiers((prev) => toggleAgeTier(prev, tier));
   }, []);
@@ -1956,6 +1960,12 @@ export function DialView() {
         return { ds, show: attributionSafeShow, rz, effectiveDjName, isPinned };
       })
       .sort((a, b) => {
+        // Keep skipped stations after included stations in every ranking band.
+        // This is intentionally the first key so scan order and visible order
+        // agree, regardless of the crossing metric/tiebreakers below.
+        const aSkip = skipped.has(a.ds.station.slug) ? 1 : 0;
+        const bSkip = skipped.has(b.ds.station.slug) ? 1 : 0;
+        if (aSkip !== bSkip) return aSkip - bSkip;
         // 1. Live crossing (rung 1) floats to the very top
         const ac = a.rz.r === 1 ? 0 : 1;
         const bc = b.rz.r === 1 ? 0 : 1;
@@ -1983,7 +1993,7 @@ export function DialView() {
         if (sortR(a.rz.r) !== sortR(b.rz.r)) return sortR(a.rz.r) - sortR(b.rz.r);
         return a.ds.station.name.localeCompare(b.ds.station.name);
       });
-  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric]);
+  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric, skipped]);
 
   // Unified live feed — the zones are collapsed into ONE flat station list.
   // Ranking segments (internal only, no visual zones):
@@ -2006,8 +2016,17 @@ export function DialView() {
   // ladder order; flipped (▼) is its exact inverse, so the least-crossed
   // stations lead and the strongest crossings sink to the bottom.
   const zone1Display = useMemo(
-    () => popSortDesc ? withReason : [...withReason].reverse(),
-    [withReason, popSortDesc],
+    () => {
+      const ordered = popSortDesc ? [...withReason] : [...withReason].reverse();
+      // Reversing the ranking must not promote skipped stations back into the
+      // scan-visible portion of the feed.
+      return ordered.sort((a, b) => {
+        const aSkip = skipped.has(a.ds.station.slug) ? 1 : 0;
+        const bSkip = skipped.has(b.ds.station.slug) ? 1 : 0;
+        return aSkip - bSkip;
+      });
+    },
+    [withReason, popSortDesc, skipped],
   );
 
   // Community presence — poll all live station IDs every 60 s.
@@ -2495,7 +2514,14 @@ export function DialView() {
   }, [pastScan.fineIdx]);
 
   // --- front-door scan (spec §11) ---
-  const scan = useFrontDoorScan(withReason.length);
+  // Scan indexes must refer to the same skip-filtered list used by the
+  // sampling effect. Otherwise a skipped station can still be previewed after
+  // the local preference changes or when Scan all wraps around.
+  const scanRows = useMemo(
+    () => withReason.filter((row) => !skipped.has(row.ds.station.slug)),
+    [withReason, skipped],
+  );
+  const scan = useFrontDoorScan(scanRows.length);
 
   // Play each sample as scan advances — uses radio.preview() so no listen event
   // is written to the journal or server ledger (spec §11).
@@ -2505,25 +2531,25 @@ export function DialView() {
   useEffect(() => {
     if (scan.scanning && scan.samplingIdx != null && scan.samplingIdx !== prevSamplingIdx.current) {
       prevSamplingIdx.current = scan.samplingIdx;
-      const row = withReason[scan.samplingIdx];
+      const row = scanRows[scan.samplingIdx];
       if (row && resolvePlaybackSource(row.ds.station) != null) {
         void radio.preview(row.ds.station);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan.scanning, scan.samplingIdx]);
+  }, [scan.scanning, scan.samplingIdx, scanRows]);
 
   // Active row index: scan cursor → playing station → none (-1)
   const activeIdx = useMemo(() => {
     if (scan.samplingIdx != null) return scan.samplingIdx;
     if (radio.station) {
-      const idx = withReason.findIndex((row) => row.ds.station.slug === radio.station!.slug);
+      const idx = scanRows.findIndex((row) => row.ds.station.slug === radio.station!.slug);
       return idx >= 0 ? idx : -1;
     }
     return -1;
-  }, [scan.samplingIdx, radio.station, withReason]);
+  }, [scan.samplingIdx, radio.station, scanRows]);
 
-  const _activeRow = activeIdx >= 0 ? (withReason[activeIdx] ?? null) : null;
+  const _activeRow = activeIdx >= 0 ? (scanRows[activeIdx] ?? null) : null;
 
   // Top row for Listen button label (spec §10) — kept for potential reuse
   const _topRow = sortedRows[0] ?? null;
@@ -2825,7 +2851,7 @@ export function DialView() {
       restRows={scopeFilter(restBand)}
       popSortDesc={popSortDesc}
       activeSlug={radio.station?.slug ?? null}
-      samplingSlug={scan.samplingIdx != null ? withReason[scan.samplingIdx]?.ds.station.slug ?? null : null}
+      samplingSlug={scan.samplingIdx != null ? scanRows[scan.samplingIdx]?.ds.station.slug ?? null : null}
       scrubTarget={scrubTarget}
       displayMode={crossingSourceMode}
       presenceMap={presenceMap}
