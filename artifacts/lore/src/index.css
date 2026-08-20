@@ -2539,6 +2539,45 @@
   background: transparent;
   cursor: pointer;
 }
+.scan-session__focus {
+  margin-top: 1.25rem;
+}
+.scan-session__focus h3 {
+  margin: 0 0 0.55rem;
+  color: #eee8f0;
+  font-size: 0.95rem;
+}
+.scan-session__station-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.45rem;
+}
+.scan-session__station-list button {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgb(214 203 218 / 22%);
+  border-radius: 0.65rem;
+  color: #d8cfdc;
+  background: rgb(255 255 255 / 3%);
+  text-align: left;
+  cursor: pointer;
+}
+.scan-session__station-list button[aria-pressed="true"] {
+  border-color: #b7d99a;
+  background: rgb(183 217 154 / 12%);
+}
+.scan-session__station-list small {
+  overflow: hidden;
+  color: #a9a0af;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-session .dial-scan {
+  margin: 0;
+}
 .split-home__scan-entry {
   display: flex;
   align-items: center;

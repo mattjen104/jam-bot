@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { CrossingScope } from "../lib/crossingScope";
 import type { StationCategory } from "../lib/dialCategories";
+import type { Station } from "@workspace/api-client-react";
+import type { DialSpin } from "../hooks/useDialData";
 import { HistoryScanner } from "./dial/HistoryScanner";
+import { CategoryScanLane } from "./dial/CategoryScanLane";
 import { usePlayer } from "../player/PlayerProvider";
 
 export type ScanSource = "live" | "archive";
@@ -12,6 +15,10 @@ export interface ScanSessionProps {
   categories: readonly StationCategory[];
   stationSlug?: string | null;
   stationName?: string | null;
+  liveStations?: Station[];
+  liveNowPlayingBySlug?: Map<string, DialSpin>;
+  activeStationSlug?: string | null;
+  onTuneStation?: (slug: string) => void;
   onClose: () => void;
 }
 
@@ -25,6 +32,10 @@ export function ScanSession({
   categories,
   stationSlug = null,
   stationName = null,
+  liveStations = [],
+  liveNowPlayingBySlug = new Map(),
+  activeStationSlug = null,
+  onTuneStation,
   onClose,
 }: ScanSessionProps) {
   const [source, setSource] = useState<ScanSource>("archive");
@@ -84,7 +95,7 @@ export function ScanSession({
             onFilterChange={setFilter}
           />
         ) : (
-          <div className="scan-session__live" role="status">
+          <div className="scan-session__live" role="status" aria-live="polite">
             <strong>{scan.active ? "Scanning live stations" : "Live station scan"}</strong>
             <p>
               {scan.current
@@ -101,6 +112,39 @@ export function ScanSession({
                 </button>
               )}
             </div>
+            {liveStations.length > 0 && onTuneStation && (
+              <>
+                <div className="scan-session__focus">
+                  <h3>Focus a station</h3>
+                  <div className="scan-session__station-list" role="group" aria-label="Live station focus">
+                    {liveStations.map((station) => {
+                      const now = liveNowPlayingBySlug.get(station.slug);
+                      const isActive = activeStationSlug === station.slug;
+                      return (
+                        <button
+                          key={station.slug}
+                          type="button"
+                          aria-pressed={isActive}
+                          onClick={() => onTuneStation(station.slug)}
+                        >
+                          <span>{station.name}</span>
+                          <small>{now?.artist ? `${now.artist} · ${now.title}` : "Quiet right now"}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="scan-session__focus">
+                  <h3>Focus a category</h3>
+                  <CategoryScanLane
+                    stations={liveStations}
+                    nowPlayingBySlug={liveNowPlayingBySlug}
+                    activeSlug={activeStationSlug}
+                    onTuneIn={onTuneStation}
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

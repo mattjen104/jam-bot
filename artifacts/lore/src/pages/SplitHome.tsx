@@ -128,16 +128,17 @@ export default function SplitHome() {
   // Scan / Scan all.
   const { skipped, toggleSkip } = useDialSkipped();
 
-  const { stations, crossingsLoading } = useDialData("personal", {
+  const { stations, scanStations, scanNowPlaying, crossingsLoading } = useDialData("personal", {
     categories: activeCategories as ReadonlySet<DialStationCategory>,
     // The main view lists EVERY station (live or not) alphabetically; the
     // hook's default dial visibility filter (live / flagship / named show)
     // would silently drop off-air stations without schedule metadata.
     includeAllStations: true,
+    scanActive: true,
   });
 
   const { addSeed } = useSeedManager();
-  const { radio } = usePlayer();
+  const { radio, scan } = usePlayer();
 
   // Scan window: which slice of the sorted feed is shown. Any multiple of
   // the density page size is valid — the page count is dynamic (filtered
@@ -560,6 +561,13 @@ export default function SplitHome() {
       void radio.toggle(row.ds.station);
     }
   }, [radio, stopCompactScan]);
+  const tuneScanStation = useCallback((slug: string) => {
+    const station = scanStations.find((candidate) => candidate.slug === slug);
+    if (!station || resolvePlaybackSource(station) == null) return;
+    stopCompactScan();
+    if (scan.active) scan.toggle();
+    void radio.toggle(station);
+  }, [radio, scan, scanStations, stopCompactScan]);
   const playRow = useCallback((row: DialLaneRow) => {
     if (resolvePlaybackSource(row.ds.station) == null) return;
     stopCompactScan();
@@ -731,6 +739,10 @@ export default function SplitHome() {
           categories={[...activeCategories]}
           stationSlug={scanStationSlug}
           stationName={scanStationName}
+          liveStations={scanStations}
+          liveNowPlayingBySlug={scanNowPlaying}
+          activeStationSlug={radio.station?.slug ?? null}
+          onTuneStation={tuneScanStation}
           onClose={() => {
             setScanSessionOpen(false);
             setScanStationSlug(null);
