@@ -234,6 +234,15 @@ interface CategoryPreview {
   stationName: string;
 }
 
+interface CategoryNowPlayingEntry {
+  row: DialLaneRow;
+  isSkipped: boolean;
+  artist: string | null;
+  title: string | null;
+  label: string;
+  hasTrack: boolean;
+}
+
 interface CategoryScopeMetrics {
   crossings: number;
   firstPlays: number;
@@ -245,6 +254,9 @@ interface SpecialistSubcategoryGroup {
   rows: CategoryGroup["rows"];
 }
 
+// Retained as a compatibility renderer for callers that still import the
+// previous dense category helper; category-first now mounts the feed renderer.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DenseCategoryStationList({
   group,
   density,
@@ -373,6 +385,129 @@ function categoryPreview(rows: CategoryGroup["rows"]): CategoryPreview | null {
     }
   }
   return null;
+}
+
+function categoryNowPlaying(rows: CategoryGroup["rows"]): CategoryNowPlayingEntry[] {
+  const entries = rows.map(({ row, isSkipped }) => {
+    const track = row.ds.isLive ? row.ds.liveTrack ?? row.show?.currentTrack ?? null : null;
+    const artist = cleanLiveValue(track?.artist);
+    const title = cleanLiveValue(track?.title);
+    const hasTrack = Boolean(artist || title);
+    return {
+      row,
+      isSkipped,
+      artist,
+      title,
+      hasTrack,
+      label: hasTrack
+        ? `${artist ?? title}${artist && title ? ` — ${title}` : ""}`
+        : "Now playing unavailable",
+    };
+  });
+
+  // The category itself remains editorially ordered. Only this derived view is
+  // sorted by the values currently on air, with station name as a stable tie
+  // breaker so a metadata refresh cannot make rows jump randomly.
+  return entries.sort((a, b) =>
+    Number(b.hasTrack) - Number(a.hasTrack)
+    || a.label.localeCompare(b.label, "en", { sensitivity: "base" })
+    || a.row.ds.station.name.localeCompare(b.row.ds.station.name, "en", {
+      numeric: true,
+      sensitivity: "base",
+    })
+    || a.row.ds.station.slug.localeCompare(b.row.ds.station.slug, "en"),
+  );
+}
+
+function CategoryNowPlayingFeed({
+  group,
+  density,
+  activeSlug,
+  playerStatus,
+  onTuneIn,
+  onPlay,
+  onToggleSkip,
+}: {
+  group: CategoryGroup;
+  density: DialDensity;
+  activeSlug: string | null;
+  playerStatus: PlayerStatus;
+  onTuneIn: (row: DialLaneRow) => void;
+  onPlay: (row: DialLaneRow) => void;
+  onToggleSkip?: (slug: string) => void;
+}) {
+  const entries = categoryNowPlaying(group.rows);
+  const pageSize = density === "compact" ? COMPACT_REMOTE_SIZE : COMPACT_DIAL_SIZE;
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(entries.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visible = entries.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+
+  return (
+    <div
+      className={`compact-category-dial__now-feed${density === "compact" ? " compact-category-dial__now-feed--remote" : ""}`}
+      id={`compact-category-${group.category}-now-feed`}
+      role="region"
+      aria-label={`${group.label} now-playing feed`}
+      data-testid={`compact-category-${group.category}-now-feed`}
+    >
+      {visible.map((entry) => {
+        const slug = entry.row.ds.station.slug;
+        const isActive = slug === activeSlug;
+        const isPlayable = resolvePlaybackSource(entry.row.ds.station) != null;
+        return (
+          <div
+            className={[
+              "compact-category-dial__feed-row",
+              entry.isSkipped ? "compact-category-dial__feed-row--skipped" : "",
+              isActive ? "compact-category-dial__feed-row--active" : "",
+            ].filter(Boolean).join(" ")}
+            key={slug}
+          >
+            {isPlayable && (
+              <CompactPlayButton
+                title={entry.row.ds.station.name}
+                isPlaying={isActive && playerStatus === "playing"}
+                isLoading={isActive && playerStatus === "loading"}
+                onClick={() => onPlay(entry.row)}
+                testId={`compact-category-feed-play-${slug}`}
+              />
+            )}
+            <button
+              type="button"
+              className="compact-category-dial__feed-tune"
+              onClick={() => onTuneIn(entry.row)}
+              aria-label={`${entry.label} · ${entry.row.ds.station.name} — tune in`}
+            >
+              <span>{entry.label}</span>
+              <b>{entry.row.ds.station.name}</b>
+            </button>
+            {onToggleSkip && (
+              <input
+                type="checkbox"
+                className="compact-dial__scan-checkbox"
+                checked={!entry.isSkipped}
+                aria-label={entry.isSkipped
+                  ? `Include ${entry.row.ds.station.name} in scan`
+                  : `Skip ${entry.row.ds.station.name} in scan`}
+                onChange={() => onToggleSkip(slug)}
+                onClick={(event) => event.stopPropagation()}
+              />
+            )}
+          </div>
+        );
+      })}
+      {pageCount > 1 && (
+        <div className="compact-dial__pager" role="group" aria-label={`${group.label} now-playing feed pages`}>
+          <button type="button" disabled={currentPage === 0} onClick={() => setPage((value) => value - 1)}
+            aria-label={`Previous ${group.label} now-playing feed page`}>←</button>
+          <span>Page {currentPage + 1} of {pageCount}</span>
+          <button type="button" disabled={currentPage >= pageCount - 1} onClick={() => setPage((value) => value + 1)}
+            aria-label={`Next ${group.label} now-playing feed page`}>→</button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function buildCompactCategoryGroups(
@@ -525,19 +660,25 @@ function SpecialistSubcategoryCard({
 function CategorySummary({
   group,
   expanded,
+  nowPlayingExpanded,
   onToggle,
+  onToggleNowPlaying,
   crossingScope,
   active,
   onToggleCategory,
 }: {
   group: CategoryGroup;
   expanded: boolean;
+  nowPlayingExpanded: boolean;
   onToggle: () => void;
+  onToggleNowPlaying: () => void;
   crossingScope: CrossingScope;
   active: boolean;
   onToggleCategory?: () => void;
 }) {
   const preview = categoryPreview(group.rows);
+  const nowPlaying = categoryNowPlaying(group.rows);
+  const leadNowPlaying = nowPlaying[0];
   const activeCount = group.rows.filter(({ isSkipped }) => !isSkipped).length;
   const stationCountLabel = `${group.rows.length} ${group.rows.length === 1 ? "station" : "stations"}`;
   const metrics = categoryScopeMetrics(group.rows, crossingScope);
@@ -593,6 +734,23 @@ function CategorySummary({
         {expanded ? "−" : "+"}
       </span>
     </button>
+    <button
+      type="button"
+      className={`compact-category-dial__now-header${nowPlayingExpanded ? " compact-category-dial__now-header--expanded" : ""}`}
+      aria-expanded={nowPlayingExpanded}
+      aria-controls={`compact-category-${group.category}-now-feed`}
+      onClick={onToggleNowPlaying}
+      data-testid={`compact-category-${group.category}-now-header`}
+      aria-label={`${nowPlayingExpanded ? "Close" : "Open"} ${group.label} now-playing feed`}
+    >
+      <span className="compact-category-dial__now-header-label">On air</span>
+      <span className="compact-category-dial__now-header-line">
+        {leadNowPlaying
+          ? <><b>{leadNowPlaying.row.ds.station.name}</b>: {leadNowPlaying.label}</>
+          : "Now playing unavailable"}
+      </span>
+      <span aria-hidden="true">{nowPlayingExpanded ? "−" : "+"}</span>
+    </button>
     {group.category !== "other" && onToggleCategory && (
       <label className="compact-category-dial__include">
         <input type="checkbox" checked={active} aria-label={`${active ? "Include" : "Exclude"} ${group.label}`}
@@ -632,6 +790,7 @@ function CategoryFirstDial({
     [activeRows, skippedRows],
   );
   const [expandedCategory, setExpandedCategory] = useState<CompactCategory | null>(null);
+  const [expandedNowPlaying, setExpandedNowPlaying] = useState<CompactCategory | null>(null);
   const [expandedSpecialist, setExpandedSpecialist] = useState<SpecialistSubcategory | null>(null);
   const [categoryPage, setCategoryPage] = useState(0);
   const [stationPages, setStationPages] = useState<Record<string, number>>({});
@@ -696,12 +855,14 @@ function CategoryFirstDial({
         // A running station scan keeps its current station visible, but does
         // not overwrite the listener's manually chosen category once it ends.
         const isExpanded = sampledCategory === group.category || expandedCategory === group.category;
+        const isNowPlayingExpanded = expandedNowPlaying === group.category && !isExpanded;
         const isSpecialist = group.category === "specialist";
         return (
           <section className="compact-category-dial__group" key={group.category}>
             <CategorySummary
               group={group}
               expanded={isExpanded}
+              nowPlayingExpanded={isNowPlayingExpanded}
               crossingScope={crossingScope ?? DEFAULT_CROSSING_SCOPE}
               active={activeCategories?.has(group.category as StationCategory) ?? true}
               onToggleCategory={
@@ -709,17 +870,24 @@ function CategoryFirstDial({
                   ? () => onToggleCategory(group.category as StationCategory)
                   : undefined
               }
-              onToggle={() => setExpandedCategory((current) => current === group.category ? null : group.category)}
+               onToggle={() => {
+                 setExpandedNowPlaying(null);
+                 setExpandedCategory((current) => current === group.category ? null : group.category);
+               }}
+               onToggleNowPlaying={() => {
+                 setExpandedCategory(null);
+                 setExpandedNowPlaying((current) => current === group.category ? null : group.category);
+               }}
             />
-            {!isExpanded && (
-              <DenseCategoryStationList
+            {isNowPlayingExpanded && (
+              <CategoryNowPlayingFeed
                 group={group}
                 density={density}
                 activeSlug={activeSlug}
                 playerStatus={playerStatus}
                 onTuneIn={onTuneIn}
                 onPlay={onPlay}
-                sampledSlug={sampledSlug}
+                onToggleSkip={onToggleSkip}
               />
             )}
             {isExpanded && (

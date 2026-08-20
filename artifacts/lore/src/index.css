@@ -8185,31 +8185,25 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-category-dial__summary {
   width: 100%;
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(7.5rem, 0.8fr) minmax(0, 2fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0;
-  background: transparent;
-  color: hsl(var(--foreground));
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
 }
-.compact-category-dial__summary {
+.compact-category-dial__topline {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 8px 2px 12px;
 }
 .compact-category-dial__summary-button {
   min-width: 0;
-  flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: minmax(7.5rem, 0.8fr) minmax(0, 2fr) auto;
+  flex: 0 1 auto;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 0;
   border: 0;
   background: transparent;
   color: hsl(var(--foreground));
@@ -8223,11 +8217,54 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   outline: 2px solid hsl(var(--live));
   outline-offset: -2px;
 }
+.compact-category-dial__now-header {
+  min-width: 0;
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 6px;
+  border: 0;
+  border-top: 1px solid hsl(var(--border) / 0.28);
+  background: hsl(var(--background) / 0.2);
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+.compact-category-dial__now-header:hover,
+.compact-category-dial__now-header:focus-visible,
+.compact-category-dial__now-header--expanded {
+  background: hsl(var(--live) / 0.08);
+  color: hsl(var(--foreground));
+}
+.compact-category-dial__now-header:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: -2px;
+}
+.compact-category-dial__now-header-label {
+  flex: 0 0 auto;
+  color: hsl(var(--live));
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.compact-category-dial__now-header-line {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-category-dial__now-header-line b {
+  color: hsl(var(--foreground));
+  font-weight: 400;
+}
 .compact-category-dial__include {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  padding: 8px 0;
+  padding: 0;
 }
 .compact-category-dial__include input {
   width: 14px;
@@ -8292,12 +8329,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .compact-category-dial__meta {
   min-width: 0;
+  padding: 0 12px 5px;
   display: flex;
   align-items: baseline;
   gap: 8px;
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);
+}
+.compact-category-dial__meta .compact-category-dial__count {
+  margin-right: auto;
 }
 .compact-category-dial__now {
   min-width: 0;
@@ -8441,6 +8482,78 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-category-dial__dense-list--remote .compact-category-dial__dense-tune {
   gap: 5px;
 }
+.compact-category-dial__now-feed {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid hsl(var(--live) / 0.35);
+  background: hsl(var(--background) / 0.2);
+}
+.compact-category-dial__feed-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 10px;
+  border-bottom: 1px solid hsl(var(--border) / 0.22);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+.compact-category-dial__feed-row--active { background: hsl(var(--live) / 0.08); }
+.compact-category-dial__feed-row--skipped { opacity: .55; }
+.compact-category-dial__feed-row .compact-play-btn {
+  width: 25px;
+  min-width: 25px;
+  height: 25px;
+}
+.compact-category-dial__feed-tune {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.compact-category-dial__feed-tune:hover,
+.compact-category-dial__feed-tune:focus-visible {
+  color: hsl(var(--foreground));
+}
+.compact-category-dial__feed-tune:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: 2px;
+}
+.compact-category-dial__feed-tune span,
+.compact-category-dial__feed-tune b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-category-dial__feed-tune span {
+  flex: 1;
+  color: hsl(var(--foreground) / .86);
+}
+.compact-category-dial__feed-tune b {
+  flex: 0 1 auto;
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+.compact-category-dial__now-feed--remote .compact-category-dial__feed-row {
+  min-height: 28px;
+  padding-block: 1px;
+}
+.compact-category-dial__now-feed--remote .compact-category-dial__feed-row .compact-play-btn {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+}
 .compact-specialist-dial__subgroups {
   display: grid;
   gap: 7px;
@@ -8535,16 +8648,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 48px;
 }
 @media (max-width: 640px) {
-  .compact-category-dial__summary-button {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 4px 8px;
-  }
-  .compact-category-dial__summary-button .compact-category-dial__meta {
-    grid-column: 1 / -1;
-    justify-content: space-between;
-    flex-wrap: wrap;
-  }
   .compact-category-dial__summary-button .compact-category-dial__label { white-space: normal; }
+  .compact-category-dial__meta { flex-wrap: wrap; }
+  .compact-category-dial__now-header-line {
+    overflow-x: auto;
+    text-overflow: clip;
+  }
   .compact-specialist-dial__subsummary {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -8557,6 +8666,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .compact-specialist-dial__now-playing-row b { text-align: left; }
   .compact-category-dial__dense-tune {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .compact-category-dial__feed-tune {
     align-items: flex-start;
     flex-direction: column;
     gap: 1px;
