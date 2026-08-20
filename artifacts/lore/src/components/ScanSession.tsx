@@ -67,8 +67,12 @@ export function ScanSession({
             <p className="scan-session__summary">
               {source === "live" ? "Live stations" : "Archive"}
               {stationName ? ` · ${stationName}` : " · across Lore"}
-              {" · "}
-              {filter === "firstPlays" ? "first plays" : filter}
+              {source === "archive" && (
+                <>
+                  {" · "}
+                  {filter === "firstPlays" ? "first plays" : filter}
+                </>
+              )}
             </p>
           </div>
           <button type="button" className="scan-session__close" onClick={onClose} aria-label="Close Scan">
@@ -76,7 +80,7 @@ export function ScanSession({
           </button>
         </header>
 
-        <div className="scan-session__choices" role="group" aria-label="Scan source">
+        <div className="scan-session__choices scan-session__choices--source" role="group" aria-label="Scan source">
           <button type="button" aria-pressed={source === "live"} onClick={() => onSourceChange("live")}>
             Live stations
           </button>
@@ -84,13 +88,15 @@ export function ScanSession({
             Archive
           </button>
         </div>
-        <div className="scan-session__choices" role="group" aria-label="Archive filter">
-          {(["all", "crossings", "firstPlays"] as const).map((value) => (
-            <button key={value} type="button" aria-pressed={filter === value} onClick={() => onFilterChange(value)}>
-              {value === "firstPlays" ? "First plays" : value[0].toUpperCase() + value.slice(1)}
-            </button>
-          ))}
-        </div>
+        {source === "archive" && (
+          <div className="scan-session__choices scan-session__choices--filters" role="group" aria-label="Archive filter">
+            {(["all", "crossings", "firstPlays"] as const).map((value) => (
+              <button key={value} type="button" aria-pressed={filter === value} onClick={() => onFilterChange(value)}>
+                {value === "firstPlays" ? "First plays" : value[0].toUpperCase() + value.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
 
         {source === "archive" ? (
           <HistoryScanner

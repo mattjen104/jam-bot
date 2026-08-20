@@ -180,7 +180,9 @@ test.describe("unified Scan session", () => {
 
     await dialog.getByRole("button", { name: "Live stations" }).focus();
     await page.keyboard.press("Enter");
-    await expect(dialog).toContainText("Live stations · across Lore · all");
+    await expect(dialog).toContainText("Live stations · across Lore");
+    await expect(dialog).not.toContainText("Archive · across Lore");
+    await expect(dialog.getByRole("group", { name: "Archive filter" })).toBeHidden();
     const liveToggle = dialog.getByRole("button", { name: "Start live scan" });
     await liveToggle.focus();
     await page.keyboard.press("Enter");
@@ -191,6 +193,8 @@ test.describe("unified Scan session", () => {
 
     await dialog.getByRole("button", { name: "Archive" }).focus();
     await page.keyboard.press("Enter");
+    await expect(dialog.getByRole("group", { name: "Archive filter" })).toBeVisible();
+    await expect(dialog.getByRole("group", { name: "Live scan controls" })).toBeHidden();
     await dialog.getByRole("button", { name: "First plays" }).focus();
     await page.keyboard.press("Enter");
     await expect(dialog).toContainText("Archive · across Lore · first plays");

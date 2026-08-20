@@ -2501,6 +2501,20 @@
   gap: 0.45rem;
   margin: 0.55rem 0;
 }
+.scan-session__choices--source {
+  padding: 0.25rem;
+  border: 1px solid rgb(214 203 218 / 16%);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 3%);
+}
+.scan-session__choices--source button {
+  flex: 1 1 10rem;
+  min-height: 2.5rem;
+  font-weight: 600;
+}
+.scan-session__choices--filters {
+  margin-top: 0.75rem;
+}
 .scan-session__choices button {
   padding: 0.4rem 0.7rem;
   border: 1px solid rgb(214 203 218 / 22%);
@@ -2513,6 +2527,13 @@
   border-color: #b7d99a;
   color: #151119;
   background: #b7d99a;
+}
+.scan-session__choices button:focus-visible,
+.scan-session__close:focus-visible,
+.scan-session__transport button:focus-visible,
+.scan-session__station-list button:focus-visible {
+  outline: 2px solid #b7d99a;
+  outline-offset: 2px;
 }
 .scan-session__live {
   margin-top: 1rem;
