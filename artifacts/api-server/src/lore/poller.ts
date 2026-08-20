@@ -609,6 +609,11 @@ export function _testOnlyHasStationPoller(stationId: number): boolean {
   return stationTimers.has(stationId) || stationWatchers.has(stationId);
 }
 
+/** Test seam: number of active one-shot/interval handles for one station. */
+export function _testOnlyStationTimerCount(stationId: number): number {
+  return stationTimers.get(stationId)?.length ?? 0;
+}
+
 /**
  * Grant a station a leased persistent watcher (crossing-score leasing).
  * Tears down its interval poller first (unenroll), so promotion is live and

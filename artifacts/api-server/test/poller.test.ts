@@ -1,6 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { fetchPlaysUntilCursor } from "../src/lore/poller.js";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import {
+  enrollStationPoller,
+  fetchPlaysUntilCursor,
+  stopLorePoller,
+  unenrollStationPoller,
+  _testOnlyStationTimerCount,
+} from "../src/lore/poller.js";
 import type { HistoryAdapter, RawSpin } from "../src/lore/types.js";
+import type { Station } from "@workspace/db";
 
 // Poll cadence constants mirrored from poller.ts for feed-depth assertions.
 // If poller.ts changes these, the coverage tests below will catch the mismatch.
@@ -159,6 +166,39 @@ describe("fetchPlaysUntilCursor", () => {
     const { adapter, pagesFetched } = nonPaginatingSource(25);
     await fetchPlaysUntilCursor(adapter, {}, "not-in-feed", 200, 10);
     expect(pagesFetched()).toBe(2);
+  });
+});
+
+describe("boot-repaired station enrollment", () => {
+  afterEach(() => {
+    stopLorePoller();
+    vi.useRealTimers();
+  });
+
+  it("fires the first repaired-station poll immediately and keeps one loop", () => {
+    vi.useFakeTimers();
+    const station = {
+      id: 974001,
+      slug: "boot-repaired",
+      name: "Boot Repaired",
+      streamUrl: "https://example.invalid/stream",
+      nowPlayingSource: "kcrw",
+      nowPlayingConfig: {},
+      hidden: false,
+    } as Station;
+
+    enrollStationPoller(station);
+    // Unlike boot's list-position scheduling, live enrollment uses delay 0.
+    expect(_testOnlyStationTimerCount(station.id)).toBe(1);
+    vi.advanceTimersByTime(0);
+    expect(_testOnlyStationTimerCount(station.id)).toBe(2);
+
+    // Re-enrollment clears the old handles before creating the replacement;
+    // a repair cannot leave duplicate intervals behind.
+    enrollStationPoller(station);
+    expect(_testOnlyStationTimerCount(station.id)).toBe(1);
+    unenrollStationPoller(station.id);
+    expect(_testOnlyStationTimerCount(station.id)).toBe(0);
   });
 });
 

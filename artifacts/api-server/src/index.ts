@@ -125,6 +125,7 @@ import { applyRbOrphanCleanupMigration } from "./lore/rb-orphan-cleanup-migratio
 import { applyFingerprintScoutMigration } from "./lore/fingerprint-scout-migration.js";
 import { applyStationSourceProbeMigration } from "./lore/source-probe-migration.js";
 import { startFingerprintScout } from "./lore/fingerprint-scout.js";
+import { startSourceCoverageProbeRun } from "./lore/source-probe.js";
 
 const rawPort = process.env["PORT"];
 
@@ -311,6 +312,13 @@ async function bootLore(): Promise<void> {
       console.error("[lore] radio-browser ICY backfill failed", err);
     }
     await startLorePoller();
+    // Run source repair after the normal fleet is scheduled. A station that
+    // proves its metadata source during boot is enrolled through the poller's
+    // zero-delay live path instead of being trapped behind its list-position
+    // stagger. The poller's per-station timer map and in-flight guard keep
+    // this bounded repair pass from creating duplicate loops or overlapping
+    // polls.
+    startSourceCoverageProbeRun();
     startLeaseScheduler();
     await startBlogPoller();
     await startNtsPoller();
