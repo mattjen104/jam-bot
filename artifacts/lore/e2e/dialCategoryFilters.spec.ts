@@ -85,6 +85,8 @@ const STATIONS = [
 function makeNowPlaying(slug: string, idx: number) {
   return {
     spinId: 900 + idx,
+    artist: `Artist ${idx + 1}`,
+    title: `Track ${idx + 1}`,
     rawArtist: `Artist ${idx + 1}`,
     rawTitle: `Track ${idx + 1}`,
     source: "nts_live",
@@ -183,7 +185,7 @@ async function installRoutes(page: import("@playwright/test").Page) {
   );
 
   // Live pulse — all four stations are live.
-  await page.route("**/api/stations/now-playing", (route) =>
+  await page.route("**/api/stations/now-playing**", (route) =>
     route.fulfill({
       json: {
         items: STATIONS.map((s, idx) => ({
@@ -340,6 +342,56 @@ test.describe("Dial category filters — CLI commands", () => {
 });
 
 test.describe("Split-home category metrics — crossing scope chip", () => {
+  test("opens the category now-playing feed independently and preserves accessible controls", async ({
+    page,
+  }) => {
+    await installRoutes(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem("lore:radioMode", "false");
+    });
+    await page.goto("/lore/");
+
+    const campusSummary = page.getByTestId("compact-category-campus");
+    await expect(campusSummary).toBeVisible({ timeout: 20_000 });
+    await expect(campusSummary).toHaveAttribute("aria-expanded", "false");
+    await expect(campusSummary).toContainText("Campus WKRP: Artist 1 — Track 1");
+    await expect(page.getByTestId("compact-category-campus-now-feed")).toHaveCount(0);
+
+    // The summary button is independently keyboard reachable and labelled as
+    // the now-playing feed control, not as the station-list control.
+    await campusSummary.focus();
+    await expect(campusSummary).toBeFocused();
+    await expect(campusSummary).toHaveAccessibleName("Open Campus Radio now-playing feed");
+    await page.keyboard.press("Enter");
+
+    const campusFeed = page.getByTestId("compact-category-campus-now-feed");
+    await expect(campusFeed).toBeVisible();
+    await expect(campusSummary).toHaveAttribute("aria-expanded", "true");
+    await expect(campusFeed).toHaveAccessibleName("Campus Radio now-playing feed");
+    await expect(
+      campusFeed.getByRole("button", {
+        name: "Artist 1 — Track 1 · Campus WKRP — tune in",
+      }),
+    ).toBeVisible();
+    await expect(campusFeed.getByRole("button", { name: "Play Campus WKRP" })).toBeVisible();
+
+    // The feed is sorted by current track values, while the collapsed card
+    // remains anchored to the editorial category and its lead station.
+    const feedStations = await campusFeed
+      .locator(".compact-category-dial__feed-tune b")
+      .allTextContents();
+    expect(feedStations).toEqual(["Campus WKRP"]);
+
+    // Opening another category closes the first feed rather than stacking
+    // controls or exposing the stationary category list at the same time.
+    const anchorSummary = page.getByTestId("compact-category-anchor");
+    await anchorSummary.click();
+    await expect(anchorSummary).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("compact-category-anchor-now-feed")).toBeVisible();
+    await expect(campusSummary).toHaveAttribute("aria-expanded", "false");
+    await expect(campusFeed).toHaveCount(0);
+  });
+
   test("cycles every scope without dropping expanded rows or skipped totals", async ({ page }) => {
     await installRoutes(page);
     await page.addInitScript(() => {
