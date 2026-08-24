@@ -59,30 +59,35 @@ id = "OuS-Jv-RPd2iSfRx2DCZ9"
 uri = "file://artifacts/jam-bot/QUICKSTART.md"
 type = "text"
 title = "Jam Bot — Quick Start"
+logical_id = "c858d539-cf78-4ffe-bd1e-63e143c65d5e"
 
 [[outputs]]
 id = "w2onxFycJe04bwAtgmQX_"
 uri = "file://attached_assets/screenshots/328c7e60-1e3e-4285-858c-1e54fe82d9e8-00-cucr4lh7nj5q_worf_replit_dev_mockup_preview_music-explore_TheMap.png"
 type = "image"
 title = "Direction A — The Map (graph-primary)"
+logical_id = "d080967c-64de-487a-ad96-5d6507bf46bf"
 
 [[outputs]]
 id = "b-cQIQbmhqNvEVk2yxCr2"
 uri = "file://attached_assets/screenshots/328c7e60-1e3e-4285-858c-1e54fe82d9e8-00-cucr4lh7nj5q_worf_replit_dev_mockup_preview_music-explore_TheCaseFile.png"
 type = "image"
 title = "Direction B — The Case File (dossier-primary)"
+logical_id = "f53f3fa9-5963-4f33-a0e9-066e0a6bdc2e"
 
 [[outputs]]
 id = "Es9HLjQVDJOxPAMojck1h"
 uri = "file://attached_assets/screenshots/328c7e60-1e3e-4285-858c-1e54fe82d9e8-00-cucr4lh7nj5q_worf_replit_dev_mockup_preview_music-explore_TheThread.png"
 type = "image"
 title = "Direction C — The Thread (lineage spine)"
+logical_id = "542af2ba-52ee-42b2-87e5-09480d27165a"
 
 [[outputs]]
 id = "WOsKN9c1QEXrCGFPAC_I6"
 uri = "file://attached_assets/lore-dial-v2.html"
 type = "unspecified"
 title = "Timeline Dial v2 — tap to open"
+logical_id = "b9b61813-5f48-461d-8b96-b23099d4a7c3"
 
 [[outputs]]
 id = "5BIqpB5PgbjXZZHbNXfpC"
@@ -90,3 +95,4 @@ uri = "file://artifacts/mockup-sandbox/lore-unified-architecture.jpg"
 type = "image"
 title = "Lore Unified Minimal Interface mockup"
 description = "Full annotated Feed, Stack, coverage-marker, and Album Investigation architecture mockup."
+logical_id = "b9328f42-65e4-4c71-a150-4aface60de54"
