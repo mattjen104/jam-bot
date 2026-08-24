@@ -156,3 +156,90 @@
     pointer-events: none;
   }
 }
+
+/* Compact tree interaction study ------------------------------------------------ */
+@font-face {
+  font-family: "Signifier Preview";
+  src: url("/fonts/Signifier-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+.tree-explorer {
+  --tree-bg: #171816;
+  --tree-panel: #1d201c;
+  --tree-line: rgba(205, 214, 191, .18);
+  --tree-muted: #899184;
+  --tree-text: #e5e9de;
+  --tree-accent: #b9d99b;
+  min-height: 100vh;
+  padding: clamp(24px, 5vw, 64px);
+  color: var(--tree-text);
+  background: radial-gradient(circle at 20% 0%, #24281f 0, var(--tree-bg) 45%);
+  font: 13px/1.35 ui-sans-serif, system-ui, sans-serif;
+}
+.tree-explorer__header { max-width: 1120px; margin: 0 auto 34px; display: flex; justify-content: space-between; gap: 32px; align-items: end; }
+.tree-explorer h1 { max-width: 630px; margin: 7px 0 10px; font: 400 clamp(24px, 4vw, 42px)/1.04 "Signifier Preview", Georgia, serif; letter-spacing: -.025em; }
+.tree-explorer__lede { max-width: 580px; margin: 0; color: var(--tree-muted); font-size: 14px; }
+.tree-kicker { margin: 0; color: var(--tree-accent); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+.tree-explorer__status, .tree-hint { color: var(--tree-muted); font-size: 11px; letter-spacing: .04em; }
+.tree-explorer__status { white-space: nowrap; }
+.status-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--tree-accent); box-shadow: 0 0 0 3px rgba(185,217,155,.1); }
+.tree-grid { max-width: 1120px; margin: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.tree-surface { min-width: 0; padding: 22px 20px 17px; border: 1px solid rgba(205,214,191,.14); background: rgba(29,32,28,.82); }
+.tree-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 8px 0 17px; padding-bottom: 11px; border-bottom: 1px solid var(--tree-line); }
+.tree-title-row h2, .tree-mobile-section h2 { margin: 0; font: 400 19px/1.1 "Signifier Preview", Georgia, serif; color: var(--tree-text); }
+.tree-root { padding-left: 1px; }
+.tree-node { position: relative; }
+.tree-node__line { min-height: 32px; display: flex; align-items: center; gap: 7px; position: relative; }
+.tree-node__children { position: relative; margin-left: 14px; padding-left: 19px; border-left: 1px solid var(--tree-line); }
+.tree-node__children::before { content: ""; position: absolute; top: 15px; left: 0; width: 18px; border-top: 1px solid var(--tree-line); }
+.tree-disclosure, .tree-check, .tree-label { border: 0; padding: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.tree-disclosure { width: 15px; height: 17px; flex: 0 0 15px; display: grid; place-items: center; border: 1px solid rgba(205,214,191,.3); color: var(--tree-accent); font-size: 14px; line-height: 1; }
+.tree-disclosure--leaf { border: 0; color: var(--tree-muted); font-size: 19px; }
+.tree-check { width: 13px; color: var(--tree-accent); font-size: 10px; opacity: .9; }
+.tree-node--off > .tree-node__line { color: #777e74; opacity: .62; }
+.tree-node--off .tree-check { color: var(--tree-muted); }
+.tree-label { min-width: 0; display: flex; align-items: baseline; gap: 8px; text-align: left; }
+.tree-label:hover, .tree-label:focus-visible { color: var(--tree-accent); }
+.tree-label__main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-label__detail { color: var(--tree-muted); font-size: 11px; white-space: nowrap; }
+.tree-context { min-width: 0; margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--tree-muted); font-size: 11px; white-space: nowrap; }
+.tree-now { max-width: 190px; overflow: hidden; text-overflow: ellipsis; color: #aab1a5; }
+.tree-pie { display: inline-block; width: 13px; height: 13px; flex: 0 0 13px; border: 1px solid rgba(205,214,191,.35); border-radius: 50%; background: conic-gradient(var(--tree-accent) var(--pie), rgba(205,214,191,.1) 0); }
+.tree-header { min-height: 28px; display: flex; align-items: center; gap: 9px; margin: 2px 0 4px; padding: 5px 0 5px 3px; color: var(--tree-muted); font-size: 11px; }
+.tree-header__track { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--tree-text); }
+.tree-header__meta { margin-left: auto; white-space: nowrap; }
+.tree-station-note, .tree-album-notes { margin: 2px 0 7px; padding: 6px 0 7px 3px; border-bottom: 1px solid rgba(205,214,191,.09); color: var(--tree-muted); font-size: 11px; }
+.tree-album-notes { display: grid; gap: 4px; }
+.tree-note-link { color: var(--tree-accent); }
+.tree-empty { padding: 8px 0 10px 3px; color: #656d63; font-size: 11px; font-style: italic; }
+.tree-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 19px; padding-top: 12px; border-top: 1px solid var(--tree-line); color: var(--tree-muted); font-size: 10px; }
+.legend-mark { margin-right: 4px; color: var(--tree-muted); font-style: normal; }
+.legend-mark--on { color: var(--tree-accent); }
+.legend-line { display: inline-block; width: 14px; margin: 0 4px 3px 0; border-top: 1px solid var(--tree-line); }
+.tree-mobile-section { max-width: 1120px; margin: 44px auto 0; display: grid; grid-template-columns: 1fr 360px; gap: 30px; align-items: start; }
+.tree-copy { max-width: 350px; margin-top: 10px; color: var(--tree-muted); }
+.tree-phone { width: 100%; padding: 12px; border: 1px solid rgba(205,214,191,.19); background: #10120f; }
+.tree-phone__top { display: flex; justify-content: space-between; margin-bottom: 9px; color: var(--tree-muted); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.tree-phone .tree-surface { padding: 15px 12px 12px; }
+.tree-phone .tree-title-row { display: block; }
+.tree-phone .tree-hint { display: block; margin-top: 6px; }
+.tree-phone .tree-context { display: none; }
+.tree-phone .tree-label { flex-wrap: wrap; gap: 2px 6px; }
+.tree-phone .tree-label__detail { width: 100%; margin-left: 0; }
+.tree-phone .tree-header { align-items: flex-start; flex-wrap: wrap; }
+.tree-phone .tree-header__meta { margin-left: 0; }
+@media (max-width: 760px) {
+  .tree-explorer { padding: 25px 16px 45px; }
+  .tree-explorer__header { display: block; margin-bottom: 26px; }
+  .tree-explorer__status { margin-top: 16px; }
+  .tree-grid { grid-template-columns: 1fr; }
+  .tree-mobile-section { grid-template-columns: 1fr; margin-top: 32px; }
+  .tree-mobile-section .tree-phone { max-width: 360px; }
+  .tree-context { display: none; }
+}
+@media (max-width: 420px) {
+  .tree-surface { padding: 17px 13px 14px; }
+  .tree-label__detail { display: block; }
+  .tree-label { flex-wrap: wrap; gap: 1px 6px; }
+}

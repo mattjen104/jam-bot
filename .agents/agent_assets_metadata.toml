@@ -96,3 +96,17 @@ type = "image"
 title = "Lore Unified Minimal Interface mockup"
 description = "Full annotated Feed, Stack, coverage-marker, and Album Investigation architecture mockup."
 logical_id = "b9328f42-65e4-4c71-a150-4aface60de54"
+
+[[outputs]]
+id = "y1-kFkE1dR290r21dDSN0"
+uri = "file://screenshots/compact-tree-mockup.jpg"
+type = "image"
+title = "CompactDial + CompactStack tree mockup"
+description = "Desktop rendering of the ultra-minimal tree interface study, including the responsive phone-width specimen."
+logical_id = "725c47dd-0521-4ceb-86c3-d466b75aecb8"
+content_hash = "sha256:6804445cd69a811c7e257d6fcb05826b65921793db4933666659436887ca8640"
+size = 92817
+mtime_ms = 1787590909792
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/725c47dd-0521-4ceb-86c3-d466b75aecb8/701e6728-514f-45a5-b924-fcb71b15383b"
+storage_version_token = "1787590916116781"
+content_type = "image/jpeg"

@@ -98,6 +98,17 @@ function getPreviewExamplePath(): string {
 
 const MOCKUPS = [
   {
+    path: "CompactTreeExplorer",
+    tag: "Interaction study · ultra-minimal",
+    title: "CompactDial + CompactStack Tree",
+    desc: "A live tree exploration with independent disclosure/selection, inline now-playing context, and a narrow-width specimen.",
+    tagColor: "#b9d99b",
+    tagBorder: "rgba(185,217,155,0.35)",
+    border: "#4a5743",
+    hoverBorder: "#b9d99b",
+    bg: "#1b211d",
+  },
+  {
     path: "lore-unified-arch/UnifiedArch",
     tag: "Annotated architecture · warm-dark",
     title: "Lore Unified Minimal Interface",
