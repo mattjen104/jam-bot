@@ -11,7 +11,7 @@
  * at /library.
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   useDialData,
@@ -26,16 +26,13 @@ import {
   useDialSkipped,
   useStackSkipped,
 } from "../lib/dialFilterState";
-import { readRadioMode } from "../lib/dialRadioMode";
-import {
-  hasAnyCrossing,
-  readCrossingScope,
-} from "../lib/crossingScope";
+import { readCrossingScope } from "../lib/crossingScope";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
+import { useMattStarterLibrary, useStartMattLibrary } from "../lib/meHooks";
 
 export default function SplitHome() {
   // The front door intentionally fixes the full Feed's advanced filters and
@@ -43,13 +40,12 @@ export default function SplitHome() {
   const activeTiers: ReadonlySet<AgeTier> = DEFAULT_ACTIVE_AGE_TIERS;
   const activeCategories = DEFAULT_ACTIVE_STATION_CATEGORIES;
   const crossingScope = readCrossingScope();
-  const crossingsOn = !readRadioMode();
 
   // Per-station selection remains in the tree without exposing the old scan
   // remote on the front door.
   const { skipped, toggleSkip } = useDialSkipped();
 
-  const { stations, crossingsLoading } = useDialData("personal", {
+  const { stations } = useDialData("personal", {
     categories: activeCategories as ReadonlySet<DialStationCategory>,
     // The main view lists EVERY station (live or not) alphabetically; the
     // hook's default dial visibility filter (live / flagship / named show)
@@ -57,6 +53,25 @@ export default function SplitHome() {
     includeAllStations: true,
     scanActive: true,
   });
+  const { data: mattStarter } = useMattStarterLibrary();
+  const startMattLibrary = useStartMattLibrary();
+  const mattBootstrapAttempted = useRef(false);
+
+  // The tree-only home has no command strip, but /matt remains the chosen
+  // listener identity for this front door. Copy the configured starter library
+  // exactly once, then let the mutation's cache invalidation refresh library
+  // and crossing data behind the visible station tree.
+  useEffect(() => {
+    if (
+      mattBootstrapAttempted.current ||
+      !mattStarter?.available ||
+      startMattLibrary.isPending
+    ) {
+      return;
+    }
+    mattBootstrapAttempted.current = true;
+    startMattLibrary.mutate();
+  }, [mattStarter?.available, startMattLibrary]);
 
   const { radio } = usePlayer();
 
@@ -112,17 +127,8 @@ export default function SplitHome() {
         return !track || rowPassesAgeTierFilter(track.ageTier, activeTiers);
       });
     }
-    // Crossing-positive filter: with crossings on, only stations with ≥1
-    // crossing at the active scope remain — "show me only stations that have
-    // played my music in the chosen window". Off (radio mode) = no filter.
-    // Suspended while crossing scores are still loading: filtering on
-    // unsettled (zero) counters would blank the feed until the compute
-    // settles — same guard as DialView's scopeFilter.
-    if (crossingsOn && !crossingsLoading) {
-      rows = rows.filter((row) => hasAnyCrossing(row.ds, crossingScope));
-    }
     return rows;
-  }, [sortedRows, activeTiers, crossingsOn, crossingsLoading, crossingScope]);
+  }, [sortedRows, activeTiers]);
 
   // Split into active (not skipped) and skipped after age-tier filtering.
   // Scan pagination and page count are based on activeRows only; skipped rows
@@ -183,7 +189,7 @@ export default function SplitHome() {
           onPlay={playRow}
           onToggleSkip={toggleSkip}
           crossingScope={crossingScope}
-          suppressCrossings={!crossingsOn}
+          suppressCrossings={false}
           displayMode="personal"
           categoryFirst={hasEditorialCategory}
           defaultOpenFirstCategory

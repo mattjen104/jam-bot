@@ -149,3 +149,4 @@
 - [Durable source-coverage evidence](source-coverage-seed-evidence.md) — verified station probe facts must reproduce on a fresh DB; seed missing evidence without overwriting newer operator probes.
 - [Dial history scanner read model](history-scanner-read-model.md) — bounded snapshot pages and selection-isolated local progress keep archive scans stable and honest.
 - [Orval non-200 response schemas](orval-non-200-response-runtime.md) — verify generated runtime exports; some non-200 inline responses become type-only models.
+- [Starter-library vs Stack diagnostics](starter-library-stack-diagnostics.md) — verify Matt copy and compact Stack independently; a healthy direct library read can coexist with a timed-out generated query.

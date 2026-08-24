@@ -15,8 +15,9 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 // Module mocks — must precede imports of the subjects.
 // ---------------------------------------------------------------------------
 
-const { mockSetLocation } = vi.hoisted(() => ({
+const { mockSetLocation, mockStartMattLibrary } = vi.hoisted(() => ({
   mockSetLocation: vi.fn(),
+  mockStartMattLibrary: vi.fn(),
 }));
 
 vi.mock("wouter", () => ({
@@ -51,7 +52,8 @@ vi.mock("../src/components/CompactStack", () => ({
 }));
 
 vi.mock("../src/lib/meHooks", () => ({
-  useStartMattLibrary: () => ({ mutate: vi.fn(), isPending: false, data: undefined, error: null }),
+  useMattStarterLibrary: () => ({ data: { available: true, addedCount: 0, totalCount: 2 } }),
+  useStartMattLibrary: () => ({ mutate: mockStartMattLibrary, isPending: false, data: undefined, error: null }),
   // SplitHome reads the first library page itself to size the stack pager.
   useMyLibraryInfinite: () => ({
     data: { pages: [{ items: [], nextCursor: null }] },
@@ -186,6 +188,7 @@ afterEach(() => {
   mockStations.value = [];
   mockCrossingsLoading.value = false;
   mockSetLocation.mockReset();
+  mockStartMattLibrary.mockReset();
   mockPreview.mockReset();
   localStorage.clear();
 });
@@ -551,33 +554,24 @@ describe("SplitHome — minimal tree front door", () => {
     expect(screen.queryByRole("button", { name: "Open Scan" })).toBeNull();
     expect(screen.queryByRole("group", { name: "Scan commands" })).toBeNull();
     expect(screen.queryByRole("group", { name: "Stack pages" })).toBeNull();
+    expect(mockStartMattLibrary).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("SplitHome — crossing-positive filter progressive loading", () => {
-  beforeEach(() => {
-    // The crossing-positive filter only exists in the crossings-on feed;
-    // radio mode (crossings off) is the default now, so pin crossings on.
-    localStorage.setItem("lore:radioMode", "false");
-  });
-
-  it("does not blank the feed while crossing scores are still loading", () => {
-    // A zero-crossing station (scope pinned to "set" by default → the fixture
-    // has no live show, so hasAnyCrossing is false once scores settle).
+describe("SplitHome — station visibility while Matt’s library hydrates", () => {
+  it("keeps stations visible before and after crossings settle", () => {
+    // A zero-crossing station must remain in the tree while Matt's starter
+    // library is copied and its derived crossings recompute.
     mockStations.value = [makeStation("kcrw", null, { name: "KCRW" })];
     localStorage.setItem("lore:crossingScope", "set");
 
-    // While the crossings compute is in flight the filter is suspended —
-    // filtering on unsettled zero counters would flash "No stations to show".
     mockCrossingsLoading.value = true;
     const { rerender } = render(<SplitHome />);
     expect(document.querySelectorAll('[data-testid="fdrow-kcrw"]').length).toBe(1);
 
-    // Once scores settle, the crossing-positive filter engages and the
-    // zero-crossing station is hidden.
     mockCrossingsLoading.value = false;
     act(() => { rerender(<SplitHome />); });
-    expect(document.querySelectorAll('[data-testid="fdrow-kcrw"]').length).toBe(0);
+    expect(document.querySelectorAll('[data-testid="fdrow-kcrw"]').length).toBe(1);
   });
 });
 
