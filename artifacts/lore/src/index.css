@@ -8262,13 +8262,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: hsl(var(--card) / 0.48);
   position: relative;
 }
-.compact-category-dial__group::before {
+.compact-category-dial__group--expanded::before {
   content: "";
   position: absolute;
-  left: 8px;
-  top: 26px;
-  bottom: 8px;
-  border-left: 1px solid hsl(var(--border) / .42);
+  z-index: 1;
+  left: 16px;
+  top: 35px;
+  bottom: 10px;
+  border-left: 1px solid hsl(var(--live) / .5);
   pointer-events: none;
 }
 .compact-category-dial__summary {
@@ -8299,6 +8300,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   cursor: pointer;
   text-align: left;
   font: inherit;
+}
+.compact-category-dial__tree-disclosure {
+  gap: 8px;
 }
 .compact-category-dial__summary-button:hover,
 .compact-category-dial__summary-button:focus-visible {
@@ -8348,6 +8352,18 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-category-dial__now-header-line b {
   color: hsl(var(--foreground));
   font-weight: 400;
+}
+.compact-category-dial__tree-mark {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  display: grid;
+  place-items: center;
+  border: 1px solid hsl(var(--live) / .65);
+  color: hsl(var(--live));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  line-height: 1;
 }
 .compact-category-dial__include {
   flex: 0 0 auto;
@@ -8572,24 +8588,43 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 5px;
 }
 .compact-category-dial__now-feed {
+  position: relative;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid hsl(var(--live) / 0.35);
+  border-top: 1px solid hsl(var(--live) / 0.5);
   background: hsl(var(--background) / 0.2);
-  margin-left: 14px;
-  border-left: 1px solid hsl(var(--border) / .5);
+  margin-left: 16px;
+  padding-left: 12px;
+  border-left: 1px solid hsl(var(--live) / .5);
+}
+.compact-category-dial__now-feed::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -16px;
+  width: 16px;
+  border-top: 1px solid hsl(var(--live) / .5);
 }
 .compact-category-dial__feed-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
   min-height: 36px;
-  padding: 4px 10px;
+  padding: 4px 10px 4px 12px;
   border-bottom: 1px solid hsl(var(--border) / 0.22);
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);
+}
+.compact-category-dial__feed-row::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -13px;
+  width: 12px;
+  border-top: 1px solid hsl(var(--live) / .4);
 }
 .compact-category-dial__feed-row--active { background: hsl(var(--live) / 0.08); }
 .compact-category-dial__feed-row--skipped { opacity: .55; }
@@ -9586,20 +9621,20 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid hsl(var(--border) / .28);
+  border-bottom: 1px solid hsl(var(--border) / .42);
 }
 .compact-stack__tree-heading {
   min-width: 0;
-  padding: 3px 10px 2px 14px;
+  padding: 4px 10px 3px 12px;
   background: hsl(var(--background) / .34);
 }
 .compact-stack__tree-disclosure {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   width: 100%;
-  padding: 1px 0;
+  padding: 2px 0;
   border: 0;
   background: transparent;
   color: hsl(var(--muted-foreground));
@@ -9618,9 +9653,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   outline-offset: 2px;
 }
 .compact-stack__tree-disclosure > span:first-child {
-  width: 12px;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  display: grid;
+  place-items: center;
+  border: 1px solid hsl(var(--live) / .65);
   color: hsl(var(--live));
   text-align: center;
+  line-height: 1;
 }
 .compact-stack__tree-disclosure > span:nth-child(2) {
   min-width: 0;
@@ -9633,12 +9674,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--faint));
 }
 .compact-stack__tree-children {
+  position: relative;
   min-width: 0;
-  margin-left: 14px;
-  border-left: 1px solid hsl(var(--border) / .5);
+  margin-left: 20px;
+  padding-left: 12px;
+  border-left: 1px solid hsl(var(--live) / .5);
 }
 .compact-stack__tree-children .compact-stack__row {
+  position: relative;
   min-height: 0;
+}
+.compact-stack__tree-children .compact-stack__row::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: -13px;
+  width: 12px;
+  border-top: 1px solid hsl(var(--live) / .45);
 }
 .compact-stack--expanded .compact-stack__tree-group {
   flex: 0 0 auto;

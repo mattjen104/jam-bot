@@ -477,6 +477,11 @@ describe("CompactStack collapsed rows", () => {
       name: "Hide albums by Shared Artist",
     });
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.classList.contains("compact-stack__tree-disclosure")).toBe(true);
+    expect(
+      disclosure.closest(".compact-stack__tree-group")
+        ?.querySelector(".compact-stack__tree-children"),
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Expand First · Shared Artist" }),
     ).toBeTruthy();

@@ -1177,13 +1177,15 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
           />
         </div>
       )}
-      {!isLoading && groups.length === 0 && skippedGroups.length === 0 && (
+      {groups.length === 0 && skippedGroups.length === 0 && (
         <button
           type="button"
           className="compact-stack__empty"
           onClick={() => setLocation("/library")}
         >
-          Nothing kept yet — your Stack starts with the first track you keep.
+          {isLoading
+            ? "Loading your artist → album Stack…"
+            : "Nothing kept yet — keep a track to grow your artist → album Stack."}
         </button>
       )}
     </div>

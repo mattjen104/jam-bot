@@ -674,20 +674,20 @@ function CategorySummary({
         )}
         <button
           type="button"
-          className="compact-category-dial__summary-button"
+          className="compact-category-dial__summary-button compact-category-dial__tree-disclosure"
           aria-expanded={expanded}
           aria-controls={`compact-category-${group.category}`}
           onClick={onToggle}
           data-testid={`compact-category-${group.category}`}
           aria-label={`${expanded ? "Close" : "Open"} ${group.label} now-playing feed`}
         >
+          <span className="compact-category-dial__tree-mark" aria-hidden="true">
+            {expanded ? "−" : "+"}
+          </span>
           <span className="compact-category-dial__now-header-line">
             {leadNowPlaying
               ? <><b>{leadNowPlaying.row.ds.station.name}</b>: {leadNowPlaying.label}</>
               : "Now playing unavailable"}
-          </span>
-          <span className="compact-category-dial__chevron" aria-hidden="true">
-            {expanded ? "−" : "+"}
           </span>
         </button>
       </div>
@@ -811,7 +811,10 @@ function CategoryFirstDial({
         const isExpanded = sampledCategory === group.category || expandedCategory === group.category;
         const isSpecialist = group.category === "specialist";
         return (
-          <section className="compact-category-dial__group" key={group.category}>
+          <section
+            className={`compact-category-dial__group${isExpanded ? " compact-category-dial__group--expanded" : ""}`}
+            key={group.category}
+          >
             <CategorySummary
               group={group}
               expanded={isExpanded}

@@ -317,6 +317,41 @@ test.describe("CompactStack — album checkboxes", () => {
     ).toBeVisible();
   });
 
+  test("renders connected artist branches and keeps disclosure independent from album controls", async ({
+    page,
+  }) => {
+    await installBaseRoutes(page);
+    await loadAndWaitForStack(page);
+
+    const massiveAttack = page.getByRole("button", {
+      name: "Hide albums by Massive Attack",
+    });
+    await expect(massiveAttack).toBeVisible();
+    await expect(massiveAttack.locator("span").first()).toHaveText("−");
+    const branch = page.locator(".compact-stack__tree-group").filter({
+      hasText: "Massive Attack",
+    });
+    await expect(branch.locator(".compact-stack__tree-children")).toBeVisible();
+    await expect(
+      branch.getByRole("button", { name: "Expand Blue Lines · Massive Attack" }),
+    ).toBeVisible();
+
+    await massiveAttack.click();
+    const collapsedMassiveAttack = page.getByRole("button", {
+      name: "Show albums by Massive Attack",
+    });
+    await expect(collapsedMassiveAttack).toHaveAttribute("aria-expanded", "false");
+    await expect(branch.locator(".compact-stack__tree-children")).toHaveCount(0);
+    await expect(
+      page.getByRole("checkbox", { name: "Skip Blue Lines · Massive Attack in the Stack window" }),
+    ).toHaveCount(0);
+
+    await collapsedMassiveAttack.click();
+    await expect(
+      branch.getByRole("checkbox", { name: "Skip Blue Lines · Massive Attack in the Stack window" }),
+    ).toBeVisible();
+  });
+
   test("re-including a skipped album from the skipped region removes it from there", async ({
     page,
   }) => {

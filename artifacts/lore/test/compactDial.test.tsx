@@ -245,6 +245,10 @@ describe("CompactDial category-first home Feed", () => {
     expect(labels).toEqual(["Ambient & Sleep", "Anchor Stations"]);
     expect(screen.getByTestId("compact-category-anchor").textContent)
       .toContain("KEXP: The Smile — Bending Hectic");
+    expect(
+      screen.getByTestId("compact-category-anchor")
+        .classList.contains("compact-category-dial__tree-disclosure"),
+    ).toBe(true);
     expect(screen.getByTestId("compact-category-anchor")
       .closest(".compact-category-dial__summary")
       ?.querySelector(".compact-category-dial__count")?.textContent)
@@ -408,6 +412,10 @@ describe("CompactDial category-first home Feed", () => {
     fireEvent.click(anchorButton);
     expect(anchorButton.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
+    expect(
+      anchorButton.closest(".compact-category-dial__group")
+        ?.classList.contains("compact-category-dial__group--expanded"),
+    ).toBe(true);
     fireEvent.click(campusButton);
     expect(campusButton.getAttribute("aria-expanded")).toBe("true");
     expect(anchorButton.getAttribute("aria-expanded")).toBe("false");
