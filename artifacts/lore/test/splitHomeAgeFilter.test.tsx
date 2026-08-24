@@ -194,15 +194,17 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
-  it("removes the old controls and leaves Scan as the archive entry point", () => {
+describe.skip("SplitHome — retired front-door remote", () => {
+  it("renders no scan, paging, or density controls", () => {
     render(<SplitHome />);
     expect(screen.queryByRole("button", { name: /^Crossings/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Station type/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Track age/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Find stations/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /History scan/ })).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Open Scan" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Open Scan" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Scan commands" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Stack pages" })).toBeNull();
   });
 
   it.each([
@@ -540,6 +542,18 @@ describe("SplitHome — age-tier CLI commands filter the compact Dial", () => {
 // All-stations deterministic ordering
 // ---------------------------------------------------------------------------
 
+describe("SplitHome — minimal tree front door", () => {
+  it("renders only the Feed and Stack tree bands", () => {
+    render(<SplitHome />);
+
+    expect(screen.getByRole("region", { name: "Live stations" })).not.toBeNull();
+    expect(screen.getByRole("region", { name: "Recent keeps" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Scan" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Scan commands" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Stack pages" })).toBeNull();
+  });
+});
+
 describe("SplitHome — crossing-positive filter progressive loading", () => {
   beforeEach(() => {
     // The crossing-positive filter only exists in the crossings-on feed;
@@ -660,7 +674,7 @@ describe("SplitHome — all stations in one deterministic order", () => {
 // Compact scan remote — page/all preview scans
 // ---------------------------------------------------------------------------
 
-describe("SplitHome — compact scan remote", () => {
+describe.skip("SplitHome — retired compact scan remote", () => {
   it("Scan previews the first row of the selected page and becomes Stop", () => {
     vi.useFakeTimers();
     try {
@@ -886,7 +900,7 @@ describe("SplitHome — compact scan remote", () => {
 // Per-station scan-skip preference
 // ---------------------------------------------------------------------------
 
-describe("SplitHome — per-station scan skip", () => {
+describe.skip("SplitHome — retired scan skip remote", () => {
   it("unchecking a station moves it to the below-fold skipped region, freeing the active page", () => {
     mockStations.value = Array.from({ length: 6 }, (_, i) =>
       makeStation(`st-${i + 1}`, null),

@@ -8082,12 +8082,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    SplitHome — the three-band 50/50 front door with the CLI seam
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Full-viewport, non-scrolling three-band grid: the two halves flex evenly
-   and the CLI strip sizes to content in the middle. */
+/* Full-viewport, non-scrolling two-tree grid. Advanced remotes belong on the
+   dedicated Feed and Stack routes, not this minimal front door. */
 .split-home {
   display: grid;
-  /* radio remote / dial band / CLI seam / stack band / stack pager */
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   height: calc(100vh - var(--shell-h, 0px));
   height: calc(100dvh - var(--shell-h, 0px));
   overflow: hidden;

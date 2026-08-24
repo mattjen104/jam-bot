@@ -137,14 +137,17 @@ async function installRoutes(page: Page) {
 }
 
 test.describe("unified Scan session", () => {
-  test("compact home reaches archive history through the universal Scan session", async ({
+  test("Feed reaches archive history through the universal Scan session", async ({
     page,
   }) => {
     const { historyRequests } = await installRoutes(page);
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
 
-    await page.getByTestId("scan-entry").first().focus();
+    const scanLens = page
+      .getByRole("group", { name: "Dial lens" })
+      .getByRole("button", { name: "Scan" });
+    await scanLens.focus();
     await page.keyboard.press("Enter");
 
     const dialog = page.getByRole("dialog", { name: "Scan" });

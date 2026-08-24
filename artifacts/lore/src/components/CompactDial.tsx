@@ -120,6 +120,8 @@ export interface CompactDialProps {
    * meaning for personal and unclassified stations.
    */
   visibleUncategorizedSlugs?: ReadonlySet<string>;
+  /** Opens the first editorial category on initial render for a tree-first home view. */
+  defaultOpenFirstCategory?: boolean;
 }
 
 function CompactDialRow({
@@ -397,6 +399,7 @@ function categoryNowPlaying(rows: CategoryGroup["rows"]): CategoryNowPlayingEntr
 function CategoryNowPlayingFeed({
   group,
   density,
+  showAll = false,
   activeSlug,
   playerStatus,
   onTuneIn,
@@ -405,6 +408,7 @@ function CategoryNowPlayingFeed({
 }: {
   group: CategoryGroup;
   density: DialDensity;
+  showAll?: boolean;
   activeSlug: string | null;
   playerStatus: PlayerStatus;
   onTuneIn: (row: DialLaneRow) => void;
@@ -416,7 +420,9 @@ function CategoryNowPlayingFeed({
   const [page, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(entries.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
-  const visible = entries.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+  const visible = showAll
+    ? entries
+    : entries.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
 
   return (
     <div
@@ -472,7 +478,7 @@ function CategoryNowPlayingFeed({
           </div>
         );
       })}
-      {pageCount > 1 && (
+      {!showAll && pageCount > 1 && (
         <div className="compact-dial__pager" role="group" aria-label={`${group.label} now-playing feed pages`}>
           <button type="button" disabled={currentPage === 0} onClick={() => setPage((value) => value - 1)}
             aria-label={`Previous ${group.label} now-playing feed page`}>←</button>
@@ -741,6 +747,7 @@ function CategoryFirstDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
+  defaultOpenFirstCategory = false,
   density = "normal",
 }: CompactDialProps) {
   const groups = useMemo(
@@ -748,6 +755,7 @@ function CategoryFirstDial({
     [activeRows, skippedRows],
   );
   const [expandedCategory, setExpandedCategory] = useState<CompactCategory | null>(null);
+  const [hasChosenCategory, setHasChosenCategory] = useState(false);
   const [expandedSpecialist, setExpandedSpecialist] = useState<SpecialistSubcategory | null>(null);
   const [categoryPage, setCategoryPage] = useState(0);
   const specialistGroup = groups.find((group) => group.category === "specialist") ?? null;
@@ -759,6 +767,9 @@ function CategoryFirstDial({
   const sampledSlug = sampledRow?.ds.station.slug ?? null;
   const sampledCategory = sampledRow ? categoryForRow(sampledRow) : null;
   const editorialGroups = groups.filter((group) => group.category !== "other");
+  const defaultExpandedCategory = defaultOpenFirstCategory
+    ? editorialGroups[0]?.category ?? null
+    : null;
   const uncategorizedGroup = groups.find((group) => group.category === "other") ?? null;
   const visibleUncategorizedGroup = uncategorizedGroup && {
     ...uncategorizedGroup,
@@ -769,7 +780,9 @@ function CategoryFirstDial({
     ),
   };
   const categoryPageCount = Math.max(1, Math.ceil(editorialGroups.length / 5));
-  const visibleGroups = editorialGroups.slice(categoryPage * 5, categoryPage * 5 + 5);
+  const visibleGroups = defaultOpenFirstCategory
+    ? editorialGroups
+    : editorialGroups.slice(categoryPage * 5, categoryPage * 5 + 5);
   const pager = (label: string, page: number, pageCount: number, onPage: (next: number) => void) =>
     pageCount > 1 ? (
       <div className="compact-dial__pager" role="group" aria-label={`${label} pages`}>
@@ -808,7 +821,10 @@ function CategoryFirstDial({
       {visibleGroups.map((group) => {
         // A running station scan keeps its current station visible, but does
         // not overwrite the listener's manually chosen category once it ends.
-        const isExpanded = sampledCategory === group.category || expandedCategory === group.category;
+        const isExpanded =
+          sampledCategory === group.category
+          || expandedCategory === group.category
+          || (!hasChosenCategory && defaultExpandedCategory === group.category);
         const isSpecialist = group.category === "specialist";
         return (
           <section
@@ -826,7 +842,11 @@ function CategoryFirstDial({
                   : undefined
               }
                onToggle={() => {
-                 setExpandedCategory((current) => current === group.category ? null : group.category);
+                 setHasChosenCategory(true);
+                  setExpandedCategory((current) => {
+                    const activeCategory = current ?? defaultExpandedCategory;
+                    return activeCategory === group.category ? null : group.category;
+                  });
                }}
             />
             {isExpanded && (
@@ -851,6 +871,7 @@ function CategoryFirstDial({
                 <CategoryNowPlayingFeed
                   group={group}
                   density={density}
+                  showAll={defaultOpenFirstCategory}
                   activeSlug={activeSlug}
                   playerStatus={playerStatus}
                   onTuneIn={onTuneIn}
@@ -862,7 +883,7 @@ function CategoryFirstDial({
           </section>
         );
       })}
-      {pager("category", categoryPage, categoryPageCount, setCategoryPage)}
+      {!defaultOpenFirstCategory && pager("category", categoryPage, categoryPageCount, setCategoryPage)}
       {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (
         <section className="compact-category-dial__uncategorized" aria-label="Other stations">
           {editorialGroups.length > 0 && (
@@ -901,6 +922,7 @@ export function CompactDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
+  defaultOpenFirstCategory,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -935,6 +957,7 @@ export function CompactDial({
         visibleUncategorizedSlugs={visibleUncategorizedSlugs}
         onToggleCategory={onToggleCategory}
         activeCategories={activeCategories}
+        defaultOpenFirstCategory={defaultOpenFirstCategory}
         density={density}
       />
     );
