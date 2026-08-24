@@ -10439,3 +10439,305 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: hsl(var(--primary) / 0.18);
   color: hsl(var(--muted-foreground));
 }
+
+/* ── SplitHome compact-tree graduation ────────────────────────────────────
+   The front door is the real-data implementation of the Compact Tree
+   Explorer mockup: two quiet, square-cornered tree surfaces on desktop,
+   collapsing to one column on narrow screens. Keep these tokens scoped so
+   the full Feed and Library retain their own visual language. */
+.split-home {
+  --home-tree-bg: #171816;
+  --home-tree-panel: #1d201c;
+  --home-tree-line: rgba(205, 214, 191, .18);
+  --home-tree-muted: #899184;
+  --home-tree-text: #e5e9de;
+  --home-tree-accent: #b9d99b;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 24px;
+  height: calc(100dvh - var(--shell-h, 0px));
+  padding: clamp(18px, 3vw, 40px);
+  overflow: hidden;
+  color: var(--home-tree-text);
+  background: radial-gradient(circle at 20% 0%, #24281f 0, var(--home-tree-bg) 45%);
+  font-family: var(--lore-font-terminal);
+}
+.split-home__intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1120px;
+  width: 100%;
+  margin: 0 auto;
+}
+.split-home__kicker {
+  margin: 0;
+  color: var(--home-tree-accent);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.split-home__intro h1 {
+  max-width: 630px;
+  margin: 6px 0 8px;
+  color: var(--home-tree-text);
+  font-family: var(--lore-font-wordmark);
+  font-size: var(--lore-size-signature);
+  font-weight: 400;
+  line-height: 1.05;
+}
+.split-home__lede {
+  max-width: 580px;
+  margin: 0;
+  color: var(--home-tree-muted);
+  font-family: var(--lore-font-body);
+  font-size: var(--lore-size-small);
+}
+.split-home__status {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--home-tree-muted);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  white-space: nowrap;
+}
+.split-home__status span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--home-tree-accent);
+  box-shadow: 0 0 0 3px rgb(185 217 155 / .1);
+}
+.split-home__trees {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  min-height: 0;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+}
+.split-home__band {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px;
+  overflow: hidden;
+  border: 1px solid var(--home-tree-line);
+  border-radius: 0;
+  background: rgb(29 32 28 / .82);
+}
+.split-home__panel-header {
+  flex: 0 0 auto;
+}
+.split-home__panel-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--home-tree-line);
+}
+.split-home__panel-title h2 {
+  margin: 0;
+  color: var(--home-tree-text);
+  font-family: var(--lore-font-wordmark);
+  font-size: var(--lore-size-interface);
+  font-weight: 400;
+}
+.split-home__panel-title span {
+  color: var(--home-tree-muted);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  white-space: nowrap;
+}
+.split-home .compact-dial--categories {
+  gap: 0;
+  padding: 0;
+}
+.split-home .compact-category-dial__group {
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+}
+.split-home .compact-category-dial__group--expanded::before {
+  left: 15px;
+  top: 30px;
+  bottom: 0;
+  border-color: var(--home-tree-line);
+}
+.split-home .compact-category-dial__topline {
+  min-height: 32px;
+  padding: 0;
+}
+.split-home .compact-category-dial__summary-button {
+  gap: 8px;
+  color: var(--home-tree-text);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+}
+.split-home .compact-category-dial__summary-button:hover,
+.split-home .compact-category-dial__summary-button:focus-visible {
+  color: var(--home-tree-accent);
+  background: transparent;
+  outline-color: var(--home-tree-accent);
+}
+.split-home .compact-category-dial__tree-mark,
+.split-home .compact-stack__tree-disclosure > span:first-child {
+  width: 15px;
+  height: 17px;
+  flex-basis: 15px;
+  border-color: rgb(205 214 191 / .3);
+  color: var(--home-tree-accent);
+}
+.split-home .compact-category-dial__label,
+.split-home .compact-category-dial__now-header-line,
+.split-home .compact-category-dial__meta,
+.split-home .compact-category-dial__metric,
+.split-home .compact-category-dial__now-header {
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+}
+.split-home .compact-category-dial__label {
+  color: var(--home-tree-text);
+}
+.split-home .compact-category-dial__now-header-line {
+  color: var(--home-tree-muted);
+}
+.split-home .compact-category-dial__now-header-line b {
+  color: var(--home-tree-text);
+}
+.split-home .compact-category-dial__meta {
+  min-height: 22px;
+  padding: 0 0 4px 23px;
+  color: var(--home-tree-muted);
+}
+.split-home .compact-category-dial__metric {
+  border-color: var(--home-tree-line);
+  color: var(--home-tree-muted);
+}
+.split-home .compact-category-dial__metric b {
+  color: var(--home-tree-accent);
+}
+.split-home .compact-category-dial__stations {
+  margin-left: 20px;
+  padding-left: 12px;
+  border-top: 0;
+  border-left: 1px solid var(--home-tree-line);
+}
+.split-home .compact-category-dial__stations .compact-dial__row {
+  min-height: 32px;
+}
+.split-home .compact-dial__row {
+  flex: 0 0 auto;
+  min-height: 32px;
+  border-color: rgb(205 214 191 / .09);
+}
+.split-home .compact-dial__row::before {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  width: 12px;
+  border-top: 1px solid var(--home-tree-line);
+}
+.split-home .fdrow {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.split-home .fdrow__t1,
+.split-home .fdrow__t1 *,
+.split-home .fdrow__t3,
+.split-home .fdrow__station-chip {
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  font-weight: 400;
+}
+.split-home .fdrow__artist,
+.split-home .fdrow__compact-artist,
+.split-home .fdrow__compact-crossing-artist {
+  color: var(--home-tree-text);
+  font-weight: 400;
+}
+.split-home .fdrow__compact-station,
+.split-home .fdrow__t3,
+.split-home .fdrow__station-chip {
+  color: var(--home-tree-muted);
+}
+.split-home .compact-play-btn {
+  color: var(--home-tree-muted);
+}
+.split-home .compact-dial__scan-checkbox {
+  margin-right: 0;
+  border-radius: 0;
+  border-color: var(--home-tree-line);
+}
+.split-home .compact-dial__scan-checkbox:checked {
+  border-color: var(--home-tree-accent);
+  background: var(--home-tree-accent);
+}
+.split-home .compact-stack {
+  grid-template-rows: repeat(5, minmax(32px, 1fr));
+}
+.split-home .compact-stack__tree-group {
+  border-color: rgb(205 214 191 / .09);
+}
+.split-home .compact-stack__tree-heading {
+  padding: 0;
+  background: transparent;
+}
+.split-home .compact-stack__tree-disclosure {
+  min-height: 32px;
+  color: var(--home-tree-text);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+}
+.split-home .compact-stack__tree-disclosure:hover,
+.split-home .compact-stack__tree-disclosure:focus-visible {
+  color: var(--home-tree-accent);
+}
+.split-home .compact-stack__tree-children {
+  border-left-color: var(--home-tree-line);
+}
+.split-home .compact-stack__tree-children .compact-stack__row::before {
+  border-top-color: var(--home-tree-line);
+}
+.split-home .compact-stack__row,
+.split-home .compact-stack__text,
+.split-home .compact-stack__album,
+.split-home .compact-stack__artist,
+.split-home .compact-stack__year {
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  font-weight: 400;
+}
+.split-home .compact-stack__album { color: var(--home-tree-text); }
+.split-home .compact-stack__artist,
+.split-home .compact-stack__year { color: var(--home-tree-muted); }
+
+@media (max-width: 760px) {
+  .split-home {
+    height: auto;
+    min-height: calc(100dvh - var(--shell-h, 0px));
+    padding: 18px 16px 32px;
+    overflow: visible;
+  }
+  .split-home__intro {
+    display: block;
+  }
+  .split-home__status {
+    margin-top: 14px;
+  }
+  .split-home__trees {
+    grid-template-columns: 1fr;
+  }
+  .split-home__band {
+    min-height: 360px;
+  }
+}
