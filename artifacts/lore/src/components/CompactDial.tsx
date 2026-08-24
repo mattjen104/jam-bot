@@ -666,18 +666,6 @@ function CategorySummary({
   return (
     <div className={`compact-category-dial__summary${expanded ? " compact-category-dial__summary--expanded" : ""}`}>
       <div className="compact-category-dial__topline">
-        <span className="compact-category-dial__label">{group.label}</span>
-        {group.category !== "other" && onToggleCategory && (
-          <label className="compact-category-dial__include">
-            <input
-              type="checkbox"
-              checked={active}
-              aria-label={`${active ? "Include" : "Exclude"} ${group.label}`}
-              onChange={onToggleCategory}
-              onClick={(event) => event.stopPropagation()}
-            />
-          </label>
-        )}
         <button
           type="button"
           className="compact-category-dial__summary-button compact-category-dial__tree-disclosure"
@@ -690,12 +678,24 @@ function CategorySummary({
           <span className="compact-category-dial__tree-mark" aria-hidden="true">
             {expanded ? "−" : "+"}
           </span>
+          <span className="compact-category-dial__label">{group.label}</span>
           <span className="compact-category-dial__now-header-line">
             {leadNowPlaying
               ? <><b>{leadNowPlaying.row.ds.station.name}</b>: {leadNowPlaying.label}</>
               : "Now playing unavailable"}
           </span>
         </button>
+        {group.category !== "other" && onToggleCategory && (
+          <label className="compact-category-dial__include">
+            <input
+              type="checkbox"
+              checked={active}
+              aria-label={`${active ? "Include" : "Exclude"} ${group.label}`}
+              onChange={onToggleCategory}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </label>
+        )}
       </div>
       <div className="compact-category-dial__meta">
         <span className="compact-category-dial__count">

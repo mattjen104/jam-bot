@@ -8284,7 +8284,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 4px 8px 1px 10px;
+  padding: 4px 10px 3px 12px;
 }
 .compact-category-dial__summary-button {
   min-width: 0;
@@ -8298,7 +8298,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--foreground));
   cursor: pointer;
   text-align: left;
-  font: inherit;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .02em;
 }
 .compact-category-dial__tree-disclosure {
   gap: 8px;
@@ -8424,9 +8426,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   outline-offset: -2px;
 }
 .compact-category-dial__label {
-  font-family: var(--app-font-display);
-  font-size: var(--lore-size-interface);
+  min-width: 0;
+  flex: 0 0 auto;
   color: hsl(var(--foreground));
+  font: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
