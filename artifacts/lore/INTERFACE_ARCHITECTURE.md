@@ -413,5 +413,74 @@ Options 2 and 3 are more efficient for bulk coverage review. Option 1 is suffici
 
 ---
 
+## 11. Compact tree interaction direction
+
+**Decision:** Carry the CompactTreeExplorer's interaction model into production
+Feed and Stack work, but keep Lore's established text-first row grammar and
+player behavior. Disclosure and selection are separate actions: opening a
+branch reveals its contents without changing whether that category, station,
+group, or album participates in the active scan/window. Deselecting dims and
+demotes an item from the active window, but never makes it unreachable.
+
+### Shared grammar
+
+Category → station and artist/group → album use the same tree mechanics:
+
+- a dedicated disclosure control for branches, with a visible connector;
+- a separate selection/scan control when the surface supports filtering;
+- a left-to-right identity line with a short secondary detail;
+- contextual information stays in the branch, not in a competing side rail.
+
+The semantic priority remains surface-specific: Feed categories lead to
+stations and live context; Stack groups lead to albums and kept metadata.
+This is one interaction grammar, not a forced identical row sentence.
+Stack album rows continue to follow the existing `album · artist · credit`
+convention, while Feed rows continue to lead with the crossing artist.
+
+### Inline information that ships
+
+- **Feed category summary:** station count, active/in-scan count when they
+  differ, the leading now-playing item, crossing count, first-play count, and
+  the existing track-age distribution badge.
+- **Feed station branch:** station identity, live/quiet state, current track
+  when known, tune/play/scan controls, and the existing crossing/unchanged
+  cues. Do not invent a track when metadata is unavailable.
+- **Stack group/album branch:** album title, year, track count where known,
+  artist, and a relationship credit only when grounded knowledge exists.
+  Expanded branches may contain liner notes and source links; collapsed rows
+  remain compact and text-first.
+
+Metrics are supporting evidence, not the primary label. Keep their scope
+explicit, preserve null-honest wording, and do not add decorative summaries
+that cannot be acted on.
+
+### Empty states
+
+- A present but quiet Feed category says **“No current track”** and retains
+  its station count and metrics.
+- A category with no live stations says **“No stations on air in this
+  branch.”**
+- A Stack group without album metadata says **“no album metadata”** /
+  **“Unresolved”** and remains visible and reachable.
+- Missing track, relationship, artwork, or source data degrades locally; it
+  must not hide the branch or imply a successful lookup.
+
+### Responsive and accessibility requirements
+
+At narrow widths the tree becomes one column. Context wraps below identity
+instead of creating horizontal scrolling or a second rail. Long labels
+ellipsize only where the full accessible name remains available.
+
+Every disclosure is a native button with an accurate accessible name,
+`aria-expanded`, and `aria-controls` pointing at the revealed region.
+Selection controls expose checkbox semantics and an accurate checked state.
+Rows with a primary action retain a real focusable control and an explicit
+name; Enter and Space activate the focused row. Interactive descendants
+(play, keep, links, and selection) must stop propagation so their keyboard
+actions never expand, collapse, or activate the parent row. Focus-visible
+styles and a minimum comfortable target size are required on phone layouts.
+Hidden/deselected items remain keyboard reachable, and expansion must not
+silently move focus or unmount neighboring bands.
+
 *Document produced as part of Task 89 — Lore unified minimal interface architecture.*  
 *Implementation begins in the follow-up task set.*
