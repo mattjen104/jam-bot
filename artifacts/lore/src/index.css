@@ -8260,6 +8260,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-radius: 5px;
   overflow: hidden;
   background: hsl(var(--card) / 0.48);
+  position: relative;
+}
+.compact-category-dial__group::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 26px;
+  bottom: 8px;
+  border-left: 1px solid hsl(var(--border) / .42);
+  pointer-events: none;
 }
 .compact-category-dial__summary {
   width: 100%;
@@ -8566,6 +8576,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-direction: column;
   border-top: 1px solid hsl(var(--live) / 0.35);
   background: hsl(var(--background) / 0.2);
+  margin-left: 14px;
+  border-left: 1px solid hsl(var(--border) / .5);
 }
 .compact-category-dial__feed-row {
   display: flex;
@@ -9566,6 +9578,70 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   grid-template-rows: repeat(5, minmax(0, 1fr));
   position: relative;
   overflow: hidden;
+}
+/* Tree presentation for the five-item window. The data remains paged by
+   album; artist nodes are only a visual/disclosure layer. */
+.compact-stack__tree-group {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid hsl(var(--border) / .28);
+}
+.compact-stack__tree-heading {
+  min-width: 0;
+  padding: 3px 10px 2px 14px;
+  background: hsl(var(--background) / .34);
+}
+.compact-stack__tree-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  width: 100%;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: .02em;
+}
+.compact-stack__tree-disclosure:hover,
+.compact-stack__tree-disclosure:focus-visible {
+  color: hsl(var(--foreground));
+}
+.compact-stack__tree-disclosure:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: 2px;
+}
+.compact-stack__tree-disclosure > span:first-child {
+  width: 12px;
+  color: hsl(var(--live));
+  text-align: center;
+}
+.compact-stack__tree-disclosure > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-stack__tree-count {
+  margin-left: auto;
+  color: hsl(var(--faint));
+}
+.compact-stack__tree-children {
+  min-width: 0;
+  margin-left: 14px;
+  border-left: 1px solid hsl(var(--border) / .5);
+}
+.compact-stack__tree-children .compact-stack__row {
+  min-height: 0;
+}
+.compact-stack--expanded .compact-stack__tree-group {
+  flex: 0 0 auto;
 }
 /* Density zoom: compact packs ten half-height rows into the band, micro
    packs fifteen one-third-height rows. The reduced row height naturally

@@ -679,6 +679,9 @@ export interface CompactStackProps {
 export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [collapsedArtists, setCollapsedArtists] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const { data, isLoading } = useMyLibraryInfinite({}, 100);
 
   // Rows per page at the current density: 5 (normal), 10 (compact), or
@@ -916,6 +919,67 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
       </>
     );
   };
+
+  const artistTree = (items: AlbumGroup[]) => {
+    const byArtist = new Map<string, AlbumGroup[]>();
+    for (const group of items) {
+      const artist = group.artist.trim() || "Unknown artist";
+      const existing = byArtist.get(artist);
+      if (existing) existing.push(group);
+      else byArtist.set(artist, [group]);
+    }
+    return [...byArtist.entries()].map(([artist, albums]) => ({ artist, albums }));
+  };
+
+  const renderTreeRows = (items: AlbumGroup[], withDensity = false) =>
+    artistTree(items).map(({ artist, albums }) => {
+      const isCollapsed = collapsedArtists.has(artist);
+      return (
+        <section className="compact-stack__tree-group" key={artist}>
+          <div className="compact-stack__tree-heading">
+            <button
+              type="button"
+              className="compact-stack__tree-disclosure"
+              aria-expanded={!isCollapsed}
+              aria-label={`${isCollapsed ? "Show" : "Hide"} albums by ${artist}`}
+              onClick={() =>
+                setCollapsedArtists((current) => {
+                  const next = new Set(current);
+                  if (next.has(artist)) next.delete(artist);
+                  else next.add(artist);
+                  return next;
+                })
+              }
+            >
+              <span aria-hidden="true">{isCollapsed ? "+" : "−"}</span>
+              <span>{artist}</span>
+              <span className="compact-stack__tree-count">{albums.length}</span>
+            </button>
+          </div>
+          {!isCollapsed && (
+            <div className="compact-stack__tree-children">
+              {albums.map((group) => {
+                const mbid = primaryMbid(group);
+                const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
+                return (
+                  <CompactStackRow
+                    key={group.key}
+                    group={group}
+                    credit={credit}
+                    renderSpine={renderSpine}
+                    sampling={group.key === shuffleKey}
+                    density={withDensity ? density : undefined}
+                    isSkipped={skippedGroups.includes(group)}
+                    onToggleSkip={onToggleSkip}
+                    onExpand={() => changeExpanded(group.key)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </section>
+      );
+    });
 
   // ── Expanded: header row + notes in place, remaining rows still listed ──
   if (expandedGroup) {
