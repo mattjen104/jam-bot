@@ -464,6 +464,40 @@ describe("CompactStack collapsed rows", () => {
     expect(container.querySelectorAll("img.compact-stack__backdrop-art")).toHaveLength(0);
     expect(container.querySelector(".compact-stack__backdrop-art--pan")).toBeNull();
   });
+
+  it("uses an artist disclosure without changing the album window or row controls", () => {
+    libraryItems = [
+      makeItem({ mbid: "m1", albumTitle: "First", artist: "Shared Artist" }),
+      makeItem({ mbid: "m2", albumTitle: "Second", artist: "Shared Artist" }),
+      makeItem({ mbid: "m3", albumTitle: "Third", artist: "Another Artist" }),
+    ];
+    renderStack();
+
+    const disclosure = screen.getByRole("button", {
+      name: "Hide albums by Shared Artist",
+    });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "Expand First · Shared Artist" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Expand Second · Shared Artist" }),
+    ).toBeTruthy();
+
+    fireEvent.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.queryByRole("button", { name: "Expand First · Shared Artist" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Expand Third · Another Artist" }),
+    ).toBeTruthy();
+
+    fireEvent.click(disclosure);
+    expect(
+      screen.getByRole("button", { name: "Expand First · Shared Artist" }),
+    ).toBeTruthy();
+  });
 });
 
 describe("CompactStack density zoom", () => {

@@ -30,6 +30,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
   type SyntheticEvent,
 } from "react";
 import { useLocation } from "wouter";
@@ -676,6 +679,96 @@ export interface CompactStackProps {
   onToggleSkip?: (key: string) => void;
 }
 
+function groupByArtist(items: AlbumGroup[]) {
+  const byArtist = new Map<string, AlbumGroup[]>();
+  for (const group of items) {
+    const artist = group.artist.trim() || "Unknown artist";
+    const existing = byArtist.get(artist);
+    if (existing) existing.push(group);
+    else byArtist.set(artist, [group]);
+  }
+  return [...byArtist.entries()].map(([artist, albums]) => ({ artist, albums }));
+}
+
+function StackTreeRows({
+  items,
+  collapsedArtists,
+  setCollapsedArtists,
+  knowledgeByMbid,
+  renderSpine,
+  shuffleKey,
+  density,
+  skippedKeys,
+  onToggleSkip,
+  onExpand,
+}: {
+  items: AlbumGroup[];
+  collapsedArtists: ReadonlySet<string>;
+  setCollapsedArtists: Dispatch<SetStateAction<ReadonlySet<string>>>;
+  knowledgeByMbid: ReadonlyMap<string, TrackKnowledge | null>;
+  renderSpine: (group: AlbumGroup) => ReactNode;
+  shuffleKey: string | null;
+  density?: StackDensity;
+  skippedKeys: ReadonlySet<string>;
+  onToggleSkip?: (key: string) => void;
+  onExpand: (key: string) => void;
+}) {
+  const renderAlbum = (group: AlbumGroup) => {
+    const mbid = primaryMbid(group);
+    const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
+    return (
+      <CompactStackRow
+        key={group.key}
+        group={group}
+        credit={credit}
+        renderSpine={renderSpine}
+        sampling={group.key === shuffleKey}
+        density={density}
+        isSkipped={skippedKeys.has(group.key)}
+        onToggleSkip={onToggleSkip}
+        onExpand={() => onExpand(group.key)}
+      />
+    );
+  };
+
+  // Micro is intentionally title-only. Keep its existing density contract
+  // rather than leaking artist tree labels into a deliberately terse mode.
+  if (density === "micro") return items.map(renderAlbum);
+
+  return groupByArtist(items).map(({ artist, albums }) => {
+    const isCollapsed = collapsedArtists.has(artist);
+    return (
+      <section className="compact-stack__tree-group" key={artist}>
+        <div className="compact-stack__tree-heading">
+          <button
+            type="button"
+            className="compact-stack__tree-disclosure"
+            aria-expanded={!isCollapsed}
+            aria-label={`${isCollapsed ? "Show" : "Hide"} albums by ${artist}`}
+            onClick={() =>
+              setCollapsedArtists((current) => {
+                const next = new Set(current);
+                if (next.has(artist)) next.delete(artist);
+                else next.add(artist);
+                return next;
+              })
+            }
+          >
+            <span aria-hidden="true">{isCollapsed ? "+" : "−"}</span>
+            <span>{artist}</span>
+            <span className="compact-stack__tree-count">{albums.length}</span>
+          </button>
+        </div>
+        {!isCollapsed && (
+          <div className="compact-stack__tree-children">
+            {albums.map(renderAlbum)}
+          </div>
+        )}
+      </section>
+    );
+  });
+}
+
 export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -702,6 +795,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
     () => (skipped ? allGroups.filter((g) => skipped.has(g.key)) : []),
     [allGroups, skipped],
   );
+  const skippedKeys = skipped ?? new Set<string>();
   const groups = useMemo(
     () => activeGroups.slice(offset, offset + pageSize),
     [activeGroups, offset, pageSize],
@@ -920,67 +1014,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
     );
   };
 
-  const artistTree = (items: AlbumGroup[]) => {
-    const byArtist = new Map<string, AlbumGroup[]>();
-    for (const group of items) {
-      const artist = group.artist.trim() || "Unknown artist";
-      const existing = byArtist.get(artist);
-      if (existing) existing.push(group);
-      else byArtist.set(artist, [group]);
-    }
-    return [...byArtist.entries()].map(([artist, albums]) => ({ artist, albums }));
-  };
-
-  const renderTreeRows = (items: AlbumGroup[], withDensity = false) =>
-    artistTree(items).map(({ artist, albums }) => {
-      const isCollapsed = collapsedArtists.has(artist);
-      return (
-        <section className="compact-stack__tree-group" key={artist}>
-          <div className="compact-stack__tree-heading">
-            <button
-              type="button"
-              className="compact-stack__tree-disclosure"
-              aria-expanded={!isCollapsed}
-              aria-label={`${isCollapsed ? "Show" : "Hide"} albums by ${artist}`}
-              onClick={() =>
-                setCollapsedArtists((current) => {
-                  const next = new Set(current);
-                  if (next.has(artist)) next.delete(artist);
-                  else next.add(artist);
-                  return next;
-                })
-              }
-            >
-              <span aria-hidden="true">{isCollapsed ? "+" : "−"}</span>
-              <span>{artist}</span>
-              <span className="compact-stack__tree-count">{albums.length}</span>
-            </button>
-          </div>
-          {!isCollapsed && (
-            <div className="compact-stack__tree-children">
-              {albums.map((group) => {
-                const mbid = primaryMbid(group);
-                const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
-                return (
-                  <CompactStackRow
-                    key={group.key}
-                    group={group}
-                    credit={credit}
-                    renderSpine={renderSpine}
-                    sampling={group.key === shuffleKey}
-                    density={withDensity ? density : undefined}
-                    isSkipped={skippedGroups.includes(group)}
-                    onToggleSkip={onToggleSkip}
-                    onExpand={() => changeExpanded(group.key)}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </section>
-      );
-    });
-
   // ── Expanded: header row + notes in place, remaining rows still listed ──
   if (expandedGroup) {
     // When a filmstrip swap is active, link to the album the listener is
@@ -1074,46 +1107,33 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         </div>
         {/* The remaining compact rows stay mounted below the notes so the
             band reads as one continuous, scrollable column. */}
-        {belowRows.map((group) => {
-          const mbid = primaryMbid(group);
-          const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
-          return (
-            <CompactStackRow
-              key={group.key}
-              group={group}
-              credit={credit}
-              renderSpine={renderSpine}
-              sampling={group.key === shuffleKey}
-              onToggleSkip={onToggleSkip}
-              onExpand={() => changeExpanded(group.key)}
-            />
-          );
-        })}
+        <StackTreeRows
+          items={belowRows}
+          collapsedArtists={collapsedArtists}
+          setCollapsedArtists={setCollapsedArtists}
+          knowledgeByMbid={knowledgeByMbid}
+          renderSpine={renderSpine}
+          shuffleKey={shuffleKey}
+          skippedKeys={skippedKeys}
+          onToggleSkip={onToggleSkip}
+          onExpand={changeExpanded}
+        />
         {skippedGroups.filter((g) => g.key !== expandedKey).length > 0 && (
           <div
             className="compact-stack__skipped-region"
             aria-label="Excluded from the Stack window"
           >
-            {skippedGroups
-              .filter((g) => g.key !== expandedKey)
-              .map((group) => {
-                const mbid = primaryMbid(group);
-                const credit = mbid
-                  ? relationshipCredit(knowledgeByMbid.get(mbid))
-                  : null;
-                return (
-                  <CompactStackRow
-                    key={group.key}
-                    group={group}
-                    credit={credit}
-                    renderSpine={renderSpine}
-                    sampling={group.key === shuffleKey}
-                    isSkipped
-                    onToggleSkip={onToggleSkip}
-                    onExpand={() => changeExpanded(group.key)}
-                  />
-                );
-              })}
+            <StackTreeRows
+              items={skippedGroups.filter((g) => g.key !== expandedKey)}
+              collapsedArtists={collapsedArtists}
+              setCollapsedArtists={setCollapsedArtists}
+              knowledgeByMbid={knowledgeByMbid}
+              renderSpine={renderSpine}
+              shuffleKey={shuffleKey}
+              skippedKeys={skippedKeys}
+              onToggleSkip={onToggleSkip}
+              onExpand={changeExpanded}
+            />
           </div>
         )}
       </div>
@@ -1126,46 +1146,35 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
       className={`compact-stack${density !== "normal" ? ` compact-stack--${density}` : ""}${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
       aria-label="Recent keeps"
     >
-      {ordered.map((group) => {
-        const mbid = primaryMbid(group);
-        const credit = mbid ? relationshipCredit(knowledgeByMbid.get(mbid)) : null;
-        return (
-          <CompactStackRow
-            key={group.key}
-            group={group}
-            credit={credit}
-            renderSpine={renderSpine}
-            sampling={group.key === shuffleKey}
-            density={density}
-            onToggleSkip={onToggleSkip}
-            onExpand={() => changeExpanded(group.key)}
-          />
-        );
-      })}
+      <StackTreeRows
+        items={ordered}
+        collapsedArtists={collapsedArtists}
+        setCollapsedArtists={setCollapsedArtists}
+        knowledgeByMbid={knowledgeByMbid}
+        renderSpine={renderSpine}
+        shuffleKey={shuffleKey}
+        density={density}
+        skippedKeys={skippedKeys}
+        onToggleSkip={onToggleSkip}
+        onExpand={changeExpanded}
+      />
       {skippedGroups.length > 0 && (
         <div
           className="compact-stack__skipped-region"
           aria-label="Excluded from the Stack window"
         >
-          {skippedGroups.map((group) => {
-            const mbid = primaryMbid(group);
-            const credit = mbid
-              ? relationshipCredit(knowledgeByMbid.get(mbid))
-              : null;
-            return (
-              <CompactStackRow
-                key={group.key}
-                group={group}
-                credit={credit}
-                renderSpine={renderSpine}
-                sampling={group.key === shuffleKey}
-                isSkipped
-                density={density}
-                onToggleSkip={onToggleSkip}
-                onExpand={() => changeExpanded(group.key)}
-              />
-            );
-          })}
+          <StackTreeRows
+            items={skippedGroups}
+            collapsedArtists={collapsedArtists}
+            setCollapsedArtists={setCollapsedArtists}
+            knowledgeByMbid={knowledgeByMbid}
+            renderSpine={renderSpine}
+            shuffleKey={shuffleKey}
+            density={density}
+            skippedKeys={skippedKeys}
+            onToggleSkip={onToggleSkip}
+            onExpand={changeExpanded}
+          />
         </div>
       )}
       {!isLoading && groups.length === 0 && skippedGroups.length === 0 && (
