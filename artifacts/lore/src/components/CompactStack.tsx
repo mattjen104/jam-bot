@@ -775,7 +775,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   const [collapsedArtists, setCollapsedArtists] = useState<ReadonlySet<string>>(
     new Set(),
   );
-  const { data, isLoading } = useMyLibraryInfinite({}, 100);
+  const { data, isLoading, isError } = useMyLibraryInfinite({}, 100);
 
   // Rows per page at the current density: 5 (normal), 10 (compact), or
   // 15 (micro). Drives the window slice and the grid's row count alike.
@@ -1185,7 +1185,9 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         >
           {isLoading
             ? "Loading your artist → album Stack…"
-            : "Nothing kept yet — keep a track to grow your artist → album Stack."}
+            : isError
+              ? "We couldn’t load your Stack — open Stack to retry."
+              : "Nothing kept yet — keep a track to grow your artist → album Stack."}
         </button>
       )}
     </div>

@@ -68,10 +68,13 @@ vi.mock("wouter", () => ({
 
 // Library page data — set per test.
 let libraryItems: LibraryItem[] = [];
+let libraryIsLoading = false;
+let libraryIsError = false;
 vi.mock("../src/lib/meHooks", () => ({
   useMyLibraryInfinite: () => ({
     data: { pages: [{ items: libraryItems, nextCursor: null }] },
-    isLoading: false,
+    isLoading: libraryIsLoading,
+    isError: libraryIsError,
   }),
 }));
 
@@ -192,6 +195,8 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   libraryItems = [];
+  libraryIsLoading = false;
+  libraryIsError = false;
   knowledgeByMbid.clear();
   albumTracksByMbid.clear();
   albumTracksOverride = null;
@@ -404,6 +409,18 @@ describe("buildAlbumLinerGroups", () => {
 // ---------------------------------------------------------------------------
 
 describe("CompactStack collapsed rows", () => {
+  it("replaces a failed library load with a retryable Stack link", () => {
+    libraryIsError = true;
+    renderStack();
+
+    const fallback = screen.getByRole("button", {
+      name: "We couldn’t load your Stack — open Stack to retry.",
+    });
+    fireEvent.click(fallback);
+
+    expect(setLocation).toHaveBeenCalledWith("/library");
+  });
+
   it("renders `album · artist · credit` per album, no per-song rows", async () => {
     libraryItems = [
       makeItem({ mbid: "m1", albumTitle: "Blue Lines", artist: "Massive Attack", title: "Safe From Harm", addedAt: "2026-08-02T00:00:00Z" }),

@@ -201,6 +201,21 @@ function defaultTimeoutSignal(): AbortSignal | undefined {
   }
 }
 
+/**
+ * Generated client calls receive React Query's cancellation signal, but that
+ * signal has no deadline. Combine it with the app's API timeout so a stalled
+ * library request can settle into an error state instead of keeping the Stack
+ * front door pending forever.
+ */
+function withApiTimeout(signal: AbortSignal): AbortSignal {
+  const timeout = defaultTimeoutSignal();
+  if (!timeout) return signal;
+  const abortSignal = AbortSignal as typeof AbortSignal & {
+    any?: (signals: AbortSignal[]) => AbortSignal;
+  };
+  return abortSignal.any?.([signal, timeout]) ?? timeout;
+}
+
 /** Thin fetch wrapper: throws ApiError on non-ok responses.
  *  Applies a 15s abort deadline unless the caller passes its own signal. */
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
@@ -1015,14 +1030,14 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
 
   return useInfiniteQuery({
     queryKey: ["me", "library", "infinite", limit, q, sort, source] as const,
-    queryFn: ({ pageParam }) => {
+    queryFn: ({ pageParam, signal }) => {
       return generatedOrNull(listMyLibrary({
         ...(pageParam ? { cursor: pageParam } : {}),
         limit,
         ...(q ? { q } : {}),
         ...(sort !== "added" ? { sort } : {}),
         ...(source ? { source } : {}),
-      })).then((d) => d ?? { items: [], nextCursor: null });
+      }, { signal: withApiTimeout(signal) })).then((d) => d ?? { items: [], nextCursor: null });
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
