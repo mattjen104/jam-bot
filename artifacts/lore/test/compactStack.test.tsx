@@ -455,20 +455,20 @@ describe("CompactStack collapsed rows", () => {
       makeItem({ mbid: "m1", albumTitle: "Imported LP", artist: "Someone", releaseGroupMbid: "rg-42" }),
     ];
     const { container } = renderStack();
-    const img = container.querySelector("img.compact-stack__spine-art");
+    const img = container.querySelector("img.compact-stack__tile-art");
     expect(img?.getAttribute("src")).toBe(
       "https://coverartarchive.org/release-group/rg-42/front-1200",
     );
   });
 
-  it("gives each collapsed row its own stationary spine art — no shared backdrop, no pan", () => {
+  it("gives each collapsed row its own square album cover — no shared backdrop, no pan", () => {
     libraryItems = [
       makeItem({ mbid: "m1", albumTitle: "One", artist: "A", artworkUrl: "https://example.com/one.jpg" }),
       makeItem({ mbid: "m2", albumTitle: "Two", artist: "B", artworkUrl: "https://example.com/two.jpg" }),
       makeItem({ mbid: "m3", albumTitle: "Three", artist: "C", artworkUrl: "https://example.com/three.jpg" }),
     ];
     const { container } = renderStack();
-    const spines = container.querySelectorAll("img.compact-stack__spine-art");
+    const spines = container.querySelectorAll("img.compact-stack__tile-art");
     expect(spines).toHaveLength(3);
     expect(
       [...spines].map((img) => img.getAttribute("src")),

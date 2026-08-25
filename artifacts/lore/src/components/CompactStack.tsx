@@ -3,12 +3,10 @@
  *
  * Shows the 5 newest kept album groups from the listener's combined
  * kept + Spotify-imported library (first page of useMyLibraryInfinite,
- * grouped with buildAlbumGroups). Each collapsed row is a single line —
- * `album title · artist · <relationship credit>` — over that album's own
- * STATIONARY full-bleed cover art (no motion while collapsed). The third
- * segment is the album's MusicBrainz relationship line (samples / covers /
- * remixes), the most crucial piece of liner-note metadata, omitted cleanly
- * when the knowledge layer has none.
+ * grouped with buildAlbumGroups). Each collapsed row uses its album's own
+ * square cover beside the album + artist label. The relationship credit
+ * (samples / covers / remixes) remains available in the normal-density
+ * presentation without turning the art into a cropped backdrop.
  *
  * Tapping a row expands it IN PLACE inside the band: the tapped album's row
  * becomes a collapse header, its liner-notes metadata (pressing, credits,
@@ -912,25 +910,31 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
       )
     : [];
 
-  // Collapsed rows: each album gets its OWN stationary full-size cover
-  // behind its row (an <img> so onArtError retry/fallback works). No motion
-  // while collapsed — the cinematic pan is reserved for the expanded hero.
+  // Collapsed rows use a real square cover tile. The expanded hero keeps its
+  // separate atmospheric backdrop, but the compact Stack stays legible and
+  // consistent with the home Feed's album-art tile grammar.
   const renderSpine = (group: AlbumGroup) => {
     const art = proxyArtUrl(spineArtUrl(group));
     return (
-      <>
-        {art && (
+      <span className="compact-stack__art-tile" aria-hidden="true">
+        {art ? (
           <img
-            className="compact-stack__spine-art"
+            className="compact-stack__tile-art"
             src={art}
             alt=""
-            aria-hidden="true"
+            loading="lazy"
+            onError={onArtError}
+          />
+        ) : (
+          <img
+            className="compact-stack__tile-art"
+            src={RUMOURS}
+            alt=""
             loading="lazy"
             onError={onArtError}
           />
         )}
-        <div className="compact-stack__overlay" aria-hidden="true" />
-      </>
+      </span>
     );
   };
 

@@ -9827,7 +9827,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: relative;
   min-height: 0;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   overflow: hidden;
   border-bottom: 1px solid hsl(var(--border) / 0.35);
   z-index: 1;
@@ -9847,9 +9847,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-/* Collapsed rows: each album's own STATIONARY full-size cover behind its
-   row. object-position centers the visible band; no animation ever runs on
-   collapsed rows — motion is reserved for the expanded hero. */
+/* Compact Stack rows keep the cover square and visible instead of using a
+   cropped/obscured backdrop. The expanded album still owns the larger,
+   atmospheric hero treatment below. */
+.compact-stack__art-tile {
+  flex: 0 0 auto;
+  width: clamp(42px, 7.5vw, 66px);
+  aspect-ratio: 1;
+  align-self: stretch;
+  overflow: hidden;
+  background: hsl(var(--secondary));
+}
+.compact-stack__tile-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
 .compact-stack__spine-art {
   position: absolute;
   inset: 0;
@@ -9875,7 +9890,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-stack__text {
   position: relative;
   z-index: 1;
-  padding: 0 16px;
+  align-self: center;
+  padding: 0 12px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9902,6 +9918,67 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--muted-foreground));
   font-style: italic;
 }
+
+/* Home discovery rail: the first three tiles fit in the initial viewport,
+   with the full recent feed available by horizontal scroll. */
+.compact-first-plays {
+  margin-top: 10px;
+  min-width: 0;
+}
+.compact-first-plays__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 5px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+}
+.compact-first-plays__rail {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 0 0 4px;
+  scrollbar-width: thin;
+}
+.compact-first-plays__tile {
+  flex: 0 0 clamp(118px, calc((100% - 16px) / 3), 164px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  text-align: left;
+  cursor: pointer;
+}
+.compact-first-plays__tile:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.compact-first-plays__art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: hsl(var(--secondary));
+}
+.compact-first-plays__artist,
+.compact-first-plays__title,
+.compact-first-plays__station {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.25;
+}
+.compact-first-plays__artist { color: hsl(var(--foreground)); }
+.compact-first-plays__title,
+.compact-first-plays__station { color: hsl(var(--muted-foreground)); }
 
 /* ── Expanded album: in-place header row + notes, remaining rows follow ── */
 .compact-stack--expanded {
@@ -10500,6 +10577,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: visible;
 }
 .split-home .compact-category-dial__all-feed {
+  flex: 0 0 auto;
+  height: auto;
   padding: 0 0 2px;
 }
 .split-home .compact-category-dial__active-groups {
@@ -10707,6 +10786,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-stack__album { color: var(--home-tree-text); }
 .split-home .compact-stack__artist,
 .split-home .compact-stack__year { color: var(--home-tree-muted); }
+.split-home .compact-first-plays__header,
+.split-home .compact-first-plays__artist,
+.split-home .compact-first-plays__title,
+.split-home .compact-first-plays__station {
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+}
+.split-home .compact-first-plays__artist { color: var(--home-tree-text); }
+.split-home .compact-first-plays__title,
+.split-home .compact-first-plays__station,
+.split-home .compact-first-plays__header { color: var(--home-tree-muted); }
 
 @media (max-width: 760px) {
   .split-home {

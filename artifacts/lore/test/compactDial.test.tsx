@@ -32,9 +32,15 @@ vi.mock("../src/components/dial/FrontDoorRow", () => ({
   ),
 }));
 
+const startReplay = vi.fn();
+vi.mock("../src/player/PlayerProvider", () => ({
+  usePlayer: () => ({ ride: { startReplay } }),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -1134,5 +1140,56 @@ describe("CompactDial category feed station marks", () => {
     expect(feed.querySelectorAll("[data-station-mark='fallback']").length).toBe(1);
     expect(feed.textContent).toContain("KEXP");
     expect(feed.textContent).toContain("Quiet Station");
+  });
+});
+
+describe("CompactDial first-play rail", () => {
+  it("renders recent first plays with square artwork, station provenance, and a preview action", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{
+          id: 42,
+          mbid: "first-play-mbid",
+          artist: "New Artist",
+          title: "New Track",
+          artworkUrl: "https://images.example.com/new-track.jpg",
+          playedAt: "2026-08-25T20:00:00.000Z",
+          station: { slug: "kexp", name: "KEXP" },
+        }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    renderDial({
+      activeRows: [makeRowWithTrack(
+        { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+        { artist: "Now Artist", title: "Now Track" },
+      )],
+      categoryFirst: true,
+    });
+
+    const tile = await screen.findByRole("button", {
+      name: "Preview New Artist — New Track, first played on KEXP",
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(tile.querySelector("img")?.getAttribute("src")).toBe(
+      "/api/art?src=https%3A%2F%2Fimages.example.com%2Fnew-track.jpg",
+    );
+    expect(tile.textContent).toContain("KEXP");
+
+    fireEvent.click(tile);
+    expect(startReplay).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mbid: "first-play-mbid",
+          artworkUrl: "https://images.example.com/new-track.jpg",
+        }),
+      ]),
+      "First play · KEXP",
+      expect.objectContaining({ previewOnly: true }),
+    );
   });
 });

@@ -33,7 +33,7 @@
  *                         overflow region regardless of alphabetical position
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationPresence } from "../hooks/useStationPresence";
 import type { DialDisplayMode } from "../hooks/useDialData";
@@ -57,6 +57,9 @@ import {
 } from "../lib/dialCategories";
 import { cleanLiveValue } from "./dialViewHelpers";
 import { StationMark } from "./StationMark";
+import { proxyArtUrl } from "../lib/proxyArt";
+import { RUMOURS, onArtError } from "../lib/rumours";
+import { usePlayer } from "../player/PlayerProvider";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
@@ -549,6 +552,107 @@ function AllNowPlayingFeed({
   );
 }
 
+interface FirstPlayHistoryItem {
+  id: number;
+  mbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  playedAt: string;
+  station: { slug: string; name: string };
+}
+
+/**
+ * A home-only discovery rail. The archive endpoint supplies confirmed,
+ * resolved first appearances (rather than inferring "new" from a station's
+ * transient current metadata), so each tile can honestly identify both the
+ * album and the station that introduced it.
+ */
+function FirstPlayFeed() {
+  const { ride } = usePlayer();
+  const [items, setItems] = useState<FirstPlayHistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (typeof fetch !== "function") {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8_000);
+    void fetch("/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18", {
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("first plays unavailable");
+        return response.json() as Promise<{ items?: FirstPlayHistoryItem[] }>;
+      })
+      .then((data) => {
+        if (!cancelled) setItems(data.items ?? []);
+      })
+      .catch(() => {
+        // The live station rail remains useful when the optional archive read
+        // is unavailable; fail quietly rather than leaving a broken panel.
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  if (!loading && items.length === 0) return null;
+
+  return (
+    <section className="compact-first-plays" aria-label="Recent first plays">
+      <div className="compact-first-plays__header">
+        <span>First plays</span>
+        {loading && <span>Loading…</span>}
+      </div>
+      <div className="compact-first-plays__rail" data-testid="compact-first-plays">
+        {items.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className="compact-first-plays__tile"
+            aria-label={`Preview ${item.artist} — ${item.title}, first played on ${item.station.name}`}
+            onClick={() => {
+              ride.startReplay(
+                [{
+                  mbid: item.mbid,
+                  title: item.title,
+                  artist: item.artist,
+                  artworkUrl: item.artworkUrl,
+                  links: [],
+                }],
+                `First play · ${item.station.name}`,
+                { timeOrientation: "curated", previewOnly: true, previewDwellMs: 7_000 },
+              );
+            }}
+          >
+            <img
+              src={proxyArtUrl(item.artworkUrl) ?? RUMOURS}
+              alt=""
+              className="compact-first-plays__art"
+              loading="lazy"
+              onError={onArtError}
+            />
+            <span className="compact-first-plays__artist">{item.artist}</span>
+            <span className="compact-first-plays__title">{item.title}</span>
+            <span className="compact-first-plays__station">{item.station.name}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function CategoryFirstDial({
   activeRows,
   skippedRows,
@@ -724,6 +828,7 @@ function CategoryFirstDial({
             playerStatus={playerStatus}
             onPlay={onPlay}
           />
+          <FirstPlayFeed />
         </div>
       )}
     </div>

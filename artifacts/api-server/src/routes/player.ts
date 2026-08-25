@@ -60,6 +60,10 @@ const HISTORY_PAGE_MAX = 60;
 router.get("/player/history", h(async (req, res) => {
   const scope = (typeof req.query.scope === "string" ? req.query.scope : "lifetime") as HistoryScope;
   const filter = (typeof req.query.filter === "string" ? req.query.filter : "all") as HistoryFilter;
+  // The scanner moves forward through a fixed archive snapshot, while the
+  // front-door discovery rail needs the newest arrivals first. Keep the
+  // scanner's chronological default and make recency an explicit opt-in.
+  const newestFirst = req.query.order === "desc";
   if (!HISTORY_SCOPES.has(scope) || !HISTORY_FILTERS.has(filter)) {
     return res.status(400).json({ error: "Invalid history scope or filter" });
   }
@@ -113,9 +117,15 @@ router.get("/player/history", h(async (req, res) => {
     isNotNull(spinsTable.mbid),
     sql`${spinsTable.playedAt} <= ${snapshot}`,
     scopeSince ? sql`${spinsTable.playedAt} >= ${scopeSince}` : undefined,
-    before ? (beforeId != null
-      ? sql`(${spinsTable.playedAt} > ${before} OR (${spinsTable.playedAt} = ${before} AND ${spinsTable.id} > ${beforeId}))`
-      : sql`${spinsTable.playedAt} > ${before}`) : undefined,
+    before
+      ? newestFirst
+        ? (beforeId != null
+          ? sql`(${spinsTable.playedAt} < ${before} OR (${spinsTable.playedAt} = ${before} AND ${spinsTable.id} < ${beforeId}))`
+          : sql`${spinsTable.playedAt} < ${before}`)
+        : (beforeId != null
+          ? sql`(${spinsTable.playedAt} > ${before} OR (${spinsTable.playedAt} = ${before} AND ${spinsTable.id} > ${beforeId}))`
+          : sql`${spinsTable.playedAt} > ${before}`)
+      : undefined,
   ].filter((p): p is NonNullable<typeof p> => p != null);
   const libraryHit = userLibrary
     ? sql`(${spinsTable.mbid} in (${userLibrary}) OR ${recordingsTable.artistMbid} in (${userArtists}))`
@@ -154,7 +164,10 @@ router.get("/player/history", h(async (req, res) => {
     .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
     .leftJoin(showsTable, and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()))
     .where(and(...predicates))
-    .orderBy(asc(spinsTable.playedAt), asc(spinsTable.id))
+    .orderBy(
+      newestFirst ? desc(spinsTable.playedAt) : asc(spinsTable.playedAt),
+      newestFirst ? desc(spinsTable.id) : asc(spinsTable.id),
+    )
     .limit(limit + 1);
   const page = rows.slice(0, limit);
   const last = page.at(-1);
