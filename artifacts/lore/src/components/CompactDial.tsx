@@ -3,14 +3,29 @@
  *
  * Layout model
  * ─────────────
- * activeRows  — stations NOT in the skip set, sliced to the current page
- *               (5 normal / 10 compact / 15 micro). These fill the dial band.
- * skippedRows — ALL skipped stations, appended below in a scrollable
- *               overflow region so the listener can still reach them without
- *               navigating to a different page.
+ * Category-first (the home Feed): a tab strip — All plus the seven editorial
+ * categories under their short labels (Anchor, Campus, Specialist, Public,
+ * Indie, Ambient, Discovery). Each category tab also carries an include
+ * checkbox: checked categories appear as cards in the All overview;
+ * unchecking a tab keeps it in the strip (dimmed) so the listener can
+ * exclude a whole station class without losing the saved choice. Clicking a
+ * checked tab focuses the feed on that category's station list; clicking an
+ * unchecked tab re-includes and focuses it. Selecting All returns to the
+ * category-card overview.
  *
- * The scan remote's page count and candidate indices are derived from
- * activeRows only — skipped stations never participate in a scan.
+ * Category cards lead with now-playing information — the freshest available
+ * track in the category — and make each station card itself the play control.
+ * Crossings/first-play metric badges and the
+ * age-distribution pie are intentionally not rendered here for now; the
+ * underlying data and APIs are untouched.
+ *
+ * Ungrouped fallback (no editorial categories present): the classic paged
+ * layout.
+ *   activeRows  — stations NOT in the skip set, sliced to the current page
+ *                 (5 normal / 10 compact / 15 micro). These fill the dial band.
+ *   skippedRows — ALL skipped stations, appended below in a scrollable
+ *                 overflow region so the listener can still reach them without
+ *                 navigating to a different page.
  *
  * Checkbox: far-right trailing edge of each row.
  *   Checked  (active)  → filled key, normal opacity
@@ -18,7 +33,7 @@
  *                         overflow region regardless of alphabetical position
  */
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationPresence } from "../hooks/useStationPresence";
 import type { DialDisplayMode } from "../hooks/useDialData";
@@ -31,28 +46,21 @@ import { MicroDialRemote } from "./MicroDialRemote";
 import {
   type CrossingScope,
   DEFAULT_CROSSING_SCOPE,
-  crossingCountForScope,
-  crossingScopeLabel,
-  firstPlayCountForScope,
   hasAnyCrossing,
 } from "../lib/crossingScope";
 import type { DialDensity } from "../lib/dialDensityState";
 import type { LastSetSummary } from "../lib/latestSet";
-import { STATION_CATEGORY_DEFINITIONS, type StationCategory } from "../lib/dialCategories";
 import {
-  SPECIALIST_SUBCATEGORY_DEFINITIONS,
-  specialistSubcategoryForStation,
-  specialistSubcategoryLabel,
-  type SpecialistSubcategory,
-} from "../lib/specialistCategories";
+  STATION_CATEGORY_DEFINITIONS,
+  stationCategoryShortLabel,
+  type StationCategory,
+} from "../lib/dialCategories";
 import { cleanLiveValue } from "./dialViewHelpers";
-import { AgeDistributionBadge } from "./dial/AgeDistributionBadge";
-import { ageDistribution } from "../lib/dialAgeDistribution";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
 const COMPACT_REMOTE_SIZE = 10;
-/** The front-door tree leads with the everyday listening categories. */
+/** The front-door tab strip leads with the everyday listening categories. */
 const COMPACT_CATEGORY_ORDER: readonly StationCategory[] = [
   "anchor",
   "campus",
@@ -88,7 +96,13 @@ export interface CompactDialProps {
   onPlay: (row: DialLaneRow) => void;
   /** Toggle skip state for a station slug (checks ↔ unchecks). */
   onToggleSkip?: (slug: string) => void;
+  /** Toggle a category's inclusion in the All overview (the tab checkboxes). */
   onToggleCategory?: (category: StationCategory) => void;
+  /**
+   * The checked category set. Checked categories render cards in the All
+   * overview; unchecked categories stay as dimmed tabs that re-include on
+   * click. Undefined means "everything included".
+   */
   activeCategories?: ReadonlySet<StationCategory>;
   /** Active crossing scope — drives the per-row ⬤ dot meaning. */
   crossingScope?: CrossingScope;
@@ -120,20 +134,17 @@ export interface CompactDialProps {
    *  drives the "unchanged since your last scan" cue on rows and keys. */
   unchangedSlugs?: ReadonlySet<string>;
   /**
-   * The home Feed's category-first presentation. Categories are concise by
-   * default and reveal the same full station rows on demand.
+   * The home Feed's category-first presentation: an All / category tab strip
+   * with concise now-playing category cards that drill into a single station
+   * list per category.
    */
   categoryFirst?: boolean;
   /**
-   * Category cards are intentionally unpaged; the direct ungrouped fallback
-   * still follows the compact Feed's pager so scan/page commands retain their
-   * meaning for personal and unclassified stations.
+   * Category tabs/cards are intentionally unpaged; the direct ungrouped
+   * fallback still follows the compact Feed's pager so scan/page commands
+   * retain their meaning for personal and unclassified stations.
    */
   visibleUncategorizedSlugs?: ReadonlySet<string>;
-  /** Opens the first editorial category on initial render for a tree-first home view. */
-  defaultOpenFirstCategory?: boolean;
-  /** Renders every editorial category at once, without a category pager. */
-  showAllCategories?: boolean;
 }
 
 function CompactDialRow({
@@ -249,118 +260,8 @@ interface CategoryNowPlayingEntry {
   title: string | null;
   label: string;
   hasTrack: boolean;
-}
-
-interface CategoryScopeMetrics {
-  crossings: number;
-  firstPlays: number;
-}
-
-interface SpecialistSubcategoryGroup {
-  id: SpecialistSubcategory;
-  label: string;
-  rows: CategoryGroup["rows"];
-}
-
-// Retained as a compatibility renderer for callers that still import the
-// previous dense category helper; category-first now mounts the feed renderer.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function DenseCategoryStationList({
-  group,
-  density,
-  activeSlug,
-  playerStatus,
-  onTuneIn,
-  onPlay,
-  sampledSlug,
-}: {
-  group: CategoryGroup;
-  density: DialDensity;
-  activeSlug: string | null;
-  playerStatus: PlayerStatus;
-  onTuneIn: (row: DialLaneRow) => void;
-  onPlay: (row: DialLaneRow) => void;
-  sampledSlug: string | null;
-}) {
-  const pageSize = density === "compact" ? COMPACT_REMOTE_SIZE : COMPACT_DIAL_SIZE;
-  const [page, setPage] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(group.rows.length / pageSize));
-  const currentPage = Math.min(page, pageCount - 1);
-  const rows = group.rows.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
-
-  return (
-    <div className={`compact-category-dial__dense-list${density === "compact" ? " compact-category-dial__dense-list--remote" : ""}`}
-      aria-label={`${group.label} now playing`}>
-      {rows.map(({ row, isSkipped }) => {
-        const track = row.ds.isLive ? row.ds.liveTrack ?? row.show?.currentTrack : null;
-        const artist = cleanLiveValue(track?.artist);
-        const title = cleanLiveValue(track?.title);
-        const stationName = row.ds.station.name;
-        const isPlayable = resolvePlaybackSource(row.ds.station) != null;
-        const isActive = row.ds.station.slug === activeSlug;
-        const nowPlaying = artist || title
-          ? `${artist ?? title}${artist && title ? ` — ${title}` : ""}`
-          : "Now playing unavailable";
-        return (
-          <div
-            className={[
-              "compact-category-dial__dense-row",
-              isSkipped ? "compact-category-dial__dense-row--skipped" : "",
-              isActive ? "compact-category-dial__dense-row--active" : "",
-              row.ds.station.slug === sampledSlug ? "compact-category-dial__dense-row--sampling" : "",
-            ].filter(Boolean).join(" ")}
-            key={row.ds.station.slug}
-          >
-            {isPlayable && (
-              <CompactPlayButton
-                title={stationName}
-                isPlaying={isActive && playerStatus === "playing"}
-                isLoading={isActive && playerStatus === "loading"}
-                onClick={() => onPlay(row)}
-                testId={`compact-category-play-${row.ds.station.slug}`}
-              />
-            )}
-            <button
-              type="button"
-              className="compact-category-dial__dense-tune"
-              onClick={() => onTuneIn(row)}
-              aria-label={`${nowPlaying} · ${stationName} — tune in`}
-            >
-              <span className="compact-category-dial__dense-track">{nowPlaying}</span>
-              <b>{stationName}</b>
-            </button>
-          </div>
-        );
-      })}
-      {pageCount > 1 && (
-        <div className="compact-dial__pager" role="group" aria-label={`${group.label} now playing pages`}>
-          <button type="button" disabled={currentPage === 0} onClick={() => setPage((value) => value - 1)}
-            aria-label={`Previous ${group.label} now playing page`}>←</button>
-          <span>Page {currentPage + 1} of {pageCount}</span>
-          <button type="button" disabled={currentPage >= pageCount - 1} onClick={() => setPage((value) => value + 1)}
-            aria-label={`Next ${group.label} now playing page`}>→</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Category totals include skipped stations because those stations remain
- * represented by the category summary and are still reachable when expanded.
- * The separate "in scan" count below continues to describe active rows only.
- */
-function categoryScopeMetrics(
-  rows: CategoryGroup["rows"],
-  scope: CrossingScope,
-): CategoryScopeMetrics {
-  return rows.reduce(
-    (totals, { row }) => ({
-      crossings: totals.crossings + crossingCountForScope(row.ds, scope),
-      firstPlays: totals.firstPlays + firstPlayCountForScope(row.ds, scope),
-    }),
-    { crossings: 0, firstPlays: 0 },
-  );
+  /** Source observation time of the displayed track; NaN when trackless. */
+  playedAtMs: number;
 }
 
 function categoryForRow(row: DialLaneRow): CompactCategory {
@@ -372,8 +273,7 @@ function categoryForRow(row: DialLaneRow): CompactCategory {
 
 function categoryLabel(category: CompactCategory): string {
   if (category === "other") return "Other stations";
-  return STATION_CATEGORY_DEFINITIONS.find((definition) => definition.cat === category)?.label
-    ?? "Other stations";
+  return stationCategoryShortLabel(category);
 }
 
 function categoryNowPlaying(rows: CategoryGroup["rows"]): CategoryNowPlayingEntry[] {
@@ -382,12 +282,14 @@ function categoryNowPlaying(rows: CategoryGroup["rows"]): CategoryNowPlayingEntr
     const artist = cleanLiveValue(track?.artist);
     const title = cleanLiveValue(track?.title);
     const hasTrack = Boolean(artist || title);
+    const playedAtMs = hasTrack && track ? new Date(track.playedAt).getTime() : Number.NaN;
     return {
       row,
       isSkipped,
       artist,
       title,
       hasTrack,
+      playedAtMs,
       label: hasTrack
         ? `${artist ?? title}${artist && title ? ` — ${title}` : ""}`
         : "Now playing unavailable",
@@ -408,10 +310,73 @@ function categoryNowPlaying(rows: CategoryGroup["rows"]): CategoryNowPlayingEntr
   );
 }
 
+/**
+ * The All-overview card feed: one station card per station, ordered so the
+ * freshest live now-playing sits far left and the strip scrolls back through
+ * older observations; stations without usable metadata sit at the end, so a
+ * quiet station never takes the lead spot.
+ */
+function categoryCardFeed(rows: CategoryGroup["rows"]): CategoryNowPlayingEntry[] {
+  const entries = categoryNowPlaying(rows);
+  const live = entries
+    .filter((entry) => entry.hasTrack && !Number.isNaN(entry.playedAtMs))
+    .sort((a, b) => b.playedAtMs - a.playedAtMs);
+  const quiet = entries.filter(
+    (entry) => !entry.hasTrack || Number.isNaN(entry.playedAtMs),
+  );
+  return [...live, ...quiet];
+}
+
+/**
+ * A now-playing observation counts as FRESH — worth a pulse so the listener
+ * notices it — when the track was played within the last half hour. Future
+ * timestamps (clock skew) also count as fresh.
+ */
+const CATEGORY_FRESH_WINDOW_MS = 30 * 60_000;
+
+function isFreshEntry(entry: CategoryNowPlayingEntry, nowMs: number): boolean {
+  return entry.hasTrack
+    && !Number.isNaN(entry.playedAtMs)
+    && nowMs - entry.playedAtMs <= CATEGORY_FRESH_WINDOW_MS;
+}
+
+function buildCompactCategoryGroups(
+  activeRows: DialLaneRow[],
+  skippedRows: DialLaneRow[],
+): CategoryGroup[] {
+  const groups = new Map<CompactCategory, CategoryGroup>();
+  const append = (row: DialLaneRow, isSkipped: boolean) => {
+    const category = categoryForRow(row);
+    const existing = groups.get(category);
+    if (existing) {
+      existing.rows.push({ row, isSkipped });
+      return;
+    }
+    groups.set(category, {
+      category,
+      label: categoryLabel(category),
+      rows: [{ row, isSkipped }],
+    });
+  };
+
+  activeRows.forEach((row) => append(row, false));
+  skippedRows.forEach((row) => append(row, true));
+
+  const editorialOrder = new Map(
+    STATION_CATEGORY_DEFINITIONS.map((definition, index) => [definition.cat, index]),
+  );
+  return [...groups.values()].sort((a, b) =>
+    (editorialOrder.get(a.category as StationCategory) ?? Number.MAX_SAFE_INTEGER)
+    - (editorialOrder.get(b.category as StationCategory) ?? Number.MAX_SAFE_INTEGER));
+}
+
+/**
+ * A focused category's station list: every station in the category (skipped
+ * included, dimmed) in the existing compact now-playing row format with
+ * play, tune-in, and per-station scan-skip controls.
+ */
 function CategoryNowPlayingFeed({
   group,
-  density,
-  showAll = false,
   activeSlug,
   playerStatus,
   onTuneIn,
@@ -419,8 +384,6 @@ function CategoryNowPlayingFeed({
   onToggleSkip,
 }: {
   group: CategoryGroup;
-  density: DialDensity;
-  showAll?: boolean;
   activeSlug: string | null;
   playerStatus: PlayerStatus;
   onTuneIn: (row: DialLaneRow) => void;
@@ -428,23 +391,21 @@ function CategoryNowPlayingFeed({
   onToggleSkip?: (slug: string) => void;
 }) {
   const entries = categoryNowPlaying(group.rows);
-  const pageSize = density === "compact" ? COMPACT_REMOTE_SIZE : COMPACT_DIAL_SIZE;
-  const [page, setPage] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(entries.length / pageSize));
-  const currentPage = Math.min(page, pageCount - 1);
-  const visible = showAll
-    ? entries
-    : entries.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
 
   return (
     <div
-      className={`compact-category-dial__now-feed${density === "compact" ? " compact-category-dial__now-feed--remote" : ""}`}
+      className="compact-category-dial__now-feed"
       id={`compact-category-${group.category}`}
       role="region"
       aria-label={`${group.label} now-playing feed`}
       data-testid={`compact-category-${group.category}-now-feed`}
     >
-      {visible.map((entry) => {
+      {entries.length === 0 && (
+        <p className="compact-category-dial__empty-category">
+          No stations in {group.label} yet.
+        </p>
+      )}
+      {entries.map((entry) => {
         const slug = entry.row.ds.station.slug;
         const isActive = slug === activeSlug;
         const isPlayable = resolvePlaybackSource(entry.row.ds.station) != null;
@@ -490,256 +451,131 @@ function CategoryNowPlayingFeed({
           </div>
         );
       })}
-      {!showAll && pageCount > 1 && (
-        <div className="compact-dial__pager" role="group" aria-label={`${group.label} now-playing feed pages`}>
-          <button type="button" disabled={currentPage === 0} onClick={() => setPage((value) => value - 1)}
-            aria-label={`Previous ${group.label} now-playing feed page`}>←</button>
-          <span>Page {currentPage + 1} of {pageCount}</span>
-          <button type="button" disabled={currentPage >= pageCount - 1} onClick={() => setPage((value) => value + 1)}
-            aria-label={`Next ${group.label} now-playing feed page`}>→</button>
-        </div>
-      )}
     </div>
   );
 }
 
-function buildCompactCategoryGroups(
-  activeRows: DialLaneRow[],
-  skippedRows: DialLaneRow[],
-): CategoryGroup[] {
-  const groups = new Map<CompactCategory, CategoryGroup>();
-  const append = (row: DialLaneRow, isSkipped: boolean) => {
-    const category = categoryForRow(row);
-    const existing = groups.get(category);
-    if (existing) {
-      existing.rows.push({ row, isSkipped });
-      return;
-    }
-    groups.set(category, {
-      category,
-      label: categoryLabel(category),
-      rows: [{ row, isSkipped }],
-    });
-  };
-
-  activeRows.forEach((row) => append(row, false));
-  skippedRows.forEach((row) => append(row, true));
-
-  const editorialOrder = new Map(
-    STATION_CATEGORY_DEFINITIONS.map((definition, index) => [definition.cat, index]),
-  );
-  return [...groups.values()].sort((a, b) =>
-    (editorialOrder.get(a.category as StationCategory) ?? Number.MAX_SAFE_INTEGER)
-    - (editorialOrder.get(b.category as StationCategory) ?? Number.MAX_SAFE_INTEGER));
-}
-
-function buildSpecialistSubcategoryGroups(
-  rows: CategoryGroup["rows"],
-): SpecialistSubcategoryGroup[] {
-  const groups = new Map<SpecialistSubcategory, SpecialistSubcategoryGroup>();
-  for (const entry of rows) {
-    const id = specialistSubcategoryForStation(entry.row.ds.station);
-    const group = groups.get(id);
-    if (group) {
-      group.rows.push(entry);
-    } else {
-      groups.set(id, {
-        id,
-        label: specialistSubcategoryLabel(id),
-        rows: [entry],
-      });
-    }
-  }
-  const order = new Map(
-    SPECIALIST_SUBCATEGORY_DEFINITIONS.map((definition, index) => [definition.id, index]),
-  );
-  return [...groups.values()].sort(
-    (a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER)
-      - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-  );
-}
-
-function specialistNowPlaying(
-  rows: SpecialistSubcategoryGroup["rows"],
-): Array<{ stationName: string; artist: string | null; title: string | null }> {
-  return rows.map(({ row }) => {
-    if (!row.ds.isLive) return { stationName: row.ds.station.name, artist: null, title: null };
-    const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
-    const artist = cleanLiveValue(track?.artist);
-    const title = cleanLiveValue(track?.title);
-    return artist || title
-      ? { stationName: row.ds.station.name, artist, title }
-      : { stationName: row.ds.station.name, artist: null, title: null };
-  });
-}
-
-function SpecialistSubcategoryCard({
+/**
+ * One All-overview card per checked category. The card header opens the
+ * category's station list; below it, a horizontal strip of station cards —
+ * two visible at a time, swipe/scroll left for more — each showing a square
+ * station identity marker and its current now-playing artist, newest far left.
+ * Fresh observations pulse so the listener notices new now-playing data.
+ */
+function CategoryCard({
   group,
-  expanded,
-  onToggle,
-  renderRows,
-}: {
-  group: SpecialistSubcategoryGroup;
-  expanded: boolean;
-  onToggle: () => void;
-  renderRows: (group: CategoryGroup) => ReactNode;
-}) {
-  const [page, setPage] = useState(0);
-  const nowPlaying = specialistNowPlaying(group.rows);
-  const liveCount = nowPlaying.filter((entry) => entry.artist || entry.title).length;
-  const categoryGroup: CategoryGroup = {
-    category: "other",
-    label: group.label,
-    rows: group.rows,
-  };
-  return (
-    <section className="compact-specialist-dial__subgroup" data-testid={`compact-specialist-${group.id}`}>
-      <button
-        type="button"
-        className={`compact-specialist-dial__subsummary${expanded ? " compact-specialist-dial__subsummary--expanded" : ""}`}
-        aria-expanded={expanded}
-        aria-controls={`compact-specialist-${group.id}-stations`}
-        onClick={onToggle}
-      >
-        <span className="compact-specialist-dial__sublabel">{group.label}</span>
-        <span className="compact-specialist-dial__subcount">
-          {group.rows.length} {group.rows.length === 1 ? "station" : "stations"} · {liveCount} now playing
-        </span>
-        <span aria-hidden="true">{expanded ? "−" : "+"}</span>
-      </button>
-      <div className="compact-specialist-dial__now-playing" aria-label={`${group.label} now playing`}>
-        <div className="compact-specialist-dial__now-playing-heading">
-          Now playing across {group.rows.length} {group.rows.length === 1 ? "station" : "stations"}
-        </div>
-        <div className="compact-specialist-dial__now-playing-list">
-          {nowPlaying.map((entry) => (
-            <div className="compact-specialist-dial__now-playing-row" key={entry.stationName}>
-              <span>
-                {entry.artist || entry.title
-                  ? `${entry.artist ?? entry.title}${entry.artist && entry.title ? ` — ${entry.title}` : ""}`
-                  : "Now playing unavailable"}
-              </span>
-              <b>{entry.stationName}</b>
-            </div>
-          ))}
-        </div>
-      </div>
-      {expanded && (
-        <div
-          className="compact-specialist-dial__stations"
-          id={`compact-specialist-${group.id}-stations`}
-          role="region"
-          aria-label={`${group.label} station controls`}
-        >
-          {renderRows({
-            ...categoryGroup,
-            rows: categoryGroup.rows.slice(page * 5, page * 5 + 5),
-          })}
-          {group.rows.length > 5 && (
-            <div className="compact-dial__pager" role="group" aria-label={`${group.label} pages`}>
-              <button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}
-                aria-label={`Previous ${group.label} page`}>←</button>
-              <span>Page {page + 1} of {Math.ceil(group.rows.length / 5)}</span>
-              <button type="button" disabled={page >= Math.ceil(group.rows.length / 5) - 1}
-                onClick={() => setPage((value) => value + 1)} aria-label={`Next ${group.label} page`}>→</button>
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function CategorySummary({
-  group,
-  expanded,
-  onToggle,
-  crossingScope,
-  active,
-  onToggleCategory,
+  activeSlug,
+  playerStatus,
+  onPlay,
+  onOpen,
 }: {
   group: CategoryGroup;
-  expanded: boolean;
-  onToggle: () => void;
-  crossingScope: CrossingScope;
-  active: boolean;
-  onToggleCategory?: () => void;
+  activeSlug: string | null;
+  playerStatus: PlayerStatus;
+  onPlay: (row: DialLaneRow) => void;
+  onOpen: () => void;
 }) {
-  const nowPlaying = categoryNowPlaying(group.rows);
-  const leadNowPlaying = nowPlaying[0];
-  const activeCount = group.rows.filter(({ isSkipped }) => !isSkipped).length;
-  const stationCountLabel = `${group.rows.length} ${group.rows.length === 1 ? "station" : "stations"}`;
-  const metrics = categoryScopeMetrics(group.rows, crossingScope);
-  const scopeLabel = crossingScopeLabel(crossingScope);
-  const age = ageDistribution(group.rows.flatMap(({ row }) => {
-    const spins = row.show?.spins;
-    return spins?.length ? spins : row.ds.liveTrack ? [row.ds.liveTrack] : [];
-  }));
+  const entries = categoryCardFeed(group.rows);
+  // Freshness is judged against mount time (the StationList-sanctioned
+  // pattern — Date.now() belongs in a state initializer, not in render);
+  // the keyed fade-in on the artist line is the per-update cue instead.
+  const [nowMs] = useState(() => Date.now());
+  const stationCount = group.rows.length;
   return (
-    <div className={`compact-category-dial__summary${expanded ? " compact-category-dial__summary--expanded" : ""}`}>
-      <div className="compact-category-dial__topline">
-        <button
-          type="button"
-          className="compact-category-dial__summary-button compact-category-dial__tree-disclosure"
-          aria-expanded={expanded}
-          aria-controls={`compact-category-${group.category}`}
-          onClick={onToggle}
-          data-testid={`compact-category-${group.category}`}
-          aria-label={`${expanded ? "Close" : "Open"} ${group.label} now-playing feed`}
-        >
-          <span className="compact-category-dial__tree-mark" aria-hidden="true">
-            {expanded ? "−" : "+"}
-          </span>
+    <section
+      className="compact-category-dial__group"
+      data-testid={`compact-category-card-${group.category}`}
+    >
+      <button
+        type="button"
+        className="compact-category-dial__summary-button compact-category-dial__card-head"
+        data-testid={`compact-category-${group.category}`}
+        aria-label={`Open ${group.label} stations`}
+        onClick={onOpen}
+      >
+        <span className="compact-category-dial__topline">
           <span className="compact-category-dial__label">{group.label}</span>
-        </button>
-        {group.category !== "other" && onToggleCategory && (
-          <label className="compact-category-dial__include">
-            <input
-              type="checkbox"
-              checked={active}
-              aria-label={`${active ? "Include" : "Exclude"} ${group.label}`}
-              onChange={onToggleCategory}
-              onClick={(event) => event.stopPropagation()}
-            />
-          </label>
-        )}
-      </div>
-      <div className="compact-category-dial__now-header-line">
-        {leadNowPlaying ? (
-          <>
-            <span>{leadNowPlaying.label}</span>
-            <b>{leadNowPlaying.row.ds.station.name}</b>
-          </>
-        ) : (
-          <span>Now playing unavailable</span>
-        )}
-      </div>
-      <div className="compact-category-dial__meta">
-        <span className="compact-category-dial__count">
-          {stationCountLabel}{activeCount !== group.rows.length ? ` · ${activeCount} in scan` : ""}
-        </span>
-        <span
-          className="compact-category-dial__metrics"
-          aria-label={`${group.label} metrics for ${scopeLabel}`}
-        >
-          <span
-            className="compact-category-dial__metric"
-            aria-label={`${metrics.crossings} crossings in ${scopeLabel}`}
-            title={`${metrics.crossings} crossings · ${scopeLabel}`}
-          >
-            <b aria-hidden="true">{metrics.crossings}</b> crossings
-          </span>
-          <span
-            className="compact-category-dial__metric"
-            aria-label={`${metrics.firstPlays} first plays in ${scopeLabel}`}
-            title={`${metrics.firstPlays} first plays · ${scopeLabel}`}
-          >
-            <b aria-hidden="true">{metrics.firstPlays}</b> first plays
+          <span className="compact-category-dial__count">
+            {stationCount} {stationCount === 1 ? "station" : "stations"}
           </span>
         </span>
-        <AgeDistributionBadge distribution={age} label={`${group.label} track age`} />
+      </button>
+      <div
+        className="compact-category-dial__station-strip"
+        role="group"
+        aria-label={`${group.label} now-playing stations`}
+        data-testid={`compact-category-strip-${group.category}`}
+      >
+        {entries.map((entry) => {
+          const station = entry.row.ds.station;
+          const slug = station.slug;
+          const isActive = slug === activeSlug;
+          const isPlayable = resolvePlaybackSource(station) != null;
+          const fresh = isFreshEntry(entry, nowMs);
+          return (
+              <button
+                type="button"
+              key={slug}
+              className={[
+                "compact-category-dial__station",
+                fresh ? "compact-category-dial__station--fresh" : "",
+                entry.hasTrack ? "" : "compact-category-dial__station--quiet",
+                entry.isSkipped ? "compact-category-dial__station--skipped" : "",
+                isActive ? "compact-category-dial__station--active" : "",
+              ].filter(Boolean).join(" ")}
+              data-testid={`compact-category-station-${slug}`}
+                aria-label={`${!isPlayable ? "Unavailable" : isActive && playerStatus === "playing" ? "Pause" : isActive && playerStatus === "loading" ? "Loading" : "Play"} ${station.name}`}
+                aria-pressed={isActive && playerStatus === "playing"}
+                aria-disabled={!isPlayable || (isActive && playerStatus === "loading") ? true : undefined}
+                onClick={() => {
+                  if (isPlayable && !(isActive && playerStatus === "loading")) onPlay(entry.row);
+                }}
+            >
+                {station.logoUrl ? (
+                  <img
+                    className="compact-category-dial__station-logo"
+                    src={station.logoUrl}
+                    alt=""
+                    loading="lazy"
+                  />
+                ) : (
+                  <span
+                    className="compact-category-dial__station-logo compact-category-dial__station-logo--mono"
+                    aria-hidden="true"
+                  >
+                    {station.name}
+                  </span>
+                )}
+                <span className="compact-category-dial__station-lines">
+                  {/* Keyed by track identity so a now-playing change re-mounts
+                      the line and replays its fade-in. The square at left
+                      carries station identity (or the station-name fallback),
+                      leaving this as one clean now-playing line. */}
+                  <span className="compact-category-dial__station-track-line">
+                    {isPlayable && (
+                      <span className="compact-category-dial__station-play-cue" aria-hidden="true">
+                        {isActive && playerStatus === "loading"
+                          ? "…"
+                          : isActive && playerStatus === "playing"
+                            ? "Ⅱ"
+                            : "▶"}
+                      </span>
+                    )}
+                    <span
+                      className="compact-category-dial__station-track"
+                      key={entry.hasTrack ? `${entry.artist}|${entry.playedAtMs}` : "quiet"}
+                    >
+                      {entry.hasTrack
+                        ? entry.artist ?? entry.title ?? ""
+                        : "Now playing unavailable"}
+                    </span>
+                  </span>
+                </span>
+              </button>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -764,39 +600,69 @@ function CategoryFirstDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
-  defaultOpenFirstCategory = false,
-  showAllCategories = false,
-  density = "normal",
 }: CompactDialProps) {
   const groups = useMemo(
     () => buildCompactCategoryGroups(activeRows, skippedRows),
     [activeRows, skippedRows],
   );
-  const [expandedCategory, setExpandedCategory] = useState<CompactCategory | null>(null);
-  const [hasChosenCategory, setHasChosenCategory] = useState(false);
-  const [expandedSpecialist, setExpandedSpecialist] = useState<SpecialistSubcategory | null>(null);
-  const [categoryPage, setCategoryPage] = useState(0);
-  const specialistGroup = groups.find((group) => group.category === "specialist") ?? null;
-  const specialistGroups = useMemo(
-    () => (specialistGroup ? buildSpecialistSubcategoryGroups(specialistGroup.rows) : []),
-    [specialistGroup],
+  // Which category the feed is focused on; null = the All card overview.
+  const [focusedCategory, setFocusedCategory] = useState<StationCategory | null>(null);
+
+  const groupByCategory = useMemo(() => {
+    const map = new Map<CompactCategory, CategoryGroup>();
+    for (const group of groups) map.set(group.category, group);
+    return map;
+  }, [groups]);
+
+  const isChecked = useCallback(
+    (category: StationCategory) => activeCategories?.has(category) ?? true,
+    [activeCategories],
   );
+
+  // Clicking a tab focuses its category's station list. An unchecked
+  // (excluded) tab re-includes the category on click so the strip doubles as
+  // the re-entry point for a saved-but-hidden station class.
+  const focusTab = useCallback(
+    (category: StationCategory) => {
+      if (!isChecked(category)) onToggleCategory?.(category);
+      setFocusedCategory(category);
+    },
+    [isChecked, onToggleCategory],
+  );
+
+  // The tab checkbox only governs All-overview membership. Excluding the
+  // focused category returns to All — its station list would no longer
+  // reflect the listener's selection.
+  const toggleTabInclusion = useCallback(
+    (category: StationCategory) => {
+      onToggleCategory?.(category);
+      if (isChecked(category) && focusedCategory === category) {
+        setFocusedCategory(null);
+      }
+    },
+    [isChecked, onToggleCategory, focusedCategory],
+  );
+
   const sampledRow = samplingRowIdx != null ? activeRows[samplingRowIdx] ?? null : null;
   const sampledSlug = sampledRow?.ds.station.slug ?? null;
-  const sampledCategory = sampledRow ? categoryForRow(sampledRow) : null;
-  const editorialGroups = groups
-    .filter((group) => group.category !== "other")
-    .sort((a, b) => {
-      const aActive = activeCategories?.has(a.category as StationCategory) ?? true;
-      const bActive = activeCategories?.has(b.category as StationCategory) ?? true;
-      return Number(!aActive) - Number(!bActive)
-        || COMPACT_CATEGORY_ORDER.indexOf(a.category as StationCategory)
-          - COMPACT_CATEGORY_ORDER.indexOf(b.category as StationCategory);
-    });
-  const defaultExpandedCategory = defaultOpenFirstCategory
-    ? editorialGroups[0]?.category ?? null
+
+  // The All overview renders one card per CHECKED category that has at least
+  // one station, in the fixed editorial order. Excluded categories contribute
+  // no card but stay in the tab strip; empty categories are honest inside
+  // their focused list instead of padding the overview with dead cards.
+  const overviewGroups = COMPACT_CATEGORY_ORDER
+    .filter((category) => isChecked(category) && groupByCategory.has(category))
+    .map((category) => groupByCategory.get(category)!);
+
+  const focusedGroup = focusedCategory
+    ? groupByCategory.get(focusedCategory) ?? {
+        category: focusedCategory,
+        label: stationCategoryShortLabel(focusedCategory),
+        rows: [],
+      }
     : null;
-  const uncategorizedGroup = groups.find((group) => group.category === "other") ?? null;
+
+  const uncategorizedGroup = groupByCategory.get("other") ?? null;
   const visibleUncategorizedGroup = uncategorizedGroup && {
     ...uncategorizedGroup,
     rows: uncategorizedGroup.rows.filter(
@@ -805,26 +671,7 @@ function CategoryFirstDial({
         || visibleUncategorizedSlugs.has(row.ds.station.slug),
     ),
   };
-  const categoryPageCount = Math.max(1, Math.ceil(editorialGroups.length / 5));
-  const visibleGroups = (defaultOpenFirstCategory || showAllCategories)
-    ? editorialGroups
-    : editorialGroups.slice(categoryPage * 5, categoryPage * 5 + 5);
-  const activeEditorialGroups = visibleGroups.filter((group) =>
-    activeCategories?.has(group.category as StationCategory) ?? true,
-  );
-  const inactiveEditorialGroups = visibleGroups.filter((group) =>
-    !(activeCategories?.has(group.category as StationCategory) ?? true),
-  );
-  const pager = (label: string, page: number, pageCount: number, onPage: (next: number) => void) =>
-    pageCount > 1 ? (
-      <div className="compact-dial__pager" role="group" aria-label={`${label} pages`}>
-        <button type="button" disabled={page === 0} onClick={() => onPage(page - 1)}
-          aria-label={`Previous ${label} page`}>←</button>
-        <span>Page {page + 1} of {pageCount}</span>
-        <button type="button" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)}
-          aria-label={`Next ${label} page`}>→</button>
-      </div>
-    ) : null;
+
   const renderRows = (group: CategoryGroup) => group.rows.map(({ row, isSkipped }) => (
     <CompactDialRow
       key={row.ds.station.slug}
@@ -848,101 +695,117 @@ function CategoryFirstDial({
     />
   ));
 
-  const renderCategoryGroup = (group: CategoryGroup) => {
-        // A running station scan keeps its current station visible, but does
-        // not overwrite the listener's manually chosen category once it ends.
-        const isExpanded =
-          sampledCategory === group.category
-          || expandedCategory === group.category
-          || (!hasChosenCategory && defaultExpandedCategory === group.category);
-        const isSpecialist = group.category === "specialist";
-        const isActive = activeCategories?.has(group.category as StationCategory) ?? true;
+  const tabStrip = (
+    <div className="compact-category-dial__tabs" role="tablist" aria-label="Station categories">
+      <button
+        type="button"
+        role="tab"
+        id="compact-category-tab-all"
+        aria-selected={focusedCategory === null}
+        aria-controls="compact-category-panel"
+        className={[
+          "compact-category-dial__tab-button",
+          focusedCategory === null ? "compact-category-dial__tab-button--selected" : "",
+        ].filter(Boolean).join(" ")}
+        data-testid="compact-category-tab-all"
+        onClick={() => setFocusedCategory(null)}
+      >
+        All
+      </button>
+      {COMPACT_CATEGORY_ORDER.map((category) => {
+        const checked = isChecked(category);
+        const selected = focusedCategory === category;
+        const label = stationCategoryShortLabel(category);
         return (
-          <section
+          <span
+            key={category}
             className={[
-              "compact-category-dial__group",
-              isExpanded ? "compact-category-dial__group--expanded" : "",
-              !isActive ? "compact-category-dial__group--inactive" : "",
+              "compact-category-dial__tab",
+              checked ? "" : "compact-category-dial__tab--excluded",
             ].filter(Boolean).join(" ")}
-            key={group.category}
           >
-            <CategorySummary
-              group={group}
-              expanded={isExpanded}
-              crossingScope={crossingScope ?? DEFAULT_CROSSING_SCOPE}
-              active={activeCategories?.has(group.category as StationCategory) ?? true}
-              onToggleCategory={
-                onToggleCategory && group.category !== "other"
-                  ? () => onToggleCategory(group.category as StationCategory)
-                  : undefined
-              }
-               onToggle={() => {
-                 setHasChosenCategory(true);
-                  setExpandedCategory((current) => {
-                    const activeCategory = current ?? defaultExpandedCategory;
-                    return activeCategory === group.category ? null : group.category;
-                  });
-               }}
-            />
-            {isExpanded && (
-              isSpecialist ? (
-                <div
-                  className="compact-specialist-dial__subgroups"
-                  id={`compact-category-${group.category}`}
-                  aria-label="Specialist subcategories"
-                >
-                  {specialistGroups.map((subcategory) => (
-                    <SpecialistSubcategoryCard
-                      key={subcategory.id}
-                      group={subcategory}
-                      expanded={expandedSpecialist === subcategory.id}
-                      onToggle={() => setExpandedSpecialist((current) =>
-                        current === subcategory.id ? null : subcategory.id)}
-                      renderRows={renderRows}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <CategoryNowPlayingFeed
-                  group={group}
-                  density={density}
-                  showAll={defaultOpenFirstCategory}
-                  activeSlug={activeSlug}
-                  playerStatus={playerStatus}
-                  onTuneIn={onTuneIn}
-                  onPlay={onPlay}
-                  onToggleSkip={onToggleSkip}
-                />
-              )
+            <button
+              type="button"
+              role="tab"
+              id={`compact-category-tab-${category}`}
+              aria-selected={selected}
+              aria-controls="compact-category-panel"
+              className={[
+                "compact-category-dial__tab-button",
+                selected ? "compact-category-dial__tab-button--selected" : "",
+              ].filter(Boolean).join(" ")}
+              data-testid={`compact-category-tab-${category}`}
+              onClick={() => focusTab(category)}
+            >
+              {label}
+            </button>
+            {onToggleCategory && (
+              <input
+                type="checkbox"
+                className="compact-category-dial__tab-check"
+                checked={checked}
+                aria-label={`Include ${label}`}
+                title={checked
+                  ? `Included in All — uncheck to exclude ${label}`
+                  : `Excluded from All — check to include ${label}`}
+                onChange={() => toggleTabInclusion(category)}
+              />
             )}
-          </section>
+          </span>
         );
-      };
+      })}
+    </div>
+  );
 
   return (
     <div className="compact-dial compact-dial--categories" data-testid="compact-category-dial">
-      <div className="compact-category-dial__active-groups">
-        {activeEditorialGroups.map(renderCategoryGroup)}
-      </div>
-      {inactiveEditorialGroups.length > 0 && (
+      {tabStrip}
+      {focusedGroup ? (
         <div
-          className="compact-category-dial__inactive-groups"
-          aria-label="Deselected categories"
+          className="compact-category-dial__focused"
+          role="tabpanel"
+          id="compact-category-panel"
+          aria-labelledby={`compact-category-tab-${focusedGroup.category}`}
         >
-          {inactiveEditorialGroups.map(renderCategoryGroup)}
+          <CategoryNowPlayingFeed
+            group={focusedGroup}
+            activeSlug={activeSlug}
+            playerStatus={playerStatus}
+            onTuneIn={onTuneIn}
+            onPlay={onPlay}
+            onToggleSkip={onToggleSkip}
+          />
         </div>
-      )}
-      {!defaultOpenFirstCategory && !showAllCategories
-        && pager("category", categoryPage, categoryPageCount, setCategoryPage)}
-      {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (
-        <section className="compact-category-dial__uncategorized" aria-label="Other stations">
-          {editorialGroups.length > 0 && (
-            <div className="compact-category-dial__uncategorized-label">Other stations</div>
-          )}
-          <div className="compact-category-dial__stations">
-            {renderRows(visibleUncategorizedGroup)}
+      ) : (
+        <div
+          className="compact-category-dial__overview"
+          role="tabpanel"
+          id="compact-category-panel"
+          aria-labelledby="compact-category-tab-all"
+        >
+          <div className="compact-category-dial__active-groups">
+            {overviewGroups.map((group) => (
+              <CategoryCard
+                key={group.category}
+                group={group}
+                activeSlug={activeSlug}
+                playerStatus={playerStatus}
+                onPlay={onPlay}
+                onOpen={() => setFocusedCategory(group.category as StationCategory)}
+              />
+            ))}
           </div>
-        </section>
+          {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (
+            <section className="compact-category-dial__uncategorized" aria-label="Other stations">
+              {overviewGroups.length > 0 && (
+                <div className="compact-category-dial__uncategorized-label">Other stations</div>
+              )}
+              <div className="compact-category-dial__stations">
+                {renderRows(visibleUncategorizedGroup)}
+              </div>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );
@@ -972,8 +835,6 @@ export function CompactDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
-  defaultOpenFirstCategory,
-  showAllCategories,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -1008,9 +869,6 @@ export function CompactDial({
         visibleUncategorizedSlugs={visibleUncategorizedSlugs}
         onToggleCategory={onToggleCategory}
         activeCategories={activeCategories}
-        defaultOpenFirstCategory={defaultOpenFirstCategory}
-        showAllCategories={showAllCategories}
-        density={density}
       />
     );
   }

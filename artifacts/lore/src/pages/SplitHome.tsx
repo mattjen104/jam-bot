@@ -217,7 +217,6 @@ export default function SplitHome() {
           suppressCrossings={false}
           displayMode="personal"
           categoryFirst={hasEditorialCategory}
-          showAllCategories
         />
       </section>
 

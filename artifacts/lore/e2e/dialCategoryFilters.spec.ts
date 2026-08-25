@@ -341,8 +341,8 @@ test.describe("Dial category filters — CLI commands", () => {
   });
 });
 
-test.describe("Split-home category metrics — crossing scope chip", () => {
-  test("opens the category now-playing feed independently and preserves accessible controls", async ({
+test.describe("Split-home category tabs — cards and drill-down", () => {
+  test("renders the tab strip and opens a category's station list from its card", async ({
     page,
   }) => {
     await installRoutes(page);
@@ -351,23 +351,38 @@ test.describe("Split-home category metrics — crossing scope chip", () => {
     });
     await page.goto("/lore/");
 
-    const campusSummary = page.getByTestId("compact-category-campus");
-    await expect(campusSummary).toBeVisible({ timeout: 20_000 });
-    await expect(campusSummary).toHaveAttribute("aria-expanded", "false");
-    await expect(campusSummary).toContainText("Campus WKRP: Artist 1 — Track 1");
+    // The tab strip leads with All, then the short category labels.
+    const strip = page.getByRole("tablist", { name: "Station categories" });
+    await expect(strip).toBeVisible({ timeout: 20_000 });
+    const allTab = page.getByRole("tab", { name: "All", exact: true });
+    const campusTab = page.getByTestId("compact-category-tab-campus");
+    await expect(allTab).toHaveAttribute("aria-selected", "true");
+    await expect(campusTab).toHaveAttribute("aria-selected", "false");
+    await expect(page.getByTestId("compact-category-tab-specialist")).toContainText("Specialist");
+
+    // All shows one card per checked category; the card's station strip leads
+    // with the station's current now-playing artist.
+    const campusCard = page.getByTestId("compact-category-card-campus");
+    await expect(campusCard).toBeVisible();
+    const campusStation = page.getByTestId("compact-category-station-campus-wkrp");
+    await expect(campusStation).toBeVisible();
+    await expect(campusStation).toContainText("Artist 1");
+    await expect(campusStation).toContainText("Campus WKRP");
     await expect(page.getByTestId("compact-category-campus-now-feed")).toHaveCount(0);
 
-    // The summary button is independently keyboard reachable and labelled as
-    // the now-playing feed control, not as the station-list control.
-    await campusSummary.focus();
-    await expect(campusSummary).toBeFocused();
-    await expect(campusSummary).toHaveAccessibleName("Open Campus Radio now-playing feed");
+    // The card body is independently keyboard reachable and opens the
+    // category drill-down (a single station list).
+    const campusOpen = page.getByTestId("compact-category-campus");
+    await campusOpen.focus();
+    await expect(campusOpen).toBeFocused();
+    await expect(campusOpen).toHaveAccessibleName("Open Campus stations");
     await page.keyboard.press("Enter");
 
     const campusFeed = page.getByTestId("compact-category-campus-now-feed");
     await expect(campusFeed).toBeVisible();
-    await expect(campusSummary).toHaveAttribute("aria-expanded", "true");
-    await expect(campusFeed).toHaveAccessibleName("Campus Radio now-playing feed");
+    await expect(campusFeed).toHaveAccessibleName("Campus now-playing feed");
+    await expect(campusTab).toHaveAttribute("aria-selected", "true");
+    await expect(allTab).toHaveAttribute("aria-selected", "false");
     await expect(
       campusFeed.getByRole("button", {
         name: "Artist 1 — Track 1 · Campus WKRP — tune in",
@@ -375,24 +390,23 @@ test.describe("Split-home category metrics — crossing scope chip", () => {
     ).toBeVisible();
     await expect(campusFeed.getByRole("button", { name: "Play Campus WKRP" })).toBeVisible();
 
-    // The feed is sorted by current track values, while the collapsed card
-    // remains anchored to the editorial category and its lead station.
-    const feedStations = await campusFeed
-      .locator(".compact-category-dial__feed-tune b")
-      .allTextContents();
-    expect(feedStations).toEqual(["Campus WKRP"]);
+    // The focused list replaces the overview cards instead of stacking.
+    await expect(campusCard).toHaveCount(0);
 
-    // Opening another category closes the first feed rather than stacking
-    // controls or exposing the stationary category list at the same time.
-    const anchorSummary = page.getByTestId("compact-category-anchor");
-    await anchorSummary.click();
-    await expect(anchorSummary).toHaveAttribute("aria-expanded", "true");
+    // Selecting a different category tab focuses that category instead.
+    await page.getByTestId("compact-category-tab-anchor").click();
     await expect(page.getByTestId("compact-category-anchor-now-feed")).toBeVisible();
-    await expect(campusSummary).toHaveAttribute("aria-expanded", "false");
     await expect(campusFeed).toHaveCount(0);
+
+    // All returns to the category-card overview.
+    await allTab.click();
+    await expect(page.getByTestId("compact-category-card-campus")).toBeVisible();
+    await expect(page.getByTestId("compact-category-anchor-now-feed")).toHaveCount(0);
   });
 
-  test("cycles every scope without dropping expanded rows or skipped totals", async ({ page }) => {
+  test("plays the card's now-playing station in place and keeps the retired metrics hidden", async ({
+    page,
+  }) => {
     await installRoutes(page);
     await page.addInitScript(() => {
       // Keep this browser check independent of persisted state from other
@@ -402,46 +416,44 @@ test.describe("Split-home category metrics — crossing scope chip", () => {
       window.localStorage.setItem("lore:dialSkipped", JSON.stringify(["campus-wkrp"]));
     });
     await page.goto("/lore/");
-    await expect(page.getByTestId("compact-category-campus")).toBeVisible({ timeout: 20_000 });
 
+    const campusCard = page.getByTestId("compact-category-card-campus");
+    await expect(campusCard).toBeVisible({ timeout: 20_000 });
+    // The skipped station still counts toward the category, but the retired
+    // crossings/first-play badges and age pie no longer render.
+    await expect(campusCard).toContainText("1 station");
+    await expect(campusCard).not.toContainText("crossings");
+    await expect(campusCard).not.toContainText("first plays");
+    await expect(campusCard.locator(".dial-age-badge")).toHaveCount(0);
+
+    // The complete station card is the play control (the inline triangle is
+    // its cue), so no small far-left play button competes with station art.
+    const stationCard = page.getByTestId("compact-category-station-campus-wkrp");
+    await expect(stationCard).toBeVisible();
+    await expect(stationCard).toHaveAccessibleName("Play Campus WKRP");
+    await stationCard.click();
+    await expect(page.getByTestId("compact-category-campus-now-feed")).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "All", exact: true }))
+      .toHaveAttribute("aria-selected", "true");
+
+    // Drilling in keeps per-station deselection working for scan selection
+    // without deleting the station from Lore.
+    await page.getByTestId("compact-category-tab-campus").click();
+    const campusFeed = page.getByTestId("compact-category-campus-now-feed");
+    await expect(campusFeed).toBeVisible();
+    const includeBox = campusFeed.getByRole("checkbox", { name: "Include Campus WKRP in scan" });
+    await expect(includeBox).toBeVisible();
+    await expect(includeBox).not.toBeChecked();
+
+    // The crossing-scope chip still cycles the underlying data model; the
+    // card simply no longer renders the metric chrome.
     const scopePill = page.locator(".crossing-scope-pill").first();
-    const campusSummary = page.getByTestId("compact-category-campus");
     await expect(scopePill).toBeVisible({ timeout: 15_000 });
     await expect(scopePill).toContainText("lifetime");
-    await expect(campusSummary).toContainText("1 station · 0 in scan");
-    await expect(campusSummary).toHaveAttribute("aria-expanded", "false");
-
-    // The skipped station is still counted in the category summary and can
-    // still be reached by expanding that category.
-    await expect(campusSummary).toContainText("32 crossings");
-    await expect(campusSummary).toContainText("6 first plays");
-    await campusSummary.click();
-    await expect(campusSummary).toHaveAttribute("aria-expanded", "true");
-    const campusRow = page.locator(".fdrow").filter({ hasText: "Campus WKRP" });
-    await expect(campusRow).toBeVisible();
-
-    const expectedByScope = [
-      { label: "lifetime", crossings: "32", firstPlays: "6" },
-      { label: "now", crossings: "1", firstPlays: "0" },
-      { label: "this set", crossings: "1", firstPlays: "0" },
-      { label: "24h", crossings: "5", firstPlays: "1" },
-      { label: "7d", crossings: "8", firstPlays: "2" },
-    ];
-
-    // The chip cycles lifetime → now → this set → 24h → 7d → lifetime.
-    for (const [index, expected] of expectedByScope.entries()) {
-      if (index > 0) await scopePill.click();
-      await expect(scopePill).toContainText(expected.label);
-      await expect(
-        campusSummary.getByLabel(`${expected.crossings} crossings in ${expected.label}`),
-      ).toBeVisible();
-      await expect(
-        campusSummary.getByLabel(`${expected.firstPlays} first plays in ${expected.label}`),
-      ).toBeVisible();
-      await expect(campusSummary).toContainText("1 station · 0 in scan");
-      await expect(campusSummary).toHaveAttribute("aria-expanded", "true");
-      await expect(campusRow).toBeVisible();
-    }
+    await scopePill.click();
+    await expect(scopePill).toContainText("now");
+    await expect(campusFeed).toBeVisible();
+    await expect(page.getByTestId("compact-category-campus")).toHaveCount(0);
   });
 });
 

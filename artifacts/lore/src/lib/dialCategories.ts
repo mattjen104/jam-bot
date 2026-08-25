@@ -28,16 +28,30 @@ export const STATION_CATEGORY_DEFINITIONS: {
   cat: StationCategory;
   command: `/${StationCategory}`;
   label: string;
+  /**
+   * Short listener-facing label used by the home category tab strip and its
+   * overview cards. The full `label` stays on the /feed filter surfaces.
+   */
+  shortLabel: string;
   title: string;
 }[] = [
-  { cat: "ambient",    command: "/ambient",    label: "Ambient & Sleep",    title: "Sleep, nature, drone, and white-noise utility channels" },
-  { cat: "campus",     command: "/campus",     label: "Campus Radio",       title: "College and university-operated stations" },
-  { cat: "specialist", command: "/specialist", label: "Specialist Radio",   title: "Genre, era, and format-focused channels — FIP Jazz, FIP Electro, decade radio" },
-  { cat: "anchor",     command: "/anchor",     label: "Anchor Stations",    title: "Broadly-programmed flagship stations — KEXP, NTS, BBC 6 Music, FIP, Dublab, Rinse FM" },
-  { cat: "public",     command: "/public",     label: "Public & Community", title: "Non-campus terrestrial and nonprofit stations with local programming — KCRW, WBGO, WDIY" },
-  { cat: "indie",      command: "/indie",      label: "Independent DJ",     title: "Web-native DJ and selector stations — Worldwide FM, Refuge Worldwide, Balamii, The Lot Radio" },
-  { cat: "discovery",  command: "/discovery",  label: "Discovery",          title: "Long-tail stations that don't fit a stronger editorial category" },
+  { cat: "ambient",    command: "/ambient",    label: "Ambient & Sleep",    shortLabel: "Ambient",    title: "Sleep, nature, drone, and white-noise utility channels" },
+  { cat: "campus",     command: "/campus",     label: "Campus Radio",       shortLabel: "Campus",     title: "College and university-operated stations" },
+  { cat: "specialist", command: "/specialist", label: "Specialist Radio",   shortLabel: "Specialist", title: "Genre, era, and format-focused channels — FIP Jazz, FIP Electro, decade radio" },
+  { cat: "anchor",     command: "/anchor",     label: "Anchor Stations",    shortLabel: "Anchor",     title: "Broadly-programmed flagship stations — KEXP, NTS, BBC 6 Music, FIP, Dublab, Rinse FM" },
+  { cat: "public",     command: "/public",     label: "Public & Community", shortLabel: "Public",     title: "Non-campus terrestrial and nonprofit stations with local programming — KCRW, WBGO, WDIY" },
+  { cat: "indie",      command: "/indie",      label: "Independent DJ",     shortLabel: "Indie",      title: "Web-native DJ and selector stations — Worldwide FM, Refuge Worldwide, Balamii, The Lot Radio" },
+  { cat: "discovery",  command: "/discovery",  label: "Discovery",          shortLabel: "Discovery",  title: "Long-tail stations that don't fit a stronger editorial category" },
 ];
+
+/**
+ * The short tab/card label for an editorial category. Falls back to the raw
+ * key so a future category can never render blank.
+ */
+export function stationCategoryShortLabel(cat: StationCategory): string {
+  return STATION_CATEGORY_DEFINITIONS.find((definition) => definition.cat === cat)?.shortLabel
+    ?? cat;
+}
 
 /**
  * Best-effort mapping from free-form Radio Browser tags to Lore's editorial

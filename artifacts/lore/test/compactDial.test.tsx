@@ -12,7 +12,7 @@
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { CompactDial, type CompactDialProps } from "../src/components/CompactDial";
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
@@ -174,124 +174,92 @@ describe("CompactDial empty state", () => {
 // Category-first home Feed
 // ---------------------------------------------------------------------------
 
-describe("CompactDial category-first home Feed", () => {
+describe("CompactDial category tabs", () => {
   it("uses the stable specialist taxonomy, including named edge cases and a visible fallback", () => {
     expect(specialistSubcategoryForStation(makeStation({ name: "FIP Groove" }))).toBe("groove");
     expect(specialistSubcategoryForStation(makeStation({ name: "t67-4fdb1912 Jazz FM" }))).toBe("jazz");
     expect(specialistSubcategoryForStation(makeStation({ name: "Unclassifiable Signal" }))).toBe("other");
   });
 
-  it("aggregates crossings and first plays by scope, including skipped stations", () => {
-    const active = makeRow({
-      slug: "active",
-      name: "Active",
-      stationCategories: ["anchor"],
-    });
-    active.ds.crossings = 2;
-    active.ds.artistCrossings = 1;
-    active.ds.firstPlayCrossings = 1;
-    active.ds.lifetimeCrossings = 7;
-    active.ds.lifetimeArtistCrossings = 2;
-    active.ds.lifetimeFirstPlayCrossings = 3;
-    const skipped = makeRow({
-      slug: "skipped",
-      name: "Skipped",
-      stationCategories: ["anchor"],
-    });
-    skipped.ds.crossings = 4;
-    skipped.ds.firstPlayCrossings = 2;
+  it("renders the tab strip in a fixed order: All, then the seven short category labels", () => {
+    const row = makeRow({ slug: "kexp", name: "KEXP", stationCategories: ["anchor"] });
+    renderDial({ activeRows: [row], categoryFirst: true });
 
-    const { rerender } = renderDial({
-      activeRows: [active],
-      skippedRows: [skipped],
-      categoryFirst: true,
-      crossingScope: "24h",
-    });
-    expect(screen.getByLabelText("7 crossings in 24h")).toBeTruthy();
-    expect(screen.getByLabelText("3 first plays in 24h")).toBeTruthy();
-
-    rerender(
-      <CompactDial
-        activeRows={[active]}
-        skippedRows={[skipped]}
-        activeSlug={null}
-        playerStatus="idle"
-        presenceMap={new Map()}
-        onTuneIn={vi.fn()}
-        onPlay={vi.fn()}
-        categoryFirst
-        crossingScope="lifetime"
-      />,
-    );
-    expect(screen.getByLabelText("9 crossings in lifetime")).toBeTruthy();
-    expect(screen.getByLabelText("3 first plays in lifetime")).toBeTruthy();
+    const strip = screen.getByRole("tablist", { name: "Station categories" });
+    const tabs = within(strip).getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      "All",
+      "Anchor",
+      "Campus",
+      "Specialist",
+      "Public",
+      "Indie",
+      "Ambient",
+      "Discovery",
+    ]);
+    // The All overview is selected initially.
+    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Anchor" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby"))
+      .toBe("compact-category-tab-all");
   });
 
-  it("renders editorial category cards with fresh now-playing previews", () => {
-    const ambient = makeRowWithTrack(
-      { slug: "sleep", name: "Sleep Radio", stationCategories: ["ambient"] },
-      { artist: "Brian Eno", title: "An Ending" },
-    );
-    const anchor = makeRowWithTrack(
-      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
-      { artist: "The Smile", title: "Bending Hectic" },
-    );
+  it("shows one card per checked category in the editorial order, using the short labels", () => {
+    const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
+    const rows = categories.map((category) => makeRow({
+      slug: `${category}-station`,
+      name: `${category} station`,
+      stationCategories: [category],
+    }));
 
-    renderDial({ activeRows: [anchor, ambient], categoryFirst: true });
+    const { container } = renderDial({
+      activeRows: rows,
+      categoryFirst: true,
+      activeCategories: new Set(["anchor", "campus", "specialist", "public", "indie"]),
+      onToggleCategory: vi.fn(),
+    });
 
-    const lane = screen.getByTestId("compact-category-dial");
-    const labels = [...lane.querySelectorAll(".compact-category-dial__label")]
+    const labels = [...container.querySelectorAll(".compact-category-dial__active-groups .compact-category-dial__label")]
       .map((element) => element.textContent);
-    expect(labels).toEqual(["Anchor Stations", "Ambient & Sleep"]);
-    const anchorSummary = screen.getByTestId("compact-category-anchor")
-      .closest(".compact-category-dial__summary")!;
-    expect(anchorSummary.querySelector(".compact-category-dial__now-header-line")?.textContent)
-      .toContain("The Smile — Bending Hectic");
-    expect(anchorSummary.querySelector(".compact-category-dial__now-header-line")?.textContent)
-      .toContain("KEXP");
+    expect(labels).toEqual(["Anchor", "Campus", "Specialist", "Public", "Indie"]);
+    // The retired long phrases are gone from the cards…
+    expect(container.textContent).not.toContain("Anchor Stations");
+    expect(container.textContent).not.toContain("Ambient & Sleep");
+    // …and unchecked categories contribute no card but keep their dimmed tab.
+    expect(screen.queryByTestId("compact-category-card-ambient")).toBeNull();
+    expect(screen.queryByTestId("compact-category-card-discovery")).toBeNull();
+    const ambientTab = screen.getByTestId("compact-category-tab-ambient");
     expect(
-      screen.getByTestId("compact-category-anchor")
-        .classList.contains("compact-category-dial__tree-disclosure"),
+      ambientTab.closest(".compact-category-dial__tab")
+        ?.classList.contains("compact-category-dial__tab--excluded"),
     ).toBe(true);
-    expect(screen.getByTestId("compact-category-anchor")
-      .closest(".compact-category-dial__summary")
-      ?.querySelector(".compact-category-dial__count")?.textContent)
-      .toBe("1 station");
+    expect(
+      (screen.getByRole("checkbox", { name: "Include Ambient" }) as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(
+      (screen.getByRole("checkbox", { name: "Include Anchor" }) as HTMLInputElement).checked,
+    ).toBe(true);
   });
 
-  it("renders accessible scope-labelled metric badges, including honest zeroes", () => {
-    const row = makeRow({
-      slug: "kexp",
-      name: "KEXP",
-      stationCategories: ["anchor"],
-    });
-    renderDial({ activeRows: [row], categoryFirst: true, crossingScope: "7d" });
-
-    expect(screen.getByLabelText("0 crossings in 7d")).toBeTruthy();
-    expect(screen.getByLabelText("0 first plays in 7d")).toBeTruthy();
-  });
-
-  it("recomputes category badges when the active scope changes", () => {
-    const row = makeRow({
-      slug: "kexp",
-      name: "KEXP",
-      stationCategories: ["anchor"],
-    });
-    row.ds.crossings = 2;
-    row.ds.firstPlayCrossings = 1;
-    row.ds.lifetimeCrossings = 8;
-    row.ds.lifetimeFirstPlayCrossings = 4;
+  it("unchecking a category tab removes its card from All while keeping the tab available", () => {
+    const anchor = makeRow({ slug: "kexp", name: "KEXP", stationCategories: ["anchor"] });
+    const campus = makeRow({ slug: "wvum", name: "WVUM", stationCategories: ["campus"] });
+    const onToggleCategory = vi.fn();
     const { rerender } = renderDial({
-      activeRows: [row],
+      activeRows: [anchor, campus],
       categoryFirst: true,
-      crossingScope: "24h",
+      activeCategories: new Set(["anchor", "campus"]),
+      onToggleCategory,
     });
-    expect(screen.getByLabelText("2 crossings in 24h")).toBeTruthy();
-    expect(screen.getByLabelText("1 first plays in 24h")).toBeTruthy();
 
+    expect(screen.getByTestId("compact-category-card-campus")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Campus" }));
+    expect(onToggleCategory).toHaveBeenCalledWith("campus");
+
+    // The parent removes the category from the checked set…
     rerender(
       <CompactDial
-        activeRows={[row]}
+        activeRows={[anchor, campus]}
         skippedRows={[]}
         activeSlug={null}
         playerStatus="idle"
@@ -299,14 +267,218 @@ describe("CompactDial category-first home Feed", () => {
         onTuneIn={vi.fn()}
         onPlay={vi.fn()}
         categoryFirst
-        crossingScope="lifetime"
+        activeCategories={new Set(["anchor"])}
+        onToggleCategory={onToggleCategory}
       />,
     );
-    expect(screen.getByLabelText("8 crossings in lifetime")).toBeTruthy();
-    expect(screen.getByLabelText("4 first plays in lifetime")).toBeTruthy();
+    // …its card leaves the All overview, but the tab stays to re-enable it.
+    expect(screen.queryByTestId("compact-category-card-campus")).toBeNull();
+    expect(screen.getByTestId("compact-category-tab-campus")).toBeTruthy();
   });
 
-  it("uses an honest unavailable state when a category has no live metadata", () => {
+  it("clicking an unchecked tab re-includes the category and focuses it", () => {
+    const ambient = makeRowWithTrack(
+      { slug: "sleep", name: "Sleep Radio", stationCategories: ["ambient"] },
+      { artist: "Brian Eno", title: "An Ending" },
+    );
+    const onToggleCategory = vi.fn();
+    renderDial({
+      activeRows: [ambient],
+      categoryFirst: true,
+      activeCategories: new Set(["anchor"]),
+      onToggleCategory,
+    });
+
+    fireEvent.click(screen.getByTestId("compact-category-tab-ambient"));
+    expect(onToggleCategory).toHaveBeenCalledWith("ambient");
+    expect(screen.getByTestId("compact-category-ambient-now-feed")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Ambient" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("clicking a checked category tab focuses the feed on only that category's stations", () => {
+    const anchor = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const campus = makeRowWithTrack(
+      { slug: "wvum", name: "WVUM", stationCategories: ["campus"] },
+      { artist: "Floating Points", title: "Bias" },
+    );
+    renderDial({ activeRows: [anchor, campus], categoryFirst: true });
+
+    fireEvent.click(screen.getByTestId("compact-category-tab-campus"));
+    expect(screen.getByTestId("compact-category-campus-now-feed")).toBeTruthy();
+    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
+    // The overview cards are swapped for the single station list.
+    expect(screen.queryByTestId("compact-category-card-anchor")).toBeNull();
+    expect(screen.getByRole("tab", { name: "Campus" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby"))
+      .toBe("compact-category-tab-campus");
+
+    // Selecting All returns to the category-card overview.
+    fireEvent.click(screen.getByTestId("compact-category-tab-all"));
+    expect(screen.getByTestId("compact-category-card-anchor")).toBeTruthy();
+    expect(screen.queryByTestId("compact-category-campus-now-feed")).toBeNull();
+  });
+
+  it("opens the same drill-down from the category card body", () => {
+    const anchor = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    renderDial({ activeRows: [anchor], categoryFirst: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Anchor stations" }));
+    expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
+    screen.getByRole("button", { name: "The Smile — Bending Hectic · KEXP — tune in" });
+  });
+
+  it("unchecking the focused category returns to the All overview", () => {
+    const anchor = makeRow({ slug: "kexp", name: "KEXP", stationCategories: ["anchor"] });
+    const onToggleCategory = vi.fn();
+    renderDial({
+      activeRows: [anchor],
+      categoryFirst: true,
+      activeCategories: new Set(["anchor"]),
+      onToggleCategory,
+    });
+
+    fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
+    expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Anchor" }));
+    expect(onToggleCategory).toHaveBeenCalledWith("anchor");
+    // Focus falls back to All even before the parent applies the change.
+    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
+  });
+
+  it("orders each card's station strip freshest-first with quiet stations last, and hides the metric chrome", () => {
+    const stale = makeRowWithTrack(
+      { slug: "old", name: "Old Station", stationCategories: ["anchor"] },
+      { artist: "Alpha Old", title: "Earlier", playedAt: "2026-08-18T01:00:00Z" },
+    );
+    const fresh = makeRowWithTrack(
+      { slug: "new", name: "New Station", stationCategories: ["anchor"] },
+      { artist: "Zed Fresh", title: "Just Now", playedAt: "2026-08-18T02:00:00Z" },
+    );
+    const quiet = makeRow({ slug: "quiet", name: "Quiet Station", stationCategories: ["anchor"] });
+    quiet.ds.isLive = false;
+    stale.ds.crossings = 9;
+    stale.ds.firstPlayCrossings = 4;
+    const { container } = renderDial({
+      activeRows: [stale, fresh, quiet],
+      categoryFirst: true,
+      crossingScope: "24h",
+    });
+
+    // Live now-playing first, newest far left; a station that isn't
+    // broadcasting now-playing never takes the first spot.
+    const strip = screen.getByTestId("compact-category-strip-anchor");
+    const order = [...strip.querySelectorAll(".compact-category-dial__station-logo--mono")]
+      .map((element) => element.textContent);
+    expect(order).toEqual(["New Station", "Old Station", "Quiet Station"]);
+    // Each station card leads with just the now-playing artist name.
+    const firstCard = screen.getByTestId("compact-category-station-new");
+    expect(firstCard.querySelector(".compact-category-dial__station-track")?.textContent)
+      .toBe("Zed Fresh");
+    expect(screen.getByTestId("compact-category-card-anchor")
+      .querySelector(".compact-category-dial__count")?.textContent).toBe("3 stations");
+    // Crossings/first-play counts and the age-distribution pie stay hidden.
+    expect(container.textContent).not.toContain("crossings");
+    expect(container.textContent).not.toContain("first plays");
+    expect(container.querySelector(".dial-age-badge")).toBeNull();
+    expect(container.querySelector(".compact-category-dial__metrics")).toBeNull();
+  });
+
+  it("makes each station card itself the play control without opening the drill-down", () => {
+    const playable = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const second = makeRowWithTrack(
+      { slug: "wfmu", name: "WFMU", stationCategories: ["anchor"] },
+      { artist: "Yo La Tengo", title: "Autumn Sweater" },
+    );
+    const onPlay = vi.fn();
+    renderDial({ activeRows: [playable, second], categoryFirst: true, onPlay });
+
+    // There is no separate play button: the whole station card is the control.
+    expect(screen.queryByTestId("compact-category-play-anchor")).toBeNull();
+    fireEvent.click(screen.getByTestId("compact-category-station-wfmu"));
+    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onPlay).toHaveBeenCalledWith(second);
+    // The card did not open — the All overview is still showing.
+    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
+    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("puts the inline play cue beside the one-line now-playing label", () => {
+    const row = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    renderDial({ activeRows: [row], categoryFirst: true });
+
+    const card = screen.getByTestId("compact-category-station-kexp");
+    expect(card.getAttribute("aria-label")).toBe("Play KEXP");
+    expect(card.querySelector(".compact-category-dial__station-play-cue")?.textContent).toBe("▶");
+    expect(card.querySelector(".compact-category-dial__station-track")?.textContent).toBe("The Smile");
+    expect(card.querySelector(".compact-category-dial__station-name")).toBeNull();
+  });
+
+  it("keeps the card layout the same for an attribution-only station", () => {
+    const attrOnly = makeRowWithTrack(
+      { slug: "attr-only", name: "Attribution Only", streamUrl: "", relayUrl: null, stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const playable = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Wall of Eyes" },
+    );
+    renderDial({ activeRows: [attrOnly, playable], categoryFirst: true });
+
+    // The attribution-only station card still shows its artist and identity…
+    const card = screen.getByTestId("compact-category-station-attr-only");
+    expect(card.querySelector(".compact-category-dial__station-track")?.textContent)
+      .toBe("The Smile");
+    expect(card.querySelector(".compact-category-dial__station-play-cue")).toBeNull();
+    expect(screen.queryByTestId("compact-category-play-attr-only")).toBeNull();
+  });
+
+  it("reflects playing and loading states on the inline cue", () => {
+    const row = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const { rerender } = renderDial({
+      activeRows: [row],
+      categoryFirst: true,
+      activeSlug: "kexp",
+      playerStatus: "playing",
+    });
+    expect(screen.getByRole("button", { name: "Pause KEXP" })
+      .querySelector(".compact-category-dial__station-play-cue")?.textContent).toBe("Ⅱ");
+
+    rerender(
+      <CompactDial
+        activeRows={[row]}
+        skippedRows={[]}
+        activeSlug="kexp"
+        playerStatus="loading"
+        presenceMap={new Map()}
+        onTuneIn={vi.fn()}
+        onPlay={vi.fn()}
+        categoryFirst
+      />,
+    );
+    const loading = screen.getByRole("button", { name: "Loading KEXP" });
+    expect(loading.getAttribute("aria-disabled")).toBe("true");
+    expect(loading.querySelector(".compact-category-dial__station-play-cue")?.textContent)
+      .toBe("…");
+  });
+
+  it("uses an honest unavailable state on station cards with no live metadata", () => {
     const quiet = makeRow({
       slug: "quiet",
       name: "Quiet Station",
@@ -314,44 +486,97 @@ describe("CompactDial category-first home Feed", () => {
     });
     renderDial({ activeRows: [quiet], categoryFirst: true });
 
-    expect(screen.getByTestId("compact-category-ambient")
-      .closest(".compact-category-dial__summary")
-      ?.querySelector(".compact-category-dial__now-header-line")?.textContent)
-      .toContain("Now playing unavailable");
+    const station = screen.getByTestId("compact-category-station-quiet");
+    expect(station.querySelector(".compact-category-dial__station-track")?.textContent)
+      .toBe("Now playing unavailable");
+    expect(station.classList.contains("compact-category-dial__station--quiet")).toBe(true);
   });
 
-  it("keeps the collapsed card compact and opens playable feed entries separately", () => {
-    const playable = makeRowWithTrack(
-      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+  it("pulses station cards whose now-playing is fresh, and only those", () => {
+    const fresh = makeRowWithTrack(
+      { slug: "live-now", name: "Live Now", stationCategories: ["anchor"] },
+      { artist: "Current Artist", title: "On Air", playedAt: new Date().toISOString() },
+    );
+    const stale = makeRowWithTrack(
+      { slug: "stale-one", name: "Stale One", stationCategories: ["anchor"] },
+      { artist: "Old Artist", title: "Yesterday", playedAt: "2026-08-18T00:00:00Z" },
+    );
+    renderDial({ activeRows: [stale, fresh], categoryFirst: true });
+
+    expect(screen.getByTestId("compact-category-station-live-now")
+      .classList.contains("compact-category-dial__station--fresh")).toBe(true);
+    expect(screen.getByTestId("compact-category-station-stale-one")
+      .classList.contains("compact-category-dial__station--fresh")).toBe(false);
+  });
+
+  it("renders the station image when it has one and a monogram otherwise", () => {
+    const withLogo = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"], logoUrl: "https://img.example.test/kexp.png" },
       { artist: "The Smile", title: "Bending Hectic" },
     );
-    const unavailable = makeRow({
-      slug: "quiet", name: "Quiet Station", streamUrl: "", relayUrl: null, stationCategories: ["anchor"],
-    });
-    const onPlay = vi.fn();
-    const onTuneIn = vi.fn();
-    renderDial({ activeRows: [playable, unavailable], categoryFirst: true, onPlay, onTuneIn });
+    const without = makeRowWithTrack(
+      { slug: "wfmu", name: "WFMU", stationCategories: ["anchor"] },
+      { artist: "Yo La Tengo", title: "Autumn Sweater" },
+    );
+    renderDial({ activeRows: [withLogo, without], categoryFirst: true });
 
-    expect(screen.queryByRole("button", { name: "Play KEXP" })).toBeNull();
-    const summary = screen.getByTestId("compact-category-anchor")
-      .closest(".compact-category-dial__summary")!;
-    expect(summary.querySelector(".compact-category-dial__now-header-line")?.textContent)
-      .toContain("The Smile — Bending Hectic");
-    expect(summary.querySelector(".compact-category-dial__now-header-line")?.textContent)
-      .toContain("KEXP");
-    expect(summary.querySelector(".compact-category-dial__now-header-line")?.textContent)
-      .not.toContain("Quiet Station");
-    fireEvent.click(screen.getByTestId("compact-category-anchor"));
-    expect(screen.getByRole("button", { name: "Play KEXP" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Play Quiet Station" })).toBeNull();
-    screen.getByRole("button", { name: "The Smile — Bending Hectic · KEXP — tune in" });
-    screen.getByRole("button", { name: "Now playing unavailable · Quiet Station — tune in" });
-    fireEvent.click(screen.getByRole("button", { name: "Play KEXP" }));
-    expect(onPlay).toHaveBeenCalledWith(playable);
-    expect(onTuneIn).not.toHaveBeenCalled();
+    const img = screen.getByTestId("compact-category-station-kexp")
+      .querySelector("img.compact-category-dial__station-logo");
+    expect(img?.getAttribute("src")).toBe("https://img.example.test/kexp.png");
+    expect(screen.getByTestId("compact-category-station-wfmu")
+      .querySelector(".compact-category-dial__station-logo--mono")?.textContent).toBe("WFMU");
   });
 
-  it("orders the now-playing feed by current track values and reorders on refresh", () => {
+  it("shows an honest empty state when a focused category has no stations", () => {
+    const anchor = makeRow({ slug: "kexp", name: "KEXP", stationCategories: ["anchor"] });
+    renderDial({ activeRows: [anchor], categoryFirst: true });
+
+    fireEvent.click(screen.getByTestId("compact-category-tab-campus"));
+    expect(screen.getByTestId("compact-category-campus-now-feed").textContent)
+      .toContain("No stations in Campus yet.");
+  });
+
+  it("renders the focused category as one compact station list with skip and play controls", () => {
+    const groove = makeRowWithTrack(
+      { slug: "fip-groove", name: "FIP Groove", stationCategories: ["specialist"] },
+      { artist: "Roy Ayers", title: "Everybody Loves the Sunshine" },
+    );
+    const jazzQuiet = makeRow({
+      slug: "jazz-quiet",
+      name: "Jazz FM",
+      stationCategories: ["specialist"],
+    });
+    jazzQuiet.ds.isLive = false;
+    const ambientOne = makeRowWithTrack(
+      { slug: "ambient-one", name: "Ambient One", stationCategories: ["specialist"] },
+      { artist: "Grouper", title: "Heavy Water" },
+    );
+    const onToggleSkip = vi.fn();
+    const onPlay = vi.fn();
+
+    renderDial({
+      activeRows: [groove, jazzQuiet, ambientOne],
+      categoryFirst: true,
+      onToggleSkip,
+      onPlay,
+    });
+
+    fireEvent.click(screen.getByTestId("compact-category-tab-specialist"));
+    const feed = screen.getByTestId("compact-category-specialist-now-feed");
+    // One flat station list — no subcategory cards.
+    expect(feed.querySelectorAll("[data-testid^='compact-specialist-']")).toHaveLength(0);
+    expect(feed.querySelectorAll(".compact-category-dial__feed-row")).toHaveLength(3);
+    // Trackless stations stay honest in the list.
+    expect(feed.textContent).toContain("Now playing unavailable");
+    expect(feed.textContent).toContain("Jazz FM");
+    // Play and per-station scan-skip controls still work in the drill-down.
+    fireEvent.click(screen.getByRole("button", { name: "Play Ambient One" }));
+    expect(onPlay).toHaveBeenCalledWith(ambientOne);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Skip Ambient One in scan" }));
+    expect(onToggleSkip).toHaveBeenCalledWith("ambient-one");
+  });
+
+  it("orders the focused station list by current track values and reorders on refresh", () => {
     const first = makeRowWithTrack(
       { slug: "first", name: "First", stationCategories: ["anchor"] },
       { artist: "Zed", title: "Late" },
@@ -364,7 +589,7 @@ describe("CompactDial category-first home Feed", () => {
       activeRows: [first, second],
       categoryFirst: true,
     });
-    fireEvent.click(screen.getByTestId("compact-category-anchor"));
+    fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
     const feed = screen.getByTestId("compact-category-anchor-now-feed");
     expect([...feed.querySelectorAll(".compact-category-dial__feed-tune b")]
       .map((element) => element.textContent))
@@ -389,204 +614,29 @@ describe("CompactDial category-first home Feed", () => {
       .toEqual(["First", "Second"]);
   });
 
-  it("keeps only the newest now-playing station beneath the collapsed category", () => {
-    const oldTrack = makeRowWithTrack(
-      { slug: "old", name: "Old Station", stationCategories: ["anchor"] },
-      { artist: "Older Artist", title: "Earlier", playedAt: "2026-08-18T01:00:00Z" },
-    );
-    const newTrack = makeRowWithTrack(
-      { slug: "new", name: "New Station", stationCategories: ["anchor"] },
-      { artist: "New Artist", title: "Just Now", playedAt: "2026-08-18T02:00:00Z" },
-    );
-    renderDial({ activeRows: [oldTrack, newTrack], categoryFirst: true });
-
-    const summary = screen.getByTestId("compact-category-anchor")
-      .closest(".compact-category-dial__summary")!;
-    const nowPlaying = summary.querySelector(".compact-category-dial__now-header-line");
-    expect(nowPlaying?.textContent).toContain("New Artist — Just Now");
-    expect(nowPlaying?.textContent).toContain("New Station");
-    expect(nowPlaying?.textContent).not.toContain("Old Station");
-  });
-
-  it("uses one category now-playing control and closes the previous feed", () => {
-    const anchor = makeRowWithTrack(
-      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
-      { artist: "The Smile", title: "Bending Hectic" },
-    );
-    const campus = makeRowWithTrack(
-      { slug: "wvum", name: "WVUM", stationCategories: ["campus"] },
-      { artist: "Floating Points", title: "Bias" },
-    );
-    renderDial({ activeRows: [anchor, campus], categoryFirst: true });
-
-    const anchorButton = screen.getByTestId("compact-category-anchor");
-    const campusButton = screen.getByTestId("compact-category-campus");
-    expect(anchorButton.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(anchorButton);
-    expect(anchorButton.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
-    expect(
-      anchorButton.closest(".compact-category-dial__group")
-        ?.classList.contains("compact-category-dial__group--expanded"),
-    ).toBe(true);
-    fireEvent.click(campusButton);
-    expect(campusButton.getAttribute("aria-expanded")).toBe("true");
-    expect(anchorButton.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
-  });
-
-  it("keeps category selection beside its label and age pie beside its metrics", () => {
-    const row = makeRowWithTrack(
-      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
-      { artist: "The Smile", title: "Bending Hectic", ageTier: "recent" },
-    );
-    const onToggleCategory = vi.fn();
-    const { container } = renderDial({
-      activeRows: [row],
-      categoryFirst: true,
-      activeCategories: new Set(["anchor"]),
-      onToggleCategory,
-    });
-
-    const summary = container.querySelector(".compact-category-dial__summary")!;
-    const topLine = summary.querySelector(".compact-category-dial__topline")!;
-    expect(topLine.querySelector(".compact-category-dial__label")?.textContent).toBe("Anchor Stations");
-    const categoryBox = screen.getByRole("checkbox", { name: "Include Anchor Stations" });
-    expect(categoryBox.parentElement?.parentElement).toBe(topLine);
-    fireEvent.click(categoryBox);
-    expect(onToggleCategory).toHaveBeenCalledWith("anchor");
-
-    const metrics = summary.querySelector(".compact-category-dial__metrics")!;
-    expect(metrics.nextElementSibling?.classList.contains("dial-age-badge")).toBe(true);
-  });
-
-  it("shows five category summaries per page before paging", () => {
-    const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
-    const rows = categories.map((category) => makeRow({
-      slug: `${category}-station`,
-      name: `${category} station`,
-      stationCategories: [category],
-    }));
-
-    renderDial({ activeRows: rows, categoryFirst: true });
-
-    const lane = screen.getByTestId("compact-category-dial");
-    expect(lane.querySelectorAll(".compact-category-dial__group")).toHaveLength(5);
-    expect(screen.getByRole("group", { name: "category pages" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Next category page" }));
-    expect(lane.querySelectorAll(".compact-category-dial__group")).toHaveLength(2);
-  });
-
-  it("shows every category collapsed when the home requests the full category list", () => {
-    const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
-    const rows = categories.map((category) => makeRow({
-      slug: `${category}-station`,
-      name: `${category} station`,
-      stationCategories: [category],
-    }));
-
-    renderDial({ activeRows: rows, categoryFirst: true, showAllCategories: true });
-
-    const lane = screen.getByTestId("compact-category-dial");
-    expect(lane.querySelectorAll(".compact-category-dial__group")).toHaveLength(7);
-    expect(screen.queryByRole("group", { name: "category pages" })).toBeNull();
-    expect(screen.getAllByRole("button", { name: /Open .* now-playing feed/ }))
-      .toHaveLength(7);
-  });
-
-  it("keeps selected categories first and places unchecked categories in a dimmed overflow region", () => {
-    const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
-    const rows = categories.map((category) => makeRow({
-      slug: `${category}-station`,
-      name: `${category} station`,
-      stationCategories: [category],
-    }));
-    const { container } = renderDial({
-      activeRows: rows,
-      categoryFirst: true,
-      showAllCategories: true,
-      activeCategories: new Set(["anchor", "campus", "specialist", "public", "indie"]),
-      onToggleCategory: vi.fn(),
-    });
-
-    const labelsFor = (selector: string) =>
-      [...container.querySelectorAll(`${selector} .compact-category-dial__label`)]
-        .map((element) => element.textContent);
-
-    expect(labelsFor(".compact-category-dial__active-groups")).toEqual([
-      "Anchor Stations",
-      "Campus Radio",
-      "Specialist Radio",
-      "Public & Community",
-      "Independent DJ",
-    ]);
-    expect(labelsFor(".compact-category-dial__inactive-groups")).toEqual([
-      "Ambient & Sleep",
-      "Discovery",
-    ]);
-    expect(container.querySelectorAll(".compact-category-dial__group--inactive"))
-      .toHaveLength(2);
-    expect(
-      (screen.getByRole("checkbox", { name: "Exclude Ambient & Sleep" }) as HTMLInputElement).checked,
-    ).toBe(false);
-    expect(
-      (screen.getByRole("checkbox", { name: "Exclude Discovery" }) as HTMLInputElement).checked,
-    ).toBe(false);
-  });
-
-  it("uses the compact remote density for category station lists", () => {
-    const rows = Array.from({ length: 11 }, (_, index) =>
-      makeRow({
-        slug: `anchor-${index + 1}`,
-        name: `Anchor ${index + 1}`,
-        stationCategories: ["anchor"],
-      }),
-    );
-    const { container } = renderDial({ activeRows: rows, categoryFirst: true, density: "compact" });
-
-    fireEvent.click(screen.getByTestId("compact-category-anchor"));
-    expect(container.querySelector(".compact-category-dial__now-feed--remote")).toBeTruthy();
-    expect(container.querySelectorAll(".compact-category-dial__feed-row")).toHaveLength(10);
-    expect(screen.getByRole("group", { name: "Anchor Stations now-playing feed pages" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Next Anchor Stations now-playing feed page" })).toBeTruthy();
-  });
-
-  it("expands exactly one category now-playing feed and keeps its controls", () => {
-    const anchor = makeRowWithTrack(
-      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
-      { artist: "The Smile", title: "Bending Hectic" },
-    );
-    const campus = makeRowWithTrack(
-      { slug: "wvum", name: "WVUM", stationCategories: ["campus"] },
-      { artist: "Floating Points", title: "Bias" },
-    );
-    const onToggleSkip = vi.fn();
-
+  it("keeps skipped stations visible but dimmed in the focused list", () => {
+    const active = makeRow({ slug: "kexp", name: "KEXP", stationCategories: ["anchor"] });
+    const skipped = makeRow({ slug: "wfmu", name: "WFMU", stationCategories: ["anchor"] });
     renderDial({
-      activeRows: [anchor, campus],
+      activeRows: [active],
+      skippedRows: [skipped],
       categoryFirst: true,
-      onToggleSkip,
+      onToggleSkip: vi.fn(),
     });
 
-    const anchorButton = screen.getByTestId("compact-category-anchor");
-    const campusButton = screen.getByTestId("compact-category-campus");
-    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
+    // Skipped stations still count toward the category card…
+    expect(screen.getByTestId("compact-category-card-anchor")
+      .querySelector(".compact-category-dial__count")?.textContent)
+      .toBe("2 stations");
 
-    fireEvent.click(anchorButton);
-    expect(anchorButton.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Play KEXP" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Skip KEXP in scan" }));
-    expect(onToggleSkip).toHaveBeenCalledWith("kexp");
-
-    fireEvent.click(campusButton);
-    expect(campusButton.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("compact-category-campus-now-feed")).toBeTruthy();
-    expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
-
-    fireEvent.click(campusButton);
-    expect(campusButton.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByTestId("compact-category-campus-now-feed")).toBeNull();
+    fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
+    const feed = screen.getByTestId("compact-category-anchor-now-feed");
+    expect(feed.querySelector(".compact-category-dial__feed-row--skipped")?.textContent)
+      .toContain("WFMU");
+    // …and deselection stays a scan preference, never a deletion.
+    expect(
+      (screen.getByRole("checkbox", { name: "Include WFMU in scan" }) as HTMLInputElement).checked,
+    ).toBe(false);
   });
 
   it("keeps uncategorized listener-pinned stations directly reachable", () => {
@@ -597,55 +647,7 @@ describe("CompactDial category-first home Feed", () => {
     renderDial({ activeRows: [personal], categoryFirst: true });
 
     expect(screen.getByTestId("fdrow-my-station")).toBeTruthy();
-    expect(screen.queryByTestId("compact-category-other")).toBeNull();
-  });
-
-  it("splits Specialist into ordered subcards with shared fresh now-playing and preserved row controls", () => {
-    const ambient = makeRowWithTrack(
-      { slug: "ambient-one", name: "Ambient One", stationCategories: ["specialist"] },
-      { artist: "Grouper", title: "Heavy Water" },
-    );
-    const jazzQuiet = makeRow({
-      slug: "jazz-quiet",
-      name: "Jazz FM",
-      stationCategories: ["specialist"],
-    });
-    jazzQuiet.ds.isLive = false;
-    const groove = makeRowWithTrack(
-      { slug: "fip-groove", name: "FIP Groove", stationCategories: ["specialist"] },
-      { artist: "Roy Ayers", title: "Everybody Loves the Sunshine" },
-    );
-    const onToggleSkip = vi.fn();
-
-    renderDial({
-      activeRows: [groove, jazzQuiet, ambient],
-      categoryFirst: true,
-      onToggleSkip,
-    });
-
-    fireEvent.click(screen.getByTestId("compact-category-specialist"));
-    const lane = screen.getByTestId("compact-category-dial");
-    const subcards = [...lane.querySelectorAll("[data-testid^='compact-specialist-']")]
-      .map((element) => element.getAttribute("data-testid"));
-    expect(subcards).toEqual([
-      "compact-specialist-ambient",
-      "compact-specialist-jazz",
-      "compact-specialist-groove",
-    ]);
-    expect(screen.getByTestId("compact-specialist-ambient").textContent)
-      .toContain("Grouper — Heavy Water");
-    expect(screen.getByTestId("compact-specialist-jazz").textContent)
-      .toContain("Now playing unavailable");
-    expect(screen.getByTestId("compact-specialist-jazz").textContent)
-      .toContain("Jazz FM");
-
-    const ambientButton = screen.getByTestId("compact-specialist-ambient").querySelector("button");
-    expect(ambientButton).toBeTruthy();
-    fireEvent.click(ambientButton!);
-    expect(screen.getByTestId("fdrow-ambient-one")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Play Ambient One" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Skip Ambient One in scan" }));
-    expect(onToggleSkip).toHaveBeenCalledWith("ambient-one");
+    expect(screen.queryByTestId("compact-category-card-other")).toBeNull();
   });
 });
 
