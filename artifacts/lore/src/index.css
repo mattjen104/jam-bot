@@ -8325,8 +8325,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-category-dial__all-feed {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(4, max-content);
   grid-auto-columns: calc((100% - 6px) / 2);
+  align-content: start;
   gap: 6px;
   min-height: 0;
   height: 100%;
@@ -8341,6 +8342,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   min-height: 0;
   width: 100%;
+  height: max-content;
+  align-self: start;
   scroll-snap-align: start;
 }
 .compact-category-dial__active-groups {
@@ -10471,6 +10474,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-category-dial__all-feed {
   padding: 0 0 2px;
+}
+/* On wider split-home panels the identifier image is short enough to fit
+   twice as many rows without making the cards feel oversized. Keep phones at
+   four rows so their touch targets remain comfortable. */
+@media (min-width: 900px) {
+  .split-home .compact-category-dial__all-feed {
+    grid-template-rows: repeat(8, max-content);
+  }
 }
 .split-home .compact-category-dial__active-groups {
   flex: 0 0 auto;
