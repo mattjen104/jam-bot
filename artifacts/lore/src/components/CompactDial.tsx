@@ -71,8 +71,6 @@ const COMPACT_CATEGORY_ORDER: readonly StationCategory[] = [
   "ambient",
   "discovery",
 ];
-const ALL_COLUMN_COUNTS = [1, 2, 3] as const;
-type AllColumnCount = (typeof ALL_COLUMN_COUNTS)[number];
 
 export interface CompactDialProps {
   /**
@@ -473,21 +471,18 @@ function CategoryNowPlayingFeed({
 /**
  * The All tab is one uninterrupted live feed: every station from the checked
  * categories competes in the same freshest-first ordering. CSS lays the
- * sequence into four rows per column, with the All tab cycling between one,
- * two, and three visible columns.
+ * sequence into one horizontal, scrollable row of station tiles.
  */
 function AllNowPlayingFeed({
   groups,
   activeSlug,
   playerStatus,
   onPlay,
-  columnCount,
 }: {
   groups: readonly CategoryGroup[];
   activeSlug: string | null;
   playerStatus: PlayerStatus;
   onPlay: (row: DialLaneRow) => void;
-  columnCount: AllColumnCount;
 }) {
   const entries = categoryCardFeed(groups.flatMap((group) => group.rows));
   // Freshness is judged against mount time (the StationList-sanctioned
@@ -496,10 +491,7 @@ function AllNowPlayingFeed({
   const [nowMs] = useState(() => Date.now());
   return (
     <div
-      className={[
-        "compact-category-dial__all-feed",
-        `compact-category-dial__all-feed--columns-${columnCount}`,
-      ].join(" ")}
+      className="compact-category-dial__all-feed"
       role="group"
       aria-label="Selected stations now playing"
       data-testid="compact-category-all-feed"
@@ -575,7 +567,6 @@ function CategoryFirstDial({
   );
   // Which category the feed is focused on; null = the All card overview.
   const [focusedCategory, setFocusedCategory] = useState<StationCategory | null>(null);
-  const [allColumnCount, setAllColumnCount] = useState<AllColumnCount>(2);
 
   const groupByCategory = useMemo(() => {
     const map = new Map<CompactCategory, CategoryGroup>();
@@ -611,17 +602,6 @@ function CategoryFirstDial({
     },
     [isChecked, onToggleCategory, focusedCategory],
   );
-
-  const selectAllOrCycleColumns = useCallback(() => {
-    if (focusedCategory !== null) {
-      setFocusedCategory(null);
-      return;
-    }
-    setAllColumnCount((current) => {
-      const currentIndex = ALL_COLUMN_COUNTS.indexOf(current);
-      return ALL_COLUMN_COUNTS[(currentIndex + 1) % ALL_COLUMN_COUNTS.length];
-    });
-  }, [focusedCategory]);
 
   // The All feed includes every station from a checked category. Excluded
   // categories remain in the tabs as an immediate way to restore them.
@@ -663,11 +643,9 @@ function CategoryFirstDial({
           focusedCategory === null ? "compact-category-dial__tab-button--selected" : "",
         ].filter(Boolean).join(" ")}
         data-testid="compact-category-tab-all"
-        aria-label={`All stations, ${allColumnCount} columns by 4 rows`}
-        title={`All stations — ${allColumnCount} column${allColumnCount === 1 ? "" : "s"} × 4 rows. Click to change layout.`}
-        onClick={selectAllOrCycleColumns}
+        onClick={() => setFocusedCategory(null)}
       >
-        All · {allColumnCount}×4
+        All
       </button>
       {COMPACT_CATEGORY_ORDER.map((category) => {
         const checked = isChecked(category);
@@ -745,7 +723,6 @@ function CategoryFirstDial({
             activeSlug={activeSlug}
             playerStatus={playerStatus}
             onPlay={onPlay}
-            columnCount={allColumnCount}
           />
         </div>
       )}

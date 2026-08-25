@@ -8362,11 +8362,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   scrollbar-width: thin;
 }
 .compact-category-dial__all-feed {
-  display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(4, max-content);
-  grid-auto-columns: calc((100% - 6px) / 2);
-  align-content: start;
+  display: flex;
+  align-items: flex-start;
   gap: 6px;
   min-height: 0;
   height: 100%;
@@ -8377,21 +8374,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   scroll-snap-type: x proximity;
   overscroll-behavior-x: contain;
 }
-.compact-category-dial__all-feed--columns-1 {
-  grid-auto-columns: 100%;
-}
-.compact-category-dial__all-feed--columns-2 {
-  grid-auto-columns: calc((100% - 6px) / 2);
-}
-.compact-category-dial__all-feed--columns-3 {
-  grid-auto-columns: calc((100% - 12px) / 3);
-}
 .compact-category-dial__all-feed .compact-category-dial__station {
+  flex: 0 0 clamp(132px, 20vw, 176px);
   min-width: 0;
   min-height: 0;
-  width: 100%;
+  width: auto;
   height: max-content;
-  align-self: start;
+  flex-direction: column;
   scroll-snap-align: start;
 }
 .compact-category-dial__active-groups {
@@ -8499,30 +8488,32 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   cursor: wait;
 }
 .compact-category-dial__station-logo {
-  width: 25%;
-  min-width: 25%;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
   aspect-ratio: 1;
   height: auto;
-  align-self: flex-start;
   display: grid;
   place-items: center;
-  border-radius: 0;
+  border-radius: 3px 3px 0 0;
   object-fit: cover;
   background: hsl(var(--secondary) / 0.6);
 }
 .compact-category-dial__station-lines {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 2px;
-  padding: 7px 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px 8px;
 }
 .compact-category-dial__station-track-line {
   min-width: 0;
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 .compact-category-dial__station-track {
   flex: 1;
