@@ -9947,8 +9947,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   scrollbar-width: thin;
 }
 .compact-first-plays__tile {
-  /* Two complete discovery cards, right-aligned with older cards off-canvas. */
-  flex: 0 0 calc((100% - 8px) / 2);
+  /* One complete discovery card plus a partial card peeking from the left;
+     right alignment keeps the newest card fully readable. */
+  flex: 0 0 calc((100% - 8px) / 1.5);
   min-width: 0;
   display: flex;
   flex-direction: column;
