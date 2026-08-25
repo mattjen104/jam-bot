@@ -10607,7 +10607,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: var(--home-tree-text);
 }
 .split-home .compact-category-dial__now-header-line {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  padding: 0 0 4px 23px;
   color: var(--home-tree-muted);
+}
+.split-home .compact-category-dial__now-header-line span,
+.split-home .compact-category-dial__now-header-line b {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-weight: 400;
 }
 .split-home .compact-category-dial__now-header-line b {
   color: var(--home-tree-text);
@@ -10632,6 +10649,51 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-category-dial__stations .compact-dial__row {
   min-height: 32px;
+}
+.split-home .compact-category-dial__now-feed {
+  margin-left: 20px;
+  padding-left: 12px;
+  border-color: var(--home-tree-line);
+  background: transparent;
+}
+.split-home .compact-category-dial__now-feed::before,
+.split-home .compact-category-dial__feed-row::before {
+  border-color: var(--home-tree-line);
+}
+.split-home .compact-category-dial__feed-row {
+  min-height: 48px;
+  padding: 5px 10px 5px 12px;
+  border-color: rgb(205 214 191 / .09);
+}
+.split-home .compact-category-dial__feed-tune {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+}
+.split-home .compact-category-dial__feed-tune span,
+.split-home .compact-category-dial__feed-tune b {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  font-weight: 400;
+}
+.split-home .compact-category-dial__feed-tune span {
+  color: var(--home-tree-text);
+}
+.split-home .compact-category-dial__feed-tune b {
+  color: var(--home-tree-muted);
+}
+.split-home .compact-category-dial__feed-row .compact-play-btn {
+  align-self: center;
+}
+.split-home .compact-category-dial__feed-row .compact-dial__scan-checkbox {
+  align-self: center;
+  margin-left: auto;
 }
 .split-home .compact-dial__row {
   flex: 0 0 auto;

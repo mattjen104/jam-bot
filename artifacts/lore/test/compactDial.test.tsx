@@ -243,8 +243,12 @@ describe("CompactDial category-first home Feed", () => {
     const labels = [...lane.querySelectorAll(".compact-category-dial__label")]
       .map((element) => element.textContent);
     expect(labels).toEqual(["Ambient & Sleep", "Anchor Stations"]);
-    expect(screen.getByTestId("compact-category-anchor").textContent)
-      .toContain("KEXP: The Smile — Bending Hectic");
+    const anchorSummary = screen.getByTestId("compact-category-anchor")
+      .closest(".compact-category-dial__summary")!;
+    expect(anchorSummary.querySelector(".compact-category-dial__now-header-line")?.textContent)
+      .toContain("The Smile — Bending Hectic");
+    expect(anchorSummary.querySelector(".compact-category-dial__now-header-line")?.textContent)
+      .toContain("KEXP");
     expect(
       screen.getByTestId("compact-category-anchor")
         .classList.contains("compact-category-dial__tree-disclosure"),
@@ -310,7 +314,9 @@ describe("CompactDial category-first home Feed", () => {
     });
     renderDial({ activeRows: [quiet], categoryFirst: true });
 
-    expect(screen.getByTestId("compact-category-ambient").textContent)
+    expect(screen.getByTestId("compact-category-ambient")
+      .closest(".compact-category-dial__summary")
+      ?.querySelector(".compact-category-dial__now-header-line")?.textContent)
       .toContain("Now playing unavailable");
   });
 
@@ -327,9 +333,13 @@ describe("CompactDial category-first home Feed", () => {
     renderDial({ activeRows: [playable, unavailable], categoryFirst: true, onPlay, onTuneIn });
 
     expect(screen.queryByRole("button", { name: "Play KEXP" })).toBeNull();
-    expect(screen.getByTestId("compact-category-anchor").textContent)
-      .toContain("KEXP: The Smile — Bending Hectic");
-    expect(screen.getByTestId("compact-category-anchor").textContent)
+    const summary = screen.getByTestId("compact-category-anchor")
+      .closest(".compact-category-dial__summary")!;
+    expect(summary.querySelector(".compact-category-dial__now-header-line")?.textContent)
+      .toContain("The Smile — Bending Hectic");
+    expect(summary.querySelector(".compact-category-dial__now-header-line")?.textContent)
+      .toContain("KEXP");
+    expect(summary.querySelector(".compact-category-dial__now-header-line")?.textContent)
       .not.toContain("Quiet Station");
     fireEvent.click(screen.getByTestId("compact-category-anchor"));
     expect(screen.getByRole("button", { name: "Play KEXP" })).toBeTruthy();
@@ -379,7 +389,7 @@ describe("CompactDial category-first home Feed", () => {
       .toEqual(["First", "Second"]);
   });
 
-  it("keeps only the newest now-playing station in the collapsed header", () => {
+  it("keeps only the newest now-playing station beneath the collapsed category", () => {
     const oldTrack = makeRowWithTrack(
       { slug: "old", name: "Old Station", stationCategories: ["anchor"] },
       { artist: "Older Artist", title: "Earlier", playedAt: "2026-08-18T01:00:00Z" },
@@ -390,9 +400,12 @@ describe("CompactDial category-first home Feed", () => {
     );
     renderDial({ activeRows: [oldTrack, newTrack], categoryFirst: true });
 
-    const header = screen.getByTestId("compact-category-anchor");
-    expect(header.textContent).toContain("New Station: New Artist — Just Now");
-    expect(header.textContent).not.toContain("Old Station");
+    const summary = screen.getByTestId("compact-category-anchor")
+      .closest(".compact-category-dial__summary")!;
+    const nowPlaying = summary.querySelector(".compact-category-dial__now-header-line");
+    expect(nowPlaying?.textContent).toContain("New Artist — Just Now");
+    expect(nowPlaying?.textContent).toContain("New Station");
+    expect(nowPlaying?.textContent).not.toContain("Old Station");
   });
 
   it("uses one category now-playing control and closes the previous feed", () => {
@@ -462,6 +475,23 @@ describe("CompactDial category-first home Feed", () => {
     expect(screen.getByRole("group", { name: "category pages" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Next category page" }));
     expect(lane.querySelectorAll(".compact-category-dial__group")).toHaveLength(2);
+  });
+
+  it("shows every category collapsed when the home requests the full category list", () => {
+    const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
+    const rows = categories.map((category) => makeRow({
+      slug: `${category}-station`,
+      name: `${category} station`,
+      stationCategories: [category],
+    }));
+
+    renderDial({ activeRows: rows, categoryFirst: true, showAllCategories: true });
+
+    const lane = screen.getByTestId("compact-category-dial");
+    expect(lane.querySelectorAll(".compact-category-dial__group")).toHaveLength(7);
+    expect(screen.queryByRole("group", { name: "category pages" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /Open .* now-playing feed/ }))
+      .toHaveLength(7);
   });
 
   it("uses the compact remote density for category station lists", () => {

@@ -122,6 +122,8 @@ export interface CompactDialProps {
   visibleUncategorizedSlugs?: ReadonlySet<string>;
   /** Opens the first editorial category on initial render for a tree-first home view. */
   defaultOpenFirstCategory?: boolean;
+  /** Renders every editorial category at once, without a category pager. */
+  showAllCategories?: boolean;
 }
 
 function CompactDialRow({
@@ -679,11 +681,6 @@ function CategorySummary({
             {expanded ? "−" : "+"}
           </span>
           <span className="compact-category-dial__label">{group.label}</span>
-          <span className="compact-category-dial__now-header-line">
-            {leadNowPlaying
-              ? <><b>{leadNowPlaying.row.ds.station.name}</b>: {leadNowPlaying.label}</>
-              : "Now playing unavailable"}
-          </span>
         </button>
         {group.category !== "other" && onToggleCategory && (
           <label className="compact-category-dial__include">
@@ -695,6 +692,16 @@ function CategorySummary({
               onClick={(event) => event.stopPropagation()}
             />
           </label>
+        )}
+      </div>
+      <div className="compact-category-dial__now-header-line">
+        {leadNowPlaying ? (
+          <>
+            <span>{leadNowPlaying.label}</span>
+            <b>{leadNowPlaying.row.ds.station.name}</b>
+          </>
+        ) : (
+          <span>Now playing unavailable</span>
         )}
       </div>
       <div className="compact-category-dial__meta">
@@ -748,6 +755,7 @@ function CategoryFirstDial({
   onToggleCategory,
   activeCategories,
   defaultOpenFirstCategory = false,
+  showAllCategories = false,
   density = "normal",
 }: CompactDialProps) {
   const groups = useMemo(
@@ -780,7 +788,7 @@ function CategoryFirstDial({
     ),
   };
   const categoryPageCount = Math.max(1, Math.ceil(editorialGroups.length / 5));
-  const visibleGroups = defaultOpenFirstCategory
+  const visibleGroups = (defaultOpenFirstCategory || showAllCategories)
     ? editorialGroups
     : editorialGroups.slice(categoryPage * 5, categoryPage * 5 + 5);
   const pager = (label: string, page: number, pageCount: number, onPage: (next: number) => void) =>
@@ -883,7 +891,8 @@ function CategoryFirstDial({
           </section>
         );
       })}
-      {!defaultOpenFirstCategory && pager("category", categoryPage, categoryPageCount, setCategoryPage)}
+      {!defaultOpenFirstCategory && !showAllCategories
+        && pager("category", categoryPage, categoryPageCount, setCategoryPage)}
       {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (
         <section className="compact-category-dial__uncategorized" aria-label="Other stations">
           {editorialGroups.length > 0 && (
@@ -923,6 +932,7 @@ export function CompactDial({
   onToggleCategory,
   activeCategories,
   defaultOpenFirstCategory,
+  showAllCategories,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -958,6 +968,7 @@ export function CompactDial({
         onToggleCategory={onToggleCategory}
         activeCategories={activeCategories}
         defaultOpenFirstCategory={defaultOpenFirstCategory}
+        showAllCategories={showAllCategories}
         density={density}
       />
     );

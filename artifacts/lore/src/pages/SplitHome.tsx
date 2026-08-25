@@ -193,7 +193,7 @@ export default function SplitHome() {
           suppressCrossings={false}
           displayMode="personal"
           categoryFirst={hasEditorialCategory}
-          defaultOpenFirstCategory
+          showAllCategories
         />
       </section>
 
