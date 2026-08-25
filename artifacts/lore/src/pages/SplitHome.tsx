@@ -178,28 +178,8 @@ export default function SplitHome() {
   const { skipped: stackSkipped, toggleSkip: toggleStackSkip } = useStackSkipped();
   return (
     <main className="split-home">
-      <header className="split-home__intro">
-        <div>
-          <p className="split-home__kicker">Lore · live library</p>
-          <h1>Compact surfaces, without the card stack</h1>
-          <p className="split-home__lede">
-            A calmer tree for scanning what is live and what you keep.
-          </p>
-        </div>
-        <p className="split-home__status">
-          <span aria-hidden="true" /> listening context stays inline
-        </p>
-      </header>
-
       <div className="split-home__trees">
       <section className="split-home__band split-home__band--dial" aria-label="Live stations">
-        <header className="split-home__panel-header">
-          <p className="split-home__kicker">CompactDial / category → station</p>
-          <div className="split-home__panel-title">
-            <h2>Listening now</h2>
-            <span>select · reveal</span>
-          </div>
-        </header>
         <CompactDial
           activeRows={activeRows}
           skippedRows={skippedRows}
@@ -218,13 +198,6 @@ export default function SplitHome() {
       </section>
 
       <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
-        <header className="split-home__panel-header">
-          <p className="split-home__kicker">CompactStack / artist → album</p>
-          <div className="split-home__panel-title">
-            <h2>Kept albums</h2>
-            <span>newest first</span>
-          </div>
-        </header>
         <CompactStack
           skipped={stackSkipped}
           onToggleSkip={toggleStackSkip}

@@ -10453,8 +10453,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   --home-tree-text: #e5e9de;
   --home-tree-accent: #b9d99b;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 24px;
+  grid-template-rows: minmax(0, 1fr);
   height: calc(100dvh - var(--shell-h, 0px));
   padding: clamp(18px, 3vw, 40px);
   overflow: hidden;
