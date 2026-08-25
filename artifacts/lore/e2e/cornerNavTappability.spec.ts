@@ -128,8 +128,21 @@ async function installRoutes(page: Page) {
     route.fulfill({ json: { items: [] } }),
   );
 
+  // Split home loads the Sleep and Era/Genre pools with query parameters.
+  // Keep those auxiliary pools empty so only the deterministic live fixture
+  // from the bare station endpoint is rendered.
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: [STATION] } }),
+  );
+  // Split home requests the pulse with includeModePools=true, while /feed can
+  // still use the bare endpoint. Intercept both request shapes.
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({
+      json: { items: [{ slug: NTS_SLUG, nowPlaying: makeNowPlaying() }] },
+    }),
   );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({

@@ -2,9 +2,9 @@ import { test, expect } from "@playwright/test";
 
 /**
  * End-to-end tests confirming that the /campus, /indie, and /discovery CLI
- * commands (and the matching DialFilterBar buttons) correctly narrow the dial
- * to stations whose server-supplied `stationCategories` array contains the
- * requested editorial label.
+ * commands on the full feed and the matching category controls on the split
+ * home correctly narrow the dial to stations in the requested editorial
+ * category.
  *
  * All API routes are intercepted so the tests are fully deterministic:
  *
@@ -14,10 +14,9 @@ import { test, expect } from "@playwright/test";
  *  - anchor-kexp   → stationCategories: ["anchor"]
  *
  * All four stations are live (recent now-playing) and carry enough crossings
- * to be Zone-1 rows in the feed, so the initial unfiltered state shows all
- * four rows. Categories are an additive multi-select: each checked category
- * shows its matching stations, checking a second category UNIONS it with the
- * first, and unchecking every category reverts to the unfiltered dial.
+ * to be Zone-1 rows in the feed. Categories are an additive multi-select:
+ * each checked category shows its matching stations and checking a second
+ * category UNIONS it with the first.
  *
  * CLI mechanics:
  *   1. Press "/" globally — the DialCliBar listener intercepts it, focuses
@@ -25,11 +24,10 @@ import { test, expect } from "@playwright/test";
  *   2. Type the rest of the command ("campus", "indie", "discovery").
  *   3. Press Enter — executeCommand() dispatches the category toggle.
  *
- * Filter-bar mechanics:
- *   The DialFilterBar on the full DialView (/lore/feed) exposes one dropdown
- *   per filter family. Opening the "Station type" trigger reveals one
- *   checkbox per category; the checked state validates against CLI-driven
- *   selections.
+ * Split-home mechanics:
+ *   The category tab strip exposes an "Include <category>" checkbox beside
+ *   each tab. Checked categories contribute cards to All; clicking an
+ *   excluded category tab re-includes it and opens its focused station feed.
  */
 
 // ---------------------------------------------------------------------------
@@ -70,16 +68,14 @@ function makeStation(
   };
 }
 
-// Each station carries its primary editorial category plus one of the three
-// default-checked categories (anchor/campus/public) so all four are visible
-// when the app loads with default filters. Without the extra tag, stations
-// whose primary category is not in the default set (indie, discovery) would
-// be hidden on load, breaking waitForAllStations.
+// Category-first home cards group by the primary category only, so fixtures
+// deliberately carry one category each. This makes every filtering assertion
+// verify the category it names rather than relying on a secondary-tag alias.
 const STATIONS = [
-  makeStation("campus-wkrp",  "Campus WKRP",  ["campus"],           0),
-  makeStation("indie-fm",     "Indie FM",     ["indie", "anchor"],  1),
-  makeStation("discovery-rb", "Discovery RB", ["discovery", "anchor"], 2),
-  makeStation("anchor-kexp",  "Anchor KEXP",  ["anchor"],           3),
+  makeStation("campus-wkrp",  "Campus WKRP",  ["campus"],    0),
+  makeStation("indie-fm",     "Indie FM",     ["indie"],     1),
+  makeStation("discovery-rb", "Discovery RB", ["discovery"], 2),
+  makeStation("anchor-kexp",  "Anchor KEXP",  ["anchor"],    3),
 ];
 
 function makeNowPlaying(slug: string, idx: number) {
@@ -179,6 +175,14 @@ async function installRoutes(page: import("@playwright/test").Page) {
     route.fulfill({ json: makeCrossings() }),
   );
 
+  // The split-home also fetches sleep/era-genre mode pools as query-string
+  // variants (/api/stations?mode=sleep etc.) — a bare path glob does not match
+  // query-carrying requests, so without this the real dev server leaks its
+  // stations into the dial and crowds out the fixtures.
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
+
   // Station directory — the four test stations.
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: STATIONS } }),
@@ -253,25 +257,26 @@ async function sendCliCommand(
 }
 
 /**
- * Waits for the initial dial to be populated (all four test station names
- * visible as text somewhere in the feed) before any filter is applied.
+ * Waits for the full feed's default category selection (Anchor, Campus, and
+ * Public) to settle. The two opt-in fixtures must remain absent.
  */
-async function waitForAllStations(page: import("@playwright/test").Page) {
-  for (const s of STATIONS) {
-    await expect(page.getByText(s.name).first()).toBeVisible({ timeout: 20_000 });
-  }
+async function waitForDefaultFeed(page: import("@playwright/test").Page) {
+  await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Anchor KEXP").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Indie FM")).toHaveCount(0);
+  await expect(page.getByText("Discovery RB")).toHaveCount(0);
 }
 
 // ---------------------------------------------------------------------------
-// CLI tests — run against /lore/ (the split homepage, which surfaces the CLI
-// strip and applies the same stationCategories filter to its station list).
+// CLI tests — run against /lore/feed, the current surface that mounts
+// DialCliBar and wires its global "/" keyboard listener.
 // ---------------------------------------------------------------------------
 
 test.describe("Dial category filters — CLI commands", () => {
   test.beforeEach(async ({ page }) => {
     await installRoutes(page);
-    await page.goto("/lore/");
-    await waitForAllStations(page);
+    await page.goto("/lore/feed");
+    await waitForDefaultFeed(page);
   });
 
   // Default-checked categories: anchor, campus, public. Category CLI
@@ -283,12 +288,11 @@ test.describe("Dial category filters — CLI commands", () => {
   }) => {
     await sendCliCommand(page, "/campus");
 
-    // campus-wkrp only carries campus, so it drops out; the other three
-    // remain visible through the still-checked anchor category.
+    // campus-wkrp only carries campus, so it drops out; anchor remains.
     await expect(page.getByText("Campus WKRP")).not.toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Indie FM").first()).toBeVisible();
-    await expect(page.getByText("Discovery RB").first()).toBeVisible();
     await expect(page.getByText("Anchor KEXP").first()).toBeVisible();
+    await expect(page.getByText("Indie FM")).not.toBeVisible();
+    await expect(page.getByText("Discovery RB")).not.toBeVisible();
   });
 
   test("/anchor unchecks anchor, leaving only campus-covered stations", async ({
@@ -360,22 +364,20 @@ test.describe("Split-home category tabs — cards and drill-down", () => {
     await expect(campusTab).toHaveAttribute("aria-selected", "false");
     await expect(page.getByTestId("compact-category-tab-specialist")).toContainText("Specialist");
 
-    // All shows one card per checked category; the card's station strip leads
-    // with the station's current now-playing artist.
-    const campusCard = page.getByTestId("compact-category-card-campus");
-    await expect(campusCard).toBeVisible();
+    // All shows one flat feed of the checked categories' stations; each row
+    // leads with the station's current now-playing artist.
+    const allFeed = page.getByTestId("compact-category-all-feed");
+    await expect(allFeed).toBeVisible();
     const campusStation = page.getByTestId("compact-category-station-campus-wkrp");
     await expect(campusStation).toBeVisible();
     await expect(campusStation).toContainText("Artist 1");
-    await expect(campusStation).toContainText("Campus WKRP");
+    await expect(campusStation).toHaveAccessibleName("Play Campus WKRP");
     await expect(page.getByTestId("compact-category-campus-now-feed")).toHaveCount(0);
 
-    // The card body is independently keyboard reachable and opens the
-    // category drill-down (a single station list).
-    const campusOpen = page.getByTestId("compact-category-campus");
-    await campusOpen.focus();
-    await expect(campusOpen).toBeFocused();
-    await expect(campusOpen).toHaveAccessibleName("Open Campus stations");
+    // The category tab is keyboard reachable and opens the drill-down (a
+    // single station list).
+    await campusTab.focus();
+    await expect(campusTab).toBeFocused();
     await page.keyboard.press("Enter");
 
     const campusFeed = page.getByTestId("compact-category-campus-now-feed");
@@ -390,17 +392,17 @@ test.describe("Split-home category tabs — cards and drill-down", () => {
     ).toBeVisible();
     await expect(campusFeed.getByRole("button", { name: "Play Campus WKRP" })).toBeVisible();
 
-    // The focused list replaces the overview cards instead of stacking.
-    await expect(campusCard).toHaveCount(0);
+    // The focused list replaces the All overview instead of stacking.
+    await expect(allFeed).toHaveCount(0);
 
     // Selecting a different category tab focuses that category instead.
     await page.getByTestId("compact-category-tab-anchor").click();
     await expect(page.getByTestId("compact-category-anchor-now-feed")).toBeVisible();
     await expect(campusFeed).toHaveCount(0);
 
-    // All returns to the category-card overview.
+    // All returns to the flat overview feed.
     await allTab.click();
-    await expect(page.getByTestId("compact-category-card-campus")).toBeVisible();
+    await expect(allFeed).toBeVisible();
     await expect(page.getByTestId("compact-category-anchor-now-feed")).toHaveCount(0);
   });
 
@@ -417,14 +419,13 @@ test.describe("Split-home category tabs — cards and drill-down", () => {
     });
     await page.goto("/lore/");
 
-    const campusCard = page.getByTestId("compact-category-card-campus");
-    await expect(campusCard).toBeVisible({ timeout: 20_000 });
-    // The skipped station still counts toward the category, but the retired
+    const dial = page.getByTestId("compact-category-dial");
+    // The skipped station still renders in the overview, but the retired
     // crossings/first-play badges and age pie no longer render.
-    await expect(campusCard).toContainText("1 station");
-    await expect(campusCard).not.toContainText("crossings");
-    await expect(campusCard).not.toContainText("first plays");
-    await expect(campusCard.locator(".dial-age-badge")).toHaveCount(0);
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toBeVisible({ timeout: 20_000 });
+    await expect(dial).not.toContainText("crossings");
+    await expect(dial).not.toContainText("first plays");
+    await expect(dial.locator(".dial-age-badge")).toHaveCount(0);
 
     // The complete station card is the play control (the inline triangle is
     // its cue), so no small far-left play button competes with station art.
@@ -445,122 +446,109 @@ test.describe("Split-home category tabs — cards and drill-down", () => {
     await expect(includeBox).toBeVisible();
     await expect(includeBox).not.toBeChecked();
 
-    // The crossing-scope chip still cycles the underlying data model; the
-    // card simply no longer renders the metric chrome.
-    const scopePill = page.locator(".crossing-scope-pill").first();
-    await expect(scopePill).toBeVisible({ timeout: 15_000 });
-    await expect(scopePill).toContainText("lifetime");
-    await scopePill.click();
-    await expect(scopePill).toContainText("now");
+    // Advanced crossing controls now live on the full Feed. The split-home
+    // keeps that chrome out of both its overview and drill-down.
+    await expect(page.locator(".crossing-scope-pill")).toHaveCount(0);
     await expect(campusFeed).toBeVisible();
-    await expect(page.getByTestId("compact-category-campus")).toHaveCount(0);
+    await expect(page.getByTestId("compact-category-all-feed")).toHaveCount(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Filter bar dropdown tests — run against /lore/feed (the full DialView),
-// whose DialFilterBar carries one dropdown per filter family. Opening the
-// "Station type" trigger reveals one checkbox per category; a CLI command
-// that checks a category must flip the matching checkbox, checking a second
-// category must leave the first checked (additive), and unchecking every
-// category reverts to the unfiltered dial.
+// Category-control tests — the retired Station type dropdown's current
+// equivalent is the split-home tab strip. Its include checkboxes control All
+// overview membership, and an excluded tab is also the category's re-entry
+// point.
 // ---------------------------------------------------------------------------
 
-test.describe("Dial category filters — filter bar dropdown wiring at /lore/feed", () => {
+test.describe("Dial category filters — split-home include controls", () => {
   test.beforeEach(async ({ page }) => {
     await installRoutes(page);
-    await page.goto("/lore/feed");
-    await waitForAllStations(page);
+    await page.goto("/lore/");
+    await expect(
+      page.getByRole("tablist", { name: "Station categories" }),
+    ).toBeVisible({ timeout: 20_000 });
+    // The All overview is one flat feed of the checked categories' stations;
+    // opt-in Discovery stays out until checked.
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toBeVisible();
+    await expect(page.getByTestId("compact-category-station-anchor-kexp")).toBeVisible();
+    await expect(page.getByTestId("compact-category-station-indie-fm")).toBeVisible();
+    await expect(page.getByTestId("compact-category-station-discovery-rb")).toHaveCount(0);
   });
-
-  function stationTypeTrigger(page: import("@playwright/test").Page) {
-    return page.getByRole("button", { name: /^Station type/ });
-  }
 
   function categoryCheckbox(
     page: import("@playwright/test").Page,
     name: string,
   ) {
-    return page.getByRole("checkbox", { name });
+    return page.getByRole("checkbox", { name: `Include ${name}` });
   }
 
-  test("Campus checkbox starts checked (default) and reflects /campus CLI toggles", async ({
+  test("Campus include checkbox starts checked and toggles its overview station", async ({
     page,
   }) => {
-    await stationTypeTrigger(page).click();
-    const campusBox = categoryCheckbox(page, "Campus Radio");
-    // Campus is one of the three default-checked categories.
+    const campusBox = categoryCheckbox(page, "Campus");
     await expect(campusBox).toBeChecked();
 
-    // /campus unchecks it — the campus-only station drops out.
-    await sendCliCommand(page, "/campus");
+    await campusBox.click();
     await expect(campusBox).not.toBeChecked();
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Anchor KEXP").first()).toBeVisible();
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toHaveCount(0);
+    await expect(page.getByTestId("compact-category-station-anchor-kexp")).toBeVisible();
 
-    // /campus again re-checks it — the campus station returns.
-    await sendCliCommand(page, "/campus");
+    await campusBox.click();
     await expect(campusBox).toBeChecked();
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toBeVisible();
   });
 
   test("Checking an opt-in category unions it with the defaults (additive multi-select)", async ({
     page,
   }) => {
-    await stationTypeTrigger(page).click();
-    const campusBox = categoryCheckbox(page, "Campus Radio");
-    const indieBox = categoryCheckbox(page, "Independent DJ");
-
-    // Defaults: campus checked, indie unchecked.
-    await expect(campusBox).toBeChecked();
-    await expect(indieBox).not.toBeChecked();
-
-    await sendCliCommand(page, "/indie");
-    await expect(indieBox).toBeChecked();
-    await expect(campusBox).toBeChecked();
-    await expect(page.getByText("Indie FM").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
-  });
-
-  test("Discovery checkbox can be toggled directly from the dropdown", async ({
-    page,
-  }) => {
-    await stationTypeTrigger(page).click();
+    const campusBox = categoryCheckbox(page, "Campus");
     const discoveryBox = categoryCheckbox(page, "Discovery");
-    await expect(discoveryBox).toBeVisible();
-    // Discovery is opt-in — not part of the default-checked set.
+
+    // Split-home defaults include Campus and Indie; Discovery is opt-in.
+    await expect(campusBox).toBeChecked();
     await expect(discoveryBox).not.toBeChecked();
 
     await discoveryBox.click();
     await expect(discoveryBox).toBeChecked();
-    // Discovery unions with the still-checked defaults, so every fixture
-    // station is visible (discovery-rb also carries anchor).
-    await expect(page.getByText("Discovery RB").first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible();
-
-    // Unchecking reverts to the default three categories.
-    await discoveryBox.click();
-    await expect(discoveryBox).not.toBeChecked();
-    await expect(page.getByText("Campus WKRP").first()).toBeVisible({ timeout: 10_000 });
+    await expect(campusBox).toBeChecked();
+    await expect(page.getByTestId("compact-category-station-discovery-rb")).toBeVisible();
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toBeVisible();
+    await expect(page.getByTestId("compact-category-station-indie-fm")).toBeVisible();
   });
 
-  test("Escape closes the dropdown and the trigger shows an active-count badge", async ({
+  test("Discovery checkbox can be toggled directly from the tab strip", async ({
     page,
   }) => {
-    const trigger = stationTypeTrigger(page);
-    // Three default-checked categories → the badge starts at 3.
-    await expect(trigger).toContainText("· 3");
-    await trigger.click();
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const discoveryBox = categoryCheckbox(page, "Discovery");
+    await expect(discoveryBox).toBeVisible();
+    await expect(discoveryBox).not.toBeChecked();
 
-    // Unchecking Campus drops the count to 2.
-    await categoryCheckbox(page, "Campus Radio").click();
-    await expect(page.getByText("Campus WKRP")).not.toBeVisible({ timeout: 10_000 });
-    await expect(trigger).toContainText("· 2");
+    await discoveryBox.click();
+    await expect(discoveryBox).toBeChecked();
+    await expect(page.getByTestId("compact-category-station-discovery-rb")).toBeVisible();
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toBeVisible();
 
-    await page.keyboard.press("Escape");
-    await expect(trigger).toHaveAttribute("aria-expanded", "false");
-    // The panel stays mounted but hidden.
-    await expect(categoryCheckbox(page, "Campus Radio")).toBeHidden();
+    await discoveryBox.click();
+    await expect(discoveryBox).not.toBeChecked();
+    await expect(page.getByTestId("compact-category-station-discovery-rb")).toHaveCount(0);
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toBeVisible();
+  });
+
+  test("an excluded category tab re-includes it and opens its station feed", async ({
+    page,
+  }) => {
+    const campusBox = categoryCheckbox(page, "Campus");
+    const campusTab = page.getByTestId("compact-category-tab-campus");
+    await campusBox.focus();
+    await page.keyboard.press("Space");
+    await expect(campusBox).not.toBeChecked();
+    await expect(page.getByTestId("compact-category-station-campus-wkrp")).toHaveCount(0);
+
+    await campusTab.click();
+    await expect(campusBox).toBeChecked();
+    await expect(campusTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("compact-category-campus-now-feed")).toBeVisible();
+    await expect(page.getByTestId("compact-category-all-feed")).toHaveCount(0);
   });
 });

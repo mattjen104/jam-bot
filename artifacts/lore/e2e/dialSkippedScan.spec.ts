@@ -77,8 +77,21 @@ async function installRoutes(page: Page) {
   await page.route("**/api/me/**", (route) =>
     route.fulfill({ status: 404, json: { error: "Not found" } }),
   );
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations } }),
+  );
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({
+      json: {
+        items: stations.map((station, index) => ({
+          slug: station.slug,
+          nowPlaying: nowPlaying(index),
+        })),
+      },
+    }),
   );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({
@@ -119,7 +132,7 @@ async function installRoutes(page: Page) {
 }
 
 test.describe("shared skipped-station preference", () => {
-  test("keeps skipped stations out of page/all previews and survives Feed navigation", async ({
+  test("keeps skipped stations excluded and ordered last across Feed navigation", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -137,37 +150,27 @@ test.describe("shared skipped-station preference", () => {
     await installRoutes(page);
     await page.goto("/lore/");
 
-    const category = page.getByRole("button", { name: /Anchor Stations/ });
+    const category = page.getByTestId("compact-category-tab-anchor");
     await expect(category).toBeVisible({ timeout: 20_000 });
     await category.click();
-    const skippedRow = page.locator(".compact-dial__row--skipped");
-    await expect(skippedRow).toContainText("Skipped Station");
+    const categoryFeed = page.getByTestId("compact-category-anchor-now-feed");
+    const skippedInclude = categoryFeed.getByRole("checkbox", {
+      name: "Include Skipped Station in scan",
+    });
+    await expect(skippedInclude).not.toBeChecked();
 
-    const names = await page
-      .locator('[aria-label="Anchor Stations stations"] > div')
+    const names = await categoryFeed
+      .locator(".compact-category-dial__feed-tune")
       .allTextContents();
     expect(names.map((name) => name.match(/(Included Alpha|Included Beta|Skipped Station)/)?.[1]))
       .toEqual(["Included Alpha", "Included Beta", "Skipped Station"]);
 
-    const scanCommands = page.getByRole("group", { name: "Scan commands" });
-    const scanPage = scanCommands.getByRole("button", { name: "scan this page" });
-    const scanAll = scanCommands.getByRole("button", { name: "scan all stations" });
-
-    await scanPage.click();
-    await expect(scanCommands.getByRole("button", { name: "stop page scan" })).toBeVisible();
-    await page.waitForTimeout(7_500);
-    await scanCommands.getByRole("button", { name: "stop page scan" }).click();
+    // The simplified front door no longer auto-previews a page/all scan.
+    // Merely opening the category keeps the excluded station silent.
     expect(previews).not.toContain("skipped-station");
-
-    await scanAll.click();
-    await expect(scanCommands.getByRole("button", { name: "stop scan all" })).toBeVisible();
-    await page.waitForTimeout(7_500);
-    await scanCommands.getByRole("button", { name: "stop scan all" }).click();
-    expect(previews).not.toContain("skipped-station");
-    expect(previews.length).toBeGreaterThan(0);
 
     await page.reload();
-    await expect(page.getByRole("button", { name: /Anchor Stations/ })).toBeVisible({
+    await expect(page.getByTestId("compact-category-tab-anchor")).toBeVisible({
       timeout: 20_000,
     });
     await page.goto("/lore/feed");
@@ -185,5 +188,6 @@ test.describe("shared skipped-station preference", () => {
     expect(feedSlugs.indexOf("skipped-station")).toBeGreaterThan(
       feedSlugs.indexOf("included-beta"),
     );
+    expect(previews).not.toContain("skipped-station");
   });
 });

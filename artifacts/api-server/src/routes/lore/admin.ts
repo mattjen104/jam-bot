@@ -1192,9 +1192,11 @@ router.patch("/admin/scraped-shows/:id/void", h(async (req, res) => {
       endTime: updated.endTime,
       djName: updated.djName,
       sourceUrl: updated.sourceUrl,
-      scrapedAt: updated.scrapedAt,
+      // drizzle returns timestamp columns as Date objects; the response
+      // contract declares ISO strings, so serialize explicitly.
+      scrapedAt: new Date(updated.scrapedAt).toISOString(),
       extraction: updated.extraction,
-      voidedAt: updated.voidedAt,
+      voidedAt: updated.voidedAt ? new Date(updated.voidedAt).toISOString() : null,
       voidReason: updated.voidReason,
     }),
   );

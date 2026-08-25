@@ -6,7 +6,7 @@ import { test, expect, type Page } from "@playwright/test";
  *
  *   1. Unchecking an album moves it to .compact-stack__skipped-region (dimmed).
  *   2. The skip preference survives a page reload (localStorage "lore:stackSkipped").
- *   3. The Stack pager page count reflects active (non-skipped) albums only.
+ *   3. The fixed Stack window refills from active (non-skipped) albums only.
  *   4. Expanding a row shows .compact-stack__filmstrip sorted oldest→newest
  *      with the currently kept album highlighted.
  *   5. Tapping a filmstrip tile swaps the expanded header title and makes that
@@ -45,7 +45,7 @@ function makeLibraryItem(opts: {
 }
 
 /**
- * 6 distinct albums → 2 stack pages (first 5 on page 1, last 1 on page 2).
+ * 6 distinct albums → 5 visible Stack rows plus one waiting beyond the window.
  * Portishead's "Dummy" (mbid-1) carries a releaseGroupMbid and will be used
  * for the filmstrip tests.
  */
@@ -86,7 +86,7 @@ const SIX_ALBUMS = [
     releaseYear: 1998,
     addedAt: "2026-08-02T00:00:00Z",
   }),
-  // This one lands on stack page 2 (index 5).
+  // This one begins just beyond the fixed five-row home window (index 5).
   makeLibraryItem({
     mbid: "mbid-6",
     albumTitle: "Third",
@@ -195,8 +195,14 @@ async function installBaseRoutes(
   );
 
   // Stations — empty so the dial band stays quiet.
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: [] } }),
+  );
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({ json: { items: [] } }),
   );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({ json: { items: [] } }),
@@ -317,38 +323,50 @@ test.describe("CompactStack — album checkboxes", () => {
     ).toBeVisible();
   });
 
-  test("renders connected artist branches and keeps disclosure independent from album controls", async ({
+  test("renders same-artist albums independently and keeps disclosure independent from album controls", async ({
     page,
   }) => {
     await installBaseRoutes(page);
     await loadAndWaitForStack(page);
 
-    const massiveAttack = page.getByRole("button", {
-      name: "Hide albums by Massive Attack",
+    // The simplified Stack has no redundant artist-level disclosure. Each
+    // album spine is independently expandable, even when two albums share an
+    // artist.
+    const blueLines = page.getByRole("button", {
+      name: "Expand Blue Lines · Massive Attack",
     });
-    await expect(massiveAttack).toBeVisible();
-    await expect(massiveAttack.locator("span").first()).toHaveText("−");
-    const branch = page.locator(".compact-stack__tree-group").filter({
-      hasText: "Massive Attack",
+    const mezzanine = page.getByRole("button", {
+      name: "Expand Mezzanine · Massive Attack",
     });
-    await expect(branch.locator(".compact-stack__tree-children")).toBeVisible();
+    await expect(blueLines).toBeVisible();
+    await expect(mezzanine).toBeVisible();
+
+    // Expanding one album must not hide or co-expand its same-artist sibling.
+    await blueLines.click();
     await expect(
-      branch.getByRole("button", { name: "Expand Blue Lines · Massive Attack" }),
+      page.getByRole("button", { name: "Collapse Blue Lines" }),
     ).toBeVisible();
+    await expect(mezzanine).toBeVisible();
+    await expect(mezzanine).toHaveAttribute("aria-expanded", "false");
 
-    await massiveAttack.click();
-    const collapsedMassiveAttack = page.getByRole("button", {
-      name: "Show albums by Massive Attack",
-    });
-    await expect(collapsedMassiveAttack).toHaveAttribute("aria-expanded", "false");
-    await expect(branch.locator(".compact-stack__tree-children")).toHaveCount(0);
+    // The trailing album checkbox remains its own control: using it skips the
+    // sibling without collapsing the album currently under investigation.
+    await page.getByRole("checkbox", {
+      name: "Skip Mezzanine · Massive Attack in the Stack window",
+    }).click();
     await expect(
-      page.getByRole("checkbox", { name: "Skip Blue Lines · Massive Attack in the Stack window" }),
-    ).toHaveCount(0);
-
-    await collapsedMassiveAttack.click();
+      page.getByRole("button", { name: "Collapse Blue Lines" }),
+    ).toBeVisible();
+    const skippedRegion = page.locator(".compact-stack__skipped-region");
     await expect(
-      branch.getByRole("checkbox", { name: "Skip Blue Lines · Massive Attack in the Stack window" }),
+      skippedRegion.getByRole("button", {
+        name: "Expand Mezzanine · Massive Attack",
+      }),
+    ).toBeVisible();
+    await expect(
+      skippedRegion.getByRole("checkbox", {
+        name: "Include Mezzanine · Massive Attack in the Stack window",
+      }),
     ).toBeVisible();
   });
 
@@ -414,39 +432,44 @@ test.describe("CompactStack — album checkboxes", () => {
     ).toBeVisible();
   });
 
-  test("pager page count reflects active albums only after skipping", async ({
+  test("the active stack window refills from active albums after skipping", async ({
     page,
   }) => {
     await installBaseRoutes(page);
     await loadAndWaitForStack(page);
 
-    // 6 albums → 2 pages initially, each labelled by its window's first album.
+    // The simplified home Stack is a fixed five-album window rather than a
+    // paged band. The sixth album starts outside the active window.
     await expect(
-      page.getByRole("button", { name: "stack page 1: Dummy, +4 more" }),
-    ).toBeVisible({ timeout: 10_000 });
+      page.locator(".compact-stack__row:not(.compact-stack__row--skipped)"),
+    ).toHaveCount(5);
     await expect(
-      page.getByRole("button", { name: "stack page 2: Third" }),
-    ).toBeVisible();
-    // No third page.
-    await expect(
-      page.getByRole("button", { name: "stack page 3" }),
+      page.getByRole("button", { name: "Expand Third · Portishead" }),
     ).toHaveCount(0);
 
-    // Skip 2 albums so only 4 remain active → 1 page.
+    // Removing the first active album immediately pulls the next active album
+    // into the five-slot window.
     await page.getByRole("checkbox", {
       name: "Skip Dummy · Portishead in the Stack window",
     }).click();
+    await expect(
+      page.getByRole("button", { name: "Expand Third · Portishead" }),
+    ).toBeVisible();
+
     await page.getByRole("checkbox", {
       name: "Skip Blue Lines · Massive Attack in the Stack window",
     }).click();
 
-    // With 4 active albums there is exactly 1 page, now led by OK Computer
-    // (Dummy and Blue Lines were skipped out of the active window).
+    // Four active albums remain and both excluded albums stay reachable in
+    // the below-fold region; no obsolete page selector is rendered.
     await expect(
-      page.getByRole("button", { name: "stack page 1: OK Computer, +3 more" }),
-    ).toBeVisible({ timeout: 5_000 });
+      page.locator(".compact-stack__row:not(.compact-stack__row--skipped)"),
+    ).toHaveCount(4);
     await expect(
-      page.getByRole("button", { name: "stack page 2" }),
+      page.locator(".compact-stack__skipped-region .compact-stack__row--skipped"),
+    ).toHaveCount(2);
+    await expect(
+      page.getByRole("group", { name: "Stack pages" }),
     ).toHaveCount(0);
   });
 });

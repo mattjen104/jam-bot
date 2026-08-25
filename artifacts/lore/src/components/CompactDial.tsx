@@ -56,6 +56,7 @@ import {
   type StationCategory,
 } from "../lib/dialCategories";
 import { cleanLiveValue } from "./dialViewHelpers";
+import { StationMark } from "./StationMark";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
@@ -440,6 +441,13 @@ function CategoryNowPlayingFeed({
               onClick={() => onTuneIn(entry.row)}
               aria-label={`${entry.label} · ${entry.row.ds.station.name} — tune in`}
             >
+              {/* Station identity cube — station logo or neutral fallback,
+                  immediately left of the now-playing text. */}
+              <StationMark
+                name={entry.row.ds.station.name}
+                logoUrl={entry.row.ds.station.logoUrl}
+                variant="cube"
+              />
               <span>{entry.label}</span>
               <b>{entry.row.ds.station.name}</b>
             </button>
@@ -521,21 +529,15 @@ function AllNowPlayingFeed({
               if (isPlayable && !(isActive && playerStatus === "loading")) onPlay(entry.row);
             }}
           >
-            {station.logoUrl ? (
-              <img
-                className="compact-category-dial__station-logo"
-                src={station.logoUrl}
-                alt=""
-                loading="lazy"
-              />
-            ) : (
-              <span
-                className="compact-category-dial__station-logo compact-category-dial__station-logo--mono"
-                aria-hidden="true"
-              >
-                {station.name}
-              </span>
-            )}
+            {/* Station identity mark — same safe treatment as every other
+                listener surface: proxied/validated logo with a neutral
+                fallback, never a broken image or track artwork. */}
+            <StationMark
+              name={station.name}
+              logoUrl={station.logoUrl}
+              variant="cube"
+              className="compact-category-dial__station-logo"
+            />
             <span className="compact-category-dial__station-lines">
               <span className="compact-category-dial__station-track-line">
                 <span

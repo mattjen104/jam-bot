@@ -34,9 +34,9 @@ import { test, expect } from "@playwright/test";
  *    only the premiere station remains visible.
  * 3. Deactivating the First tier via /first hides the premiere station while
  *    old-catalog and current stations remain visible.
- * 4. Track age dropdown at /lore/feed shows the "First" checkbox with the
- *    correct description text ("First Lore play of a brand-new release").
- * 5. Toggling the First checkbox directly in the dropdown mirrors the CLI.
+ * 4. The current /lore/feed command surface accepts all four age-tier
+ *    commands and preserves the "First" premiere semantics.
+ * 5. Tier commands compose, round-trip, and treat an empty set as no filter.
  */
 
 // ---------------------------------------------------------------------------
@@ -232,12 +232,27 @@ async function installRoutes(page: import("@playwright/test").Page) {
     route.fulfill({ json: { candidates: [], needsChoice: false } }),
   );
 
-  // Station directory.
+  // Station directory. SplitHome also requests mode pools with query strings;
+  // keep those empty so real-server stations cannot leak into this fixture.
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: STATIONS } }),
   );
 
-  // Bulk now-playing pulse — all three stations are live.
+  // Bulk now-playing pulse — all three stations are live. SplitHome appends
+  // includeModePools=true, so intercept both URL shapes.
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({
+      json: {
+        items: STATIONS.map((s) => ({
+          slug: s.slug,
+          nowPlaying: NOW_PLAYING_MAP[s.slug],
+        })),
+      },
+    }),
+  );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({
       json: {
@@ -287,21 +302,18 @@ async function installRoutes(page: import("@playwright/test").Page) {
 // ---------------------------------------------------------------------------
 
 /**
- * Send any slash-command via the global DialCliBar listener.
+ * Send any slash-command through the current DialCliBar input.
  *
- * Blurs the active element first so the "/" keydown is not swallowed by an
- * existing focused input, then types the full command and presses Enter.
+ * Targeting the mounted input directly avoids racing the global "/" listener
+ * while the route's front-door shell settles.
  */
 async function sendCliCommand(
   page: import("@playwright/test").Page,
   cmd: string,
 ) {
-  await page.evaluate(() =>
-    (document.activeElement as HTMLElement | null)?.blur(),
-  );
-  await page.keyboard.press("/");
-  await page.keyboard.type(cmd.slice(1));
-  await page.keyboard.press("Enter");
+  const input = page.getByRole("textbox", { name: "Dial command" });
+  await input.fill(cmd);
+  await input.press("Enter");
 }
 
 /**
@@ -315,13 +327,13 @@ async function waitForAllStations(page: import("@playwright/test").Page) {
 }
 
 // ---------------------------------------------------------------------------
-// CLI tests — run at the split homepage (/lore/)
+// CLI tests — run in the full Dial feed, where age filtering now lives.
 // ---------------------------------------------------------------------------
 
 test.describe("Dial age-tier filter — CLI (/first)", () => {
   test.beforeEach(async ({ page }) => {
     await installRoutes(page);
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
     await waitForAllStations(page);
   });
 
@@ -393,114 +405,86 @@ test.describe("Dial age-tier filter — CLI (/first)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Filter-bar dropdown tests — run at /lore/feed (full DialView)
+// Current age-filter surface — slash commands in the full DialView
 // ---------------------------------------------------------------------------
 
-test.describe("Dial age-tier filter — Track age dropdown at /lore/feed", () => {
+test.describe("Dial age-tier filter — command surface at /lore/feed", () => {
   test.beforeEach(async ({ page }) => {
     await installRoutes(page);
     await page.goto("/lore/feed");
     await waitForAllStations(page);
   });
 
-  function trackAgeTrigger(page: import("@playwright/test").Page) {
-    return page.getByRole("button", { name: /^Track age/ });
-  }
-
-  function tierCheckbox(page: import("@playwright/test").Page, name: string) {
-    return page.getByRole("checkbox", { name });
-  }
-
-  test("Track age dropdown is present and shows all four tier options", async ({
+  test("Dial command surface accepts all four age-tier commands", async ({
     page,
   }) => {
-    const trigger = trackAgeTrigger(page);
-    await expect(trigger).toBeVisible();
-    await trigger.click();
+    const input = page.getByRole("textbox", { name: "Dial command" });
+    await expect(input).toBeAttached();
 
-    await expect(tierCheckbox(page, "First")).toBeVisible();
-    await expect(tierCheckbox(page, "Current")).toBeVisible();
-    await expect(tierCheckbox(page, "Catalog")).toBeVisible();
-    await expect(tierCheckbox(page, "Deep")).toBeVisible();
-  });
-
-  test("First checkbox description reads 'First Lore play of a brand-new release'", async ({
-    page,
-  }) => {
-    await trackAgeTrigger(page).click();
-
-    // The FilterDropdownMenu renders each option description as a
-    // .filter-dropdown__option-desc span alongside the label.
-    const desc = page
-      .locator(".filter-dropdown__option-desc")
-      .filter({ hasText: "First Lore play of a brand-new release" });
-    await expect(desc.first()).toBeVisible();
-  });
-
-  test("First checkbox starts checked (default) and unchecking hides premiere tracks", async ({
-    page,
-  }) => {
-    await trackAgeTrigger(page).click();
-
-    const firstBox = tierCheckbox(page, "First");
-    // "first" is part of the default active set so the checkbox starts checked.
-    await expect(firstBox).toBeChecked();
-
-    // Uncheck it — premiere station should disappear.
-    await firstBox.click();
-    await expect(firstBox).not.toBeChecked();
-    await expect(page.getByText("Premiere Air")).not.toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Old Catalog Air").first()).toBeVisible();
-    await expect(page.getByText("Current Air").first()).toBeVisible();
-  });
-
-  test("Dropdown First checkbox reflects /first CLI toggle", async ({
-    page,
-  }) => {
-    await trackAgeTrigger(page).click();
-
-    // Initially checked (default).
-    await expect(tierCheckbox(page, "First")).toBeChecked();
-
-    // CLI removes "first" from the active set → checkbox unchecked.
-    await sendCliCommand(page, "/first");
-    await expect(tierCheckbox(page, "First")).not.toBeChecked();
-    await expect(page.getByText("Premiere Air")).not.toBeVisible({ timeout: 10_000 });
-
-    // CLI adds it back → checkbox re-checked, premiere station returns.
-    await sendCliCommand(page, "/first");
-    await expect(tierCheckbox(page, "First")).toBeChecked();
-    await expect(page.getByText("Premiere Air").first()).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("Unchecking every tier shows all stations (empty set = no age filtering)", async ({
-    page,
-  }) => {
-    await trackAgeTrigger(page).click();
-
-    // Remove all four tiers.
-    for (const label of ["First", "Current", "Catalog", "Deep"]) {
-      await tierCheckbox(page, label).click();
+    // Each supported command is consumed and clears the command field.
+    for (const command of ["/first", "/current", "/catalog", "/deep"]) {
+      await sendCliCommand(page, command);
+      await expect(input).toHaveValue("");
     }
 
-    // Empty active set → rowPassesAgeTierFilter returns true for every row.
+    // All four toggled off means no age filtering, so every tier passes.
+    await waitForAllStations(page);
+  });
+
+  test("/first means a first Lore play of a brand-new release", async ({
+    page,
+  }) => {
+    await sendCliCommand(page, "/first");
+
+    // The future release is the premiere and is removed. A first archive spin
+    // of an old release is Deep, not First, and therefore remains.
+    await expect(page.getByText("Premiere Air")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Old Catalog Air").first()).toBeVisible();
+    await expect(page.getByText("Current Air").first()).toBeVisible();
+  });
+
+  test("First tier starts active and toggling it hides premiere tracks", async ({
+    page,
+  }) => {
+    await expect(page.getByText("Premiere Air").first()).toBeVisible();
+    await sendCliCommand(page, "/first");
+    await expect(page.getByText("Premiere Air")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Old Catalog Air").first()).toBeVisible();
+    await expect(page.getByText("Current Air").first()).toBeVisible();
+  });
+
+  test("/first command is a reversible filter toggle", async ({
+    page,
+  }) => {
+    await sendCliCommand(page, "/first");
+    await expect(page.getByText("Premiere Air")).not.toBeVisible({ timeout: 10_000 });
+
+    await sendCliCommand(page, "/first");
+    await expect(page.getByText("Premiere Air").first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Toggling every tier off shows all stations (empty set = no age filtering)", async ({
+    page,
+  }) => {
+    for (const command of ["/first", "/current", "/catalog", "/deep"]) {
+      await sendCliCommand(page, command);
+    }
+
     await expect(page.getByText("Premiere Air").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Old Catalog Air").first()).toBeVisible();
     await expect(page.getByText("Current Air").first()).toBeVisible();
   });
 
-  test("Track age trigger badge shows active-count after toggling", async ({
+  test("Multiple commands compose into the remaining active tier set", async ({
     page,
   }) => {
-    const trigger = trackAgeTrigger(page);
-    // Default: all 4 tiers active → badge reads "· 4".
-    await expect(trigger).toContainText("· 4");
+    // Remove First, Current, and Catalog, leaving only Deep active.
+    await sendCliCommand(page, "/first");
+    await sendCliCommand(page, "/current");
+    await sendCliCommand(page, "/catalog");
 
-    await trigger.click();
-    await tierCheckbox(page, "First").click();
-
-    // One tier removed → badge reads "· 3".
-    await expect(trigger).toContainText("· 3");
-    await expect(page.getByText("Premiere Air")).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Old Catalog Air").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Premiere Air")).not.toBeVisible();
+    await expect(page.getByText("Current Air")).not.toBeVisible();
   });
 });

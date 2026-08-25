@@ -40,6 +40,7 @@ import {
 import { type StationPresence } from "../../hooks/useStationPresence";
 import { ListenerAvatarStack } from "../ListenerAvatarStack";
 import { AgeDistributionBadge } from "./AgeDistributionBadge";
+import { StationMark } from "../StationMark";
 
 export function agoLabel(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -553,6 +554,10 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
             onPointerDown={(e) => e.stopPropagation()}
           >+ Keep</button>
         )}
+        {/* Station identity mark — the station's own logo (or a neutral
+            fallback), never track artwork. Decorative; the station name
+            beside it stays the accessible identity. */}
+        <StationMark name={ds.station.name} logoUrl={ds.station.logoUrl} />
         <span className="fdrow__compact-station">{compact.station}</span>
         {/* ⬤ crossing indicator — present iff the station has ≥1 crossing at
             the active scope. Tapping toggles the inline scope detail. */}

@@ -1,12 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Browser coverage for the SplitHome Micro remote.
+ * Browser coverage for the simplified SplitHome station dial.
  *
- * The unit suite owns page slicing and ordinal arithmetic. This spec exercises
- * the actual rendered grid with 16 live stations, so it catches layout
- * regressions that only surface once the fifteen-key page is constrained by a
- * real browser viewport.
+ * The front door now presents one scrollable station list instead of the old
+ * density-switching keypad. This spec exercises that rendered list with 16
+ * live stations, so it catches clipping and overflow regressions and proves a
+ * station beyond the initial five-row fold remains reachable.
  */
 
 const STATION_COUNT = 16;
@@ -90,8 +90,21 @@ async function installRoutes(page: Page) {
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
 
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: STATIONS } }),
+  );
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({
+      json: {
+        items: STATIONS.map((station, index) => ({
+          slug: station.slug,
+          nowPlaying: NOW_PLAYING[index],
+        })),
+      },
+    }),
   );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({
@@ -124,126 +137,86 @@ async function installRoutes(page: Page) {
   );
 }
 
-async function loadMicroRemote(page: Page) {
+async function loadStationDial(page: Page) {
   await installRoutes(page);
   await page.goto("/lore/");
-
-  // Cycle normal → compact → micro through the control a listener uses.
-  const scanCommands = page.getByRole("group", { name: "Scan commands" });
-  await scanCommands.getByRole("button", { name: /Show more scan controls/ }).click();
-  const advancedControls = page.getByRole("group", { name: "More scan controls" });
-  const normalDensity = advancedControls.getByRole("button", {
-    name: "density 5 rows — switch to 10",
+  await expect(page.getByRole("region", { name: "Live stations" })).toBeVisible({
+    timeout: 20_000,
   });
-  await expect(normalDensity).toBeVisible({ timeout: 20_000 });
-  await normalDensity.click();
-
-  const compactDensity = advancedControls.getByRole("button", {
-    name: "density 10 rows — switch to 15",
-  });
-  await expect(compactDensity).toBeVisible();
-  await compactDensity.click();
-
-  await expect(page.getByRole("group", { name: "Station keypad" })).toBeVisible();
+  await expect(page.locator(".compact-dial__row")).toHaveCount(STATION_COUNT);
 }
 
-interface KeypadGeometry {
+interface DialGeometry {
   clientWidth: number;
   clientHeight: number;
   scrollWidth: number;
   scrollHeight: number;
   bodyScrollWidth: number;
   viewportWidth: number;
-  buttonCount: number;
-  buttonsEscapeKeypad: boolean;
+  rowCount: number;
+  rowsEscapeHorizontally: boolean;
 }
 
-async function readKeypadGeometry(page: Page): Promise<KeypadGeometry> {
+async function readDialGeometry(page: Page): Promise<DialGeometry> {
   return page.evaluate(() => {
-    const keypad = document.querySelector<HTMLElement>(".compact-dial__micro-grid");
-    if (!keypad) throw new Error("Micro keypad did not render");
-    const keypadRect = keypad.getBoundingClientRect();
-    const buttons = Array.from(
-      keypad.querySelectorAll<HTMLElement>(".compact-dial__micro-btn"),
+    const dial = document.querySelector<HTMLElement>(".compact-dial");
+    if (!dial) throw new Error("Station dial did not render");
+    const dialRect = dial.getBoundingClientRect();
+    const rows = Array.from(
+      dial.querySelectorAll<HTMLElement>(".compact-dial__row"),
     );
     return {
-      clientWidth: keypad.clientWidth,
-      clientHeight: keypad.clientHeight,
-      scrollWidth: keypad.scrollWidth,
-      scrollHeight: keypad.scrollHeight,
+      clientWidth: dial.clientWidth,
+      clientHeight: dial.clientHeight,
+      scrollWidth: dial.scrollWidth,
+      scrollHeight: dial.scrollHeight,
       bodyScrollWidth: document.body.scrollWidth,
       viewportWidth: window.innerWidth,
-      buttonCount: buttons.length,
-      buttonsEscapeKeypad: buttons.some((button) => {
-        const rect = button.getBoundingClientRect();
+      rowCount: rows.length,
+      rowsEscapeHorizontally: rows.some((row) => {
+        const rect = row.getBoundingClientRect();
         return (
-          rect.left < keypadRect.left - 1 ||
-          rect.right > keypadRect.right + 1 ||
-          rect.top < keypadRect.top - 1 ||
-          rect.bottom > keypadRect.bottom + 1
+          rect.left < dialRect.left - 1 ||
+          rect.right > dialRect.right + 1
         );
       }),
     };
   });
 }
 
-test.describe("Micro station remote — real browser paging", () => {
-  test("390×844: renders 15 keys, two pages, and tunes page two", async ({ page }) => {
+test.describe("Station dial — real browser scrolling", () => {
+  test("390×844: renders all stations and tunes beyond the initial fold", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await loadMicroRemote(page);
+    await loadStationDial(page);
 
-    const keypad = page.getByRole("group", { name: "Station keypad" });
-    const pageSelectors = page
-      .getByRole("group", { name: "More scan controls" })
-      .locator(".home-cli-strip__page-selectors");
-    await expect(keypad.getByRole("button")).toHaveCount(15);
-    await expect(pageSelectors.getByRole("button")).toHaveCount(2);
-    await expect(pageSelectors.getByRole("button", { name: "page 1 /scan1" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    await pageSelectors.getByRole("button", { name: "page 2 /scan2" }).click();
-    const sixteenthKey = keypad.getByRole("button", {
-      name: "16. Station 16 — tune in",
-    });
-    await expect(keypad.getByRole("button")).toHaveCount(1);
-    await expect(sixteenthKey).toBeVisible();
-    await expect(pageSelectors.getByRole("button", { name: "page 2 /scan2" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    await sixteenthKey.click();
-    await expect(sixteenthKey).toHaveClass(/compact-dial__micro-btn--active/);
+    const stationRows = page.locator(".compact-dial__row");
+    await expect(stationRows).toHaveCount(16);
+    const sixteenthRow = stationRows.nth(15);
+    await sixteenthRow.scrollIntoViewIfNeeded();
+    await expect(sixteenthRow).toContainText("Station 16");
+    await sixteenthRow.getByRole("button", { name: "Play Station 16" }).click();
+    await expect(sixteenthRow.locator(".fdrow")).toHaveClass(/fdrow--playing/);
     await expect(page.locator(".player-bar-row")).toBeVisible();
 
-    const geometry = await readKeypadGeometry(page);
-    expect(geometry.buttonCount).toBe(1);
+    const geometry = await readDialGeometry(page);
+    expect(geometry.rowCount).toBe(16);
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
-    expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight + 1);
+    expect(geometry.scrollHeight).toBeGreaterThanOrEqual(geometry.clientHeight);
     expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-    expect(geometry.buttonsEscapeKeypad).toBe(false);
+    expect(geometry.rowsEscapeHorizontally).toBe(false);
   });
 
-  test("1280×900: first fifteen-key page stays entirely within its dial band", async ({
+  test("1280×900: station list stays entirely within its dial band", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await loadMicroRemote(page);
+    await loadStationDial(page);
 
-    const keypad = page.getByRole("group", { name: "Station keypad" });
-    const pageSelectors = page
-      .getByRole("group", { name: "More scan controls" })
-      .locator(".home-cli-strip__page-selectors");
-    await expect(keypad.getByRole("button")).toHaveCount(15);
-    await expect(pageSelectors.getByRole("button")).toHaveCount(2);
-
-    const geometry = await readKeypadGeometry(page);
-    expect(geometry.buttonCount).toBe(15);
+    const geometry = await readDialGeometry(page);
+    expect(geometry.rowCount).toBe(16);
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
-    expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight + 1);
+    expect(geometry.scrollHeight).toBeGreaterThanOrEqual(geometry.clientHeight);
     expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-    expect(geometry.buttonsEscapeKeypad).toBe(false);
+    expect(geometry.rowsEscapeHorizontally).toBe(false);
   });
 });

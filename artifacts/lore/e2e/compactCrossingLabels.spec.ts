@@ -185,12 +185,28 @@ async function installRoutes(
     route.fulfill({ status: 404, json: { error: "Not found" } }),
   );
 
-  // Station directory.
+  // Station directory. The split-home also fetches the sleep/era-genre mode
+  // pools as query-string variants (/api/stations?mode=sleep etc.) — a bare
+  // path glob does NOT match query-carrying requests, so without this the
+  // real dev server answers and its real stations leak into the dial.
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: [opts.station] } }),
   );
 
-  // Live pulse — a single station is live.
+  // Live pulse — a single station is live. The split-home requests this as
+  // /api/stations/now-playing?includeModePools=true, so the query-string glob
+  // is required; without it the real server answers and the fixture station
+  // renders with an empty artist span.
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({
+      json: {
+        items: [{ slug: opts.station.slug, nowPlaying: opts.nowPlaying }],
+      },
+    }),
+  );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({
       json: {
@@ -344,12 +360,13 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
       recentSpins: makeRecentSpins("kexp", ["Wet Leg"]),
     });
     // The scope pill is a crossings-on control; radio mode (crossings off)
-    // is the default now.
+    // is the default now. The pill lives in the DialFilterBar on the full
+    // /feed dial (the split-home no longer renders it).
     await page.addInitScript(() => {
       window.localStorage.setItem("lore:radioMode", "false");
       window.localStorage.setItem("lore:crossingScope", "set");
     });
-    await page.goto("/lore/");
+    await page.goto("/lore/feed");
 
     const pill = page.locator(".crossing-scope-pill").first();
     await expect(pill).toBeVisible({ timeout: 15_000 });
@@ -390,6 +407,8 @@ test.describe("Compact Feed row — ⬤ crossing dot & plain identity in a real 
     await expect(page.locator(".fdrow__crossing-dot")).toHaveCount(0);
     await expect(row.locator(".fdrow__compact-station")).toHaveText("NTS 1");
     await expect(row).toHaveAttribute("aria-label", "Burial · NTS 1");
-    await expect(page.locator(".crossing-scope-pill").first()).toBeDisabled();
+    // The scope pill no longer renders on the split-home at all (it lives in
+    // the /feed DialFilterBar), so "no filter" shows as the absence of any
+    // crossing UI on the row — asserted above.
   });
 });

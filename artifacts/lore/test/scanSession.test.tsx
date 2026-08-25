@@ -3,7 +3,6 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ScanFilter, ScanSource } from "../src/components/ScanSession";
 
 const { mockUsePlayer } = vi.hoisted(() => ({ mockUsePlayer: vi.fn() }));
 

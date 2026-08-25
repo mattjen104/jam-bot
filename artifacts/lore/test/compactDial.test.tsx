@@ -403,9 +403,13 @@ describe("CompactDial category tabs", () => {
     // Live now-playing begins in the top-left slot; a station that isn't
     // broadcasting now-playing never takes the first spot.
     const feed = screen.getByTestId("compact-category-all-feed");
-    const order = [...feed.querySelectorAll(".compact-category-dial__station-logo--mono")]
-      .map((element) => element.textContent);
-    expect(order).toEqual(["New Station", "Old Station", "Quiet Station"]);
+    const order = [...feed.querySelectorAll(".compact-category-dial__station")]
+      .map((element) => element.getAttribute("data-testid"));
+    expect(order).toEqual([
+      "compact-category-station-new",
+      "compact-category-station-old",
+      "compact-category-station-quiet",
+    ]);
     // Each station card leads with just the now-playing artist name.
     const firstCard = screen.getByTestId("compact-category-station-new");
     expect(firstCard.querySelector(".compact-category-dial__station-track")?.textContent)
@@ -603,7 +607,7 @@ describe("CompactDial category tabs", () => {
       .classList.contains("compact-category-dial__station--fresh")).toBe(false);
   });
 
-  it("renders the station image when it has one and a monogram otherwise", () => {
+  it("marks overview stations with the shared safe station-mark treatment", () => {
     const withLogo = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"], logoUrl: "https://img.example.test/kexp.png" },
       { artist: "The Smile", title: "Bending Hectic" },
@@ -614,11 +618,44 @@ describe("CompactDial category tabs", () => {
     );
     renderDial({ activeRows: [withLogo, without], categoryFirst: true });
 
+    // External logos route through the art proxy (never fetched directly),
+    // lazy/async, and keep the card sizing class on the shared mark.
     const img = screen.getByTestId("compact-category-station-kexp")
-      .querySelector("img.compact-category-dial__station-logo");
-    expect(img?.getAttribute("src")).toBe("https://img.example.test/kexp.png");
-    expect(screen.getByTestId("compact-category-station-wfmu")
-      .querySelector(".compact-category-dial__station-logo--mono")?.textContent).toBe("WFMU");
+      .querySelector("img[data-station-mark='logo']");
+    expect(img?.getAttribute("src")).toBe(
+      `/api/art?src=${encodeURIComponent("https://img.example.test/kexp.png")}`,
+    );
+    expect(img?.getAttribute("loading")).toBe("lazy");
+    expect(img?.classList.contains("compact-category-dial__station-logo")).toBe(true);
+    // Missing logo → neutral fallback mark, never a broken image.
+    const wfmu = screen.getByTestId("compact-category-station-wfmu");
+    expect(wfmu.querySelector("img")).toBeNull();
+    expect(wfmu.querySelector("[data-station-mark='fallback']")).not.toBeNull();
+  });
+
+  it("falls back to the neutral mark for invalid or failed overview logos", () => {
+    const invalid = makeRowWithTrack(
+      { slug: "odd", name: "Odd Radio", stationCategories: ["anchor"], logoUrl: "ftp://not-http.example/logo.png" },
+      { artist: "Can", title: "Vitamin C" },
+    );
+    const failing = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"], logoUrl: "https://img.example.test/kexp.png" },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    renderDial({ activeRows: [invalid, failing], categoryFirst: true });
+
+    // Non-http(s) URLs never reach an <img> at all.
+    const odd = screen.getByTestId("compact-category-station-odd");
+    expect(odd.querySelector("img")).toBeNull();
+    expect(odd.querySelector("[data-station-mark='fallback']")).not.toBeNull();
+
+    // A failed image degrades to the same neutral mark — never broken art.
+    const kexp = screen.getByTestId("compact-category-station-kexp");
+    const img = kexp.querySelector("img[data-station-mark='logo']");
+    expect(img).not.toBeNull();
+    fireEvent.error(img!);
+    expect(kexp.querySelector("img[data-station-mark='logo']")).toBeNull();
+    expect(kexp.querySelector("[data-station-mark='fallback']")).not.toBeNull();
   });
 
   it("shows an honest empty state when a focused category has no stations", () => {
@@ -1093,5 +1130,39 @@ describe("CompactDial micro density", () => {
     });
     expect(container.querySelector(".compact-dial__micro-btn--sampling")?.getAttribute("aria-label")).toContain("Station 3");
     expect(container.querySelector(".compact-dial__micro-btn--active")?.getAttribute("aria-label")).toContain("Station 1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Station identity marks in the expanded category now-playing feed
+// ---------------------------------------------------------------------------
+
+describe("CompactDial category feed station marks", () => {
+  it("shows the logo cube for stations with logoUrl and a neutral mark otherwise", () => {
+    const withLogo = makeRowWithTrack(
+      {
+        slug: "kexp",
+        name: "KEXP",
+        stationCategories: ["anchor"],
+        logoUrl: "https://static.example.com/kexp-logo.png",
+      },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const withoutLogo = makeRowWithTrack(
+      { slug: "quiet", name: "Quiet Station", stationCategories: ["anchor"] },
+      { artist: "Low", title: "Words" },
+    );
+    renderDial({ activeRows: [withLogo, withoutLogo], categoryFirst: true });
+    fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
+
+    const feed = screen.getByTestId("compact-category-anchor-now-feed");
+    const cubes = feed.querySelectorAll(".station-mark--cube");
+    // Both rows carry the cube treatment — logo where available, neutral
+    // fallback otherwise — and the station names stay visible.
+    expect(cubes.length).toBe(2);
+    expect(feed.querySelectorAll("img[data-station-mark='logo']").length).toBe(1);
+    expect(feed.querySelectorAll("[data-station-mark='fallback']").length).toBe(1);
+    expect(feed.textContent).toContain("KEXP");
+    expect(feed.textContent).toContain("Quiet Station");
   });
 });

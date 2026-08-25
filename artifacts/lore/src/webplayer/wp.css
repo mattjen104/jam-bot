@@ -390,3 +390,9 @@
     padding-right: 7px;
   }
 }
+
+/* Station identity mark on On Air rows and the now-playing card — sits
+   inline with the text it accompanies. Base styling lives in index.css. */
+.wp-station-mark {
+  vertical-align: middle;
+}

@@ -184,6 +184,39 @@
 /* Larger touch target in the expanded sheet */
 .player-sheet__btn.station-site-link { width: 40px; min-width: 40px; height: 40px; }
 
+/* ── Station identity mark ─────────────────────────────────────────────────
+   The station's own logo (Station.logoUrl) beside station names on
+   now-playing surfaces. Station-level identity only — track artwork stays
+   reserved for the track. Missing/invalid/failed logos fall back to a
+   neutral radio glyph, never to album art or a broken image. */
+.station-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+  object-fit: cover;
+  background: hsl(var(--secondary));
+}
+/* Cube treatment — left of the now-playing text in single-station lists. */
+.station-mark--cube {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+.station-mark--fallback {
+  color: hsl(var(--muted-foreground) / 0.7);
+  border: 1px solid hsl(var(--border) / 0.55);
+  box-sizing: border-box;
+}
+.station-mark--fallback svg {
+  width: 62%;
+  height: 62%;
+}
+
 /* ── Ticker strip ───────────────────────────────────────────────────────────
    Hidden at all widths: the collapsed dock is a single line everywhere
    (station · track); track detail lives in the expanded player. The rules
@@ -6084,6 +6117,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Station mark in the right cluster: opt out of baseline alignment so the
+   small square centres against the station name instead of sitting on the
+   text baseline. */
+#dial-feed-rows .fdrow__compact-right .station-mark {
+  align-self: center;
+}
 /* Expanded byline: DJ · Show — static, one line, below the identity row. */
 #dial-feed-rows .fdrow__byline {
   font-size: 0.82em;
@@ -8471,16 +8510,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   object-fit: cover;
   background: hsl(var(--secondary) / 0.6);
 }
-.compact-category-dial__station-logo--mono {
-  padding: 4px;
-  color: hsl(var(--muted-foreground));
-  font-family: var(--app-font-mono);
-  font-size: clamp(8px, 2.1vw, 10px);
-  line-height: 1.1;
-  overflow: hidden;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
 .compact-category-dial__station-lines {
   flex: 1;
   min-width: 0;
@@ -8661,6 +8690,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Station cube to the left of the now-playing text in category lists. */
+.compact-category-dial__feed-tune .station-mark {
+  align-self: center;
 }
 .compact-category-dial__feed-tune span {
   flex: 1;
@@ -10610,6 +10643,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-top: 1px solid var(--home-tree-line);
 }
 .split-home .fdrow {
+  min-height: 36px;
   padding-top: 5px;
   padding-bottom: 5px;
 }

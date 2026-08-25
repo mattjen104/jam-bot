@@ -1,9 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Real-browser coverage for the Stack band's density pager. This deliberately
- * uses more than one API page worth of albums so a density change exercises
- * the page selector math as well as the rendered row window.
+ * Real-browser coverage for the simplified Stack band's fixed home window.
+ * This deliberately supplies far more than five albums to prove the surface
+ * remains a concise newest-first preview rather than leaking overflow rows.
  */
 
 function makeLibraryItem(index: number) {
@@ -24,7 +24,7 @@ function makeLibraryItem(index: number) {
   };
 }
 
-/** 42 unique album groups: 9 normal pages, 5 compact pages, 3 micro pages. */
+/** 42 unique album groups, of which the simplified home Stack shows five. */
 const DENSITY_LIBRARY = Array.from({ length: 42 }, (_, index) =>
   makeLibraryItem(index),
 );
@@ -77,8 +77,14 @@ async function installRoutes(page: Page) {
     route.fulfill({ json: libraryPayload }),
   );
 
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: [] } }),
+  );
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({ json: { items: [] } }),
   );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({ json: { items: [] } }),
@@ -116,67 +122,46 @@ function stackRows(page: Page) {
   );
 }
 
-function stackPageSelectors(page: Page) {
-  return page.locator(
-    ".stack-pager-bar .home-cli-strip__page-selectors button",
-  );
-}
-
-test.describe("Stack density pager", () => {
-  test("cycles 5 → 10 → 15, persists on reload, and changes the page artwork", async ({
+test.describe("Simplified Stack window", () => {
+  test("shows the five newest albums with stable row artwork across reload", async ({
     page,
   }) => {
     await suppressFirstRun(page);
     await installRoutes(page);
     await page.goto("/lore/");
 
-    const pager = page.locator(".stack-pager-bar");
-    const count = pager.locator(".home-cli-strip__station-count");
-    const backdrop = pager.locator(".stack-pager-bar__backdrop-art");
-
+    // The current home Stack deliberately uses one fixed five-row window;
+    // density, paging, shuffle, and decorative pager artwork live outside the
+    // simplified home surface.
     await expect(stackRows(page)).toHaveCount(5, { timeout: 20_000 });
-    await expect(stackPageSelectors(page)).toHaveCount(9);
-    await expect(count).toHaveText("42 albums");
-    await expect(backdrop).toBeVisible();
-    const firstPageArt = await backdrop.getAttribute("src");
-    expect(firstPageArt).toContain("/lore/e2e-art/album-01.svg");
-
-    await pager
-      .getByRole("button", { name: "density 5 rows — switch to 10" })
-      .click();
-    await expect(stackRows(page)).toHaveCount(10);
-    await expect(stackPageSelectors(page)).toHaveCount(5);
-    await expect(count).toHaveText("42 albums");
-
-    await pager
-      .getByRole("button", { name: "density 10 rows — switch to 15" })
-      .click();
-    await expect(stackRows(page)).toHaveCount(15);
-    await expect(stackPageSelectors(page)).toHaveCount(3);
-    await expect(count).toHaveText("42 albums");
-
-    // The second micro page begins at album 16, so its keyed backdrop image
-    // must replace the page-one art behind the same pager controls.
-    await page
-      .getByRole("button", {
-        name: "stack page 2: Density Album 16, +14 more",
-      })
-      .click();
-    await expect(backdrop).toBeVisible();
-    await expect(backdrop).toHaveAttribute(
+    const albums = stackRows(page).locator(".compact-stack__album");
+    await expect(albums).toHaveText([
+      "Density Album 01",
+      "Density Album 02",
+      "Density Album 03",
+      "Density Album 04",
+      "Density Album 05",
+    ]);
+    const rowArt = stackRows(page).locator(".compact-stack__spine-art");
+    await expect(rowArt).toHaveCount(5);
+    await expect(rowArt.first()).toHaveAttribute(
       "src",
-      /\/lore\/e2e-art\/album-16\.svg$/,
+      /\/lore\/e2e-art\/album-01\.svg$/,
     );
-    expect(await backdrop.getAttribute("src")).not.toBe(firstPageArt);
+    await expect(page.locator(".stack-pager-bar")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(
-      pager.getByRole("button", { name: "density 15 rows — switch to 5" }),
-    ).toBeVisible({ timeout: 20_000 });
-    await expect(stackRows(page)).toHaveCount(15);
-    await expect(stackPageSelectors(page)).toHaveCount(3);
-    await expect(pager.locator(".home-cli-strip__station-count")).toHaveText(
-      "42 albums",
+    await expect(stackRows(page)).toHaveCount(5, { timeout: 20_000 });
+    await expect(stackRows(page).locator(".compact-stack__album")).toHaveText([
+      "Density Album 01",
+      "Density Album 02",
+      "Density Album 03",
+      "Density Album 04",
+      "Density Album 05",
+    ]);
+    await expect(stackRows(page).locator(".compact-stack__spine-art").first()).toHaveAttribute(
+      "src",
+      /\/lore\/e2e-art\/album-01\.svg$/,
     );
   });
 });

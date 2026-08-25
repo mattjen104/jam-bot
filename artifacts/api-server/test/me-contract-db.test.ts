@@ -1,13 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   libraryItemsTable,
   listensTable,
   loreUsersTable,
   recordingsTable,
+  trackClaimsTable,
 } from "@workspace/db";
 import {
   KeepRecordingResponse,
@@ -33,6 +34,8 @@ let dbAvailable = false;
 let userId: number | null = null;
 let server: Server | undefined;
 let baseUrl = "";
+/** Device keys auto-provisioned by anonymous-request tests; cleaned in afterAll. */
+const provisionedSids: string[] = [];
 
 function headers() {
   return { cookie: `lore_sid=${SID}` };
@@ -106,8 +109,21 @@ afterAll(async () => {
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   if (!dbAvailable || userId == null) return;
   await db.delete(listensTable).where(eq(listensTable.userId, userId));
+  // Delete library/claim rows by MBID as well as by user: the anonymous
+  // auto-provision test lands /me/keep on freshly provisioned users, which a
+  // userId-scoped delete would miss — and the recordings deletes below would
+  // then hit the library_items_mbid / track_claims_mbid foreign keys.
+  await db
+    .delete(libraryItemsTable)
+    .where(inArray(libraryItemsTable.mbid, [MBID_ONE, MBID_TWO]));
   await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
+  await db
+    .delete(trackClaimsTable)
+    .where(inArray(trackClaimsTable.mbid, [MBID_ONE, MBID_TWO]));
   await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
+  for (const sid of provisionedSids) {
+    await db.delete(loreUsersTable).where(eq(loreUsersTable.deviceKey, sid));
+  }
   await db.delete(recordingsTable).where(eq(recordingsTable.mbid, MBID_ONE));
   await db.delete(recordingsTable).where(eq(recordingsTable.mbid, MBID_TWO));
 });
@@ -166,7 +182,7 @@ describe("listener route contracts", () => {
     expect(secondPage.items[0]?.recording?.artworkUrl).toBeNull();
   });
 
-  it("returns 401 for anonymous requests, which hooks convert to null", async () => {
+  it("auto-provisions a device identity for anonymous requests (no login wall)", async () => {
     if (!dbAvailable) return;
     const [listens, library, keep] = await Promise.all([
       fetch(`${baseUrl}/api/me/listens`),
@@ -177,8 +193,13 @@ describe("listener route contracts", () => {
         body: JSON.stringify({ mbid: MBID_ONE }),
       }),
     ]);
-    expect(listens.status).toBe(401);
-    expect(library.status).toBe(401);
-    expect(keep.status).toBe(401);
+    // requireUserMiddleware provisions a fresh anonymous device identity and
+    // sets the lore_sid cookie rather than rejecting with 401.
+    for (const response of [listens, library, keep]) {
+      expect(response.status).toBe(200);
+      const match = /lore_sid=([^;]+)/.exec(response.headers.get("set-cookie") ?? "");
+      expect(match).not.toBeNull();
+      provisionedSids.push(match![1]!);
+    }
   });
 });

@@ -18,6 +18,7 @@ import { groupCredits, pressingLine } from "../lib/linerNotes";
 import { cn, safeHttpUrl } from "../lib/utils";
 import { LikeButton } from "./LikeButton";
 import { KeepButton } from "./KeepButton";
+import { StationMark } from "./StationMark";
 import { ShareButton } from "./ShareButton";
 import { LyricView } from "./LyricView";
 import { LinerNotesSheet } from "./LinerNotesSheet";
@@ -182,6 +183,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
         <div className="absolute left-4 top-4">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 font-mono text-[13px] uppercase tracking-wide text-primary backdrop-blur">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            <StationMark name={station.name} logoUrl={station.logoUrl} />
             On air · {station.name}
           </span>
         </div>

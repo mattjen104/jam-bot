@@ -16,6 +16,7 @@ import { useStationPresence, type StationPresence } from "../hooks/useStationPre
 import { useSocialMode } from "../lib/social";
 import { isStaleNowPlaying } from "../lib/freshness";
 import { useWpOnAir, useWpLoreCounts, type WpOnAirItem } from "./hooks";
+import { StationMark } from "../components/StationMark";
 import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
 import { RunDrawerSheet } from "./RunDrawerSheet";
@@ -163,12 +164,17 @@ function NowPlayingCard({
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 15, color: "var(--wp-text-secondary)" }}>
           {stationLine}
-          {!scanHop && showLabel && (
+          {!scanHop && showLabel && radio.station && (
             <>
               {" "}
               <span style={{ color: "var(--wp-text-muted)" }}>· via</span>{" "}
+              <StationMark
+                name={radio.station.name}
+                logoUrl={radio.station.logoUrl}
+                className="wp-station-mark"
+              />{" "}
               <span className="wp-mono" style={{ fontSize: 14 }}>
-                {radio.station?.name}
+                {radio.station.name}
               </span>
             </>
           )}
@@ -529,6 +535,12 @@ export function OnAirRow({
         aria-label={`Open tonight's run for ${title}`}
       >
         <p style={{ margin: 0, fontSize: 15, fontWeight: 400, ...oneLine }}>
+          <StationMark
+            name={item.station.name}
+            logoUrl={item.station.logoUrl}
+            variant="cube"
+            className="wp-station-mark"
+          />{" "}
           {title}
           {item.show?.djName && (
             <span style={{ fontSize: 13, color: "var(--wp-text-muted)", fontWeight: 400 }}>

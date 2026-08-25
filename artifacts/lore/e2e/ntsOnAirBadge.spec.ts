@@ -131,17 +131,24 @@ async function installDialRoutes(
     route.fulfill({ json: { items: [] } }),
   );
 
-  // Station directory — a single NTS station.
+  // Station directory — a single NTS station. The split-home also fetches
+  // sleep/era-genre mode pools as query-string variants; bare path globs do
+  // not match query-carrying requests, so intercept those too (empty pools).
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: [STATION] } }),
   );
 
-  // Live pulse list — drives liveBySlug.
-  await page.route("**/api/stations/now-playing", (route) =>
+  // Live pulse list — drives liveBySlug. Requested with
+  // ?includeModePools=true on the split-home, so the query glob is required.
+  const livePulse = (route: import("@playwright/test").Route) =>
     route.fulfill({
       json: { items: opts.live ? [{ slug: NTS_SLUG, nowPlaying: makeNowPlaying() }] : [] },
-    }),
-  );
+    });
+  await page.route("**/api/stations/now-playing?**", livePulse);
+  await page.route("**/api/stations/now-playing", livePulse);
 
   // SSE stream — fulfill with an empty event stream (REST pulse is enough).
   await page.route("**/api/stations/now-playing/stream", (route) =>

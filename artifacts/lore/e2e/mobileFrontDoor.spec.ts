@@ -139,8 +139,21 @@ async function installRoutes(page: Page) {
     route.fulfill({ status: 404, json: { error: "Not found" } }),
   );
 
+  await page.route("**/api/stations?**", (route) =>
+    route.fulfill({ json: { stations: [] } }),
+  );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: STATIONS } }),
+  );
+  await page.route("**/api/stations/now-playing?**", (route) =>
+    route.fulfill({
+      json: {
+        items: STATION_SLUGS.map((slug, idx) => ({
+          slug,
+          nowPlaying: makeNowPlaying(slug, idx),
+        })),
+      },
+    }),
   );
   await page.route("**/api/stations/now-playing", (route) =>
     route.fulfill({

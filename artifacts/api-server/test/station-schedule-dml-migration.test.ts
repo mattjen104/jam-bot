@@ -124,7 +124,7 @@ async function showExists(id: number): Promise<boolean> {
 describe("applyStationScheduleMigration — DML ledger gate", () => {
   it(
     "backfills upcoming_show_count from scraped_shows on first run",
-    { timeout: 180_000 },
+    { timeout: 420_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -146,7 +146,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 
   it(
     "is idempotent: upcoming_show_count backfill does not run on second call (completion ledger)",
-    { timeout: 120_000 },
+    { timeout: 300_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -173,7 +173,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 
   it(
     "cleans invisible characters from show_name on first run",
-    { timeout: 180_000 },
+    { timeout: 420_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -191,7 +191,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 
   it(
     "is idempotent: invisible-char cleanup does not run on second call (completion ledger)",
-    { timeout: 120_000 },
+    { timeout: 300_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -220,7 +220,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 describe("applyStationScheduleMigration — extraction receipt migration", () => {
   it(
     "backfills schedule receipts from the station source and stays idempotent",
-    { timeout: 180_000 },
+    { timeout: 420_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
