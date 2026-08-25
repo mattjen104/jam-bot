@@ -8363,7 +8363,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .compact-category-dial__all-feed {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: flex-start;
   gap: 6px;
   min-height: 0;
@@ -8382,7 +8382,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   min-height: 0;
   width: auto;
-  height: max-content;
+  height: auto;
   flex-direction: column;
   scroll-snap-align: start;
 }
