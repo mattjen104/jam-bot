@@ -282,7 +282,12 @@ function categoryNowPlaying(rows: CategoryGroup["rows"]): CategoryNowPlayingEntr
     const artist = cleanLiveValue(track?.artist);
     const title = cleanLiveValue(track?.title);
     const hasTrack = Boolean(artist || title);
-    const playedAtMs = hasTrack && track ? new Date(track.playedAt).getTime() : Number.NaN;
+    // REST live rows deliberately stamp `playedAt` with the current client
+    // time for freshness UI. All needs the actual source start time instead;
+    // fall back for schedule/SSE rows that already keep it in `playedAt`.
+    const playedAtMs = hasTrack && track
+      ? new Date(track.sourcePlayedAt ?? track.playedAt).getTime()
+      : Number.NaN;
     return {
       row,
       isSkipped,

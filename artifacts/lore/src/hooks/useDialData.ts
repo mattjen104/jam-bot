@@ -63,6 +63,12 @@ export interface DialSpin {
   title: string;
   artist: string;
   playedAt: string;
+  /**
+   * Original source observation time when `playedAt` has been restamped for a
+   * live UI affordance. Use this to compare track starts across stations;
+   * `playedAt` remains the display/freshness clock for existing Dial surfaces.
+   */
+  sourcePlayedAt?: string;
   /** Exact recording or release-group match against user's library. */
   isLibraryHit: boolean;
   /** Artist is in the user's library but this exact track/album is not. */
@@ -1280,6 +1286,7 @@ export function useDialData(
         title,
         artist,
         playedAt: sourcePlayedAt,
+        sourcePlayedAt,
         isLibraryHit: gated.isLibraryHit,
         isArtistHit: gated.isArtistHit,
         isFirstSpin,
@@ -1296,10 +1303,14 @@ export function useDialData(
     const m = new Map<string, DialSpin>();
 
     // REST rows are stamped ~now for live-chip display (pre-existing display
-    // semantics); the honest source timestamp lives on restNowPlaying and is
-    // what the Scan lens's freshness gate reads.
+    // semantics). Preserve the honest source timestamp separately so surfaces
+    // that rank newly started tracks can compare station observations.
     for (const [slug, spin] of restNowPlaying) {
-      m.set(slug, { ...spin, playedAt: new Date().toISOString() });
+      m.set(slug, {
+        ...spin,
+        playedAt: new Date().toISOString(),
+        sourcePlayedAt: spin.playedAt,
+      });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
     // chip reflects the current on-air track the moment it is logged.
@@ -1312,6 +1323,7 @@ export function useDialData(
         title: entry.title,
         artist: entry.artist,
         playedAt: entry.playedAt,
+        sourcePlayedAt: entry.playedAt,
         isLibraryHit: entry.isLibraryHit,
         isArtistHit: entry.isArtistHit,
         isFirstSpin: entry.isFirstSpin,

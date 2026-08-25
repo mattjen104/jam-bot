@@ -45,6 +45,16 @@ membership controls evolve. Category tabs may show category-specific lists;
 they must not reintroduce grouping into All. Preserve the four-items-per-column
 DOM sequence so CSS column flow remains deterministic.
 
+The live UI freshness timestamp can be deliberately restamped to the current
+time for every REST row. All-feed ordering must use the separately preserved
+source track-start timestamp instead.
+
+**Why:** comparing the restamped display clock ties every card and silently
+falls back to alphabetical ordering, even while current tracks are available.
+
+**How to apply:** retain an honest source-time field whenever a consumer needs
+cross-station recency ordering; only use the restamped time for live/fresh UI.
+
 ## Landed (Stack full-screen slice)
 - Default `/library` (no `?lens=` param) is a chrome-free full-height album
   list: no hero/stats, week card, avatar picker, lens pills, sort bar, group

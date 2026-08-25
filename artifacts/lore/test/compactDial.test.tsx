@@ -392,23 +392,49 @@ describe("CompactDial category tabs", () => {
     const rows = [
       makeRowWithTrack(
         { slug: "fifth", name: "Fifth", stationCategories: ["indie"] },
-        { artist: "Fifth Artist", title: "Five", playedAt: "2026-08-18T01:00:00Z" },
+        {
+          artist: "Fifth Artist",
+          title: "Five",
+          // REST live rows all share this UI freshness timestamp.
+          playedAt: "2026-08-18T06:00:00Z",
+          sourcePlayedAt: "2026-08-18T01:00:00Z",
+        },
       ),
       makeRowWithTrack(
         { slug: "newest", name: "Newest", stationCategories: ["anchor"] },
-        { artist: "Newest Artist", title: "One", playedAt: "2026-08-18T05:00:00Z" },
+        {
+          artist: "Newest Artist",
+          title: "One",
+          playedAt: "2026-08-18T06:00:00Z",
+          sourcePlayedAt: "2026-08-18T05:00:00Z",
+        },
       ),
       makeRowWithTrack(
         { slug: "third", name: "Third", stationCategories: ["specialist"] },
-        { artist: "Third Artist", title: "Three", playedAt: "2026-08-18T03:00:00Z" },
+        {
+          artist: "Third Artist",
+          title: "Three",
+          playedAt: "2026-08-18T06:00:00Z",
+          sourcePlayedAt: "2026-08-18T03:00:00Z",
+        },
       ),
       makeRowWithTrack(
         { slug: "fourth", name: "Fourth", stationCategories: ["public"] },
-        { artist: "Fourth Artist", title: "Four", playedAt: "2026-08-18T02:00:00Z" },
+        {
+          artist: "Fourth Artist",
+          title: "Four",
+          playedAt: "2026-08-18T06:00:00Z",
+          sourcePlayedAt: "2026-08-18T02:00:00Z",
+        },
       ),
       makeRowWithTrack(
         { slug: "second", name: "Second", stationCategories: ["campus"] },
-        { artist: "Second Artist", title: "Two", playedAt: "2026-08-18T04:00:00Z" },
+        {
+          artist: "Second Artist",
+          title: "Two",
+          playedAt: "2026-08-18T06:00:00Z",
+          sourcePlayedAt: "2026-08-18T04:00:00Z",
+        },
       ),
     ];
     const { container } = renderDial({
