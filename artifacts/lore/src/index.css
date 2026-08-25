@@ -8248,8 +8248,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 /* Category-first home Feed --------------------------------------------------
    A tab strip (All + the seven short category labels) sits above the panel.
-   All renders one concise now-playing card per checked category; a category
-   tab focuses the panel on that category's single station list. */
+   All is one flattened live feed; category tabs focus individual station
+   lists without changing the selected-set membership. */
 .compact-dial--categories {
   gap: 6px;
   padding: 4px 0 6px;
@@ -8321,6 +8321,27 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-direction: column;
   overflow-y: auto;
   scrollbar-width: thin;
+}
+.compact-category-dial__all-feed {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-auto-columns: calc((100% - 6px) / 2);
+  gap: 6px;
+  min-height: 0;
+  height: 100%;
+  padding: 6px 8px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+}
+.compact-category-dial__all-feed .compact-category-dial__station {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  scroll-snap-align: start;
 }
 .compact-category-dial__active-groups {
   display: flex;
@@ -8460,7 +8481,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 10px;
 }
 .compact-category-dial__station-track {
   flex: 1;
@@ -8485,7 +8506,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-category-dial__station-play-cue {
   flex: 0 0 auto;
   color: hsl(var(--muted-foreground));
-  font-size: var(--lore-size-interface);
+  font-size: 0.68em;
   line-height: 1;
 }
 .compact-category-dial__station-name {
@@ -10447,6 +10468,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__overview,
 .split-home .compact-category-dial__focused {
   overflow: visible;
+}
+.split-home .compact-category-dial__all-feed {
+  padding: 0 0 2px;
 }
 .split-home .compact-category-dial__active-groups {
   flex: 0 0 auto;

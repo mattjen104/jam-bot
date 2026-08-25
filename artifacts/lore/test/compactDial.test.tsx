@@ -204,7 +204,7 @@ describe("CompactDial category tabs", () => {
       .toBe("compact-category-tab-all");
   });
 
-  it("shows one card per checked category in the editorial order, using the short labels", () => {
+  it("shows one flattened All feed containing only checked-category stations", () => {
     const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
     const rows = categories.map((category) => makeRow({
       slug: `${category}-station`,
@@ -212,22 +212,20 @@ describe("CompactDial category tabs", () => {
       stationCategories: [category],
     }));
 
-    const { container } = renderDial({
+    renderDial({
       activeRows: rows,
       categoryFirst: true,
       activeCategories: new Set(["anchor", "campus", "specialist", "public", "indie"]),
       onToggleCategory: vi.fn(),
     });
 
-    const labels = [...container.querySelectorAll(".compact-category-dial__active-groups .compact-category-dial__label")]
-      .map((element) => element.textContent);
-    expect(labels).toEqual(["Anchor", "Campus", "Specialist", "Public", "Indie"]);
-    // The retired long phrases are gone from the cards…
-    expect(container.textContent).not.toContain("Anchor Stations");
-    expect(container.textContent).not.toContain("Ambient & Sleep");
-    // …and unchecked categories contribute no card but keep their dimmed tab.
-    expect(screen.queryByTestId("compact-category-card-ambient")).toBeNull();
-    expect(screen.queryByTestId("compact-category-card-discovery")).toBeNull();
+    const feed = screen.getByTestId("compact-category-all-feed");
+    expect(feed.querySelectorAll(".compact-category-dial__station")).toHaveLength(5);
+    expect(feed.querySelector(".compact-category-dial__station-strip")).toBeNull();
+    expect(feed.querySelector(".compact-category-dial__group")).toBeNull();
+    expect(screen.getByTestId("compact-category-station-anchor-station")).toBeTruthy();
+    expect(screen.queryByTestId("compact-category-station-ambient-station")).toBeNull();
+    expect(screen.queryByTestId("compact-category-station-discovery-station")).toBeNull();
     const ambientTab = screen.getByTestId("compact-category-tab-ambient");
     expect(
       ambientTab.closest(".compact-category-dial__tab")
@@ -241,7 +239,7 @@ describe("CompactDial category tabs", () => {
     ).toBe(true);
   });
 
-  it("unchecking a category tab removes its card from All while keeping the tab available", () => {
+  it("unchecking a category tab removes its stations from All while keeping the tab available", () => {
     const anchor = makeRow({ slug: "kexp", name: "KEXP", stationCategories: ["anchor"] });
     const campus = makeRow({ slug: "wvum", name: "WVUM", stationCategories: ["campus"] });
     const onToggleCategory = vi.fn();
@@ -252,7 +250,7 @@ describe("CompactDial category tabs", () => {
       onToggleCategory,
     });
 
-    expect(screen.getByTestId("compact-category-card-campus")).toBeTruthy();
+    expect(screen.getByTestId("compact-category-station-wvum")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Include Campus" }));
     expect(onToggleCategory).toHaveBeenCalledWith("campus");
 
@@ -271,8 +269,8 @@ describe("CompactDial category tabs", () => {
         onToggleCategory={onToggleCategory}
       />,
     );
-    // …its card leaves the All overview, but the tab stays to re-enable it.
-    expect(screen.queryByTestId("compact-category-card-campus")).toBeNull();
+    // …its station leaves All, but the tab stays to re-enable it.
+    expect(screen.queryByTestId("compact-category-station-wvum")).toBeNull();
     expect(screen.getByTestId("compact-category-tab-campus")).toBeTruthy();
   });
 
@@ -309,27 +307,28 @@ describe("CompactDial category tabs", () => {
     fireEvent.click(screen.getByTestId("compact-category-tab-campus"));
     expect(screen.getByTestId("compact-category-campus-now-feed")).toBeTruthy();
     expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
-    // The overview cards are swapped for the single station list.
-    expect(screen.queryByTestId("compact-category-card-anchor")).toBeNull();
+    // The global All feed is swapped for the single focused station list.
+    expect(screen.queryByTestId("compact-category-all-feed")).toBeNull();
     expect(screen.getByRole("tab", { name: "Campus" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("false");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby"))
       .toBe("compact-category-tab-campus");
 
-    // Selecting All returns to the category-card overview.
+    // Selecting All returns to the flattened live feed.
     fireEvent.click(screen.getByTestId("compact-category-tab-all"));
-    expect(screen.getByTestId("compact-category-card-anchor")).toBeTruthy();
+    expect(screen.getByTestId("compact-category-all-feed")).toBeTruthy();
     expect(screen.queryByTestId("compact-category-campus-now-feed")).toBeNull();
   });
 
-  it("opens the same drill-down from the category card body", () => {
+  it("keeps All as stations only; category tabs are the drill-down controls", () => {
     const anchor = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
       { artist: "The Smile", title: "Bending Hectic" },
     );
     renderDial({ activeRows: [anchor], categoryFirst: true });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Anchor stations" }));
+    expect(screen.queryByRole("button", { name: "Open Anchor stations" })).toBeNull();
+    fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
     expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
     screen.getByRole("button", { name: "The Smile — Bending Hectic · KEXP — tune in" });
   });
@@ -353,7 +352,7 @@ describe("CompactDial category tabs", () => {
     expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
   });
 
-  it("orders each card's station strip freshest-first with quiet stations last, and hides the metric chrome", () => {
+  it("orders the flattened All feed freshest-first with quiet stations last, and hides metric chrome", () => {
     const stale = makeRowWithTrack(
       { slug: "old", name: "Old Station", stationCategories: ["anchor"] },
       { artist: "Alpha Old", title: "Earlier", playedAt: "2026-08-18T01:00:00Z" },
@@ -372,23 +371,63 @@ describe("CompactDial category tabs", () => {
       crossingScope: "24h",
     });
 
-    // Live now-playing first, newest far left; a station that isn't
+    // Live now-playing begins in the top-left slot; a station that isn't
     // broadcasting now-playing never takes the first spot.
-    const strip = screen.getByTestId("compact-category-strip-anchor");
-    const order = [...strip.querySelectorAll(".compact-category-dial__station-logo--mono")]
+    const feed = screen.getByTestId("compact-category-all-feed");
+    const order = [...feed.querySelectorAll(".compact-category-dial__station-logo--mono")]
       .map((element) => element.textContent);
     expect(order).toEqual(["New Station", "Old Station", "Quiet Station"]);
     // Each station card leads with just the now-playing artist name.
     const firstCard = screen.getByTestId("compact-category-station-new");
     expect(firstCard.querySelector(".compact-category-dial__station-track")?.textContent)
       .toBe("Zed Fresh");
-    expect(screen.getByTestId("compact-category-card-anchor")
-      .querySelector(".compact-category-dial__count")?.textContent).toBe("3 stations");
     // Crossings/first-play counts and the age-distribution pie stay hidden.
     expect(container.textContent).not.toContain("crossings");
     expect(container.textContent).not.toContain("first plays");
     expect(container.querySelector(".dial-age-badge")).toBeNull();
     expect(container.querySelector(".compact-category-dial__metrics")).toBeNull();
+  });
+
+  it("keeps one global recency sequence across categories for the four-row columns", () => {
+    const rows = [
+      makeRowWithTrack(
+        { slug: "fifth", name: "Fifth", stationCategories: ["indie"] },
+        { artist: "Fifth Artist", title: "Five", playedAt: "2026-08-18T01:00:00Z" },
+      ),
+      makeRowWithTrack(
+        { slug: "newest", name: "Newest", stationCategories: ["anchor"] },
+        { artist: "Newest Artist", title: "One", playedAt: "2026-08-18T05:00:00Z" },
+      ),
+      makeRowWithTrack(
+        { slug: "third", name: "Third", stationCategories: ["specialist"] },
+        { artist: "Third Artist", title: "Three", playedAt: "2026-08-18T03:00:00Z" },
+      ),
+      makeRowWithTrack(
+        { slug: "fourth", name: "Fourth", stationCategories: ["public"] },
+        { artist: "Fourth Artist", title: "Four", playedAt: "2026-08-18T02:00:00Z" },
+      ),
+      makeRowWithTrack(
+        { slug: "second", name: "Second", stationCategories: ["campus"] },
+        { artist: "Second Artist", title: "Two", playedAt: "2026-08-18T04:00:00Z" },
+      ),
+    ];
+    const { container } = renderDial({
+      activeRows: rows,
+      categoryFirst: true,
+      activeCategories: new Set(["anchor", "campus", "specialist", "public", "indie"]),
+    });
+
+    const feed = screen.getByTestId("compact-category-all-feed");
+    expect([...feed.querySelectorAll(".compact-category-dial__station")].map(
+      (station) => station.getAttribute("data-testid"),
+    )).toEqual([
+      "compact-category-station-newest",
+      "compact-category-station-second",
+      "compact-category-station-third",
+      "compact-category-station-fourth",
+      "compact-category-station-fifth",
+    ]);
+    expect(container.querySelector(".compact-category-dial__all-feed")).toBeTruthy();
   });
 
   it("makes each station card itself the play control without opening the drill-down", () => {
@@ -624,10 +663,10 @@ describe("CompactDial category tabs", () => {
       onToggleSkip: vi.fn(),
     });
 
-    // Skipped stations still count toward the category card…
-    expect(screen.getByTestId("compact-category-card-anchor")
-      .querySelector(".compact-category-dial__count")?.textContent)
-      .toBe("2 stations");
+    // Skipped stations remain in the global All feed, dimmed but reachable.
+    expect(screen.getByTestId("compact-category-station-wfmu")
+      .classList.contains("compact-category-dial__station--skipped"))
+      .toBe(true);
 
     fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
     const feed = screen.getByTestId("compact-category-anchor-now-feed");
@@ -646,7 +685,7 @@ describe("CompactDial category tabs", () => {
     );
     renderDial({ activeRows: [personal], categoryFirst: true });
 
-    expect(screen.getByTestId("fdrow-my-station")).toBeTruthy();
+    expect(screen.getByTestId("compact-category-station-my-station")).toBeTruthy();
     expect(screen.queryByTestId("compact-category-card-other")).toBeNull();
   });
 });

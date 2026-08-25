@@ -456,147 +456,110 @@ function CategoryNowPlayingFeed({
 }
 
 /**
- * One All-overview card per checked category. The card header opens the
- * category's station list; below it, a horizontal strip of station cards —
- * two visible at a time, swipe/scroll left for more — each showing a square
- * station identity marker and its current now-playing artist, newest far left.
- * Fresh observations pulse so the listener notices new now-playing data.
+ * The All tab is one uninterrupted live feed: every station from the checked
+ * categories competes in the same freshest-first ordering. CSS lays the
+ * sequence into four rows per column, so the first observation lands at the
+ * top-left and the fifth starts the next horizontally scrollable column.
  */
-function CategoryCard({
-  group,
+function AllNowPlayingFeed({
+  groups,
   activeSlug,
   playerStatus,
   onPlay,
-  onOpen,
 }: {
-  group: CategoryGroup;
+  groups: readonly CategoryGroup[];
   activeSlug: string | null;
   playerStatus: PlayerStatus;
   onPlay: (row: DialLaneRow) => void;
-  onOpen: () => void;
 }) {
-  const entries = categoryCardFeed(group.rows);
+  const entries = categoryCardFeed(groups.flatMap((group) => group.rows));
   // Freshness is judged against mount time (the StationList-sanctioned
   // pattern — Date.now() belongs in a state initializer, not in render);
   // the keyed fade-in on the artist line is the per-update cue instead.
   const [nowMs] = useState(() => Date.now());
-  const stationCount = group.rows.length;
   return (
-    <section
-      className="compact-category-dial__group"
-      data-testid={`compact-category-card-${group.category}`}
+    <div
+      className="compact-category-dial__all-feed"
+      role="group"
+      aria-label="Selected stations now playing"
+      data-testid="compact-category-all-feed"
     >
-      <button
-        type="button"
-        className="compact-category-dial__summary-button compact-category-dial__card-head"
-        data-testid={`compact-category-${group.category}`}
-        aria-label={`Open ${group.label} stations`}
-        onClick={onOpen}
-      >
-        <span className="compact-category-dial__topline">
-          <span className="compact-category-dial__label">{group.label}</span>
-          <span className="compact-category-dial__count">
-            {stationCount} {stationCount === 1 ? "station" : "stations"}
-          </span>
-        </span>
-      </button>
-      <div
-        className="compact-category-dial__station-strip"
-        role="group"
-        aria-label={`${group.label} now-playing stations`}
-        data-testid={`compact-category-strip-${group.category}`}
-      >
-        {entries.map((entry) => {
-          const station = entry.row.ds.station;
-          const slug = station.slug;
-          const isActive = slug === activeSlug;
-          const isPlayable = resolvePlaybackSource(station) != null;
-          const fresh = isFreshEntry(entry, nowMs);
-          return (
-              <button
-                type="button"
-              key={slug}
-              className={[
-                "compact-category-dial__station",
-                fresh ? "compact-category-dial__station--fresh" : "",
-                entry.hasTrack ? "" : "compact-category-dial__station--quiet",
-                entry.isSkipped ? "compact-category-dial__station--skipped" : "",
-                isActive ? "compact-category-dial__station--active" : "",
-              ].filter(Boolean).join(" ")}
-              data-testid={`compact-category-station-${slug}`}
-                aria-label={`${!isPlayable ? "Unavailable" : isActive && playerStatus === "playing" ? "Pause" : isActive && playerStatus === "loading" ? "Loading" : "Play"} ${station.name}`}
-                aria-pressed={isActive && playerStatus === "playing"}
-                aria-disabled={!isPlayable || (isActive && playerStatus === "loading") ? true : undefined}
-                onClick={() => {
-                  if (isPlayable && !(isActive && playerStatus === "loading")) onPlay(entry.row);
-                }}
-            >
-                {station.logoUrl ? (
-                  <img
-                    className="compact-category-dial__station-logo"
-                    src={station.logoUrl}
-                    alt=""
-                    loading="lazy"
-                  />
-                ) : (
-                  <span
-                    className="compact-category-dial__station-logo compact-category-dial__station-logo--mono"
-                    aria-hidden="true"
-                  >
-                    {station.name}
+      {entries.map((entry) => {
+        const station = entry.row.ds.station;
+        const slug = station.slug;
+        const isActive = slug === activeSlug;
+        const isPlayable = resolvePlaybackSource(station) != null;
+        const fresh = isFreshEntry(entry, nowMs);
+        return (
+          <button
+            type="button"
+            key={slug}
+            className={[
+              "compact-category-dial__station",
+              fresh ? "compact-category-dial__station--fresh" : "",
+              entry.hasTrack ? "" : "compact-category-dial__station--quiet",
+              entry.isSkipped ? "compact-category-dial__station--skipped" : "",
+              isActive ? "compact-category-dial__station--active" : "",
+            ].filter(Boolean).join(" ")}
+            data-testid={`compact-category-station-${slug}`}
+            aria-label={`${!isPlayable ? "Unavailable" : isActive && playerStatus === "playing" ? "Pause" : isActive && playerStatus === "loading" ? "Loading" : "Play"} ${station.name}`}
+            aria-pressed={isActive && playerStatus === "playing"}
+            aria-disabled={!isPlayable || (isActive && playerStatus === "loading") ? true : undefined}
+            onClick={() => {
+              if (isPlayable && !(isActive && playerStatus === "loading")) onPlay(entry.row);
+            }}
+          >
+            {station.logoUrl ? (
+              <img
+                className="compact-category-dial__station-logo"
+                src={station.logoUrl}
+                alt=""
+                loading="lazy"
+              />
+            ) : (
+              <span
+                className="compact-category-dial__station-logo compact-category-dial__station-logo--mono"
+                aria-hidden="true"
+              >
+                {station.name}
+              </span>
+            )}
+            <span className="compact-category-dial__station-lines">
+              <span className="compact-category-dial__station-track-line">
+                {isPlayable && (
+                  <span className="compact-category-dial__station-play-cue" aria-hidden="true">
+                    {isActive && playerStatus === "loading"
+                      ? "…"
+                      : isActive && playerStatus === "playing"
+                        ? "Ⅱ"
+                        : "▶"}
                   </span>
                 )}
-                <span className="compact-category-dial__station-lines">
-                  {/* Keyed by track identity so a now-playing change re-mounts
-                      the line and replays its fade-in. The square at left
-                      carries station identity (or the station-name fallback),
-                      leaving this as one clean now-playing line. */}
-                  <span className="compact-category-dial__station-track-line">
-                    {isPlayable && (
-                      <span className="compact-category-dial__station-play-cue" aria-hidden="true">
-                        {isActive && playerStatus === "loading"
-                          ? "…"
-                          : isActive && playerStatus === "playing"
-                            ? "Ⅱ"
-                            : "▶"}
-                      </span>
-                    )}
-                    <span
-                      className="compact-category-dial__station-track"
-                      key={entry.hasTrack ? `${entry.artist}|${entry.playedAtMs}` : "quiet"}
-                    >
-                      {entry.hasTrack
-                        ? entry.artist ?? entry.title ?? ""
-                        : "Now playing unavailable"}
-                    </span>
-                  </span>
+                <span
+                  className="compact-category-dial__station-track"
+                  key={entry.hasTrack ? `${entry.artist}|${entry.playedAtMs}` : "quiet"}
+                >
+                  {entry.hasTrack
+                    ? entry.artist ?? entry.title ?? ""
+                    : "Now playing unavailable"}
                 </span>
-              </button>
-          );
-        })}
-      </div>
-    </section>
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
 function CategoryFirstDial({
   activeRows,
   skippedRows,
-  samplingRowIdx,
   activeSlug,
   playerStatus,
-  presenceMap,
   onTuneIn,
   onPlay,
   onToggleSkip,
-  crossingScope,
-  suppressCrossings,
-  displayMode,
-  seedsLower,
-  onAddArtist,
-  onOpenLastSet,
-  lastSetSummaries,
-  unchangedSlugs,
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
@@ -643,13 +606,8 @@ function CategoryFirstDial({
     [isChecked, onToggleCategory, focusedCategory],
   );
 
-  const sampledRow = samplingRowIdx != null ? activeRows[samplingRowIdx] ?? null : null;
-  const sampledSlug = sampledRow?.ds.station.slug ?? null;
-
-  // The All overview renders one card per CHECKED category that has at least
-  // one station, in the fixed editorial order. Excluded categories contribute
-  // no card but stay in the tab strip; empty categories are honest inside
-  // their focused list instead of padding the overview with dead cards.
+  // The All feed includes every station from a checked category. Excluded
+  // categories remain in the tabs as an immediate way to restore them.
   const overviewGroups = COMPACT_CATEGORY_ORDER
     .filter((category) => isChecked(category) && groupByCategory.has(category))
     .map((category) => groupByCategory.get(category)!);
@@ -671,29 +629,9 @@ function CategoryFirstDial({
         || visibleUncategorizedSlugs.has(row.ds.station.slug),
     ),
   };
-
-  const renderRows = (group: CategoryGroup) => group.rows.map(({ row, isSkipped }) => (
-    <CompactDialRow
-      key={row.ds.station.slug}
-      row={row}
-      isSampling={row.ds.station.slug === sampledSlug}
-      isSkipped={isSkipped}
-      activeSlug={activeSlug}
-      playerStatus={playerStatus}
-      presenceMap={presenceMap}
-      onTuneIn={onTuneIn}
-      onPlay={onPlay}
-      onToggleSkip={onToggleSkip}
-      crossingScope={crossingScope}
-      suppressCrossings={suppressCrossings}
-      displayMode={displayMode}
-      seedsLower={seedsLower}
-      onAddArtist={onAddArtist}
-      onOpenLastSet={onOpenLastSet}
-      lastSetSummaries={lastSetSummaries}
-      unchangedSlugs={unchangedSlugs}
-    />
-  ));
+  const selectedOverviewGroups = visibleUncategorizedGroup?.rows.length
+    ? [...overviewGroups, visibleUncategorizedGroup]
+    : overviewGroups;
 
   const tabStrip = (
     <div className="compact-category-dial__tabs" role="tablist" aria-label="Station categories">
@@ -783,28 +721,12 @@ function CategoryFirstDial({
           id="compact-category-panel"
           aria-labelledby="compact-category-tab-all"
         >
-          <div className="compact-category-dial__active-groups">
-            {overviewGroups.map((group) => (
-              <CategoryCard
-                key={group.category}
-                group={group}
-                activeSlug={activeSlug}
-                playerStatus={playerStatus}
-                onPlay={onPlay}
-                onOpen={() => setFocusedCategory(group.category as StationCategory)}
-              />
-            ))}
-          </div>
-          {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (
-            <section className="compact-category-dial__uncategorized" aria-label="Other stations">
-              {overviewGroups.length > 0 && (
-                <div className="compact-category-dial__uncategorized-label">Other stations</div>
-              )}
-              <div className="compact-category-dial__stations">
-                {renderRows(visibleUncategorizedGroup)}
-              </div>
-            </section>
-          )}
+          <AllNowPlayingFeed
+            groups={selectedOverviewGroups}
+            activeSlug={activeSlug}
+            playerStatus={playerStatus}
+            onPlay={onPlay}
+          />
         </div>
       )}
     </div>

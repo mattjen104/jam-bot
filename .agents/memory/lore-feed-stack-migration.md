@@ -27,6 +27,24 @@ station is secondary context; centered pipe made the eye hunt mid-row.
 the same grammar: `primary · secondary  [right-edge metadata]`, byline below on
 expand. Album leads in the Stack; artist leads in the Feed.
 
+## Home All-feed ordering
+
+The home Feed’s **All** tab is a single real-time station stream, not a set of
+category summaries. It includes every station in the selected categories,
+sorts the usable live observations newest-first, and fills a four-row grid
+top-to-bottom before continuing into the next horizontally scrollable column.
+Quiet or metadata-less stations follow the live observations.
+
+**Why:** category cards turned the overview into a reduced editorial index,
+making it hard to scan the actual current radio landscape. The column flow
+keeps the newest item at top-left while exposing eight stations in the initial
+two-column view.
+
+**How to apply:** retain flat ordering in All even when category tabs or
+membership controls evolve. Category tabs may show category-specific lists;
+they must not reintroduce grouping into All. Preserve the four-items-per-column
+DOM sequence so CSS column flow remains deterministic.
+
 ## Landed (Stack full-screen slice)
 - Default `/library` (no `?lens=` param) is a chrome-free full-height album
   list: no hero/stats, week card, avatar picker, lens pills, sort bar, group
