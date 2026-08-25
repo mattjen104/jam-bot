@@ -27,11 +27,11 @@ import {
 } from "@workspace/api-zod";
 import {
   db,
+  listenerDb,
   stationsTable,
   spinsTable,
   showsTable,
   recordingsTable,
-  recordingReleaseGroupsTable,
   pickersTable,
   picksTable,
   scrapedShowsTable,
@@ -50,7 +50,7 @@ import {
   validScheduleShowAttribution,
 } from "./shared.js";
 import { resolveAutomationClass } from "../../lore/scraped-shows-sync.js";
-import { getUserFromSession } from "../../lore/userSession.js";
+import { getUserForListenerRead, getUserFromSession } from "../../lore/userSession.js";
 import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../../lore/library-hits.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged, spinEvents, type SpinChangedEvent, type SpinRawEvent, type SpinRawFailedEvent } from "../../lore/resolve.js";
@@ -70,6 +70,25 @@ import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConn
 import { eligibleDjName } from "@workspace/lore-attribution";
 
 const router: IRouter = Router();
+
+const LISTENER_PERSONALIZATION_WAIT_MS = 120;
+
+async function getListenerHitContext(userId: number) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      buildLibraryHitContext(userId).catch(() => EMPTY_HIT_CONTEXT),
+      new Promise<typeof EMPTY_HIT_CONTEXT>((resolve) => {
+        timeout = setTimeout(
+          () => resolve(EMPTY_HIT_CONTEXT),
+          LISTENER_PERSONALIZATION_WAIT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Now-playing base query cache (30 seconds, user-independent)
@@ -96,7 +115,6 @@ type NpBaseCache = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rows: any[];
   seenBefore: Set<string>;
-  rgMap: Map<string, string>;
 };
 
 let npBaseCache: NpBaseCache | null = null;
@@ -192,7 +210,7 @@ function refreshStationRows(): Promise<StationDirectoryRow[]> {
   const p = (async () => {
     if (stationRowsRefreshGate) await stationRowsRefreshGate;
     stationRowsRefreshCount++;
-    return db
+    return listenerDb
       .select({
         station: stationsTable,
         qualityTier: stationQualityTable.qualityTier,
@@ -323,7 +341,31 @@ async function buildNpBase(dateFilter: string | null, includeModePools = false):
   npBuildCount++;
   const stations = await fetchNpStations(includeModePools);
 
-  const rows = await db
+  // DISTINCT ON over the whole play history makes a cold Feed wait for a scan
+  // of every historical spin. Fetch one current ID per visible station through
+  // the station/time index, then hydrate that small ID set below.
+  const latestSpinIds =
+    stations.length === 0
+      ? []
+      : (await listenerDb.execute<{ id: number }>(sql`
+          SELECT latest.id
+          FROM unnest(
+            ARRAY[${sql.join(stations.map((station) => sql`${station.id}`), sql`, `)}]::integer[]
+          ) AS target(station_id)
+          JOIN LATERAL (
+            SELECT sp.id
+            FROM spins sp
+            WHERE sp.station_id = target.station_id
+              ${dateFilter
+                ? sql`AND sp.played_at >= ${dateFilter}::date
+                  AND sp.played_at < (${dateFilter}::date + interval '1 day')`
+                : sql``}
+            ORDER BY sp.played_at DESC, sp.id DESC
+            LIMIT 1
+          ) AS latest ON true
+        `)).rows.map((row) => row.id);
+
+  const rows = latestSpinIds.length === 0 ? [] : await listenerDb
     .selectDistinctOn([spinsTable.stationId], {
       spinId: spinsTable.id,
       stationId: spinsTable.stationId,
@@ -350,15 +392,12 @@ async function buildNpBase(dateFilter: string | null, includeModePools = false):
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(
-      showsTable,
-      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
-    )
-    .where(
-      dateFilter
-        ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
-        : isNotNull(spinsTable.stationId),
-    )
+    // The live poller writes showId after it resolves attribution. Re-running
+    // the archival schedule predicate here creates hundreds of correlated
+    // checks on every cold Feed cache fill; archive/history routes retain that
+    // stricter validation for historical evidence.
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .where(inArray(spinsTable.id, latestSpinIds))
     .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 
   // Batch-check which resolved MBIDs have been seen in the archive before today.
@@ -366,39 +405,22 @@ async function buildNpBase(dateFilter: string | null, includeModePools = false):
   const nowPlayingMbids = new Set<string>();
   for (const row of rows) { if (row.mbid) nowPlayingMbids.add(row.mbid); }
 
-  // Batch-fetch the primary release-group MBID for each now-playing spin so we
-  // can do album-level library widening without joining the RG table in the
-  // selectDistinctOn query (which would complicate the DISTINCT ON semantics).
-  const rgMap = new Map<string, string>(); // recording MBID → release-group MBID
-  const [seenRows, rgRows] = await Promise.all([
-    nowPlayingMbids.size > 0
-      ? db.execute<{ mbid: string }>(sql`
-          SELECT DISTINCT mbid FROM spins
-          WHERE mbid = ANY(ARRAY[${sql.join([...nowPlayingMbids].map((m) => sql`${m}`), sql`, `)}]::text[])
-            AND played_at::date < CURRENT_DATE
-        `)
-      : Promise.resolve({ rows: [] as { mbid: string }[] }),
-    nowPlayingMbids.size > 0
-      ? db
-          .select({
-            recordingMbid: recordingReleaseGroupsTable.recordingMbid,
-            releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
-          })
-          .from(recordingReleaseGroupsTable)
-          .where(
-            and(
-              inArray(recordingReleaseGroupsTable.recordingMbid, [...nowPlayingMbids]),
-              eq(recordingReleaseGroupsTable.isPrimary, true),
-            ),
-          )
-      : Promise.resolve([] as { recordingMbid: string; releaseGroupMbid: string }[]),
-  ]);
+  // Album widening is useful only for signed-in library matching and must not
+  // delay the shared anonymous Feed payload. The critical live cache keeps the
+  // direct recording and artist checks; release-group matching remains
+  // available in the dedicated library surfaces.
+  const seenRows = nowPlayingMbids.size > 0
+    ? await listenerDb.execute<{ mbid: string }>(sql`
+        SELECT DISTINCT mbid FROM spins
+        WHERE mbid = ANY(ARRAY[${sql.join([...nowPlayingMbids].map((m) => sql`${m}`), sql`, `)}]::text[])
+          AND played_at::date < CURRENT_DATE
+      `)
+    : { rows: [] as { mbid: string }[] };
 
   const seenBefore = new Set<string>();
   for (const r of seenRows.rows) seenBefore.add(r.mbid);
-  for (const r of rgRows) rgMap.set(r.recordingMbid, r.releaseGroupMbid);
 
-  const base: NpBaseCache = { builtAt: Date.now(), stations, rows, seenBefore, rgMap };
+  const base: NpBaseCache = { builtAt: Date.now(), stations, rows, seenBefore };
   if (!dateFilter) {
     if (includeModePools) npBaseCacheInclusive = base;
     else npBaseCache = base;
@@ -696,10 +718,10 @@ router.get("/stations/now-playing", h(async (req, res) => {
   // unauthenticated requests receive isLibraryHit=false, isArtistHit=false.
   // buildLibraryHitContext is itself cached per-user (5-min TTL in library-hits.ts).
   const [user] = await Promise.all([
-    getUserFromSession(req).catch(() => null),
+    getUserForListenerRead(req),
   ]);
   const hitCtx = user
-    ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
+    ? await getListenerHitContext(user.id)
     : EMPTY_HIT_CONTEXT;
 
   // ── Base query cache (user-independent, 30-second TTL) ───────────────────
@@ -766,7 +788,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
     }
   }
 
-  const { stations, rows, seenBefore, rgMap } = base;
+  const { stations, rows, seenBefore } = base;
   const byStation = new Map(rows.map((r) => [r.stationId, r]));
   const items = stations.map((s) => {
     const row = byStation.get(s.id);
@@ -775,7 +797,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
     const hitFlags = user
       ? checkLibraryHit(hitCtx, {
           mbid: row.mbid,
-          releaseGroupMbid: row.mbid ? (rgMap.get(row.mbid) ?? null) : null,
+          releaseGroupMbid: null,
           artistMbid: row.artistMbid,
           artist: row.artist ?? row.rawArtist ?? "",
         })

@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import {
   db,
+  pool,
   stationsTable,
+  loreUsersTable,
   recordingsTable,
   spinsTable,
   stationQualityTable,
@@ -16,7 +18,9 @@ import {
   _testOnly_expireNpBaseCache,
   _testOnly_getNpBuildCount,
   prewarmNowPlayingBaseCache,
+  invalidateNowPlayingBaseCache,
 } from "../src/routes/lore/stations.js";
+import { _testOnly_clearLibraryHitCache } from "../src/lore/library-hits.js";
 
 /**
  * Cold-start behavior of GET /api/stations/now-playing (task: dial must not
@@ -37,18 +41,25 @@ import {
 const run = randomUUID().slice(0, 8);
 const SLUG = `test-cold-${run}`;
 const MBID = `test-cold-mbid-${run}`;
+const DEVICE_KEY = `00000000-0000-4000-8000-${run.padStart(12, "0")}`;
 const MIN = 60 * 1000;
 
 let dbAvailable = false;
 let stationId: number | undefined;
+let userId: number | undefined;
 let server: Server | undefined;
 let baseUrl = "";
 
 type NowPlayingItem = { slug: string; nowPlaying: unknown | null };
 type ListNowPlayingResponse = { items: NowPlayingItem[] };
 
-async function getNowPlaying(): Promise<ListNowPlayingResponse> {
-  const res = await fetch(`${baseUrl}/api/stations/now-playing`);
+const BLOCKED_SESSION_COOKIE = "lore_sid=00000000-0000-0000-0000-000000000000";
+
+async function getNowPlaying(
+  query = "",
+  init?: RequestInit,
+): Promise<ListNowPlayingResponse> {
+  const res = await fetch(`${baseUrl}/api/stations/now-playing${query}`, init);
   expect(res.status).toBe(200);
   return (await res.json()) as ListNowPlayingResponse;
 }
@@ -78,6 +89,11 @@ beforeAll(async () => {
     .values({ slug: SLUG, name: `Test Cold ${run}`, streamUrl: "http://example.invalid/cold", stationClass: "community" })
     .returning({ id: stationsTable.id });
   stationId = s!.id;
+  const [user] = await db
+    .insert(loreUsersTable)
+    .values({ deviceKey: DEVICE_KEY })
+    .returning({ id: loreUsersTable.id });
+  userId = user!.id;
 
   await db.insert(recordingsTable).values([
     { mbid: MBID, title: "Cold Track", artist: `Test Cold Artist ${run}` },
@@ -107,9 +123,80 @@ afterAll(async () => {
     await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
   }
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID]));
+  if (userId) await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
 }, 90_000);
 
 describe("GET /api/stations/now-playing — cold start", () => {
+  it("continues serving the Feed while the general background pool is exhausted", async () => {
+    if (!dbAvailable) return;
+    _testOnly_resetNpCaches();
+    // Prime the inexpensive station directory snapshot before simulating a
+    // saturated general pool. The assertion below isolates the listener
+    // now-playing read model rather than coupling this regression to a fresh
+    // directory cache eviction.
+    await getNowPlaying();
+    invalidateNowPlayingBaseCache();
+    const clients = await Promise.all(
+      Array.from({ length: pool.options.max ?? 10 }, () => pool.connect()),
+    );
+    try {
+      const started = Date.now();
+      const initial = await getNowPlaying("", {
+        headers: { cookie: BLOCKED_SESSION_COOKIE },
+      });
+      expect(Date.now() - started).toBeLessThan(3_000);
+      expect(initial.items.find((i) => i.slug === SLUG)).toBeTruthy();
+
+      const full = await pollUntilFull(8_000);
+      expect(full.items.find((i) => i.slug === SLUG)?.nowPlaying).toBeTruthy();
+    } finally {
+      for (const client of clients) client.release();
+    }
+  }, 30_000);
+
+  it("uses the indexed listener path for a dated dial snapshot under background saturation", async () => {
+    if (!dbAvailable) return;
+    _testOnly_resetNpCaches();
+    // Reuse a warm directory snapshot while making the per-date live cache
+    // cold; this exercises the date range in the lateral station/time lookup.
+    await getNowPlaying();
+    const clients = await Promise.all(
+      Array.from({ length: pool.options.max ?? 10 }, () => pool.connect()),
+    );
+    try {
+      const date = new Date(Date.now() + 2 * MIN).toISOString().slice(0, 10);
+      const started = Date.now();
+      const body = await getNowPlaying(`?date=${date}`, {
+        headers: { cookie: BLOCKED_SESSION_COOKIE },
+      });
+      expect(Date.now() - started).toBeLessThan(3_000);
+      expect(body.items.find((item) => item.slug === SLUG)).toBeTruthy();
+    } finally {
+      for (const client of clients) client.release();
+    }
+  }, 30_000);
+
+  it("falls back to public hit flags when a signed listener's cold context is queued", async () => {
+    if (!dbAvailable || !userId) return;
+    _testOnly_clearLibraryHitCache(userId);
+    // Leave one general connection for the identity lookup, then make the
+    // five-query cold hit-context batch queue behind it. The live Feed must
+    // not wait for that optional personalization.
+    const clients = await Promise.all(
+      Array.from({ length: Math.max((pool.options.max ?? 10) - 1, 1) }, () => pool.connect()),
+    );
+    try {
+      const started = Date.now();
+      const body = await getNowPlaying("", {
+        headers: { cookie: `lore_sid=${DEVICE_KEY}` },
+      });
+      expect(Date.now() - started).toBeLessThan(3_000);
+      expect(body.items.find((item) => item.slug === SLUG)).toBeTruthy();
+    } finally {
+      for (const client of clients) client.release();
+    }
+  }, 30_000);
+
   it("serves a timely stations-only partial when the cold fill outlives the deadline, then the full payload on a later poll", async () => {
     if (!dbAvailable) return;
     // Deadline 0: even a fast fill loses the race (queries cannot resolve

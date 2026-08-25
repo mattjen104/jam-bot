@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   db,
-  listenerReadDb,
+  listenerDb,
   type Station,
   stationsTable,
   spinsTable,
@@ -16,9 +16,8 @@ import {
   pickersTable,
 } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray, isNotNull, isNull, gte } from "drizzle-orm";
-import { getUserFromSession } from "../lore/userSession.js";
+import { getUserForListenerRead, getUserFromSession } from "../lore/userSession.js";
 import { toStation, isPickerOptedOut, validScheduleShowAttribution, deriveStationCategories } from "./lore/shared.js";
-import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
 import { classifyFreshness } from "../lore/freshness.js";
 import { estimateExpiry } from "../lore/expiry.js";
 import { pollStation } from "../lore/poller.js";
@@ -65,10 +64,6 @@ router.get("/player/history", h(async (req, res) => {
   // front-door discovery rail needs the newest arrivals first. Keep the
   // scanner's chronological default and make recency an explicit opt-in.
   const newestFirst = req.query.order === "desc";
-  // The home discovery rail is public and should not queue behind the
-  // background worker pool just to resolve an optional session. It uses the
-  // listener fast-lane pool and intentionally has no personal crossing filter.
-  const homeDiscovery = req.query.home === "1";
   if (!HISTORY_SCOPES.has(scope) || !HISTORY_FILTERS.has(filter)) {
     return res.status(400).json({ error: "Invalid history scope or filter" });
   }
@@ -88,9 +83,23 @@ router.get("/player/history", h(async (req, res) => {
     return res.status(400).json({ error: "Invalid history cursor" });
   }
 
-  const useHomeFastLane = homeDiscovery && stationSlug == null && categories.length === 0;
-  const user = homeDiscovery ? null : await getUserFromSession(req).catch(() => null);
-  const historyDb = useHomeFastLane ? listenerReadDb : db;
+  // This narrow public fast lane is only for the home rail. A request that
+  // merely happens to carry `surface=home` must keep the regular archive
+  // semantics, including cursoring and listener personalization.
+  const isHomeFirstPlayRail =
+    (req.query.home === "1" || req.query.surface === "home") &&
+    scope === "7d" &&
+    filter === "firstPlays" &&
+    newestFirst &&
+    limit === 18 &&
+    stationSlug == null &&
+    categories.length === 0 &&
+    before == null &&
+    beforeId == null &&
+    typeof req.query.snapshot !== "string";
+  const useHomeFastLane = isHomeFirstPlayRail;
+  const user = isHomeFirstPlayRail ? null : await getUserFromSession(req).catch(() => null);
+  const historyDb = useHomeFastLane ? listenerDb : db;
   const userLibrary = user
     ? db.select({ mbid: libraryItemsTable.mbid }).from(libraryItemsTable)
         .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)))
@@ -215,15 +224,32 @@ router.get("/player/history", h(async (req, res) => {
 // ---------------------------------------------------------------------------
 
 router.get("/player/onair", h(async (req, res) => {
-  const user = await getUserFromSession(req).catch(() => null);
+  const user = await getUserForListenerRead(req);
 
-  const stations = await db
+  const stations = await listenerDb
     .select()
     .from(stationsTable)
     .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)));
 
-  // Latest spin per station, with resolved recording + show.
-  const latest = await db
+  // Fetch only the most-recent ID per visible station through the
+  // station/time index instead of sorting the whole spin archive.
+  const latestSpinIds =
+    stations.length === 0
+      ? []
+      : (await listenerDb.execute<{ id: number }>(sql`
+          SELECT latest.id
+          FROM unnest(
+            ARRAY[${sql.join(stations.map((station) => sql`${station.id}`), sql`, `)}]::integer[]
+          ) AS target(station_id)
+          JOIN LATERAL (
+            SELECT sp.id
+            FROM spins sp
+            WHERE sp.station_id = target.station_id
+            ORDER BY sp.played_at DESC, sp.id DESC
+            LIMIT 1
+          ) AS latest ON true
+        `)).rows.map((row) => row.id);
+  const latest = latestSpinIds.length === 0 ? [] : await listenerDb
     .selectDistinctOn([spinsTable.stationId], {
       stationId: spinsTable.stationId,
       playedAt: spinsTable.playedAt,
@@ -241,16 +267,13 @@ router.get("/player/onair", h(async (req, res) => {
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(
-      showsTable,
-      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
-    )
-    .where(isNotNull(spinsTable.stationId))
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .where(inArray(spinsTable.id, latestSpinIds))
     .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 
   // Recent spins for "earlier: A, B, C" summaries.
   const earlierSince = new Date(Date.now() - EARLIER_WINDOW_MS);
-  const recent = await db
+  const recent = await listenerDb
     .select({
       stationId: spinsTable.stationId,
       playedAt: spinsTable.playedAt,
@@ -266,11 +289,11 @@ router.get("/player/onair", h(async (req, res) => {
   // Library match counts per station (distinct library MBIDs ever spun).
   const matchByStation = new Map<number, number>();
   if (user) {
-    const userLib = db
+    const userLib = listenerDb
       .select({ mbid: libraryItemsTable.mbid })
       .from(libraryItemsTable)
       .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
-    const rows = await db
+    const rows = await listenerDb
       .select({
         stationId: spinsTable.stationId,
         matches: sql<number>`count(distinct ${spinsTable.mbid})::int`,
@@ -303,19 +326,16 @@ router.get("/player/onair", h(async (req, res) => {
 
   const cutoff = Date.now() - ON_AIR_WINDOW_MS;
   const now = new Date();
-  const itemsRaw = await Promise.all(
-    stations.map(async (s) => {
+  const itemsRaw = stations.map((s) => {
       const spin = latestByStation.get(s.id);
       if (!spin || spin.playedAt.getTime() < cutoff) return null;
       const earlier = (earlierByStation.get(s.id) ?? []).slice(1);
-      const resolvedClass = await resolveAutomationClass(
-        s.id,
-        s.ianaTimezone,
-        s.automationClass ?? null,
-        now,
-      );
       return {
-        station: toStation(s, undefined, resolvedClass),
+        station: toStation(
+          s,
+          undefined,
+          s.automationClass === "mixed" ? "automated" : s.automationClass,
+        ),
         show:
           spin.showName != null
             ? { name: spin.showName, djName: spin.showDj ?? null }
@@ -333,8 +353,7 @@ router.get("/player/onair", h(async (req, res) => {
         earlier,
         matchCount: user ? matchByStation.get(s.id) ?? 0 : null,
       };
-    }),
-  );
+    });
   const items = itemsRaw.filter((x): x is NonNullable<typeof x> => x !== null)
     .sort(
       (a, b) =>

@@ -581,7 +581,7 @@ function FirstPlayFeed() {
     let cancelled = false;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8_000);
-    void fetch("/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&home=1", {
+    void fetch("/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&surface=home", {
       signal: controller.signal,
     })
       .then((response) => {

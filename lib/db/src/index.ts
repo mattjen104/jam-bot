@@ -34,11 +34,16 @@ export const pool = new Pool({
  */
 export const listenerReadPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 4,
-  connectionTimeoutMillis: 5_000,
+  max: 3,
+  connectionTimeoutMillis: 1_500,
   idleTimeoutMillis: 30_000,
+  statement_timeout: 5_000,
 });
 export const db = drizzle(pool, { schema });
 export const listenerReadDb = drizzle(listenerReadPool, { schema });
+// Compatibility alias for listener-facing read models added before the
+// home fast-lane naming landed. Both names intentionally share one bounded
+// pool; never create a second competing listener pool.
+export const listenerDb = listenerReadDb;
 
 export * from "./schema";

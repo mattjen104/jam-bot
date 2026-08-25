@@ -66,6 +66,29 @@ export async function getUserFromSession(
 }
 
 /**
+ * Best-effort identity for listener-facing read models.
+ *
+ * The public Feed must not wait on the general-purpose pool just to decorate
+ * an otherwise usable response with personal context. If the lookup is queued
+ * behind ingestion work, return the public read model and let the next normal
+ * poll pick up personalization.
+ */
+export function getUserForListenerRead(req: Request): Promise<LoreUser | null> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(null), 120);
+    void getUserFromSession(req)
+      .then((user) => {
+        clearTimeout(timeout);
+        resolve(user);
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        resolve(null);
+      });
+  });
+}
+
+/**
  * Look up or create an anonymous lore_users row for the given deviceKey.
  *
  * If no row exists for the `deviceKey`, inserts a fresh anonymous user.

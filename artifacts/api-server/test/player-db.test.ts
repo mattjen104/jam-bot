@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import { inArray, sql } from "drizzle-orm";
 import {
   db,
+  pool,
   stationsTable,
   showsTable,
   recordingsTable,
@@ -146,6 +147,28 @@ afterAll(async () => {
 });
 
 describe("GET /api/player/onair", () => {
+  it("serves player read models while the general background pool is exhausted", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const clients = await Promise.all(
+      Array.from({ length: pool.options.max ?? 10 }, () => pool.connect()),
+    );
+    try {
+      const started = Date.now();
+      const init = {
+        headers: { cookie: "lore_sid=00000000-0000-0000-0000-000000000000" },
+      };
+      const [onAir, history] = await Promise.all([
+        fetch(`${baseUrl}/api/player/onair`, init),
+        fetch(`${baseUrl}/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&surface=home`, init),
+      ]);
+      expect(Date.now() - started).toBeLessThan(3_000);
+      expect(onAir.status).toBe(200);
+      expect(history.status).toBe(200);
+    } finally {
+      for (const client of clients) client.release();
+    }
+  }, 30_000);
+
   it("lists the live station with now/earlier and null matchCount when anonymous", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
     const res = await fetch(`${baseUrl}/api/player/onair`);
@@ -288,6 +311,30 @@ describe("GET /api/player/history", () => {
     expect(secondBody.snapshot).toBe(firstBody.snapshot);
     expect(secondBody.items.map((item) => item.mbid)).toEqual([MBID_A]);
     expect(secondBody.items.map((item) => item.mbid)).not.toContain(MBID_C);
+  });
+
+  it("keeps surface=home archive requests out of the first-play fast lane", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const replayedAt = new Date(base + 3 * MIN);
+    await db.insert(spinsTable).values({
+      stationId: stationIds[0]!,
+      showId: showIds[0]!,
+      mbid: MBID_A,
+      confidence: "text",
+      rawArtist: "raw-a-repeat",
+      rawTitle: "raw-a-repeat-t",
+      playedAt: replayedAt,
+    });
+
+    const response = await fetch(
+      `${baseUrl}/api/player/history?scope=7d&filter=all&order=desc&limit=18&surface=home&snapshot=${encodeURIComponent(replayedAt.toISOString())}`,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      items: Array<{ mbid: string; isFirstPlay: boolean }>;
+    };
+    const repeated = body.items.find((item) => item.mbid === MBID_A);
+    expect(repeated?.isFirstPlay).toBe(false);
   });
 });
 
