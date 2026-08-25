@@ -11,7 +11,7 @@
  * at /library.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   useDialData,
@@ -24,10 +24,14 @@ import {
   DEFAULT_ACTIVE_AGE_TIERS,
   useDialSkipped,
   useStackSkipped,
+  toggleStationCategory,
 } from "../lib/dialFilterState";
 import { readCrossingScope } from "../lib/crossingScope";
 import { rowPassesAgeTierFilter, type AgeTier } from "../lib/dialAgeFilter";
-import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
+import {
+  STATION_CATEGORY_DEFINITIONS,
+  type StationCategory,
+} from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
@@ -36,6 +40,13 @@ import { useMattStarterLibrary, useStartMattLibrary } from "../lib/meHooks";
 const HOME_CATEGORY_SOURCES: ReadonlySet<DialStationCategory> = new Set(
   STATION_CATEGORY_DEFINITIONS.map((definition) => definition.cat as DialStationCategory),
 );
+const HOME_ACTIVE_CATEGORIES: ReadonlySet<StationCategory> = new Set([
+  "anchor",
+  "campus",
+  "specialist",
+  "public",
+  "indie",
+]);
 
 export default function SplitHome() {
   // The front door intentionally fixes the full Feed's advanced filters and
@@ -49,6 +60,12 @@ export default function SplitHome() {
   // Per-station selection remains in the tree without exposing the old scan
   // remote on the front door.
   const { skipped, toggleSkip } = useDialSkipped();
+  const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
+    () => new Set(HOME_ACTIVE_CATEGORIES),
+  );
+  const toggleCategory = useCallback((category: StationCategory) => {
+    setActiveCategories((current) => toggleStationCategory(current, category));
+  }, []);
 
   const { stations } = useDialData("personal", {
     categories: HOME_CATEGORY_SOURCES,
@@ -194,6 +211,8 @@ export default function SplitHome() {
           onTuneIn={tuneRow}
           onPlay={playRow}
           onToggleSkip={toggleSkip}
+          onToggleCategory={toggleCategory}
+          activeCategories={activeCategories}
           crossingScope={crossingScope}
           suppressCrossings={false}
           displayMode="personal"

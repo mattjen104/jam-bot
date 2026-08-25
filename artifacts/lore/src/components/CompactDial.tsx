@@ -52,6 +52,16 @@ import { ageDistribution } from "../lib/dialAgeDistribution";
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
 const COMPACT_REMOTE_SIZE = 10;
+/** The front-door tree leads with the everyday listening categories. */
+const COMPACT_CATEGORY_ORDER: readonly StationCategory[] = [
+  "anchor",
+  "campus",
+  "specialist",
+  "public",
+  "indie",
+  "ambient",
+  "discovery",
+];
 
 export interface CompactDialProps {
   /**
@@ -774,7 +784,15 @@ function CategoryFirstDial({
   const sampledRow = samplingRowIdx != null ? activeRows[samplingRowIdx] ?? null : null;
   const sampledSlug = sampledRow?.ds.station.slug ?? null;
   const sampledCategory = sampledRow ? categoryForRow(sampledRow) : null;
-  const editorialGroups = groups.filter((group) => group.category !== "other");
+  const editorialGroups = groups
+    .filter((group) => group.category !== "other")
+    .sort((a, b) => {
+      const aActive = activeCategories?.has(a.category as StationCategory) ?? true;
+      const bActive = activeCategories?.has(b.category as StationCategory) ?? true;
+      return Number(!aActive) - Number(!bActive)
+        || COMPACT_CATEGORY_ORDER.indexOf(a.category as StationCategory)
+          - COMPACT_CATEGORY_ORDER.indexOf(b.category as StationCategory);
+    });
   const defaultExpandedCategory = defaultOpenFirstCategory
     ? editorialGroups[0]?.category ?? null
     : null;
@@ -791,6 +809,12 @@ function CategoryFirstDial({
   const visibleGroups = (defaultOpenFirstCategory || showAllCategories)
     ? editorialGroups
     : editorialGroups.slice(categoryPage * 5, categoryPage * 5 + 5);
+  const activeEditorialGroups = visibleGroups.filter((group) =>
+    activeCategories?.has(group.category as StationCategory) ?? true,
+  );
+  const inactiveEditorialGroups = visibleGroups.filter((group) =>
+    !(activeCategories?.has(group.category as StationCategory) ?? true),
+  );
   const pager = (label: string, page: number, pageCount: number, onPage: (next: number) => void) =>
     pageCount > 1 ? (
       <div className="compact-dial__pager" role="group" aria-label={`${label} pages`}>
@@ -824,9 +848,7 @@ function CategoryFirstDial({
     />
   ));
 
-  return (
-    <div className="compact-dial compact-dial--categories" data-testid="compact-category-dial">
-      {visibleGroups.map((group) => {
+  const renderCategoryGroup = (group: CategoryGroup) => {
         // A running station scan keeps its current station visible, but does
         // not overwrite the listener's manually chosen category once it ends.
         const isExpanded =
@@ -834,9 +856,14 @@ function CategoryFirstDial({
           || expandedCategory === group.category
           || (!hasChosenCategory && defaultExpandedCategory === group.category);
         const isSpecialist = group.category === "specialist";
+        const isActive = activeCategories?.has(group.category as StationCategory) ?? true;
         return (
           <section
-            className={`compact-category-dial__group${isExpanded ? " compact-category-dial__group--expanded" : ""}`}
+            className={[
+              "compact-category-dial__group",
+              isExpanded ? "compact-category-dial__group--expanded" : "",
+              !isActive ? "compact-category-dial__group--inactive" : "",
+            ].filter(Boolean).join(" ")}
             key={group.category}
           >
             <CategorySummary
@@ -890,7 +917,21 @@ function CategoryFirstDial({
             )}
           </section>
         );
-      })}
+      };
+
+  return (
+    <div className="compact-dial compact-dial--categories" data-testid="compact-category-dial">
+      <div className="compact-category-dial__active-groups">
+        {activeEditorialGroups.map(renderCategoryGroup)}
+      </div>
+      {inactiveEditorialGroups.length > 0 && (
+        <div
+          className="compact-category-dial__inactive-groups"
+          aria-label="Deselected categories"
+        >
+          {inactiveEditorialGroups.map(renderCategoryGroup)}
+        </div>
+      )}
       {!defaultOpenFirstCategory && !showAllCategories
         && pager("category", categoryPage, categoryPageCount, setCategoryPage)}
       {visibleUncategorizedGroup && visibleUncategorizedGroup.rows.length > 0 && (

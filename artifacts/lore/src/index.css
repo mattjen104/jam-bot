@@ -8253,6 +8253,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 6px;
   padding: 6px 0;
 }
+.compact-category-dial__active-groups {
+  display: flex;
+  flex: 0 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.compact-category-dial__inactive-groups {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  border-top: 1px solid hsl(var(--border) / 0.45);
+  scrollbar-width: thin;
+}
 .compact-category-dial__group {
   flex: 0 0 auto;
   border: 1px solid hsl(var(--border) / 0.5);
@@ -8260,6 +8277,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   background: hsl(var(--card) / 0.48);
   position: relative;
+}
+.compact-category-dial__group--inactive {
+  opacity: 0.42;
+  filter: saturate(0.45);
+}
+.compact-category-dial__group--inactive:hover,
+.compact-category-dial__group--inactive:focus-within {
+  opacity: 0.72;
 }
 .compact-category-dial__group--expanded::before {
   content: "";
@@ -10558,6 +10583,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-dial--categories {
   gap: 0;
   padding: 0;
+  overflow-y: auto;
+}
+.split-home .compact-category-dial__active-groups,
+.split-home .compact-category-dial__inactive-groups {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.split-home .compact-category-dial__active-groups,
+.split-home .compact-category-dial__inactive-groups {
+  gap: 0;
 }
 .split-home .compact-category-dial__group {
   border: 0;
@@ -10605,6 +10640,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-category-dial__label {
   color: var(--home-tree-text);
+}
+.split-home .compact-category-dial__group--inactive .compact-category-dial__label,
+.split-home .compact-category-dial__group--inactive .compact-category-dial__now-header-line,
+.split-home .compact-category-dial__group--inactive .compact-category-dial__meta {
+  color: var(--home-tree-muted);
+}
+.split-home .compact-category-dial__group--inactive .compact-category-dial__tree-mark {
+  color: var(--home-tree-muted);
+  border-color: var(--home-tree-line);
 }
 .split-home .compact-category-dial__now-header-line {
   display: flex;

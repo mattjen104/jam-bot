@@ -242,7 +242,7 @@ describe("CompactDial category-first home Feed", () => {
     const lane = screen.getByTestId("compact-category-dial");
     const labels = [...lane.querySelectorAll(".compact-category-dial__label")]
       .map((element) => element.textContent);
-    expect(labels).toEqual(["Ambient & Sleep", "Anchor Stations"]);
+    expect(labels).toEqual(["Anchor Stations", "Ambient & Sleep"]);
     const anchorSummary = screen.getByTestId("compact-category-anchor")
       .closest(".compact-category-dial__summary")!;
     expect(anchorSummary.querySelector(".compact-category-dial__now-header-line")?.textContent)
@@ -492,6 +492,46 @@ describe("CompactDial category-first home Feed", () => {
     expect(screen.queryByRole("group", { name: "category pages" })).toBeNull();
     expect(screen.getAllByRole("button", { name: /Open .* now-playing feed/ }))
       .toHaveLength(7);
+  });
+
+  it("keeps selected categories first and places unchecked categories in a dimmed overflow region", () => {
+    const categories = ["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"] as const;
+    const rows = categories.map((category) => makeRow({
+      slug: `${category}-station`,
+      name: `${category} station`,
+      stationCategories: [category],
+    }));
+    const { container } = renderDial({
+      activeRows: rows,
+      categoryFirst: true,
+      showAllCategories: true,
+      activeCategories: new Set(["anchor", "campus", "specialist", "public", "indie"]),
+      onToggleCategory: vi.fn(),
+    });
+
+    const labelsFor = (selector: string) =>
+      [...container.querySelectorAll(`${selector} .compact-category-dial__label`)]
+        .map((element) => element.textContent);
+
+    expect(labelsFor(".compact-category-dial__active-groups")).toEqual([
+      "Anchor Stations",
+      "Campus Radio",
+      "Specialist Radio",
+      "Public & Community",
+      "Independent DJ",
+    ]);
+    expect(labelsFor(".compact-category-dial__inactive-groups")).toEqual([
+      "Ambient & Sleep",
+      "Discovery",
+    ]);
+    expect(container.querySelectorAll(".compact-category-dial__group--inactive"))
+      .toHaveLength(2);
+    expect(
+      (screen.getByRole("checkbox", { name: "Exclude Ambient & Sleep" }) as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(
+      (screen.getByRole("checkbox", { name: "Exclude Discovery" }) as HTMLInputElement).checked,
+    ).toBe(false);
   });
 
   it("uses the compact remote density for category station lists", () => {
