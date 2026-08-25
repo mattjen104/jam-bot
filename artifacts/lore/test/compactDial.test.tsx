@@ -188,7 +188,7 @@ describe("CompactDial category tabs", () => {
     const strip = screen.getByRole("tablist", { name: "Station categories" });
     const tabs = within(strip).getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      "All",
+      "All · 2×4",
       "Anchor",
       "Campus",
       "Specialist",
@@ -198,7 +198,8 @@ describe("CompactDial category tabs", () => {
       "Discovery",
     ]);
     // The All overview is selected initially.
-    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "All stations, 2 columns by 4 rows" })
+      .getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tab", { name: "Anchor" }).getAttribute("aria-selected")).toBe("false");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby"))
       .toBe("compact-category-tab-all");
@@ -310,7 +311,8 @@ describe("CompactDial category tabs", () => {
     // The global All feed is swapped for the single focused station list.
     expect(screen.queryByTestId("compact-category-all-feed")).toBeNull();
     expect(screen.getByRole("tab", { name: "Campus" }).getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("tab", { name: "All stations, 2 columns by 4 rows" })
+      .getAttribute("aria-selected")).toBe("false");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby"))
       .toBe("compact-category-tab-campus");
 
@@ -318,6 +320,32 @@ describe("CompactDial category tabs", () => {
     fireEvent.click(screen.getByTestId("compact-category-tab-all"));
     expect(screen.getByTestId("compact-category-all-feed")).toBeTruthy();
     expect(screen.queryByTestId("compact-category-campus-now-feed")).toBeNull();
+  });
+
+  it("cycles the All feed through one, two, and three columns with four rows", () => {
+    const rows = Array.from({ length: 13 }, (_, index) => makeRow({
+      slug: `station-${index}`,
+      name: `Station ${index}`,
+      stationCategories: ["anchor"],
+    }));
+    renderDial({ activeRows: rows, categoryFirst: true });
+
+    const allTab = screen.getByTestId("compact-category-tab-all");
+    const feed = screen.getByTestId("compact-category-all-feed");
+    expect(allTab.textContent).toBe("All · 2×4");
+    expect(feed.className).toContain("all-feed--columns-2");
+
+    fireEvent.click(allTab);
+    expect(allTab.textContent).toBe("All · 3×4");
+    expect(feed.className).toContain("all-feed--columns-3");
+
+    fireEvent.click(allTab);
+    expect(allTab.textContent).toBe("All · 1×4");
+    expect(feed.className).toContain("all-feed--columns-1");
+
+    fireEvent.click(allTab);
+    expect(allTab.textContent).toBe("All · 2×4");
+    expect(feed.className).toContain("all-feed--columns-2");
   });
 
   it("keeps All as stations only; category tabs are the drill-down controls", () => {
@@ -348,7 +376,8 @@ describe("CompactDial category tabs", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Include Anchor" }));
     expect(onToggleCategory).toHaveBeenCalledWith("anchor");
     // Focus falls back to All even before the parent applies the change.
-    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "All stations, 2 columns by 4 rows" })
+      .getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
   });
 
@@ -475,10 +504,11 @@ describe("CompactDial category tabs", () => {
     expect(onPlay).toHaveBeenCalledWith(second);
     // The card did not open — the All overview is still showing.
     expect(screen.queryByTestId("compact-category-anchor-now-feed")).toBeNull();
-    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "All stations, 2 columns by 4 rows" })
+      .getAttribute("aria-selected")).toBe("true");
   });
 
-  it("puts the inline play cue beside the one-line now-playing label", () => {
+  it("keeps the station card as the play control without an inline play cue", () => {
     const row = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
       { artist: "The Smile", title: "Bending Hectic" },
@@ -487,7 +517,7 @@ describe("CompactDial category tabs", () => {
 
     const card = screen.getByTestId("compact-category-station-kexp");
     expect(card.getAttribute("aria-label")).toBe("Play KEXP");
-    expect(card.querySelector(".compact-category-dial__station-play-cue")?.textContent).toBe("▶");
+    expect(card.querySelector(".compact-category-dial__station-play-cue")).toBeNull();
     expect(card.querySelector(".compact-category-dial__station-track")?.textContent).toBe("The Smile");
     expect(card.querySelector(".compact-category-dial__station-name")).toBeNull();
   });
@@ -511,7 +541,7 @@ describe("CompactDial category tabs", () => {
     expect(screen.queryByTestId("compact-category-play-attr-only")).toBeNull();
   });
 
-  it("reflects playing and loading states on the inline cue", () => {
+  it("reflects playing and loading states on the card without adding a play cue", () => {
     const row = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
       { artist: "The Smile", title: "Bending Hectic" },
@@ -523,7 +553,7 @@ describe("CompactDial category tabs", () => {
       playerStatus: "playing",
     });
     expect(screen.getByRole("button", { name: "Pause KEXP" })
-      .querySelector(".compact-category-dial__station-play-cue")?.textContent).toBe("Ⅱ");
+      .querySelector(".compact-category-dial__station-play-cue")).toBeNull();
 
     rerender(
       <CompactDial
@@ -539,8 +569,7 @@ describe("CompactDial category tabs", () => {
     );
     const loading = screen.getByRole("button", { name: "Loading KEXP" });
     expect(loading.getAttribute("aria-disabled")).toBe("true");
-    expect(loading.querySelector(".compact-category-dial__station-play-cue")?.textContent)
-      .toBe("…");
+    expect(loading.querySelector(".compact-category-dial__station-play-cue")).toBeNull();
   });
 
   it("uses an honest unavailable state on station cards with no live metadata", () => {
