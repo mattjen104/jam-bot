@@ -345,6 +345,7 @@ function CompactStackRow({
   sampling = false,
   isSkipped = false,
   density = "normal",
+  homeCarousel = false,
   onToggleSkip,
   onExpand,
 }: {
@@ -355,6 +356,8 @@ function CompactStackRow({
   sampling?: boolean;
   /** True when the album is unchecked — row dims and lives below the fold. */
   isSkipped?: boolean;
+  /** Home-only horizontal carousel: one cover at a time, no expanded sheet. */
+  homeCarousel?: boolean;
   /**
    * Row display density. "compact" drops the relationship credit segment;
    * "micro" shows only the year + album title (no artist, no credit) and
@@ -367,12 +370,13 @@ function CompactStackRow({
 }) {
   const { launch, isActive, isPlaying, isLoading, canLaunch, togglePause } =
     useAlbumPlay(group);
+  const [touched, setTouched] = useState(false);
   const label = group.artist
     ? `${group.albumTitle} · ${group.artist}`
     : group.albumTitle;
   // Expansion (liner notes) exists only at normal density — in the denser
   // modes a row tap plays the album directly, the same as the compact dial.
-  const directPlay = density !== "normal";
+  const directPlay = density !== "normal" || homeCarousel;
   const handlePress = () => {
     if (!directPlay) {
       onExpand();
@@ -390,9 +394,16 @@ function CompactStackRow({
 
   return (
     <div
-      className={`compact-stack__row${sampling ? " compact-stack__row--sampling" : ""}${isSkipped ? " compact-stack__row--skipped" : ""}`}
+      className={[
+        "compact-stack__row",
+        sampling ? "compact-stack__row--sampling" : "",
+        isSkipped ? "compact-stack__row--skipped" : "",
+        homeCarousel && touched ? "compact-stack__row--touched" : "",
+      ].filter(Boolean).join(" ")}
       role="button"
       tabIndex={0}
+      onPointerDown={homeCarousel ? () => setTouched(true) : undefined}
+      onFocus={homeCarousel ? () => setTouched(true) : undefined}
       aria-expanded="false"
       aria-label={directPlay ? `Play ${label}` : `Expand ${label}`}
       onClick={handlePress}
@@ -646,6 +657,8 @@ export interface CompactStackProps {
    * render no checkbox at all.
    */
   onToggleSkip?: (key: string) => void;
+  /** Home-only one-album horizontal carousel presentation. */
+  homeCarousel?: boolean;
 }
 
 function StackTreeRows({
@@ -654,6 +667,7 @@ function StackTreeRows({
   renderSpine,
   shuffleKey,
   density,
+  homeCarousel = false,
   skippedKeys,
   onToggleSkip,
   onExpand,
@@ -663,6 +677,7 @@ function StackTreeRows({
   renderSpine: (group: AlbumGroup) => ReactNode;
   shuffleKey: string | null;
   density?: StackDensity;
+  homeCarousel?: boolean;
   skippedKeys: ReadonlySet<string>;
   onToggleSkip?: (key: string) => void;
   onExpand: (key: string) => void;
@@ -678,6 +693,7 @@ function StackTreeRows({
         renderSpine={renderSpine}
         sampling={group.key === shuffleKey}
         density={density}
+        homeCarousel={homeCarousel}
         isSkipped={skippedKeys.has(group.key)}
         onToggleSkip={onToggleSkip}
         onExpand={() => onExpand(group.key)}
@@ -690,7 +706,7 @@ function StackTreeRows({
   return items.map(renderAlbum);
 }
 
-export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip }: CompactStackProps = {}) {
+export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip, homeCarousel = false }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { data, isLoading, isError } = useMyLibraryInfinite({}, 100);
@@ -951,7 +967,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
     const stackHref = `/library?openAlbum=${encodeURIComponent(stackTarget)}`;
     return (
       <div
-        className="compact-stack compact-stack--expanded"
+        className={`compact-stack compact-stack--expanded${homeCarousel ? " compact-stack--home" : ""}`}
         aria-label="Recent keeps"
       >
         <ExpandedStackHeader
@@ -1034,6 +1050,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
           knowledgeByMbid={knowledgeByMbid}
           renderSpine={renderSpine}
           shuffleKey={shuffleKey}
+          homeCarousel={homeCarousel}
           skippedKeys={skippedKeys}
           onToggleSkip={onToggleSkip}
           onExpand={changeExpanded}
@@ -1048,6 +1065,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
               knowledgeByMbid={knowledgeByMbid}
               renderSpine={renderSpine}
               shuffleKey={shuffleKey}
+              homeCarousel={homeCarousel}
               skippedKeys={skippedKeys}
               onToggleSkip={onToggleSkip}
               onExpand={changeExpanded}
@@ -1061,7 +1079,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   // ── Collapsed: single-line rows (+ below-fold skipped region) ──────────
   return (
     <div
-      className={`compact-stack${density !== "normal" ? ` compact-stack--${density}` : ""}${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
+      className={`compact-stack${density !== "normal" ? ` compact-stack--${density}` : ""}${homeCarousel ? " compact-stack--home" : ""}${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
       aria-label="Recent keeps"
     >
       <StackTreeRows
@@ -1070,6 +1088,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         renderSpine={renderSpine}
         shuffleKey={shuffleKey}
         density={density}
+        homeCarousel={homeCarousel}
         skippedKeys={skippedKeys}
         onToggleSkip={onToggleSkip}
         onExpand={changeExpanded}
@@ -1085,6 +1104,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
             renderSpine={renderSpine}
             shuffleKey={shuffleKey}
             density={density}
+            homeCarousel={homeCarousel}
             skippedKeys={skippedKeys}
             onToggleSkip={onToggleSkip}
             onExpand={changeExpanded}

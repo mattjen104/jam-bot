@@ -226,6 +226,7 @@ export default function SplitHome() {
         <CompactStack
           skipped={stackSkipped}
           onToggleSkip={toggleStackSkip}
+          homeCarousel
         />
       </section>
       </div>

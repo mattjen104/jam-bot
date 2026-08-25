@@ -8364,6 +8364,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-category-dial__all-feed {
   display: flex;
   align-items: flex-start;
+  justify-content: flex-end;
   gap: 6px;
   min-height: 0;
   height: 100%;
@@ -8375,7 +8376,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overscroll-behavior-x: contain;
 }
 .compact-category-dial__all-feed .compact-category-dial__station {
-  flex: 0 0 clamp(132px, 20vw, 176px);
+  /* Three-and-a-half station buttons: the clipped fourth card advertises
+     horizontal swiping without making the first cards feel undersized. */
+  flex: 0 0 calc((100% - 18px) / 3.5);
   min-width: 0;
   min-height: 0;
   width: auto;
@@ -9936,6 +9939,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .compact-first-plays__rail {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -9943,7 +9947,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   scrollbar-width: thin;
 }
 .compact-first-plays__tile {
-  flex: 0 0 clamp(118px, calc((100% - 16px) / 3), 164px);
+  /* Two complete discovery cards, right-aligned with older cards off-canvas. */
+  flex: 0 0 calc((100% - 8px) / 2);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -10751,6 +10756,36 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-stack {
   grid-template-rows: repeat(5, minmax(32px, 1fr));
 }
+/* The front door Stack is a single-album horizontal strip. Full Stack keeps
+   its five-row tree on /library. Native overflow gives touch users the same
+   swipe gesture as the radio rail above. */
+.split-home .compact-stack--home {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  grid-template-rows: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+}
+.split-home .compact-stack--home .compact-stack__row {
+  flex: 0 0 100%;
+  min-width: 100%;
+  height: 100%;
+  scroll-snap-align: start;
+}
+.split-home .compact-stack--home .compact-stack__art-tile {
+  width: clamp(220px, 42vh, 420px);
+  max-width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+}
+.split-home .compact-stack--home .compact-stack__tile-art {
+  object-fit: cover;
+}
 .split-home .compact-stack__tree-group {
   border-color: rgb(205 214 191 / .09);
 }
@@ -10816,5 +10851,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .split-home__band {
     min-height: 360px;
+  }
+  /* Keep the mobile Stack visually quiet until the listener touches a cover
+     to browse it. Accessible labels remain on the row for screen readers. */
+  .split-home .compact-stack--home .compact-stack__text {
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity .12s ease, visibility .12s ease;
+  }
+  .split-home .compact-stack--home .compact-stack__row--touched .compact-stack__text,
+  .split-home .compact-stack--home .compact-stack__row:focus-visible .compact-stack__text {
+    visibility: visible;
+    opacity: 1;
   }
 }
