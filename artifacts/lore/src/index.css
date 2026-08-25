@@ -10007,11 +10007,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: sticky;
   top: 0;
   z-index: 3;
-  background: hsl(var(--background) / 0.72);
-  backdrop-filter: blur(3px);
+  overflow: hidden;
+  background: hsl(var(--background));
 }
-/* The notes region owns the backdrop art — the cover fills only this
-   section (never the whole band) and pans once it overflows. */
+/* The selected album's art belongs to its header spine; its liner details
+   expand below it as a readable, stable list. */
 .compact-stack__notes {
   position: relative;
   flex: 0 0 auto;

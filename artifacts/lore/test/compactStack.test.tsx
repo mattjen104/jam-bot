@@ -482,7 +482,7 @@ describe("CompactStack collapsed rows", () => {
     expect(container.querySelector(".compact-stack__backdrop-art--pan")).toBeNull();
   });
 
-  it("uses an artist disclosure without changing the album window or row controls", () => {
+  it("uses each album spine as the disclosure without an artist-only wrapper", () => {
     libraryItems = [
       makeItem({ mbid: "m1", albumTitle: "First", artist: "Shared Artist" }),
       makeItem({ mbid: "m2", albumTitle: "Second", artist: "Shared Artist" }),
@@ -490,35 +490,13 @@ describe("CompactStack collapsed rows", () => {
     ];
     renderStack();
 
-    const disclosure = screen.getByRole("button", {
-      name: "Hide albums by Shared Artist",
+    const first = screen.getByRole("button", {
+      name: "Expand First · Shared Artist",
     });
-    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-    expect(disclosure.classList.contains("compact-stack__tree-disclosure")).toBe(true);
-    expect(
-      disclosure.closest(".compact-stack__tree-group")
-        ?.querySelector(".compact-stack__tree-children"),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Expand First · Shared Artist" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Expand Second · Shared Artist" }),
-    ).toBeTruthy();
-
-    fireEvent.click(disclosure);
-    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
-    expect(
-      screen.queryByRole("button", { name: "Expand First · Shared Artist" }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Expand Third · Another Artist" }),
-    ).toBeTruthy();
-
-    fireEvent.click(disclosure);
-    expect(
-      screen.getByRole("button", { name: "Expand First · Shared Artist" }),
-    ).toBeTruthy();
+    screen.getByRole("button", { name: "Expand Second · Shared Artist" });
+    screen.getByRole("button", { name: "Expand Third · Another Artist" });
+    expect(first.closest(".compact-stack__tree-group")).toBeNull();
+    expect(screen.queryByRole("button", { name: /albums by Shared Artist/ })).toBeNull();
   });
 });
 
@@ -681,15 +659,11 @@ describe("CompactStack expansion", () => {
     ).toBe(true);
     screen.getByRole("button", { name: "Expand First Album · A" });
 
-    // The expanded view renders the album's hero backdrop; fitting art
-    // (jsdom reports zero natural size) never gains the pan class.
+    // The expanded header keeps the selected album's own spine art. Liner
+    // notes are plain metadata below it, rather than a separate hero.
     const stackEl = header.closest(".compact-stack")!;
-    const backdrop = stackEl.querySelector("img.compact-stack__backdrop-art");
-    expect(backdrop).not.toBeNull();
-    fireEvent.load(backdrop!);
-    expect(
-      backdrop?.classList.contains("compact-stack__backdrop-art--pan"),
-    ).toBe(false);
+    expect(header.querySelector("img.compact-stack__spine-art")).not.toBeNull();
+    expect(stackEl.querySelector("img.compact-stack__backdrop-art")).toBeNull();
 
     // Metadata cards render per row: pressing, relationship, claim + source link
     await screen.findByText("Island · 1994 · UK");

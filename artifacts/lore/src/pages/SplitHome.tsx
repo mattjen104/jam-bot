@@ -22,7 +22,6 @@ import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import {
   DEFAULT_ACTIVE_AGE_TIERS,
-  DEFAULT_ACTIVE_STATION_CATEGORIES,
   useDialSkipped,
   useStackSkipped,
 } from "../lib/dialFilterState";
@@ -34,11 +33,17 @@ import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
 import { useMattStarterLibrary, useStartMattLibrary } from "../lib/meHooks";
 
+const HOME_CATEGORY_SOURCES: ReadonlySet<DialStationCategory> = new Set(
+  STATION_CATEGORY_DEFINITIONS.map((definition) => definition.cat as DialStationCategory),
+);
+
 export default function SplitHome() {
   // The front door intentionally fixes the full Feed's advanced filters and
   // display modes. Those controls remain available on /feed and /library.
   const activeTiers: ReadonlySet<AgeTier> = DEFAULT_ACTIVE_AGE_TIERS;
-  const activeCategories = DEFAULT_ACTIVE_STATION_CATEGORIES;
+  // The compact home is an inventory, not a filter result: retain the
+  // listener's normal category defaults for /feed, but fetch every category
+  // here so an unchecked category remains visible and can be opened.
   const crossingScope = readCrossingScope();
 
   // Per-station selection remains in the tree without exposing the old scan
@@ -46,7 +51,7 @@ export default function SplitHome() {
   const { skipped, toggleSkip } = useDialSkipped();
 
   const { stations } = useDialData("personal", {
-    categories: activeCategories as ReadonlySet<DialStationCategory>,
+    categories: HOME_CATEGORY_SOURCES,
     // The main view lists EVERY station (live or not) alphabetically; the
     // hook's default dial visibility filter (live / flagship / named show)
     // would silently drop off-air stations without schedule metadata.

@@ -30,10 +30,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type Dispatch,
   type ReactNode,
-  type SetStateAction,
-  type SyntheticEvent,
 } from "react";
 import { useLocation } from "wouter";
 import { useQueries } from "@tanstack/react-query";
@@ -145,45 +142,6 @@ export function buildAlbumLinerGroups(
     }
   }
   return buildLinerGroups(best, claims);
-}
-
-function CompactStackBackdrop({ art }: { art: string | null }) {
-  const [canPan, setCanPan] = useState(false);
-
-  const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
-    const image = event.currentTarget;
-    const container = image.parentElement?.getBoundingClientRect();
-    if (!container) return;
-
-    // The class is only added from onLoad, so an image can never animate
-    // while it is still loading. object-position can then reveal the portions
-    // of the high-resolution cover that overflow the hero window, one very
-    // slow corner-to-corner round trip at a time.
-    setCanPan(
-      image.naturalWidth > container.width ||
-        image.naturalHeight > container.height,
-    );
-  };
-
-  const handleError = (event: SyntheticEvent<HTMLImageElement>) => {
-    setCanPan(false);
-    onArtError(event);
-  };
-
-  if (!art) return null;
-
-  return (
-    <img
-      key={art}
-      className={`compact-stack__backdrop-art${canPan ? " compact-stack__backdrop-art--pan" : ""}`}
-      src={art}
-      alt=""
-      aria-hidden="true"
-      loading="eager"
-      onLoad={handleLoad}
-      onError={handleError}
-    />
-  );
 }
 
 /**
@@ -301,11 +259,14 @@ export function useAlbumPlay(
 function ExpandedStackHeader({
   group,
   swappedAlbum,
+  art,
   onCollapse,
 }: {
   group: AlbumGroup;
   /** Release swapped in via the artist filmstrip; null = the kept album. */
   swappedAlbum: SwappedAlbum | null;
+  /** The same art spine used by this album's compact row. */
+  art: string | null;
   onCollapse: () => void;
 }) {
   const displayTitle = swappedAlbum?.rgTitle ?? group.albumTitle;
@@ -334,6 +295,16 @@ function ExpandedStackHeader({
         }
       }}
     >
+      {art && (
+        <img
+          className="compact-stack__spine-art"
+          src={art}
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          onError={onArtError}
+        />
+      )}
       <div className="compact-stack__overlay" aria-hidden="true" />
       {canLaunch && (
         <CompactPlayButton
@@ -679,21 +650,8 @@ export interface CompactStackProps {
   onToggleSkip?: (key: string) => void;
 }
 
-function groupByArtist(items: AlbumGroup[]) {
-  const byArtist = new Map<string, AlbumGroup[]>();
-  for (const group of items) {
-    const artist = group.artist.trim() || "Unknown artist";
-    const existing = byArtist.get(artist);
-    if (existing) existing.push(group);
-    else byArtist.set(artist, [group]);
-  }
-  return [...byArtist.entries()].map(([artist, albums]) => ({ artist, albums }));
-}
-
 function StackTreeRows({
   items,
-  collapsedArtists,
-  setCollapsedArtists,
   knowledgeByMbid,
   renderSpine,
   shuffleKey,
@@ -703,8 +661,6 @@ function StackTreeRows({
   onExpand,
 }: {
   items: AlbumGroup[];
-  collapsedArtists: ReadonlySet<string>;
-  setCollapsedArtists: Dispatch<SetStateAction<ReadonlySet<string>>>;
   knowledgeByMbid: ReadonlyMap<string, TrackKnowledge | null>;
   renderSpine: (group: AlbumGroup) => ReactNode;
   shuffleKey: string | null;
@@ -731,50 +687,14 @@ function StackTreeRows({
     );
   };
 
-  // Micro is intentionally title-only. Keep its existing density contract
-  // rather than leaking artist tree labels into a deliberately terse mode.
-  if (density === "micro") return items.map(renderAlbum);
-
-  return groupByArtist(items).map(({ artist, albums }) => {
-    const isCollapsed = collapsedArtists.has(artist);
-    return (
-      <section className="compact-stack__tree-group" key={artist}>
-        <div className="compact-stack__tree-heading">
-          <button
-            type="button"
-            className="compact-stack__tree-disclosure"
-            aria-expanded={!isCollapsed}
-            aria-label={`${isCollapsed ? "Show" : "Hide"} albums by ${artist}`}
-            onClick={() =>
-              setCollapsedArtists((current) => {
-                const next = new Set(current);
-                if (next.has(artist)) next.delete(artist);
-                else next.add(artist);
-                return next;
-              })
-            }
-          >
-            <span aria-hidden="true">{isCollapsed ? "+" : "−"}</span>
-            <span>{artist}</span>
-            <span className="compact-stack__tree-count">{albums.length}</span>
-          </button>
-        </div>
-        {!isCollapsed && (
-          <div className="compact-stack__tree-children">
-            {albums.map(renderAlbum)}
-          </div>
-        )}
-      </section>
-    );
-  });
+  // The album spine itself is the disclosure. Artist-level headers would add
+  // a second expandable row before the thing the listener actually opens.
+  return items.map(renderAlbum);
 }
 
 export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [collapsedArtists, setCollapsedArtists] = useState<ReadonlySet<string>>(
-    new Set(),
-  );
   const { data, isLoading, isError } = useMyLibraryInfinite({}, 100);
 
   // Rows per page at the current density: 5 (normal), 10 (compact), or
@@ -1033,12 +953,10 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         <ExpandedStackHeader
           group={expandedGroup}
           swappedAlbum={swappedAlbum}
+          art={expandedArt}
           onCollapse={() => changeExpanded(null)}
         />
-        {/* The notes region owns its backdrop: the album art covers only this
-            section (panning once it overflows), never the whole band. */}
         <div className="compact-stack__notes">
-          <CompactStackBackdrop key={expandedArt ?? "no-art"} art={expandedArt} />
           <div
             className={`compact-stack__cards${swapLoading ? " compact-stack__cards--swapping" : ""}`}
             role="region"
@@ -1109,8 +1027,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
             band reads as one continuous, scrollable column. */}
         <StackTreeRows
           items={belowRows}
-          collapsedArtists={collapsedArtists}
-          setCollapsedArtists={setCollapsedArtists}
           knowledgeByMbid={knowledgeByMbid}
           renderSpine={renderSpine}
           shuffleKey={shuffleKey}
@@ -1125,8 +1041,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
           >
             <StackTreeRows
               items={skippedGroups.filter((g) => g.key !== expandedKey)}
-              collapsedArtists={collapsedArtists}
-              setCollapsedArtists={setCollapsedArtists}
               knowledgeByMbid={knowledgeByMbid}
               renderSpine={renderSpine}
               shuffleKey={shuffleKey}
@@ -1148,8 +1062,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
     >
       <StackTreeRows
         items={ordered}
-        collapsedArtists={collapsedArtists}
-        setCollapsedArtists={setCollapsedArtists}
         knowledgeByMbid={knowledgeByMbid}
         renderSpine={renderSpine}
         shuffleKey={shuffleKey}
@@ -1165,8 +1077,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         >
           <StackTreeRows
             items={skippedGroups}
-            collapsedArtists={collapsedArtists}
-            setCollapsedArtists={setCollapsedArtists}
             knowledgeByMbid={knowledgeByMbid}
             renderSpine={renderSpine}
             shuffleKey={shuffleKey}
