@@ -87,7 +87,6 @@ import {
 } from "./lore/artist-metadata-cleanup.js";
 import { startSessionExpiryWorker } from "./routes/me/attendance.js";
 import {
-  prewarmNowPlayingBaseCache,
   prewarmStationDirectoryCache,
 } from "./routes/lore/stations.js";
 import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
@@ -105,7 +104,6 @@ import { applyLifetimeCrossingsMigration } from "./lore/lifetime-crossings-migra
 import { applyAppleLibraryItemsMigration } from "./lore/apple-library-items-migration.js";
 import { startLifetimeCrossingsJob } from "./lore/lifetime-crossings-job.js";
 import { startBlendedCrossingsWarmJob } from "./lore/blended-crossings-job.js";
-import { warmPersonalCrossingsAtBoot } from "./lore/personal-crossings-warm.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
 import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js";
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
@@ -160,7 +158,11 @@ async function bootLore(): Promise<void> {
     // work can occupy the shared DB pool. Requests racing boot join this same
     // single-flight query, so the first front door never queues behind warmers.
     await prewarmStationDirectoryCache();
-    prewarmNowPlayingBaseCache();
+    // Do not eagerly build the full now-playing payload during boot. Its
+    // schedule-attribution query can run for minutes on a cold database and
+    // starve independent listener reads such as Stack and first-play history.
+    // The now-playing route retains its existing single-flight, on-demand
+    // fill when a listener actually opens the Dial.
     await markOrphanedImportJobsAsError();
     await markOrphanedSyncJobsAsError();
     wireSongEnrichment();
@@ -377,7 +379,10 @@ async function bootLore(): Promise<void> {
     await runMigration("applyAppleLibraryItemsMigration", applyAppleLibraryItemsMigration);
     startLifetimeCrossingsJob();
     startBlendedCrossingsWarmJob();
-    warmPersonalCrossingsAtBoot();
+    // Do not launch a boot-wide personal-crossings sweep here. Its stale-user
+    // backlog can monopolize the shared database pool and starve listener
+    // reads such as Stack and first-play history. Crossings still refresh on
+    // demand through the normal SWR path.
     startArtPrewarm();
     startPhase3RetryScheduler();
     await resumeReplayResolutionJobs();

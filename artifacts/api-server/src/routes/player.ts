@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   db,
+  listenerReadDb,
   type Station,
   stationsTable,
   spinsTable,
@@ -64,6 +65,10 @@ router.get("/player/history", h(async (req, res) => {
   // front-door discovery rail needs the newest arrivals first. Keep the
   // scanner's chronological default and make recency an explicit opt-in.
   const newestFirst = req.query.order === "desc";
+  // The home discovery rail is public and should not queue behind the
+  // background worker pool just to resolve an optional session. It uses the
+  // listener fast-lane pool and intentionally has no personal crossing filter.
+  const homeDiscovery = req.query.home === "1";
   if (!HISTORY_SCOPES.has(scope) || !HISTORY_FILTERS.has(filter)) {
     return res.status(400).json({ error: "Invalid history scope or filter" });
   }
@@ -83,7 +88,9 @@ router.get("/player/history", h(async (req, res) => {
     return res.status(400).json({ error: "Invalid history cursor" });
   }
 
-  const user = await getUserFromSession(req).catch(() => null);
+  const useHomeFastLane = homeDiscovery && stationSlug == null && categories.length === 0;
+  const user = homeDiscovery ? null : await getUserFromSession(req).catch(() => null);
+  const historyDb = useHomeFastLane ? listenerReadDb : db;
   const userLibrary = user
     ? db.select({ mbid: libraryItemsTable.mbid }).from(libraryItemsTable)
         .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)))
@@ -95,25 +102,30 @@ router.get("/player/history", h(async (req, res) => {
         .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt), isNotNull(recordingsTable.artistMbid)))
     : null;
 
-  const stationRows = await db.select().from(stationsTable).where(eq(stationsTable.hidden, false));
-  const eligibleStations = stationRows.filter((station) => {
-    if (stationSlug && station.slug !== stationSlug) return false;
-    if (categories.length > 0 && !categories.some((cat) => deriveStationCategories(station).includes(cat))) return false;
-    return true;
-  });
-  if (stationSlug && eligibleStations.length === 0) return res.status(404).json({ error: "Station not found" });
-  if (eligibleStations.length === 0) {
-    return res.json({ snapshot: snapshot.toISOString(), items: [], nextBefore: null, partial: false, authenticated: user != null });
+  let stationIds: number[] | null = null;
+  if (!useHomeFastLane) {
+    const stationRows = await historyDb.select().from(stationsTable).where(eq(stationsTable.hidden, false));
+    const eligibleStations = stationRows.filter((station) => {
+      if (stationSlug && station.slug !== stationSlug) return false;
+      if (categories.length > 0 && !categories.some((cat) => deriveStationCategories(station).includes(cat))) return false;
+      return true;
+    });
+    if (stationSlug && eligibleStations.length === 0) return res.status(404).json({ error: "Station not found" });
+    if (eligibleStations.length === 0) {
+      return res.json({ snapshot: snapshot.toISOString(), items: [], nextBefore: null, partial: false, authenticated: user != null });
+    }
+    stationIds = eligibleStations.map((station) => station.id);
   }
 
-  const stationIds = eligibleStations.map((station) => station.id);
   const scopeSince =
     scope === "now" ? new Date(snapshot.getTime() - 2 * 60 * 60 * 1000) :
     scope === "set" ? new Date(Date.UTC(snapshot.getUTCFullYear(), snapshot.getUTCMonth(), snapshot.getUTCDate())) :
     scope === "24h" ? new Date(snapshot.getTime() - 24 * 60 * 60 * 1000) :
     scope === "7d" ? new Date(snapshot.getTime() - 7 * 24 * 60 * 60 * 1000) : null;
   const predicates = [
-    inArray(spinsTable.stationId, stationIds),
+    useHomeFastLane
+      ? eq(stationsTable.hidden, false)
+      : inArray(spinsTable.stationId, stationIds!),
     isNotNull(spinsTable.mbid),
     sql`${spinsTable.playedAt} <= ${snapshot}`,
     scopeSince ? sql`${spinsTable.playedAt} >= ${scopeSince}` : undefined,
@@ -140,7 +152,7 @@ router.get("/player/history", h(async (req, res) => {
     )`);
     if (user) predicates.push(libraryHit);
   }
-  const rows = await db.select({
+  const rows = await historyDb.select({
     id: spinsTable.id,
     mbid: recordingsTable.mbid,
     title: recordingsTable.title,
@@ -148,7 +160,7 @@ router.get("/player/history", h(async (req, res) => {
     artistMbid: recordingsTable.artistMbid,
     artworkUrl: recordingsTable.artworkUrl,
     isCrossing: libraryHit,
-    isFirstPlay: sql<boolean>`NOT EXISTS (
+    isFirstPlay: useHomeFastLane ? sql<boolean>`true` : sql<boolean>`NOT EXISTS (
       SELECT 1 FROM spins prior
       WHERE prior.mbid = ${spinsTable.mbid}
         AND (prior.played_at < ${spinsTable.playedAt}
@@ -162,7 +174,12 @@ router.get("/player/history", h(async (req, res) => {
   }).from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
     .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(showsTable, and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()))
+    .leftJoin(
+      showsTable,
+      useHomeFastLane
+        ? eq(spinsTable.showId, showsTable.id)
+        : and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(and(...predicates))
     .orderBy(
       newestFirst ? desc(spinsTable.playedAt) : asc(spinsTable.playedAt),

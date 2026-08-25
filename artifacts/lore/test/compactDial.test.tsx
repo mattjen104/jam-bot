@@ -1172,7 +1172,7 @@ describe("CompactDial first-play rail", () => {
       name: "Preview New Artist — New Track, first played on KEXP",
     });
     expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18",
+      "/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&home=1",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(tile.querySelector("img")?.getAttribute("src")).toBe(

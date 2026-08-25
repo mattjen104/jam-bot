@@ -759,6 +759,17 @@ export function useDialData(
      * category filter. Defaults to false.
      */
     scanActive?: boolean;
+    /**
+     * Fetch personalized crossing scores. Defaults to true for the full Dial;
+     * the minimal home view defers this expensive read so its live and archive
+     * rails can become interactive first.
+     */
+    crossingsEnabled?: boolean;
+    /**
+     * Skip schedule, recent-spin, and artist-frequency enrichment for compact
+     * surfaces that only need station identity plus the live pulse.
+     */
+    deferEnrichment?: boolean;
   } = {},
 ): {
   stations: DialStation[];
@@ -1056,6 +1067,7 @@ export function useDialData(
     {
       query: {
         queryKey: getGetStationsScheduleQueryKey({ date: today }),
+        enabled: !opts.deferEnrichment,
         staleTime: 60_000,
         refetchInterval: 2 * 60_000,
       },
@@ -1068,6 +1080,7 @@ export function useDialData(
     {
       query: {
         queryKey: getGetStationsScheduleQueryKey({ date: yesterday }),
+        enabled: !opts.deferEnrichment,
         // Yesterday's data is stable; refresh infrequently.
         staleTime: 5 * 60_000,
         refetchInterval: 10 * 60_000,
@@ -1084,6 +1097,7 @@ export function useDialData(
     {
       query: {
         queryKey: getGetStationsRecentSpinsQueryKey({ date: today }),
+        enabled: !opts.deferEnrichment,
         staleTime: 60_000,
         refetchInterval: 2 * 60_000,
       },
@@ -1096,6 +1110,7 @@ export function useDialData(
     useGetStationsArtistFrequency({
       query: {
         queryKey: getGetStationsArtistFrequencyQueryKey(),
+        enabled: !opts.deferEnrichment,
         staleTime: 10 * 60_000,
         refetchInterval: 10 * 60_000,
       },
@@ -1112,7 +1127,7 @@ export function useDialData(
     data: crossingsResult,
     isLoading: crossingsQueryLoading,
     isError: crossingsQueryError,
-  } = useMyDialCrossings(today);
+  } = useMyDialCrossings(today, opts.crossingsEnabled ?? true);
   const serverCrossings = crossingsResult?.items;
   const crossingsPending = crossingsQueryLoading || crossingsResult?.computing === true;
   const crossingsLoading = useBoundedPending(crossingsPending, CROSSINGS_SETTLE_DEADLINE_MS);

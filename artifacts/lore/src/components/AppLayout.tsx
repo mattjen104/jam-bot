@@ -16,14 +16,15 @@ import {
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const qc = useQueryClient();
+  const isHome = location === "/" || location === "";
 
   // Prefetch crossings as soon as the app shell mounts — not just when the
   // Radio tab renders.  React Query deduplicates the call so DialView gets
-  // a warm cache hit instead of waiting for a cold network round-trip.
+  // a warm cache hit instead of waiting for a cold network round-trip. The
+  // compact home defers this aggregate so its first-play and Stack reads are
+  // not starved by a cold personalized recompute.
   const today = new Date().toISOString().slice(0, 10);
-  useMyDialCrossings(today);
-
-  const isHome = location === "/" || location === "";
+  useMyDialCrossings(today, !isHome);
 
   // ── Global import modal — hosted here so any route (Dial, Library, etc.)
   //    can open it by dispatching "lore:open-import-modal". ─────────────────

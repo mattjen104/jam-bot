@@ -74,6 +74,8 @@ export default function SplitHome() {
     // would silently drop off-air stations without schedule metadata.
     includeAllStations: true,
     scanActive: true,
+    crossingsEnabled: false,
+    deferEnrichment: true,
   });
   const { data: mattStarter } = useMattStarterLibrary();
   const startMattLibrary = useStartMattLibrary();

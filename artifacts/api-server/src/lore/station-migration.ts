@@ -1,18 +1,59 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
+const DISCOVERY_COLUMNS = [
+  "active",
+  "source",
+  "tier",
+  "tags",
+  "last_alive_at",
+  "resolution_rate",
+  "clickcount",
+  "votes",
+  "bitrate",
+  "codec",
+  "health_failures",
+  "discovery_score",
+  "homepage_blurb",
+  "homepage_scraped_at",
+  "favorite",
+  "hidden",
+  "crossing_eligible",
+] as const;
+
 /**
  * Idempotent DDL migration for the station discovery fields.
  *
- * Uses `ADD COLUMN IF NOT EXISTS` so it is safe to run on every server boot —
- * columns that already exist are silently skipped; existing rows receive the
- * column DEFAULT, so no separate UPDATE/backfill is needed.
+ * Check the catalog before issuing ALTER TABLE. `ADD COLUMN IF NOT EXISTS`
+ * still takes an ACCESS EXCLUSIVE lock even when every column is already
+ * present, which can block listener reads behind a busy station poller on
+ * every API restart. Existing rows receive the column DEFAULT when the ALTER
+ * genuinely is needed, so no separate UPDATE/backfill is needed.
  *
  * Safe defaults for existing curated rows:
  *   active=true, source='curated', tier='flagship', clickcount=0, votes=0,
  *   health_failures=0. All nullable columns stay NULL.
  */
 export async function applyStationDiscoveryMigration(): Promise<void> {
+  const existing = await db.execute<{ column_name: string }>(sql`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'stations'
+      AND column_name = ANY(
+        ARRAY[
+          'active', 'source', 'tier', 'tags', 'last_alive_at',
+          'resolution_rate', 'clickcount', 'votes', 'bitrate', 'codec',
+          'health_failures', 'discovery_score', 'homepage_blurb',
+          'homepage_scraped_at', 'favorite', 'hidden', 'crossing_eligible'
+        ]::text[]
+      )
+  `);
+  if (existing.rows.length === DISCOVERY_COLUMNS.length) {
+    console.info("[migration] station discovery fields: already present");
+    return;
+  }
+
   await db.execute(sql`
     ALTER TABLE stations
       ADD COLUMN IF NOT EXISTS active          boolean  NOT NULL DEFAULT true,

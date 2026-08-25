@@ -711,7 +711,7 @@ export interface DialCrossingsResult {
   failed: boolean;
 }
 
-export function useMyDialCrossings(date: string) {
+export function useMyDialCrossings(date: string, enabled = true) {
   return useQuery<DialCrossingsResult>({
     queryKey: ME_DIAL_CROSSINGS_KEY(date),
     queryFn: () =>
@@ -723,6 +723,7 @@ export function useMyDialCrossings(date: string) {
         failed: d?.failed === true,
       })),
     staleTime: 2 * 60_000,
+    enabled,
     // While the server reports a cold compute in progress, poll fast so
     // personalized rows fill in the moment the background compute lands.
     // After a reported compute failure, retry on a middling cadence — each
