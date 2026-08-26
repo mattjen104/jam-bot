@@ -10930,6 +10930,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .split-home__band--stack {
     min-height: 0;
   }
+  .split-home__band--first-plays {
+    min-height: 0;
+  }
   .split-home .compact-stack--home {
     /* Four rows, two complete columns plus a clipped third column, matching
        the station feed's swipe cue while keeping artist labels readable. */

@@ -144,6 +144,12 @@ export interface CompactDialProps {
    */
   categoryFirst?: boolean;
   /**
+   * Whether the category-first Dial owns the optional First Plays rail.
+   * SplitHome renders that rail after the Stack so the two home surfaces can
+   * be reordered without changing CompactDial's standalone default.
+   */
+  showFirstPlays?: boolean;
+  /**
    * Category tabs/cards are intentionally unpaged; the direct ungrouped
    * fallback still follows the compact Feed's pager so scan/page commands
    * retain their meaning for personal and unclassified stations.
@@ -570,7 +576,7 @@ interface FirstPlayHistoryItem {
  * transient current metadata), so each tile can honestly identify both the
  * album and the station that introduced it.
  */
-function FirstPlayFeed() {
+export function FirstPlayFeed() {
   const { ride } = usePlayer();
   const [items, setItems] = useState<FirstPlayHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -666,6 +672,7 @@ function CategoryFirstDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
+  showFirstPlays = true,
 }: CompactDialProps) {
   const groups = useMemo(
     () => buildCompactCategoryGroups(activeRows, skippedRows),
@@ -830,7 +837,7 @@ function CategoryFirstDial({
             playerStatus={playerStatus}
             onPlay={onPlay}
           />
-          <FirstPlayFeed />
+          {showFirstPlays && <FirstPlayFeed />}
         </div>
       )}
     </div>
@@ -861,6 +868,7 @@ export function CompactDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
+  showFirstPlays = true,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -895,6 +903,7 @@ export function CompactDial({
         visibleUncategorizedSlugs={visibleUncategorizedSlugs}
         onToggleCategory={onToggleCategory}
         activeCategories={activeCategories}
+        showFirstPlays={showFirstPlays}
       />
     );
   }

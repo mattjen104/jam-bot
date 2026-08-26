@@ -1,10 +1,11 @@
 /**
  * SplitHome — the Lore front door as a minimal two-tree view.
  *
- *   top         — CompactStack: kept album groups as an artist → album tree.
- *   below       — CompactDial: concise category cards with honest now-playing
+ *   top         — CompactDial: concise category cards with honest now-playing
  *                 metadata. Opening one reveals its individual station rows
  *                 inline as a category → station tree.
+ *   middle      — CompactStack: kept album groups as an artist → album tree.
+ *   bottom      — First Plays: recent discovery tiles with station provenance.
  *
  * The view never scrolls — it fills the viewport between the app header and
  * the bottom shell. The full scrollable Dial lives at /feed; the full Stack
@@ -33,7 +34,7 @@ import {
   type StationCategory,
 } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
-import { CompactDial } from "../components/CompactDial";
+import { CompactDial, FirstPlayFeed } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
 import { useMattStarterLibrary, useStartMattLibrary } from "../lib/meHooks";
 
@@ -223,6 +224,7 @@ export default function SplitHome() {
             suppressCrossings={false}
             displayMode="personal"
             categoryFirst={hasEditorialCategory}
+            showFirstPlays={false}
           />
         </section>
 
@@ -233,6 +235,13 @@ export default function SplitHome() {
             homeCarousel
             homeBootstrapPending={mattBootstrapPending}
           />
+        </section>
+
+        <section
+          className="split-home__band split-home__band--first-plays"
+          aria-label="Recent first plays"
+        >
+          <FirstPlayFeed />
         </section>
       </div>
     </main>
