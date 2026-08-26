@@ -10578,6 +10578,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home__band--dial {
   position: relative;
 }
+.split-home__band--stack {
+  padding-left: 0;
+  padding-right: 0;
+}
 .split-home__remote-trigger {
   appearance: none;
   position: absolute;
@@ -10981,6 +10985,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    controls. The taller square cards still advertise horizontal swiping. */
 .split-home .compact-stack--home {
   --home-stack-art-size: calc((100% - 8px) / 1.25);
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 8px;
@@ -10994,8 +10999,50 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   touch-action: pan-x;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) {
-  padding-top: 24px;
+  padding-top: 32px;
   padding-bottom: 18px;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__home-header {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  color: var(--home-tree-text);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__home-add {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgb(205 214 191 / .72);
+  border-radius: 50%;
+  background: rgb(18 21 18 / .82);
+  color: var(--home-tree-accent);
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__home-add:hover,
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__home-add:focus-visible {
+  border-color: var(--home-tree-accent);
+  background: rgb(18 21 18 / .96);
+  color: hsl(var(--foreground));
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__home-add:focus-visible {
+  outline: 2px solid var(--home-tree-accent);
+  outline-offset: 2px;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__home-add svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
 }
 .split-home .compact-stack--home .compact-stack__row {
   flex: 0 0 var(--home-stack-art-size);
