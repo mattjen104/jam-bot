@@ -10655,6 +10655,25 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__station--fresh .compact-category-dial__station-track {
   color: var(--home-tree-accent);
 }
+/* All-feed cards use the same compact four-row geometry as the home Stack.
+   The larger height belongs only to focused category station cards; without
+   this more-specific override it creates a blank-looking first grid row. */
+.split-home .compact-category-dial__all-feed .compact-category-dial__station {
+  height: var(--home-feed-art-size);
+  min-height: var(--home-feed-art-size);
+  align-self: stretch;
+}
+.split-home .compact-category-dial__all-feed .compact-category-dial__station-track {
+  display: -webkit-box;
+  max-height: 2.3em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
 .split-home .compact-category-dial__stations {
   margin-left: 20px;
   padding-left: 12px;
