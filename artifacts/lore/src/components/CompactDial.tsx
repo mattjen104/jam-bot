@@ -506,6 +506,16 @@ function AllNowPlayingFeed({
         const isActive = slug === activeSlug;
         const isPlayable = resolvePlaybackSource(station) != null;
         const fresh = isFreshEntry(entry, nowMs);
+        const playbackAction = !isPlayable
+          ? "Unavailable"
+          : isActive && playerStatus === "playing"
+            ? "Pause"
+            : isActive && playerStatus === "loading"
+              ? "Loading"
+              : "Play";
+        const trackDescription = entry.hasTrack
+          ? [entry.artist, entry.title].filter(Boolean).join(" — ")
+          : "no current metadata";
         return (
           <button
             type="button"
@@ -518,7 +528,7 @@ function AllNowPlayingFeed({
               isActive ? "compact-category-dial__station--active" : "",
             ].filter(Boolean).join(" ")}
             data-testid={`compact-category-station-${slug}`}
-            aria-label={`${!isPlayable ? "Unavailable" : isActive && playerStatus === "playing" ? "Pause" : isActive && playerStatus === "loading" ? "Loading" : "Play"} ${station.name}`}
+            aria-label={`${playbackAction} ${station.name}, ${entry.hasTrack ? `currently playing ${trackDescription}` : trackDescription}`}
             aria-pressed={isActive && playerStatus === "playing"}
             aria-disabled={!isPlayable || (isActive && playerStatus === "loading") ? true : undefined}
             onClick={() => {
@@ -536,14 +546,20 @@ function AllNowPlayingFeed({
               className="compact-category-dial__station-logo"
             />
             <span className="compact-category-dial__station-lines">
+              <span
+                className="compact-category-dial__station-name"
+                title={station.name}
+              >
+                {station.name}
+              </span>
               <span className="compact-category-dial__station-track-line">
                 <span
                   className="compact-category-dial__station-track"
                   key={entry.hasTrack ? `${entry.artist}|${entry.playedAtMs}` : "quiet"}
                 >
                   {entry.hasTrack
-                    ? entry.artist ?? entry.title ?? ""
-                    : "Now playing unavailable"}
+                    ? entry.artist ?? entry.title ?? "No metadata"
+                    : "No metadata"}
                 </span>
               </span>
             </span>

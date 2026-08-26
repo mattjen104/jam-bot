@@ -8517,6 +8517,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   box-sizing: border-box;
   padding: 6px 7px;
 }
+.compact-category-dial__station-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
 .compact-category-dial__station-track-line {
   min-width: 0;
   width: 100%;
@@ -10626,6 +10635,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: var(--home-tree-accent);
 }
 .split-home .compact-category-dial__label,
+.split-home .compact-category-dial__station-name,
 .split-home .compact-category-dial__station-track {
   font-family: var(--lore-font-terminal);
   font-size: var(--lore-size-small);
@@ -10677,6 +10687,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+}
+.split-home .compact-category-dial__station-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .split-home .compact-category-dial__stations {
   margin-left: 20px;

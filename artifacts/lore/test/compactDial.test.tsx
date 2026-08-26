@@ -245,7 +245,7 @@ describe("CompactDial category tabs", () => {
     ).toBe(true);
   });
 
-  it("shows only the artist beside every All-feed station mark", () => {
+  it("shows station identity and artist while exposing the full track accessibly", () => {
     const station = makeRowWithTrack(
       { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
       { artist: "The Smile", title: "Bending Hectic" },
@@ -253,9 +253,12 @@ describe("CompactDial category tabs", () => {
     renderDial({ activeRows: [station], categoryFirst: true });
 
     const card = screen.getByTestId("compact-category-station-kexp");
-    expect(card.querySelector(".compact-category-dial__station-name")).toBeNull();
+    expect(card.querySelector(".compact-category-dial__station-name")?.textContent)
+      .toBe("KEXP");
     expect(card.querySelector(".compact-category-dial__station-track")?.textContent)
       .toBe("The Smile");
+    expect(card.getAttribute("aria-label"))
+      .toBe("Play KEXP, currently playing The Smile — Bending Hectic");
   });
 
   it("unchecking a category tab removes its stations from All while keeping the tab available", () => {
@@ -509,10 +512,11 @@ describe("CompactDial category tabs", () => {
     renderDial({ activeRows: [row], categoryFirst: true });
 
     const card = screen.getByTestId("compact-category-station-kexp");
-    expect(card.getAttribute("aria-label")).toBe("Play KEXP");
+    expect(card.getAttribute("aria-label"))
+      .toBe("Play KEXP, currently playing The Smile — Bending Hectic");
     expect(card.querySelector(".compact-category-dial__station-play-cue")).toBeNull();
     expect(card.querySelector(".compact-category-dial__station-track")?.textContent).toBe("The Smile");
-    expect(card.querySelector(".compact-category-dial__station-name")).toBeNull();
+    expect(card.querySelector(".compact-category-dial__station-name")?.textContent).toBe("KEXP");
   });
 
   it("keeps the card layout the same for an attribution-only station", () => {
@@ -545,7 +549,9 @@ describe("CompactDial category tabs", () => {
       activeSlug: "kexp",
       playerStatus: "playing",
     });
-    expect(screen.getByRole("button", { name: "Pause KEXP" })
+    expect(screen.getByRole("button", {
+      name: "Pause KEXP, currently playing The Smile — Bending Hectic",
+    })
       .querySelector(".compact-category-dial__station-play-cue")).toBeNull();
 
     rerender(
@@ -560,7 +566,9 @@ describe("CompactDial category tabs", () => {
         categoryFirst
       />,
     );
-    const loading = screen.getByRole("button", { name: "Loading KEXP" });
+    const loading = screen.getByRole("button", {
+      name: "Loading KEXP, currently playing The Smile — Bending Hectic",
+    });
     expect(loading.getAttribute("aria-disabled")).toBe("true");
     expect(loading.querySelector(".compact-category-dial__station-play-cue")).toBeNull();
   });
@@ -575,7 +583,9 @@ describe("CompactDial category tabs", () => {
 
     const station = screen.getByTestId("compact-category-station-quiet");
     expect(station.querySelector(".compact-category-dial__station-track")?.textContent)
-      .toBe("Now playing unavailable");
+      .toBe("No metadata");
+    expect(station.getAttribute("aria-label"))
+      .toBe("Play Quiet Station, no current metadata");
     expect(station.classList.contains("compact-category-dial__station--quiet")).toBe(true);
   });
 
