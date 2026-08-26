@@ -10625,6 +10625,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__all-feed {
   flex: 0 0 auto;
   height: auto;
+  grid-template-rows: repeat(2, var(--home-feed-art-size));
+  min-height: calc(var(--home-feed-art-size) * 2 + 7px);
   padding: 0 0 2px;
 }
 .split-home .compact-category-dial__active-groups {
@@ -10719,10 +10721,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__remote-rail {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(2, max-content);
-  grid-auto-rows: max-content;
+  grid-template-rows: repeat(5, minmax(48px, 1fr));
   grid-auto-columns: minmax(150px, calc((100% - 7px) / 2.25));
-  align-content: start;
   gap: 7px;
   min-width: 0;
   min-height: 0;
@@ -10739,13 +10739,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: none;
 }
 .split-home .compact-category-dial__remote-rail .compact-dial__remote-row {
-  align-self: start;
-  width: fit-content;
-  max-width: 100%;
+  width: 100%;
   min-width: 0;
-  min-height: 42px;
-  height: auto;
-  padding: 9px 12px;
+  padding: 0 12px;
   border: 0;
   background: rgb(29 32 28 / .58);
   color: var(--home-tree-text);
@@ -10816,12 +10812,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__station--fresh .compact-category-dial__station-track {
   color: var(--home-tree-accent);
 }
-/* All-feed cards use the same compact four-row geometry as the home Stack.
-   The larger height belongs only to focused category station cards; without
-   this more-specific override it creates a blank-looking first grid row. */
+/* All-feed cards use compact icon-sized cells. The larger height belongs only
+   to focused category station cards; keeping these cells tight lets the home
+   Dial show two rows without clipping. */
 .split-home .compact-category-dial__all-feed .compact-category-dial__station {
-  height: calc(var(--home-feed-art-size) * 3);
-  min-height: calc(var(--home-feed-art-size) * 3);
+  height: var(--home-feed-art-size);
+  min-height: var(--home-feed-art-size);
   align-self: stretch;
 }
 .split-home .compact-category-dial__all-feed .compact-category-dial__station-track {
