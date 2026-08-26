@@ -10975,21 +10975,35 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   height: auto;
   flex-direction: column;
   align-items: stretch;
-  border: 1px solid rgb(205 214 191 / .12);
+  border: none;
   border-radius: 4px;
   background: rgb(255 255 255 / .025);
   scroll-snap-align: start;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row {
   position: relative;
-  z-index: var(--home-stack-layer, 1);
+  z-index: 1;
   margin-left: 8px;
   transform: rotate(var(--home-stack-rotation, 0deg));
   transform-origin: 50% 92%;
-  transition: transform 260ms cubic-bezier(.22, .8, .28, 1);
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:first-child {
   margin-left: 0;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(2) {
+  --home-stack-rotation: 4deg;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(3) {
+  --home-stack-rotation: -3.5deg;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(4) {
+  --home-stack-rotation: 5deg;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(5) {
+  --home-stack-rotation: -4deg;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(6) {
+  --home-stack-rotation: 3deg;
 }
 .split-home .compact-stack--home .compact-stack__art-tile {
   flex: 0 0 auto;

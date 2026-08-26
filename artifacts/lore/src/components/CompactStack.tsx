@@ -49,24 +49,6 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { CompactPlayButton } from "./CompactPlayButton";
 import { stackPageSize, type StackDensity } from "../lib/stackDensityState";
 
-const HOME_STACK_TILTS = [-5, 4, -3.5, 5, -4, 3] as const;
-
-function syncHomeStackScatter(rail: HTMLDivElement) {
-  const rows = [...rail.querySelectorAll<HTMLElement>(
-    ":scope > .compact-stack__row",
-  )];
-  const scrollLeft = rail.scrollLeft;
-
-  rows.forEach((row, index) => {
-    const distanceFromSnap = Math.abs(row.offsetLeft - scrollLeft);
-    const settleDistance = Math.max(1, row.offsetWidth * 0.9);
-    const settle = Math.max(0, Math.min(1, 1 - distanceFromSnap / settleDistance));
-    const tilt = HOME_STACK_TILTS[index % HOME_STACK_TILTS.length] * (1 - settle);
-    row.style.setProperty("--home-stack-rotation", `${tilt}deg`);
-    row.style.setProperty("--home-stack-layer", String(index + 1));
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for tests)
 // ---------------------------------------------------------------------------
@@ -734,7 +716,6 @@ function StackTreeRows({
 export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip, homeCarousel = false, homeBootstrapPending = false }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const homeRailRef = useRef<HTMLDivElement | null>(null);
   const { data, isLoading, isFetching, isError } = useMyLibraryInfinite({}, 100);
 
   // The home rail intentionally exposes the twelve newest active albums in a
@@ -883,27 +864,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   // Cheap over ≤5 groups; the React Compiler memoizes it (a manual useMemo
   // here can't be preserved by the compiler and forces a skip).
   const ordered = orderForExpansion(groups, expandedKey);
-  const homeScatterKey = ordered.map((group) => group.key).join("\u001f");
-  useEffect(() => {
-    if (!homeCarousel || expandedKey != null) return;
-    const rail = homeRailRef.current;
-    if (!rail) return;
-
-    const sync = () => syncHomeStackScatter(rail);
-    sync();
-    rail.addEventListener("scroll", sync, { passive: true });
-    window.addEventListener("resize", sync);
-    return () => {
-      rail.removeEventListener("scroll", sync);
-      window.removeEventListener("resize", sync);
-      [...rail.querySelectorAll<HTMLElement>(
-        ":scope > .compact-stack__row",
-      )].forEach((row) => {
-        row.style.removeProperty("--home-stack-rotation");
-        row.style.removeProperty("--home-stack-layer");
-      });
-    };
-  }, [expandedKey, homeCarousel, homeScatterKey]);
   // Rows below the notes: the window minus the expanded album when it leads
   // the window; the full window when a skipped row is the expanded one.
   const expandedInWindow =
@@ -1129,7 +1089,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   // ── Collapsed: single-line rows (+ below-fold skipped region) ──────────
   return (
     <div
-      ref={homeCarousel ? homeRailRef : undefined}
       className={`compact-stack${density !== "normal" ? ` compact-stack--${density}` : ""}${homeCarousel ? " compact-stack--home" : ""}${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
       aria-label="Recent keeps"
     >
