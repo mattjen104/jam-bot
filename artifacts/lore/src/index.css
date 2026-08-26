@@ -8366,7 +8366,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: grid;
   grid-auto-flow: column;
   grid-template-rows: repeat(4, var(--home-feed-art-size));
-  grid-auto-columns: calc((100% - 21px) / 2.5);
+  grid-auto-columns: calc((100% - 21px) / 2.25);
   align-content: start;
   gap: 7px;
   min-height: calc(var(--home-feed-art-size) * 4 + 21px);
@@ -8378,8 +8378,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overscroll-behavior-x: contain;
 }
 .compact-category-dial__all-feed .compact-category-dial__station {
-  /* Four stacked station rows, two complete columns, and a clipped third
-     column advertise horizontal swiping while preserving readable metadata. */
+  /* Four stacked station rows, two complete columns, and a wider clipped
+     third column advertise horizontal swiping while preserving readable metadata. */
   min-width: 0;
   min-height: var(--home-feed-art-size);
   width: auto;
