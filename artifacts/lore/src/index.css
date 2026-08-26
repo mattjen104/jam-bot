@@ -9939,7 +9939,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home__trees > .compact-first-plays {
   margin-top: 0;
   padding: 20px;
-  background: rgb(29 32 28 / .82);
+  background: transparent;
 }
 .compact-first-plays__header {
   display: flex;
@@ -10503,7 +10503,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding: clamp(18px, 3vw, 40px);
   overflow: hidden;
   color: var(--home-tree-text);
-  background: radial-gradient(circle at 20% 0%, #24281f 0, var(--home-tree-bg) 45%);
+  background: var(--home-tree-bg);
   font-family: var(--lore-font-terminal);
 }
 .split-home__intro {
@@ -10573,7 +10573,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: rgb(29 32 28 / .82);
+  background: transparent;
 }
 .split-home__band--dial {
   position: relative;
@@ -11016,17 +11016,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   height: 22px;
   place-items: center;
   padding: 0;
-  border: 1px solid rgb(205 214 191 / .72);
-  border-radius: 50%;
-  background: rgb(18 21 18 / .82);
+  border: 0;
+  background: transparent;
   color: var(--home-tree-accent);
   cursor: pointer;
-  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  transition: color .15s ease;
 }
 .split-home .compact-stack-home-header__add:hover,
 .split-home .compact-stack-home-header__add:focus-visible {
-  border-color: var(--home-tree-accent);
-  background: rgb(18 21 18 / .96);
   color: hsl(var(--foreground));
 }
 .split-home .compact-stack-home-header__add:focus-visible {

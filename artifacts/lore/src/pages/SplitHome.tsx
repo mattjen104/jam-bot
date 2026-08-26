@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CirclePlus, SlidersHorizontal } from "lucide-react";
+import { Plus, SlidersHorizontal } from "lucide-react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   useDialData,
@@ -257,7 +257,7 @@ export default function SplitHome() {
                 );
               }}
             >
-              <CirclePlus aria-hidden="true" />
+              <Plus aria-hidden="true" />
             </button>
           </div>
           <CompactStack
