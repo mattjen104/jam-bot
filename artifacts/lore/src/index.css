@@ -8362,12 +8362,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   scrollbar-width: thin;
 }
 .compact-category-dial__all-feed {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 6px;
-  min-height: 0;
-  height: 100%;
+  --home-feed-art-size: clamp(42px, 4.5vw, 58px);
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(4, var(--home-feed-art-size));
+  grid-auto-columns: calc((100% - 21px) / 2.5);
+  align-content: start;
+  gap: 7px;
+  min-height: calc(var(--home-feed-art-size) * 4 + 21px);
   padding: 6px 8px 8px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -8376,14 +8378,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overscroll-behavior-x: contain;
 }
 .compact-category-dial__all-feed .compact-category-dial__station {
-  /* Three-and-a-half station buttons: the clipped fourth card advertises
-     horizontal swiping without making the first cards feel undersized. */
-  flex: 0 0 calc((100% - 18px) / 3.5);
+  /* Four stacked station rows, two complete columns, and a clipped third
+     column advertise horizontal swiping while preserving readable metadata. */
   min-width: 0;
-  min-height: 0;
+  min-height: var(--home-feed-art-size);
   width: auto;
   height: auto;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   scroll-snap-align: start;
 }
 .compact-category-dial__active-groups {
@@ -8491,26 +8493,29 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   cursor: wait;
 }
 .compact-category-dial__station-logo {
-  width: 100%;
-  min-width: 0;
-  flex: 0 0 auto;
+  width: var(--home-feed-art-size);
+  min-width: var(--home-feed-art-size);
+  flex: 0 0 var(--home-feed-art-size);
   aspect-ratio: 1;
-  height: auto;
+  height: var(--home-feed-art-size);
   display: grid;
   place-items: center;
-  border-radius: 3px 3px 0 0;
+  align-self: center;
+  margin-left: 6px;
+  border-radius: 3px;
   object-fit: cover;
   background: hsl(var(--secondary) / 0.6);
 }
 .compact-category-dial__station-lines {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  justify-content: flex-start;
+  flex-direction: column;
+  justify-content: center;
   gap: 2px;
-  width: 100%;
+  width: auto;
   box-sizing: border-box;
-  padding: 7px 8px 8px;
+  padding: 6px 7px;
 }
 .compact-category-dial__station-track-line {
   min-width: 0;
@@ -8519,7 +8524,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
 }
 .compact-category-dial__station-track {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -8537,16 +8542,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 @keyframes compact-category-track-fade {
   from { opacity: 0; }
   to   { opacity: 1; }
-}
-.compact-category-dial__station-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: hsl(var(--muted-foreground));
-  font-family: var(--app-font-mono);
-  font-size: var(--lore-size-small);
-  font-weight: 400;
 }
 @media (prefers-reduced-motion: reduce) {
   .compact-category-dial__station--fresh { animation: none; }

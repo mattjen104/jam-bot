@@ -475,7 +475,7 @@ function CategoryNowPlayingFeed({
 /**
  * The All tab is one uninterrupted live feed: every station from the checked
  * categories competes in the same freshest-first ordering. CSS lays the
- * sequence into one horizontal, scrollable row of station tiles.
+ * sequence into a four-row, horizontally scrollable station rail.
  */
 function AllNowPlayingFeed({
   groups,

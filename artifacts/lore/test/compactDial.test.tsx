@@ -245,6 +245,19 @@ describe("CompactDial category tabs", () => {
     ).toBe(true);
   });
 
+  it("shows only the artist beside every All-feed station mark", () => {
+    const station = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    renderDial({ activeRows: [station], categoryFirst: true });
+
+    const card = screen.getByTestId("compact-category-station-kexp");
+    expect(card.querySelector(".compact-category-dial__station-name")).toBeNull();
+    expect(card.querySelector(".compact-category-dial__station-track")?.textContent)
+      .toBe("The Smile");
+  });
+
   it("unchecking a category tab removes its stations from All while keeping the tab available", () => {
     const anchor = makeRow({ slug: "kexp", name: "KEXP", stationCategories: ["anchor"] });
     const campus = makeRow({ slug: "wvum", name: "WVUM", stationCategories: ["campus"] });
