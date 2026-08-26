@@ -8365,8 +8365,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   --home-feed-art-size: clamp(42px, 4.5vw, 58px);
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(3, var(--home-feed-art-size));
-  grid-auto-columns: calc((100% - 21px) / 2.25);
+  grid-template-rows: calc(var(--home-feed-art-size) * 3);
+  grid-auto-columns: calc((100% - 7px) / 2.25);
   align-content: start;
   gap: 7px;
   min-height: calc(var(--home-feed-art-size) * 3 + 14px);
@@ -8378,8 +8378,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overscroll-behavior-x: contain;
 }
 .compact-category-dial__all-feed .compact-category-dial__station {
-  /* Three stacked station rows, two complete columns, and a wider clipped
-     third column advertise horizontal swiping while preserving readable metadata. */
+  /* One horizontal row with the vertical footprint of the former three-row
+     layout; the wider clipped third column still advertises horizontal swiping. */
   min-width: 0;
   min-height: var(--home-feed-art-size);
   width: auto;
@@ -10663,8 +10663,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    The larger height belongs only to focused category station cards; without
    this more-specific override it creates a blank-looking first grid row. */
 .split-home .compact-category-dial__all-feed .compact-category-dial__station {
-  height: var(--home-feed-art-size);
-  min-height: var(--home-feed-art-size);
+  height: calc(var(--home-feed-art-size) * 3);
+  min-height: calc(var(--home-feed-art-size) * 3);
   align-self: stretch;
 }
 .split-home .compact-category-dial__all-feed .compact-category-dial__station-track {
