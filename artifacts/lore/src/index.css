@@ -9961,7 +9961,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-first-plays__rail {
   gap: 8px;
-  padding-top: 24px;
+  padding-top: 10px;
   padding-bottom: 18px;
 }
 .compact-first-plays__tile {
@@ -11012,7 +11012,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   gap: 6px;
   min-height: 26px;
-  padding-left: 2px;
+  padding-left: 22px;
   color: var(--home-tree-text);
   font-family: var(--lore-font-terminal);
   font-size: var(--lore-size-small);
