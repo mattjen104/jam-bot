@@ -8363,7 +8363,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .compact-category-dial__all-feed {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 6px;
   min-height: 0;
@@ -10635,7 +10635,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: var(--home-tree-text);
 }
 .split-home .compact-category-dial__station {
-  min-height: 170px;
+  /* One shared responsive card height keeps every station control identical
+     while preserving room for the square mark and a three-line artist name. */
+  height: clamp(150px, 14vw, 220px);
+  min-height: clamp(150px, 14vw, 220px);
   border-color: rgb(205 214 191 / .14);
   background: transparent;
 }
