@@ -409,6 +409,19 @@ describe("buildAlbumLinerGroups", () => {
 // ---------------------------------------------------------------------------
 
 describe("CompactStack collapsed rows", () => {
+  it("keeps the home Stack in its starter-loading state while seeded keeps refresh", () => {
+    renderStack({ homeCarousel: true, homeBootstrapPending: true });
+
+    expect(
+      screen.getByRole("button", { name: "Building your starter Stack…" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", {
+        name: "Nothing kept yet — keep a track to grow your artist → album Stack.",
+      }),
+    ).toBeNull();
+  });
+
   it("replaces a failed library load with a retryable Stack link", () => {
     libraryIsError = true;
     renderStack();

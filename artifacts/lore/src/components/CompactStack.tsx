@@ -661,6 +661,11 @@ export interface CompactStackProps {
   onToggleSkip?: (key: string) => void;
   /** Home-only one-album horizontal carousel presentation. */
   homeCarousel?: boolean;
+  /**
+   * The home view is copying its configured starter library. Keep the empty
+   * band honest while the first library response refreshes after that copy.
+   */
+  homeBootstrapPending?: boolean;
 }
 
 function StackTreeRows({
@@ -708,10 +713,10 @@ function StackTreeRows({
   return items.map(renderAlbum);
 }
 
-export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip, homeCarousel = false }: CompactStackProps = {}) {
+export function CompactStack({ offset = 0, density = "normal", shuffleKey = null, onExpandedChange, skipped, onToggleSkip, homeCarousel = false, homeBootstrapPending = false }: CompactStackProps = {}) {
   const [, setLocation] = useLocation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const { data, isLoading, isError } = useMyLibraryInfinite({}, 100);
+  const { data, isLoading, isFetching, isError } = useMyLibraryInfinite({}, 100);
 
   // The home grid intentionally exposes the eight newest active albums;
   // full Stack retains its density-controlled pager window.
@@ -1121,8 +1126,10 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
           className="compact-stack__empty"
           onClick={() => setLocation("/library")}
         >
-          {isLoading
-            ? "Loading your artist → album Stack…"
+          {isLoading || (homeCarousel && (homeBootstrapPending || isFetching))
+            ? homeCarousel && homeBootstrapPending
+              ? "Building your starter Stack…"
+              : "Loading your artist → album Stack…"
             : isError
               ? "We couldn’t load your Stack — open Stack to retry."
               : "Nothing kept yet — keep a track to grow your artist → album Stack."}

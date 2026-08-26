@@ -77,9 +77,13 @@ export default function SplitHome() {
     crossingsEnabled: false,
     deferEnrichment: true,
   });
-  const { data: mattStarter } = useMattStarterLibrary();
+  const { data: mattStarter, isLoading: mattStarterLoading } = useMattStarterLibrary();
   const startMattLibrary = useStartMattLibrary();
   const mattBootstrapAttempted = useRef(false);
+  const mattBootstrapPending =
+    mattStarterLoading ||
+    (mattStarter?.available === true &&
+      (startMattLibrary.isIdle || startMattLibrary.isPending));
 
   // The tree-only home has no command strip, but /matt remains the chosen
   // listener identity for this front door. Copy the configured starter library
@@ -208,6 +212,7 @@ export default function SplitHome() {
           skipped={stackSkipped}
           onToggleSkip={toggleStackSkip}
           homeCarousel
+          homeBootstrapPending={mattBootstrapPending}
         />
         </section>
 
