@@ -168,6 +168,8 @@ router.get("/player/history", h(async (req, res) => {
     artist: recordingsTable.artist,
     artistMbid: recordingsTable.artistMbid,
     artworkUrl: recordingsTable.artworkUrl,
+    releaseYear: recordingsTable.releaseYear,
+    releaseDate: recordingsTable.releaseDate,
     isCrossing: libraryHit,
     isFirstPlay: useHomeFastLane ? sql<boolean>`true` : sql<boolean>`NOT EXISTS (
       SELECT 1 FROM spins prior
@@ -206,6 +208,8 @@ router.get("/player/history", h(async (req, res) => {
       artist: row.artist,
       artistMbid: row.artistMbid,
       artworkUrl: row.artworkUrl ?? null,
+      releaseYear: row.releaseYear ?? null,
+      releaseDate: row.releaseDate ?? null,
       playedAt: row.playedAt.toISOString(),
       station: { slug: row.stationSlug, name: row.stationName },
       show: row.showName ? { name: row.showName, djName: row.showDj ?? null } : null,

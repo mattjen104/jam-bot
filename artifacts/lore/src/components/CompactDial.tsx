@@ -581,8 +581,14 @@ interface FirstPlayHistoryItem {
   title: string;
   artist: string;
   artworkUrl: string | null;
+  releaseYear: number | null;
+  releaseDate: string | null;
   playedAt: string;
   station: { slug: string; name: string };
+}
+
+function releaseDateLabel(item: FirstPlayHistoryItem): string {
+  return item.releaseDate ?? (item.releaseYear != null ? String(item.releaseYear) : "Date unknown");
 }
 
 /**
@@ -659,6 +665,9 @@ export function FirstPlayFeed() {
               );
             }}
           >
+            <span className="compact-first-plays__release-date">
+              {releaseDateLabel(item)}
+            </span>
             <span className="compact-first-plays__artist">{item.artist}</span>
             <span className="compact-first-plays__title">{item.title}</span>
             <span className="compact-first-plays__station">{item.station.name}</span>

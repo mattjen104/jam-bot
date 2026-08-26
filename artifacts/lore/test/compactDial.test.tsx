@@ -1219,6 +1219,8 @@ describe("CompactDial first-play rail", () => {
           artist: "New Artist",
           title: "New Track",
           artworkUrl: "https://images.example.com/new-track.jpg",
+          releaseYear: 2024,
+          releaseDate: "2024-05-17",
           playedAt: "2026-08-25T20:00:00.000Z",
           station: { slug: "kexp", name: "KEXP" },
         }],
@@ -1252,6 +1254,7 @@ describe("CompactDial first-play rail", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(tile.querySelector("img")).toBeNull();
+    expect(tile.firstElementChild?.textContent).toBe("2024-05-17");
     expect(tile.textContent).toContain("KEXP");
 
     fireEvent.click(tile);
