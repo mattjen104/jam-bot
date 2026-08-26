@@ -10766,18 +10766,26 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-stack {
   grid-template-rows: repeat(5, minmax(32px, 1fr));
 }
-/* The front door Stack is a compact eight-album grid. Full Stack keeps its
-   five-row tree on /library; home cards remain direct replay controls. */
+/* The front door Stack is a compact eight-album rail. Full Stack keeps its
+   five-row tree on /library; home cards remain direct replay controls. The
+   clipped next card advertises the same horizontal swipe affordance as the
+   station feed. */
 .split-home .compact-stack--home {
   --home-stack-art-size: clamp(42px, 4.5vw, 58px);
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(2, var(--home-stack-art-size));
-  align-content: start;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   gap: 7px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
 }
 .split-home .compact-stack--home .compact-stack__row {
+  flex: 0 0 calc((100% - 21px) / 3.5);
   width: auto;
   min-width: 0;
   min-height: var(--home-stack-art-size);
@@ -10785,6 +10793,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border: 1px solid rgb(205 214 191 / .12);
   border-radius: 4px;
   background: rgb(255 255 255 / .025);
+  scroll-snap-align: start;
 }
 .split-home .compact-stack--home .compact-stack__art-tile {
   flex: 0 0 var(--home-stack-art-size);
@@ -10906,7 +10915,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     min-height: 0;
   }
   .split-home .compact-stack--home {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(4, var(--home-stack-art-size));
+    /* Two complete cards plus a clipped third card, matching the station
+       feed's swipe cue while keeping artist labels readable. */
+    flex-basis: auto;
+  }
+  .split-home .compact-stack--home .compact-stack__row {
+    flex-basis: calc((100% - 14px) / 2.5);
   }
 }

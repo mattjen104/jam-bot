@@ -113,7 +113,7 @@ test.describe("CompactStack — home grid", () => {
     ).toHaveCount(0);
   });
 
-  test("uses the two-column compact-card layout on mobile", async ({ page }) => {
+  test("uses a swipeable rail with a clipped third card on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 402, height: 874 });
     await loadHomeStack(page);
 
@@ -122,9 +122,19 @@ test.describe("CompactStack — home grid", () => {
     await expect(grid.locator(".compact-stack__row")).toHaveCount(8, {
       timeout: 20_000,
     });
-    const columnCount = await grid.evaluate((element) =>
-      getComputedStyle(element).gridTemplateColumns.split(" ").length,
-    );
-    expect(columnCount).toBe(2);
+    const railMetrics = await grid.evaluate((element) => {
+      const firstCard = element.querySelector<HTMLElement>(".compact-stack__row");
+      return {
+        overflowX: getComputedStyle(element).overflowX,
+        scrollable: element.scrollWidth > element.clientWidth,
+        visibleCardWidths: firstCard
+          ? element.clientWidth / firstCard.getBoundingClientRect().width
+          : 0,
+      };
+    });
+    expect(railMetrics.overflowX).toBe("auto");
+    expect(railMetrics.scrollable).toBe(true);
+    expect(railMetrics.visibleCardWidths).toBeGreaterThan(2);
+    expect(railMetrics.visibleCardWidths).toBeLessThan(3);
   });
 });
