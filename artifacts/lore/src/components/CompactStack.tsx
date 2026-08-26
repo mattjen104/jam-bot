@@ -32,7 +32,7 @@ import {
 } from "react";
 import { useLocation } from "wouter";
 import { useQueries } from "@tanstack/react-query";
-import { ArrowRight, CirclePlus, ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import {
   getRecordingKnowledge,
   getGetRecordingKnowledgeQueryKey,
@@ -1092,26 +1092,6 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
       className={`compact-stack${density !== "normal" ? ` compact-stack--${density}` : ""}${homeCarousel ? " compact-stack--home" : ""}${skippedGroups.length > 0 ? " compact-stack--has-skipped" : ""}`}
       aria-label="Recent keeps"
     >
-      {homeCarousel && (
-        <div className="compact-stack__home-header">
-          <span>Library</span>
-          <button
-            type="button"
-            className="compact-stack__home-add"
-            title="Keep artists to grow your Stack"
-            aria-label="Keep artists to grow your Stack"
-            onClick={() => {
-              window.dispatchEvent(
-                new CustomEvent("lore:open-import-modal", {
-                  detail: { mode: "artist-seeds" },
-                }),
-              );
-            }}
-          >
-            <CirclePlus aria-hidden="true" />
-          </button>
-        </div>
-      )}
       <StackTreeRows
         items={ordered}
         knowledgeByMbid={knowledgeByMbid}

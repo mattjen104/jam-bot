@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { CirclePlus, SlidersHorizontal } from "lucide-react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   useDialData,
@@ -242,6 +242,24 @@ export default function SplitHome() {
         </section>
 
         <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
+          <div className="compact-stack-home-header">
+            <span>Library</span>
+            <button
+              type="button"
+              className="compact-stack-home-header__add"
+              title="Keep artists to grow your Stack"
+              aria-label="Keep artists to grow your Stack"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent("lore:open-import-modal", {
+                    detail: { mode: "artist-seeds" },
+                  }),
+                );
+              }}
+            >
+              <CirclePlus aria-hidden="true" />
+            </button>
+          </div>
           <CompactStack
             skipped={stackSkipped}
             onToggleSkip={toggleStackSkip}
