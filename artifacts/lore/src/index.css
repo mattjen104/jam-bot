@@ -10540,6 +10540,37 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-radius: 0;
   background: rgb(29 32 28 / .82);
 }
+.split-home__band--dial {
+  position: relative;
+}
+.split-home__remote-trigger {
+  appearance: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--home-tree-muted);
+  cursor: pointer;
+}
+.split-home__remote-trigger:hover {
+  color: var(--home-tree-text);
+}
+.split-home__remote-trigger:focus-visible {
+  outline: 2px solid var(--home-tree-accent);
+  outline-offset: 2px;
+}
+.split-home__remote-trigger svg {
+  width: 17px;
+  height: 17px;
+}
 .split-home__panel-header {
   flex: 0 0 auto;
 }
@@ -10615,6 +10646,111 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__topline {
   min-height: 32px;
   padding: 0;
+}
+.split-home .compact-category-dial__remote {
+  position: fixed;
+  inset: clamp(64px, 8vh, 92px) max(16px, calc((100vw - 1120px) / 2)) clamp(68px, 9vh, 96px);
+  z-index: 55;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(14px, 2vw, 24px);
+  overflow: hidden;
+  background: rgb(23 24 22 / .86);
+  box-shadow: 0 24px 80px rgb(0 0 0 / .48);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.split-home .compact-category-dial__remote-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--home-tree-text);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.split-home .compact-category-dial__remote-close {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--home-tree-muted);
+  cursor: pointer;
+}
+.split-home .compact-category-dial__remote-close:hover {
+  color: var(--home-tree-text);
+}
+.split-home .compact-category-dial__remote-close:focus-visible {
+  outline: 2px solid var(--home-tree-accent);
+  outline-offset: 2px;
+}
+.split-home .compact-category-dial__remote-close svg {
+  width: 17px;
+  height: 17px;
+}
+.split-home .compact-category-dial__remote-filters {
+  min-width: 0;
+  padding: 4px 0 10px;
+}
+.split-home .compact-category-dial__remote-filters .compact-category-dial__tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  min-width: 0;
+  padding-right: 0;
+  padding-left: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+.split-home .compact-category-dial__remote-filters .compact-category-dial__tabs::-webkit-scrollbar {
+  display: none;
+}
+.split-home .compact-category-dial__remote-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(5, minmax(48px, 1fr));
+  grid-auto-columns: minmax(150px, calc((100% - 7px) / 2.25));
+  gap: 7px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 0 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+.split-home .compact-category-dial__remote-rail::-webkit-scrollbar {
+  display: none;
+}
+.split-home .compact-category-dial__remote-rail .compact-dial__remote-row {
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  border: 0;
+  background: rgb(29 32 28 / .58);
+  color: var(--home-tree-text);
+  scroll-snap-align: start;
+}
+.split-home .compact-category-dial__remote-rail .compact-dial__remote-row:hover {
+  background: rgb(43 47 40 / .72);
+}
+.split-home .compact-category-dial__remote-rail .compact-dial__remote-ordinal,
+.split-home .compact-category-dial__remote-rail .compact-dial__remote-station {
+  color: var(--home-tree-muted);
 }
 .split-home .compact-category-dial__summary-button {
   gap: 8px;

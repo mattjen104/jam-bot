@@ -556,6 +556,19 @@ describe("SplitHome — minimal tree front door", () => {
     expect(screen.queryByRole("group", { name: "Stack pages" })).toBeNull();
     expect(mockStartMattLibrary).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps filter controls behind the radio remote trigger", () => {
+    render(<SplitHome />);
+
+    const trigger = screen.getByRole("button", {
+      name: "Open radio remote and filter settings",
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("tablist", { name: "Station categories" })).toBeNull();
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  });
 });
 
 describe("SplitHome — station visibility while Matt’s library hydrates", () => {

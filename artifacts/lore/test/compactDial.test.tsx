@@ -181,6 +181,48 @@ describe("CompactDial empty state", () => {
 // ---------------------------------------------------------------------------
 
 describe("CompactDial category tabs", () => {
+  it("hides category filters until the home radio remote opens", () => {
+    const row = makeRowWithTrack(
+      { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+      { artist: "The Smile", title: "Bending Hectic" },
+    );
+    const onCloseRemote = vi.fn();
+    const { rerender } = renderDial({
+      activeRows: [row],
+      categoryFirst: true,
+      hideCategoryFilters: true,
+      remoteOpen: false,
+      onCloseRemote,
+    });
+
+    expect(screen.queryByRole("tablist", { name: "Station categories" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Radio remote" })).toBeNull();
+
+    rerender(
+      <CompactDial
+        activeRows={[row]}
+        skippedRows={[]}
+        activeSlug={null}
+        playerStatus="idle"
+        presenceMap={new Map()}
+        onTuneIn={vi.fn()}
+        onPlay={vi.fn()}
+        categoryFirst
+        hideCategoryFilters
+        remoteOpen
+        onCloseRemote={onCloseRemote}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Radio remote" })).toBeTruthy();
+    expect(screen.getByRole("tablist", { name: "Station categories" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Remote stations" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /The Smile on KEXP/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close radio remote" }));
+    expect(onCloseRemote).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the stable specialist taxonomy, including named edge cases and a visible fallback", () => {
     expect(specialistSubcategoryForStation(makeStation({ name: "FIP Groove" }))).toBe("groove");
     expect(specialistSubcategoryForStation(makeStation({ name: "t67-4fdb1912 Jazz FM" }))).toBe("jazz");

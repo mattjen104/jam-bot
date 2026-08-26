@@ -34,6 +34,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationPresence } from "../hooks/useStationPresence";
 import type { DialDisplayMode } from "../hooks/useDialData";
@@ -149,6 +150,12 @@ export interface CompactDialProps {
    * retain their meaning for personal and unclassified stations.
    */
   visibleUncategorizedSlugs?: ReadonlySet<string>;
+  /** Home-only: hide category filters until the large radio remote opens. */
+  hideCategoryFilters?: boolean;
+  /** Home-only: expands the category controls into the large radio remote. */
+  remoteOpen?: boolean;
+  /** Closes the home radio remote. */
+  onCloseRemote?: () => void;
 }
 
 function CompactDialRow({
@@ -682,6 +689,9 @@ function CategoryFirstDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
+  hideCategoryFilters = false,
+  remoteOpen = false,
+  onCloseRemote,
 }: CompactDialProps) {
   const groups = useMemo(
     () => buildCompactCategoryGroups(activeRows, skippedRows),
@@ -752,6 +762,28 @@ function CategoryFirstDial({
     ? [...overviewGroups, visibleUncategorizedGroup]
     : overviewGroups;
 
+  const remoteRows = useMemo(() => {
+    const source = focusedGroup ? [focusedGroup] : selectedOverviewGroups;
+    const seen = new Set<string>();
+    return source.flatMap((group) => group.rows)
+      .filter(({ row, isSkipped }) => {
+        const slug = row.ds.station.slug;
+        if (isSkipped || seen.has(slug)) return false;
+        seen.add(slug);
+        return true;
+      })
+      .map(({ row }) => row);
+  }, [focusedGroup, selectedOverviewGroups]);
+
+  useEffect(() => {
+    if (!remoteOpen || !onCloseRemote) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRemote();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [remoteOpen, onCloseRemote]);
+
   const tabStrip = (
     <div className="compact-category-dial__tabs" role="tablist" aria-label="Station categories">
       <button
@@ -816,7 +848,49 @@ function CategoryFirstDial({
 
   return (
     <div className="compact-dial compact-dial--categories" data-testid="compact-category-dial">
-      {tabStrip}
+      {!hideCategoryFilters && tabStrip}
+      {remoteOpen && (
+        <div
+          id="compact-category-remote"
+          className="compact-category-dial__remote"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Radio remote"
+          data-testid="compact-category-remote"
+        >
+          <div className="compact-category-dial__remote-header">
+            <span>Radio remote</span>
+            <button
+              type="button"
+              className="compact-category-dial__remote-close"
+              aria-label="Close radio remote"
+              onClick={onCloseRemote}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
+          <div className="compact-category-dial__remote-filters">
+            {tabStrip}
+          </div>
+          <div
+            className="compact-category-dial__remote-rail"
+            role="group"
+            aria-label="Remote stations"
+            data-testid="compact-category-remote-rail"
+          >
+            {remoteRows.map((row, index) => (
+              <CompactDialRemote
+                key={row.ds.station.slug}
+                row={row}
+                ordinal={index + 1}
+                isSampling={false}
+                isActive={row.ds.station.slug === activeSlug}
+                onTuneIn={onTuneIn}
+              />
+            ))}
+          </div>
+        </div>
+      )}
       {focusedGroup ? (
         <div
           className="compact-category-dial__focused"
@@ -877,6 +951,9 @@ export function CompactDial({
   visibleUncategorizedSlugs,
   onToggleCategory,
   activeCategories,
+  hideCategoryFilters = false,
+  remoteOpen = false,
+  onCloseRemote,
 }: CompactDialProps) {
   const totalRows = activeRows.length + skippedRows.length;
 
@@ -911,6 +988,9 @@ export function CompactDial({
         visibleUncategorizedSlugs={visibleUncategorizedSlugs}
         onToggleCategory={onToggleCategory}
         activeCategories={activeCategories}
+        hideCategoryFilters={hideCategoryFilters}
+        remoteOpen={remoteOpen}
+        onCloseRemote={onCloseRemote}
       />
     );
   }

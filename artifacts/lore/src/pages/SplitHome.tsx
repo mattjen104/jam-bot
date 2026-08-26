@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import {
   useDialData,
@@ -63,6 +64,7 @@ export default function SplitHome() {
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set(HOME_ACTIVE_CATEGORIES),
   );
+  const [remoteOpen, setRemoteOpen] = useState(false);
   const toggleCategory = useCallback((category: StationCategory) => {
     setActiveCategories((current) => toggleStationCategory(current, category));
   }, []);
@@ -208,6 +210,16 @@ export default function SplitHome() {
     <main className="split-home">
       <div className="split-home__trees">
         <section className="split-home__band split-home__band--dial" aria-label="Live stations">
+          <button
+            type="button"
+            className="split-home__remote-trigger"
+            aria-label="Open radio remote and filter settings"
+            aria-expanded={remoteOpen}
+            aria-controls="compact-category-remote"
+            onClick={() => setRemoteOpen(true)}
+          >
+            <SlidersHorizontal aria-hidden="true" />
+          </button>
           <CompactDial
             activeRows={activeRows}
             skippedRows={skippedRows}
@@ -223,6 +235,9 @@ export default function SplitHome() {
             suppressCrossings={false}
             displayMode="personal"
             categoryFirst={hasEditorialCategory}
+            hideCategoryFilters
+            remoteOpen={remoteOpen}
+            onCloseRemote={() => setRemoteOpen(false)}
           />
         </section>
 
