@@ -1,8 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Real-browser coverage for the simplified Stack band's fixed home window.
- * This deliberately supplies far more than five albums to prove the surface
+ * Real-browser coverage for the simplified Stack band's fixed home grid.
+ * This deliberately supplies far more than eight albums to prove the surface
  * remains a concise newest-first preview rather than leaking overflow rows.
  */
 
@@ -24,7 +24,7 @@ function makeLibraryItem(index: number) {
   };
 }
 
-/** 42 unique album groups, of which the simplified home Stack shows five. */
+/** 42 unique album groups, of which the simplified home Stack shows eight. */
 const DENSITY_LIBRARY = Array.from({ length: 42 }, (_, index) =>
   makeLibraryItem(index),
 );
@@ -123,17 +123,17 @@ function stackRows(page: Page) {
 }
 
 test.describe("Simplified Stack window", () => {
-  test("shows the five newest albums with stable row artwork across reload", async ({
+  test("shows the eight newest albums with stable card artwork across reload", async ({
     page,
   }) => {
     await suppressFirstRun(page);
     await installRoutes(page);
     await page.goto("/lore/");
 
-    // The current home Stack deliberately uses one fixed five-row window;
+    // The current home Stack deliberately uses one fixed eight-card grid;
     // density, paging, shuffle, and decorative pager artwork live outside the
     // simplified home surface.
-    await expect(stackRows(page)).toHaveCount(5, { timeout: 20_000 });
+    await expect(stackRows(page)).toHaveCount(8, { timeout: 20_000 });
     const albums = stackRows(page).locator(".compact-stack__album");
     await expect(albums).toHaveText([
       "Density Album 01",
@@ -141,9 +141,12 @@ test.describe("Simplified Stack window", () => {
       "Density Album 03",
       "Density Album 04",
       "Density Album 05",
+      "Density Album 06",
+      "Density Album 07",
+      "Density Album 08",
     ]);
-    const rowArt = stackRows(page).locator(".compact-stack__spine-art");
-    await expect(rowArt).toHaveCount(5);
+    const rowArt = stackRows(page).locator(".compact-stack__tile-art");
+    await expect(rowArt).toHaveCount(8);
     await expect(rowArt.first()).toHaveAttribute(
       "src",
       /\/lore\/e2e-art\/album-01\.svg$/,
@@ -151,15 +154,18 @@ test.describe("Simplified Stack window", () => {
     await expect(page.locator(".stack-pager-bar")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(stackRows(page)).toHaveCount(5, { timeout: 20_000 });
+    await expect(stackRows(page)).toHaveCount(8, { timeout: 20_000 });
     await expect(stackRows(page).locator(".compact-stack__album")).toHaveText([
       "Density Album 01",
       "Density Album 02",
       "Density Album 03",
       "Density Album 04",
       "Density Album 05",
+      "Density Album 06",
+      "Density Album 07",
+      "Density Album 08",
     ]);
-    await expect(stackRows(page).locator(".compact-stack__spine-art").first()).toHaveAttribute(
+    await expect(stackRows(page).locator(".compact-stack__tile-art").first()).toHaveAttribute(
       "src",
       /\/lore\/e2e-art\/album-01\.svg$/,
     );

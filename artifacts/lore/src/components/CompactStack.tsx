@@ -370,7 +370,6 @@ function CompactStackRow({
 }) {
   const { launch, isActive, isPlaying, isLoading, canLaunch, togglePause } =
     useAlbumPlay(group);
-  const [touched, setTouched] = useState(false);
   const label = group.artist
     ? `${group.albumTitle} · ${group.artist}`
     : group.albumTitle;
@@ -398,12 +397,9 @@ function CompactStackRow({
         "compact-stack__row",
         sampling ? "compact-stack__row--sampling" : "",
         isSkipped ? "compact-stack__row--skipped" : "",
-        homeCarousel && touched ? "compact-stack__row--touched" : "",
       ].filter(Boolean).join(" ")}
       role="button"
       tabIndex={0}
-      onPointerDown={homeCarousel ? () => setTouched(true) : undefined}
-      onFocus={homeCarousel ? () => setTouched(true) : undefined}
       aria-expanded="false"
       aria-label={directPlay ? `Play ${label}` : `Expand ${label}`}
       onClick={handlePress}
@@ -417,7 +413,7 @@ function CompactStackRow({
         }
       }}
     >
-      {canLaunch && (
+      {!homeCarousel && canLaunch && (
         <CompactPlayButton
           title={group.albumTitle}
           isPlaying={isPlaying}
@@ -449,14 +445,14 @@ function CompactStackRow({
           </>
         )}
         {/* The relationship credit survives only at normal density. */}
-        {credit && density === "normal" && (
+        {credit && density === "normal" && !homeCarousel && (
           <>
             <span className="compact-stack__sep" aria-hidden="true">·</span>
             <span className="compact-stack__credit">{credit}</span>
           </>
         )}
       </span>
-      {onToggleSkip && (
+      {!homeCarousel && onToggleSkip && (
         <input
           type="checkbox"
           className="compact-stack__scan-checkbox"
@@ -711,9 +707,9 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { data, isLoading, isError } = useMyLibraryInfinite({}, 100);
 
-  // Rows per page at the current density: 5 (normal), 10 (compact), or
-  // 15 (micro). Drives the window slice and the grid's row count alike.
-  const pageSize = stackPageSize(density);
+  // The home grid intentionally exposes the eight newest active albums;
+  // full Stack retains its density-controlled pager window.
+  const pageSize = homeCarousel ? 8 : stackPageSize(density);
 
   // The full group list splits into active (pager-windowed) and skipped
   // (below-fold overflow) albums — the Stack-side mirror of CompactDial.
@@ -879,10 +875,12 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   // fetches.
   const creditMbids = useMemo(
     () =>
-      [...groups, ...skippedGroups]
-        .map((g) => primaryMbid(g))
-        .filter((m): m is string => m !== null),
-    [groups, skippedGroups],
+      homeCarousel
+        ? []
+        : [...groups, ...skippedGroups]
+            .map((g) => primaryMbid(g))
+            .filter((m): m is string => m !== null),
+    [groups, homeCarousel, skippedGroups],
   );
   const creditResults = useQueries({
     queries: creditMbids.map((mbid) => ({
@@ -1093,7 +1091,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         onToggleSkip={onToggleSkip}
         onExpand={changeExpanded}
       />
-      {skippedGroups.length > 0 && (
+      {!homeCarousel && skippedGroups.length > 0 && (
         <div
           className="compact-stack__skipped-region"
           aria-label="Excluded from the Stack window"

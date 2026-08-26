@@ -10766,35 +10766,66 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-stack {
   grid-template-rows: repeat(5, minmax(32px, 1fr));
 }
-/* The front door Stack is a single-album horizontal strip. Full Stack keeps
-   its five-row tree on /library. Native overflow gives touch users the same
-   swipe gesture as the radio rail above. */
+/* The front door Stack is a compact eight-album grid. Full Stack keeps its
+   five-row tree on /library; home cards remain direct replay controls. */
 .split-home .compact-stack--home {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  grid-template-rows: none;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-  touch-action: pan-x;
+  --home-stack-art-size: clamp(42px, 4.5vw, 58px);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(2, var(--home-stack-art-size));
+  align-content: start;
+  gap: 7px;
+  overflow: hidden;
 }
 .split-home .compact-stack--home .compact-stack__row {
-  flex: 0 0 100%;
-  min-width: 100%;
-  height: 100%;
-  scroll-snap-align: start;
+  width: auto;
+  min-width: 0;
+  min-height: var(--home-stack-art-size);
+  height: var(--home-stack-art-size);
+  border: 1px solid rgb(205 214 191 / .12);
+  border-radius: 4px;
+  background: rgb(255 255 255 / .025);
 }
 .split-home .compact-stack--home .compact-stack__art-tile {
-  width: clamp(220px, 42vh, 420px);
-  max-width: 100%;
-  height: 100%;
+  flex: 0 0 var(--home-stack-art-size);
+  width: var(--home-stack-art-size);
+  height: var(--home-stack-art-size);
   aspect-ratio: 1;
+  align-self: center;
+  margin-left: 6px;
+  border-radius: 3px;
 }
 .split-home .compact-stack--home .compact-stack__tile-art {
   object-fit: cover;
+}
+.split-home .compact-stack--home .compact-stack__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 7px;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: normal;
+}
+.split-home .compact-stack--home .compact-stack__album,
+.split-home .compact-stack--home .compact-stack__artist {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+.split-home .compact-stack--home .compact-stack__artist {
+  font-size: .9em;
+}
+.split-home .compact-stack--home .compact-stack__year,
+.split-home .compact-stack--home .compact-stack__sep,
+.split-home .compact-stack--home .compact-stack__credit,
+.split-home .compact-stack--home .compact-stack__scan-checkbox {
+  display: none;
 }
 .split-home .compact-stack__tree-group {
   border-color: rgb(205 214 191 / .09);
@@ -10862,16 +10893,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .split-home__band {
     min-height: 360px;
   }
-  /* Keep the mobile Stack visually quiet until the listener touches a cover
-     to browse it. Accessible labels remain on the row for screen readers. */
-  .split-home .compact-stack--home .compact-stack__text {
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity .12s ease, visibility .12s ease;
-  }
-  .split-home .compact-stack--home .compact-stack__row--touched .compact-stack__text,
-  .split-home .compact-stack--home .compact-stack__row:focus-visible .compact-stack__text {
-    visibility: visible;
-    opacity: 1;
+  .split-home .compact-stack--home {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(4, var(--home-stack-art-size));
   }
 }

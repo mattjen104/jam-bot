@@ -447,6 +447,7 @@ function CategoryNowPlayingFeed({
               <StationMark
                 name={entry.row.ds.station.name}
                 logoUrl={entry.row.ds.station.logoUrl}
+                homepageUrl={entry.row.ds.station.homepageUrl}
                 variant="cube"
               />
               <span>{entry.label}</span>
@@ -530,6 +531,7 @@ function AllNowPlayingFeed({
             <StationMark
               name={station.name}
               logoUrl={station.logoUrl}
+              homepageUrl={station.homepageUrl}
               variant="cube"
               className="compact-category-dial__station-logo"
             />

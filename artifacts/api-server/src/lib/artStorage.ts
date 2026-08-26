@@ -31,6 +31,64 @@ function getBucket() {
 }
 
 const ART_PREFIX = "art-proxy/";
+const MEMORY_CACHE_MAX_ENTRIES = 512;
+const MEMORY_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+
+type MemoryArt = {
+  data: Buffer;
+  contentType: string;
+  cachedAt: number;
+};
+
+/**
+ * Fast fallback for development and any deployment where App Storage is not
+ * configured. Persistent object storage remains the durable cache; this small
+ * bounded layer prevents every station mark from re-fetching its origin during
+ * a running server session when that durable cache is unavailable.
+ */
+const memoryArtCache = new Map<string, MemoryArt>();
+let warnedMissingBucket = false;
+
+function logStorageFailure(action: string, err: unknown): void {
+  if (
+    err instanceof Error &&
+    err.message.includes("DEFAULT_OBJECT_STORAGE_BUCKET_ID not set")
+  ) {
+    if (!warnedMissingBucket) {
+      warnedMissingBucket = true;
+      console.warn(
+        "[art-storage] App Storage is unavailable; using the bounded in-memory artwork cache",
+      );
+    }
+    return;
+  }
+  console.error(`[art-storage] ${action} failed`, err);
+}
+
+function memoryGet(url: string): MemoryArt | null {
+  const key = artUrlHash(url);
+  const entry = memoryArtCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > MEMORY_CACHE_TTL_MS) {
+    memoryArtCache.delete(key);
+    return null;
+  }
+  // Refresh LRU position on use.
+  memoryArtCache.delete(key);
+  memoryArtCache.set(key, entry);
+  return entry;
+}
+
+function memoryPut(url: string, data: Buffer, contentType: string): void {
+  const key = artUrlHash(url);
+  memoryArtCache.delete(key);
+  memoryArtCache.set(key, { data, contentType, cachedAt: Date.now() });
+  while (memoryArtCache.size > MEMORY_CACHE_MAX_ENTRIES) {
+    const oldest = memoryArtCache.keys().next().value;
+    if (!oldest) break;
+    memoryArtCache.delete(oldest);
+  }
+}
 
 /**
  * Stable URL-safe base64 hash of the source URL — used as the GCS object
@@ -58,6 +116,9 @@ export async function artExists(url: string): Promise<boolean> {
 export async function artGet(
   url: string,
 ): Promise<{ data: Buffer; contentType: string } | null> {
+  const memory = memoryGet(url);
+  if (memory) return memory;
+
   try {
     const hash = artUrlHash(url);
     const file = getBucket().file(`${ART_PREFIX}${hash}`);
@@ -65,10 +126,12 @@ export async function artGet(
     if (!exists) return null;
     const [data] = await file.download();
     const [meta] = await file.getMetadata();
-    return {
+    const cached = {
       data: data as Buffer,
       contentType: (meta.contentType as string | undefined) ?? "image/jpeg",
     };
+    memoryPut(url, cached.data, cached.contentType);
+    return cached;
   } catch {
     return null;
   }
@@ -80,13 +143,14 @@ export async function artGet(
  * evicted and the next /api/art request re-fetches the new cover.
  */
 export async function artDelete(url: string): Promise<void> {
+  memoryArtCache.delete(artUrlHash(url));
   try {
     const hash = artUrlHash(url);
     const file = getBucket().file(`${ART_PREFIX}${hash}`);
     const [exists] = await file.exists();
     if (exists) await file.delete();
   } catch (err) {
-    console.error("[art-storage] delete failed", err);
+    logStorageFailure("delete", err);
   }
 }
 
@@ -96,6 +160,7 @@ export async function artPut(
   data: Buffer,
   contentType: string,
 ): Promise<void> {
+  memoryPut(url, data, contentType);
   try {
     const hash = artUrlHash(url);
     const file = getBucket().file(`${ART_PREFIX}${hash}`);
@@ -104,6 +169,6 @@ export async function artPut(
       resumable: false,
     });
   } catch (err) {
-    console.error("[art-storage] write failed", err);
+    logStorageFailure("write", err);
   }
 }

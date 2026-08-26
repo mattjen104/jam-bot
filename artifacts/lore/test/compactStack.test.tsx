@@ -498,6 +498,29 @@ describe("CompactStack collapsed rows", () => {
     expect(first.closest(".compact-stack__tree-group")).toBeNull();
     expect(screen.queryByRole("button", { name: /albums by Shared Artist/ })).toBeNull();
   });
+
+  it("renders an eight-album home grid without nested play or skip controls", () => {
+    libraryItems = Array.from({ length: 10 }, (_, index) =>
+      makeItem({
+        mbid: `home-${index}`,
+        albumTitle: `Home Album ${index + 1}`,
+        artist: `Home Artist ${index + 1}`,
+        artworkUrl: `https://example.com/home-${index}.jpg`,
+        addedAt: `2026-08-${String(20 - index).padStart(2, "0")}T00:00:00Z`,
+      }),
+    );
+
+    const { container } = renderStack({ homeCarousel: true });
+    const homeGrid = container.querySelector(".compact-stack--home");
+
+    expect(homeGrid?.querySelectorAll(".compact-stack__row")).toHaveLength(8);
+    expect(homeGrid?.querySelectorAll(".compact-stack__art-tile")).toHaveLength(8);
+    expect(homeGrid?.querySelectorAll(".compact-play-btn")).toHaveLength(0);
+    expect(homeGrid?.querySelectorAll(".compact-stack__scan-checkbox")).toHaveLength(0);
+    expect(
+      screen.getByRole("button", { name: "Play Home Album 1 · Home Artist 1" }),
+    ).toBeTruthy();
+  });
 });
 
 describe("CompactStack density zoom", () => {

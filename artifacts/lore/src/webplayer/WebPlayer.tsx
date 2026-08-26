@@ -171,6 +171,7 @@ function NowPlayingCard({
               <StationMark
                 name={radio.station.name}
                 logoUrl={radio.station.logoUrl}
+                homepageUrl={radio.station.homepageUrl}
                 className="wp-station-mark"
               />{" "}
               <span className="wp-mono" style={{ fontSize: 14 }}>
@@ -538,6 +539,7 @@ export function OnAirRow({
           <StationMark
             name={item.station.name}
             logoUrl={item.station.logoUrl}
+            homepageUrl={item.station.homepageUrl}
             variant="cube"
             className="wp-station-mark"
           />{" "}

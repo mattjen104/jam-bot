@@ -557,7 +557,11 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {/* Station identity mark — the station's own logo (or a neutral
             fallback), never track artwork. Decorative; the station name
             beside it stays the accessible identity. */}
-        <StationMark name={ds.station.name} logoUrl={ds.station.logoUrl} />
+        <StationMark
+          name={ds.station.name}
+          logoUrl={ds.station.logoUrl}
+          homepageUrl={ds.station.homepageUrl}
+        />
         <span className="fdrow__compact-station">{compact.station}</span>
         {/* ⬤ crossing indicator — present iff the station has ≥1 crossing at
             the active scope. Tapping toggles the inline scope detail. */}

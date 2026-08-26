@@ -80,6 +80,15 @@ describe("StationMark", () => {
     expect(container.querySelector("img")).toBeNull();
   });
 
+  it("uses a proxied homepage favicon when the station has no logo URL", () => {
+    const { container } = render(
+      <StationMark name="KEXP" logoUrl={null} homepageUrl="https://kexp.org/schedule/" />,
+    );
+    const img = container.querySelector("img[data-station-mark='logo']");
+    const favicon = "https://www.google.com/s2/favicons?sz=128&domain_url=https%3A%2F%2Fkexp.org";
+    expect(img?.getAttribute("src")).toBe(`/api/art?src=${encodeURIComponent(favicon)}`);
+  });
+
   it("rejects non-http(s) URLs instead of rendering them", () => {
     const { container } = render(
       <StationMark name="KEXP" logoUrl="javascript:alert(1)" />,
@@ -102,6 +111,17 @@ describe("StationMark", () => {
     expect(container.querySelector("img")).toBeNull();
     rerender(<StationMark name="KEXP" logoUrl="https://static.example.com/new.png" />);
     expect(container.querySelector("img[data-station-mark='logo']")).not.toBeNull();
+  });
+
+  it("uses the homepage favicon after an explicit logo fails", () => {
+    const { container } = render(
+      <StationMark name="KEXP" logoUrl={LOGO} homepageUrl="https://kexp.org" />,
+    );
+    fireEvent.error(container.querySelector("img[data-station-mark='logo']")!);
+    const fallback = "https://www.google.com/s2/favicons?sz=128&domain_url=https%3A%2F%2Fkexp.org";
+    expect(container.querySelector("img[data-station-mark='logo']")?.getAttribute("src")).toBe(
+      `/api/art?src=${encodeURIComponent(fallback)}`,
+    );
   });
 });
 

@@ -13,14 +13,16 @@
  *  - External URLs route through the existing art proxy (same caching and
  *    mixed-content upgrade as other external imagery); non-http(s) values
  *    are rejected by safeHttpUrl.
- *  - Missing, invalid, or failed URLs fall back to a neutral radio-glyph
- *    mark — never a broken-image icon and never album artwork.
+ *  - Missing, invalid, or failed logo URLs try the station homepage favicon
+ *    before falling back to a neutral radio-glyph mark — never a broken image
+ *    or album artwork.
  *  - Decorative: adjacent station-name text stays the accessible identity,
  *    so the mark is hidden from assistive tech and never interactive.
  */
 import { useState } from "react";
 import { Radio } from "lucide-react";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { stationFaviconUrl } from "../lib/stationArt";
 import { safeHttpUrl } from "../lib/utils";
 
 export interface StationMarkProps {
@@ -28,18 +30,30 @@ export interface StationMarkProps {
    *  station name is always rendered separately by the caller. */
   name: string;
   logoUrl?: string | null;
+  homepageUrl?: string | null;
   /** "inline" sits beside text at cap height; "cube" is the larger block used
    *  to the left of now-playing text in single-station lists. */
   variant?: "inline" | "cube";
   className?: string;
 }
 
-export function StationMark({ name, logoUrl, variant = "inline", className }: StationMarkProps) {
+export function StationMark({
+  name,
+  logoUrl,
+  homepageUrl,
+  variant = "inline",
+  className,
+}: StationMarkProps) {
   // Track the failed URL (not a boolean) so a later, different logoUrl gets
   // a fresh attempt instead of inheriting the failure.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const safe = safeHttpUrl(logoUrl);
-  const src = safe ? proxyArtUrl(safe) : null;
+  const fallback = stationFaviconUrl(homepageUrl);
+  const fallbackSrc = fallback ? proxyArtUrl(fallback) : null;
+  const primarySrc = safe ? proxyArtUrl(safe) : null;
+  // A failed explicit logo should not strand the station on a glyph when its
+  // homepage still has a usable domain favicon.
+  const src = primarySrc && failedSrc !== primarySrc ? primarySrc : fallbackSrc;
 
   const cls = ["station-mark", `station-mark--${variant}`, className]
     .filter(Boolean)
