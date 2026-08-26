@@ -210,7 +210,7 @@ export default function SplitHome() {
     <main className="split-home">
       <div className="split-home__trees">
         <section className="split-home__band split-home__band--dial" aria-label="Live stations">
-          <div className="split-home__band-heading">Radio</div>
+          <div className="split-home__band-heading">Now Playing</div>
           <button
             type="button"
             className="split-home__remote-trigger"

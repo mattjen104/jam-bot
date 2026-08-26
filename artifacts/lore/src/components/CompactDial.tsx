@@ -641,7 +641,7 @@ export function FirstPlayFeed() {
   return (
     <section className="compact-first-plays" aria-label="Recent first plays">
       <div className="compact-first-plays__header">
-        <span>New</span>
+        <span>New Releases Selected</span>
         {loading && <span>Loading…</span>}
       </div>
       <div className="compact-first-plays__rail" data-testid="compact-first-plays">

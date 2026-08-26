@@ -11172,8 +11172,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-first-plays__artist { color: var(--home-tree-text); }
 .split-home .compact-first-plays__release-date { color: var(--home-tree-accent); }
 .split-home .compact-first-plays__title,
-.split-home .compact-first-plays__station,
-.split-home .compact-first-plays__header { color: var(--home-tree-muted); }
+.split-home .compact-first-plays__station { color: var(--home-tree-muted); }
+.split-home .compact-first-plays__header { color: var(--home-tree-text); }
 
 @media (max-width: 760px) {
   .split-home {
