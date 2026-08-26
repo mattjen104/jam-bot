@@ -10991,19 +10991,19 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   margin-left: 0;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(2) .compact-stack__art-tile {
-  --home-stack-rotation: 4deg;
+  --home-stack-rotation: 7deg;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(3) .compact-stack__art-tile {
-  --home-stack-rotation: -3.5deg;
+  --home-stack-rotation: -5deg;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(4) .compact-stack__art-tile {
-  --home-stack-rotation: 5deg;
+  --home-stack-rotation: 6deg;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(5) .compact-stack__art-tile {
-  --home-stack-rotation: -4deg;
+  --home-stack-rotation: -4.5deg;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(6) .compact-stack__art-tile {
-  --home-stack-rotation: 3deg;
+  --home-stack-rotation: 5deg;
 }
 .split-home .compact-stack--home .compact-stack__art-tile {
   flex: 0 0 auto;
@@ -11017,7 +11017,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-radius: 0;
   background: transparent;
   transform: rotate(var(--home-stack-rotation, 0deg));
-  transform-origin: 50% 92%;
+  transform-origin: 50% 100%;
 }
 .split-home .compact-stack--home .compact-stack__tile-art {
   object-fit: cover;
