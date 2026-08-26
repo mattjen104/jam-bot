@@ -10571,11 +10571,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow-y: auto;
 }
 .split-home .compact-category-dial__tabs {
-  border-bottom-color: var(--home-tree-line);
+  border: 0;
 }
 .split-home .compact-category-dial__tab-button {
   color: var(--home-tree-muted);
   font-family: var(--lore-font-terminal);
+  border: 0;
 }
 .split-home .compact-category-dial__tab-button:hover {
   color: var(--home-tree-text);
@@ -10648,15 +10649,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
      while preserving room for the square mark and a three-line artist name. */
   height: clamp(150px, 14vw, 220px);
   min-height: clamp(150px, 14vw, 220px);
-  border-color: rgb(205 214 191 / .14);
+  border: 0;
   background: transparent;
 }
 .split-home .compact-category-dial__station:hover,
 .split-home .compact-category-dial__station:focus-visible {
-  border-color: var(--home-tree-accent);
+  border: 0;
 }
 .split-home .compact-category-dial__station--fresh {
-  border-color: var(--home-tree-accent);
+  border: 0;
+  animation: none;
 }
 .split-home .compact-category-dial__station-track {
   color: var(--home-tree-text);
@@ -10696,8 +10698,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__stations {
   margin-left: 20px;
   padding-left: 12px;
-  border-top: 0;
-  border-left: 1px solid var(--home-tree-line);
+  border: 0;
 }
 .split-home .compact-category-dial__stations .compact-dial__row {
   min-height: 32px;
@@ -10705,17 +10706,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__now-feed {
   margin-left: 20px;
   padding-left: 12px;
-  border-color: var(--home-tree-line);
+  border: 0;
   background: transparent;
 }
 .split-home .compact-category-dial__now-feed::before,
 .split-home .compact-category-dial__feed-row::before {
-  border-color: var(--home-tree-line);
+  border: 0;
 }
 .split-home .compact-category-dial__feed-row {
   min-height: 48px;
   padding: 5px 10px 5px 12px;
-  border-color: rgb(205 214 191 / .09);
+  border: 0;
 }
 .split-home .compact-category-dial__feed-tune {
   flex-direction: column;
@@ -10750,7 +10751,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-dial__row {
   flex: 0 0 auto;
   min-height: 32px;
-  border-color: rgb(205 214 191 / .09);
+  border: 0;
 }
 .split-home .compact-dial__row::before {
   content: "";
@@ -10758,7 +10759,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   left: -13px;
   top: 50%;
   width: 12px;
-  border-top: 1px solid var(--home-tree-line);
+  border: 0;
 }
 .split-home .fdrow {
   min-height: 36px;
