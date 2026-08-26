@@ -10582,6 +10582,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding-left: 0;
   padding-right: 0;
 }
+.split-home .split-home__band-heading {
+  flex: 0 0 26px;
+  min-height: 26px;
+  color: var(--home-tree-text);
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 26px;
+}
 .split-home__remote-trigger {
   appearance: none;
   position: absolute;
