@@ -58,8 +58,6 @@ import {
 } from "../lib/dialCategories";
 import { cleanLiveValue } from "./dialViewHelpers";
 import { StationMark } from "./StationMark";
-import { proxyArtUrl } from "../lib/proxyArt";
-import { RUMOURS, onArtError } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
 
 const COMPACT_DIAL_SIZE = 5;
@@ -661,13 +659,6 @@ export function FirstPlayFeed() {
               );
             }}
           >
-            <img
-              src={proxyArtUrl(item.artworkUrl) ?? RUMOURS}
-              alt=""
-              className="compact-first-plays__art"
-              loading="lazy"
-              onError={onArtError}
-            />
             <span className="compact-first-plays__artist">{item.artist}</span>
             <span className="compact-first-plays__title">{item.title}</span>
             <span className="compact-first-plays__station">{item.station.name}</span>

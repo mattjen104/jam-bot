@@ -1251,9 +1251,7 @@ describe("CompactDial first-play rail", () => {
       "/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&home=1",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    expect(tile.querySelector("img")?.getAttribute("src")).toBe(
-      "/api/art?src=https%3A%2F%2Fimages.example.com%2Fnew-track.jpg",
-    );
+    expect(tile.querySelector("img")).toBeNull();
     expect(tile.textContent).toContain("KEXP");
 
     fireEvent.click(tile);

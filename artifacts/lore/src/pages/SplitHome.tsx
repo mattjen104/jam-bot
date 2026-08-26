@@ -242,6 +242,8 @@ export default function SplitHome() {
           />
         </section>
 
+        <FirstPlayFeed />
+
         <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
           <div className="compact-stack-home-header">
             <span>Library</span>
@@ -268,7 +270,6 @@ export default function SplitHome() {
             homeBootstrapPending={mattBootstrapPending}
           />
         </section>
-        <FirstPlayFeed />
       </div>
     </main>
   );
