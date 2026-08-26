@@ -207,15 +207,6 @@ export default function SplitHome() {
   return (
     <main className="split-home">
       <div className="split-home__trees">
-        <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
-        <CompactStack
-          skipped={stackSkipped}
-          onToggleSkip={toggleStackSkip}
-          homeCarousel
-          homeBootstrapPending={mattBootstrapPending}
-        />
-        </section>
-
         <section className="split-home__band split-home__band--dial" aria-label="Live stations">
           <CompactDial
             activeRows={activeRows}
@@ -232,6 +223,15 @@ export default function SplitHome() {
             suppressCrossings={false}
             displayMode="personal"
             categoryFirst={hasEditorialCategory}
+          />
+        </section>
+
+        <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
+          <CompactStack
+            skipped={stackSkipped}
+            onToggleSkip={toggleStackSkip}
+            homeCarousel
+            homeBootstrapPending={mattBootstrapPending}
           />
         </section>
       </div>

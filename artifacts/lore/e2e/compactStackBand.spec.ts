@@ -73,12 +73,12 @@ function homeGrid(page: Page) {
   return page.locator(".split-home__band--stack .compact-stack--home");
 }
 
-async function expectStackBeforeRadio(page: Page) {
+async function expectRadioBeforeStack(page: Page) {
   await expect(page.locator(".split-home__band")).toHaveCount(2);
   const bandLabels = await page.locator(".split-home__band").evaluateAll((bands) =>
     bands.map((band) => band.getAttribute("aria-label")),
   );
-  expect(bandLabels).toEqual(["Recent keeps", "Live stations"]);
+  expect(bandLabels).toEqual(["Live stations", "Recent keeps"]);
 }
 
 test.describe("CompactStack — home grid", () => {
@@ -87,7 +87,7 @@ test.describe("CompactStack — home grid", () => {
   }) => {
     await loadHomeStack(page);
 
-    await expectStackBeforeRadio(page);
+    await expectRadioBeforeStack(page);
     const grid = homeGrid(page);
     const cards = grid.locator(".compact-stack__row");
     await expect(cards).toHaveCount(12, { timeout: 20_000 });
@@ -124,7 +124,7 @@ test.describe("CompactStack — home grid", () => {
     await page.setViewportSize({ width: 402, height: 874 });
     await loadHomeStack(page);
 
-    await expectStackBeforeRadio(page);
+    await expectRadioBeforeStack(page);
     const grid = homeGrid(page);
     await expect(grid.locator(".compact-stack__row")).toHaveCount(12, {
       timeout: 20_000,
