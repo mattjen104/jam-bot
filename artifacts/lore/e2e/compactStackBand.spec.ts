@@ -133,17 +133,29 @@ test.describe("CompactStack — home rail", () => {
     });
     const railMetrics = await grid.evaluate((element) => {
       const firstCard = element.querySelector<HTMLElement>(".compact-stack__row");
+      const firstArt = element.querySelector<HTMLElement>(".compact-stack__art-tile");
       return {
         overflowX: getComputedStyle(element).overflowX,
         scrollable: element.scrollWidth > element.clientWidth,
         visibleColumnWidths: firstCard
           ? element.clientWidth / firstCard.getBoundingClientRect().width
           : 0,
+        artWidthRatio: firstCard && firstArt
+          ? firstArt.getBoundingClientRect().width / firstCard.getBoundingClientRect().width
+          : 0,
+        artIsSquare: firstArt
+          ? Math.abs(
+            firstArt.getBoundingClientRect().width
+            - firstArt.getBoundingClientRect().height,
+          ) < 2
+          : false,
       };
     });
     expect(railMetrics.overflowX).toBe("auto");
     expect(railMetrics.scrollable).toBe(true);
     expect(railMetrics.visibleColumnWidths).toBeGreaterThan(1);
     expect(railMetrics.visibleColumnWidths).toBeLessThan(2);
+    expect(railMetrics.artWidthRatio).toBeGreaterThan(0.9);
+    expect(railMetrics.artIsSquare).toBe(true);
   });
 });
