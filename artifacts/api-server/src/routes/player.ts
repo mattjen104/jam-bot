@@ -159,6 +159,27 @@ router.get("/player/history", h(async (req, res) => {
         AND (prior.played_at < ${spinsTable.playedAt}
           OR (prior.played_at = ${spinsTable.playedAt} AND prior.id < ${spinsTable.id}))
     )`);
+    // The home "New" rail follows the Dial's existing First/premiere
+    // definition, not the broader archive "first time Lore saw this MBID"
+    // meaning. Release dates preserve MusicBrainz's partial precision:
+    // year-only means year-end and month-only means month-end. If a full
+    // date is absent, the established year fallback remains in place.
+    if (useHomeFastLane) {
+      predicates.push(sql`CASE
+        WHEN ${recordingsTable.releaseDate} ~ '^[0-9]{4}$'
+          THEN ${spinsTable.playedAt}::date <= (${recordingsTable.releaseDate} || '-12-31')::date
+        WHEN ${recordingsTable.releaseDate} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          THEN ${spinsTable.playedAt}::date <= (
+            date_trunc('month', (${recordingsTable.releaseDate} || '-01')::date)
+            + interval '1 month - 1 day'
+          )::date
+        WHEN ${recordingsTable.releaseDate} ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+          THEN to_char(${spinsTable.playedAt}, 'YYYY-MM-DD') <= ${recordingsTable.releaseDate}
+        WHEN ${recordingsTable.releaseYear} IS NOT NULL
+          THEN extract(year from ${spinsTable.playedAt})::integer <= ${recordingsTable.releaseYear}
+        ELSE false
+      END`);
+    }
     if (user) predicates.push(libraryHit);
   }
   const rows = await historyDb.select({

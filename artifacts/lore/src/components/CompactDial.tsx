@@ -592,10 +592,10 @@ function releaseDateLabel(item: FirstPlayHistoryItem): string {
 }
 
 /**
- * A home-only discovery rail. The archive endpoint supplies confirmed,
- * resolved first appearances (rather than inferring "new" from a station's
- * transient current metadata), so each tile can honestly identify both the
- * album and the station that introduced it.
+ * A home-only premiere rail. The archive endpoint supplies confirmed,
+ * resolved first appearances that also meet Lore's established First/premiere
+ * release-date rule, rather than inferring "new" from a station's transient
+ * current metadata.
  */
 export function FirstPlayFeed() {
   const { ride } = usePlayer();
