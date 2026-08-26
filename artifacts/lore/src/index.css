@@ -9923,6 +9923,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   margin-top: 10px;
   min-width: 0;
 }
+/* Give the discovery rail a deliberate pause after the live station feed. */
+.split-home .compact-first-plays {
+  margin-top: 22px;
+}
 .compact-first-plays__header {
   display: flex;
   justify-content: space-between;
