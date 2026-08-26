@@ -1,10 +1,10 @@
 /**
  * SplitHome — the Lore front door as a minimal two-tree view.
  *
- *   top ~50%  — CompactDial: concise category cards with honest now-playing
- *               metadata. Opening one reveals its individual station rows
- *               inline as a category → station tree.
- *   bottom ~50% — CompactStack: kept album groups as an artist → album tree.
+ *   top         — CompactStack: kept album groups as an artist → album tree.
+ *   below       — CompactDial: concise category cards with honest now-playing
+ *                 metadata. Opening one reveals its individual station rows
+ *                 inline as a category → station tree.
  *
  * The view never scrolls — it fills the viewport between the app header and
  * the bottom shell. The full scrollable Dial lives at /feed; the full Stack
@@ -203,32 +203,32 @@ export default function SplitHome() {
   return (
     <main className="split-home">
       <div className="split-home__trees">
-      <section className="split-home__band split-home__band--dial" aria-label="Live stations">
-        <CompactDial
-          activeRows={activeRows}
-          skippedRows={skippedRows}
-          activeSlug={radio.station?.slug ?? null}
-          playerStatus={radio.status}
-          presenceMap={presenceMap}
-          onTuneIn={tuneRow}
-          onPlay={playRow}
-          onToggleSkip={toggleSkip}
-          onToggleCategory={toggleCategory}
-          activeCategories={activeCategories}
-          crossingScope={crossingScope}
-          suppressCrossings={false}
-          displayMode="personal"
-          categoryFirst={hasEditorialCategory}
-        />
-      </section>
-
-      <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
+        <section className="split-home__band split-home__band--stack" aria-label="Recent keeps">
         <CompactStack
           skipped={stackSkipped}
           onToggleSkip={toggleStackSkip}
           homeCarousel
         />
-      </section>
+        </section>
+
+        <section className="split-home__band split-home__band--dial" aria-label="Live stations">
+          <CompactDial
+            activeRows={activeRows}
+            skippedRows={skippedRows}
+            activeSlug={radio.station?.slug ?? null}
+            playerStatus={radio.status}
+            presenceMap={presenceMap}
+            onTuneIn={tuneRow}
+            onPlay={playRow}
+            onToggleSkip={toggleSkip}
+            onToggleCategory={toggleCategory}
+            activeCategories={activeCategories}
+            crossingScope={crossingScope}
+            suppressCrossings={false}
+            displayMode="personal"
+            categoryFirst={hasEditorialCategory}
+          />
+        </section>
       </div>
     </main>
   );

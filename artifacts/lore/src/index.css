@@ -10444,9 +10444,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 
 /* ── SplitHome compact-tree graduation ────────────────────────────────────
    The front door is the real-data implementation of the Compact Tree
-   Explorer mockup: two quiet, square-cornered tree surfaces on desktop,
-   collapsing to one column on narrow screens. Keep these tokens scoped so
-   the full Feed and Library retain their own visual language. */
+   Explorer mockup: two quiet, square-cornered tree surfaces stacked in a
+   single reading order. Keep these tokens scoped so the full Feed and Library
+   retain their own visual language. */
 .split-home {
   --home-tree-bg: #171816;
   --home-tree-panel: #1d201c;
@@ -10515,7 +10515,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home__trees {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 18px;
   min-height: 0;
   width: min(100%, 1120px);
@@ -10892,6 +10892,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .split-home__band {
     min-height: 360px;
+  }
+  /* The Stack is now the compact top band; do not retain the old
+     half-screen reservation that belonged to the radio surface. */
+  .split-home__band--stack {
+    min-height: 0;
   }
   .split-home .compact-stack--home {
     grid-template-columns: repeat(2, minmax(0, 1fr));
