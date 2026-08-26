@@ -718,9 +718,10 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { data, isLoading, isFetching, isError } = useMyLibraryInfinite({}, 100);
 
-  // The home grid intentionally exposes the eight newest active albums;
+  // The home rail intentionally exposes the twelve newest active albums in a
+  // four-row, horizontally swipeable grid;
   // full Stack retains its density-controlled pager window.
-  const pageSize = homeCarousel ? 8 : stackPageSize(density);
+  const pageSize = homeCarousel ? 12 : stackPageSize(density);
 
   // The full group list splits into active (pager-windowed) and skipped
   // (below-fold overflow) albums — the Stack-side mirror of CompactDial.

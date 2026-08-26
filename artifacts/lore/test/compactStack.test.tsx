@@ -512,8 +512,8 @@ describe("CompactStack collapsed rows", () => {
     expect(screen.queryByRole("button", { name: /albums by Shared Artist/ })).toBeNull();
   });
 
-  it("renders an eight-album home grid without nested play or skip controls", () => {
-    libraryItems = Array.from({ length: 10 }, (_, index) =>
+  it("renders a twelve-album home rail without nested play or skip controls", () => {
+    libraryItems = Array.from({ length: 12 }, (_, index) =>
       makeItem({
         mbid: `home-${index}`,
         albumTitle: `Home Album ${index + 1}`,
@@ -526,10 +526,10 @@ describe("CompactStack collapsed rows", () => {
     const { container } = renderStack({ homeCarousel: true });
     const homeGrid = container.querySelector(".compact-stack--home");
 
-    expect(homeGrid?.querySelectorAll(".compact-stack__row")).toHaveLength(8);
-    expect(homeGrid?.querySelectorAll(".compact-stack__art-tile")).toHaveLength(8);
+    expect(homeGrid?.querySelectorAll(".compact-stack__row")).toHaveLength(12);
+    expect(homeGrid?.querySelectorAll(".compact-stack__art-tile")).toHaveLength(12);
     expect(homeGrid?.querySelectorAll(".compact-stack__album")).toHaveLength(0);
-    expect(homeGrid?.querySelectorAll(".compact-stack__artist")).toHaveLength(8);
+    expect(homeGrid?.querySelectorAll(".compact-stack__artist")).toHaveLength(12);
     expect(homeGrid?.querySelectorAll(".compact-play-btn")).toHaveLength(0);
     expect(homeGrid?.querySelectorAll(".compact-stack__scan-checkbox")).toHaveLength(0);
     expect(

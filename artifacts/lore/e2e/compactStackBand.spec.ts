@@ -24,7 +24,7 @@ function makeLibraryItem(index: number) {
   };
 }
 
-const HOME_LIBRARY = Array.from({ length: 10 }, (_, index) =>
+const HOME_LIBRARY = Array.from({ length: 12 }, (_, index) =>
   makeLibraryItem(index),
 );
 
@@ -82,7 +82,7 @@ async function expectStackBeforeRadio(page: Page) {
 }
 
 test.describe("CompactStack — home grid", () => {
-  test("shows eight direct-replay album cards without play or skip buttons", async ({
+  test("shows twelve direct-replay album cards in a four-row rail", async ({
     page,
   }) => {
     await loadHomeStack(page);
@@ -90,10 +90,10 @@ test.describe("CompactStack — home grid", () => {
     await expectStackBeforeRadio(page);
     const grid = homeGrid(page);
     const cards = grid.locator(".compact-stack__row");
-    await expect(cards).toHaveCount(8, { timeout: 20_000 });
-    await expect(cards.locator(".compact-stack__tile-art")).toHaveCount(8);
+    await expect(cards).toHaveCount(12, { timeout: 20_000 });
+    await expect(cards.locator(".compact-stack__tile-art")).toHaveCount(12);
     await expect(grid.locator(".compact-stack__album")).toHaveCount(0);
-    await expect(grid.locator(".compact-stack__artist")).toHaveCount(8);
+    await expect(grid.locator(".compact-stack__artist")).toHaveCount(12);
     await expect(grid.locator(".compact-play-btn")).toHaveCount(0);
     await expect(grid.getByRole("checkbox")).toHaveCount(0);
     await expect(
@@ -103,9 +103,16 @@ test.describe("CompactStack — home grid", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("button", {
-        name: "Play Home Album 08 · Home Artist 08",
+        name: "Play Home Album 12 · Home Artist 12",
       }),
     ).toBeVisible();
+    const rowMetrics = await grid.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return {
+        rows: styles.gridTemplateRows.split(" ").filter(Boolean).length,
+      };
+    });
+    expect(rowMetrics.rows).toBe(4);
 
     await cards.first().click();
     await expect(
@@ -119,7 +126,7 @@ test.describe("CompactStack — home grid", () => {
 
     await expectStackBeforeRadio(page);
     const grid = homeGrid(page);
-    await expect(grid.locator(".compact-stack__row")).toHaveCount(8, {
+    await expect(grid.locator(".compact-stack__row")).toHaveCount(12, {
       timeout: 20_000,
     });
     const railMetrics = await grid.evaluate((element) => {
@@ -127,14 +134,18 @@ test.describe("CompactStack — home grid", () => {
       return {
         overflowX: getComputedStyle(element).overflowX,
         scrollable: element.scrollWidth > element.clientWidth,
-        visibleCardWidths: firstCard
+        visibleColumnWidths: firstCard
           ? element.clientWidth / firstCard.getBoundingClientRect().width
           : 0,
+        rows: getComputedStyle(element).gridTemplateRows
+          .split(" ")
+          .filter(Boolean).length,
       };
     });
     expect(railMetrics.overflowX).toBe("auto");
     expect(railMetrics.scrollable).toBe(true);
-    expect(railMetrics.visibleCardWidths).toBeGreaterThan(2);
-    expect(railMetrics.visibleCardWidths).toBeLessThan(3);
+    expect(railMetrics.rows).toBe(4);
+    expect(railMetrics.visibleColumnWidths).toBeGreaterThan(2);
+    expect(railMetrics.visibleColumnWidths).toBeLessThan(3);
   });
 });
