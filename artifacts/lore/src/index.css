@@ -10538,7 +10538,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home__trees {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 18px;
+  gap: 28px;
   min-height: 0;
   width: min(100%, 1120px);
   margin: 0 auto;
