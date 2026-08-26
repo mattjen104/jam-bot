@@ -10950,7 +10950,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
    keeps its five-row tree on /library; home cards remain direct replay
    controls. The taller square cards still advertise horizontal swiping. */
 .split-home .compact-stack--home {
-  --home-stack-art-size: calc((100% - 8px) / 1.5);
+  --home-stack-art-size: calc((100% - 8px) / 1.25);
   display: flex;
   align-items: stretch;
   gap: 8px;
