@@ -10660,6 +10660,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border: 0;
   animation: none;
 }
+.split-home .compact-category-dial__station-logo.station-mark--fallback {
+  border: 0;
+}
 .split-home .compact-category-dial__station-track {
   color: var(--home-tree-text);
   overflow: visible;
