@@ -515,6 +515,8 @@ describe("CompactStack collapsed rows", () => {
 
     expect(homeGrid?.querySelectorAll(".compact-stack__row")).toHaveLength(8);
     expect(homeGrid?.querySelectorAll(".compact-stack__art-tile")).toHaveLength(8);
+    expect(homeGrid?.querySelectorAll(".compact-stack__album")).toHaveLength(0);
+    expect(homeGrid?.querySelectorAll(".compact-stack__artist")).toHaveLength(8);
     expect(homeGrid?.querySelectorAll(".compact-play-btn")).toHaveLength(0);
     expect(homeGrid?.querySelectorAll(".compact-stack__scan-checkbox")).toHaveLength(0);
     expect(

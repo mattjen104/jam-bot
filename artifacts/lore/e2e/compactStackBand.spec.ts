@@ -92,6 +92,8 @@ test.describe("CompactStack — home grid", () => {
     const cards = grid.locator(".compact-stack__row");
     await expect(cards).toHaveCount(8, { timeout: 20_000 });
     await expect(cards.locator(".compact-stack__tile-art")).toHaveCount(8);
+    await expect(grid.locator(".compact-stack__album")).toHaveCount(0);
+    await expect(grid.locator(".compact-stack__artist")).toHaveCount(8);
     await expect(grid.locator(".compact-play-btn")).toHaveCount(0);
     await expect(grid.getByRole("checkbox")).toHaveCount(0);
     await expect(

@@ -433,16 +433,22 @@ function CompactStackRow({
       )}
       {renderSpine(group)}
       <span className="compact-stack__text">
-        {group.releaseYear != null && (
+        {!homeCarousel && group.releaseYear != null && (
           <span className="compact-stack__year">{group.releaseYear}</span>
         )}
-        <span className="compact-stack__album">{group.albumTitle}</span>
+        {!homeCarousel && (
+          <span className="compact-stack__album">{group.albumTitle}</span>
+        )}
         {/* Micro density is year + title only — no artist, no credit. */}
         {group.artist && density !== "micro" && (
-          <>
-            <span className="compact-stack__sep" aria-hidden="true">·</span>
+          homeCarousel ? (
             <span className="compact-stack__artist">{group.artist}</span>
-          </>
+          ) : (
+            <>
+              <span className="compact-stack__sep" aria-hidden="true">·</span>
+              <span className="compact-stack__artist">{group.artist}</span>
+            </>
+          )
         )}
         {/* The relationship credit survives only at normal density. */}
         {credit && density === "normal" && !homeCarousel && (

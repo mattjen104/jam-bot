@@ -10820,6 +10820,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-stack--home .compact-stack__artist {
   font-size: .9em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-height: 2.3em;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .split-home .compact-stack--home .compact-stack__year,
 .split-home .compact-stack--home .compact-stack__sep,
