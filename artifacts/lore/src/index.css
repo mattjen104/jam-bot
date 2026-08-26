@@ -9982,6 +9982,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-first-plays__tile:not(:first-child) {
   margin-left: 8px;
 }
+.split-home .compact-first-plays__tile:first-child .compact-first-plays__art {
+  --first-plays-rotation: -2.5deg;
+}
 .split-home .compact-first-plays__tile:nth-child(2) .compact-first-plays__art {
   --first-plays-rotation: 7deg;
 }
@@ -11016,6 +11019,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:first-child {
   margin-left: 0;
+}
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:first-child .compact-stack__art-tile {
+  --home-stack-rotation: -2.5deg;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(2) .compact-stack__art-tile {
   --home-stack-rotation: 7deg;
