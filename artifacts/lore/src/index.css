@@ -10635,6 +10635,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: var(--home-tree-text);
 }
 .split-home .compact-category-dial__station {
+  min-height: 170px;
   border-color: rgb(205 214 191 / .14);
   background: transparent;
 }
