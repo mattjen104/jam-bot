@@ -10984,25 +10984,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: relative;
   z-index: 1;
   margin-left: 8px;
-  transform: rotate(var(--home-stack-rotation, 0deg));
-  transform-origin: 50% 92%;
 }
 .split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:first-child {
   margin-left: 0;
 }
-.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(2) {
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(2) .compact-stack__art-tile {
   --home-stack-rotation: 4deg;
 }
-.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(3) {
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(3) .compact-stack__art-tile {
   --home-stack-rotation: -3.5deg;
 }
-.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(4) {
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(4) .compact-stack__art-tile {
   --home-stack-rotation: 5deg;
 }
-.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(5) {
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(5) .compact-stack__art-tile {
   --home-stack-rotation: -4deg;
 }
-.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(6) {
+.split-home .compact-stack--home:not(.compact-stack--expanded) .compact-stack__row:nth-child(6) .compact-stack__art-tile {
   --home-stack-rotation: 3deg;
 }
 .split-home .compact-stack--home .compact-stack__art-tile {
@@ -11014,6 +11012,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-self: stretch;
   margin-left: 0;
   border-radius: 3px 3px 0 0;
+  transform: rotate(var(--home-stack-rotation, 0deg));
+  transform-origin: 50% 92%;
 }
 .split-home .compact-stack--home .compact-stack__tile-art {
   object-fit: cover;
