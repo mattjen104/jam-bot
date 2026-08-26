@@ -34,7 +34,7 @@ import {
   type StationCategory,
 } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
-import { CompactDial } from "../components/CompactDial";
+import { CompactDial, FirstPlayFeed } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
 import { useMattStarterLibrary, useStartMattLibrary } from "../lib/meHooks";
 
@@ -249,7 +249,7 @@ export default function SplitHome() {
             homeBootstrapPending={mattBootstrapPending}
           />
         </section>
-
+        <FirstPlayFeed />
       </div>
     </main>
   );

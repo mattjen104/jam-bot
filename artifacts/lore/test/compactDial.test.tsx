@@ -14,7 +14,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
-import { CompactDial, type CompactDialProps } from "../src/components/CompactDial";
+import { CompactDial, FirstPlayFeed, type CompactDialProps } from "../src/components/CompactDial";
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { Station } from "@workspace/api-client-react";
 import type { DialShow, DialSpin, DialStation } from "../src/hooks/useDialData";
@@ -1225,13 +1225,24 @@ describe("CompactDial first-play rail", () => {
       }),
     });
     vi.stubGlobal("fetch", fetchSpy);
-    renderDial({
-      activeRows: [makeRowWithTrack(
-        { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
-        { artist: "Now Artist", title: "Now Track" },
-      )],
-      categoryFirst: true,
-    });
+    render(
+      <>
+        <CompactDial
+          activeRows={[makeRowWithTrack(
+            { slug: "kexp", name: "KEXP", stationCategories: ["anchor"] },
+            { artist: "Now Artist", title: "Now Track" },
+          )]}
+          skippedRows={[]}
+          activeSlug={null}
+          playerStatus="idle"
+          presenceMap={new Map()}
+          onTuneIn={vi.fn()}
+          onPlay={vi.fn()}
+          categoryFirst
+        />
+        <FirstPlayFeed />
+      </>,
+    );
 
     const tile = await screen.findByRole("button", {
       name: "Preview New Artist — New Track, first played on KEXP",

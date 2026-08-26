@@ -593,7 +593,7 @@ interface FirstPlayHistoryItem {
  * transient current metadata), so each tile can honestly identify both the
  * album and the station that introduced it.
  */
-function FirstPlayFeed() {
+export function FirstPlayFeed() {
   const { ride } = usePlayer();
   const [items, setItems] = useState<FirstPlayHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -920,7 +920,6 @@ function CategoryFirstDial({
             playerStatus={playerStatus}
             onPlay={onPlay}
           />
-          <FirstPlayFeed />
         </div>
       )}
     </div>

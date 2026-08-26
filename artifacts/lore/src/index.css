@@ -9936,6 +9936,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-first-plays {
   margin-top: 22px;
 }
+.split-home__trees > .compact-first-plays {
+  margin-top: 0;
+  padding: 20px;
+  background: rgb(29 32 28 / .82);
+}
 .compact-first-plays__header {
   display: flex;
   justify-content: space-between;
