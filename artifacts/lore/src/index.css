@@ -10719,8 +10719,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__remote-rail {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(5, minmax(48px, 1fr));
+  grid-template-rows: repeat(2, max-content);
+  grid-auto-rows: max-content;
   grid-auto-columns: minmax(150px, calc((100% - 7px) / 2.25));
+  align-content: start;
   gap: 7px;
   min-width: 0;
   min-height: 0;
@@ -10737,9 +10739,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: none;
 }
 .split-home .compact-category-dial__remote-rail .compact-dial__remote-row {
-  width: 100%;
+  align-self: start;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
-  padding: 0 12px;
+  min-height: 42px;
+  height: auto;
+  padding: 9px 12px;
   border: 0;
   background: rgb(29 32 28 / .58);
   color: var(--home-tree-text);
