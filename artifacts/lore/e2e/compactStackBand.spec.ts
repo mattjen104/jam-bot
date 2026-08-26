@@ -81,8 +81,8 @@ async function expectRadioBeforeStack(page: Page) {
   expect(bandLabels).toEqual(["Live stations", "Recent keeps"]);
 }
 
-test.describe("CompactStack — home grid", () => {
-  test("shows twelve direct-replay album cards in a four-row rail", async ({
+test.describe("CompactStack — home rail", () => {
+  test("shows twelve direct-replay album cards in a one-row rail", async ({
     page,
   }) => {
     await loadHomeStack(page);
@@ -106,13 +106,15 @@ test.describe("CompactStack — home grid", () => {
         name: "Play Home Album 12 · Home Artist 12",
       }),
     ).toBeVisible();
-    const rowMetrics = await grid.evaluate((element) => {
+    const railMetrics = await grid.evaluate((element) => {
       const styles = getComputedStyle(element);
       return {
-        rows: styles.gridTemplateRows.split(" ").filter(Boolean).length,
+        display: styles.display,
+        flexWrap: styles.flexWrap,
       };
     });
-    expect(rowMetrics.rows).toBe(4);
+    expect(railMetrics.display).toBe("flex");
+    expect(railMetrics.flexWrap).toBe("nowrap");
 
     await cards.first().click();
     await expect(
@@ -120,7 +122,7 @@ test.describe("CompactStack — home grid", () => {
     ).toHaveCount(0);
   });
 
-  test("uses a swipeable rail with a clipped third card on mobile", async ({ page }) => {
+  test("uses a swipeable rail with one-and-a-half cards visible on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 402, height: 874 });
     await loadHomeStack(page);
 
@@ -137,15 +139,11 @@ test.describe("CompactStack — home grid", () => {
         visibleColumnWidths: firstCard
           ? element.clientWidth / firstCard.getBoundingClientRect().width
           : 0,
-        rows: getComputedStyle(element).gridTemplateRows
-          .split(" ")
-          .filter(Boolean).length,
       };
     });
     expect(railMetrics.overflowX).toBe("auto");
     expect(railMetrics.scrollable).toBe(true);
-    expect(railMetrics.rows).toBe(4);
-    expect(railMetrics.visibleColumnWidths).toBeGreaterThan(2);
-    expect(railMetrics.visibleColumnWidths).toBeLessThan(3);
+    expect(railMetrics.visibleColumnWidths).toBeGreaterThan(1);
+    expect(railMetrics.visibleColumnWidths).toBeLessThan(2);
   });
 });

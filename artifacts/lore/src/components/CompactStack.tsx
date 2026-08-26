@@ -719,8 +719,8 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
   const { data, isLoading, isFetching, isError } = useMyLibraryInfinite({}, 100);
 
   // The home rail intentionally exposes the twelve newest active albums in a
-  // four-row, horizontally swipeable grid;
-  // full Stack retains its density-controlled pager window.
+  // single horizontally swipeable row; full Stack retains its
+  // density-controlled pager window.
   const pageSize = homeCarousel ? 12 : stackPageSize(density);
 
   // The full group list splits into active (pager-windowed) and skipped
