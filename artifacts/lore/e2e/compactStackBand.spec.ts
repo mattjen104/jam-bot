@@ -74,11 +74,11 @@ function homeGrid(page: Page) {
 }
 
 async function expectRadioBeforeStack(page: Page) {
-  await expect(page.locator(".split-home__band")).toHaveCount(3);
+  await expect(page.locator(".split-home__band")).toHaveCount(2);
   const bandLabels = await page.locator(".split-home__band").evaluateAll((bands) =>
     bands.map((band) => band.getAttribute("aria-label")),
   );
-  expect(bandLabels).toEqual(["Live stations", "Recent keeps", "Recent first plays"]);
+  expect(bandLabels).toEqual(["Live stations", "Recent keeps"]);
 }
 
 test.describe("CompactStack — home grid", () => {

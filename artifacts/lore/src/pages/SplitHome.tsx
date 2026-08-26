@@ -4,8 +4,7 @@
  *   top         — CompactDial: concise category cards with honest now-playing
  *                 metadata. Opening one reveals its individual station rows
  *                 inline as a category → station tree.
- *   middle      — CompactStack: kept album groups as an artist → album tree.
- *   bottom      — First Plays: recent discovery tiles with station provenance.
+ *   below       — CompactStack: kept album groups as an artist → album tree.
  *
  * The view never scrolls — it fills the viewport between the app header and
  * the bottom shell. The full scrollable Dial lives at /feed; the full Stack
@@ -34,7 +33,7 @@ import {
   type StationCategory,
 } from "../lib/dialCategories";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
-import { CompactDial, FirstPlayFeed } from "../components/CompactDial";
+import { CompactDial } from "../components/CompactDial";
 import { CompactStack } from "../components/CompactStack";
 import { useMattStarterLibrary, useStartMattLibrary } from "../lib/meHooks";
 
@@ -224,7 +223,6 @@ export default function SplitHome() {
             suppressCrossings={false}
             displayMode="personal"
             categoryFirst={hasEditorialCategory}
-            showFirstPlays={false}
           />
         </section>
 
@@ -237,12 +235,6 @@ export default function SplitHome() {
           />
         </section>
 
-        <section
-          className="split-home__band split-home__band--first-plays"
-          aria-label="Recent first plays"
-        >
-          <FirstPlayFeed />
-        </section>
       </div>
     </main>
   );
