@@ -122,7 +122,7 @@ test.describe("CompactStack — home rail", () => {
     ).toHaveCount(0);
   });
 
-  test("uses a swipeable rail with one-and-a-half cards visible on mobile", async ({ page }) => {
+  test("uses a swipeable one-row rail with taller square cards on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 402, height: 874 });
     await loadHomeStack(page);
 
@@ -153,8 +153,8 @@ test.describe("CompactStack — home rail", () => {
     });
     expect(railMetrics.overflowX).toBe("auto");
     expect(railMetrics.scrollable).toBe(true);
-    expect(railMetrics.visibleColumnWidths).toBeGreaterThan(1);
-    expect(railMetrics.visibleColumnWidths).toBeLessThan(2);
+    expect(railMetrics.visibleColumnWidths).toBeGreaterThan(2);
+    expect(railMetrics.visibleColumnWidths).toBeLessThan(4);
     expect(railMetrics.artWidthRatio).toBeGreaterThan(0.9);
     expect(railMetrics.artIsSquare).toBe(true);
   });
