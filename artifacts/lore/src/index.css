@@ -11092,6 +11092,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .split-home__band {
     min-height: 360px;
   }
+  .split-home__band--dial {
+    min-height: 0;
+  }
   /* The Stack is now the compact top band; do not retain the old
      half-screen reservation that belonged to the radio surface. */
   .split-home__band--stack {
