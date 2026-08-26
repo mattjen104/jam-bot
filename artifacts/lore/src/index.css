@@ -9959,6 +9959,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding: 0 0 4px;
   scrollbar-width: thin;
 }
+.split-home .compact-first-plays__rail {
+  gap: 8px;
+  padding-top: 24px;
+  padding-bottom: 18px;
+}
 .compact-first-plays__tile {
   /* One complete discovery card plus a partial card peeking from the left;
      right alignment keeps the newest card fully readable. */
@@ -9974,6 +9979,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-align: left;
   cursor: pointer;
 }
+.split-home .compact-first-plays__tile:not(:first-child) {
+  margin-left: 8px;
+}
+.split-home .compact-first-plays__tile:nth-child(2) .compact-first-plays__art {
+  --first-plays-rotation: 7deg;
+}
+.split-home .compact-first-plays__tile:nth-child(3) .compact-first-plays__art {
+  --first-plays-rotation: -5deg;
+}
+.split-home .compact-first-plays__tile:nth-child(4) .compact-first-plays__art {
+  --first-plays-rotation: 6deg;
+}
+.split-home .compact-first-plays__tile:nth-child(5) .compact-first-plays__art {
+  --first-plays-rotation: -4.5deg;
+}
+.split-home .compact-first-plays__tile:nth-child(6) .compact-first-plays__art {
+  --first-plays-rotation: 5deg;
+}
 .compact-first-plays__tile:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
@@ -9984,6 +10007,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   aspect-ratio: 1;
   object-fit: cover;
   background: hsl(var(--secondary));
+}
+.split-home .compact-first-plays__art {
+  transform: rotate(var(--first-plays-rotation, 0deg));
+  transform-origin: 50% 100%;
 }
 .compact-first-plays__artist,
 .compact-first-plays__title,
