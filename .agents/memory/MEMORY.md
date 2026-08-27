@@ -105,7 +105,7 @@
 - [Merge-splice duplication](crossings-route-merge-splice.md) — twin route handlers AND e2e test blocks get duplicated/triplicated by merges (duplicate Playwright titles fail the gate); grep for duplicate titles after merges.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
 - [Lore test provider drift](lore-test-provider-drift.md) — new react-query hooks in shared components break provider-less tests; fix via meHooks/api-client barrel mocks, not QueryClientProvider wrapping.
-- [Lore two-layer typography](lore-two-layer-typography.md) — Signifier voice vs system-sans interface; all sizes from the 3-token scale in tokens/typography.css, no px or Signifier outside it.
+- [Lore two-layer typography](lore-two-layer-typography.md) — Signifier voice vs system-sans interface; home is Nebula Sans with Semibold headings; sizes still use the 3-token scale.
 - [Playwright autoplay testing](playwright-autoplay-testing.md) — 3 defaults silently allow autoplay (default policy flag, --mute-audio, evaluate's userGesture); a no-gesture control test is mandatory.
 - [Tier-1 prefetch loop & interstitial gating](tier1-prefetch-loop.md) — zero-link items need a fetched-set or prefetch loops when queue-run is deferred; interstitial must gate spotifyQueueRun too.
 - [Crossing-tone e2e merge gate](tone-e2e-gate.md) — `tone-e2e` validation runs the autoplay-policy Playwright spec; fails loudly when Chromium or the lore dev server is missing, so restart the lore workflow first.

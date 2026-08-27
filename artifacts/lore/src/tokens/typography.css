@@ -40,8 +40,8 @@
 }
 
 /* Nebula Sans — SIL Open Font License 1.1; source and license are bundled
-   alongside this artifact. Limited to the front-door headings so the rest of
-   Lore retains its established editorial and terminal voices. */
+   alongside this artifact. Scoped to the front door so the rest of Lore
+   retains its established editorial and terminal voices. */
 @font-face {
   font-family: 'Nebula Sans';
   src: url('/lore/fonts/NebulaSans-Book.woff2') format('woff2');

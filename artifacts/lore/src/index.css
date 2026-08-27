@@ -8925,7 +8925,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
   cursor: pointer;
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   line-height: 1.2;
   white-space: nowrap;
@@ -10510,7 +10510,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: var(--home-tree-text);
   font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-signature);
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.05;
 }
 .split-home__lede {
@@ -10569,7 +10569,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: var(--home-tree-text);
   font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-signature);
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.15;
 }
 .split-home__remote-trigger {
@@ -10617,7 +10617,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: var(--home-tree-text);
   font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-interface);
-  font-weight: 400;
+  font-weight: 600;
 }
 .split-home__panel-title span {
   color: var(--home-tree-muted);
@@ -11176,7 +11176,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-first-plays__header {
   font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-signature);
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.15;
 }
 .split-home .compact-first-plays__artist { color: var(--home-tree-text); }
