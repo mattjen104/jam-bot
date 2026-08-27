@@ -1209,7 +1209,7 @@ describe("CompactDial category feed station marks", () => {
 });
 
 describe("CompactDial first-play rail", () => {
-  it("renders recent first plays with square artwork, station provenance, and a preview action", async () => {
+  it("renders recent first plays with month-first release dates, provenance, and preview action", async () => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -1254,7 +1254,7 @@ describe("CompactDial first-play rail", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(tile.querySelector("img")).toBeNull();
-    expect(tile.firstElementChild?.textContent).toBe("2024-05-17");
+    expect(tile.firstElementChild?.textContent).toBe("05/17/2024");
     expect(tile.textContent).toContain("KEXP");
 
     fireEvent.click(tile);

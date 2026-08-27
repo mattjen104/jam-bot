@@ -588,7 +588,16 @@ interface FirstPlayHistoryItem {
 }
 
 function releaseDateLabel(item: FirstPlayHistoryItem): string {
-  return item.releaseDate ?? (item.releaseYear != null ? String(item.releaseYear) : "Date unknown");
+  if (item.releaseDate) {
+    const match = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(item.releaseDate);
+    if (match) {
+      const [, year, month, day] = match;
+      if (month && day) return `${month}/${day}/${year}`;
+      if (month) return `${month}/${year}`;
+      return year;
+    }
+  }
+  return item.releaseYear != null ? String(item.releaseYear) : "Date unknown";
 }
 
 /**

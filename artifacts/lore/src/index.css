@@ -9945,10 +9945,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 2px 5px;
+  padding: 0 2px 8px;
   color: hsl(var(--muted-foreground));
-  font-family: var(--lore-font-terminal);
-  font-size: var(--lore-size-small);
+  font-family: var(--lore-font-signature);
+  font-size: var(--lore-size-signature);
+  font-weight: 400;
+  line-height: 1.15;
 }
 .compact-first-plays__rail {
   display: flex;
@@ -10562,12 +10564,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding-right: 0;
 }
 .split-home .split-home__band-heading {
-  flex: 0 0 26px;
-  min-height: 26px;
+  flex: 0 0 auto;
+  min-height: 34px;
   color: var(--home-tree-text);
-  font-family: var(--lore-font-terminal);
-  font-size: var(--lore-size-small);
-  line-height: 26px;
+  font-family: var(--lore-font-signature);
+  font-size: var(--lore-size-signature);
+  font-weight: 400;
+  line-height: 1.15;
 }
 .split-home__remote-trigger {
   appearance: none;
@@ -10986,16 +10989,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   touch-action: pan-x;
 }
 .split-home .compact-stack-home-header {
-  flex: 0 0 26px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 26px;
+  min-height: 34px;
   padding-left: 22px;
   color: var(--home-tree-text);
-  font-family: var(--lore-font-terminal);
-  font-size: var(--lore-size-small);
-  line-height: 1;
+  font-family: var(--lore-font-signature);
+  font-size: var(--lore-size-signature);
+  font-weight: 400;
+  line-height: 1.15;
 }
 .split-home .compact-stack-home-header__add {
   display: grid;
@@ -11168,6 +11172,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-first-plays__station {
   font-family: var(--lore-font-terminal);
   font-size: var(--lore-size-small);
+}
+.split-home .compact-first-plays__header {
+  font-family: var(--lore-font-signature);
+  font-size: var(--lore-size-signature);
+  font-weight: 400;
+  line-height: 1.15;
 }
 .split-home .compact-first-plays__artist { color: var(--home-tree-text); }
 .split-home .compact-first-plays__release-date { color: var(--home-tree-accent); }
