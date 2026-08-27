@@ -11189,7 +11189,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .split-home {
     height: auto;
     min-height: calc(100dvh - var(--shell-h, 0px));
-    padding: 18px 16px 32px;
+    padding: 18px 16px 20px;
     overflow: visible;
   }
   .split-home__intro {
@@ -11200,9 +11200,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .split-home__trees {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
   .split-home__band {
     min-height: 360px;
+  }
+  /* Give each heading a little more air before its tree while keeping the
+     overall three-section stack compact enough for the Library rail to land
+     fully in the initial viewport. */
+  .split-home .split-home__band-heading,
+  .split-home .compact-stack-home-header {
+    min-height: 40px;
+  }
+  .split-home .compact-first-plays__header {
+    padding-bottom: 12px;
+  }
+  .split-home .compact-first-plays__rail {
+    padding-top: 6px;
   }
   .split-home__band--dial {
     min-height: 0;
