@@ -140,7 +140,7 @@ async function installRoutes(page: Page) {
   );
 
   await page.route("**/api/stations?**", (route) =>
-    route.fulfill({ json: { stations: [] } }),
+    route.fulfill({ json: { stations: STATIONS } }),
   );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: STATIONS } }),
@@ -309,34 +309,30 @@ test.describe("Mobile front door — five-row viewport guarantee", () => {
     expect(errors).toHaveLength(0);
   });
 
-  test("portrait art cap: artwrap ≤ 35dvh and hero leaves room for five rows", async ({
+  test("uses the locked interface type scale on mobile", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
     await loadFrontDoor(page);
 
-    const hero = await page.evaluate(() => {
-      const artwrap = document.querySelector<HTMLElement>(".dial-hero__artwrap");
-      const panel = document.querySelector<HTMLElement>(".dial-hero__setpanel");
-      const artwrapH = artwrap ? artwrap.getBoundingClientRect().height : 0;
-      const panelH = panel ? panel.getBoundingClientRect().height : 0;
+    const type = await page.evaluate(() => {
+      const title = document.querySelector<HTMLElement>(".home-discovery__title");
+      const row = document.querySelector<HTMLElement>(".home-discovery__artist");
+      const byline = document.querySelector<HTMLElement>(".home-discovery__byline");
       return {
-        artwrapH,
-        panelH,
-        heroH: artwrapH + panelH,
-        hasTopbarAll: !!document.querySelector(".dial-topbar--all"),
+        title: title ? getComputedStyle(title).fontSize : "",
+        row: row ? getComputedStyle(row).fontSize : "",
+        byline: byline ? getComputedStyle(byline).fontSize : "",
+        family: row ? getComputedStyle(row).fontFamily : "",
       };
     });
 
-    // Artwrap must be capped by the portrait rule (35dvh ≈ 295px at 844px).
-    // Allow 20px tolerance for font/padding rounding.
-    const max35dvh = Math.ceil(0.35 * 844) + 20;
-    expect(hero.artwrapH).toBeLessThanOrEqual(max35dvh);
-
-    // Hero (art + queue panel) must leave ≥ 200px for rows (5 × 40px minimum).
-    expect(hero.heroH).toBeLessThanOrEqual(844 - 200);
-
-    expect(hero.hasTopbarAll).toBe(false);
+    expect(type).toEqual(expect.objectContaining({
+      title: "23px",
+      row: "16px",
+      byline: "12px",
+    }));
+    expect(type.family).toContain("Nebula Sans");
   });
 });

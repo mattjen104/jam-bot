@@ -2929,7 +2929,7 @@ router.get("/me/library", h(async (req, res) => {
 
   type ResolvedRow = {
     mbid: string; provenance: LibraryItemProvenance; addedAt: Date; removedAt: Date | null;
-    title: string | null; artist: string | null; artworkUrl: string | null;
+    title: string | null; artist: string | null; artistMbid: string | null; artworkUrl: string | null;
     links: Array<{ url: string }> | null; sortKey: string; albumTitle: string | null;
     releaseGroupMbid: string | null; releaseYear: number | null;
   };
@@ -2942,6 +2942,7 @@ router.get("/me/library", h(async (req, res) => {
       removedAt: libraryItemsTable.removedAt,
       title: recordingsTable.title,
       artist: recordingsTable.artist,
+      artistMbid: recordingsTable.artistMbid,
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
       releaseYear: recordingsTable.releaseYear,
@@ -3060,6 +3061,7 @@ router.get("/me/library", h(async (req, res) => {
       removedAt: r.removedAt,
       title: r.title,
       artist: r.artist,
+      artistMbid: r.artistMbid,
       artworkUrl: r.artworkUrl,
       links: r.links as Array<{ url: string }> | null,
       albumTitle: r.albumTitle,
@@ -3076,6 +3078,7 @@ router.get("/me/library", h(async (req, res) => {
       removedAt: s.removedAt,
       title: s.title,
       artist: s.artist,
+      artistMbid: null as string | null,
       artworkUrl: s.artworkUrl,
       links: null as Array<{ url: string }> | null,
       albumTitle: s.albumName,
@@ -3123,6 +3126,7 @@ router.get("/me/library", h(async (req, res) => {
         ? {
             title: r.title,
             artist: r.artist,
+            artistMbid: r.artistMbid ?? null,
             artworkUrl: r.artworkUrl ?? null,
             albumTitle: r.albumTitle ?? null,
             releaseGroupMbid: r.releaseGroupMbid ?? null,

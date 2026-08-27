@@ -5647,6 +5647,7 @@ export const ListMyLibraryResponse = zod.object({
         .object({
           title: zod.string(),
           artist: zod.string(),
+          artistMbid: zod.string().nullable(),
           artworkUrl: zod.string().nullable(),
           albumTitle: zod.string().nullable(),
           releaseGroupMbid: zod.string().nullable(),

@@ -4264,12 +4264,13 @@ components:
       properties:
         title: { type: string }
         artist: { type: string }
+        artistMbid: { type: string, nullable: true }
         artworkUrl: { type: string, nullable: true }
         albumTitle: { type: string, nullable: true }
         releaseGroupMbid: { type: string, nullable: true }
         releaseYear: { type: integer, nullable: true }
         spotifyUrl: { type: string, nullable: true }
-      required: [title, artist, artworkUrl, albumTitle, releaseGroupMbid, releaseYear, spotifyUrl]
+      required: [title, artist, artistMbid, artworkUrl, albumTitle, releaseGroupMbid, releaseYear, spotifyUrl]
     LibraryItem:
       type: object
       properties:

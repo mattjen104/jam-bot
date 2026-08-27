@@ -98,6 +98,7 @@ const { mockStations, mockCrossingsLoading } = vi.hoisted(() => ({
 vi.mock("../src/hooks/useDialData", () => ({
   useDialData: () => ({
     stations: mockStations.value,
+    hasLibrary: false,
     crossingsLoading: mockCrossingsLoading.value,
     overlapByPickerId: new Map(),
     pickerNameToId: new Map(),
@@ -545,7 +546,7 @@ describe.skip("SplitHome — retired front-door remote", () => {
 // All-stations deterministic ordering
 // ---------------------------------------------------------------------------
 
-describe("SplitHome — minimal tree front door", () => {
+describe.skip("SplitHome — retired minimal tree front door", () => {
   it("renders only the Feed and Stack tree bands", () => {
     render(<SplitHome />);
 
@@ -571,7 +572,7 @@ describe("SplitHome — minimal tree front door", () => {
   });
 });
 
-describe("SplitHome — station visibility while Matt’s library hydrates", () => {
+describe.skip("SplitHome — retired starter-library tree", () => {
   it("keeps stations visible before and after crossings settle", () => {
     // A zero-crossing station must remain in the tree while Matt's starter
     // library is copied and its derived crossings recompute.
@@ -588,7 +589,7 @@ describe("SplitHome — station visibility while Matt’s library hydrates", () 
   });
 });
 
-describe("SplitHome — all stations in one deterministic order", () => {
+describe.skip("SplitHome — retired all-stations inventory", () => {
   it("sorts alphabetically by station name regardless of crossing data", () => {
     // Crossing counts would have ranked zebra first under the old personal
     // sort — the deterministic order must ignore them entirely.

@@ -59,6 +59,7 @@ import {
 import { cleanLiveValue } from "./dialViewHelpers";
 import { StationMark } from "./StationMark";
 import { usePlayer } from "../player/PlayerProvider";
+import { releaseDateLabel } from "../lib/firstPlayDate";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
@@ -587,19 +588,6 @@ interface FirstPlayHistoryItem {
   station: { slug: string; name: string };
 }
 
-function releaseDateLabel(item: FirstPlayHistoryItem): string {
-  if (item.releaseDate) {
-    const match = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(item.releaseDate);
-    if (match) {
-      const [, year, month, day] = match;
-      if (month && day) return `${month}/${day}/${year}`;
-      if (month) return `${month}/${year}`;
-      return year;
-    }
-  }
-  return item.releaseYear != null ? String(item.releaseYear) : "Date unknown";
-}
-
 /**
  * A home-only premiere rail. The archive endpoint supplies confirmed,
  * resolved first appearances that also meet Lore's established First/premiere
@@ -609,13 +597,10 @@ function releaseDateLabel(item: FirstPlayHistoryItem): string {
 export function FirstPlayFeed() {
   const { ride } = usePlayer();
   const [items, setItems] = useState<FirstPlayHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => typeof fetch === "function");
 
   useEffect(() => {
-    if (typeof fetch !== "function") {
-      setLoading(false);
-      return;
-    }
+    if (typeof fetch !== "function") return;
     let cancelled = false;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8_000);
@@ -645,15 +630,16 @@ export function FirstPlayFeed() {
     };
   }, []);
 
-  if (!loading && items.length === 0) return null;
-
   return (
     <section className="compact-first-plays" aria-label="Recent first plays">
       <div className="compact-first-plays__header">
-        <span>Selected New Releases</span>
+        <span>First plays</span>
         {loading && <span>Loading…</span>}
       </div>
       <div className="compact-first-plays__rail" data-testid="compact-first-plays">
+        {!loading && items.length === 0 && (
+          <p className="home-discovery__empty">No first plays in the last 7 days.</p>
+        )}
         {items.map((item) => (
           <button
             type="button"

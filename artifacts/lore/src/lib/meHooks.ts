@@ -39,6 +39,7 @@ export interface ReplayPlaylistTarget {
 export interface LibraryRecording {
   title: string;
   artist: string;
+  artistMbid?: string | null;
   artworkUrl: string | null;
   albumTitle: string | null;
   /**

@@ -11232,3 +11232,259 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     flex-basis: auto;
   }
 }
+
+/* ── Warm/cold Lore front door ─────────────────────────────────────────────
+   Home is the discovery hierarchy. The category-first controls remain on
+   /feed and are intentionally not reused here. */
+.split-home--discovery {
+  height: auto;
+  min-height: 100dvh;
+  overflow-x: clip;
+  font-family: var(--lore-font-body);
+  font-size: var(--lore-size-interface);
+  font-weight: var(--lore-weight-book);
+}
+.split-home__discovery-shell {
+  width: min(100%, 920px);
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 34px 24px 96px;
+}
+.split-home__discovery-intro { margin: 0 0 34px; }
+.split-home__eyebrow,
+.home-discovery__heading,
+.home-discovery__more,
+.home-discovery__byline,
+.home-discovery__keep-byline,
+.home-discovery__hint,
+.home-discovery__pinned {
+  font-size: var(--lore-size-small);
+}
+.split-home__eyebrow,
+.home-discovery__heading,
+.home-discovery__byline,
+.home-discovery__pinned {
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.split-home__eyebrow {
+  margin: 0 0 8px;
+  color: hsl(var(--muted-foreground));
+  font-weight: var(--lore-weight-medium);
+}
+.split-home__discovery-intro h1 {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-signature);
+  font-weight: var(--lore-weight-semibold);
+  line-height: 1.12;
+}
+.split-home__discovery-intro > p:last-child {
+  margin: 8px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-interface);
+}
+.home-discovery {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+.home-discovery__section { min-width: 0; }
+.home-discovery__heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.home-discovery__heading {
+  margin: 0 0 10px;
+  color: hsl(var(--muted-foreground));
+  font-weight: var(--lore-weight-semibold);
+}
+.home-discovery__more {
+  color: hsl(var(--muted-foreground));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home-discovery__list { border-top: 1px solid hsl(var(--border) / 0.7); }
+.split-home--discovery .home-discovery__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(180px, .8fr);
+  grid-template-areas: "artist track byline";
+  align-items: baseline;
+  gap: 10px 20px;
+  min-height: 72px;
+  padding: 14px 12px 13px;
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 0;
+  cursor: pointer;
+}
+.split-home--discovery .home-discovery__row::before {
+  inset: 11px auto 11px 0;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+.split-home--discovery .home-discovery__row:hover { background: hsl(var(--secondary) / 0.23); }
+.split-home--discovery .home-discovery__row:focus-visible {
+  outline: 2px solid hsl(var(--foreground));
+  outline-offset: -2px;
+}
+.home-discovery__artist,
+.home-discovery__track {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--lore-size-interface);
+  line-height: 1.3;
+}
+.home-discovery__artist {
+  grid-area: artist;
+  color: hsl(var(--foreground));
+  font-weight: var(--lore-weight-semibold);
+}
+.home-discovery__artist a:hover,
+.home-discovery__station:hover,
+.home-discovery__selector:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home-discovery__track {
+  grid-area: track;
+  color: hsl(var(--foreground) / 0.78);
+  font-weight: var(--lore-weight-book);
+}
+.home-discovery__byline {
+  grid-area: byline;
+  color: hsl(var(--muted-foreground));
+  font-weight: var(--lore-weight-medium);
+  line-height: 1.45;
+}
+.home-discovery__selector--confirmed {
+  color: hsl(var(--accent));
+  font-weight: var(--lore-weight-semibold);
+}
+.home-discovery__byline--inferred,
+.home-discovery__byline--claim { color: hsl(var(--foreground) / 0.55); }
+.home-discovery__byline--unknown { color: hsl(var(--muted-foreground) / 0.7); }
+.home-discovery__row--pinned::before { background: hsl(var(--foreground)); }
+.home-discovery__pinned {
+  position: absolute;
+  right: 12px;
+  bottom: 5px;
+  color: hsl(var(--muted-foreground));
+}
+@keyframes home-crossing-arrive {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.home-discovery__row--arrived { animation: home-crossing-arrive 420ms ease-out both; }
+.home-discovery__hint,
+.home-discovery__empty {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
+}
+.home-discovery__import {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--lore-font-body);
+  font-size: var(--lore-size-small);
+  font-weight: var(--lore-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.home-discovery__import:hover,
+.home-discovery__import:focus-visible {
+  border-color: hsl(var(--foreground));
+}
+.home-discovery__empty {
+  padding: 16px 12px;
+  border: 1px solid hsl(var(--border) / 0.7);
+}
+.home-discovery__keeps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(152px, 190px);
+  gap: 10px;
+  padding-bottom: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+.home-discovery__keep {
+  display: flex;
+  min-height: 126px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 3px;
+  padding: 14px;
+  border: 1px solid hsl(var(--border) / 0.72);
+  background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--secondary) / .38));
+  color: hsl(var(--foreground));
+  scroll-snap-align: start;
+}
+.home-discovery__keep--unresolved {
+  background: transparent;
+  border-style: dashed;
+}
+.home-discovery__keep-title {
+  font-size: var(--lore-size-interface);
+  font-weight: var(--lore-weight-semibold);
+}
+.home-discovery__keep-artist {
+  font-size: var(--lore-size-interface);
+  font-weight: var(--lore-weight-book);
+}
+.home-discovery__keep-byline {
+  margin-top: 5px;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.split-home--discovery .compact-first-plays {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 30px 0 0;
+  padding: 0;
+  border: 0;
+  font-family: var(--lore-font-body);
+}
+.split-home--discovery .compact-first-plays__rail,
+.split-home--discovery .home-discovery__keeps {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  contain: inline-size;
+}
+.split-home--discovery .compact-first-plays__tile:not(:first-child) { display: flex; }
+
+@media (max-width: 680px) {
+  .split-home__discovery-shell { padding: 22px 14px 104px; }
+  .split-home__discovery-intro { margin-bottom: 22px; }
+  .home-discovery { gap: 24px; }
+  .split-home--discovery .home-discovery__row {
+    grid-template-columns: 1fr;
+    grid-template-areas: "artist" "track" "byline";
+    gap: 2px;
+    min-height: 0;
+    padding: 10px 8px 11px;
+  }
+  .home-discovery__artist,
+  .home-discovery__track,
+  .home-discovery__byline {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-discovery__row--arrived { animation: none; }
+}

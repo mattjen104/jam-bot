@@ -13,7 +13,7 @@
     HOME SURFACE — Nebula Sans, a humanist sans used throughout the front door
                    with weight changes for hierarchy.
 
-    INTERFACE — native system sans (system-ui stack, no download).
+    INTERFACE — Nebula Sans, the interface face used throughout the front door.
      --lore-font-body        flowing prose, UI copy, descriptions
      --lore-font-display     labels, chips, station names, callouts
      --lore-font-mono        metadata, timestamps, counts, technical strings
@@ -79,10 +79,16 @@
   --lore-font-signature: 'Signifier', Georgia, serif;
   --lore-font-home-heading: 'Nebula Sans', system-ui, sans-serif;
 
-  /* Interface layer — native system sans, nothing downloaded. */
-  --lore-font-body:    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --lore-font-display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --lore-font-mono:    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Interface layer — Nebula Sans. Keep the three roles separate so voice
+     and terminal surfaces can remain independently scoped. */
+  --lore-font-body:    'Nebula Sans', system-ui, sans-serif;
+  --lore-font-display: 'Nebula Sans', system-ui, sans-serif;
+  --lore-font-mono:    'Nebula Sans', system-ui, sans-serif;
+
+  /* Named weights keep hierarchy readable without introducing extra sizes. */
+  --lore-weight-book:     400;
+  --lore-weight-medium:   500;
+  --lore-weight-semibold: 600;
 
   /* Terminal layer — JetBrains Mono, the modern code face used on the dial
      sentence rows; native monospace fallbacks while the file loads. */
