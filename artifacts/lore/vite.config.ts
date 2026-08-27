@@ -28,6 +28,12 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
+  // The preview is used directly in mobile Safari as well as desktop Chromium.
+  // Keep dev-served application modules parseable by older iOS Safari instead
+  // of relying on Vite's newer browser baseline.
+  esbuild: {
+    target: "es2018",
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -55,8 +61,14 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   build: {
+    target: "es2018",
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: "es2018",
+    },
   },
   server: {
     port,

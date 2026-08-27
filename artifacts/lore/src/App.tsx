@@ -219,13 +219,15 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <PlayerProvider>
-          <ListeningLogger />
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Shell />
-          </WouterRouter>
-          <Toaster />
-        </PlayerProvider>
+        <ErrorBoundary>
+          <PlayerProvider>
+            <ListeningLogger />
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Shell />
+            </WouterRouter>
+            <Toaster />
+          </PlayerProvider>
+        </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>
   );
