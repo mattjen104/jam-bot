@@ -6,6 +6,73 @@ import type { LibraryItem } from "../lib/meHooks";
 import { FirstPlayFeed } from "./CompactDial";
 
 type DiscoveryTrack = DialSpin & { spinId?: number | null };
+type DiscoveryLane = "crossing" | "also";
+
+interface StableDiscoveryCard {
+  cardKey: string;
+  track: DiscoveryTrack;
+  lane: DiscoveryLane;
+}
+
+interface StableDiscoveryState {
+  cards: Map<string, StableDiscoveryCard>;
+  crossingOrder: Array<string | null>;
+  alsoOrder: Array<string | null>;
+}
+
+/**
+ * Identity for the live card, deliberately independent of resolution fields.
+ * sourcePlayedAt is the station's play-start observation and stays stable while
+ * MusicBrainz/artist enrichment arrives. Text is the fallback for older rows
+ * that do not carry the source timestamp.
+ */
+export function discoveryTrackCardKey(track: DiscoveryTrack): string {
+  const sourcePlayedAt = track.sourcePlayedAt?.trim();
+  if (sourcePlayedAt) return `source:${sourcePlayedAt}`;
+  const artist = track.artist?.trim().toLowerCase() ?? "";
+  const title = track.title?.trim().toLowerCase() ?? "";
+  if (artist || title) return `text:${artist}|${title}`;
+  return `mbid:${track.mbid ?? "unknown"}`;
+}
+
+function discoveryTrackTextKey(track: DiscoveryTrack): string {
+  const artist = track.artist?.trim().toLowerCase() ?? "";
+  const title = track.title?.trim().toLowerCase() ?? "";
+  return artist || title ? `${artist}|${title}` : "";
+}
+
+export function sameDiscoveryTrackCard(
+  previous: DiscoveryTrack,
+  current: DiscoveryTrack,
+): boolean {
+  if (previous.spinId != null && current.spinId != null) {
+    return previous.spinId === current.spinId;
+  }
+  const previousText = discoveryTrackTextKey(previous);
+  const currentText = discoveryTrackTextKey(current);
+  if (previousText && currentText && previousText === currentText) return true;
+  const previousTitle = previous.title?.trim().toLowerCase() ?? "";
+  const currentTitle = current.title?.trim().toLowerCase() ?? "";
+  if (previousTitle && currentTitle && previousTitle === currentTitle) return true;
+  const previousSource = previous.sourcePlayedAt?.trim();
+  const currentSource = current.sourcePlayedAt?.trim();
+  if (previousSource && currentSource) return previousSource === currentSource;
+  return discoveryTrackCardKey(previous) === discoveryTrackCardKey(current);
+}
+
+export function reconcileDiscoverySlots(
+  previousSlots: Array<string | null>,
+  currentOrder: string[],
+  lockedSlugs: ReadonlySet<string>,
+): Array<string | null> {
+  const available = currentOrder.filter((slug) => !lockedSlugs.has(slug));
+  let availableIndex = 0;
+  const next = previousSlots.map((slug) => {
+    if (slug && lockedSlugs.has(slug)) return slug;
+    return available[availableIndex++] ?? null;
+  });
+  return [...next, ...available.slice(availableIndex)];
+}
 
 export type DiscoveryProvenance =
   | { kind: "named"; name: string; station: string; stationSlug: string }
@@ -255,9 +322,13 @@ export function HomeDiscovery({
   warm: boolean;
   libraryItems: LibraryItem[];
 }) {
-  const [crossingOrder, setCrossingOrder] = useState<string[]>([]);
   const [arrivals, setArrivals] = useState<Set<string>>(new Set());
-  const knownKeys = useRef(new Set<string>());
+  const knownCrossingCards = useRef(new Map<string, string>());
+  const stableDisplayRef = useRef<StableDiscoveryState>({
+    cards: new Map(),
+    crossingOrder: [],
+    alsoOrder: [],
+  });
 
   const liveRows = useMemo(
     () => rows
@@ -265,62 +336,119 @@ export function HomeDiscovery({
       .map((row) => ({ row, track: liveTrackForRow(row)! })),
     [rows],
   );
-  const crossingRows = useMemo(
-    () => liveRows.filter(({ track }) => track.isLibraryHit || track.isArtistHit),
-    [liveRows],
-  );
-  const crossingByKey = useMemo(
-    () => new Map(crossingRows.map(({ row, track }) => [
-      `${row.ds.station.slug}:${track.mbid ?? `${track.artist}:${track.title}`}`,
-      { row, track },
-    ])),
-    [crossingRows],
-  );
 
-  useEffect(() => {
-    const current = [...crossingByKey.keys()];
-    const fresh = current.filter((key) => !knownKeys.current.has(key));
-    knownKeys.current = new Set(current);
-    setCrossingOrder((previous) => [
-      ...previous.filter((key) => crossingByKey.has(key)),
-      ...fresh,
-    ]);
-    if (fresh.length > 0) {
-      setArrivals((previous) => new Set([...previous, ...fresh]));
-      const timer = window.setTimeout(() => {
-        setArrivals((previous) => {
-          const next = new Set(previous);
-          fresh.forEach((key) => next.delete(key));
-          return next;
-        });
-      }, 700);
-      return () => window.clearTimeout(timer);
-    }
-    return undefined;
-  }, [crossingByKey]);
-
-  const orderedCrossings = crossingOrder
-    .map((key) => crossingByKey.get(key))
-    .filter((entry): entry is { row: DialLaneRow; track: DiscoveryTrack } => Boolean(entry));
-  const generalRows = liveRows.filter(({ row, track }) => {
-    const key = `${row.ds.station.slug}:${track.mbid ?? `${track.artist}:${track.title}`}`;
-    return !crossingByKey.has(key);
-  });
-  const orderedGeneral = [...generalRows].sort((a, b) => {
+  const orderedLive = useMemo(() => [...liveRows].sort((a, b) => {
     if (a.row.ds.station.slug === activeSlug) return -1;
     if (b.row.ds.station.slug === activeSlug) return 1;
     return Date.parse(b.track.sourcePlayedAt ?? b.track.playedAt) -
       Date.parse(a.track.sourcePlayedAt ?? a.track.playedAt);
-  });
+  }), [liveRows, activeSlug]);
+
+  /**
+   * Keep a station in the same lane and slot while its current card is being
+   * enriched. Resolution can change crossing flags, MBIDs, and display times;
+   * none of those are a card change. A new source play timestamp is the point
+   * at which the current ordering is allowed to settle again.
+   */
+  const stableDisplay = useMemo(() => {
+    const previous = stableDisplayRef.current;
+    const nextCards = new Map<string, StableDiscoveryCard>();
+    const entriesBySlug = new Map<string, { row: DialLaneRow; track: DiscoveryTrack }>();
+    const unchangedSlugs = new Set<string>();
+
+    for (const entry of liveRows) {
+      const slug = entry.row.ds.station.slug;
+      const cardKey = discoveryTrackCardKey(entry.track);
+      const prior = previous.cards.get(slug);
+      const sameCard = prior != null && sameDiscoveryTrackCard(prior.track, entry.track);
+      if (sameCard) unchangedSlugs.add(slug);
+      const lane: DiscoveryLane = sameCard
+        ? prior!.lane
+        : entry.track.isLibraryHit || entry.track.isArtistHit
+          ? "crossing"
+          : "also";
+      nextCards.set(slug, {
+        cardKey: sameCard ? prior!.cardKey : cardKey,
+        track: entry.track,
+        lane,
+      });
+      entriesBySlug.set(slug, entry);
+    }
+
+    const currentCrossingOrder = orderedLive
+      .filter(({ row }) => nextCards.get(row.ds.station.slug)?.lane === "crossing")
+      .map(({ row }) => row.ds.station.slug);
+    const currentAlsoOrder = orderedLive
+      .filter(({ row }) => nextCards.get(row.ds.station.slug)?.lane === "also")
+      .map(({ row }) => row.ds.station.slug);
+    const lockedCrossings = new Set(
+      [...unchangedSlugs].filter((slug) => nextCards.get(slug)?.lane === "crossing"),
+    );
+    const lockedAlso = new Set(
+      [...unchangedSlugs].filter((slug) => nextCards.get(slug)?.lane === "also"),
+    );
+    const crossingOrder = reconcileDiscoverySlots(
+      previous.crossingOrder,
+      currentCrossingOrder,
+      lockedCrossings,
+    );
+    const alsoOrder = reconcileDiscoverySlots(
+      previous.alsoOrder,
+      currentAlsoOrder,
+      lockedAlso,
+    );
+
+    const nextState = { cards: nextCards, crossingOrder, alsoOrder };
+    stableDisplayRef.current = nextState;
+    return { ...nextState, entriesBySlug };
+  }, [liveRows, orderedLive]);
+
+  const orderedCrossings = useMemo(
+    () => stableDisplay.crossingOrder
+      .map((slug) => slug ? stableDisplay.entriesBySlug.get(slug) : undefined)
+      .filter((entry): entry is { row: DialLaneRow; track: DiscoveryTrack } => Boolean(entry)),
+    [stableDisplay],
+  );
+  const orderedGeneralSlots = useMemo(
+    () => stableDisplay.alsoOrder
+      .map((slug) => slug ? stableDisplay.entriesBySlug.get(slug) ?? null : null),
+    [stableDisplay],
+  );
+
+  useEffect(() => {
+    const current = new Map(
+      orderedCrossings.map(({ row }) => [
+        row.ds.station.slug,
+        stableDisplay.cards.get(row.ds.station.slug)?.cardKey ?? "",
+      ]),
+    );
+    const fresh = [...current].filter(([slug, cardKey]) =>
+      knownCrossingCards.current.get(slug) !== cardKey,
+    );
+    knownCrossingCards.current = current;
+    if (fresh.length === 0) return undefined;
+    const freshSlugs = fresh.map(([slug]) => slug);
+    setArrivals((previous) => new Set([...previous, ...freshSlugs]));
+    const timer = window.setTimeout(() => {
+      setArrivals((previous) => {
+        const next = new Set(previous);
+        freshSlugs.forEach((slug) => next.delete(slug));
+        return next;
+      });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [orderedCrossings]);
+
   const catches = buildCaughtKeeps(libraryItems).slice(0, 12);
   const fallback = warm && orderedCrossings.length === 0
     ? selectHistoricalFallback(rows)
     : null;
   const fallbackSlug = fallback?.row.ds.station.slug ?? null;
   const alsoOnAir = fallbackSlug
-    ? orderedGeneral.filter(({ row }) => row.ds.station.slug !== fallbackSlug)
-    : orderedGeneral;
-  const displayRows = warm ? alsoOnAir : orderedGeneral;
+    ? orderedGeneralSlots.map((entry) =>
+        entry?.row.ds.station.slug === fallbackSlug ? null : entry)
+    : orderedGeneralSlots;
+  const displayRows = warm ? alsoOnAir : orderedGeneralSlots;
   const heading = warm ? "Also on the air" : "On the air";
 
   return (
@@ -330,8 +458,7 @@ export function HomeDiscovery({
           <h2 className="home-discovery__heading">Crossing now</h2>
           <div className="home-discovery__list">
             {orderedCrossings.length > 0 ? orderedCrossings.map(({ row, track }) => {
-              const key = `${row.ds.station.slug}:${track.mbid ?? `${track.artist}:${track.title}`}`;
-              return <DiscoveryRow key={key} row={row} track={track} active={row.ds.station.slug === activeSlug} arrived={arrivals.has(key)} onPlay={() => onPlay(row)} />;
+              return <DiscoveryRow key={row.ds.station.slug} row={row} track={track} active={row.ds.station.slug === activeSlug} arrived={arrivals.has(row.ds.station.slug)} onPlay={() => onPlay(row)} />;
             }) : fallback ? (
               <FallbackRow fallback={fallback} onPlay={() => onPlay(fallback.row)} />
             ) : (
@@ -344,11 +471,20 @@ export function HomeDiscovery({
       <section className="home-discovery__section" aria-label={heading}>
         <h2 className="home-discovery__heading">{heading}</h2>
         <div className="home-discovery__list">
-          {displayRows.length === 0 ? (
+          {displayRows.every((entry) => entry == null) ? (
             <p className="home-discovery__empty">Nothing live with confirmed metadata right now.</p>
-          ) : displayRows.map(({ row, track }) => {
-            const key = `${row.ds.station.slug}:${track.mbid ?? `${track.artist}:${track.title}`}`;
-            return <DiscoveryRow key={key} row={row} track={track} active={row.ds.station.slug === activeSlug} arrived={false} onPlay={() => onPlay(row)} />;
+          ) : displayRows.map((entry, index) => {
+            if (!entry) {
+              return (
+                <div
+                  key={`also-cell-${index}`}
+                  className="fdrow home-discovery__row home-discovery__row--vacant"
+                  aria-hidden="true"
+                />
+              );
+            }
+            const { row, track } = entry;
+            return <DiscoveryRow key={`also-cell-${index}`} row={row} track={track} active={row.ds.station.slug === activeSlug} arrived={false} onPlay={() => onPlay(row)} />;
           })}
         </div>
       </section>

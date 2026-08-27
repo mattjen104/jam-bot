@@ -4,6 +4,9 @@ import type { LibraryItem } from "../src/lib/meHooks";
 import {
   buildCaughtKeeps,
   discoveryProvenance,
+  liveTrackForRow,
+  reconcileDiscoverySlots,
+  sameDiscoveryTrackCard,
   selectHistoricalFallback,
 } from "../src/components/HomeDiscovery";
 
@@ -99,6 +102,42 @@ describe("front-door discovery read model", () => {
       row({ slug: "new", showName: "Set", setCount: 2, playedAt: "2026-08-27T12:00:00.000Z" }),
     ])?.row.ds.station.slug).toBe("new");
     expect(selectHistoricalFallback([row({ libraryHit: true, lifetimeCount: 9 })])).toBeNull();
+  });
+
+  it("keeps resolution updates on the same card until the source play changes", () => {
+    const initial = liveTrackForRow(row({ slug: "same-card" }))!;
+    const resolved = {
+      ...initial,
+      mbid: "resolved-recording",
+      playedAt: "2026-08-27T12:00:08.000Z",
+      sourcePlayedAt: initial.playedAt,
+    };
+    const refreshed = {
+      ...resolved,
+      sourcePlayedAt: "2026-08-27T12:04:00.000Z",
+    };
+    const nextCard = {
+      ...refreshed,
+      title: "Next track",
+      sourcePlayedAt: "2026-08-27T12:08:00.000Z",
+    };
+
+    expect(sameDiscoveryTrackCard(initial, resolved)).toBe(true);
+    expect(sameDiscoveryTrackCard(resolved, refreshed)).toBe(true);
+    expect(sameDiscoveryTrackCard(refreshed, nextCard)).toBe(false);
+  });
+
+  it("keeps unchanged cards in their exact cells while replacements fill vacancies", () => {
+    expect(reconcileDiscoverySlots(
+      ["alpha", "beta", "charlie"],
+      ["replacement", "charlie", "alpha"],
+      new Set(["alpha", "charlie"]),
+    )).toEqual(["alpha", "replacement", "charlie"]);
+    expect(reconcileDiscoverySlots(
+      ["alpha", "beta", "charlie"],
+      ["alpha", "charlie"],
+      new Set(["alpha", "charlie"]),
+    )).toEqual(["alpha", null, "charlie"]);
   });
 
   it("keeps only genuine radio catches, newest first, with honest release identity", () => {

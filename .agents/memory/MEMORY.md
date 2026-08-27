@@ -154,3 +154,4 @@
 - [Starter-library vs Stack diagnostics](starter-library-stack-diagnostics.md) — verify Matt copy and compact Stack independently; a healthy direct library read can coexist with a timed-out generated query.
 - [Compact home fast lane](compact-home-fast-lane.md) — home defers full-Dial enrichments and crossings so first plays/Stack stay responsive under radio load.
 - [Admin health payload compatibility](admin-health-payload-compatibility.md) — health panels must default newly added metrics because older fixtures and deployments may omit fields.
+- [Home on-air stable cells](home-on-air-stable-cells.md) — unchanged station cards keep their exact cells through enrichment; changed cards fill vacancies without pulling later rows upward.

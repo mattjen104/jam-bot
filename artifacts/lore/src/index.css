@@ -11675,6 +11675,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: transparent;
 }
 .split-home--discovery .home-discovery__row:hover { background: hsl(var(--secondary) / 0.23); }
+.split-home--discovery .home-discovery__row--vacant {
+  visibility: hidden;
+  pointer-events: none;
+}
 .split-home--discovery .home-discovery__row:focus-visible {
   outline: 2px solid hsl(var(--foreground));
   outline-offset: -2px;
