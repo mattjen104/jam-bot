@@ -9,6 +9,7 @@ import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { HomeDiscovery } from "../components/HomeDiscovery";
+import { FirstPlayFeed } from "../components/CompactDial";
 import { useMyLibraryInfinite } from "../lib/meHooks";
 import {
   nextCrossingScope,
@@ -16,20 +17,16 @@ import {
   writeCrossingScope,
 } from "../lib/crossingScope";
 import { HomePress } from "../components/HomePress";
-import { readDialLens, writeDialLens, type DialLens } from "../lib/dialLensState";
+import { readHomeLens, writeHomeLens, type HomeLens } from "../lib/homeLensState";
 
 export default function SplitHome() {
   const { radio } = usePlayer();
 
-  const [lens, setLens] = useState<DialLens>(() =>
-    readDialLens() === "press" ? "press" : "radio",
-  );
+  const [lens, setLens] = useState<HomeLens>(readHomeLens);
 
-  const handleSetLens = (newLens: DialLens) => {
-    if (newLens === "press" || newLens === "radio") {
-      setLens(newLens);
-      writeDialLens(newLens);
-    }
+  const handleSetLens = (newLens: HomeLens) => {
+    setLens(newLens);
+    writeHomeLens(newLens);
   };
 
   const { stations, hasLibrary } = useDialData("personal", {
@@ -102,6 +99,15 @@ export default function SplitHome() {
             <span className="split-home__lens-sep" aria-hidden="true">|</span>
             <button
               type="button"
+              className={`split-home__lens-btn${lens === "firstPlays" ? " split-home__lens-btn--active" : ""}`}
+              aria-pressed={lens === "firstPlays"}
+              onClick={() => handleSetLens("firstPlays")}
+            >
+              First plays
+            </button>
+            <span className="split-home__lens-sep" aria-hidden="true">|</span>
+            <button
+              type="button"
               className={`split-home__lens-btn${lens === "press" ? " split-home__lens-btn--active" : ""}`}
               aria-pressed={lens === "press"}
               onClick={() => handleSetLens("press")}
@@ -109,8 +115,20 @@ export default function SplitHome() {
               Press
             </button>
           </div>
-          <h1>{lens === "press" ? "Source and respect" : "Hear what’s moving"}</h1>
-          <p>{lens === "press" ? "Music publications and the records you caught." : "Live music, human choices, and the records you caught."}</p>
+          <h1>
+            {lens === "press"
+              ? "Source and respect"
+              : lens === "firstPlays"
+                ? "First plays"
+                : "Hear what’s moving"}
+          </h1>
+          <p>
+            {lens === "press"
+              ? "Music publications and the records you caught."
+              : lens === "firstPlays"
+                ? "Recent first appearances from the radio."
+                : "Live music, human choices, and the records you caught."}
+          </p>
         </header>
         {lens === "radio" ? (
           <HomeDiscovery
@@ -122,6 +140,8 @@ export default function SplitHome() {
             crossingScope={crossingScope}
             onCycleCrossingScope={onCycleCrossingScope}
           />
+        ) : lens === "firstPlays" ? (
+          <FirstPlayFeed />
         ) : (
           <HomePress />
         )}

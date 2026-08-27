@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin, DialStation } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
-import { FirstPlayFeed } from "./CompactDial";
 import { CrossingScopePill } from "./dial/CrossingScopePill";
 import {
   crossingCountForScope,
@@ -499,8 +498,6 @@ export function HomeDiscovery({
           })}
         </div>
       </section>
-
-      <FirstPlayFeed />
 
       {warm ? (
         <section className="home-discovery__section" aria-label="Last kept">
