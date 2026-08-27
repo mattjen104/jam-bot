@@ -11810,6 +11810,39 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border: 0;
   font-family: var(--lore-font-body);
 }
+.split-home--discovery .compact-first-plays__header {
+  justify-content: flex-start;
+  padding: 0 0 10px;
+  border-bottom: 1px solid hsl(var(--border) / .7);
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-small);
+  font-weight: var(--lore-weight-semibold);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.split-home--discovery .compact-first-plays__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: visible;
+  padding: 0;
+}
+.split-home--discovery .compact-first-plays__tile {
+  display: grid;
+  grid-template-columns: minmax(72px, .35fr) minmax(0, 1fr) minmax(0, 1fr) minmax(120px, .7fr);
+  grid-template-areas: "date artist title station";
+  align-items: baseline;
+  gap: 10px 16px;
+  flex: none;
+  width: 100%;
+  min-height: 54px;
+  padding: 12px 8px;
+  border-bottom: 1px solid hsl(var(--border) / .7);
+}
+.split-home--discovery .compact-first-plays__release-date { grid-area: date; }
+.split-home--discovery .compact-first-plays__artist { grid-area: artist; }
+.split-home--discovery .compact-first-plays__title { grid-area: title; }
+.split-home--discovery .compact-first-plays__station { grid-area: station; }
 .split-home--discovery .compact-first-plays__rail,
 .split-home--discovery .home-discovery__keeps {
   width: 100%;
@@ -11817,7 +11850,56 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   max-width: 100%;
   contain: inline-size;
 }
-.split-home--discovery .compact-first-plays__tile:not(:first-child) { display: flex; }
+.split-home--discovery .home-discovery__keeps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: visible;
+  border-top: 1px solid hsl(var(--border) / .7);
+}
+.split-home--discovery .home-discovery__keep {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(120px, .7fr) auto;
+  align-items: baseline;
+  gap: 10px 16px;
+  min-height: 54px;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border) / .7);
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+.split-home--discovery .home-discovery__keep:hover {
+  background: hsl(var(--secondary) / .23);
+}
+.split-home--discovery .home-discovery__keep-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.split-home--discovery .home-discovery__keep-artist,
+.split-home--discovery .home-discovery__keep-byline {
+  min-width: 0;
+  overflow: hidden;
+  color: hsl(var(--foreground) / .72);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.split-home--discovery .home-discovery__keep-byline {
+  margin-top: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-small);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.split-home--discovery .home-discovery__keep-count {
+  color: hsl(var(--muted-foreground));
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  white-space: nowrap;
+}
 
 @media (max-width: 680px) {
   .split-home__discovery-shell { padding: 22px 14px 104px; }
@@ -11836,6 +11918,33 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
+  }
+  .split-home--discovery .compact-first-plays__tile {
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-areas:
+      "date artist"
+      "date title"
+      "date station";
+    gap: 2px 12px;
+    min-height: 68px;
+    padding: 10px 8px;
+  }
+  .split-home--discovery .home-discovery__keep {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title count"
+      "artist count"
+      "station count";
+    gap: 2px 12px;
+    min-height: 68px;
+    padding: 10px 8px;
+  }
+  .split-home--discovery .home-discovery__keep-title { grid-area: title; }
+  .split-home--discovery .home-discovery__keep-artist { grid-area: artist; }
+  .split-home--discovery .home-discovery__keep-byline { grid-area: station; }
+  .split-home--discovery .home-discovery__keep-count {
+    grid-area: count;
+    align-self: center;
   }
 }
 

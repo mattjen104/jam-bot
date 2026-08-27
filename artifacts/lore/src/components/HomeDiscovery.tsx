@@ -176,6 +176,44 @@ export function buildCaughtKeeps(items: LibraryItem[]): CaughtKeep[] {
     }));
 }
 
+export interface HomeKeepGroup {
+  key: string;
+  albumTitle: string;
+  artist: string;
+  stationName: string | null;
+  count: number;
+  releaseGroupMbid: string | null;
+  artistMbid: string | null;
+}
+
+/** Shape recent radio catches into the album-first rows used by Stack. */
+export function buildHomeKeepGroups(catches: CaughtKeep[]): HomeKeepGroup[] {
+  const groups = new Map<string, HomeKeepGroup & { stationSlugs: Set<string> }>();
+  for (const caught of catches) {
+    const key = caught.releaseGroupMbid
+      ? `album:${caught.releaseGroupMbid}`
+      : `track:${caught.item.mbid ?? `${caught.artist}:${caught.title}`}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.stationSlugs.add(caught.stationSlug);
+      if (existing.stationSlugs.size > 1) existing.stationName = null;
+      continue;
+    }
+    groups.set(key, {
+      key,
+      albumTitle: caught.item.recording?.albumTitle ?? caught.title,
+      artist: caught.artist,
+      stationName: caught.stationName,
+      count: 1,
+      releaseGroupMbid: caught.releaseGroupMbid,
+      artistMbid: caught.artistMbid,
+      stationSlugs: new Set([caught.stationSlug]),
+    });
+  }
+  return [...groups.values()].map(({ stationSlugs: _stationSlugs, ...group }) => group);
+}
+
 /**
  * Use the narrowest real history window that contains evidence. Within that
  * window, count wins and the most recent current observation breaks ties.
@@ -420,6 +458,7 @@ export function HomeDiscovery({
   const visibleStationSlots = orderedSlots.slice(0, 6);
 
   const catches = buildCaughtKeeps(libraryItems).slice(0, 12);
+  const keepGroups = buildHomeKeepGroups(catches);
 
   return (
     <div className="home-discovery">
@@ -469,23 +508,28 @@ export function HomeDiscovery({
             <h2 className="home-discovery__heading">Last kept</h2>
             <Link href="/library" className="home-discovery__more">Library</Link>
           </div>
-          {catches.length === 0 ? (
+          {keepGroups.length === 0 ? (
             <p className="home-discovery__empty">No radio catches yet.</p>
           ) : (
             <div className="home-discovery__keeps">
-              {catches.map((caught) => (
+              {keepGroups.map((group) => (
                 <Link
-                  key={caught.item.mbid ?? caught.item.addedAt}
-                  href={caught.releaseGroupMbid
-                    ? `/album/${caught.releaseGroupMbid}`
-                    : caught.artistMbid
-                      ? `/artist/${caught.artistMbid}`
-                      : `/library?q=${encodeURIComponent(caught.artist)}`}
-                  className={`home-discovery__keep${caught.releaseGroupMbid ? "" : " home-discovery__keep--unresolved"}`}
+                  key={group.key}
+                  href={group.releaseGroupMbid
+                    ? `/album/${group.releaseGroupMbid}`
+                    : group.artistMbid
+                      ? `/artist/${group.artistMbid}`
+                      : `/library?q=${encodeURIComponent(group.artist)}`}
+                  className={`home-discovery__keep${group.releaseGroupMbid ? "" : " home-discovery__keep--unresolved"}`}
                 >
-                  <span className="home-discovery__keep-title">{caught.title}</span>
-                  <span className="home-discovery__keep-artist">{caught.artist}</span>
-                  <span className="home-discovery__keep-byline">Kept from {caught.stationName}</span>
+                  <span className="home-discovery__keep-title">{group.albumTitle}</span>
+                  <span className="home-discovery__keep-artist">{group.artist}</span>
+                  {group.stationName && (
+                    <span className="home-discovery__keep-byline">{group.stationName}</span>
+                  )}
+                  <span className="home-discovery__keep-count">
+                    {group.count} kept
+                  </span>
                 </Link>
               ))}
             </div>

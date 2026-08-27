@@ -3,6 +3,7 @@ import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { LibraryItem } from "../src/lib/meHooks";
 import {
   buildCaughtKeeps,
+  buildHomeKeepGroups,
   discoveryProvenance,
   homeCrossingMetric,
   liveTrackForRow,
@@ -178,5 +179,36 @@ describe("front-door discovery read model", () => {
     expect(catches.map((caught) => caught.stationSlug)).toEqual(["nts", "wfmu"]);
     expect(catches[0]?.releaseGroupMbid).toBe("release-2");
     expect(catches[1]?.artistMbid).toBe("artist-mbid");
+  });
+
+  it("formats recent catches as album-first Stack rows", () => {
+    const kept = (mbid: string, title: string, stationSlug: string): LibraryItem => ({
+      mbid,
+      addedAt: `2026-08-${mbid === "track-1" ? "27" : "26"}T00:00:00.000Z`,
+      provenance: { kind: "keep", stationSlug, stationName: stationSlug.toUpperCase() },
+      recording: {
+        title,
+        artist: "Artist",
+        artistMbid: "artist-mbid",
+        artworkUrl: null,
+        albumTitle: "Album",
+        releaseGroupMbid: "release-group",
+        releaseYear: 2026,
+        spotifyUrl: null,
+      },
+    });
+    const groups = buildHomeKeepGroups(buildCaughtKeeps([
+      kept("track-1", "One", "nts"),
+      kept("track-2", "Two", "wfmu"),
+    ]));
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      albumTitle: "Album",
+      artist: "Artist",
+      stationName: null,
+      count: 2,
+      releaseGroupMbid: "release-group",
+    });
   });
 });
