@@ -18,3 +18,9 @@ Home typography rule: keep Nebula Sans scoped to the front door; use its 600 wei
 **How to apply:** new components use the tokens; front-door density overrides (`.dial-root--front .fdrow__t1`) may step a voice surface down to the interface size but must not change its face.
 
 Pitfall: `.dial-topbar__wordmark` carries a late button-normalisation block with `font: inherit` that silently kills the Signifier pinning for any element reusing that class outside the topbar. Don't reuse the class for static labels — style a scoped class with the tokens directly.
+
+Safari resilience rule: browser-only layout observers must be optional. In particular, the shared bottom shell needs a viewport-resize fallback when `ResizeObserver` is absent, and the Vite target stays at ES2018 so the mobile preview does not depend on a newer Safari syntax baseline.
+
+**Why:** a Safari iPhone preview can otherwise fail before the home route mounts, presenting as a blank white page while Chromium remains healthy.
+
+**How to apply:** feature-detect browser APIs at application mount and preserve a plain event-based fallback; keep the error boundary outside the player/layout tree so a rendering failure becomes visible rather than blank.
