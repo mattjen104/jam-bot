@@ -3,7 +3,7 @@ name: Home on-air stable cells
 description: The home discovery list treats cell position as part of a live card's identity.
 ---
 
-Rule: home has one unified “On the air” list. An unchanged card keeps its exact cell while enrichment and source refreshes arrive; a scope change releases the ordering. New or changed cards fill available cells, and empty cells retain their height.
+Rule: home has one unified “On the air” list capped at six visible stations. An unchanged card keeps its exact cell while enrichment and source refreshes arrive; a scope change releases the ordering. New or changed cards fill available cells, and empty cells retain their height.
 
 **Why:** sorting every live refresh made stations visibly jump while the same song was still playing. The desired radio behavior is physical: a station remains where the listener saw it until that card changes.
 

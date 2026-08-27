@@ -417,6 +417,7 @@ export function HomeDiscovery({
       .map((slug) => slug ? stableDisplay.entriesBySlug.get(slug) ?? null : null),
     [stableDisplay],
   );
+  const visibleStationSlots = orderedSlots.slice(0, 6);
 
   const catches = buildCaughtKeeps(libraryItems).slice(0, 12);
 
@@ -432,9 +433,9 @@ export function HomeDiscovery({
           />
         </div>
         <div className="home-discovery__list">
-          {orderedSlots.every((entry) => entry == null) ? (
+          {visibleStationSlots.every((entry) => entry == null) ? (
             <p className="home-discovery__empty">Nothing live with confirmed metadata right now.</p>
-          ) : orderedSlots.map((entry, index) => {
+          ) : visibleStationSlots.map((entry, index) => {
             if (!entry) {
               return (
                 <div
