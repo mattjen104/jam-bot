@@ -32,6 +32,8 @@ export interface RawLibraryTrack {
   durationMs?: number;
   /** Service-internal id for dedup (e.g. Spotify track id). */
   externalId?: string;
+  /** Parsed provider timestamp for when the listener saved the track. */
+  addedAt?: string;
 }
 
 /** Token bundle returned by authCallback. */
@@ -220,6 +222,13 @@ interface SpotifyTracksPage {
   total: number;
 }
 
+/** Return a canonical ISO timestamp only for a valid Spotify saved-track date. */
+export function parseSpotifyAddedAt(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+
 export class SpotifyConnector implements ServiceConnector {
   readonly service = "spotify";
   readonly displayName = "Spotify";
@@ -338,12 +347,14 @@ export class SpotifyConnector implements ServiceConnector {
       for (const item of page.items) {
         const track = item.track;
         if (!track) continue;
+        const addedAt = parseSpotifyAddedAt(item.added_at);
         yield {
           artist: track.artists[0]?.name ?? "",
           title: track.name,
           isrc: track.external_ids?.isrc,
           durationMs: track.duration_ms,
           externalId: track.id,
+          ...(addedAt ? { addedAt } : {}),
         };
       }
       url = page.next;

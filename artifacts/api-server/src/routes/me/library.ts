@@ -127,6 +127,27 @@ const imageExtractionLimiter = rateLimit({
   message: { error: "Too many screenshot extraction attempts — try again later." },
 });
 
+function bufferedSourceAddedAt(entry: ImportBufferEntry): Date | null {
+  if (typeof entry.addedAt !== "string" || entry.addedAt.trim() === "") return null;
+  const parsed = new Date(entry.addedAt);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function importedTrackFacts(
+  service: string,
+  entry: ImportBufferEntry,
+): { addedAt: Date; provenance: LibraryItemProvenance } {
+  const sourceAddedAt = service === "spotify" ? bufferedSourceAddedAt(entry) : null;
+  return {
+    addedAt: sourceAddedAt ?? new Date(),
+    provenance: {
+      kind: "import",
+      service,
+      ...(service === "spotify" ? { sourceKeepDate: sourceAddedAt !== null } : {}),
+    },
+  };
+}
+
 function mattStarterSourceUserId(): number | null {
   const raw = process.env[MATT_STARTER_SOURCE_ENV]?.trim();
   if (!raw || !/^\d+$/.test(raw)) return null;
@@ -862,6 +883,8 @@ export async function seedSpotifySoftRows(
   for (const t of entries) {
     const meta = metaMap.get(t.externalId);
     const isRealSpotifyId = spotifyIdPattern.test(t.externalId);
+    const sourceAddedAt = bufferedSourceAddedAt(t);
+    const addedAt = sourceAddedAt ?? new Date();
 
     // Guard: when the entry uses a synthesised key (not a real 22-char Spotify
     // track ID), skip inserting if a real-Spotify-ID row already exists for
@@ -900,7 +923,7 @@ export async function seedSpotifySoftRows(
         albumName: meta?.albumName ?? null,
         artworkUrl: meta?.artworkUrl ?? null,
         isrc: meta?.isrc ?? t.isrc ?? null,
-        addedAt: new Date(),
+        addedAt,
         mbid: null,
       })
       .onConflictDoUpdate({
@@ -911,6 +934,7 @@ export async function seedSpotifySoftRows(
           albumName: meta?.albumName ?? null,
           artworkUrl: meta?.artworkUrl ?? null,
           isrc: meta?.isrc ?? t.isrc ?? null,
+          addedAt,
         },
       })
       .catch(() => {}); // Silently skip FK or other errors.
@@ -1089,6 +1113,7 @@ export async function runImportWorker(
           isrc: raw.isrc ?? null,
           durationMs: raw.durationMs ?? null,
           externalId: raw.externalId ?? `${raw.artist}\u001f${raw.title}`,
+          addedAt: raw.addedAt ?? null,
         });
         if (buffer.length - lastFetchStamp >= FETCH_STAMP_INTERVAL) {
           lastFetchStamp = buffer.length;
@@ -1108,8 +1133,6 @@ export async function runImportWorker(
 
     const total = buffer.length;
     let resolved = 0;
-
-    const provenance: LibraryItemProvenance = { kind: "import", service };
 
     const matchedIdx = new Set<number>();
     const resolvedMbidIdx = new Set<number>();
@@ -1132,10 +1155,11 @@ export async function runImportWorker(
       for (const { t, i } of isrcEntries) {
         const mbid = isrcToMbid.get(t.isrc!);
         if (mbid) {
+          const { addedAt, provenance } = importedTrackFacts(service, t);
           try {
             await db
               .insert(libraryItemsTable)
-              .values({ userId, mbid, provenance, addedAt: new Date() })
+              .values({ userId, mbid, provenance, addedAt })
               .onConflictDoNothing();
             resolved++;
           } catch (insertErr) {
@@ -1220,10 +1244,11 @@ export async function runImportWorker(
               })
               .onConflictDoNothing();
           }
+          const facts = importedTrackFacts(service, track ?? buffer[idx]!);
           try {
             await db
               .insert(libraryItemsTable)
-              .values({ userId, mbid, provenance, addedAt: new Date() })
+              .values({ userId, mbid, provenance: facts.provenance, addedAt: facts.addedAt })
               .onConflictDoNothing();
             resolved++;
           } catch (insertErr) {
@@ -1337,10 +1362,11 @@ export async function runImportWorker(
           })
           .onConflictDoNothing();
 
+        const { addedAt, provenance } = importedTrackFacts(service, t);
         try {
           await db
             .insert(libraryItemsTable)
-            .values({ userId, mbid, provenance, addedAt: new Date() })
+            .values({ userId, mbid, provenance, addedAt })
             .onConflictDoNothing();
           resolved++;
         } catch (insertErr) {
@@ -2361,7 +2387,6 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
     if (!retryJob) continue;
 
     const retryJobId = retryJob.id;
-    const provenance: LibraryItemProvenance = { kind: "import", service: candidate.service };
     let retryResolved = 0;
     let retryPassFailed = false;
 
@@ -2475,6 +2500,7 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
           // FK guard: recordings row may disappear between the insert above and
           // the library_items insert (same race as the main Phase 3 worker).
           let libItemInserted = false;
+          const { addedAt, provenance } = importedTrackFacts(candidate.service, t);
           try {
             await db
               .insert(libraryItemsTable)
@@ -2482,7 +2508,7 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
                 userId: candidate.userId,
                 mbid,
                 provenance,
-                addedAt: new Date(),
+                addedAt,
                 ...(softRemovedAt ? { removedAt: softRemovedAt } : {}),
               })
               .onConflictDoNothing();
@@ -3049,7 +3075,36 @@ router.get("/me/library", h(async (req, res) => {
       .limit(limit + 1);
   }
 
-  const softProvenance: LibraryItemProvenance = { kind: "import", service: "spotify" };
+  const softSourceDateBySpotifyId = new Map<string, boolean>();
+  if (softRows.length > 0) {
+    const visibleSoftIds = softRows.map((row) => row.spotifyId);
+    const sourceFacts = await db.execute<{ external_id: string; added_at: string | null }>(sql`
+      SELECT DISTINCT ON (entry->>'externalId')
+        entry->>'externalId' AS external_id,
+        entry->>'addedAt' AS added_at
+      FROM library_import_jobs AS job
+      CROSS JOIN LATERAL jsonb_array_elements(job.buffer_json) AS entry
+      WHERE job.user_id = ${user.id}
+        AND job.service = 'spotify'
+        AND job.status = 'done'
+        AND job.buffer_json IS NOT NULL
+        AND entry->>'externalId' = ANY(
+          ARRAY[${sql.join(visibleSoftIds.map((id) => sql`${id}`), sql`, `)}]::text[]
+        )
+      ORDER BY entry->>'externalId', job.id DESC
+    `);
+    for (const row of sourceFacts.rows) {
+      softSourceDateBySpotifyId.set(
+        row.external_id,
+        bufferedSourceAddedAt({
+          artist: "",
+          title: "",
+          externalId: row.external_id,
+          addedAt: row.added_at,
+        }) !== null,
+      );
+    }
+  }
 
   const unified = [
     ...resolvedRows.map((r) => ({
@@ -3073,7 +3128,11 @@ router.get("/me/library", h(async (req, res) => {
       soft: true as const,
       mbid: null as string | null,
       spotifyId: s.spotifyId,
-      provenance: softProvenance,
+      provenance: {
+        kind: "import" as const,
+        service: "spotify",
+        sourceKeepDate: softSourceDateBySpotifyId.get(s.spotifyId) ?? false,
+      },
       addedAt: s.addedAt,
       removedAt: s.removedAt,
       title: s.title,

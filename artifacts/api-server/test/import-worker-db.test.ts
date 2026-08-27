@@ -313,7 +313,7 @@ async function createJob(): Promise<number> {
 // ── Helper: make mockImportLibrary yield the given tracks ───────────────────
 
 function setupConnector(
-  tracks: Array<{ artist: string; title: string; isrc?: string; externalId: string }>,
+  tracks: Array<{ artist: string; title: string; isrc?: string; externalId: string; addedAt?: string }>,
 ) {
   mockImportLibrary.mockImplementation(async function* () {
     for (const t of tracks) yield t;
@@ -332,7 +332,13 @@ describe("Phase 1 — ISRC bulk pre-match", () => {
     mockResolveByIsrc.mockClear();
 
     setupConnector([
-      { artist: ARTIST, title: "Phase1 Track", isrc: ISRC_P1, externalId: "sp-p1" },
+      {
+        artist: ARTIST,
+        title: "Phase1 Track",
+        isrc: ISRC_P1,
+        externalId: "sp-p1",
+        addedAt: "2019-04-05T12:34:56.000Z",
+      },
     ]);
 
     const jid = await createJob();
@@ -344,12 +350,19 @@ describe("Phase 1 — ISRC bulk pre-match", () => {
 
     // The track should appear in library_items.
     const items = await db
-      .select({ mbid: libraryItemsTable.mbid })
+      .select({
+        mbid: libraryItemsTable.mbid,
+        addedAt: libraryItemsTable.addedAt,
+        provenance: libraryItemsTable.provenance,
+      })
       .from(libraryItemsTable)
       .where(eq(libraryItemsTable.userId, userId));
 
     const mbids = items.map((r) => r.mbid);
     expect(mbids).toContain(MBID_P1);
+    const imported = items.find((row) => row.mbid === MBID_P1)!;
+    expect(imported.addedAt.toISOString()).toBe("2019-04-05T12:34:56.000Z");
+    expect(imported.provenance.sourceKeepDate).toBe(true);
 
     // Job should be marked done.
     const [job] = await db
@@ -374,6 +387,7 @@ describe("Phase 2 — resolution-cache bulk pre-check", () => {
 
     // Track has NO isrc, so Phase 1 won't pick it up.
     // Its artist+title normalises to the key we seeded in resolution_cache.
+    const importStartedAt = Date.now();
     setupConnector([
       { artist: ARTIST, title: "Phase2 Track", externalId: "sp-p2" },
     ]);
@@ -385,11 +399,18 @@ describe("Phase 2 — resolution-cache bulk pre-check", () => {
     expect(mockResolveByText).not.toHaveBeenCalled();
 
     const items = await db
-      .select({ mbid: libraryItemsTable.mbid })
+      .select({
+        mbid: libraryItemsTable.mbid,
+        addedAt: libraryItemsTable.addedAt,
+        provenance: libraryItemsTable.provenance,
+      })
       .from(libraryItemsTable)
       .where(eq(libraryItemsTable.userId, userId));
 
     expect(items.map((r) => r.mbid)).toContain(MBID_P2);
+    const imported = items.find((row) => row.mbid === MBID_P2)!;
+    expect(imported.addedAt.getTime()).toBeGreaterThanOrEqual(importStartedAt);
+    expect(imported.provenance.sourceKeepDate).toBe(false);
 
     const [job] = await db
       .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
@@ -462,7 +483,12 @@ describe("Phase 3 — unresolved track when resolveByText returns null", () => {
       mockResolveByText.mockResolvedValue(null);
 
       setupConnector([
-        { artist: ARTIST, title: "Phase3Y Track", externalId: "sp-p3y" },
+        {
+          artist: ARTIST,
+          title: "Phase3Y Track",
+          externalId: "sp-p3y",
+          addedAt: "2018-02-03T04:05:06.000Z",
+        },
       ]);
 
       const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
@@ -488,6 +514,15 @@ describe("Phase 3 — unresolved track when resolveByText returns null", () => {
         .from(libraryItemsTable)
         .where(eq(libraryItemsTable.userId, userId));
       expect(items.map((r) => r.mbid)).not.toContain(MBID_P3B);
+
+      const [soft] = await db
+        .select({ addedAt: spotifyLibraryItemsTable.addedAt })
+        .from(spotifyLibraryItemsTable)
+        .where(and(
+          eq(spotifyLibraryItemsTable.userId, userId),
+          eq(spotifyLibraryItemsTable.spotifyId, "sp-p3y"),
+        ));
+      expect(soft!.addedAt.toISOString()).toBe("2018-02-03T04:05:06.000Z");
 
       const [job] = await db
         .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
@@ -1359,7 +1394,12 @@ describe("Phase 3 off-peak retry — soft-row removed after retry promotion", ()
       mockResolveByText.mockResolvedValue(null);
 
       setupConnector([
-        { artist: ARTIST, title: "Phase3Retry Track", externalId: RETRY_EXT_ID },
+        {
+          artist: ARTIST,
+          title: "Phase3Retry Track",
+          externalId: RETRY_EXT_ID,
+          addedAt: "2017-06-07T08:09:10.000Z",
+        },
       ]);
 
       const jid1 = await createJob();
@@ -1416,10 +1456,17 @@ describe("Phase 3 off-peak retry — soft-row removed after retry promotion", ()
 
       // The track must now appear in library_items.
       const libRows = await db
-        .select({ mbid: libraryItemsTable.mbid })
+        .select({
+          mbid: libraryItemsTable.mbid,
+          addedAt: libraryItemsTable.addedAt,
+          provenance: libraryItemsTable.provenance,
+        })
         .from(libraryItemsTable)
         .where(eq(libraryItemsTable.userId, userId));
       expect(libRows.map((r) => r.mbid)).toContain(MBID_RETRY_SOFT);
+      const promoted = libRows.find((row) => row.mbid === MBID_RETRY_SOFT)!;
+      expect(promoted.addedAt.toISOString()).toBe("2017-06-07T08:09:10.000Z");
+      expect(promoted.provenance.sourceKeepDate).toBe(true);
 
       // The soft row must have been removed after promotion.
       const softAfterRetry = await db

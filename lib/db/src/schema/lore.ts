@@ -1268,6 +1268,11 @@ export type InsertServiceConnection =
 export interface LibraryItemProvenance {
   kind: "keep" | "import";
   service?: string;
+  /**
+   * True when addedAt came from the source service's saved-track timestamp.
+   * False means addedAt is an internal fallback and must not be shown as fact.
+   */
+  sourceKeepDate?: boolean;
   [k: string]: unknown;
 }
 
@@ -1325,6 +1330,8 @@ export interface ImportBufferEntry {
   isrc?: string | null;
   durationMs?: number | null;
   externalId: string;
+  /** Canonical ISO source timestamp; absent/null means the source supplied no valid date. */
+  addedAt?: string | null;
 }
 
 /**

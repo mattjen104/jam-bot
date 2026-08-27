@@ -7,7 +7,9 @@ import {
   loreUsersTable,
   spotifyConnectionsTable,
   libraryItemsTable,
+  libraryImportJobsTable,
   recordingsTable,
+  spotifyLibraryItemsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
 
@@ -196,6 +198,84 @@ describe("Matt starter library", () => {
 });
 
 describe("GET /api/me/library search/sort/filter", () => {
+  it("exposes source-date truth for unresolved Spotify rows", async () => {
+    if (!dbAvailable || userId == null) return;
+    const validId = `soft-valid-${run}`;
+    const fallbackId = `soft-fallback-${run}`;
+    await db.insert(spotifyLibraryItemsTable).values([
+      {
+        userId,
+        spotifyId: validId,
+        title: "Historically Saved",
+        artist: `Soft Artist ${run}`,
+        addedAt: new Date("2015-03-04T05:06:07.000Z"),
+      },
+      {
+        userId,
+        spotifyId: fallbackId,
+        title: "Unknown Save Date",
+        artist: `Soft Artist ${run}`,
+        addedAt: new Date(),
+      },
+    ]);
+    await db.insert(libraryImportJobsTable).values({
+      userId,
+      service: "spotify",
+      status: "done",
+      phase: "done",
+      total: 2,
+      resolved: 0,
+      bufferJson: [
+        {
+          artist: `Soft Artist ${run}`,
+          title: "Historically Saved",
+          externalId: validId,
+          addedAt: "2015-03-04T05:06:07.000Z",
+        },
+        {
+          artist: `Soft Artist ${run}`,
+          title: "Unknown Save Date",
+          externalId: fallbackId,
+          addedAt: null,
+        },
+      ],
+      startedAt: new Date(),
+      finishedAt: new Date(),
+    });
+    // A newer snapshot that omits these retained soft rows must not erase the
+    // provenance fact recorded by the newest snapshot that contains each row.
+    await db.insert(libraryImportJobsTable).values({
+      userId,
+      service: "spotify",
+      status: "done",
+      phase: "done",
+      total: 1,
+      resolved: 0,
+      bufferJson: [{
+        artist: `Different Artist ${run}`,
+        title: "Different Track",
+        externalId: `different-${run}`,
+        addedAt: "2026-01-02T03:04:05.000Z",
+      }],
+      startedAt: new Date(),
+      finishedAt: new Date(),
+    });
+
+    try {
+      const { status, body } = await getLibrary({ source: "soft", q: `Soft Artist ${run}` });
+      expect(status).toBe(200);
+      const byId = new Map(body.items.map((item: { spotifyId: string; provenance: { sourceKeepDate?: boolean } }) => [
+        item.spotifyId,
+        item.provenance.sourceKeepDate,
+      ]));
+      expect(byId.get(validId)).toBe(true);
+      expect(byId.get(fallbackId)).toBe(false);
+    } finally {
+      await db.delete(spotifyLibraryItemsTable).where(eq(spotifyLibraryItemsTable.userId, userId));
+      await db.delete(libraryImportJobsTable).where(eq(libraryImportJobsTable.userId, userId));
+    }
+  });
+
   it("defaults to newest-first addedAt order", async () => {
     if (!dbAvailable) return;
     const { status, body } = await getLibrary({ limit: "50" });

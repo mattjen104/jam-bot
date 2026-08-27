@@ -5641,6 +5641,12 @@ export const ListMyLibraryResponse = zod.object({
         pickerName: zod.string().optional(),
         surface: zod.string().optional(),
         entryPoint: zod.string().optional(),
+        sourceKeepDate: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when addedAt is the source service's saved-track date; false when it is an internal fallback.",
+          ),
       }),
       addedAt: zod.string().datetime({}),
       recording: zod

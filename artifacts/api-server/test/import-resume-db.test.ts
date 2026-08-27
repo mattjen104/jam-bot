@@ -268,7 +268,14 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=spine", 
     // Previous job completed the fetch (phase="spine") but crashed during
     // resolution — the buffer is the full library snapshot and should be reused.
     const completeBuffer: ImportBufferEntry[] = [
-      { artist: ARTIST, title: "Spine Track", isrc: ISRC_BUF, durationMs: null, externalId: "sp-spine" },
+      {
+        artist: ARTIST,
+        title: "Spine Track",
+        isrc: ISRC_BUF,
+        durationMs: null,
+        externalId: "sp-spine",
+        addedAt: "2016-01-02T03:04:05.000Z",
+      },
     ];
     await seedPrevJob({ bufferEntries: completeBuffer, phase: "spine", status: "error" });
 
@@ -292,6 +299,16 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=spine", 
       .from(libraryImportJobsTable)
       .where(eq(libraryImportJobsTable.id, newJobId));
     expect(job!.status).toBe("done");
+
+    const [item] = await db
+      .select({
+        addedAt: libraryItemsTable.addedAt,
+        provenance: libraryItemsTable.provenance,
+      })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userId));
+    expect(item!.addedAt.toISOString()).toBe("2016-01-02T03:04:05.000Z");
+    expect(item!.provenance.sourceKeepDate).toBe(true);
   });
 });
 
@@ -312,8 +329,16 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=cache", 
     // Previous job completed the fetch (phase="cache") but crashed during
     // the cache lookup phase — the buffer is the full library snapshot and
     // should be reused.
+    const importStartedAt = Date.now();
     const completeBuffer: ImportBufferEntry[] = [
-      { artist: ARTIST, title: "Cache Track", isrc: ISRC_BUF, durationMs: null, externalId: "sp-cache" },
+      {
+        artist: ARTIST,
+        title: "Cache Track",
+        isrc: ISRC_BUF,
+        durationMs: null,
+        externalId: "sp-cache",
+        addedAt: "malformed-source-date",
+      },
     ];
     await seedPrevJob({ bufferEntries: completeBuffer, phase: "cache", status: "error" });
 
@@ -336,6 +361,16 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=cache", 
       .from(libraryImportJobsTable)
       .where(eq(libraryImportJobsTable.id, newJobId));
     expect(job!.status).toBe("done");
+
+    const [item] = await db
+      .select({
+        addedAt: libraryItemsTable.addedAt,
+        provenance: libraryItemsTable.provenance,
+      })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userId));
+    expect(item!.addedAt.getTime()).toBeGreaterThanOrEqual(importStartedAt);
+    expect(item!.provenance.sourceKeepDate).toBe(false);
   });
 });
 

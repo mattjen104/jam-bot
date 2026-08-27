@@ -4257,6 +4257,9 @@ components:
         pickerName: { type: string }
         surface: { type: string }
         entryPoint: { type: string }
+        sourceKeepDate:
+          type: boolean
+          description: True when addedAt is the source service's saved-track date; false when it is an internal fallback.
       additionalProperties: true
       required: [kind]
     LibraryRecording:

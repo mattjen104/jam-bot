@@ -15,5 +15,7 @@ export interface LibraryProvenance {
   pickerName?: string;
   surface?: string;
   entryPoint?: string;
+  /** True when addedAt is the source service's saved-track date; false when it is an internal fallback. */
+  sourceKeepDate?: boolean;
   [key: string]: unknown;
 }
