@@ -184,10 +184,18 @@ function BottomShell() {
     const apply = () =>
       document.documentElement.style.setProperty("--shell-h", `${el.offsetHeight}px`);
     apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(apply) : null;
+    if (ro) {
+      ro.observe(el);
+    } else {
+      // Older iOS Safari/WebViews do not expose ResizeObserver. The shell
+      // still needs its height token there, so fall back to viewport resizes
+      // rather than failing the entire React surface during mount.
+      window.addEventListener("resize", apply);
+    }
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
+      window.removeEventListener("resize", apply);
       document.documentElement.style.removeProperty("--shell-h");
     };
   }, []);
