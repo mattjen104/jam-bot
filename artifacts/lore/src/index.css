@@ -11654,6 +11654,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.home-discovery__crossing-count {
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
 .home-discovery__list { border-top: 1px solid hsl(var(--border) / 0.7); }
 .split-home--discovery .home-discovery__row {
   position: relative;

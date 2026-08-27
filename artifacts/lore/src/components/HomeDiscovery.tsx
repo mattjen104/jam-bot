@@ -1,23 +1,59 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import { Link } from "wouter";
 import type { DialLaneRow } from "./dial/DialFeedLane";
-import type { DialSpin } from "../hooks/useDialData";
+import type { DialSpin, DialStation } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
 import { FirstPlayFeed } from "./CompactDial";
+import { CrossingScopePill } from "./dial/CrossingScopePill";
+import {
+  crossingCountForScope,
+  crossingScopeLabel,
+  type CrossingScope,
+} from "../lib/crossingScope";
 
 type DiscoveryTrack = DialSpin & { spinId?: number | null };
-type DiscoveryLane = "crossing" | "also";
 
 interface StableDiscoveryCard {
   cardKey: string;
   track: DiscoveryTrack;
-  lane: DiscoveryLane;
 }
 
 interface StableDiscoveryState {
   cards: Map<string, StableDiscoveryCard>;
-  crossingOrder: Array<string | null>;
-  alsoOrder: Array<string | null>;
+  order: Array<string | null>;
+  crossingScope: CrossingScope;
+}
+
+export interface HomeCrossingMetric {
+  count: number;
+  scope: CrossingScope;
+}
+
+const HOME_CROSSING_INTERVALS: readonly CrossingScope[] = [
+  "now",
+  "set",
+  "24h",
+  "7d",
+  "lifetime",
+];
+
+/**
+ * "Now" is the narrowest end of the range control. When there is no literal
+ * live crossing, retain useful context by widening only as far as needed for
+ * this station. Other selected scopes remain exact.
+ */
+export function homeCrossingMetric(
+  ds: DialStation,
+  selectedScope: CrossingScope,
+): HomeCrossingMetric {
+  if (selectedScope !== "now") {
+    return { count: crossingCountForScope(ds, selectedScope), scope: selectedScope };
+  }
+  for (const scope of HOME_CROSSING_INTERVALS) {
+    const count = crossingCountForScope(ds, scope);
+    if (count > 0) return { count, scope };
+  }
+  return { count: 0, scope: "lifetime" };
 }
 
 /**
@@ -242,14 +278,18 @@ function DiscoveryRow({
   active,
   arrived,
   onPlay,
+  crossingScope,
 }: {
   row: DialLaneRow;
   track: DiscoveryTrack;
   active: boolean;
   arrived: boolean;
   onPlay: () => void;
+  crossingScope: CrossingScope;
 }) {
   const provenance = discoveryProvenance(row);
+  const metric = homeCrossingMetric(row.ds, crossingScope);
+  const metricLabel = crossingScopeLabel(metric.scope);
   return (
     <div
       className={`fdrow home-discovery__row${active ? " home-discovery__row--pinned" : ""}${arrived ? " home-discovery__row--arrived" : ""}`}
@@ -258,6 +298,8 @@ function DiscoveryRow({
       data-testid={`fdrow-${row.ds.station.slug}`}
       data-station-slug={row.ds.station.slug}
       data-recording-id={track.mbid ?? `${track.artist}:${track.title}`}
+      data-crossing-count={metric.count}
+      data-crossing-scope={metric.scope}
       onClick={onPlay}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -275,36 +317,16 @@ function DiscoveryRow({
       </span>
       <span className="home-discovery__track">{track.title || "Title unknown"}</span>
       <span className={`home-discovery__byline home-discovery__byline--${provenance.kind}`}>
+        <span
+          className="home-discovery__crossing-count"
+          title={`${metric.count} crossings in ${metricLabel}`}
+        >
+          {metric.count} {metric.count === 1 ? "crossing" : "crossings"} · {metricLabel}
+        </span>
+        <span aria-hidden="true"> · </span>
         {byline(provenance)}
       </span>
       {active && <span className="home-discovery__pinned">Playing</span>}
-    </div>
-  );
-}
-
-function FallbackRow({ fallback, onPlay }: {
-  fallback: HistoricalFallback;
-  onPlay: () => void;
-}) {
-  return (
-    <div
-      className="fdrow home-discovery__row home-discovery__row--fallback"
-      role="button"
-      tabIndex={0}
-      data-testid={`fdrow-${fallback.row.ds.station.slug}`}
-      onClick={onPlay}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onPlay();
-        }
-      }}
-    >
-      <span className="home-discovery__artist">{fallback.track.artist || "Artist unknown"}</span>
-      <span className="home-discovery__track">{fallback.track.title || "Title unknown"}</span>
-      <span className="home-discovery__byline home-discovery__byline--fallback">
-        {fallback.row.ds.station.name} · Live now · tune in · {fallback.window} history: {fallback.artist} ({fallback.count})
-      </span>
     </div>
   );
 }
@@ -315,19 +337,21 @@ export function HomeDiscovery({
   onPlay,
   warm,
   libraryItems,
+  crossingScope,
+  onCycleCrossingScope,
 }: {
   rows: DialLaneRow[];
   activeSlug: string | null;
   onPlay: (row: DialLaneRow) => void;
   warm: boolean;
   libraryItems: LibraryItem[];
+  crossingScope: CrossingScope;
+  onCycleCrossingScope: () => void;
 }) {
-  const [arrivals, setArrivals] = useState<Set<string>>(new Set());
-  const knownCrossingCards = useRef(new Map<string, string>());
   const stableDisplayRef = useRef<StableDiscoveryState>({
     cards: new Map(),
-    crossingOrder: [],
-    alsoOrder: [],
+    order: [],
+    crossingScope,
   });
 
   const liveRows = useMemo(
@@ -338,17 +362,27 @@ export function HomeDiscovery({
   );
 
   const orderedLive = useMemo(() => [...liveRows].sort((a, b) => {
+    const aMetric = homeCrossingMetric(a.row.ds, crossingScope);
+    const bMetric = homeCrossingMetric(b.row.ds, crossingScope);
+    if (crossingScope === "now") {
+      const intervalDelta =
+        HOME_CROSSING_INTERVALS.indexOf(aMetric.scope) -
+        HOME_CROSSING_INTERVALS.indexOf(bMetric.scope);
+      if (intervalDelta !== 0) return intervalDelta;
+    }
+    const crossingDelta = bMetric.count - aMetric.count;
+    if (crossingDelta !== 0) return crossingDelta;
     if (a.row.ds.station.slug === activeSlug) return -1;
     if (b.row.ds.station.slug === activeSlug) return 1;
     return Date.parse(b.track.sourcePlayedAt ?? b.track.playedAt) -
       Date.parse(a.track.sourcePlayedAt ?? a.track.playedAt);
-  }), [liveRows, activeSlug]);
+  }), [liveRows, activeSlug, crossingScope]);
 
   /**
-   * Keep a station in the same lane and slot while its current card is being
-   * enriched. Resolution can change crossing flags, MBIDs, and display times;
-   * none of those are a card change. A new source play timestamp is the point
-   * at which the current ordering is allowed to settle again.
+   * Keep a station in the same slot while its current card is being enriched.
+   * Resolution can change crossing flags, MBIDs, and display times; none of
+   * those are a card change. A scope change or new source play timestamp is the
+   * point at which the current ordering is allowed to settle again.
    */
   const stableDisplay = useMemo(() => {
     const previous = stableDisplayRef.current;
@@ -360,120 +394,47 @@ export function HomeDiscovery({
       const slug = entry.row.ds.station.slug;
       const cardKey = discoveryTrackCardKey(entry.track);
       const prior = previous.cards.get(slug);
-      const sameCard = prior != null && sameDiscoveryTrackCard(prior.track, entry.track);
+      const sameCard = previous.crossingScope === crossingScope &&
+        prior != null && sameDiscoveryTrackCard(prior.track, entry.track);
       if (sameCard) unchangedSlugs.add(slug);
-      const lane: DiscoveryLane = sameCard
-        ? prior!.lane
-        : entry.track.isLibraryHit || entry.track.isArtistHit
-          ? "crossing"
-          : "also";
       nextCards.set(slug, {
         cardKey: sameCard ? prior!.cardKey : cardKey,
         track: entry.track,
-        lane,
       });
       entriesBySlug.set(slug, entry);
     }
 
-    const currentCrossingOrder = orderedLive
-      .filter(({ row }) => nextCards.get(row.ds.station.slug)?.lane === "crossing")
-      .map(({ row }) => row.ds.station.slug);
-    const currentAlsoOrder = orderedLive
-      .filter(({ row }) => nextCards.get(row.ds.station.slug)?.lane === "also")
-      .map(({ row }) => row.ds.station.slug);
-    const lockedCrossings = new Set(
-      [...unchangedSlugs].filter((slug) => nextCards.get(slug)?.lane === "crossing"),
-    );
-    const lockedAlso = new Set(
-      [...unchangedSlugs].filter((slug) => nextCards.get(slug)?.lane === "also"),
-    );
-    const crossingOrder = reconcileDiscoverySlots(
-      previous.crossingOrder,
-      currentCrossingOrder,
-      lockedCrossings,
-    );
-    const alsoOrder = reconcileDiscoverySlots(
-      previous.alsoOrder,
-      currentAlsoOrder,
-      lockedAlso,
-    );
+    const currentOrder = orderedLive.map(({ row }) => row.ds.station.slug);
+    const order = reconcileDiscoverySlots(previous.order, currentOrder, unchangedSlugs);
 
-    const nextState = { cards: nextCards, crossingOrder, alsoOrder };
+    const nextState = { cards: nextCards, order, crossingScope };
     stableDisplayRef.current = nextState;
     return { ...nextState, entriesBySlug };
-  }, [liveRows, orderedLive]);
+  }, [liveRows, orderedLive, crossingScope]);
 
-  const orderedCrossings = useMemo(
-    () => stableDisplay.crossingOrder
-      .map((slug) => slug ? stableDisplay.entriesBySlug.get(slug) : undefined)
-      .filter((entry): entry is { row: DialLaneRow; track: DiscoveryTrack } => Boolean(entry)),
-    [stableDisplay],
-  );
-  const orderedGeneralSlots = useMemo(
-    () => stableDisplay.alsoOrder
+  const orderedSlots = useMemo(
+    () => stableDisplay.order
       .map((slug) => slug ? stableDisplay.entriesBySlug.get(slug) ?? null : null),
     [stableDisplay],
   );
 
-  useEffect(() => {
-    const current = new Map(
-      orderedCrossings.map(({ row }) => [
-        row.ds.station.slug,
-        stableDisplay.cards.get(row.ds.station.slug)?.cardKey ?? "",
-      ]),
-    );
-    const fresh = [...current].filter(([slug, cardKey]) =>
-      knownCrossingCards.current.get(slug) !== cardKey,
-    );
-    knownCrossingCards.current = current;
-    if (fresh.length === 0) return undefined;
-    const freshSlugs = fresh.map(([slug]) => slug);
-    setArrivals((previous) => new Set([...previous, ...freshSlugs]));
-    const timer = window.setTimeout(() => {
-      setArrivals((previous) => {
-        const next = new Set(previous);
-        freshSlugs.forEach((slug) => next.delete(slug));
-        return next;
-      });
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [orderedCrossings]);
-
   const catches = buildCaughtKeeps(libraryItems).slice(0, 12);
-  const fallback = warm && orderedCrossings.length === 0
-    ? selectHistoricalFallback(rows)
-    : null;
-  const fallbackSlug = fallback?.row.ds.station.slug ?? null;
-  const alsoOnAir = fallbackSlug
-    ? orderedGeneralSlots.map((entry) =>
-        entry?.row.ds.station.slug === fallbackSlug ? null : entry)
-    : orderedGeneralSlots;
-  const displayRows = warm ? alsoOnAir : orderedGeneralSlots;
-  const heading = warm ? "Also on the air" : "On the air";
 
   return (
     <div className="home-discovery">
-      {warm && (
-        <section className="home-discovery__section" aria-label="Crossing now">
-          <h2 className="home-discovery__heading">Crossing now</h2>
-          <div className="home-discovery__list">
-            {orderedCrossings.length > 0 ? orderedCrossings.map(({ row, track }) => {
-              return <DiscoveryRow key={row.ds.station.slug} row={row} track={track} active={row.ds.station.slug === activeSlug} arrived={arrivals.has(row.ds.station.slug)} onPlay={() => onPlay(row)} />;
-            }) : fallback ? (
-              <FallbackRow fallback={fallback} onPlay={() => onPlay(fallback.row)} />
-            ) : (
-              <p className="home-discovery__empty">No library artist is live right now.</p>
-            )}
-          </div>
-        </section>
-      )}
-
-      <section className="home-discovery__section" aria-label={heading}>
-        <h2 className="home-discovery__heading">{heading}</h2>
+      <section className="home-discovery__section" aria-label="On the air">
+        <div className="home-discovery__heading-row">
+          <h2 className="home-discovery__heading">On the air</h2>
+          <CrossingScopePill
+            scope={crossingScope}
+            enabled
+            onCycle={onCycleCrossingScope}
+          />
+        </div>
         <div className="home-discovery__list">
-          {displayRows.every((entry) => entry == null) ? (
+          {orderedSlots.every((entry) => entry == null) ? (
             <p className="home-discovery__empty">Nothing live with confirmed metadata right now.</p>
-          ) : displayRows.map((entry, index) => {
+          ) : orderedSlots.map((entry, index) => {
             if (!entry) {
               return (
                 <div
@@ -484,7 +445,17 @@ export function HomeDiscovery({
               );
             }
             const { row, track } = entry;
-            return <DiscoveryRow key={`also-cell-${index}`} row={row} track={track} active={row.ds.station.slug === activeSlug} arrived={false} onPlay={() => onPlay(row)} />;
+            return (
+              <DiscoveryRow
+                key={`also-cell-${index}`}
+                row={row}
+                track={track}
+                crossingScope={crossingScope}
+                active={row.ds.station.slug === activeSlug}
+                arrived={false}
+                onPlay={() => onPlay(row)}
+              />
+            );
           })}
         </div>
       </section>

@@ -4,6 +4,7 @@ import type { LibraryItem } from "../src/lib/meHooks";
 import {
   buildCaughtKeeps,
   discoveryProvenance,
+  homeCrossingMetric,
   liveTrackForRow,
   reconcileDiscoverySlots,
   sameDiscoveryTrackCard,
@@ -102,6 +103,19 @@ describe("front-door discovery read model", () => {
       row({ slug: "new", showName: "Set", setCount: 2, playedAt: "2026-08-27T12:00:00.000Z" }),
     ])?.row.ds.station.slug).toBe("new");
     expect(selectHistoricalFallback([row({ libraryHit: true, lifetimeCount: 9 })])).toBeNull();
+  });
+
+  it("uses each station's closest positive interval when the selected scope is now", () => {
+    const live = row({ libraryHit: true, lifetimeCount: 20 }).ds;
+    const set = row({ showName: "Set", setCount: 2, dayCount: 8 }).ds;
+    const day = row({ dayCount: 3, weekCount: 12 }).ds;
+    const never = row().ds;
+
+    expect(homeCrossingMetric(live, "now")).toEqual({ count: 1, scope: "now" });
+    expect(homeCrossingMetric(set, "now")).toEqual({ count: 2, scope: "set" });
+    expect(homeCrossingMetric(day, "now")).toEqual({ count: 3, scope: "24h" });
+    expect(homeCrossingMetric(never, "now")).toEqual({ count: 0, scope: "lifetime" });
+    expect(homeCrossingMetric(set, "24h")).toEqual({ count: 8, scope: "24h" });
   });
 
   it("keeps resolution updates on the same card until the source play changes", () => {

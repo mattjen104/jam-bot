@@ -2,7 +2,7 @@
  * Lore's front door.  The full category browser remains on /feed; home is
  * deliberately a read-first discovery surface for live radio and catches.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { useDialData } from "../hooks/useDialData";
 import { usePlayer } from "../player/PlayerProvider";
@@ -10,6 +10,11 @@ import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { HomeDiscovery } from "../components/HomeDiscovery";
 import { useMyLibraryInfinite } from "../lib/meHooks";
+import {
+  nextCrossingScope,
+  readCrossingScope,
+  writeCrossingScope,
+} from "../lib/crossingScope";
 
 export default function SplitHome() {
   const { radio } = usePlayer();
@@ -25,6 +30,14 @@ export default function SplitHome() {
     () => libraryQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [libraryQuery.data],
   );
+  const [crossingScope, setCrossingScope] = useState(readCrossingScope);
+  const onCycleCrossingScope = useCallback(() => {
+    setCrossingScope((current) => {
+      const next = nextCrossingScope(current);
+      writeCrossingScope(next);
+      return next;
+    });
+  }, []);
 
   const rows = useMemo<DialLaneRow[]>(
     () => stations
@@ -75,6 +88,8 @@ export default function SplitHome() {
           onPlay={playRow}
           warm={warm}
           libraryItems={libraryItems}
+          crossingScope={crossingScope}
+          onCycleCrossingScope={onCycleCrossingScope}
         />
       </div>
     </main>
