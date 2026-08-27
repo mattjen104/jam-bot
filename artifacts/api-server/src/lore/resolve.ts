@@ -112,11 +112,16 @@ function sig(artist: string, title: string): string {
  */
 async function readResolutionCache(
   key: string,
-): Promise<{ mbid: string | null; confidence: string } | undefined> {
+): Promise<{
+  mbid: string | null;
+  confidence: string;
+  updatedAt: Date | null;
+} | undefined> {
   const [row] = await db
     .select({
       mbid: resolutionCacheTable.mbid,
       confidence: resolutionCacheTable.confidence,
+      updatedAt: resolutionCacheTable.updatedAt,
     })
     .from(resolutionCacheTable)
     .where(eq(resolutionCacheTable.key, key))
@@ -141,7 +146,11 @@ async function writeResolutionCache(
 /** Cache read that never throws — a read failure just falls through to MB. */
 async function readResolutionCacheSafe(
   key: string,
-): Promise<{ mbid: string | null; confidence: string } | undefined> {
+): Promise<{
+  mbid: string | null;
+  confidence: string;
+  updatedAt: Date | null;
+} | undefined> {
   try {
     return await readResolutionCache(key);
   } catch (err) {
@@ -167,6 +176,9 @@ async function writeResolutionCacheSafe(
 export function isrcKey(isrc: string): string {
   return `isrc\u001f${isrc.trim().toUpperCase()}`;
 }
+
+/** Retry deferred MusicBrainz text lookups slowly, not on every live poll. */
+const DEFERRED_RESOLUTION_RETRY_MS = 15 * 60_000;
 
 /**
  * Resolve a raw artist+title to a MusicBrainz Recording ID (the spine key).
@@ -227,9 +239,15 @@ export async function resolveToMbid(
   //    (hit or miss) keeps us under the MusicBrainz 1 req/sec budget.
   const key = normalizeKey(rawArtist, rawTitle);
   const cached = await readResolutionCacheSafe(key);
-  if (cached) {
+  if (cached && (
+    cached.confidence !== "deferred" ||
+    (cached.updatedAt != null &&
+      Date.now() - cached.updatedAt.getTime() < DEFERRED_RESOLUTION_RETRY_MS)
+  )) {
     const confidence =
-      (cached.confidence as MbidResolution["confidence"]) || "unresolved";
+      cached.confidence === "deferred"
+        ? "unresolved"
+        : (cached.confidence as MbidResolution["confidence"]) || "unresolved";
     // fromCache is false when a live ISRC call preceded this (madeNetworkCall=true)
     // but we then hit the text cache — still counts as a network call overall.
     return { mbid: cached.mbid, confidence, fromCache: !madeNetworkCall, ...base };

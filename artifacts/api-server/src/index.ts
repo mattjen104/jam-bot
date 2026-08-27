@@ -111,6 +111,7 @@ import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migrati
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
 import { applyReleaseDateMigration } from "./lore/release-date-migration.js";
 import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
+import { startUnmatchedSpinBackfillJob } from "./lore/unmatched-spin-backfill.js";
 import { startPitchforkJob } from "./lore/pitchfork-job.js";
 import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
 import { ingestAllBookSources } from "./lore/book-knowledge.js";
@@ -358,6 +359,7 @@ async function bootLore(): Promise<void> {
     startGenreBackfillJob();
     startIsrcEnrichmentJob();
     startReleaseYearBackfillJob();
+    startUnmatchedSpinBackfillJob();
     startPitchforkJob();
     // All BEATO_EPISODES video IDs verified 2026-08-13 against the official
     // @RickBeato channel via videodb.org, fan playlist, and Rosetta episode db.

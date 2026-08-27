@@ -598,7 +598,7 @@ export const resolutionCacheTable = pgTable("resolution_cache", {
   key: text("key").notNull().unique(),
   /** Resolved MBID, or null for a cached miss. */
   mbid: text("mbid"),
-  /** Confidence tier of the cached resolution: "isrc" | "text" | "unresolved". */
+  /** Confidence tier: "isrc" | "text" | "unresolved" | "deferred". */
   confidence: text("confidence").notNull().default("unresolved"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

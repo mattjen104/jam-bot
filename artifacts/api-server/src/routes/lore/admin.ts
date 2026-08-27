@@ -130,6 +130,10 @@ import { clearAutomationClassCache } from "../../lore/scraped-shows-sync.js";
 import { clearPlayerScheduleCache } from "../player.js";
 import { toPicker } from "./shared.js";
 import { backfillReleaseYearBatch } from "../../lore/release-year-backfill.js";
+import {
+  backfillUnmatchedSpinsBatch,
+  getUnmatchedSpinHealth,
+} from "../../lore/unmatched-spin-backfill.js";
 import { triggerBeatoReset } from "../../lore/beato.js";
 
 const router: IRouter = Router();
@@ -1860,6 +1864,10 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
       )::text`,
     })
     .from(recordingsTable);
+  // Unmatched spins are tracked by normalized artist/title identity in the
+  // convergence cache. Keep this read independent from the release-year
+  // aggregate so an unavailable cache table never hides year coverage.
+  const unmatched = await getUnmatchedSpinHealth();
   return res.json({
     totalNull: totals?.totalNull ?? 0,
     inQueue: totals?.inQueue ?? 0,
@@ -1871,6 +1879,11 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
     dateInQueue: totals?.dateInQueue ?? 0,
     datePermMiss: totals?.datePermMiss ?? 0,
     dateLastCheckedAt: totals?.dateLastCheckedAt ?? null,
+    unmatchedCandidates: unmatched.candidates,
+    unmatchedResolved: unmatched.resolved,
+    unmatchedDeferred: unmatched.deferred,
+    unmatchedUnavailable: unmatched.unavailable,
+    unmatchedLastAttemptAt: unmatched.lastAttemptAt,
   });
 }));
 
@@ -1881,6 +1894,19 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
 router.post("/admin/release-year-backfill/run", h(async (_req, res) => {
   const result = await backfillReleaseYearBatch().catch((err) => {
     throw new HttpError(500, err instanceof Error ? err.message : "Backfill batch failed");
+  });
+  return res.json(result);
+}));
+
+// POST /api/admin/unmatched-spin-backfill/run — trigger one bounded convergence
+// batch immediately. The scheduled worker remains the normal path; this is an
+// operational escape hatch for watching a newly repaired source converge.
+router.post("/admin/unmatched-spin-backfill/run", h(async (_req, res) => {
+  const result = await backfillUnmatchedSpinsBatch().catch((err) => {
+    throw new HttpError(
+      500,
+      err instanceof Error ? err.message : "Unmatched-spin batch failed",
+    );
   });
   return res.json(result);
 }));

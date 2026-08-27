@@ -227,6 +227,20 @@ export interface IsolatedMbResolver {
     signal?: AbortSignal,
   ): Promise<{ mbid: string; score: number } | null>;
   /**
+   * Status-aware form for background convergence. A provider/network failure
+   * is distinct from a definitive no-match, while the compatibility method
+   * above intentionally collapses both to null for existing import callers.
+   */
+  resolveByTextWithScoreStatus(
+    artist: string,
+    title: string,
+    signal?: AbortSignal,
+  ): Promise<
+    | { status: "matched"; mbid: string; score: number }
+    | { status: "unavailable" }
+    | { status: "deferred" }
+  >;
+  /**
    * Reverse direction: fetch the ISRC(s) attached to a recording MBID via
    * `/recording/{mbid}?inc=isrcs`. Returns the first ISRC or null (including
    * on any error — callers must record "checked" separately so misses aren't
@@ -293,10 +307,27 @@ export function createMbResolver(): IsolatedMbResolver {
       title: string,
       signal?: AbortSignal,
     ): Promise<{ mbid: string; score: number } | null> {
-      if (!musicbrainzEnabled() || !artist.trim() || !title.trim()) return null;
+      const result = await this.resolveByTextWithScoreStatus(artist, title, signal);
+      return result.status === "matched"
+        ? { mbid: result.mbid, score: result.score }
+        : null;
+    },
+
+    async resolveByTextWithScoreStatus(
+      artist: string,
+      title: string,
+      signal?: AbortSignal,
+    ): Promise<
+      | { status: "matched"; mbid: string; score: number }
+      | { status: "unavailable" }
+      | { status: "deferred" }
+    > {
+      if (!musicbrainzEnabled() || !artist.trim() || !title.trim()) {
+        return { status: "unavailable" };
+      }
       const a = escapeQuery(artist);
       const t = escapeQuery(title);
-      if (!a || !t) return null;
+      if (!a || !t) return { status: "unavailable" };
       try {
         const query = `recording:"${t}" AND artist:"${a}"`;
         const body = await isolatedFetch(
@@ -304,10 +335,14 @@ export function createMbResolver(): IsolatedMbResolver {
           signal,
         );
         const match = parseRecordingSearch(body);
-        if (!match || match.score < 90) return null;
-        return { mbid: match.recordingId, score: match.score };
-      } catch {
-        return null;
+        if (!match || match.score < 90) return { status: "unavailable" };
+        return { status: "matched", mbid: match.recordingId, score: match.score };
+      } catch (err) {
+        const statusMatch = String(err).match(/MusicBrainz (\d{3})/);
+        const status = statusMatch ? Number(statusMatch[1]) : 0;
+        return status === 400 || status === 404 || status === 410
+          ? { status: "unavailable" }
+          : { status: "deferred" };
       }
     },
 
@@ -1291,8 +1326,10 @@ export async function fetchAlbumTracklist(
 /**
  * Resolve an artist + title (the shape radio now-playing metadata gives us) to a
  * canonical MusicBrainz recording. Best-effort — returns null when MusicBrainz
- * is unconfigured, inputs are empty, nothing matches above `minScore`, or on any
- * failure; never throws. `minScore` guards against low-confidence junk matches
+ * is unconfigured, inputs are empty, or nothing matches above `minScore`.
+ * Provider/network failures are thrown so isolated background jobs can preserve
+ * retryability; the process-wide resolver below remains the never-throwing
+ * live-ingestion path. `minScore` guards against low-confidence junk matches
  * so a bad text search doesn't poison the spine.
  */
 export async function resolveRecordingByText(

@@ -83,6 +83,15 @@ interface ReleaseYearHealth {
   datePermMiss: number;
   /** Max release_date_checked_at among recent recordings — shows job progress. */
   dateLastCheckedAt: string | null;
+  /** Recent unique unresolved artist/title identities awaiting convergence. */
+  unmatchedCandidates: number;
+  /** Recent identities promoted to a canonical MusicBrainz recording. */
+  unmatchedResolved: number;
+  /** Recent identities deferred after a temporary provider failure. */
+  unmatchedDeferred: number;
+  /** Recent identities with a durable no-match result. */
+  unmatchedUnavailable: number;
+  unmatchedLastAttemptAt: string | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -782,6 +791,14 @@ interface RunBatchResult {
   remaining: number;
 }
 
+interface UnmatchedRunBatchResult {
+  candidates: number;
+  resolved: number;
+  deferred: number;
+  unavailable: number;
+  remaining: number;
+}
+
 function ReleaseYearHealthSection({
   health,
   token,
@@ -801,10 +818,19 @@ function ReleaseYearHealthSection({
     dateInQueue,
     datePermMiss,
     dateLastCheckedAt,
+    unmatchedCandidates = 0,
+    unmatchedResolved = 0,
+    unmatchedDeferred = 0,
+    unmatchedUnavailable = 0,
+    unmatchedLastAttemptAt = null,
   } = health;
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<RunBatchResult | string | null>(null);
+  const [unmatchedRunning, setUnmatchedRunning] = useState(false);
+  const [unmatchedRunResult, setUnmatchedRunResult] =
+    useState<UnmatchedRunBatchResult | string | null>(null);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unmatchedResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleRunBatch = useCallback(async () => {
     setRunning(true);
@@ -832,6 +858,35 @@ function ReleaseYearHealthSection({
     }
   }, [token, onRunComplete]);
 
+  const handleRunUnmatchedBatch = useCallback(async () => {
+    setUnmatchedRunning(true);
+    setUnmatchedRunResult(null);
+    try {
+      const res = await fetch("/api/admin/unmatched-spin-backfill/run", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setUnmatchedRunResult(body.error ?? `HTTP ${res.status}`);
+      } else {
+        setUnmatchedRunResult((await res.json()) as UnmatchedRunBatchResult);
+        onRunComplete();
+      }
+    } catch (err) {
+      setUnmatchedRunResult(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setUnmatchedRunning(false);
+      if (unmatchedResultTimerRef.current) {
+        clearTimeout(unmatchedResultTimerRef.current);
+      }
+      unmatchedResultTimerRef.current = setTimeout(
+        () => setUnmatchedRunResult(null),
+        8_000,
+      );
+    }
+  }, [token, onRunComplete]);
+
   const queueDone = inQueue === 0;
 
   return (
@@ -852,6 +907,96 @@ function ReleaseYearHealthSection({
         (First/Current/Catalog/Deep). The backfill job queries MusicBrainz for
         aired, non-synthetic recordings continuously to fill the gap.
       </p>
+
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-medium text-foreground">
+            Recent unmatched spin convergence
+          </h3>
+          <span className="text-[12px] text-muted-foreground">
+            (last 30 days · scored MusicBrainz matches only)
+          </span>
+          <button
+            onClick={() => void handleRunUnmatchedBatch()}
+            disabled={unmatchedRunning || unmatchedCandidates === 0}
+            className="ml-auto flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+          >
+            <RefreshCw className={`h-3 w-3 ${unmatchedRunning ? "animate-spin" : ""}`} />
+            {unmatchedRunning ? "Running…" : "Resolve batch now"}
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Unresolved station metadata is retried in bounded background batches.
+          Clear misses are remembered; temporary MusicBrainz failures remain deferred.
+        </p>
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-base sm:grid-cols-4">
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Candidates
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {unmatchedCandidates.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">not yet attempted</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Resolved
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {unmatchedResolved.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">canonical recording attached</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Deferred
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {unmatchedDeferred.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">temporary provider failure</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Unavailable
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {unmatchedUnavailable.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">confirmed no match</dd>
+          </div>
+        </dl>
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm text-muted-foreground">
+          <span>
+            {unmatchedLastAttemptAt
+              ? `Last lookup: ${formatTimestamp(unmatchedLastAttemptAt)}`
+              : "No convergence lookup has run yet."}
+          </span>
+          {unmatchedRunResult !== null && (
+            <span>
+              {typeof unmatchedRunResult === "string" ? (
+                <span className="text-destructive">{unmatchedRunResult}</span>
+              ) : (
+                <>
+                  resolved{" "}
+                  <span className="font-mono text-foreground">
+                    {unmatchedRunResult.resolved}
+                  </span>
+                  {" · deferred "}
+                  <span className="font-mono text-foreground">
+                    {unmatchedRunResult.deferred}
+                  </span>
+                  {" · unavailable "}
+                  <span className="font-mono text-foreground">
+                    {unmatchedRunResult.unavailable}
+                  </span>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-base sm:grid-cols-4">

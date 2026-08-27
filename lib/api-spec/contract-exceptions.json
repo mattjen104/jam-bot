@@ -21,6 +21,7 @@
     { "method": "GET", "path": "/admin/spinitron-web-health", "kind": "admin", "reason": "Admin health endpoint (Spinitron web scraping)." },
     { "method": "GET", "path": "/admin/release-year-health", "kind": "admin", "reason": "Admin health endpoint (release-year backfill coverage)." },
     { "method": "POST", "path": "/admin/release-year-backfill/run", "kind": "admin", "reason": "Admin ops endpoint (trigger release-year backfill batch)." },
+    { "method": "POST", "path": "/admin/unmatched-spin-backfill/run", "kind": "admin", "reason": "Admin ops endpoint (trigger unmatched-spin convergence batch)." },
     { "method": "GET", "path": "/admin/feed-freshness-health", "kind": "admin", "reason": "Admin health endpoint (now-playing feed freshness)." },
     { "method": "GET", "path": "/admin/resolution-latency-health", "kind": "admin", "reason": "Admin health endpoint (slow-resolution stations)." },
     { "method": "GET", "path": "/admin/lore/blog-health", "kind": "admin", "reason": "Admin health endpoint (blog ingest freshness)." },
