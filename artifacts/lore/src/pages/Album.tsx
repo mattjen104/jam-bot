@@ -1,4 +1,4 @@
-import { Link, useParams } from "wouter";
+import { Link, useParams, useSearch } from "wouter";
 import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useGetAlbum,
@@ -98,7 +98,12 @@ function AlbumSkeleton() {
 
 export default function Album() {
   const params = useParams();
+  const search = useSearch();
   const releaseGroupMbid = params.releaseGroupMbid ?? "";
+  const requestedTilt = Number(new URLSearchParams(search).get("tilt"));
+  const openingTilt = Number.isFinite(requestedTilt) && Math.abs(requestedTilt) >= 5 && Math.abs(requestedTilt) <= 12
+    ? requestedTilt
+    : 0;
 
   const { data: album, isLoading, isError } = useGetAlbum(releaseGroupMbid);
 
@@ -142,6 +147,7 @@ export default function Album() {
   const totalSpins = heardTracks.reduce((s, t) => s + t.spinCount, 0);
   const artistMbid = album.tracks[0]?.artistMbid ?? null;
   const artistName = album.tracks[0]?.artist ?? null;
+  const albumArtworkUrl = album.tracks.find((track) => track.artworkUrl)?.artworkUrl ?? null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-24">
@@ -156,7 +162,18 @@ export default function Album() {
         </Link>
       </div>
 
-      <header className="mt-8 space-y-1">
+      <header
+        className="album-open mt-8 space-y-1"
+        style={{ "--album-opening-tilt": `${openingTilt}deg` } as React.CSSProperties}
+        data-opening-tilt={openingTilt}
+      >
+        {albumArtworkUrl && (
+          <img
+            src={proxyArtUrl(albumArtworkUrl) ?? albumArtworkUrl}
+            alt=""
+            className="album-open__cover"
+          />
+        )}
         <p className="font-mono text-[13px] uppercase tracking-[0.2em] text-primary">
           {album.primaryType ?? "Album"}
         </p>

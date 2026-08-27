@@ -10,7 +10,7 @@
  */
 import { Router, type IRouter } from "express";
 import { db, tasteSeedsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
 import { bustCrossingsCache } from "./crossings.js";
@@ -32,6 +32,86 @@ router.get("/me/taste-seeds", h(async (req, res) => {
     .where(eq(tasteSeedsTable.userId, user.id))
     .orderBy(tasteSeedsTable.createdAt);
   return res.json({ artists: rows.map((r) => r.artistName) });
+}));
+
+/**
+ * Browsable, read-only catalogue for the undated artist membership section.
+ * It uses only already-resolved Lore recordings/release groups; missing
+ * catalogue data is represented by an empty release stack.
+ */
+router.get("/me/taste-seeds/catalog", h(async (req, res) => {
+  const requested = String(req.query.artists ?? "")
+    .split(",")
+    .map((name) => decodeURIComponent(name).trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  const keys = [...new Set(requested.map((name) => name.toLocaleLowerCase()))];
+  if (keys.length === 0) return res.json({ artists: {} });
+
+  const result = await db.execute(sql`
+    SELECT DISTINCT ON (lower(trim(r.artist)), rrg.release_group_mbid)
+      lower(trim(r.artist)) AS "artistKey",
+      r.artist_mbid AS "artistMbid",
+      rrg.release_group_mbid AS "releaseGroupMbid",
+      rrg.title,
+      rrg.primary_type AS "primaryType",
+      rrg.release_year AS "releaseYear",
+      art.artwork_url AS "artworkUrl"
+    FROM recordings r
+    JOIN recording_release_groups rrg
+      ON rrg.recording_mbid = r.mbid
+     AND rrg.is_primary = true
+    LEFT JOIN LATERAL (
+      SELECT rec.artwork_url
+      FROM recording_release_groups member
+      JOIN recordings rec ON rec.mbid = member.recording_mbid
+      WHERE member.release_group_mbid = rrg.release_group_mbid
+        AND rec.artwork_url IS NOT NULL
+      LIMIT 1
+    ) art ON true
+    WHERE lower(trim(r.artist)) IN (${sql.join(keys.map((key) => sql`${key}`), sql`, `)})
+    ORDER BY lower(trim(r.artist)), rrg.release_group_mbid, rrg.release_year DESC NULLS LAST
+  `);
+
+  type Row = {
+    artistKey: string;
+    artistMbid: string | null;
+    releaseGroupMbid: string;
+    title: string | null;
+    primaryType: string | null;
+    releaseYear: number | null;
+    artworkUrl: string | null;
+  };
+  const artists: Record<string, {
+    artistMbid: string | null;
+    releases: Array<{
+      releaseGroupMbid: string;
+      title: string | null;
+      primaryType: string | null;
+      releaseYear: number | null;
+      artworkUrl: string | null;
+    }>;
+  }> = Object.fromEntries(keys.map((key) => [key, { artistMbid: null, releases: [] }]));
+
+  for (const row of result.rows as unknown as Row[]) {
+    const entry = artists[row.artistKey];
+    if (!entry) continue;
+    entry.artistMbid ??= row.artistMbid;
+    entry.releases.push({
+      releaseGroupMbid: row.releaseGroupMbid,
+      title: row.title,
+      primaryType: row.primaryType,
+      releaseYear: row.releaseYear,
+      artworkUrl: row.artworkUrl,
+    });
+  }
+  for (const entry of Object.values(artists)) {
+    entry.releases.sort((a, b) =>
+      (b.releaseYear ?? -Infinity) - (a.releaseYear ?? -Infinity) ||
+      (a.title ?? "").localeCompare(b.title ?? ""),
+    );
+  }
+  return res.json({ artists });
 }));
 
 /**

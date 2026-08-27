@@ -86,6 +86,7 @@
     { "method": "GET", "path": "/me/library/mbids", "kind": "plain-json", "reason": "Library MBID set read model via hand-written fetch." },
     { "method": "GET", "path": "/me/library/export", "kind": "media", "reason": "File download (library export), not a JSON API response shape." },
     { "method": "GET", "path": "/me/library/investigation-coverage", "kind": "plain-json", "reason": "Investigation-coverage read model via hand-written fetch." },
+    { "method": "GET", "path": "/me/library/release-stats", "kind": "plain-json", "reason": "Per-listener release attendance read model via hand-written fetch." },
     { "method": "POST", "path": "/me/library/sync", "kind": "plain-json", "reason": "Spotify library sync trigger via hand-written fetch." },
     { "method": "GET", "path": "/me/library/sync", "kind": "plain-json", "reason": "Latest sync job read model via hand-written fetch." },
     { "method": "GET", "path": "/me/library/sync/{jobId}/unavailable", "kind": "plain-json", "reason": "Sync-job unavailable-items read model via hand-written fetch." },
@@ -102,6 +103,7 @@
     { "method": "GET", "path": "/me/popular-crossings", "kind": "plain-json", "reason": "Popular-crossings read model via hand-written fetch." },
     { "method": "POST", "path": "/me/presence/heartbeat", "kind": "plain-json", "reason": "Presence heartbeat via hand-written fetch." },
     { "method": "GET", "path": "/me/taste-seeds", "kind": "plain-json", "reason": "Taste-seed read model via hand-written fetch." },
+    { "method": "GET", "path": "/me/taste-seeds/catalog", "kind": "plain-json", "reason": "Resolved catalogue read model for undated artist memberships via hand-written fetch." },
     { "method": "PUT", "path": "/me/taste-seeds", "kind": "plain-json", "reason": "Taste-seed write via hand-written fetch." },
 
     { "method": "GET", "path": "/player/onair", "kind": "plain-json", "reason": "Webplayer read model — deliberately plain-JSON, no orval (see player.ts header)." },

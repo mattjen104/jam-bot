@@ -57,6 +57,7 @@ import {
 import { YourWeekCard } from "../components/YourWeekCard";
 import { toast } from "../hooks/use-toast";
 import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
+import { LibraryCrate } from "../components/LibraryCrate";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -2110,7 +2111,15 @@ export default function Library() {
               />
             ))}
           </div>
-        ) : (viewMode === "album" && albumGroups.length > 0) ? (
+        ) : isStackView ? (
+          <LibraryCrate
+            items={keptItems}
+            seedArtists={visibleSeeds}
+            sort={sortFilter}
+            unopenedOnly={new URLSearchParams(search).get("unopened") === "1"}
+            onImport={openImportModal}
+          />
+        ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (
           /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */
           <>
             <div data-testid="library-album-view">

@@ -61,6 +61,8 @@ export interface LibraryRecording {
 export interface LibraryProvenance {
   kind: string;
   service?: string;
+  /** True only when an import source supplied a real per-item saved date. */
+  sourceKeepDate?: boolean;
   stationSlug?: string;
   /** Display name of the station (joined from spins → stations) */
   stationName?: string;
