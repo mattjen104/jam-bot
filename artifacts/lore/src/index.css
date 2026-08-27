@@ -8840,7 +8840,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   border-bottom: 1px solid hsl(var(--border) / 0.35);
   background: transparent;
   cursor: pointer;
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   line-height: 1.2;
   color: hsl(var(--foreground));
@@ -10499,7 +10499,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home__kicker {
   margin: 0;
   color: var(--home-tree-accent);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -10508,7 +10508,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   max-width: 630px;
   margin: 6px 0 8px;
   color: var(--home-tree-text);
-  font-family: var(--lore-font-wordmark);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-signature);
   font-weight: 400;
   line-height: 1.05;
@@ -10517,14 +10517,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   max-width: 580px;
   margin: 0;
   color: var(--home-tree-muted);
-  font-family: var(--lore-font-body);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
 }
 .split-home__status {
   flex: 0 0 auto;
   margin: 0;
   color: var(--home-tree-muted);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   white-space: nowrap;
 }
@@ -10615,13 +10615,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home__panel-title h2 {
   margin: 0;
   color: var(--home-tree-text);
-  font-family: var(--lore-font-wordmark);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-interface);
   font-weight: 400;
 }
 .split-home__panel-title span {
   color: var(--home-tree-muted);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   white-space: nowrap;
 }
@@ -10635,7 +10635,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-category-dial__tab-button {
   color: var(--home-tree-muted);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   border: 0;
 }
 .split-home .compact-category-dial__tab-button:hover {
@@ -10672,7 +10672,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .split-home .compact-category-dial__empty-category {
   color: var(--home-tree-muted);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
 }
 .split-home .compact-category-dial__topline {
   min-height: 32px;
@@ -10699,7 +10699,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   justify-content: space-between;
   gap: 12px;
   color: var(--home-tree-text);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -10786,7 +10786,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__summary-button {
   gap: 8px;
   color: var(--home-tree-text);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
 }
 .split-home .compact-category-dial__summary-button:hover,
@@ -10805,7 +10805,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-category-dial__label,
 .split-home .compact-category-dial__station-name,
 .split-home .compact-category-dial__station-track {
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
 }
 .split-home .compact-category-dial__label {
@@ -10901,7 +10901,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   font-weight: 400;
 }
@@ -10940,7 +10940,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .fdrow__t1 *,
 .split-home .fdrow__t3,
 .split-home .fdrow__station-chip {
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   font-weight: 400;
 }
@@ -11140,7 +11140,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-stack__tree-disclosure {
   min-height: 32px;
   color: var(--home-tree-text);
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
 }
 .split-home .compact-stack__tree-disclosure:hover,
@@ -11158,7 +11158,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-stack__album,
 .split-home .compact-stack__artist,
 .split-home .compact-stack__year {
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
   font-weight: 400;
 }
@@ -11170,7 +11170,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home .compact-first-plays__artist,
 .split-home .compact-first-plays__title,
 .split-home .compact-first-plays__station {
-  font-family: var(--lore-font-terminal);
+  font-family: var(--lore-font-home-heading);
   font-size: var(--lore-size-small);
 }
 .split-home .compact-first-plays__header {
