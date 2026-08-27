@@ -11999,21 +11999,57 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding: 0;
 }
 .split-home--discovery .compact-first-plays__tile {
-  display: grid;
-  grid-template-columns: minmax(72px, .35fr) minmax(0, 1fr) minmax(0, 1fr) minmax(120px, .7fr);
-  grid-template-areas: "date artist title station";
-  align-items: baseline;
-  gap: 10px 16px;
+  display: block;
   flex: none;
   width: 100%;
-  min-height: 54px;
-  padding: 12px 8px;
+  min-height: 0;
+  padding: 11px 8px 10px;
   border-bottom: 1px solid hsl(var(--border) / .7);
+  background: transparent;
+  color: hsl(var(--foreground));
+  text-align: left;
 }
-.split-home--discovery .compact-first-plays__release-date { grid-area: date; }
-.split-home--discovery .compact-first-plays__artist { grid-area: artist; }
-.split-home--discovery .compact-first-plays__title { grid-area: title; }
-.split-home--discovery .compact-first-plays__station { grid-area: station; }
+.split-home--discovery .compact-first-plays__tile:hover {
+  background: hsl(var(--secondary) / .23);
+}
+.split-home--discovery .compact-first-plays__artist,
+.split-home--discovery .compact-first-plays__title {
+  display: block;
+  overflow: hidden;
+  font-size: var(--lore-size-interface);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.split-home--discovery .compact-first-plays__artist {
+  color: hsl(var(--foreground));
+  font-weight: var(--lore-weight-semibold);
+}
+.split-home--discovery .compact-first-plays__title {
+  margin-top: 2px;
+  color: hsl(var(--foreground) / .78);
+  font-weight: var(--lore-weight-book);
+}
+.split-home--discovery .compact-first-plays__byline {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-small);
+  font-weight: var(--lore-weight-book);
+  letter-spacing: .06em;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.split-home--discovery .compact-first-plays__release-date {
+  color: hsl(var(--foreground) / .78);
+  font-weight: var(--lore-weight-medium);
+}
+.split-home--discovery .compact-first-plays__separator {
+  color: hsl(var(--muted-foreground) / .7);
+}
 .split-home--discovery .compact-first-plays__rail,
 .split-home--discovery .home-discovery__keeps {
   width: 100%;
@@ -12089,16 +12125,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
-  }
-  .split-home--discovery .compact-first-plays__tile {
-    grid-template-columns: 72px minmax(0, 1fr);
-    grid-template-areas:
-      "date artist"
-      "date title"
-      "date station";
-    gap: 2px 12px;
-    min-height: 68px;
-    padding: 10px 8px;
   }
   .split-home--discovery .home-discovery__keep {
     grid-template-columns: minmax(0, 1fr) auto;

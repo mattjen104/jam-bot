@@ -1254,7 +1254,8 @@ describe("CompactDial first-play rail", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(tile.querySelector("img")).toBeNull();
-    expect(tile.firstElementChild?.textContent).toBe("17 May 2024");
+    expect(tile.querySelector(".compact-first-plays__artist")?.textContent).toBe("New Artist");
+    expect(tile.querySelector(".compact-first-plays__release-date")?.textContent).toBe("17 May 2024");
     expect(tile.textContent).toContain("KEXP");
 
     fireEvent.click(tile);

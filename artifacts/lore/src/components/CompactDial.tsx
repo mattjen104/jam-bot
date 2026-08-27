@@ -660,12 +660,15 @@ export function FirstPlayFeed() {
               );
             }}
           >
-            <span className="compact-first-plays__release-date">
-              {releaseDateLabel(item)}
-            </span>
             <span className="compact-first-plays__artist">{item.artist}</span>
             <span className="compact-first-plays__title">{item.title}</span>
-            <span className="compact-first-plays__station">{item.station.name}</span>
+            <span className="compact-first-plays__byline">
+              <span className="compact-first-plays__release-date">
+                {releaseDateLabel(item)}
+              </span>
+              <span className="compact-first-plays__separator" aria-hidden="true"> · </span>
+              <span className="compact-first-plays__station">{item.station.name}</span>
+            </span>
           </button>
         ))}
       </div>
