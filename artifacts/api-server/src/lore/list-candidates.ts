@@ -153,6 +153,25 @@ export async function processListCandidate(
   }
   inFlight.add(candidate.id);
   try {
+    const [publication] = await db
+      .select({
+        pickerType: pickersTable.pickerType,
+        sourceRef: pickersTable.sourceRef,
+      })
+      .from(pickersTable)
+      .where(eq(pickersTable.id, candidate.pickerId))
+      .limit(1);
+    if (
+      publication?.pickerType === "blog" &&
+      typeof publication.sourceRef?.["feedUrl"] === "string"
+    ) {
+      return {
+        status: "skipped",
+        note: "RSS publication articles remain source-directed and are not extracted",
+        listId: null,
+      };
+    }
+
     // Idempotency by post URL: if any list already points at this URL, the
     // post has been extracted (possibly via another picker's feed or the
     // manual admin flow) — never re-scrape or duplicate.

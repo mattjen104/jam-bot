@@ -10,7 +10,7 @@ import {
   getLookupPickedMbidsQueryKey,
 } from "@workspace/api-client-react";
 import type { PickerDialItem, SelectorSummary } from "@workspace/api-client-react";
-import { useMyLibrary, useMyOverlapSelectors } from "../lib/meHooks";
+import { useMyLibrary, useMyOverlapSelectors, useMyPressPublicationsList } from "../lib/meHooks";
 import { usePlayer } from "../player/PlayerProvider";
 import { Search } from "lucide-react";
 
@@ -100,12 +100,12 @@ function useLibraryOverlap(): {
 }
 
 // ---------------------------------------------------------------------------
-// Unified selector shape (covers curated pickers + KEXP radio DJs)
+// Unified selector shape (covers curated pickers + KEXP radio DJs + RSS press)
 // ---------------------------------------------------------------------------
 interface UnifiedSelector {
   handle: string;
   name: string;
-  kind: "curated" | "dj";
+  kind: "curated" | "dj" | "press";
   /** Station display name */
   station?: string | null;
   stationSlug?: string | null;
@@ -140,13 +140,16 @@ function SelectorCard({
     sel.overlapPct >= 20 ? "sel-card--warm" : "",
     sel.isLive ? "sel-card--live" : "",
     sel.overlapPct === 0 ? "sel-card--cold" : "",
+    sel.kind === "press" ? "sel-card--press" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const metaParts: string[] = [];
   if (sel.setCount) metaParts.push(`${sel.setCount} sets`);
-  if (sel.spinCount) metaParts.push(`${sel.spinCount.toLocaleString()} spins`);
+  if (sel.spinCount) {
+    metaParts.push(`${sel.spinCount.toLocaleString()} ${sel.kind === "press" ? "articles" : "spins"}`);
+  }
   if (sel.lastActiveAt) metaParts.push(`last ${timeAgoShort(sel.lastActiveAt)}`);
 
   const [, navigate] = useLocation();
@@ -155,7 +158,7 @@ function SelectorCard({
       role="link"
       tabIndex={0}
       className={cardClass}
-      data-testid="selector-card"
+      data-testid={`selector-card-${sel.kind}`}
       onClick={() => navigate(`/archive/selectors/${sel.handle}`)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/archive/selectors/${sel.handle}`); }}
       style={{ cursor: "pointer" }}
@@ -169,6 +172,15 @@ function SelectorCard({
             {sel.sharedCount > 0
               ? <><b className="sel-card__overlap-n">{sel.sharedCount.toLocaleString()}</b> of your records played</>
               : <span className="sel-card__overlap-zero">hasn't played anything of yours yet</span>
+            }
+          </div>
+        )}
+
+        {sel.kind === "press" && sel.sharedCount !== undefined && (
+          <div className="sel-card__overlap-sentence">
+            {sel.sharedCount > 0
+              ? <><b className="sel-card__overlap-n">{sel.sharedCount.toLocaleString()}</b> overlapping mentions</>
+              : <span className="sel-card__overlap-zero">no overlapping press yet</span>
             }
           </div>
         )}
@@ -226,7 +238,7 @@ function SelectorCard({
         </div>
 
         {/* Play button (curated selectors with a run) */}
-        {onPlay && (
+        {onPlay && sel.kind !== "press" && (
           <button
             type="button"
             style={{
@@ -363,6 +375,30 @@ function RadioDjCard({
 }
 
 // ---------------------------------------------------------------------------
+// Press Publication card
+// ---------------------------------------------------------------------------
+function PressPublicationCard({
+  pub,
+  overlapPct,
+}: {
+  pub: { handle: string; name: string; articleCount: number; overlapCount?: number };
+  overlapPct: number;
+}) {
+  const sel: UnifiedSelector = {
+    handle: pub.handle,
+    name: pub.name,
+    kind: "press",
+    setCount: 0,
+    spinCount: pub.articleCount,
+    overlapPct,
+    sharedCount: pub.overlapCount,
+    isLive: false,
+  };
+
+  return <SelectorCard sel={sel} />;
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function Selectors() {
@@ -373,6 +409,8 @@ export default function Selectors() {
   const { data: listData, isLoading: listLoading, isError: listError } = useListPickers();
   const { data: dialData } = useGetPickersDial();
   const { data: kexpData, isLoading: kexpLoading } = useListSelectors();
+  const { data: pressPubs = [], isLoading: pressLoading } = useMyPressPublicationsList();
+
   const overlap = useLibraryOverlap();
   const { data: selectorOverlaps } = useMyOverlapSelectors();
   void radio;
@@ -390,9 +428,16 @@ export default function Selectors() {
     return m;
   }, [dialData]);
 
+  const pressHandles = useMemo(
+    () => new Set(pressPubs.map((publication) => publication.handle)),
+    [pressPubs],
+  );
+
   // Curated pickers (sorted by overlap)
   const sortedPickers = useMemo(() => {
-    const all = (listData?.pickers ?? []).filter((p) => p.active && p.pickerType !== "dj");
+    const all = (listData?.pickers ?? []).filter(
+      (p) => p.active && p.pickerType !== "dj" && !pressHandles.has(p.handle),
+    );
     return [...all].sort((a, b) => {
       const aOv = overlap?.overlapByHandle.get(a.handle) ?? 0;
       const bOv = overlap?.overlapByHandle.get(b.handle) ?? 0;
@@ -402,7 +447,7 @@ export default function Selectors() {
       if (aRecent !== bRecent) return bRecent - aRecent;
       return a.name.localeCompare(b.name);
     });
-  }, [listData, dialByHandle, overlap]);
+  }, [listData, dialByHandle, overlap, pressHandles]);
 
   const kexpSelectors = kexpData?.selectors ?? [];
 
@@ -436,6 +481,16 @@ export default function Selectors() {
     });
   }, [filteredKexp, overlap, nowMs]);
 
+  // Press publications (sorted by overlap count descending)
+  const sortedPress = useMemo(() => {
+    return [...pressPubs].sort((a, b) => {
+      const aOv = a.overlapCount ?? 0;
+      const bOv = b.overlapCount ?? 0;
+      if (bOv !== aOv) return bOv - aOv;
+      return b.articleCount - a.articleCount;
+    });
+  }, [pressPubs]);
+
   // Hero stats
   const liveCount =
     kexpSelectors.filter(
@@ -448,11 +503,12 @@ export default function Selectors() {
     let n = 0;
     for (const p of sortedPickers) if ((overlap?.overlapByHandle.get(p.handle) ?? 0) > 0) n++;
     for (const s of kexpSelectors) if ((overlap?.overlapByHandle.get(s.handle) ?? 0) > 0) n++;
+    for (const p of pressPubs) if ((p.overlapCount ?? 0) > 0) n++;
     return n;
-  }, [overlap, sortedPickers, kexpSelectors]);
+  }, [overlap, sortedPickers, kexpSelectors, pressPubs]);
 
-  const totalCount = sortedPickers.length + (stationFilter === "all" ? kexpSelectors.length : sortedKexp.length);
-  const isLoading = listLoading || kexpLoading;
+  const totalCount = sortedPickers.length + (stationFilter === "all" ? kexpSelectors.length : sortedKexp.length) + (stationFilter === "all" ? pressPubs.length : 0);
+  const isLoading = listLoading || kexpLoading || pressLoading;
 
   return (
     <div className="dial-root">
@@ -605,6 +661,20 @@ export default function Selectors() {
             sharedCount={selectorSharedByHandle.get(s.handle)}
           />
         ))}
+
+        {/* ── Press Publications ── */}
+        {!isLoading && stationFilter === "all" && sortedPress.map((p) => {
+          const overlapPct = p.articleCount > 0
+            ? Math.round(((p.overlapCount ?? 0) / p.articleCount) * 1000) / 10
+            : 0;
+          return (
+            <PressPublicationCard
+              key={p.handle}
+              pub={p}
+              overlapPct={overlapPct}
+            />
+          );
+        })}
 
         {/* Footer note */}
         {!isLoading && totalCount > 0 && (

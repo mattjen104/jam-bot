@@ -14,7 +14,9 @@ vi.mock("@workspace/db", async (importOriginal) => {
   return {
     ...actual,
     db: {
-      execute: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn().mockResolvedValue({
+        rows: Array.from({ length: 17 }, () => ({ column_name: "present" })),
+      }),
     },
   };
 });

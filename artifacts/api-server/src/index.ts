@@ -5,7 +5,6 @@ import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezone
 import { startLorePoller } from "./lore/poller.js";
 import { startLeaseScheduler } from "./lore/socket-leases.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
-import { startListCandidateWorker } from "./lore/list-candidates.js";
 import { startBackfillJob } from "./lore/backfill.js";
 import { startReconcileJob } from "./lore/reconcile.js";
 import { startNtsPoller } from "./lore/nts.js";
@@ -123,6 +122,7 @@ import { applyArtistEventsMigration } from "./lore/artist-events-migration.js";
 import { applyRbOrphanCleanupMigration } from "./lore/rb-orphan-cleanup-migration.js";
 import { applyFingerprintScoutMigration } from "./lore/fingerprint-scout-migration.js";
 import { applyStationSourceProbeMigration } from "./lore/source-probe-migration.js";
+import { applyRssArticlesMigration } from "./lore/rss-articles-migration.js";
 import { startFingerprintScout } from "./lore/fingerprint-scout.js";
 import { startSourceCoverageProbeRun } from "./lore/source-probe.js";
 
@@ -169,6 +169,7 @@ async function bootLore(): Promise<void> {
     wireSongEnrichment();
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
+    await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
     await runMigration("applyStationExclusionsMigration", applyStationExclusionsMigration);
     await runMigration("applyPickerDiscoveryMigration", applyPickerDiscoveryMigration);
@@ -348,7 +349,6 @@ async function bootLore(): Promise<void> {
       console.error("[lore] bandcamp-daily picker seed failed", err);
     }
     startBandcampDailyPoller();
-    startListCandidateWorker();
     await startBackfillJob();
     await startReconcileJob();
     startSegueJob();

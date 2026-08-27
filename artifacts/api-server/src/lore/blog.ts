@@ -1,6 +1,6 @@
-import { db, pickersTable, blogListCandidatesTable } from "@workspace/db";
+import { db, pickersTable, rssArticlesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { upsertPicker, persistPick } from "./picks.js";
+import { upsertPicker } from "./picks.js";
 
 /**
  * Blog / critic RSS worker. Polls a tastemaker feed and, per post, tries to
@@ -24,6 +24,16 @@ export interface BlogItem {
   tags: string[];
   /** Stable id for idempotent dedup (guid/id, else the link). */
   guid: string;
+}
+
+/** Only absolute web links are safe to persist and render as publisher links. */
+export function isSafeArticleUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function decodeEntities(s: string): string {
@@ -101,7 +111,7 @@ export function parseFeedItems(xml: string): BlogItem[] {
     const block = m[2]!;
     const title = firstTag(block, "title");
     const link = firstTag(block, "link") || atomLink(block);
-    if (!title || !link) continue;
+    if (!title || !link || !isSafeArticleUrl(link)) continue;
     const guid =
       firstTag(block, "guid") || firstTag(block, "id") || link;
     const publishedAt =
@@ -406,7 +416,9 @@ export interface BlogIngestResult {
   items: number;
   matched: number;
   logged: number;
-  /** Feed items flagged (and queued) as list/roundup candidates this pass. */
+  /** Number of newly retained source articles. */
+  inserted?: number;
+  /** Retained for API compatibility; RSS ingestion no longer queues lists. */
   listCandidates: number;
   /**
    * Whether the feed fetch succeeded. False means the network/HTTP request
@@ -497,84 +509,21 @@ export async function ingestBlogFeed(args: {
   }
 
   let matched = 0;
-  let logged = 0;
-  let listCandidates = 0;
+  let inserted = 0;
   for (const item of items) {
-    // Sound on Sound "Classic Album:" column — deep-dive series posts. Parse
-    // the artist + album from the title (after the colon) and log as a series
-    // pick linked directly to the article, rather than routing through the
-    // list-candidates queue (these are single-work features, not ranked lists).
-    if (/^classic album\s*:/i.test(item.title.trim())) {
-      const rest = item.title.replace(/^classic album\s*:\s*/i, "").trim();
-      const guess = extractArtistTrack(rest, item.tags);
-      if (guess) {
-        matched++;
-        const { logged: wrote } = await persistPick({
-          pickerId: picker.id,
-          source: "blog_post",
-          rawArtist: guess.artist,
-          rawTitle: guess.title,
-          sourceUrl: item.link,
-          context: item.title,
-          externalId: `blog:${item.guid}`,
-          ...(item.publishedAt ? { pickedAt: item.publishedAt } : {}),
-        });
-        if (wrote) logged++;
-      }
-      continue; // Never route SOS Classic Album posts to list-candidates
-    }
-
-    // Stage-1 list detection: a year-end/best-of/roundup post is a queue entry
-    // for the extraction stage, never a single artist–track guess.
-    if (isListCandidate(item.title, item.tags)) {
-      try {
-        const inserted = await db
-          .insert(blogListCandidatesTable)
-          .values({
-            pickerId: picker.id,
-            guid: item.guid,
-            url: item.link,
-            title: item.title,
-            publishedAt: item.publishedAt ?? null,
-          })
-          .onConflictDoNothing({
-            target: [
-              blogListCandidatesTable.pickerId,
-              blogListCandidatesTable.guid,
-            ],
-          })
-          .returning({ id: blogListCandidatesTable.id });
-        if (inserted.length > 0) {
-          listCandidates++;
-          console.info(
-            `[lore] blog ${args.name} queued list candidate: ${item.title}`,
-          );
-        }
-      } catch (e) {
-        console.error("[lore] blog: list-candidate insert failed", item.link, e);
-      }
-      continue;
-    }
-
     const guess = extractArtistTrack(item.title, item.tags);
-    if (!guess) continue; // No confident match — skip, never guess.
-    matched++;
-    const { logged: wrote } = await persistPick({
-      pickerId: picker.id,
-      source: "blog_post",
-      rawArtist: guess.artist,
-      rawTitle: guess.title,
-      sourceUrl: item.link,
-      context: item.title,
-      externalId: `blog:${item.guid}`,
-      ...(item.publishedAt ? { pickedAt: item.publishedAt } : {}),
-    });
-    if (wrote) logged++;
+    if (guess) matched++;
+    const wrote = await db.insert(rssArticlesTable).values({
+      pickerId: picker.id, guid: item.guid, url: item.link, title: item.title,
+      publishedAt: item.publishedAt ?? null, tags: item.tags,
+      matchedArtist: guess?.artist ?? null, matchedWork: guess?.title ?? null,
+    }).onConflictDoNothing().returning({ id: rssArticlesTable.id });
+    if (wrote.length) inserted++;
   }
 
-  if (logged > 0) {
+  if (inserted > 0) {
     console.info(
-      `[lore] blog ${args.name} logged ${logged}/${matched} matched pick(s) from ${items.length} post(s)`,
+      `[lore] blog ${args.name} retained ${inserted}/${items.length} article(s)`,
     );
   }
 
@@ -584,8 +533,9 @@ export async function ingestBlogFeed(args: {
     name: args.name,
     items: items.length,
     matched,
-    logged,
-    listCandidates,
+    logged: 0,
+    inserted,
+    listCandidates: 0,
     success: true,
     // All item links from the feed — the poller queues these for cross-ref
     // discovery so outbound links from post pages can surface new blog candidates.

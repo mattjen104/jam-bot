@@ -44,7 +44,7 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
     useSpotifyLibraryConnected: vi.fn(() => false),
     startSpotifyLibraryConnect: vi.fn(),
     useMyTasteSeeds: vi.fn(() => ({ data: [] })),
-    useMyPressCrossings: vi.fn(() => ({
+    useMyPressInfinite: vi.fn(() => ({
       data: undefined,
       isLoading: false,
       isError: false,
@@ -52,6 +52,8 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
       isFetchingNextPage: false,
       fetchNextPage: vi.fn(),
     })),
+    useSavePressArticleAction: vi.fn(() => ({ mutate: vi.fn() })),
+    useUnsavePressArticleAction: vi.fn(() => ({ mutate: vi.fn() })),
   });
 });
 
@@ -112,7 +114,8 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
 // ---------------------------------------------------------------------------
 
 import { useDialData } from "../src/hooks/useDialData";
-import { useMyPressCrossings, type PressMentionItem } from "../src/lib/meHooks";
+import { useMyPressInfinite } from "../src/lib/meHooks";
+import type { PressArticle } from "@workspace/api-client-react";
 import { DialView } from "../src/components/DialView";
 import type { DialStation, DialShow } from "../src/hooks/useDialData";
 
@@ -163,36 +166,40 @@ function makeLiveStation(slug: string): DialStation {
   };
 }
 
-const MENTION: PressMentionItem = {
-  id: "list:1",
-  artistName: "Fleetwood Mac",
-  kind: "list_entry",
-  sourceLabel: "Pitchfork — Best Albums of 1977",
-  context: null,
-  sourceUrl: "https://pitchfork.example/1977",
-  occurredAt: "2023-01-01T00:00:00.000Z",
+const MENTION: PressArticle = {
+  id: 1,
+  title: "A great review",
+  url: "https://pitchfork.example/1977",
+  guid: "test-guid",
+  publishedAt: "2023-01-01T00:00:00.000Z",
+  tags: ["Review"],
+  matchedArtist: "Fleetwood Mac",
+  matchedWork: "Rumours",
+  pickerId: 10,
+  publication: "Pitchfork",
+  handle: "pitchfork",
+  overlap: true,
+  saved: false,
+  savedAt: null,
 };
 
 function mockPress(page: {
-  items?: PressMentionItem[];
+  items?: PressArticle[];
   hasTaste?: boolean;
   computing?: boolean;
   failed?: boolean;
 } | null) {
-  (useMyPressCrossings as ReturnType<typeof vi.fn>).mockReturnValue({
+  (useMyPressInfinite as ReturnType<typeof vi.fn>).mockReturnValue({
     data: page
       ? {
           pages: [{
             items: page.items ?? [],
-            nextCursor: null,
-            computing: page.computing ?? false,
-            failed: page.failed ?? false,
-            hasTaste: page.hasTaste ?? true,
+            nextOffset: null,
           }],
         }
       : undefined,
-    isLoading: false,
-    isError: false,
+    isLoading: page?.computing ?? false,
+    isError: page?.failed ?? false,
     hasNextPage: false,
     isFetchingNextPage: false,
     fetchNextPage: vi.fn(),
@@ -265,7 +272,7 @@ describe("Dial lens toggle", () => {
     expect(document.querySelector("#press-feed-rows")).toBeTruthy();
     expect(document.querySelector("#dial-feed-rows")).toBeNull();
     expect(document.querySelector("#press-feed-rows")?.textContent).toContain(
-      "Fleetwood Mac, from your Stack, made Pitchfork — Best Albums of 1977 in 2023.",
+      "A great review",
     );
     expect(localStorage.getItem("lore:dialLens")).toBe("press");
   });
@@ -292,15 +299,14 @@ describe("Dial lens toggle", () => {
     expect(document.querySelector("#press-feed-rows")).toBeTruthy();
   });
 
-  it("Press with no taste shows the seeding nudge, not a blank screen", () => {
+  it("Press with no taste still shows retained publisher articles", () => {
     mockDialData({ hasLibrary: false, hasSeeds: false });
-    mockPress({ items: [], hasTaste: false });
+    mockPress({ items: [MENTION], hasTaste: false });
     renderDial();
     fireEvent.click(lensBtn("Press"));
 
-    expect(document.querySelector("#press-feed-rows")).toBeNull();
-    // The Zone1Placeholder onboarding surface renders instead of a blank body.
-    expect(document.querySelector(".z1-placeholder")).toBeTruthy();
+    expect(document.querySelector("#press-feed-rows")).toBeTruthy();
+    expect(screen.getByText("A great review")).toBeTruthy();
   });
 
   it("Press failed state shows the error copy, never the empty state", () => {
@@ -310,7 +316,7 @@ describe("Dial lens toggle", () => {
     fireEvent.click(lensBtn("Press"));
 
     expect(screen.getByText(/couldn't check the press/i)).toBeTruthy();
-    expect(screen.queryByText(/No press for your artists yet/i)).toBeNull();
+    expect(screen.queryByText(/No press articles have arrived yet/i)).toBeNull();
   });
 
   it("Press settled-empty state shows 'no press yet'", () => {
@@ -319,6 +325,6 @@ describe("Dial lens toggle", () => {
     renderDial();
     fireEvent.click(lensBtn("Press"));
 
-    expect(screen.getByText(/No press for your artists yet/i)).toBeTruthy();
+    expect(screen.getByText(/No press articles have arrived yet/i)).toBeTruthy();
   });
 });

@@ -12,6 +12,12 @@ import {
   updateListen as updateListenRequest,
   unkeepRecording,
   unkeepSpin,
+  getMyPress,
+  getMySavedPress,
+  savePressArticle,
+  unsavePressArticle,
+  getMyPressPublication,
+  getMyPressPublications
 } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
 
@@ -2089,4 +2095,93 @@ export function useMyRunCrossings(
 export interface RunCrossingMomentsResponse {
   runId: number;
   moments: RunCrossingMoment[];
+}
+
+export const ME_PRESS_INFINITE_KEY = ["me", "press", "infinite"] as const;
+export const ME_SAVED_PRESS_INFINITE_KEY = ["me", "saved-press", "infinite"] as const;
+export const ME_PRESS_PUBLICATIONS_KEY = ["me", "press-publications"] as const;
+
+export function useMyPressInfinite() {
+  return useInfiniteQuery({
+    queryKey: ME_PRESS_INFINITE_KEY,
+    queryFn: ({ pageParam, signal }) => {
+      return generatedOrNull(getMyPress({
+        ...(pageParam !== null ? { offset: pageParam } : {}),
+      }, { signal: withApiTimeout(signal) })).then((d) => d ?? { items: [], offset: 0, limit: 20, total: 0, nextOffset: null });
+    },
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useMySavedPressInfinite() {
+  return useInfiniteQuery({
+    queryKey: ME_SAVED_PRESS_INFINITE_KEY,
+    queryFn: ({ pageParam, signal }) => {
+      return generatedOrNull(getMySavedPress({
+        ...(pageParam !== null ? { offset: pageParam } : {}),
+      }, { signal: withApiTimeout(signal) })).then((d) => d ?? { items: [], offset: 0, limit: 20, total: 0, nextOffset: null });
+    },
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useMyPressPublicationsList() {
+  return useQuery({
+    queryKey: ME_PRESS_PUBLICATIONS_KEY,
+    queryFn: ({ signal }) => {
+      return generatedOrNull(getMyPressPublications({ signal: withApiTimeout(signal) }))
+        .then((d) => d?.items ?? []);
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useMyPressPublicationInfinite(handle: string) {
+  return useInfiniteQuery({
+    queryKey: ["me", "press-publication", handle, "infinite"] as const,
+    queryFn: ({ pageParam, signal }) => {
+      return generatedOrNull(getMyPressPublication(handle, {
+        ...(pageParam !== null ? { offset: pageParam } : {}),
+      }, { signal: withApiTimeout(signal) })).then((d) => {
+        if (!d) throw new Error("Press publication unavailable");
+        return d;
+      });
+    },
+    initialPageParam: null as number | null,
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    staleTime: 30_000,
+    retry: false,
+    enabled: !!handle,
+  });
+}
+
+export function useSavePressArticleAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (articleId: number) => savePressArticle(articleId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ME_PRESS_INFINITE_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_SAVED_PRESS_INFINITE_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["me", "press-publication"] });
+    },
+  });
+}
+
+export function useUnsavePressArticleAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (articleId: number) => unsavePressArticle(articleId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ME_PRESS_INFINITE_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_SAVED_PRESS_INFINITE_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["me", "press-publication"] });
+    },
+  });
 }

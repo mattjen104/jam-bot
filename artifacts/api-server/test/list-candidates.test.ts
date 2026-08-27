@@ -127,7 +127,7 @@ beforeAll(async () => {
       name: "List Candidate Test Blog",
       handle: HANDLE,
       homeUrl: "https://list-cand-test.example",
-      sourceRef: { feedUrl: "https://list-cand-test.example/feed" },
+      sourceRef: { legacyListExtraction: true },
       trustTier: 2,
       active: true,
     })
@@ -205,6 +205,27 @@ async function makeCandidate(suffix: string, title: string) {
 }
 
 describe("processListCandidate", () => {
+  it("never fetches or extracts a feed-backed publication candidate", async () => {
+    if (!dbAvailable) return;
+    const candidate = await makeCandidate("rss-boundary", "The 10 Best Albums of 2026");
+    await db.update(pickersTable)
+      .set({ sourceRef: { feedUrl: "https://list-cand-test.example/feed" } })
+      .where(eq(pickersTable.id, pickerId));
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const outcome = await processListCandidate(candidate, CONTACT);
+      expect(outcome.status).toBe("skipped");
+      expect(outcome.note).toMatch(/source-directed/);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      await db.update(pickersTable)
+        .set({ sourceRef: { legacyListExtraction: true } })
+        .where(eq(pickersTable.id, pickerId));
+      vi.stubGlobal("fetch", realFetch);
+    }
+  });
+
   it("extracts, resolves, and files a list with auto-confirmed exact entries", async () => {
     if (!dbAvailable) return;
 

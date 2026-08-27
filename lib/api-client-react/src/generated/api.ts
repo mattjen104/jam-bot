@@ -55,7 +55,10 @@ import type {
   GetMyOverlapRunsParams,
   GetMyOverlapSpineParams,
   GetMyPressCrossingsParams,
+  GetMyPressParams,
+  GetMyPressPublicationParams,
   GetMyRecentSetsParams,
+  GetMySavedPressParams,
   GetMyShowsParams,
   GetMyWeeklyRecapParams,
   GetOembedParams,
@@ -128,6 +131,10 @@ import type {
   PickerStationOverlaps,
   PickersDialResult,
   PostEmbedResolutionRequeueResponse,
+  PressBookmarkResult,
+  PressPage,
+  PressPublicationList,
+  PressPublicationPage,
   RecomputeQualityResponse,
   RecordingKnowledge,
   RecordingListProvenanceResponse,
@@ -8561,6 +8568,546 @@ export function useGetMyPressCrossings<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyPressCrossingsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Retained RSS Press feed, with library crossings first
+ */
+export const getGetMyPressUrl = (params?: GetMyPressParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/press?${stringifiedParams}`
+    : `/api/me/press`;
+};
+
+export const getMyPress = async (
+  params?: GetMyPressParams,
+  options?: RequestInit,
+): Promise<PressPage> => {
+  return customFetch<PressPage>(getGetMyPressUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyPressQueryKey = (params?: GetMyPressParams) => {
+  return [`/api/me/press`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyPressQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyPress>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyPressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyPress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyPressQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyPress>>> = ({
+    signal,
+  }) => getMyPress(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPress>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyPressQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyPress>>
+>;
+export type GetMyPressQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Retained RSS Press feed, with library crossings first
+ */
+
+export function useGetMyPress<
+  TData = Awaited<ReturnType<typeof getMyPress>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyPressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyPress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyPressQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Listener bookmarks, newest saved first
+ */
+export const getGetMySavedPressUrl = (params?: GetMySavedPressParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/press/saved?${stringifiedParams}`
+    : `/api/me/press/saved`;
+};
+
+export const getMySavedPress = async (
+  params?: GetMySavedPressParams,
+  options?: RequestInit,
+): Promise<PressPage> => {
+  return customFetch<PressPage>(getGetMySavedPressUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMySavedPressQueryKey = (params?: GetMySavedPressParams) => {
+  return [`/api/me/press/saved`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMySavedPressQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMySavedPress>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMySavedPressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMySavedPress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMySavedPressQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMySavedPress>>> = ({
+    signal,
+  }) => getMySavedPress(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMySavedPress>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMySavedPressQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMySavedPress>>
+>;
+export type GetMySavedPressQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Listener bookmarks, newest saved first
+ */
+
+export function useGetMySavedPress<
+  TData = Awaited<ReturnType<typeof getMySavedPress>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMySavedPressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMySavedPress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMySavedPressQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getSavePressArticleUrl = (articleId: number) => {
+  return `/api/me/press/articles/${articleId}/bookmark`;
+};
+
+export const savePressArticle = async (
+  articleId: number,
+  options?: RequestInit,
+): Promise<PressBookmarkResult> => {
+  return customFetch<PressBookmarkResult>(getSavePressArticleUrl(articleId), {
+    ...options,
+    method: "PUT",
+  });
+};
+
+export const getSavePressArticleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof savePressArticle>>,
+    TError,
+    { articleId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof savePressArticle>>,
+  TError,
+  { articleId: number },
+  TContext
+> => {
+  const mutationKey = ["savePressArticle"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof savePressArticle>>,
+    { articleId: number }
+  > = (props) => {
+    const { articleId } = props ?? {};
+
+    return savePressArticle(articleId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SavePressArticleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof savePressArticle>>
+>;
+
+export type SavePressArticleMutationError = ErrorType<unknown>;
+
+export const useSavePressArticle = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof savePressArticle>>,
+    TError,
+    { articleId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof savePressArticle>>,
+  TError,
+  { articleId: number },
+  TContext
+> => {
+  return useMutation(getSavePressArticleMutationOptions(options));
+};
+
+export const getUnsavePressArticleUrl = (articleId: number) => {
+  return `/api/me/press/articles/${articleId}/bookmark`;
+};
+
+export const unsavePressArticle = async (
+  articleId: number,
+  options?: RequestInit,
+): Promise<PressBookmarkResult> => {
+  return customFetch<PressBookmarkResult>(getUnsavePressArticleUrl(articleId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUnsavePressArticleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsavePressArticle>>,
+    TError,
+    { articleId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unsavePressArticle>>,
+  TError,
+  { articleId: number },
+  TContext
+> => {
+  const mutationKey = ["unsavePressArticle"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unsavePressArticle>>,
+    { articleId: number }
+  > = (props) => {
+    const { articleId } = props ?? {};
+
+    return unsavePressArticle(articleId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnsavePressArticleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unsavePressArticle>>
+>;
+
+export type UnsavePressArticleMutationError = ErrorType<unknown>;
+
+export const useUnsavePressArticle = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsavePressArticle>>,
+    TError,
+    { articleId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unsavePressArticle>>,
+  TError,
+  { articleId: number },
+  TContext
+> => {
+  return useMutation(getUnsavePressArticleMutationOptions(options));
+};
+
+/**
+ * @summary Active RSS publication directory
+ */
+export const getGetMyPressPublicationsUrl = () => {
+  return `/api/me/press/publications`;
+};
+
+export const getMyPressPublications = async (
+  options?: RequestInit,
+): Promise<PressPublicationList> => {
+  return customFetch<PressPublicationList>(getGetMyPressPublicationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyPressPublicationsQueryKey = () => {
+  return [`/api/me/press/publications`] as const;
+};
+
+export const getGetMyPressPublicationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyPressPublications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPressPublications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyPressPublicationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyPressPublications>>
+  > = ({ signal }) => getMyPressPublications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPressPublications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyPressPublicationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyPressPublications>>
+>;
+export type GetMyPressPublicationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Active RSS publication directory
+ */
+
+export function useGetMyPressPublications<
+  TData = Awaited<ReturnType<typeof getMyPressPublications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPressPublications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyPressPublicationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Complete retained history for one RSS publication
+ */
+export const getGetMyPressPublicationUrl = (
+  handle: string,
+  params?: GetMyPressPublicationParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/press/publications/${handle}?${stringifiedParams}`
+    : `/api/me/press/publications/${handle}`;
+};
+
+export const getMyPressPublication = async (
+  handle: string,
+  params?: GetMyPressPublicationParams,
+  options?: RequestInit,
+): Promise<PressPublicationPage> => {
+  return customFetch<PressPublicationPage>(
+    getGetMyPressPublicationUrl(handle, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyPressPublicationQueryKey = (
+  handle: string,
+  params?: GetMyPressPublicationParams,
+) => {
+  return [
+    `/api/me/press/publications/${handle}`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetMyPressPublicationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyPressPublication>>,
+  TError = ErrorType<unknown>,
+>(
+  handle: string,
+  params?: GetMyPressPublicationParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyPressPublication>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyPressPublicationQueryKey(handle, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyPressPublication>>
+  > = ({ signal }) =>
+    getMyPressPublication(handle, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPressPublication>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyPressPublicationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyPressPublication>>
+>;
+export type GetMyPressPublicationQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Complete retained history for one RSS publication
+ */
+
+export function useGetMyPressPublication<
+  TData = Awaited<ReturnType<typeof getMyPressPublication>>,
+  TError = ErrorType<unknown>,
+>(
+  handle: string,
+  params?: GetMyPressPublicationParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyPressPublication>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyPressPublicationQueryOptions(
+    handle,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

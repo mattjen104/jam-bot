@@ -1787,6 +1787,54 @@ export type ListEntry = typeof listEntriesTable.$inferSelect;
 export type InsertListEntry = typeof listEntriesTable.$inferInsert;
 
 /**
+ * Durable, source-respecting RSS/Atom article ledger.  This is deliberately
+ * separate from picks: a publication can be useful to a reader even when no
+ * music work can be identified in its headline.
+ */
+export const rssArticlesTable = pgTable(
+  "rss_articles",
+  {
+    id: serial("id").primaryKey(),
+    pickerId: integer("picker_id").notNull().references(() => pickersTable.id),
+    /** Feed supplied stable identity (guid/id, falling back to canonical URL). */
+    guid: text("guid").notNull(),
+    /** Publisher-owned article URL; Lore never stores or fetches its body. */
+    url: text("url").notNull(),
+    title: text("title").notNull(),
+    publishedAt: timestamp("published_at"),
+    tags: text("tags").array(),
+    /** Conservative headline/tag hint only, never a generated music pick. */
+    matchedArtist: text("matched_artist"),
+    matchedWork: text("matched_work"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("rss_articles_picker_guid_uq").on(t.pickerId, t.guid),
+    uniqueIndex("rss_articles_picker_url_uq").on(t.pickerId, t.url),
+    index("rss_articles_picker_published_idx").on(t.pickerId, t.publishedAt),
+    index("rss_articles_published_idx").on(t.publishedAt),
+  ],
+);
+export type RssArticle = typeof rssArticlesTable.$inferSelect;
+export type InsertRssArticle = typeof rssArticlesTable.$inferInsert;
+
+/** A listener's retained Press links.  This never creates a music keep. */
+export const rssArticleBookmarksTable = pgTable(
+  "rss_article_bookmarks",
+  {
+    userId: integer("user_id").notNull().references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    articleId: integer("article_id").notNull().references(() => rssArticlesTable.id, { onDelete: "cascade" }),
+    savedAt: timestamp("saved_at").defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.articleId], name: "rss_article_bookmarks_pkey" }),
+    index("rss_article_bookmarks_user_saved_idx").on(t.userId, t.savedAt),
+  ],
+);
+export type RssArticleBookmark = typeof rssArticleBookmarksTable.$inferSelect;
+export type InsertRssArticleBookmark = typeof rssArticleBookmarksTable.$inferInsert;
+
+/**
  * Feed posts flagged as **list candidates** — year-end / best-of / roundup
  * posts detected by the blog poller. Detection and extraction are two separate
  * stages by design: RSS answers "a list was published" (this table), while a

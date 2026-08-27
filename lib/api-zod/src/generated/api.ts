@@ -5000,6 +5000,160 @@ export const GetMyPressCrossingsResponse = zod.object({
 });
 
 /**
+ * @summary Retained RSS Press feed, with library crossings first
+ */
+export const getMyPressQueryOffsetMin = 0;
+
+export const GetMyPressQueryParams = zod.object({
+  offset: zod.coerce.number().min(getMyPressQueryOffsetMin).optional(),
+});
+
+export const GetMyPressResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      url: zod.string(),
+      guid: zod.string(),
+      publishedAt: zod.string().nullable(),
+      tags: zod.array(zod.string()).nullable(),
+      matchedArtist: zod.string().nullable(),
+      matchedWork: zod.string().nullable(),
+      pickerId: zod.number(),
+      publication: zod.string(),
+      handle: zod.string(),
+      overlap: zod.boolean(),
+      saved: zod.boolean(),
+      savedAt: zod.string().nullable(),
+    }),
+  ),
+  offset: zod.number(),
+  limit: zod.number(),
+  total: zod.number(),
+  nextOffset: zod.number().nullable(),
+});
+
+/**
+ * @summary Listener bookmarks, newest saved first
+ */
+export const getMySavedPressQueryOffsetMin = 0;
+
+export const GetMySavedPressQueryParams = zod.object({
+  offset: zod.coerce.number().min(getMySavedPressQueryOffsetMin).optional(),
+});
+
+export const GetMySavedPressResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      url: zod.string(),
+      guid: zod.string(),
+      publishedAt: zod.string().nullable(),
+      tags: zod.array(zod.string()).nullable(),
+      matchedArtist: zod.string().nullable(),
+      matchedWork: zod.string().nullable(),
+      pickerId: zod.number(),
+      publication: zod.string(),
+      handle: zod.string(),
+      overlap: zod.boolean(),
+      saved: zod.boolean(),
+      savedAt: zod.string().nullable(),
+    }),
+  ),
+  offset: zod.number(),
+  limit: zod.number(),
+  total: zod.number(),
+  nextOffset: zod.number().nullable(),
+});
+
+export const SavePressArticleParams = zod.object({
+  articleId: zod.coerce.number(),
+});
+
+export const SavePressArticleResponse = zod.object({
+  articleId: zod.number(),
+  saved: zod.boolean(),
+});
+
+export const UnsavePressArticleParams = zod.object({
+  articleId: zod.coerce.number(),
+});
+
+export const UnsavePressArticleResponse = zod.object({
+  articleId: zod.number(),
+  saved: zod.boolean(),
+});
+
+/**
+ * @summary Active RSS publication directory
+ */
+export const GetMyPressPublicationsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      handle: zod.string(),
+      tags: zod.array(zod.string()).nullable(),
+      health: zod.unknown().nullable(),
+      articleCount: zod.number(),
+      overlapCount: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Complete retained history for one RSS publication
+ */
+export const GetMyPressPublicationParams = zod.object({
+  handle: zod.coerce.string(),
+});
+
+export const getMyPressPublicationQueryOffsetMin = 0;
+
+export const GetMyPressPublicationQueryParams = zod.object({
+  offset: zod.coerce
+    .number()
+    .min(getMyPressPublicationQueryOffsetMin)
+    .optional(),
+});
+
+export const GetMyPressPublicationResponse = zod
+  .object({
+    items: zod.array(
+      zod.object({
+        id: zod.number(),
+        title: zod.string(),
+        url: zod.string(),
+        guid: zod.string(),
+        publishedAt: zod.string().nullable(),
+        tags: zod.array(zod.string()).nullable(),
+        matchedArtist: zod.string().nullable(),
+        matchedWork: zod.string().nullable(),
+        pickerId: zod.number(),
+        publication: zod.string(),
+        handle: zod.string(),
+        overlap: zod.boolean(),
+        saved: zod.boolean(),
+        savedAt: zod.string().nullable(),
+      }),
+    ),
+    offset: zod.number(),
+    limit: zod.number(),
+    total: zod.number(),
+    nextOffset: zod.number().nullable(),
+  })
+  .and(
+    zod.object({
+      publication: zod.object({
+        id: zod.number(),
+        name: zod.string(),
+        handle: zod.string(),
+      }),
+    }),
+  );
+
+/**
  * Returns upcoming Bandsintown events for artists in the listener's taste set (library items, taste seeds, unresolved Spotify artists), soonest-first. When `city` is supplied, events at venues in that city sort first (the "near you" band); a simple normalized string match against the venue city and region — no geocoding. Returns `computing: true` while background event fetches are in progress (poll at ~5 s until false). Returns `hasTaste: false` when the listener has no taste sources, so the client can show a seeding nudge. Clients must display Bandsintown attribution wherever event rows appear, per Bandsintown API terms.
 
  * @summary Shows lens — upcoming concerts for the listener's taste artists

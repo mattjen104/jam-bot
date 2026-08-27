@@ -336,3 +336,113 @@ test.describe("Mobile front door — five-row viewport guarantee", () => {
     expect(type.family).toContain("Nebula Sans");
   });
 });
+
+test.describe("Press lens", () => {
+  test("persists the lens, keeps a source link, and restores a bookmark", async ({ page }) => {
+    let saved = false;
+    const article = {
+      id: 1,
+      title: "Test Article Overlap",
+      url: "https://example.com/overlap",
+      guid: "overlap-guid",
+      publishedAt: "2026-08-27T12:00:00.000Z",
+      tags: [],
+      matchedArtist: "Test Artist",
+      matchedWork: null,
+      pickerId: 10,
+      publication: "Test Pub",
+      handle: "testpub",
+      overlap: true,
+      saved: false,
+      savedAt: null,
+    };
+    const pageBody = (items: typeof article[]) => ({
+      items,
+      offset: 0,
+      limit: 30,
+      total: items.length,
+      nextOffset: null,
+    });
+    const feedItems = [
+      ...Array.from({ length: 31 }, (_, index) => ({
+        ...article,
+        id: index + 1,
+        title: index === 0 ? article.title : `Overlap article ${index + 1}`,
+        guid: `overlap-guid-${index + 1}`,
+        publishedAt: `2026-08-27T${String(12 - Math.floor(index / 60)).padStart(2, "0")}:${String(59 - index).padStart(2, "0")}:00.000Z`,
+      })),
+      {
+        ...article,
+        id: 32,
+        title: "Test Article Recent",
+        url: "https://example.com/recent",
+        guid: "recent-guid",
+        publishedAt: "2026-08-26T11:00:00.000Z",
+        matchedArtist: null,
+        overlap: false,
+      },
+    ];
+    const savedItems = feedItems.slice(0, 31);
+
+    await installRoutes(page);
+    await page.route("**/api/me/press**", (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith("/press/saved")) {
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        const items = savedItems.slice(offset, offset + 30).map((item) => ({
+          ...item,
+          saved: true,
+          savedAt: "2026-08-27T13:00:00.000Z",
+        }));
+        return route.fulfill({
+          json: {
+            ...pageBody(saved ? items : []),
+            offset,
+            nextOffset: saved && offset + 30 < savedItems.length ? offset + 30 : null,
+          },
+        });
+      }
+      if (url.pathname.endsWith("/press/articles/1/bookmark")) {
+        saved = route.request().method() === "PUT";
+        return route.fulfill({ json: { articleId: 1, saved } });
+      }
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      return route.fulfill({
+        json: {
+          ...pageBody(feedItems.slice(offset, offset + 30).map((item) => ({
+            ...item,
+            saved: saved && item.id === 1,
+            savedAt: saved && item.id === 1 ? "2026-08-27T13:00:00.000Z" : null,
+          }))),
+          offset,
+          nextOffset: offset + 30 < feedItems.length ? offset + 30 : null,
+        },
+      });
+    });
+
+    await page.goto("/lore/");
+    await expect(
+      page.locator(".split-home"),
+      "app shell (.split-home) never mounted — bundle failed to boot",
+    ).toBeVisible({ timeout: 20_000 });
+
+    await page.click('button:has-text("Press")');
+    await expect(page.locator('button:has-text("Press")')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('text=Test Article Overlap')).toBeVisible();
+    await page.getByTestId("press-pagination-sentinel").scrollIntoViewIfNeeded();
+    await expect(page.locator('text=Test Article Recent')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("press-link-1")).toHaveAttribute("href", "https://example.com/overlap");
+    await expect(page.getByTestId("press-link-1")).toHaveAttribute("target", "_blank");
+    await page.getByTestId("press-bookmark-1").click();
+    await expect(page.getByTestId("press-bookmark-1")).toHaveAttribute("aria-label", "Remove bookmark");
+
+    await page.reload();
+    await expect(page.locator('button:has-text("Press")')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("press-link-1")).toBeVisible();
+    await page.getByTestId("saved-press-pagination-sentinel").scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("press-saved-link-31")).toBeVisible({ timeout: 10_000 });
+    await page.click('button:has-text("Lore radio")');
+    await expect(page.locator('button:has-text("Lore radio")')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".home-discovery__section").first()).toBeVisible();
+  });
+});

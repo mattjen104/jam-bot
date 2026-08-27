@@ -1,7 +1,6 @@
 import { db, pickersTable, type PickerHealth } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { ingestBlogFeed } from "./blog.js";
-import { queueCrossRefDiscovery } from "./blog-crossref.js";
 
 /**
  * Blog-feed poller — the blog analogue of the station poller. Blogs publish a
@@ -181,18 +180,13 @@ async function pollFeed(feed: BlogFeed): Promise<void> {
       return;
     }
 
-    if (result.logged > 0) {
-      console.info(`[lore] blog ${feed.name} ingested ${result.logged} pick(s)`);
+    if (result.inserted) {
+      console.info(`[lore] blog ${feed.name} retained ${result.inserted} article(s)`);
     }
     await writeHealthOk(feed.id).catch((err) =>
       console.error("[blog-poller] health write failed", feed.id, err),
     );
 
-    // Queue any blog post page links for cross-ref discovery. The cross-ref
-    // module will fetch each post page, extract outbound links, and auto-discover
-    // new blog candidates from those links' domains.
-    const sourceDomain = new URL(feed.feedUrl).hostname;
-    queueCrossRefDiscovery(result.feedLinks ?? [], sourceDomain);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[lore] blog poll failed", feed.feedUrl, err);

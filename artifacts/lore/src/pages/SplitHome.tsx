@@ -15,12 +15,24 @@ import {
   readCrossingScope,
   writeCrossingScope,
 } from "../lib/crossingScope";
+import { HomePress } from "../components/HomePress";
+import { readDialLens, writeDialLens, type DialLens } from "../lib/dialLensState";
 
 export default function SplitHome() {
   const { radio } = usePlayer();
+
+  const [lens, setLens] = useState<DialLens>(() =>
+    readDialLens() === "press" ? "press" : "radio",
+  );
+
+  const handleSetLens = (newLens: DialLens) => {
+    if (newLens === "press" || newLens === "radio") {
+      setLens(newLens);
+      writeDialLens(newLens);
+    }
+  };
+
   const { stations, hasLibrary } = useDialData("personal", {
-    // Home needs live crossings and current station observations, but does
-    // not need the full /feed category controls or its enrichment surface.
     includeAllStations: false,
     crossingsEnabled: true,
     deferEnrichment: false,
@@ -78,19 +90,41 @@ export default function SplitHome() {
     <main className="split-home split-home--discovery">
       <div className="split-home__discovery-shell">
         <header className="split-home__discovery-intro">
-          <p className="split-home__eyebrow">Lore radio</p>
-          <h1>Hear what’s moving</h1>
-          <p>Live music, human choices, and the records you caught.</p>
+          <div className="split-home__lens-toggle" role="group" aria-label="Lens selection">
+            <button
+              type="button"
+              className={`split-home__lens-btn${lens === "radio" ? " split-home__lens-btn--active" : ""}`}
+              aria-pressed={lens === "radio"}
+              onClick={() => handleSetLens("radio")}
+            >
+              Lore radio
+            </button>
+            <span className="split-home__lens-sep" aria-hidden="true">|</span>
+            <button
+              type="button"
+              className={`split-home__lens-btn${lens === "press" ? " split-home__lens-btn--active" : ""}`}
+              aria-pressed={lens === "press"}
+              onClick={() => handleSetLens("press")}
+            >
+              Press
+            </button>
+          </div>
+          <h1>{lens === "press" ? "Source and respect" : "Hear what’s moving"}</h1>
+          <p>{lens === "press" ? "Music publications and the records you caught." : "Live music, human choices, and the records you caught."}</p>
         </header>
-        <HomeDiscovery
-          rows={rows}
-          activeSlug={radio.station?.slug ?? null}
-          onPlay={playRow}
-          warm={warm}
-          libraryItems={libraryItems}
-          crossingScope={crossingScope}
-          onCycleCrossingScope={onCycleCrossingScope}
-        />
+        {lens === "radio" ? (
+          <HomeDiscovery
+            rows={rows}
+            activeSlug={radio.station?.slug ?? null}
+            onPlay={playRow}
+            warm={warm}
+            libraryItems={libraryItems}
+            crossingScope={crossingScope}
+            onCycleCrossingScope={onCycleCrossingScope}
+          />
+        ) : (
+          <HomePress />
+        )}
       </div>
     </main>
   );

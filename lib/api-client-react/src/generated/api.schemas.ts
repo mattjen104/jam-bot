@@ -2997,6 +2997,60 @@ export interface MePickerOverlapResult {
   items: PickerOverlapItem[];
 }
 
+export interface PressArticle {
+  id: number;
+  title: string;
+  url: string;
+  guid: string;
+  publishedAt: string | null;
+  tags: string[] | null;
+  matchedArtist: string | null;
+  matchedWork: string | null;
+  pickerId: number;
+  publication: string;
+  handle: string;
+  overlap: boolean;
+  saved: boolean;
+  savedAt: string | null;
+}
+
+export interface PressPage {
+  items: PressArticle[];
+  offset: number;
+  limit: number;
+  total: number;
+  nextOffset: number | null;
+}
+
+export interface PressBookmarkResult {
+  articleId: number;
+  saved: boolean;
+}
+
+export interface PressPublication {
+  id: number;
+  name: string;
+  handle: string;
+  tags: string[] | null;
+  health: unknown | null;
+  articleCount: number;
+  overlapCount: number;
+}
+
+export interface PressPublicationList {
+  items: PressPublication[];
+}
+
+export type PressPublicationPagePublication = {
+  id: number;
+  name: string;
+  handle: string;
+};
+
+export type PressPublicationPage = PressPage & {
+  publication: PressPublicationPagePublication;
+};
+
 export type PressMentionItemKind =
   (typeof PressMentionItemKind)[keyof typeof PressMentionItemKind];
 
@@ -4071,6 +4125,27 @@ export type GetMyPressCrossingsParams = {
 
  */
   cursor?: string;
+};
+
+export type GetMyPressParams = {
+  /**
+   * @minimum 0
+   */
+  offset?: number;
+};
+
+export type GetMySavedPressParams = {
+  /**
+   * @minimum 0
+   */
+  offset?: number;
+};
+
+export type GetMyPressPublicationParams = {
+  /**
+   * @minimum 0
+   */
+  offset?: number;
 };
 
 export type GetMyShowsParams = {

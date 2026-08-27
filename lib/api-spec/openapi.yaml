@@ -3019,6 +3019,76 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/press:
+    get:
+      operationId: getMyPress
+      tags: [me]
+      summary: Retained RSS Press feed, with library crossings first
+      parameters:
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Source-owned articles, never music picks
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PressPage" }
+  /me/press/saved:
+    get:
+      operationId: getMySavedPress
+      tags: [me]
+      summary: Listener bookmarks, newest saved first
+      parameters:
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Saved RSS articles
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PressPage" }
+  /me/press/articles/{articleId}/bookmark:
+    put:
+      operationId: savePressArticle
+      tags: [me]
+      parameters:
+        - { name: articleId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Bookmark saved, content: { application/json: { schema: { $ref: "#/components/schemas/PressBookmarkResult" } } } }
+    delete:
+      operationId: unsavePressArticle
+      tags: [me]
+      parameters:
+        - { name: articleId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Bookmark removed, content: { application/json: { schema: { $ref: "#/components/schemas/PressBookmarkResult" } } } }
+  /me/press/publications:
+    get:
+      operationId: getMyPressPublications
+      tags: [me]
+      summary: Active RSS publication directory
+      responses:
+        "200":
+          description: Publication directory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PressPublicationList" }
+  /me/press/publications/{handle}:
+    get:
+      operationId: getMyPressPublication
+      tags: [me]
+      summary: Complete retained history for one RSS publication
+      parameters:
+        - { name: handle, in: path, required: true, schema: { type: string } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Publication article page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PressPublicationPage" }
   /me/shows:
     get:
       operationId: getMyShows
@@ -8073,6 +8143,68 @@ components:
           items:
             $ref: "#/components/schemas/PickerOverlapItem"
       required: [items]
+    PressArticle:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        url: { type: string }
+        guid: { type: string }
+        publishedAt: { type: string, nullable: true }
+        tags: { type: array, items: { type: string }, nullable: true }
+        matchedArtist: { type: string, nullable: true }
+        matchedWork: { type: string, nullable: true }
+        pickerId: { type: integer }
+        publication: { type: string }
+        handle: { type: string }
+        overlap: { type: boolean }
+        saved: { type: boolean }
+        savedAt: { type: string, nullable: true }
+      required: [id, title, url, guid, publishedAt, tags, matchedArtist, matchedWork, pickerId, publication, handle, overlap, saved, savedAt]
+    PressPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PressArticle" } }
+        offset: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        nextOffset: { type: integer, nullable: true }
+      required: [items, offset, limit, total, nextOffset]
+    PressBookmarkResult:
+      type: object
+      properties:
+        articleId: { type: integer }
+        saved: { type: boolean }
+      required: [articleId, saved]
+    PressPublication:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        handle: { type: string }
+        tags: { type: array, items: { type: string }, nullable: true }
+        health: { nullable: true }
+        articleCount: { type: integer }
+        overlapCount: { type: integer }
+      required: [id, name, handle, tags, health, articleCount, overlapCount]
+    PressPublicationList:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PressPublication" } }
+      required: [items]
+    PressPublicationPage:
+      allOf:
+        - $ref: "#/components/schemas/PressPage"
+        - type: object
+          properties:
+            publication:
+              type: object
+              properties:
+                id: { type: integer }
+                name: { type: string }
+                handle: { type: string }
+              required: [id, name, handle]
+          required: [publication]
     PressMentionItem:
       type: object
       description: One scraped-metadata mention of an artist/release in the listener's taste set.

@@ -5,6 +5,7 @@ import {
   useGetSelectorRuns,
   useGetSelectorInsights,
   useGetPickerInsights,
+  type PressPublication,
   type SelectorRunSummary,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
@@ -17,13 +18,179 @@ import {
   ExternalLink,
   Radio,
   Users,
+  Rss
 } from "lucide-react";
+import { useMyPressPublicationsList, useMyPressPublicationInfinite, useSavePressArticleAction, useUnsavePressArticleAction } from "../lib/meHooks";
+import { PressArticleRow } from "../components/HomePress";
+import { useEffect, useMemo, useRef, useCallback } from "react";
+
+function PressPublicationArchive({
+  handle,
+  dockPadding,
+  directoryEntry,
+}: {
+  handle: string;
+  dockPadding: string;
+  directoryEntry: PressPublication;
+}) {
+  const query = useMyPressPublicationInfinite(handle);
+  const saveMutation = useSavePressArticleAction();
+  const unsaveMutation = useUnsavePressArticleAction();
+
+  const handleBookmark = useCallback((id: number) => {
+    return saveMutation.mutateAsync(id);
+  }, [saveMutation]);
+
+  const handleUnbookmark = useCallback((id: number) => {
+    return unsaveMutation.mutateAsync(id);
+  }, [unsaveMutation]);
+
+  const articles = useMemo(
+    () => query.data?.pages.flatMap((page) => page.items) ?? [],
+    [query.data]
+  );
+
+  const publication = query.data?.pages[0]?.publication;
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasObserver = typeof IntersectionObserver !== "undefined";
+
+  useEffect(() => {
+    if (!hasObserver) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        if (query.hasNextPage && !query.isFetchingNextPage) {
+          void query.fetchNextPage();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasObserver, query]);
+
+  if (query.isLoading) {
+    return (
+      <div className="min-h-screen">
+        <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+          <div className="mt-8 h-40 animate-pulse rounded-xl border border-card-border bg-card" />
+        </div>
+      </div>
+    );
+  }
+
+  if (query.isError || !publication) {
+    return (
+      <div className="min-h-screen">
+        <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+          <p className="mt-8 rounded-xl border border-destructive-border bg-destructive/10 p-4 text-base text-destructive-foreground">
+            Couldn't load this publication's archive.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen">
+      <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+        <Link
+          href="/selectors"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          All selectors
+        </Link>
+
+        <header className="mb-8 mt-6">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
+            <Rss className="h-4 w-4" />
+            Press Publication
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <h1 className="font-serif text-4xl font-normal text-foreground">
+              {publication.name}
+            </h1>
+          </div>
+          {typeof directoryEntry.health === "object" &&
+            directoryEntry.health !== null &&
+            "last_error" in directoryEntry.health &&
+            directoryEntry.health.last_error ? (
+              <p className="mt-2 font-mono text-[13px] text-muted-foreground">
+                Feed delayed — showing the complete retained archive while the
+                publisher feed recovers.
+              </p>
+            ) : null}
+        </header>
+
+        <section className="home-discovery__section" aria-label="Articles">
+          <div className="home-press__list">
+            {articles.length === 0 ? (
+              <p className="home-discovery__empty">No articles found.</p>
+            ) : (
+              articles.map((article) => (
+                <PressArticleRow
+                  key={article.id}
+                  article={article}
+                  onBookmark={handleBookmark}
+                  onUnbookmark={handleUnbookmark}
+                />
+              ))
+            )}
+          </div>
+
+          {query.hasNextPage && (
+            <div ref={sentinelRef} className="dial-feed-sentinel" aria-hidden="true" />
+          )}
+
+          {!hasObserver && query.hasNextPage && (
+            <button
+              type="button"
+              className="dial-filter-bar__btn"
+              onClick={() => void query.fetchNextPage()}
+              disabled={query.isFetchingNextPage}
+            >
+              {query.isFetchingNextPage ? "Loading…" : "More"}
+            </button>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
 
 /** A selector's documented runs — dated, ordered tracklists with sources. */
 export default function SelectorArchive() {
   const params = useParams();
   const handle = params.handle ?? "";
   const { ride, radio } = usePlayer();
+
+  const { data: pressPubs, isLoading: pressDirectoryLoading } = useMyPressPublicationsList();
+  const pressPublication = pressPubs?.find((publication) => publication.handle === handle);
+
+  const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
+
+  if (pressDirectoryLoading) {
+    return <div className={`min-h-screen ${dockPadding}`} aria-busy="true" />;
+  }
+
+  if (pressPublication) {
+    return (
+      <PressPublicationArchive
+        handle={handle}
+        dockPadding={dockPadding}
+        directoryEntry={pressPublication}
+      />
+    );
+  }
+
+  return <LegacySelectorArchive handle={handle} dockPadding={dockPadding} />;
+}
+
+function LegacySelectorArchive({ handle, dockPadding }: { handle: string; dockPadding: string }) {
   const { data, isLoading, isError } = useGetPickerArchive(handle);
   const { data: overlaps } = useGetPickerStationOverlaps(handle);
   const isDj = data?.picker.pickerType === "dj";
@@ -36,8 +203,6 @@ export default function SelectorArchive() {
     useGetPickerInsights(isDj ? "" : handle);
   const insights = isDj ? selectorInsights : pickerInsights;
   const insightsLoading = isDj ? selectorInsightsLoading : pickerInsightsLoading;
-
-  const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   return (
     <div className="min-h-screen">
