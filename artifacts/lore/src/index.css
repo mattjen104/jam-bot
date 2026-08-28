@@ -10616,9 +10616,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-align: left;
   cursor: pointer;
 }
-.split-home .compact-first-plays__tile:not(:first-child) {
-  margin-left: 8px;
-}
 .compact-first-plays__tile:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
@@ -12333,16 +12330,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding: 0;
   border: 0;
   font-family: var(--lore-font-body);
-}
-.split-home--discovery .compact-first-plays__header {
-  justify-content: flex-start;
-  padding: 0 0 10px;
-  border-bottom: 1px solid hsl(var(--border) / .7);
-  color: hsl(var(--muted-foreground));
-  font-size: var(--lore-size-small);
-  font-weight: var(--lore-weight-semibold);
-  letter-spacing: .09em;
-  text-transform: uppercase;
 }
 .split-home--discovery .compact-first-plays__rail {
   display: flex;
