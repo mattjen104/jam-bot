@@ -12,7 +12,9 @@ type Station = {
   track: string;
   matches: Record<Scope, number>;
   covers: Cover[];
+  caughtCount: number;
   firstPlays?: { count: number; records: FirstPlay[] };
+  kept?: { count: number; records: FirstPlay[] };
 };
 
 const SCOPE_COPY: Record<Scope, { label: string }> = {
@@ -56,6 +58,14 @@ const STATIONS: Station[] = [
         { title: "Grid of Points", artist: "Grouper", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg" },
       ],
     },
+    caughtCount: 28,
+    kept: {
+      count: 4,
+      records: [
+        { title: "Dragging a Dead Deer Up a Hill", artist: "Grouper", imageUrl: "/__mockup/images/grouper-dragging-a-dead-deer.jpg" },
+        { title: "Grid of Points", artist: "Grouper", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg" },
+      ],
+    },
   },
   {
     name: "KEXP", frequency: "90.3 FM · SEATTLE",
@@ -72,6 +82,7 @@ const STATIONS: Station[] = [
         { title: "Haha Sound", artist: "Broadcast", imageUrl: "/__mockup/images/broadcast-haha-sound.jpg" },
       ],
     },
+    caughtCount: 19,
   },
   {
     name: "KCRW", frequency: "89.9 FM · SANTA MONICA",
@@ -86,6 +97,14 @@ const STATIONS: Station[] = [
         { title: "Emperor Tomato Ketchup", artist: "Stereolab" },
       ],
     },
+    caughtCount: 34,
+    kept: {
+      count: 7,
+      records: [
+        { title: "Cobra and Phases", artist: "Stereolab", imageUrl: "/__mockup/images/stereolab-cobra-and-phases.jpg" },
+        { title: "Dots and Loops", artist: "Stereolab", imageUrl: "/__mockup/images/stereolab-dots-and-loops.jpg" },
+      ],
+    },
   },
   {
     name: "KBOO", frequency: "90.7 FM · PORTLAND",
@@ -94,6 +113,13 @@ const STATIONS: Station[] = [
       { title: "Ptah, the El Daoud", artist: "Alice Coltrane", year: "1970", className: "cover-c", imageUrl: "/__mockup/images/alice-ptah-the-el-daoud.jpg", detail: "Two saxophones orbit a spiritual center." },
       { title: "Universal Consciousness", artist: "Alice Coltrane", year: "1971", className: "cover-e", imageUrl: "/__mockup/images/alice-universal-consciousness.jpg", detail: "Strings and organ reaching for the same horizon." },
     ], matches: { "15m": 2, hour: 13, day: 27, lifetime: 52 },
+    caughtCount: 12,
+    kept: {
+      count: 2,
+      records: [
+        { title: "Journey in Satchidananda", artist: "Alice Coltrane", imageUrl: "/__mockup/images/alice-journey-in-satchidananda.jpg" },
+      ],
+    },
   },
 ];
 
@@ -114,38 +140,92 @@ function RecordCover({ cover, selected, onSelect }: { cover: Cover; selected: bo
   );
 }
 
-function FirstPlaysLink({ station }: { station: Station }) {
-  if (!station.firstPlays || station.firstPlays.count === 0) return null;
-
-  const resolvedRecords = station.firstPlays.records.filter((record) => record.imageUrl).slice(0, 3);
-  const stationParam = encodeURIComponent(station.name);
+function RecordPath({
+  label,
+  count,
+  stationName,
+  href,
+  records,
+}: {
+  label: string;
+  count: number;
+  stationName: string;
+  href: string;
+  records?: FirstPlay[];
+}) {
+  const resolvedRecords = records?.filter((record) => record.imageUrl).slice(0, 3) ?? [];
   return (
-    <div className={`air-first-plays${resolvedRecords.length === 0 ? " air-first-plays--text-only" : ""}`}>
+    <div className={`air-record-path${resolvedRecords.length === 0 ? " air-record-path--text-only" : ""}`}>
       <a
-        className="air-first-plays__link"
-        href={`/first-plays?station=${stationParam}`}
+        className="air-record-path__link"
+        href={href}
         target="_blank"
         rel="noreferrer"
-        aria-label={`Open ${station.name} First plays, ${station.firstPlays.count} records`}
+        aria-label={`Open ${label} for ${stationName}, ${count} records`}
       >
-        <span className="air-first-plays__copy">
-          <span className="air-first-plays__label">First plays</span>
-          <span className="air-first-plays__count">{station.firstPlays.count} from {station.name}</span>
+        <span className="air-record-path__copy">
+          <span className="air-record-path__label">{label}</span>
+          <span className="air-record-path__count">{count} from {stationName}</span>
         </span>
         {resolvedRecords.length > 0 && (
-          <span className="air-first-plays__pile" aria-hidden="true">
+          <span className="air-record-path__pile" aria-hidden="true">
             {resolvedRecords.map((record, index) => (
               <img
                 key={record.title}
                 src={record.imageUrl}
                 alt=""
-                style={{ "--first-play-index": index } as CSSProperties}
+                style={{ "--record-path-index": index } as CSSProperties}
               />
             ))}
           </span>
         )}
-        <span className="air-first-plays__arrow" aria-hidden="true">↗</span>
+        <span className="air-record-path__arrow" aria-hidden="true">↗</span>
       </a>
+    </div>
+  );
+}
+
+function StationRecordPaths({ station }: { station: Station }) {
+  const stationParam = encodeURIComponent(station.name);
+  return (
+    <div className="air-record-paths">
+      <div className="air-record-paths__head">
+        <span className="air-record-paths__title">Your paths</span>
+        <a
+          className="air-apple-link"
+          href={`/apple-music?station=${stationParam}&view=station-records`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Play in Apple Music <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+      <div className="air-record-paths__grid">
+        <RecordPath
+          label="Caught here"
+          count={station.caughtCount}
+          stationName={station.name}
+          href={`/heard?station=${stationParam}`}
+        />
+        {station.firstPlays && station.firstPlays.count > 0 && (
+          <RecordPath
+            label="First plays"
+            count={station.firstPlays.count}
+            stationName={station.name}
+            href={`/first-plays?station=${stationParam}`}
+            records={station.firstPlays.records}
+          />
+        )}
+        {station.kept && station.kept.count > 0 && (
+          <RecordPath
+            label="Kept here"
+            count={station.kept.count}
+            stationName={station.name}
+            href={`/library?station=${stationParam}&view=kept`}
+            records={station.kept.records}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -156,6 +236,9 @@ export function LoreOnAirRecordPiles() {
   const [expandedStation, setExpandedStation] = useState<string | null>(null);
   const [artistCommand, setArtistCommand] = useState("");
   const [addedArtists, setAddedArtists] = useState<string[]>([]);
+  const [playingStation, setPlayingStation] = useState<string | null>(null);
+  const [battleOpen, setBattleOpen] = useState(false);
+  const [battleStation, setBattleStation] = useState(STATIONS[0].name);
 
   const submitArtistCommand = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -209,6 +292,55 @@ export function LoreOnAirRecordPiles() {
           <div className="air-live-mark"><span className="air-live-dot" aria-hidden="true" /> live crossing</div>
         </header>
 
+        <div className="air-battle-toggle">
+          <button type="button" onClick={() => setBattleOpen((open) => !open)} aria-expanded={battleOpen}>
+            <span>Battle station</span>
+            <span className="air-battle-toggle__hint">compare two live signals</span>
+            <span aria-hidden="true">{battleOpen ? "↙" : "↗"}</span>
+          </button>
+        </div>
+
+        {battleOpen && (
+          <section className="air-battle" aria-label="Battle station comparison">
+            <div className="air-battle__head">
+              <div>
+                <div className="air-battle__kicker">Battle station</div>
+                <p>Pick the signal. One shared player keeps the choice clear.</p>
+              </div>
+              <button type="button" className="air-battle__close" onClick={() => setBattleOpen(false)} aria-label="Close Battle station">×</button>
+            </div>
+            <div className="air-battle__choices">
+              {STATIONS.slice(0, 2).map((station) => {
+                const selectedBattleStation = battleStation === station.name;
+                return (
+                  <button
+                    key={station.name}
+                    type="button"
+                    className={`air-battle__choice${selectedBattleStation ? " air-battle__choice--selected" : ""}`}
+                    aria-pressed={selectedBattleStation}
+                    onClick={() => setBattleStation(station.name)}
+                  >
+                    <span className="air-battle__choice-station">{station.name}</span>
+                    <span>{station.artist} · {station.track}</span>
+                    <span className="air-battle__choice-state">{selectedBattleStation ? "selected" : "choose"}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="air-battle__footer">
+              <span>Selected signal: <strong>{battleStation}</strong></span>
+              <button
+                type="button"
+                className="air-battle__play"
+                aria-pressed={playingStation === battleStation}
+                onClick={() => setPlayingStation((current) => current === battleStation ? null : battleStation)}
+              >
+                {playingStation === battleStation ? "Playing" : `Play ${battleStation}`}
+              </button>
+            </div>
+          </section>
+        )}
+
         <section className="air-grid" aria-label={`Live stations, ${SCOPE_COPY[scope].label}`}>
           {STATIONS.map((station, stationIndex) => {
             const now = SCOPE_NOW[scope][stationIndex];
@@ -223,7 +355,18 @@ export function LoreOnAirRecordPiles() {
                   <div className="air-station">{station.name}</div>
                   <div className="air-frequency">{station.frequency}</div>
                 </div>
-                <div className="air-card-live"><span className="air-live-dot" aria-hidden="true" /> now</div>
+                <div className="air-card-head__actions">
+                  <div className="air-card-live"><span className="air-live-dot" aria-hidden="true" /> now</div>
+                  <button
+                    type="button"
+                    className="air-listen"
+                    aria-pressed={playingStation === station.name}
+                    onClick={() => setPlayingStation((current) => current === station.name ? null : station.name)}
+                  >
+                    <span aria-hidden="true">{playingStation === station.name ? "■" : "▶"}</span>
+                    {playingStation === station.name ? "Playing" : "Play station"}
+                  </button>
+                </div>
               </div>
               <div className="air-now">
                 <div>
@@ -258,7 +401,7 @@ export function LoreOnAirRecordPiles() {
                   <span className="air-complete">fully readable</span>
                 )}
               </div>
-              <FirstPlaysLink station={station} />
+              <StationRecordPaths station={station} />
               {isExpanded && hasOverflow && (
                 <div id={`${station.name}-overflow`} className="air-overflow-note">
                   <span aria-hidden="true">↳</span>
