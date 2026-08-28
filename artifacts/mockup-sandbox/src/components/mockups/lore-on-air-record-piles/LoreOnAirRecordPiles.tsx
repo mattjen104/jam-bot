@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import "./_group.css";
 
 type Scope = "15m" | "hour" | "day" | "lifetime";
@@ -95,7 +95,28 @@ export function LoreOnAirRecordPiles() {
   const [scope, setScope] = useState<Scope>("hour");
   const [selected, setSelected] = useState<SelectedCover | null>(null);
   const [expandedStation, setExpandedStation] = useState<string | null>(null);
+  const [artistCommand, setArtistCommand] = useState("");
+  const [addedArtists, setAddedArtists] = useState<string[]>([]);
   const scopeTotal = STATIONS.reduce((total, station) => total + station.matches[scope], 0);
+
+  const submitArtistCommand = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = artistCommand.trim();
+    const remainder = trimmed.replace(/^\/add\b/i, "").trim();
+    if (!remainder) return;
+    const tokens = /[,\n]/.test(remainder) ? remainder.split(/[,\n]+/) : remainder.split(/\s+/);
+    const names = tokens
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .filter((name, index, all) =>
+        all.findIndex((candidate) => candidate.toLowerCase() === name.toLowerCase()) === index,
+      );
+    if (names.length === 0) return;
+    setAddedArtists((current) => [...current, ...names.filter((name) =>
+      !current.some((artist) => artist.toLowerCase() === name.toLowerCase()),
+    )]);
+    setArtistCommand("");
+  };
 
   return (
     <main className="lore-air lore-grain">
@@ -103,11 +124,34 @@ export function LoreOnAirRecordPiles() {
         <header className="air-header">
           <div>
             <div className="air-kicker">Lore / on air</div>
-            <h1>Record piles in motion.</h1>
-            <p className="air-deck">A small, honest window onto what is crossing the dial right now. No station logos. Just the signal, the artist, and the records nearby.</p>
+            <h1>Radio in motion.</h1>
+            <p className="air-deck">Add artists to see which stations are playing your music.</p>
           </div>
           <div className="air-live-mark"><span className="air-live-dot" aria-hidden="true" /> live crossing</div>
         </header>
+
+        <section className="air-command" aria-label="Add artists">
+          <p className="air-command-label">FOLLOW THE SIGNAL</p>
+          <form className="air-artist-cli" onSubmit={submitArtistCommand}>
+            <span className="air-artist-cli__prompt" aria-hidden="true">&gt;_</span>
+            <input
+              aria-label="Add artists"
+              value={artistCommand}
+              onChange={(event) => setArtistCommand(event.target.value)}
+              placeholder="/add Radiohead, Grouper"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+            <button type="submit">Add</button>
+          </form>
+          <p className="air-command-hint">Type <code>/add artist, artist</code> to see where they’re playing</p>
+          {addedArtists.length > 0 && (
+            <div className="air-added-artists" aria-live="polite">
+              {addedArtists.map((artist) => <span key={artist}>{artist}</span>)}
+            </div>
+          )}
+        </section>
 
         <section aria-label="Crossing time scope">
           <div className="air-scope">
