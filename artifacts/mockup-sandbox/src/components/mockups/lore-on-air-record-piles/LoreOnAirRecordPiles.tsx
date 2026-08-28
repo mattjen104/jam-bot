@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import "./_group.css";
 
 type Scope = "15m" | "hour" | "day" | "lifetime";
 type Cover = { title: string; artist: string; year: string; className: string; imageUrl: string; detail: string };
+type FirstPlay = { title: string; artist: string; imageUrl?: string };
 type SelectedCover = { cover: Cover; stationName: string };
 type Station = {
   name: string;
@@ -11,6 +12,7 @@ type Station = {
   track: string;
   matches: Record<Scope, number>;
   covers: Cover[];
+  firstPlays?: { count: number; records: FirstPlay[] };
 };
 
 const SCOPE_COPY: Record<Scope, { label: string }> = {
@@ -47,6 +49,13 @@ const STATIONS: Station[] = [
       { title: "Dragging a Dead Deer Up a Hill", artist: "Grouper", year: "2008", className: "cover-b", imageUrl: "/__mockup/images/grouper-dragging-a-dead-deer.jpg", detail: "A submerged collection of songs, pulled toward the light one guitar at a time." },
       { title: "Grid of Points", artist: "Grouper", year: "2018", className: "cover-c", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg", detail: "Nine brief sketches with the grain left in." },
     ], matches: { "15m": 2, hour: 8, day: 36, lifetime: 312 },
+    firstPlays: {
+      count: 6,
+      records: [
+        { title: "Ruins", artist: "Grouper", imageUrl: "/__mockup/images/grouper-ruins.jpg" },
+        { title: "Grid of Points", artist: "Grouper", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg" },
+      ],
+    },
   },
   {
     name: "KEXP", frequency: "90.3 FM · SEATTLE",
@@ -55,6 +64,14 @@ const STATIONS: Station[] = [
       { title: "The Noise Made by People", artist: "Broadcast", year: "2000", className: "cover-e", imageUrl: "/__mockup/images/broadcast-noise-made-by-people.jpg", detail: "A careful collision between library music, psychedelia, and a future that never arrived." },
       { title: "Haha Sound", artist: "Broadcast", year: "2003", className: "cover-f", imageUrl: "/__mockup/images/broadcast-haha-sound.jpg", detail: "The point where Broadcast's experiments became a language of their own." },
     ], matches: { "15m": 1, hour: 5, day: 24, lifetime: 204 },
+    firstPlays: {
+      count: 4,
+      records: [
+        { title: "Tender Buttons", artist: "Broadcast", imageUrl: "/__mockup/images/broadcast-tender-buttons.jpg" },
+        { title: "The Noise Made by People", artist: "Broadcast", imageUrl: "/__mockup/images/broadcast-noise-made-by-people.jpg" },
+        { title: "Haha Sound", artist: "Broadcast", imageUrl: "/__mockup/images/broadcast-haha-sound.jpg" },
+      ],
+    },
   },
   {
     name: "KCRW", frequency: "89.9 FM · SANTA MONICA",
@@ -63,6 +80,12 @@ const STATIONS: Station[] = [
       { title: "Emperor Tomato Ketchup", artist: "Stereolab", year: "1996", className: "cover-a", imageUrl: "/__mockup/images/stereolab-emperor-tomato-ketchup.jpg", detail: "The record where the laboratory opened its doors." },
       { title: "Cobra and Phases", artist: "Stereolab", year: "1999", className: "cover-d", imageUrl: "/__mockup/images/stereolab-cobra-and-phases.jpg", detail: "A long-form, many-windowed portrait of a band refusing the straight line." },
     ], matches: { "15m": 3, hour: 11, day: 41, lifetime: 116 },
+    firstPlays: {
+      count: 2,
+      records: [
+        { title: "Emperor Tomato Ketchup", artist: "Stereolab" },
+      ],
+    },
   },
   {
     name: "KBOO", frequency: "90.7 FM · PORTLAND",
@@ -88,6 +111,42 @@ function RecordCover({ cover, selected, onSelect }: { cover: Cover; selected: bo
       <img className="air-cover-image" src={cover.imageUrl} alt="" draggable={false} />
       <span className="air-cover-title">{cover.title}</span>
     </button>
+  );
+}
+
+function FirstPlaysLink({ station }: { station: Station }) {
+  if (!station.firstPlays || station.firstPlays.count === 0) return null;
+
+  const resolvedRecords = station.firstPlays.records.filter((record) => record.imageUrl).slice(0, 3);
+  const stationParam = encodeURIComponent(station.name);
+  return (
+    <div className={`air-first-plays${resolvedRecords.length === 0 ? " air-first-plays--text-only" : ""}`}>
+      <a
+        className="air-first-plays__link"
+        href={`/first-plays?station=${stationParam}`}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`Open ${station.name} First plays, ${station.firstPlays.count} records`}
+      >
+        <span className="air-first-plays__copy">
+          <span className="air-first-plays__label">First plays</span>
+          <span className="air-first-plays__count">{station.firstPlays.count} from {station.name}</span>
+        </span>
+        {resolvedRecords.length > 0 && (
+          <span className="air-first-plays__pile" aria-hidden="true">
+            {resolvedRecords.map((record, index) => (
+              <img
+                key={record.title}
+                src={record.imageUrl}
+                alt=""
+                style={{ "--first-play-index": index } as CSSProperties}
+              />
+            ))}
+          </span>
+        )}
+        <span className="air-first-plays__arrow" aria-hidden="true">↗</span>
+      </a>
+    </div>
   );
 }
 
@@ -199,6 +258,7 @@ export function LoreOnAirRecordPiles() {
                   <span className="air-complete">fully readable</span>
                 )}
               </div>
+              <FirstPlaysLink station={station} />
               {isExpanded && hasOverflow && (
                 <div id={`${station.name}-overflow`} className="air-overflow-note">
                   <span aria-hidden="true">↳</span>
