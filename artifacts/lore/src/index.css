@@ -12219,8 +12219,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home--discovery .home-discovery__row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(180px, .8fr);
-  grid-template-areas: "artist track byline";
+  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) minmax(180px, .8fr);
+  grid-template-areas: "mark artist track byline";
   align-items: baseline;
   gap: 10px 20px;
   min-height: 72px;
@@ -12243,6 +12243,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .split-home--discovery .home-discovery__row:focus-visible {
   outline: 2px solid hsl(var(--foreground));
   outline-offset: -2px;
+}
+.home-discovery__station-mark {
+  grid-area: mark;
+  align-self: start;
+  margin-top: 2px;
 }
 .home-discovery__artist,
 .home-discovery__track {
@@ -12488,9 +12493,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .split-home__discovery-shell { padding: 22px 14px 104px; }
   .home-discovery { gap: 24px; }
   .split-home--discovery .home-discovery__row {
-    grid-template-columns: 1fr;
-    grid-template-areas: "artist" "track" "byline";
-    gap: 2px;
+    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-areas: "mark artist" "mark track" "mark byline";
+    gap: 2px 10px;
     min-height: 0;
     padding: 10px 8px 11px;
   }

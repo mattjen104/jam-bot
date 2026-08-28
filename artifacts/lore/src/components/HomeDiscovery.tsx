@@ -5,6 +5,7 @@ import type { DialSpin, DialStation } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
 import { CrossingScopePill } from "./dial/CrossingScopePill";
 import { HomeLensNav } from "./HomeLensNav";
+import { StationMark } from "./StationMark";
 import {
   crossingCountForScope,
   crossingScopeLabel,
@@ -346,6 +347,13 @@ function DiscoveryRow({
         }
       }}
     >
+      <StationMark
+        name={row.ds.station.name}
+        logoUrl={row.ds.station.logoUrl}
+        homepageUrl={row.ds.station.homepageUrl}
+        variant="cube"
+        className="home-discovery__station-mark"
+      />
       <span className="home-discovery__artist">
         {track.artistMbid ? (
           <Link href={`/artist/${track.artistMbid}`} onClick={(event) => event.stopPropagation()}>
