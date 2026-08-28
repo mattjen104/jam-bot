@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 
 import { liveIdentityKey, type DialStation } from "../hooks/useDialData";
 import "./FirstRunSidebar.css";
@@ -236,6 +237,15 @@ function StationBlock({
         </span>
         {attribution && (
           <div className="fdrow__live-secondary">{attribution}</div>
+        )}
+        {currentArtist?.mbid && (
+          <Link
+            href={`/index?section=stations&artistMbid=${encodeURIComponent(currentArtist.mbid)}`}
+            className="frb__index-handoff"
+            onClick={(event) => event.stopPropagation()}
+          >
+            Other stations that play {currentArtist.name} →
+          </Link>
         )}
       </div>
     </div>

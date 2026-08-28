@@ -573,6 +573,7 @@ export interface AlbumGroup {
 export interface ArtistGroup {
   key: string;
   artist: string;
+  artistMbid?: string | null;
   items: LibraryItem[];
   /** Albums nested inside this artist, in encountered order */
   albums: AlbumGroup[];
@@ -613,8 +614,17 @@ export function buildArtistGroups(items: LibraryItem[]): ArtistGroup[] {
     const artist = item.recording?.artist ?? "Unknown artist";
     let ag = artistMap.get(artist);
     if (!ag) {
-      ag = { key: artist, artist, items: [], albums: [] };
+      ag = {
+        key: artist,
+        artist,
+        artistMbid: item.recording?.artistMbid ?? null,
+        items: [],
+        albums: [],
+      };
       artistMap.set(artist, ag);
+    }
+    if (!ag.artistMbid && item.recording?.artistMbid) {
+      ag.artistMbid = item.recording.artistMbid;
     }
     ag.items.push(item);
   }
@@ -899,6 +909,26 @@ export function ArtistGroupRow({
             {group.items.length} track{group.items.length === 1 ? "" : "s"}
           </div>
         </div>
+        {group.artistMbid && (
+          <Link
+            href={`/index?section=artists&artistMbid=${encodeURIComponent(group.artistMbid)}`}
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Browse the Index for ${group.artist}`}
+            style={{
+              position: "relative",
+              zIndex: 2,
+              flexShrink: 0,
+              color: "hsl(var(--dim))",
+              fontFamily: "var(--app-font-mono)",
+              fontSize: 10,
+              textDecoration: "underline",
+              textUnderlineOffset: 3,
+            }}
+            data-testid="link-library-artist-index"
+          >
+            Index
+          </Link>
+        )}
         {isOpen ? (
           <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
         ) : (

@@ -589,6 +589,36 @@ export interface StationList {
   stations: Station[];
 }
 
+/**
+ * A named public Index entity. href is null when no canonical identifier exists.
+ */
+export interface IndexItem {
+  id: string;
+  name: string;
+  /** @nullable */
+  secondary: string | null;
+  /** @nullable */
+  href: string | null;
+}
+
+export type IndexResponseSection =
+  (typeof IndexResponseSection)[keyof typeof IndexResponseSection];
+
+export const IndexResponseSection = {
+  releases: "releases",
+  artists: "artists",
+  stations: "stations",
+  selectors: "selectors",
+} as const;
+
+export interface IndexResponse {
+  section: IndexResponseSection;
+  items: IndexItem[];
+  total: number;
+  /** @nullable */
+  nextCursor: string | null;
+}
+
 export type RecordingLinkKind =
   (typeof RecordingLinkKind)[keyof typeof RecordingLinkKind];
 
@@ -4003,6 +4033,29 @@ export type ListStationsMode =
 export const ListStationsMode = {
   sleep: "sleep",
   "era-genre": "era-genre",
+} as const;
+
+export type GetIndexParams = {
+  section: GetIndexSection;
+  q?: string;
+  artistMbid?: string;
+  stationSlug?: string;
+  cursor?: string;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+};
+
+export type GetIndexSection =
+  (typeof GetIndexSection)[keyof typeof GetIndexSection];
+
+export const GetIndexSection = {
+  releases: "releases",
+  artists: "artists",
+  stations: "stations",
+  selectors: "selectors",
 } as const;
 
 export type ListStationsNowPlayingParams = {

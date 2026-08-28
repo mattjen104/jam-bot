@@ -17,7 +17,7 @@ vi.mock("wouter", () => ({
 
 import { SlimSectionNav, sectionFor } from "../src/components/SlimSectionNav";
 
-describe("sectionFor — three-section model", () => {
+describe("sectionFor — primary section model", () => {
   it("classifies library-family pages as library", () => {
     for (const path of ["/library", "/library/albums", "/journal", "/journal/2026-08", "/following"]) {
       expect(sectionFor(path)).toBe("library");
@@ -27,6 +27,11 @@ describe("sectionFor — three-section model", () => {
   it("classifies the Heard page separately", () => {
     expect(sectionFor("/heard")).toBe("heard");
     expect(sectionFor("/heard/today")).toBe("heard");
+  });
+
+  it("classifies Index pages separately", () => {
+    expect(sectionFor("/index")).toBe("index");
+    expect(sectionFor("/index?section=stations&artistMbid=abc")).toBe("index");
   });
 
   it("classifies selector, DJ, and archive pages as part of Lore", () => {
@@ -53,11 +58,11 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     mockLocation.value = "/";
   });
 
-  it("renders exactly three hyperlinks — Feed, Heard, and Stack", () => {
+  it("renders exactly four hyperlinks — Feed, Heard, Stack, and Index", () => {
     render(<SlimSectionNav />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const links = Array.from(nav.querySelectorAll("a"));
-    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack"]);
+    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack", "Index"]);
     // No button-styled nav items remain.
     expect(nav.querySelectorAll("button").length).toBe(0);
   });
@@ -68,6 +73,7 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/feed");
     expect(screen.getByRole("link", { name: "Heard" }).getAttribute("href")).toBe("/heard");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
+    expect(screen.getByRole("link", { name: "Index" }).getAttribute("href")).toBe("/index");
   });
 
   it("links Feed back to the front door from any other page", () => {
@@ -76,6 +82,7 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/");
     expect(screen.getByRole("link", { name: "Heard" }).getAttribute("href")).toBe("/heard");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
+    expect(screen.getByRole("link", { name: "Index" }).getAttribute("href")).toBe("/index");
   });
 
   it("pins Feed to the left corner and the other sections to the right side", () => {
@@ -83,6 +90,7 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     expect(screen.getByRole("link", { name: "Feed" }).className).toContain("corner-nav__link--left");
     expect(screen.getByRole("link", { name: "Stack" }).className).toContain("corner-nav__link--right");
     expect(screen.getByRole("link", { name: "Heard" }).className).toContain("corner-nav__link--right");
+    expect(screen.getByRole("link", { name: "Index" }).className).toContain("corner-nav__link--right");
   });
 
   it("marks Feed active on the front door", () => {
@@ -93,6 +101,7 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     expect(lore.className).toContain("corner-nav__link--active");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("aria-current")).toBeNull();
     expect(screen.getByRole("link", { name: "Heard" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Index" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("marks Heard active only on the Heard route", () => {
@@ -101,6 +110,14 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     expect(screen.getByRole("link", { name: "Heard" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBeNull();
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Index" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("marks Index active across filtered Index routes", () => {
+    mockLocation.value = "/index?section=artists&artistMbid=abc";
+    render(<SlimSectionNav />);
+    expect(screen.getByRole("link", { name: "Index" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("marks Stack active across the library family of routes", () => {
@@ -127,7 +144,7 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
     mockLocation.value = "/";
   });
 
-  it("renders the same three links inside a .bottom-nav row", () => {
+  it("renders the same four links inside a .bottom-nav row", () => {
     // On the split homepage the Feed label targets the full Dial at /feed.
     mockLocation.value = "/";
     render(<SlimSectionNav variant="bottom" />);
@@ -135,8 +152,8 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
     expect(nav.className).toContain("bottom-nav");
     expect(nav.className).not.toContain("corner-nav");
     const links = Array.from(nav.querySelectorAll("a"));
-    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack"]);
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/feed", "/heard", "/library"]);
+    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack", "Index"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/feed", "/heard", "/library", "/index"]);
   });
 
   it("uses bottom-nav link classes with the same data-section hooks", () => {

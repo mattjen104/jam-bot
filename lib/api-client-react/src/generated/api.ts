@@ -51,6 +51,7 @@ import type {
   GetEmbedCoverageResponse,
   GetEmbedResolutionResponse,
   GetGuidedReplayQueueParams,
+  GetIndexParams,
   GetKeepStatusParams,
   GetMyOverlapRunsParams,
   GetMyOverlapSpineParams,
@@ -81,6 +82,7 @@ import type {
   ImportedSet,
   ImportedSetList,
   ImportedSetUploadRequest,
+  IndexResponse,
   IngestResult,
   KeepRecordingInput,
   KeepRecordingResponse,
@@ -903,6 +905,102 @@ export function useGetStationsRecentArtists<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetStationsRecentArtistsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns one alphabetically ordered, cursor-paginated section of the public Lore Index. Releases and artists are derived from resolved spins on visible stations. Artists without a MusicBrainz ID remain visible but have no href. Selectors honor active and opt-out visibility.
+
+ * @summary Browse the bounded public Lore Index
+ */
+export const getGetIndexUrl = (params: GetIndexParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/index?${stringifiedParams}`
+    : `/api/index`;
+};
+
+export const getIndex = async (
+  params: GetIndexParams,
+  options?: RequestInit,
+): Promise<IndexResponse> => {
+  return customFetch<IndexResponse>(getGetIndexUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetIndexQueryKey = (params?: GetIndexParams) => {
+  return [`/api/index`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetIndexQueryOptions = <
+  TData = Awaited<ReturnType<typeof getIndex>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetIndexParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getIndex>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetIndexQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getIndex>>> = ({
+    signal,
+  }) => getIndex(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getIndex>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetIndexQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getIndex>>
+>;
+export type GetIndexQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Browse the bounded public Lore Index
+ */
+
+export function useGetIndex<
+  TData = Awaited<ReturnType<typeof getIndex>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetIndexParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getIndex>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetIndexQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

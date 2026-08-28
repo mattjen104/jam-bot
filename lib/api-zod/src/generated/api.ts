@@ -435,6 +435,45 @@ export const GetStationsRecentArtistsResponse = zod
   .describe("Artists aired in the trailing window, newest first.");
 
 /**
+ * Returns one alphabetically ordered, cursor-paginated section of the public Lore Index. Releases and artists are derived from resolved spins on visible stations. Artists without a MusicBrainz ID remain visible but have no href. Selectors honor active and opt-out visibility.
+
+ * @summary Browse the bounded public Lore Index
+ */
+export const getIndexQueryLimitDefault = 20;
+export const getIndexQueryLimitMax = 50;
+
+export const GetIndexQueryParams = zod.object({
+  section: zod.enum(["releases", "artists", "stations", "selectors"]),
+  q: zod.coerce.string().optional(),
+  artistMbid: zod.coerce.string().optional(),
+  stationSlug: zod.coerce.string().optional(),
+  cursor: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getIndexQueryLimitMax)
+    .default(getIndexQueryLimitDefault),
+});
+
+export const GetIndexResponse = zod.object({
+  section: zod.enum(["releases", "artists", "stations", "selectors"]),
+  items: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        name: zod.string(),
+        secondary: zod.string().nullable(),
+        href: zod.string().nullable(),
+      })
+      .describe(
+        "A named public Index entity. href is null when no canonical identifier exists.",
+      ),
+  ),
+  total: zod.number(),
+  nextCursor: zod.string().nullable(),
+});
+
+/**
  * Same as listStationsNowPlaying but for a historical calendar day. Returns the last logged spin per station on that UTC date. Powers the ghost-dial date sweep on the home page.
 
  * @summary Last spin per station for a specific calendar day (ghost dial)

@@ -104,6 +104,29 @@
   pointer-events: auto;
 }
 
+.frb__index-handoff {
+  display: inline-block;
+  position: relative;
+  z-index: 2;
+  margin-top: 3px;
+  color: hsl(var(--muted-foreground) / 0.7);
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  pointer-events: auto;
+}
+
+.frb__index-handoff:hover,
+.frb__index-handoff:focus-visible {
+  color: hsl(var(--foreground));
+}
+
+.frb__index-handoff:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
 /* ── Picker (named selector) ── */
 .frb__picker {
   color: hsl(var(--foreground));

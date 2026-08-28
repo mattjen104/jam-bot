@@ -222,6 +222,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationsRecentArtistsResult"
+  /index:
+    get:
+      operationId: getIndex
+      tags: [lore]
+      summary: Browse the bounded public Lore Index
+      description: >
+        Returns one alphabetically ordered, cursor-paginated section of the
+        public Lore Index. Releases and artists are derived from resolved spins
+        on visible stations. Artists without a MusicBrainz ID remain visible
+        but have no href. Selectors honor active and opt-out visibility.
+      parameters:
+        - name: section
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [releases, artists, stations, selectors]
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: artistMbid
+          in: query
+          required: false
+          schema: { type: string }
+        - name: stationSlug
+          in: query
+          required: false
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: One bounded Index section
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IndexResponse"
+        "400":
+          description: Invalid or missing section query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/at/{date}/now-playing:
     get:
       operationId: listStationsAtDate
@@ -4994,6 +5048,34 @@ components:
             $ref: "#/components/schemas/Station"
       required:
         - stations
+    IndexItem:
+      type: object
+      description: A named public Index entity. href is null when no canonical identifier exists.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        secondary:
+          type: ["string", "null"]
+        href:
+          type: ["string", "null"]
+      required: [id, name, secondary, href]
+    IndexResponse:
+      type: object
+      properties:
+        section:
+          type: string
+          enum: [releases, artists, stations, selectors]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndexItem"
+        total:
+          type: integer
+        nextCursor:
+          type: ["string", "null"]
+      required: [section, items, total, nextCursor]
     RecordingLink:
       type: object
       description: >-
