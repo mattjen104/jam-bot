@@ -47,13 +47,6 @@
 .lore-air .air-command-hint code { color:var(--air-muted); font:inherit; }
 .lore-air .air-added-artists { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .lore-air .air-added-artists span { padding:4px 8px; border:1px solid rgba(130,185,168,.42); border-radius:999px; color:var(--air-teal); font:10px 'IBM Plex Mono', monospace; }
-.lore-air .air-scope { position:relative; display:flex; align-items:center; gap:6px; margin:24px 0 29px; padding:5px; background:#120f0c; border:1px solid var(--air-edge); border-radius:8px; overflow:visible; }
-.lore-air .air-scope::after { content:""; position:absolute; height:1px; width:calc(100% - 18px); left:9px; top:50%; background:rgba(229,166,80,.44); pointer-events:none; z-index:0; }
-.lore-air .air-scope-label { position:relative; z-index:1; padding:0 8px; color:var(--air-faint); font:10px 'IBM Plex Mono', monospace; background:#120f0c; }
-.lore-air .air-scope button { position:relative; z-index:1; border:1px solid transparent; background:transparent; color:var(--air-muted); cursor:pointer; border-radius:5px; padding:8px 12px; font:500 11px 'IBM Plex Mono', monospace; transition:background .16s, color .16s, border-color .16s; }
-.lore-air .air-scope button:hover, .lore-air .air-scope button:focus-visible { color:var(--air-ink); border-color:var(--air-edge-hi); outline:none; }
-.lore-air .air-scope button[aria-pressed="true"] { color:#17130f; background:var(--air-amber); border-color:var(--air-amber); }
-.lore-air .air-total { margin-left:auto; position:relative; z-index:1; background:#120f0c; padding:0 10px 0 14px; color:var(--air-amber); font:600 11px 'IBM Plex Mono', monospace; white-space:nowrap; }
 .lore-air .air-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
 .lore-air .air-card { background:linear-gradient(145deg, rgba(255,255,255,.018), transparent 50%), var(--air-panel); border:1px solid var(--air-edge); border-radius:11px; padding:17px; min-width:0; }
 .lore-air .air-card:hover { border-color:var(--air-edge-hi); }
@@ -95,9 +88,6 @@
   .lore-air .air-shell { padding:22px 16px 45px; }
   .lore-air .air-header { align-items:flex-start; flex-direction:column; }
   .lore-air .air-command, .lore-air .air-artist-cli { width:100%; }
-  .lore-air .air-scope { flex-wrap:wrap; }
-  .lore-air .air-total { margin-left:0; width:100%; padding:8px 8px 3px; }
-  .lore-air .air-scope::after { top:34px; }
   .lore-air .air-grid { grid-template-columns:1fr; }
   .lore-air .air-detail { grid-column:auto; }
 }

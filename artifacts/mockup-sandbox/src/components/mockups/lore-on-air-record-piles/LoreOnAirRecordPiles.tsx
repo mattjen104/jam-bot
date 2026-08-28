@@ -92,12 +92,11 @@ function RecordCover({ cover, selected, onSelect }: { cover: Cover; selected: bo
 }
 
 export function LoreOnAirRecordPiles() {
-  const [scope, setScope] = useState<Scope>("hour");
+  const scope: Scope = "hour";
   const [selected, setSelected] = useState<SelectedCover | null>(null);
   const [expandedStation, setExpandedStation] = useState<string | null>(null);
   const [artistCommand, setArtistCommand] = useState("");
   const [addedArtists, setAddedArtists] = useState<string[]>([]);
-  const scopeTotal = STATIONS.reduce((total, station) => total + station.matches[scope], 0);
 
   const submitArtistCommand = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -150,18 +149,6 @@ export function LoreOnAirRecordPiles() {
           </div>
           <div className="air-live-mark"><span className="air-live-dot" aria-hidden="true" /> live crossing</div>
         </header>
-
-        <section aria-label="Crossing time scope">
-          <div className="air-scope">
-            <span className="air-scope-label">CROSSING</span>
-            {(Object.keys(SCOPE_COPY) as Scope[]).map((key) => (
-              <button key={key} type="button" aria-pressed={scope === key} onClick={() => setScope(key)}>
-                {SCOPE_COPY[key].label}
-              </button>
-            ))}
-            <span className="air-total" aria-live="polite">{scopeTotal} records crossed</span>
-          </div>
-        </section>
 
         <section className="air-grid" aria-label={`Live stations, ${SCOPE_COPY[scope].label}`}>
           {STATIONS.map((station, stationIndex) => {
@@ -232,7 +219,7 @@ export function LoreOnAirRecordPiles() {
             </aside>
           )}
         </section>
-        <p className="air-note">Shared visible-cover cap: {VISIBLE_COVER_CAP} per station. Overflow stays explicit so a lifetime set can communicate hundreds without rendering hundreds of tiles. Selecting a cover opens detail without moving the crossing scope.</p>
+        <p className="air-note">Shared visible-cover cap: {VISIBLE_COVER_CAP} per station. Overflow stays explicit so a large set can communicate hundreds without rendering hundreds of tiles. Selecting a cover opens detail without moving the station grid.</p>
       </div>
     </main>
   );
