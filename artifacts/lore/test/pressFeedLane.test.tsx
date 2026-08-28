@@ -61,15 +61,17 @@ describe("PressFeedLane rows", () => {
   it("renders an article", () => {
     const { container } = renderLane();
     const link = screen.getByTestId("press-link-1");
+    const media = container.querySelector(".home-press__media");
+    const image = screen.getByTestId("press-image-1");
     expect(link.getAttribute("href")).toBe("https://example.com/review");
     expect(link.textContent).toContain("A great review");
     expect(container.textContent).toContain("Fleetwood Mac");
     expect(screen.getByTestId("press-relevance-1").textContent).toBe("In your library");
     expect(container.textContent).toContain("By Test Author");
     expect(container.textContent).toContain("A short feed-provided excerpt.");
-    expect(screen.getByTestId("press-image-1").getAttribute("src")).toBe(
-      "https://example.com/review.jpg",
-    );
+    expect(media?.contains(image)).toBe(true);
+    expect(image.getAttribute("src")).toBe("https://example.com/review.jpg");
+    expect(image.getAttribute("loading")).toBe("lazy");
   });
 
   it("does not describe a seed match as a library keep", () => {
@@ -90,7 +92,9 @@ describe("PressFeedLane rows", () => {
   it("falls back safely when an article image fails", () => {
     renderLane();
     fireEvent.error(screen.getByTestId("press-image-1"));
-    expect(screen.getByTestId("press-image-fallback-1").textContent).toBe("P");
+    const fallback = screen.getByTestId("press-image-fallback-1");
+    expect(fallback.textContent).toBe("P");
+    expect(fallback.parentElement?.classList.contains("home-press__media")).toBe(true);
   });
 
   it("handles empty states correctly", () => {
