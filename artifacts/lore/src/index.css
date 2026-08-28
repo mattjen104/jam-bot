@@ -12145,7 +12145,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  margin-left: auto;
+  margin-left: 0;
   color: hsl(var(--muted-foreground));
   font-size: var(--lore-size-small);
   white-space: nowrap;
