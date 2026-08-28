@@ -230,6 +230,59 @@ function Swatch({ title, artworkUrl, className = "" }: {
   );
 }
 
+function CrateTrackCard({
+  item,
+  release,
+  position,
+  opened,
+  onOpened,
+}: {
+  item: LibraryItem;
+  release: CrateRelease;
+  position: number;
+  opened: boolean;
+  onOpened: (key: string) => void;
+}) {
+  const rec = item.recording;
+  const title = rec?.title ?? "Unresolved recording";
+  const album = rec?.albumTitle ?? release.title ?? "Album unknown";
+  const artist = rec?.artist ?? release.artist ?? "Unknown artist";
+  const cover = rec?.artworkUrl ?? release.artworkUrl;
+  const openedKey = item.mbid ?? item.spotifyId ?? `${release.key}:${position}`;
+  const releaseHref = release.releaseGroupMbid
+    ? `/album/${release.releaseGroupMbid}`
+    : null;
+
+  return (
+    <article
+      className={`library-crate__track${opened ? " library-crate__track--opened" : ""}`}
+      data-testid="library-crate-track"
+      data-track-key={openedKey}
+    >
+      <div className="library-crate__track-art">
+        {releaseHref ? (
+          <Link
+            href={releaseHref}
+            className="library-crate__cover-link"
+            onClick={() => onOpened(openedKey)}
+            aria-label={`Open ${album}`}
+          >
+            <Swatch title={album} artworkUrl={cover} className="library-crate__track-swatch" />
+          </Link>
+        ) : (
+          <Swatch title={album} artworkUrl={cover} className="library-crate__track-swatch" />
+        )}
+      </div>
+      <div className="library-crate__track-copy">
+        <div className="library-crate__track-title">{title}</div>
+        <div className="library-crate__track-album">{album}</div>
+        <div className="library-crate__track-artist">{artist}</div>
+        <div className="library-crate__provenance">{keepCopy(item)}</div>
+      </div>
+    </article>
+  );
+}
+
 function TrackPlayButton({ item }: { item: LibraryItem }) {
   const { ride, spotify } = usePlayer();
   const rec = item.recording;
@@ -475,7 +528,6 @@ export interface LibraryCrateProps {
 
 export function LibraryCrate({
   items,
-  seedArtists,
   sort,
   unopenedOnly = false,
   activeLens = false,
@@ -483,63 +535,34 @@ export function LibraryCrate({
 }: LibraryCrateProps) {
   const [location, setLocation] = useLocation();
   const [opened, markOpened] = useOpenedKeys();
-  const [showAllAdded, setShowAllAdded] = useState(false);
-  const [catalogue, setCatalogue] = useState<Record<string, { artistMbid: string | null; releases: ArtistCatalogueRelease[] }>>({});
-  const { dated, undated } = useMemo(() => partitionCrateItems(items), [items]);
-  const releases = useMemo(() => sortCrateReleases(buildCrateReleases(dated), sort), [dated, sort]);
-  const attendance = useReleaseAttendance(releases);
-  const addedArtists = useMemo(
-    () => buildAddedArtists(seedArtists, catalogue, undated),
-    [catalogue, seedArtists, undated],
-  );
-  const addedArtistNames = useMemo(() => addedArtists.map((artist) => artist.name), [addedArtists]);
-
-  useEffect(() => {
-    if (addedArtistNames.length === 0) return;
-    let cancelled = false;
-    fetch(`/api/me/taste-seeds/catalog?artists=${addedArtistNames.map(encodeURIComponent).join(",")}`)
-      .then((response) => response.ok ? response.json() as Promise<{ artists?: Record<string, { artistMbid: string | null; releases: ArtistCatalogueRelease[] }> }> : Promise.reject())
-      .then((payload) => { if (!cancelled) setCatalogue(payload.artists ?? {}); })
-      .catch(() => { if (!cancelled) setCatalogue({}); });
-    return () => { cancelled = true; };
-  }, [addedArtistNames]);
+  const releases = useMemo(() => sortCrateReleases(buildCrateReleases(items), sort), [items, sort]);
 
   const visibleReleases = unopenedOnly ? releases.filter((release) => !opened.has(release.releaseGroupMbid ?? release.key)) : releases;
-  const filteredArtists = unopenedOnly ? addedArtists.filter((artist) => !opened.has(artist.key)) : addedArtists;
-  const visibleArtists = showAllAdded ? filteredArtists : filteredArtists.slice(0, 20);
-  const hasItems = releases.length > 0 || addedArtists.length > 0;
-  const setUnopened = (value: boolean) => {
-    const path = location.split("?")[0] ?? "/library";
-    const params = new URLSearchParams(location.split("?")[1] ?? "");
-    if (value) params.set("unopened", "1");
-    else params.delete("unopened");
-    setLocation(params.size > 0 ? `${path}?${params}` : path);
-  };
-  const setSort = (value: "added" | "artist" | "title") => {
-    const path = location.split("?")[0] ?? "/library";
-    const params = new URLSearchParams(location.split("?")[1] ?? "");
-    if (value === "added") params.delete("sort");
-    else params.set("sort", value);
-    setLocation(params.size > 0 ? `${path}?${params}` : path);
-  };
+  const tracks = useMemo(
+    () => visibleReleases.flatMap((release) =>
+      release.items.map((item) => ({ item, release })),
+    ).sort((a, b) => {
+      if (sort === "artist") {
+        return (a.item.recording?.artist ?? "").localeCompare(b.item.recording?.artist ?? "")
+          || (a.item.recording?.title ?? "").localeCompare(b.item.recording?.title ?? "");
+      }
+      if (sort === "title") {
+        return (a.item.recording?.title ?? "").localeCompare(b.item.recording?.title ?? "")
+          || (a.item.recording?.artist ?? "").localeCompare(b.item.recording?.artist ?? "");
+      }
+      return (keepTimestamp(b.item) ?? -Infinity) - (keepTimestamp(a.item) ?? -Infinity)
+        || (a.item.mbid ?? a.item.spotifyId ?? "").localeCompare(b.item.mbid ?? b.item.spotifyId ?? "");
+    }),
+    [sort, visibleReleases],
+  );
+  const hasItems = tracks.length > 0;
 
   if (!hasItems) {
     return (
       <div className="library-crate__empty" data-testid="library-crate-empty">
         <p>Your crate is empty.</p>
-        {activeLens ? (
-          <button
-            type="button"
-            onClick={() => setLocation(location.split("?")[0] ?? "/library")}
-            data-testid="library-show-all"
-          >
-            Show all
-          </button>
-        ) : (
-          <>
-            <button type="button" onClick={onImport} data-testid="library-import-cta">Add music</button>
-            <Link href="/" className="library-crate__empty-dial">Open the dial</Link>
-          </>
+        {!activeLens && (
+          <button type="button" onClick={onImport} data-testid="library-import-cta">Add music</button>
         )}
       </div>
     );
@@ -547,77 +570,30 @@ export function LibraryCrate({
 
   return (
     <div className="library-crate" data-testid="library-crate">
-      <div className="library-crate__toolbar">
-        <span>Release crate</span>
-        {(["added", "artist", "title"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={sort === value ? "is-active" : ""}
-            onClick={() => setSort(value)}
-            data-testid={`library-sort-${value}`}
-          >
-            {value === "added" ? "Added" : value === "artist" ? "Artist" : "Title"}
-          </button>
-        ))}
-        <button type="button" onClick={() => setUnopened(true)} className={unopenedOnly ? "is-active" : ""} data-testid="library-unopened-toggle">
-          {unopenedOnly ? "Showing not yet opened" : "Not yet opened"}
-        </button>
-        {unopenedOnly && <button type="button" onClick={() => setUnopened(false)}>Show all</button>}
-      </div>
       <section className="library-crate__section" data-testid="library-crate-kept">
         <header className="library-crate__section-heading">
-          <h2>Kept</h2>
+          <h2>Release crate</h2>
           <span>
-            {visibleReleases.length} · {sort === "added" ? "newest first" : sort === "artist" ? "A–Z by artist" : "A–Z by title"}
+            {tracks.length} {tracks.length === 1 ? "song" : "songs"}
           </span>
         </header>
-        {visibleReleases.length > 0 ? (
-          <div className="library-crate__rail">
-            {visibleReleases.map((release, index) => (
-              <ReleaseCard
-                key={release.key}
+        {tracks.length > 0 ? (
+          <div className="library-crate__track-list">
+            {tracks.map(({ item, release }, index) => (
+              <CrateTrackCard
+                key={`${release.key}:${item.mbid ?? item.spotifyId ?? index}`}
+                item={item}
                 release={release}
                 position={index}
-                opened={opened.has(release.releaseGroupMbid ?? release.key)}
-                attendance={release.releaseGroupMbid ? attendance[release.releaseGroupMbid] : undefined}
+                opened={opened.has(item.mbid ?? item.spotifyId ?? `${release.key}:${index}`)}
                 onOpened={markOpened}
               />
             ))}
           </div>
         ) : (
-          <p className="library-crate__section-empty">{unopenedOnly ? "Nothing with a known keep date is waiting to be opened." : "Nothing with a known keep date yet."}</p>
+          <p className="library-crate__section-empty">No songs in this view.</p>
         )}
       </section>
-      {addedArtists.length > 0 && (
-        <section className="library-crate__section" data-testid="library-crate-added">
-          <header className="library-crate__section-heading">
-            <h2>Added</h2>
-            <span>{visibleArtists.length} artists · A–Z</span>
-          </header>
-          {visibleArtists.length > 0 ? (
-            <div className="library-crate__rail">
-              {visibleArtists.map((artist, index) => (
-                <AddedArtistCard key={artist.key} artist={artist} position={index + visibleReleases.length} onOpened={markOpened} />
-              ))}
-            </div>
-          ) : (
-            <p className="library-crate__section-empty">Every added artist has been opened.</p>
-          )}
-          {filteredArtists.length > 20 && (
-            <button
-              type="button"
-              className="library-crate__index-link"
-              onClick={() => setShowAllAdded((value) => !value)}
-              data-testid="library-added-show-all"
-            >
-              {showAllAdded
-                ? "Show fewer added artists"
-                : `Showing 20 of ${filteredArtists.length}. Show all added artists →`}
-            </button>
-          )}
-        </section>
-      )}
     </div>
   );
 }

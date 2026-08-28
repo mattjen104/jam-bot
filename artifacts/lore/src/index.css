@@ -3192,6 +3192,61 @@
   letter-spacing: .05em;
 }
 .library-crate__section-heading span { color: hsl(var(--faint)); }
+.library-crate__track-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  width: min(100%, 1120px);
+  padding: 6px max(16px, calc((100vw - 980px) / 2)) 30px;
+}
+.library-crate__track {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid hsl(var(--border) / .7);
+  border-radius: 4px;
+  background: hsl(var(--card) / .55);
+}
+.library-crate__track-art,
+.library-crate__track-swatch {
+  width: 92px;
+  height: 92px;
+}
+.library-crate__track-swatch {
+  transform: none;
+  box-shadow: 0 8px 18px rgb(0 0 0 / .32);
+}
+.library-crate__track-copy {
+  min-width: 0;
+}
+.library-crate__track-title,
+.library-crate__track-album,
+.library-crate__track-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-crate__track-title {
+  color: hsl(var(--foreground));
+  font-family: var(--lore-font-reading);
+  font-size: var(--lore-size-interface);
+  font-weight: var(--lore-weight-semibold);
+}
+.library-crate__track-album {
+  margin-top: 4px;
+  color: hsl(var(--foreground) / .78);
+  font-family: var(--lore-font-reading);
+  font-size: var(--lore-size-interface);
+}
+.library-crate__track-artist {
+  margin-top: 3px;
+  color: hsl(var(--dim));
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-small);
+}
 .library-crate__rail {
   position: relative;
   isolation: isolate;
@@ -3459,6 +3514,19 @@
   .heard-row__art { width: 32px; height: 32px; }
   .heard-row__context { font-size: 9px; }
   .library-crate { --crate-art: 148px; }
+  .library-crate__track-list {
+    grid-template-columns: 1fr;
+    padding-inline: 14px;
+  }
+  .library-crate__track {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 11px;
+  }
+  .library-crate__track-art,
+  .library-crate__track-swatch {
+    width: 72px;
+    height: 72px;
+  }
   .library-crate__card {
     grid-template-columns: var(--crate-art) minmax(0, 1fr);
     width: calc(100vw + 26px);
