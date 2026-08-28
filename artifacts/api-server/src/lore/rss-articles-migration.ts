@@ -17,6 +17,9 @@ export async function applyRssArticlesMigration(): Promise<void> {
       created_at timestamp NOT NULL DEFAULT now()
     )
   `);
+  await db.execute(sql`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS author text`);
+  await db.execute(sql`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS image_url text`);
+  await db.execute(sql`ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS excerpt text`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS rss_articles_picker_guid_uq ON rss_articles (picker_id, guid)`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS rss_articles_picker_url_uq ON rss_articles (picker_id, url)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS rss_articles_picker_published_idx ON rss_articles (picker_id, published_at DESC)`);

@@ -14,7 +14,10 @@ import { upsertPicker } from "./picks.js";
  * the wild are messy, and this is best-effort ingest, not a validator.
  */
 
-/** A single parsed feed item — resolved pick source only, never body text. */
+const MAX_ARTICLE_AUTHOR_LENGTH = 160;
+const MAX_ARTICLE_EXCERPT_LENGTH = 280;
+
+/** A single parsed feed item — resolved pick source plus lightweight metadata. */
 export interface BlogItem {
   title: string;
   link: string;
@@ -24,6 +27,12 @@ export interface BlogItem {
   tags: string[];
   /** Stable id for idempotent dedup (guid/id, else the link). */
   guid: string;
+  /** Feed-provided byline, when available. */
+  author?: string;
+  /** Feed-provided article image URL, when available and safe. */
+  imageUrl?: string;
+  /** Short plain-text feed summary; full article content is never retained. */
+  excerpt?: string;
 }
 
 /** Only absolute web links are safe to persist and render as publisher links. */
@@ -53,6 +62,12 @@ function firstTag(block: string, tag: string): string | undefined {
   return m ? decodeEntities(m[1]!) : undefined;
 }
 
+function attributeValue(markup: string, attribute: string): string | undefined {
+  const escaped = attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = markup.match(new RegExp(`\\b${escaped}\\s*=\\s*["']([^"']+)["']`, "i"));
+  return m ? decodeEntities(m[1]!) : undefined;
+}
+
 function allTags(block: string, tag: string): string[] {
   const out: string[] = [];
   const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi");
@@ -68,6 +83,80 @@ function allTags(block: string, tag: string): string[] {
 function atomLink(block: string): string | undefined {
   const m = block.match(/<link[^>]*href=["']([^"']+)["']/i);
   return m ? decodeEntities(m[1]!) : undefined;
+}
+
+function stripMarkup(value: string): string {
+  return decodeEntities(value)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\s*(?:br|p|div|li|h[1-6])\b[^>]*>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function boundedText(value: string | undefined, maxLength: number): string | undefined {
+  const text = value ? stripMarkup(value) : "";
+  if (!text) return undefined;
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function itemAuthor(block: string): string | undefined {
+  const rawCandidates = [
+    firstTag(block, "dc:creator"),
+    firstTag(block, "creator"),
+    firstTag(block, "author"),
+  ];
+  for (const raw of rawCandidates) {
+    if (!raw) continue;
+    const nestedName = firstTag(raw, "name");
+    const author = boundedText(nestedName ?? raw, MAX_ARTICLE_AUTHOR_LENGTH);
+    if (author) return author;
+  }
+  return undefined;
+}
+
+function hasImageExtension(url: string): boolean {
+  return /\.(?:avif|gif|jpe?g|png|webp)(?:[?#]|$)/i.test(url);
+}
+
+function itemImageUrl(block: string): string | undefined {
+  const mediaRe = /<media:(content|thumbnail)\b[^>]*>/gi;
+  let mediaMatch: RegExpExecArray | null;
+  while ((mediaMatch = mediaRe.exec(block))) {
+    const markup = mediaMatch[0]!;
+    const url = attributeValue(markup, "url");
+    if (!url || !isSafeArticleUrl(url)) continue;
+    if (
+      mediaMatch[1]!.toLowerCase() === "thumbnail" ||
+      attributeValue(markup, "medium")?.toLowerCase() === "image" ||
+      attributeValue(markup, "type")?.toLowerCase().startsWith("image/") ||
+      hasImageExtension(url)
+    ) {
+      return url;
+    }
+  }
+
+  const enclosureRe = /<enclosure\b[^>]*>/gi;
+  let enclosureMatch: RegExpExecArray | null;
+  while ((enclosureMatch = enclosureRe.exec(block))) {
+    const markup = enclosureMatch[0]!;
+    const url = attributeValue(markup, "url");
+    const type = attributeValue(markup, "type")?.toLowerCase();
+    if (
+      url &&
+      isSafeArticleUrl(url) &&
+      (type?.startsWith("image/") || hasImageExtension(url))
+    ) {
+      return url;
+    }
+  }
+
+  const imageBlock = block.match(/<image\b[^>]*>[\s\S]*?<\/image>/i)?.[0];
+  const nestedUrl = imageBlock ? firstTag(imageBlock, "url") : undefined;
+  if (nestedUrl && isSafeArticleUrl(nestedUrl)) return nestedUrl;
+  return undefined;
 }
 
 function toDate(v: string | undefined): Date | undefined {
@@ -98,9 +187,8 @@ export function extractChannelTags(xml: string): string[] {
 }
 
 /**
- * Pure: parse an RSS or Atom feed body into BlogItem[]. Only the fields needed
- * to make + link a pick are kept (title, link, date, tags, id) — the body/
- * content is never read, so no article text is ever stored.
+ * Pure: parse an RSS or Atom feed body into BlogItem[]. Only lightweight
+ * source metadata is kept; full article content is never retained.
  */
 export function parseFeedItems(xml: string): BlogItem[] {
   const out: BlogItem[] = [];
@@ -123,12 +211,21 @@ export function parseFeedItems(xml: string): BlogItem[] {
       ...allTags(block, "category"),
       ...allTags(block, "dc:subject"),
     ];
+    const author = itemAuthor(block);
+    const imageUrl = itemImageUrl(block);
+    const excerpt = boundedText(
+      firstTag(block, "description") ?? firstTag(block, "summary"),
+      MAX_ARTICLE_EXCERPT_LENGTH,
+    );
     out.push({
       title,
       link,
       tags,
       guid,
       ...(publishedAt ? { publishedAt } : {}),
+      ...(author ? { author } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(excerpt ? { excerpt } : {}),
     });
   }
   return out;
@@ -517,6 +614,7 @@ export async function ingestBlogFeed(args: {
       pickerId: picker.id, guid: item.guid, url: item.link, title: item.title,
       publishedAt: item.publishedAt ?? null, tags: item.tags,
       matchedArtist: guess?.artist ?? null, matchedWork: guess?.title ?? null,
+      author: item.author ?? null, imageUrl: item.imageUrl ?? null, excerpt: item.excerpt ?? null,
     }).onConflictDoNothing().returning({ id: rssArticlesTable.id });
     if (wrote.length) inserted++;
   }

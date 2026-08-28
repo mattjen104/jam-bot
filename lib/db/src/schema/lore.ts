@@ -1801,6 +1801,12 @@ export const rssArticlesTable = pgTable(
     /** Publisher-owned article URL; Lore never stores or fetches its body. */
     url: text("url").notNull(),
     title: text("title").notNull(),
+    /** Feed-provided byline, when available. */
+    author: text("author"),
+    /** Feed-provided article image URL, never fetched by the server. */
+    imageUrl: text("image_url"),
+    /** Bounded plain-text feed summary, never full article content. */
+    excerpt: text("excerpt"),
     publishedAt: timestamp("published_at"),
     tags: text("tags").array(),
     /** Conservative headline/tag hint only, never a generated music pick. */
