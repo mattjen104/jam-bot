@@ -120,6 +120,17 @@ const MOCKUPS = [
     bg: "#211f1c",
   },
   {
+    path: "lore-on-air-record-piles/LoreOnAirRecordPiles",
+    tag: "Interaction study · on air",
+    title: "On-Air Record Piles",
+    desc: "Clickable, capped album-cover piles replace station logos while crossing scope controls move every live station together.",
+    tagColor: "#e5a650",
+    tagBorder: "rgba(229,166,80,0.35)",
+    border: "#514334",
+    hoverBorder: "#e5a650",
+    bg: "#211b15",
+  },
+  {
     path: "lore-grayscale/LoreGrayscale",
     tag: "Annotated architecture · grayscale",
     title: "Lore Grayscale — Terminal Variant",
