@@ -2,7 +2,7 @@ import { useState } from "react";
 import "./_group.css";
 
 type Scope = "15m" | "hour" | "day" | "lifetime";
-type Cover = { title: string; artist: string; year: string; className: string; detail: string };
+type Cover = { title: string; artist: string; year: string; className: string; imageUrl: string; detail: string };
 type SelectedCover = { cover: Cover; stationName: string };
 type Station = {
   name: string;
@@ -43,33 +43,33 @@ const STATIONS: Station[] = [
   {
     name: "WFMU", frequency: "91.1 FM · JERSEY CITY",
     artist: "Grouper", track: "Clearing", covers: [
-      { title: "Ruins", artist: "Grouper", year: "2014", className: "cover-a", detail: "A room-tone record: spare piano, tape hiss, and the feeling of being almost home." },
-      { title: "Dragging a Dead Deer Up a Hill", artist: "Grouper", year: "2008", className: "cover-b", detail: "A submerged collection of songs, pulled toward the light one guitar at a time." },
-      { title: "Grid of Points", artist: "Grouper", year: "2018", className: "cover-c", detail: "Nine brief sketches with the grain left in." },
+      { title: "Ruins", artist: "Grouper", year: "2014", className: "cover-a", imageUrl: "/__mockup/images/grouper-ruins.jpg", detail: "A room-tone record: spare piano, tape hiss, and the feeling of being almost home." },
+      { title: "Dragging a Dead Deer Up a Hill", artist: "Grouper", year: "2008", className: "cover-b", imageUrl: "/__mockup/images/grouper-dragging-a-dead-deer.jpg", detail: "A submerged collection of songs, pulled toward the light one guitar at a time." },
+      { title: "Grid of Points", artist: "Grouper", year: "2018", className: "cover-c", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg", detail: "Nine brief sketches with the grain left in." },
     ], matches: { "15m": 2, hour: 8, day: 36, lifetime: 312 },
   },
   {
     name: "KEXP", frequency: "90.3 FM · SEATTLE",
     artist: "Broadcast", track: "Echo's Answer", covers: [
-      { title: "Tender Buttons", artist: "Broadcast", year: "2005", className: "cover-d", detail: "Bright, strange pop assembled from analogue edges and impossible little hooks." },
-      { title: "The Noise Made by People", artist: "Broadcast", year: "2000", className: "cover-e", detail: "A careful collision between library music, psychedelia, and a future that never arrived." },
-      { title: "Haha Sound", artist: "Broadcast", year: "2003", className: "cover-f", detail: "The point where Broadcast's experiments became a language of their own." },
+      { title: "Tender Buttons", artist: "Broadcast", year: "2005", className: "cover-d", imageUrl: "/__mockup/images/broadcast-tender-buttons.jpg", detail: "Bright, strange pop assembled from analogue edges and impossible little hooks." },
+      { title: "The Noise Made by People", artist: "Broadcast", year: "2000", className: "cover-e", imageUrl: "/__mockup/images/broadcast-noise-made-by-people.jpg", detail: "A careful collision between library music, psychedelia, and a future that never arrived." },
+      { title: "Haha Sound", artist: "Broadcast", year: "2003", className: "cover-f", imageUrl: "/__mockup/images/broadcast-haha-sound.jpg", detail: "The point where Broadcast's experiments became a language of their own." },
     ], matches: { "15m": 1, hour: 5, day: 24, lifetime: 204 },
   },
   {
     name: "KCRW", frequency: "89.9 FM · SANTA MONICA",
     artist: "Stereolab", track: "The Free Design", covers: [
-      { title: "Dots and Loops", artist: "Stereolab", year: "1997", className: "cover-f", detail: "Motorik rhythms, soft focus electronics, and pop music viewed through a prism." },
-      { title: "Emperor Tomato Ketchup", artist: "Stereolab", year: "1996", className: "cover-a", detail: "The record where the laboratory opened its doors." },
-      { title: "Cobra and Phases", artist: "Stereolab", year: "1999", className: "cover-d", detail: "A long-form, many-windowed portrait of a band refusing the straight line." },
+      { title: "Dots and Loops", artist: "Stereolab", year: "1997", className: "cover-f", imageUrl: "/__mockup/images/stereolab-dots-and-loops.jpg", detail: "Motorik rhythms, soft focus electronics, and pop music viewed through a prism." },
+      { title: "Emperor Tomato Ketchup", artist: "Stereolab", year: "1996", className: "cover-a", imageUrl: "/__mockup/images/stereolab-emperor-tomato-ketchup.jpg", detail: "The record where the laboratory opened its doors." },
+      { title: "Cobra and Phases", artist: "Stereolab", year: "1999", className: "cover-d", imageUrl: "/__mockup/images/stereolab-cobra-and-phases.jpg", detail: "A long-form, many-windowed portrait of a band refusing the straight line." },
     ], matches: { "15m": 3, hour: 11, day: 41, lifetime: 116 },
   },
   {
     name: "KBOO", frequency: "90.7 FM · PORTLAND",
     artist: "Alice Coltrane", track: "Journey in Satchidananda", covers: [
-      { title: "Journey in Satchidananda", artist: "Alice Coltrane", year: "1971", className: "cover-b", detail: "Harp, tanpura, and Pharoah Sanders in a record that keeps widening." },
-      { title: "Ptah, the El Daoud", artist: "Alice Coltrane", year: "1970", className: "cover-c", detail: "Two saxophones orbit a spiritual center." },
-      { title: "Universal Consciousness", artist: "Alice Coltrane", year: "1971", className: "cover-e", detail: "Strings and organ reaching for the same horizon." },
+      { title: "Journey in Satchidananda", artist: "Alice Coltrane", year: "1971", className: "cover-b", imageUrl: "/__mockup/images/alice-journey-in-satchidananda.jpg", detail: "Harp, tanpura, and Pharoah Sanders in a record that keeps widening." },
+      { title: "Ptah, the El Daoud", artist: "Alice Coltrane", year: "1970", className: "cover-c", imageUrl: "/__mockup/images/alice-ptah-the-el-daoud.jpg", detail: "Two saxophones orbit a spiritual center." },
+      { title: "Universal Consciousness", artist: "Alice Coltrane", year: "1971", className: "cover-e", imageUrl: "/__mockup/images/alice-universal-consciousness.jpg", detail: "Strings and organ reaching for the same horizon." },
     ], matches: { "15m": 2, hour: 13, day: 27, lifetime: 52 },
   },
 ];
@@ -85,6 +85,7 @@ function RecordCover({ cover, selected, onSelect }: { cover: Cover; selected: bo
       aria-pressed={selected}
       onClick={onSelect}
     >
+      <img className="air-cover-image" src={cover.imageUrl} alt="" draggable={false} />
       <span className="air-cover-title">{cover.title}</span>
     </button>
   );
@@ -180,7 +181,7 @@ export function LoreOnAirRecordPiles() {
           })}
           {selected && (
             <aside className="air-detail" aria-live="polite">
-              <div className={`air-detail-swatch ${selected.cover.className}`} aria-hidden="true" />
+              <img className="air-detail-swatch" src={selected.cover.imageUrl} alt="" aria-hidden="true" />
               <div>
                 <div className="air-detail-kicker">selected from {selected.stationName} · {SCOPE_COPY[scope].label} remains active</div>
                 <strong>{selected.cover.title}</strong>
