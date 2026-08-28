@@ -1,9 +1,21 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { Play, Radio } from "lucide-react";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
-import { useMyHeardToday, type HeardItem } from "../lib/meHooks";
+import { localDateKey, useMyHeard, type HeardItem } from "../lib/meHooks";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
+
+function heardDayLabel(day: string): string {
+  const parsed = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return day;
+  return parsed.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 function heardTime(value: string, timezone: string): string {
   try {
@@ -95,7 +107,12 @@ function HeardRow({ item, timezone }: { item: HeardItem; timezone: string }) {
 }
 
 export default function Heard() {
-  const { data, isLoading, isError } = useMyHeardToday();
+  const today = localDateKey();
+  const [selectedDate, setSelectedDate] = useState(today);
+  const activeDate = selectedDate > today ? today : selectedDate;
+  const isToday = activeDate === today;
+  const { data, isLoading, isError } = useMyHeard(activeDate);
+  const selectedDayLabel = isToday ? "today" : heardDayLabel(activeDate);
 
   return (
     <div className="dial-root content-pad-shell" data-testid="heard-page">
@@ -106,11 +123,37 @@ export default function Heard() {
       <main className="heard-page">
         <header className="heard-page__header">
           <div>
-            <h1>Heard today</h1>
+            <h1>{isToday ? "Heard today" : `Heard ${heardDayLabel(activeDate)}`}</h1>
             <p>Confirmed listening, in the order it happened.</p>
           </div>
           {data && <span className="heard-page__count">{data.items.length}{data.partial ? "+" : ""} spins</span>}
         </header>
+        <div className="heard-page__date-picker">
+          <label htmlFor="heard-date">Review another local day</label>
+          <div className="heard-page__date-row">
+            <input
+              id="heard-date"
+              type="date"
+              value={activeDate}
+              max={today}
+              onChange={(event) => {
+                const nextDate = event.target.value;
+                if (nextDate && nextDate <= today) setSelectedDate(nextDate);
+              }}
+              data-testid="heard-date"
+            />
+            {!isToday && (
+              <button
+                type="button"
+                className="heard-page__today"
+                onClick={() => setSelectedDate(today)}
+                data-testid="heard-today"
+              >
+                Back to today
+              </button>
+            )}
+          </div>
+        </div>
         <p className="heard-page__intent" data-testid="heard-intent-note">
           Heard is automatic attendance. It never saves a track to Stack.
         </p>
@@ -131,7 +174,7 @@ export default function Heard() {
         )}
         {!isLoading && !isError && data && data.items.length === 0 && (
           <div className="heard-page__state" data-testid="heard-empty">
-            Nothing confirmed today.
+            Nothing confirmed {selectedDayLabel}.
             <span>Heard only includes listening that crossed Lore’s attendance threshold.</span>
           </div>
         )}
@@ -144,7 +187,7 @@ export default function Heard() {
             </div>
             {data.partial && (
               <p className="heard-page__partial" data-testid="heard-partial">
-                Showing the first 200 confirmed spins today.
+                Showing the first 200 confirmed spins {selectedDayLabel}.
               </p>
             )}
             {data.items.some((item) => !item.recording || !item.station) && (

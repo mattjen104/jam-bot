@@ -1957,6 +1957,59 @@
   font-size: var(--lore-size-small);
   white-space: nowrap;
 }
+.heard-page__date-picker {
+  display: grid;
+  gap: 7px;
+  margin: 18px 0 0;
+  color: hsl(var(--dim));
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-small);
+}
+.heard-page__date-picker label {
+  color: hsl(var(--faint));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.heard-page__date-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.heard-page__date-row input {
+  min-height: 34px;
+  border: 1px solid hsl(var(--border) / .75);
+  border-radius: 3px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  color-scheme: dark;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  padding: 6px 9px;
+}
+.heard-page__date-row input:focus-visible,
+.heard-page__today:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.heard-page__today {
+  border: 1px solid hsl(var(--border) / .7);
+  border-radius: 3px;
+  background: transparent;
+  color: hsl(var(--primary));
+  cursor: pointer;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .05em;
+  padding: 8px 10px;
+  text-transform: uppercase;
+}
+.heard-page__today:hover {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / .1);
+}
 .heard-page__intent {
   border-bottom: 1px solid hsl(var(--border) / .45);
   padding-bottom: 18px;

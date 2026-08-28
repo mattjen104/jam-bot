@@ -1731,7 +1731,7 @@ export function useMyWeeklySummary(week: string | null) {
 }
 
 // ---------------------------------------------------------------------------
-// Confirmed listening today — GET /api/me/attendance/heard
+// Confirmed listening by local calendar day — GET /api/me/attendance/heard
 // ---------------------------------------------------------------------------
 
 export interface HeardItem {
@@ -1753,7 +1753,7 @@ export interface HeardItem {
   show: { id: number; name: string; djName: string | null } | null;
 }
 
-export interface HeardToday {
+export interface HeardDay {
   day: string;
   timezone: string;
   dayStart: string;
@@ -1761,6 +1761,9 @@ export interface HeardToday {
   partial: boolean;
   items: HeardItem[];
 }
+
+/** Backwards-compatible name for callers that only request the current day. */
+export type HeardToday = HeardDay;
 
 export const ME_HEARD_TODAY_KEY = ["me", "attendance", "heard"] as const;
 
@@ -1772,7 +1775,15 @@ function localTimezone(): string {
   }
 }
 
-function isHeardToday(value: unknown): value is HeardToday {
+export function localDateKey(now = new Date()): string {
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function isHeardDay(value: unknown): value is HeardDay {
   return Boolean(
     value &&
       typeof value === "object" &&
@@ -1781,21 +1792,27 @@ function isHeardToday(value: unknown): value is HeardToday {
   );
 }
 
-/** Confirmed individual spins for the current day in the listener's timezone. */
-export function useMyHeardToday() {
+/** Confirmed individual spins for a local calendar day in the listener's timezone. */
+export function useMyHeard(date = localDateKey()) {
   const tz = localTimezone();
+  const today = localDateKey();
   return useQuery({
-    queryKey: [...ME_HEARD_TODAY_KEY, tz] as const,
+    queryKey: [...ME_HEARD_TODAY_KEY, tz, date] as const,
     queryFn: async () => {
       const value = await fetchOrNull<unknown>(
-        `/api/me/attendance/heard?tz=${encodeURIComponent(tz)}`,
+        `/api/me/attendance/heard?tz=${encodeURIComponent(tz)}&date=${encodeURIComponent(date)}`,
       );
-      return isHeardToday(value) ? value : null;
+      return isHeardDay(value) ? value : null;
     },
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: date === today ? 60_000 : false,
     retry: false,
   });
+}
+
+/** Confirmed individual spins for the current day in the listener's timezone. */
+export function useMyHeardToday() {
+  return useMyHeard(localDateKey());
 }
 
 /**

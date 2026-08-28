@@ -613,17 +613,18 @@ router.get("/me/attendance/counts", h(async (req, res) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the individual confirmed attendance rows for the listener's current
- * local calendar day.  This is intentionally a different read model from the
- * weekly rollups: Heard is a chronological catch log, not a keep list or a
- * per-recording aggregate.
+ * Returns the individual confirmed attendance rows for one local calendar day.
+ * This is intentionally a different read model from the weekly rollups: Heard
+ * is a chronological catch log, not a keep list or a per-recording aggregate.
  *
  * Query params:
  *   tz — optional IANA timezone. Defaults to UTC when omitted.
+ *   date — optional local calendar date (YYYY-MM-DD). Defaults to today in tz.
  *
- * The query is bounded to one local day and reads only attendance rows that
- * crossed the dwell gate.  The extra row lets the response say that the day
- * is partial without pretending the first 200 rows are the complete history.
+ * The query is always bounded to one local day and reads only attendance rows
+ * that crossed the dwell gate. The extra row lets the response say that the
+ * day is partial without pretending the first 200 rows are the complete
+ * history.
  */
 export interface HeardDayWindow {
   day: string;
@@ -632,26 +633,67 @@ export interface HeardDayWindow {
   end: Date;
 }
 
-export function currentLocalDayWindow(
+interface CalendarDayParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+function parseCalendarDay(value: string): CalendarDayParts | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1000 || month < 1 || month > 12 || day < 1) return null;
+
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day <= daysInMonth ? { year, month, day } : null;
+}
+
+function formatCalendarDay({ year, month, day }: CalendarDayParts): string {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * Returns the UTC bounds for one explicitly requested local calendar day.
+ * `start` and `end` are calculated independently through the timezone-aware
+ * midnight helper, so a 23- or 25-hour DST day remains intact.
+ */
+export function localDayWindow(
   tz: string,
-  now = new Date(),
+  day: string,
 ): HeardDayWindow {
-  const current = localDateParts(now, tz);
-  const nextDay = new Date(Date.UTC(current.year, current.month - 1, current.day + 1));
+  const requested = parseCalendarDay(day);
+  if (!requested) {
+    throw new RangeError(`Invalid local calendar date: "${day}"`);
+  }
+
+  const nextDay = new Date(Date.UTC(requested.year, requested.month - 1, requested.day + 1));
   const next = {
     year: nextDay.getUTCFullYear(),
     month: nextDay.getUTCMonth() + 1,
     day: nextDay.getUTCDate(),
   };
+
   return {
-    day: `${current.year}-${String(current.month).padStart(2, "0")}-${String(current.day).padStart(2, "0")}`,
+    day: formatCalendarDay(requested),
     timezone: tz,
-    start: localMidnightToUtc(current.year, current.month, current.day, tz),
+    start: localMidnightToUtc(requested.year, requested.month, requested.day, tz),
     end: localMidnightToUtc(next.year, next.month, next.day, tz),
   };
 }
 
-async function getHeardToday(req: Request, res: Response) {
+export function currentLocalDayWindow(
+  tz: string,
+  now = new Date(),
+): HeardDayWindow {
+  const current = localDateParts(now, tz);
+  return localDayWindow(tz, formatCalendarDay(current));
+}
+
+async function getHeardDay(req: Request, res: Response) {
   const user = (req as AuthedRequest).loreUser;
   const tzParam = typeof req.query["tz"] === "string" ? req.query["tz"] : "UTC";
 
@@ -661,7 +703,25 @@ async function getHeardToday(req: Request, res: Response) {
     });
   }
 
-  const window = currentLocalDayWindow(tzParam);
+  const now = new Date();
+  const today = currentLocalDayWindow(tzParam, now);
+  const dateParam = typeof req.query["date"] === "string"
+    ? req.query["date"].trim()
+    : null;
+  if (dateParam !== null && !parseCalendarDay(dateParam)) {
+    return res.status(400).json({
+      error: `Invalid date: "${dateParam}". Provide a real local calendar date as YYYY-MM-DD.`,
+    });
+  }
+  if (dateParam !== null && dateParam > today.day) {
+    return res.status(400).json({
+      error: `Date "${dateParam}" is in the future for timezone "${tzParam}".`,
+    });
+  }
+
+  const window = dateParam
+    ? localDayWindow(tzParam, dateParam)
+    : today;
   const rows = await db
     .select({
       attendanceId: attendanceTable.id,
@@ -737,8 +797,8 @@ async function getHeardToday(req: Request, res: Response) {
 
 // `/today` is retained as a small compatibility alias for clients that used
 // the first name of this read model while Heard was being prototyped.
-router.get("/me/attendance/heard", h(getHeardToday));
-router.get("/me/attendance/today", h(getHeardToday));
+router.get("/me/attendance/heard", h(getHeardDay));
+router.get("/me/attendance/today", h(getHeardDay));
 
 // ---------------------------------------------------------------------------
 // GET /api/me/attendance/weekly
