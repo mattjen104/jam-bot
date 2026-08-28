@@ -7,6 +7,7 @@ import {
   hasGenuineKeepDate,
   keepCopy,
   partitionCrateItems,
+  primaryReleaseMetadata,
   sortCrateReleases,
 } from "../src/components/LibraryCrate";
 import type { LibraryItem } from "../src/lib/meHooks";
@@ -46,6 +47,32 @@ function item(overrides: Partial<LibraryItem> & {
 }
 
 describe("Library crate read model", () => {
+  it("selects the earliest plain album from MusicBrainz release metadata", () => {
+    expect(primaryReleaseMetadata({
+      releases: [
+        {
+          date: "2005-01-01",
+          status: "Official",
+          "release-group": {
+            id: "single-rg",
+            title: "The Song",
+            "primary-type": "Single",
+          },
+        },
+        {
+          date: "2002-03-04",
+          status: "Official",
+          "release-group": {
+            id: "album-rg",
+            title: "The Album",
+            "primary-type": "Album",
+            "secondary-types": [],
+          },
+        },
+      ],
+    })).toEqual({ title: "The Album", releaseGroupMbid: "album-rg" });
+  });
+
   it("mixes Lore catches and genuinely dated imports in one chronological pile", () => {
     const oldImport = item({
       mbid: "spotify-old",

@@ -11,6 +11,95 @@ import { Play, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "../hooks/use-toast";
 import type { CSSProperties } from "react";
 
+interface ReleaseMetadata {
+  title: string;
+  releaseGroupMbid: string;
+}
+
+const releaseMetadataCache = new Map<string, ReleaseMetadata | null>();
+const releaseMetadataPending = new Set<string>();
+let releaseMetadataRequestChain: Promise<void> = Promise.resolve();
+let lastReleaseMetadataRequestAt = 0;
+
+function releaseDate(release: {
+  date?: string;
+  "release-group"?: { "first-release-date"?: string };
+}): string {
+  return release["release-group"]?.["first-release-date"] ?? release.date ?? "9999";
+}
+
+export function primaryReleaseMetadata(recording: {
+  releases?: Array<{
+    date?: string;
+    status?: string;
+    "release-group"?: {
+      id?: string;
+      title?: string;
+      "primary-type"?: string;
+      "secondary-types"?: string[];
+      "first-release-date"?: string;
+    };
+  }>;
+}): ReleaseMetadata | null {
+  const releases = (recording.releases ?? []).filter(
+    (release) => release["release-group"]?.id && release["release-group"]?.title,
+  );
+  if (releases.length === 0) return null;
+  const preferred = releases
+    .filter((release) => {
+      const group = release["release-group"];
+      return group?.["primary-type"] === "Album"
+        && (group["secondary-types"]?.length ?? 0) === 0;
+    })
+    .sort((a, b) => releaseDate(a).localeCompare(releaseDate(b)))[0];
+  const fallback = releases
+    .filter((release) => release.status === "Official")
+    .sort((a, b) => releaseDate(a).localeCompare(releaseDate(b)))[0]
+    ?? releases.sort((a, b) => releaseDate(a).localeCompare(releaseDate(b)))[0];
+  const group = (preferred ?? fallback)?.["release-group"];
+  return group?.id && group.title
+    ? { title: group.title, releaseGroupMbid: group.id }
+    : null;
+}
+
+async function fetchReleaseMetadata(mbids: string[]): Promise<void> {
+  const query = mbids.map((mbid) => `rid:${mbid}`).join(" OR ");
+  const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&inc=releases+release-groups&fmt=json&limit=100`;
+  try {
+    const waitMs = Math.max(0, 1_100 - (Date.now() - lastReleaseMetadataRequestAt));
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    lastReleaseMetadataRequestAt = Date.now();
+    const response = await fetch(url, { signal: AbortSignal.timeout(12_000) });
+    if (!response.ok) throw new Error(`MusicBrainz returned ${response.status}`);
+    const data = await response.json() as {
+      recordings?: Array<{
+        id?: string;
+        releases?: Parameters<typeof primaryReleaseMetadata>[0]["releases"];
+      }>;
+    };
+    const returned = new Set<string>();
+    for (const recording of data.recordings ?? []) {
+      if (!recording.id || !mbids.includes(recording.id)) continue;
+      returned.add(recording.id);
+      releaseMetadataCache.set(recording.id, primaryReleaseMetadata(recording));
+    }
+    for (const mbid of mbids) {
+      if (!returned.has(mbid)) releaseMetadataCache.set(mbid, null);
+    }
+  } catch {
+    for (const mbid of mbids) releaseMetadataCache.set(mbid, null);
+  } finally {
+    for (const mbid of mbids) releaseMetadataPending.delete(mbid);
+  }
+}
+
+function queueReleaseMetadata(mbids: string[]): Promise<void> {
+  for (const mbid of mbids) releaseMetadataPending.add(mbid);
+  const request = releaseMetadataRequestChain.then(() => fetchReleaseMetadata(mbids));
+  releaseMetadataRequestChain = request.catch(() => {});
+  return request;
+}
+
 export interface CrateRelease {
   key: string;
   releaseGroupMbid: string | null;
@@ -218,13 +307,17 @@ function Swatch({ title, artworkUrl, className = "" }: {
   artworkUrl: string | null;
   className?: string;
 }) {
-  const initials = title.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
   return (
-    <span className={`library-crate__swatch ${className}`} aria-hidden="true">
+    <span className={`library-crate__swatch ${className}`} aria-hidden="true" title={title}>
       {artworkUrl ? (
         <img src={proxyArtUrl(artworkUrl) ?? artworkUrl} alt="" onError={onArtError} loading="lazy" />
       ) : (
-        <span className="library-crate__swatch-fallback">{initials || "·"}</span>
+        <img
+          src={`${import.meta.env.BASE_URL}rumours.jpg`}
+          alt=""
+          className="library-crate__swatch-fallback"
+          loading="lazy"
+        />
       )}
     </span>
   );
@@ -233,24 +326,35 @@ function Swatch({ title, artworkUrl, className = "" }: {
 function CrateTrackCard({
   item,
   release,
+  metadata,
   position,
   opened,
   onOpened,
 }: {
   item: LibraryItem;
   release: CrateRelease;
+  metadata: ReleaseMetadata | null;
   position: number;
   opened: boolean;
   onOpened: (key: string) => void;
 }) {
   const rec = item.recording;
   const title = rec?.title ?? "Unresolved recording";
-  const album = rec?.albumTitle ?? release.title ?? "Album unknown";
+  const album = rec?.albumTitle ?? release.title ?? metadata?.title ?? "Release unknown";
   const artist = rec?.artist ?? release.artist ?? "Unknown artist";
-  const cover = rec?.artworkUrl ?? release.artworkUrl;
+  const releaseGroupMbid =
+    rec?.releaseGroupMbid
+    ?? release.releaseGroupMbid
+    ?? metadata?.releaseGroupMbid
+    ?? null;
+  const cover = rec?.artworkUrl
+    ?? release.artworkUrl
+    ?? (releaseGroupMbid
+      ? `https://coverartarchive.org/release-group/${releaseGroupMbid}/front-1200`
+      : null);
   const openedKey = item.mbid ?? item.spotifyId ?? `${release.key}:${position}`;
-  const releaseHref = release.releaseGroupMbid
-    ? `/album/${release.releaseGroupMbid}`
+  const releaseHref = releaseGroupMbid
+    ? `/album/${releaseGroupMbid}`
     : null;
 
   return (
@@ -535,7 +639,27 @@ export function LibraryCrate({
 }: LibraryCrateProps) {
   const [location, setLocation] = useLocation();
   const [opened, markOpened] = useOpenedKeys();
+  const [metadataVersion, setMetadataVersion] = useState(0);
   const releases = useMemo(() => sortCrateReleases(buildCrateReleases(items), sort), [items, sort]);
+
+  useEffect(() => {
+    const missing = items
+      .filter((item) =>
+        item.mbid
+        && item.recording
+        && (!item.recording.albumTitle || !item.recording.releaseGroupMbid)
+        && !releaseMetadataCache.has(item.mbid)
+        && !releaseMetadataPending.has(item.mbid),
+      )
+      .map((item) => item.mbid!)
+      .slice(0, 100);
+    if (missing.length === 0) return;
+    let active = true;
+    void queueReleaseMetadata(missing).finally(() => {
+      if (active) setMetadataVersion((version) => version + 1);
+    });
+    return () => { active = false; };
+  }, [items, metadataVersion]);
 
   const visibleReleases = unopenedOnly ? releases.filter((release) => !opened.has(release.releaseGroupMbid ?? release.key)) : releases;
   const tracks = useMemo(
@@ -584,6 +708,7 @@ export function LibraryCrate({
                 key={`${release.key}:${item.mbid ?? item.spotifyId ?? index}`}
                 item={item}
                 release={release}
+                metadata={item.mbid ? releaseMetadataCache.get(item.mbid) ?? null : null}
                 position={index}
                 opened={opened.has(item.mbid ?? item.spotifyId ?? `${release.key}:${index}`)}
                 onOpened={markOpened}
