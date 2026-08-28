@@ -505,7 +505,7 @@ export function HomeDiscovery({
       {warm ? (
         <section className="home-discovery__section" aria-label="Last kept">
           <div className="home-discovery__heading-row">
-            <h2 className="home-discovery__heading">Last kept</h2>
+            <h2 className="lore-heading lore-heading--section home-discovery__heading">Last kept</h2>
             <Link href="/library" className="home-discovery__more">Library</Link>
           </div>
           {keepGroups.length === 0 ? (
@@ -537,7 +537,7 @@ export function HomeDiscovery({
         </section>
       ) : (
         <section className="home-discovery__section home-discovery__library-empty" aria-label="Library">
-          <h2 className="home-discovery__heading">Library</h2>
+          <h2 className="lore-heading lore-heading--section home-discovery__heading">Library</h2>
           <p className="home-discovery__empty">Nothing kept yet. Keep a radio catch and it will appear here.</p>
           <button
             type="button"

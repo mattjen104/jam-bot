@@ -25,7 +25,7 @@ export default function WeeklyRecap() {
             <Calendar className="h-4 w-4" />
             Weekly Recap
           </div>
-          <h1 className="max-w-[20ch] font-serif text-4xl font-normal leading-[1.05] text-foreground">
+          <h1 className="lore-heading lore-heading--page max-w-[20ch] text-foreground">
             A look back at your week in radio.
           </h1>
           <p className="mt-4 max-w-[52ch] text-lg text-muted-foreground">
@@ -53,7 +53,7 @@ export default function WeeklyRecap() {
         ) : (
           <div className="flex flex-col gap-12">
             <section>
-              <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
+              <h2 className="lore-heading lore-heading--section mb-4 text-muted-foreground">
                 Stations Attended
               </h2>
               <p className="mb-3 font-serif text-4xl text-foreground">{data.stationsAttended.count}</p>
@@ -77,7 +77,7 @@ export default function WeeklyRecap() {
             </section>
 
             <section>
-              <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
+              <h2 className="lore-heading lore-heading--section mb-4 text-muted-foreground">
                 First-Ever-Heards
               </h2>
               <p className="mb-3 font-serif text-4xl text-foreground">{data.firstEverHeards.count}</p>
@@ -111,7 +111,7 @@ export default function WeeklyRecap() {
 
             {/* Ripened Crossings */}
             <section>
-              <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
+              <h2 className="lore-heading lore-heading--section mb-4 text-muted-foreground">
                 Ripened Crossings
               </h2>
               <p className="mb-3 font-serif text-4xl text-foreground">{data.ripenedCrossings.count}</p>
@@ -146,7 +146,7 @@ export default function WeeklyRecap() {
             {/* Missed Ghost Replay */}
             {data.missedGhostReplay && (
               <section>
-                <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
+                <h2 className="lore-heading lore-heading--section mb-4 text-muted-foreground">
                   Missed Ghost Replay
                 </h2>
                 <div className="flex flex-col gap-1 rounded-xl border border-card-border bg-card p-4">

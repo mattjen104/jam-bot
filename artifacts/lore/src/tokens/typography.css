@@ -89,6 +89,7 @@
   --lore-weight-book:     400;
   --lore-weight-medium:   500;
   --lore-weight-semibold: 600;
+  --lore-heading-tracking: 0.12em;
 
   /* Terminal layer — JetBrains Mono, the modern code face used on the dial
      sentence rows; native monospace fallbacks while the file loads. */

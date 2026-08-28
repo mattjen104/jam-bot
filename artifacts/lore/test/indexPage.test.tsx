@@ -65,6 +65,14 @@ describe("Index page", () => {
     expect(screen.getByRole("heading", { name: "Artists" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Stations" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Selectors" })).toBeTruthy();
+    const pageHeading = screen.getByRole("heading", { name: "Index" });
+    expect(pageHeading.classList.contains("lore-heading")).toBe(true);
+    expect(pageHeading.classList.contains("lore-heading--page")).toBe(true);
+    for (const name of ["Releases", "Artists", "Stations", "Selectors"]) {
+      const sectionHeading = screen.getByRole("heading", { name });
+      expect(sectionHeading.classList.contains("lore-heading")).toBe(true);
+      expect(sectionHeading.classList.contains("lore-heading--section")).toBe(true);
+    }
     expect(screen.getByRole("link", { name: /A Release/ }).getAttribute("href")).toBe("/album/release-1");
     expect(screen.getByTestId("link-index-item-artist-1").getAttribute("href")).toBe("/artist/artist-1");
     expect(screen.getByText("Unknown Artist").closest("a")).toBeNull();

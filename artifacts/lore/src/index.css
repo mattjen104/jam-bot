@@ -12862,3 +12862,31 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .index-page__input-wrap:first-child { grid-column: auto; }
   .index-page__filters { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
+
+/* ── Listener-facing heading treatment ─────────────────────────────────────
+   Headings are compact signposts, not content titles: use the home heading
+   face, tracked all-caps, and no link decoration. Keep this class opt-in so
+   artist names, row identities, navigation, admin, and WebPlayer surfaces do
+   not inherit the treatment. */
+.lore-heading,
+.lore-heading.lore-heading--page,
+.lore-heading.lore-heading--section {
+  font-family: var(--lore-font-home-heading);
+  font-weight: var(--lore-weight-semibold);
+  letter-spacing: var(--lore-heading-tracking);
+  line-height: 1.12;
+  text-transform: uppercase;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.lore-heading.lore-heading--page {
+  font-size: clamp(var(--lore-size-interface), 3.2vw, var(--lore-size-signature));
+}
+.lore-heading.lore-heading--section {
+  font-size: var(--lore-size-small);
+  line-height: 1.3;
+}
+.lore-heading:is(:link, :visited, :hover, :active),
+.lore-heading a:is(:link, :visited, :hover, :active) {
+  text-decoration: none;
+}

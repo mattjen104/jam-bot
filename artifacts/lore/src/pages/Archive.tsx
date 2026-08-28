@@ -65,7 +65,7 @@ export default function Archive() {
             <Ghost className="h-4 w-4" />
             Ghost radio
           </div>
-          <h1 className="mt-3 max-w-[20ch] font-serif text-4xl font-normal leading-[1.05] text-foreground">
+          <h1 className="lore-heading lore-heading--page mt-3 max-w-[20ch] text-foreground">
             Replay a run as it aired.
           </h1>
           <p className="mt-4 max-w-[52ch] text-lg text-muted-foreground">
@@ -165,7 +165,7 @@ export default function Archive() {
             className="mb-10 rounded-xl border border-card-border bg-card p-4"
             data-testid="archive-coverage"
           >
-            <h2 className="mb-3 flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
+            <h2 className="lore-heading lore-heading--section mb-3 flex items-center gap-2 text-primary">
               <Gauge className="h-4 w-4" />
               How deep the vault goes
             </h2>
@@ -221,7 +221,7 @@ export default function Archive() {
         ) : null}
 
         <section className="mb-10">
-          <h2 className="mb-4 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
+          <h2 className="lore-heading lore-heading--section mb-4 flex items-center gap-2 text-foreground">
             <Ghost className="h-4 w-4 text-primary" />
             Recent runs
           </h2>
@@ -268,7 +268,7 @@ export default function Archive() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-4 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
+          <h2 className="lore-heading lore-heading--section mb-4 flex items-center gap-2 text-foreground">
             <Radio className="h-4 w-4 text-primary" />
             Station archives
           </h2>
@@ -300,7 +300,7 @@ export default function Archive() {
         </section>
 
         <section>
-          <h2 className="mb-4 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
+          <h2 className="lore-heading lore-heading--section mb-4 flex items-center gap-2 text-foreground">
             <Users className="h-4 w-4 text-primary" />
             Selector archives
           </h2>

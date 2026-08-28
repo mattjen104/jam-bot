@@ -213,7 +213,7 @@ export function HomePress() {
     label: string,
   ) => articles.length > 0 && (
     <section className="home-discovery__section" aria-label={label}>
-      <h2 className="home-discovery__heading">{label}</h2>
+      <h2 className="lore-heading lore-heading--section home-discovery__heading">{label}</h2>
       <div className="home-press__list">
         {articles.map((article) => (
           <PressArticleRow
@@ -317,7 +317,7 @@ export function HomePress() {
       )}
 
       <section className="home-discovery__section" aria-label="Saved links">
-          <h2 className="home-discovery__heading">Saved links</h2>
+          <h2 className="lore-heading lore-heading--section home-discovery__heading">Saved links</h2>
           {savedQuery.isLoading ? (
             <p className="home-discovery__empty">Loading saved links…</p>
           ) : savedQuery.isError ? (

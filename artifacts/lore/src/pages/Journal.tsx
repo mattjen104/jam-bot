@@ -45,7 +45,7 @@ export default function Journal() {
             <BookOpen className="h-4 w-4" />
             Your journal
           </div>
-          <h1 className="mt-3 max-w-[20ch] font-serif text-4xl font-normal leading-[1.05] text-foreground">
+          <h1 className="lore-heading lore-heading--page mt-3 max-w-[20ch] text-foreground">
             Everything you heard here.
           </h1>
           <p className="mt-4 max-w-[52ch] text-lg text-muted-foreground">
@@ -115,7 +115,7 @@ export default function Journal() {
           <div className="flex flex-col gap-8" data-testid="journal-days">
             {days.map(([day, dayEntries]) => (
               <section key={day}>
-                <h2 className="mb-3 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
+                <h2 className="lore-heading lore-heading--section mb-3 text-muted-foreground">
                   {day}
                 </h2>
                 <ul className="flex flex-col gap-2">

@@ -123,7 +123,9 @@ export default function Heard() {
       <main className="heard-page">
         <header className="heard-page__header">
           <div>
-            <h1>{isToday ? "Heard today" : `Heard ${heardDayLabel(activeDate)}`}</h1>
+            <h1 className="lore-heading lore-heading--page">
+              {isToday ? "Heard today" : `Heard ${heardDayLabel(activeDate)}`}
+            </h1>
             <p>Confirmed listening, in the order it happened.</p>
           </div>
           {data && <span className="heard-page__count">{data.items.length}{data.partial ? "+" : ""} spins</span>}

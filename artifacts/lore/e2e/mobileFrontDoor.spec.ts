@@ -309,6 +309,27 @@ test.describe("Mobile front door — five-row viewport guarantee", () => {
     expect(errors).toHaveLength(0);
   });
 
+  test("uses the shared all-caps treatment on public section headings", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installRoutes(page);
+    await loadFrontDoor(page);
+
+    const heading = page.getByRole("heading", { name: "Library" });
+    await expect(heading).toHaveClass(/lore-heading--section/);
+    await expect(heading).toHaveCSS("font-family", /Nebula Sans/);
+    await expect(heading).toHaveCSS("font-size", "12px");
+    await expect(heading).toHaveCSS("text-transform", "uppercase");
+    await expect(heading).toHaveCSS("text-decoration-line", "none");
+
+    const bodyWidth = await page.evaluate(() => ({
+      scroll: document.body.scrollWidth,
+      viewport: window.innerWidth,
+    }));
+    expect(bodyWidth.scroll).toBeLessThanOrEqual(bodyWidth.viewport + 1);
+  });
+
   test("uses the locked interface type scale on mobile", async ({
     page,
   }) => {

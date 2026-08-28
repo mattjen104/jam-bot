@@ -181,7 +181,10 @@ function IndexSectionCard({
       data-testid={`section-index-${section}`}
     >
       <div className="index-section__heading">
-        <h2 className="index-section__title" id={`index-section-title-${section}`}>
+        <h2
+          className="lore-heading lore-heading--section index-section__title"
+          id={`index-section-title-${section}`}
+        >
           <span className="index-section__mark" aria-hidden="true" />
           {SECTION_LABELS[section]}
         </h2>
@@ -349,7 +352,7 @@ export default function Index() {
         <header className="index-page__masthead">
           <div>
             <p className="index-page__eyebrow">Lore / public directory</p>
-            <h1 className="index-page__title">Index</h1>
+            <h1 className="lore-heading lore-heading--page index-page__title">Index</h1>
             <p className="index-page__dek">
               The canonical map of the records, artists, stations, and selectors
               gathered by the dial.
