@@ -74,3 +74,33 @@
   max-width: 900px;
   margin: 0 auto;
 }
+
+.motion-now-playing__actions {
+  display: contents;
+}
+
+@media (max-width: 560px) {
+  .lore-v2 {
+    padding: 16px 10px 44px;
+  }
+
+  .lore-v2 .wrap > div {
+    padding: 16px 10px !important;
+  }
+
+  .motion-now-playing {
+    gap: 10px !important;
+  }
+
+  .motion-now-playing__copy {
+    flex: 1 1 calc(100% - 58px) !important;
+  }
+
+  .motion-now-playing__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding-left: 54px;
+  }
+}
