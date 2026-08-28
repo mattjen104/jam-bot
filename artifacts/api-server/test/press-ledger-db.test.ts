@@ -5,7 +5,8 @@ import type { Server } from "node:http";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db, loreUsersTable, pickersTable, rssArticlesTable, rssArticleBookmarksTable,
-  tasteSeedsTable, picksTable, blogListCandidatesTable,
+  tasteSeedsTable, picksTable, blogListCandidatesTable, recordingsTable,
+  libraryItemsTable, spotifyLibraryItemsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
 import { ingestBlogFeed } from "../src/lore/blog.js";
@@ -14,8 +15,11 @@ import { applyRssArticlesMigration } from "../src/lore/rss-articles-migration.js
 const run = randomUUID().slice(0, 8);
 const sidA = `press-a-${run}`, sidB = `press-b-${run}`;
 let userA = 0, userB = 0, pressPicker = 0, emptyPicker = 0, ingestPicker = 0;
+let rankingPicker = 0;
 let server: Server, baseUrl = "", dbAvailable = false;
 const ids: number[] = [];
+const rankingIds: number[] = [];
+const rankingMbids: string[] = [];
 
 async function request(path: string, sid: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
@@ -34,15 +38,16 @@ beforeAll(async () => {
   const pickers = await db.insert(pickersTable).values([
     { pickerType: "blog", name: `Press ${run}`, handle: `press-${run}`, sourceRef: { feedUrl: `https://feed.example/${run}` } },
     { pickerType: "blog", name: `Empty ${run}`, handle: `empty-${run}`, sourceRef: { feedUrl: `https://empty.example/${run}` } },
+    { pickerType: "blog", name: `Ranking ${run}`, handle: `ranking-${run}`, sourceRef: { feedUrl: `https://ranking.example/${run}` } },
   ]).returning({ id: pickersTable.id });
-  pressPicker = pickers[0]!.id; emptyPicker = pickers[1]!.id;
+  pressPicker = pickers[0]!.id; emptyPicker = pickers[1]!.id; rankingPicker = pickers[2]!.id;
 
   // Future fixture dates keep this test's pagination deterministic even on a
   // shared development database.  Two crossings must precede every unmatched
   // article; each partition still sorts newest first.
   const articles = Array.from({ length: 33 }, (_, i) => ({
     pickerId: pressPicker, guid: `g-${run}-${i}`, url: `https://press.example/${run}/${i}`,
-    title: `Article ${i} ${run}`, tags: ["test"],
+    title: `Music article ${i} ${run}`, tags: ["music"],
     publishedAt: i === 32 ? null : new Date(Date.UTC(2099, 0, 31 - i)),
     matchedArtist: i < 2 ? `Matched Artist ${run}` : null,
     matchedWork: i < 2 ? `Work ${i}` : null,
@@ -52,6 +57,73 @@ beforeAll(async () => {
   }));
   const inserted = await db.insert(rssArticlesTable).values(articles).returning({ id: rssArticlesTable.id });
   ids.push(...inserted.map((r) => r.id));
+
+  const directMbid = `press-direct-${run}`;
+  const removedMbid = `press-removed-${run}`;
+  rankingMbids.push(directMbid, removedMbid);
+  await db.insert(recordingsTable).values([
+    { mbid: directMbid, title: "Older story", artist: `Direct Library Artist ${run}` },
+    { mbid: removedMbid, title: "Removed story", artist: `Removed Library Artist ${run}` },
+  ]);
+  await db.insert(libraryItemsTable).values([
+    { userId: userA, mbid: directMbid, provenance: { kind: "keep" } },
+    {
+      userId: userA,
+      mbid: removedMbid,
+      provenance: { kind: "keep" },
+      removedAt: new Date(),
+    },
+  ]);
+  await db.insert(spotifyLibraryItemsTable).values({
+    userId: userA,
+    spotifyId: `press-spotify-${run}`,
+    title: "Imported story",
+    artist: `Imported Library Artist ${run}`,
+  });
+  const rankingArticles = await db.insert(rssArticlesTable).values([
+    {
+      pickerId: rankingPicker, guid: `ranking-direct-${run}`,
+      url: `https://press.example/${run}/ranking-direct`,
+      title: "An older story", tags: ["news"],
+      publishedAt: new Date(Date.UTC(2090, 0, 1)),
+      matchedArtist: `Direct Library Artist ${run}`, matchedWork: "Older story",
+    },
+    {
+      pickerId: rankingPicker, guid: `ranking-import-${run}`,
+      url: `https://press.example/${run}/ranking-import`,
+      title: "An imported story", tags: ["news"],
+      publishedAt: new Date(Date.UTC(2091, 0, 1)),
+      matchedArtist: `Imported Library Artist ${run}`, matchedWork: "Imported story",
+    },
+    {
+      pickerId: rankingPicker, guid: `ranking-generic-${run}`,
+      url: `https://press.example/${run}/ranking-generic`,
+      title: "New music news", tags: ["music"],
+      publishedAt: new Date(Date.UTC(2099, 0, 1)),
+    },
+    {
+      pickerId: rankingPicker, guid: `ranking-removed-${run}`,
+      url: `https://press.example/${run}/ranking-removed`,
+      title: "A removed-library story", tags: ["news"],
+      publishedAt: new Date(Date.UTC(2089, 0, 1)),
+      matchedArtist: `Removed Library Artist ${run}`, matchedWork: "Removed story",
+    },
+    {
+      pickerId: rankingPicker, guid: `ranking-game-${run}`,
+      url: `https://press.example/${run}/ranking-gaming`,
+      title: "Nintendo – The next console reviewed", tags: ["gaming"],
+      publishedAt: new Date(Date.UTC(2100, 0, 1)),
+      matchedArtist: "Nintendo", matchedWork: "The next console",
+    },
+    {
+      pickerId: rankingPicker, guid: `ranking-city-${run}`,
+      url: `https://press.example/${run}/ranking-generic-news`,
+      title: "City council approves a new transit plan", tags: ["news"],
+      publishedAt: new Date(Date.UTC(2101, 0, 1)),
+    },
+  ]).returning({ id: rssArticlesTable.id });
+  rankingIds.push(...rankingArticles.map((r) => r.id));
+
   server = app.listen(0);
   const address = server.address();
   baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -62,7 +134,7 @@ afterAll(async () => {
   server?.close();
   await db.delete(rssArticleBookmarksTable).where(inArray(rssArticleBookmarksTable.articleId, ids));
   await db.delete(rssArticlesTable).where(inArray(rssArticlesTable.id, ids));
-  for (const id of [pressPicker, emptyPicker, ingestPicker]) if (id) {
+  for (const id of [pressPicker, emptyPicker, rankingPicker, ingestPicker]) if (id) {
     // Article rows reference the publication; remove their bookmarks first.
     const articleRows = await db.select({ id: rssArticlesTable.id }).from(rssArticlesTable).where(eq(rssArticlesTable.pickerId, id));
     if (articleRows.length) {
@@ -73,6 +145,9 @@ afterAll(async () => {
     await db.delete(picksTable).where(eq(picksTable.pickerId, id));
     await db.delete(pickersTable).where(eq(pickersTable.id, id));
   }
+  await db.delete(libraryItemsTable).where(inArray(libraryItemsTable.mbid, rankingMbids));
+  await db.delete(spotifyLibraryItemsTable).where(eq(spotifyLibraryItemsTable.userId, userA));
+  await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, rankingMbids));
   await db.delete(tasteSeedsTable).where(inArray(tasteSeedsTable.userId, [userA, userB]));
   await db.delete(loreUsersTable).where(inArray(loreUsersTable.id, [userA, userB]));
 }, 120_000);
@@ -164,6 +239,33 @@ describe("ledger-backed Press reads", () => {
     expect(seen.size).toBe(33);
     const cold = await request("/api/me/press", sidB);
     expect(cold.body.items.some((a: any) => a.pickerId === pressPicker && !a.overlap)).toBe(true);
+  });
+
+  it("ranks active library artists ahead of newer music coverage and ignores removed keeps", async () => {
+    if (!dbAvailable) return;
+    const allItems: any[] = [];
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const response = await request(`/api/me/press?offset=${offset}`, sidA);
+      expect(response.status).toBe(200);
+      allItems.push(...response.body.items);
+      offset = response.body.nextOffset;
+    }
+    const rankingItems = allItems.filter((a: any) => a.pickerId === rankingPicker);
+    expect(rankingItems.map((a: any) => a.id)).toEqual([
+      rankingIds[1],
+      rankingIds[0],
+      rankingIds[2],
+      rankingIds[3],
+    ]);
+    expect(rankingItems[0].overlap).toBe(true);
+    expect(rankingItems[1].overlap).toBe(true);
+    expect(rankingItems[2].overlap).toBe(false);
+    expect(rankingItems[3].overlap).toBe(false);
+
+    const archive = await request(`/api/me/press/publications/ranking-${run}`, sidA);
+    expect(archive.body.total).toBe(6);
+    expect(archive.body.items.some((a: any) => a.title.includes("Nintendo"))).toBe(true);
   });
 
   it("keeps bookmarks per listener and orders saved newest first", async () => {

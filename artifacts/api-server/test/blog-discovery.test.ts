@@ -5,6 +5,7 @@ import {
   discoverFeedUrl,
   extractFeedLinksFromHtml,
   extractChannelTags,
+  classifyPressDiscoveryArticle,
 } from "../src/lore/blog.js";
 
 import {
@@ -380,6 +381,56 @@ describe("extractChannelTags", () => {
     const cats = Array.from({ length: 40 }, (_, i) => `<category>tag-${i}</category>`).join("");
     const xml = `<rss><channel>${cats}</channel></rss>`;
     expect(extractChannelTags(xml).length).toBeLessThanOrEqual(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyPressDiscoveryArticle — source-respecting discovery gate
+// ---------------------------------------------------------------------------
+
+describe("classifyPressDiscoveryArticle", () => {
+  it("accepts a confident extraction even when the headline has no music keyword", () => {
+    expect(classifyPressDiscoveryArticle({
+      title: "The Long Way Home",
+      matchedArtist: "Library Artist",
+      matchedWork: "The Long Way Home",
+    })).toEqual({ eligible: true, reason: "artist-or-work-extraction" });
+  });
+
+  it("accepts unmatched stories with explicit music evidence in retained metadata", () => {
+    expect(classifyPressDiscoveryArticle({
+      title: "A new album arrives this Friday",
+      tags: ["Reviews"],
+      excerpt: "The songwriter discusses the recording.",
+    })).toEqual({ eligible: true, reason: "music-signal" });
+  });
+
+  it("accepts an explicit genre tag without trusting an ambiguous prose word", () => {
+    expect(classifyPressDiscoveryArticle({
+      title: "Staff picks from this month",
+      tags: ["Jazz"],
+    })).toEqual({ eligible: true, reason: "music-signal" });
+    expect(classifyPressDiscoveryArticle({
+      title: "A rock formation draws visitors",
+      tags: ["News"],
+    })).toEqual({ eligible: false, reason: "no-music-signal" });
+  });
+
+  it("rejects generic news even when it comes from a music publication", () => {
+    expect(classifyPressDiscoveryArticle({
+      title: "City council approves a new transit plan",
+      tags: ["News"],
+      excerpt: "Officials announced the change Tuesday.",
+    })).toEqual({ eligible: false, reason: "no-music-signal" });
+  });
+
+  it("rejects gaming coverage before an incidental extraction can qualify it", () => {
+    expect(classifyPressDiscoveryArticle({
+      title: "Nintendo – The next console reviewed",
+      matchedArtist: "Nintendo",
+      matchedWork: "The next console",
+      tags: ["Gaming"],
+    })).toEqual({ eligible: false, reason: "clearly-off-topic" });
   });
 });
 

@@ -13,17 +13,31 @@ import {
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
-import { isSafeArticleUrl } from "../../lore/blog.js";
+import {
+  classifyPressDiscoveryArticle,
+  isSafeArticleUrl,
+} from "../../lore/blog.js";
 
 const router: IRouter = Router();
-const norm = (value: string | null) => (value ?? "").toLowerCase()
-  .replace(/^the\s+/, "").replace(/[\s\p{P}]+/gu, "");
+const norm = (value: string | null) => (value ?? "")
+  .normalize("NFKD")
+  .replace(/\p{Diacritic}/gu, "")
+  .toLowerCase()
+  .replace(/^the\s+/, "")
+  .replace(/[\s\p{P}]+/gu, "");
 const page = (value: unknown, fallback: number) => {
   const n = typeof value === "string" || typeof value === "number" ? Number(value) : fallback;
   return Number.isInteger(n) && n >= 0 ? n : fallback;
 };
 
-async function taste(userId: number): Promise<Set<string>> {
+interface PressTaste {
+  /** Active Lore keeps and active Spotify imports are direct library taste. */
+  direct: Set<string>;
+  /** Seeds are useful taste overlap, but are not library keeps. */
+  seeded: Set<string>;
+}
+
+async function taste(userId: number): Promise<PressTaste> {
   const [seeds, soft, library] = await Promise.all([
     db.select({ artist: tasteSeedsTable.artistName }).from(tasteSeedsTable).where(eq(tasteSeedsTable.userId, userId)),
     db.select({ artist: spotifyLibraryItemsTable.artist }).from(spotifyLibraryItemsTable)
@@ -32,7 +46,10 @@ async function taste(userId: number): Promise<Set<string>> {
       .innerJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
       .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt))),
   ]);
-  return new Set([...seeds, ...soft, ...library].map((r) => norm(r.artist)).filter(Boolean));
+  return {
+    direct: new Set([...soft, ...library].map((r) => norm(r.artist)).filter(Boolean)),
+    seeded: new Set(seeds.map((r) => norm(r.artist)).filter(Boolean)),
+  };
 }
 
 async function rowsFor(userId: number, pickerId?: number) {
@@ -55,9 +72,40 @@ async function rowsFor(userId: number, pickerId?: number) {
   return articles.filter((a) => isSafeArticleUrl(a.url)).map((a) => ({
     ...a, publishedAt: a.publishedAt?.toISOString() ?? null,
     imageUrl: a.imageUrl && isSafeArticleUrl(a.imageUrl) ? a.imageUrl : null,
-    overlap: Boolean(a.matchedArtist && artists.has(norm(a.matchedArtist))),
+    overlap: Boolean(
+      a.matchedArtist &&
+      (artists.direct.has(norm(a.matchedArtist)) || artists.seeded.has(norm(a.matchedArtist))),
+    ),
     saved: savedById.has(a.id), savedAt: savedById.get(a.id)?.toISOString() ?? null,
   }));
+}
+
+type PressRow = Awaited<ReturnType<typeof rowsFor>>[number];
+
+function compareNewestFirst(a: PressRow, b: PressRow): number {
+  const dateA = a.publishedAt ?? "";
+  const dateB = b.publishedAt ?? "";
+  return dateB.localeCompare(dateA) || b.id - a.id;
+}
+
+/**
+ * Apply the complete discovery policy before offset pagination. This keeps an
+ * older direct-library story ahead of newer weakly related coverage and avoids
+ * page boundaries splitting the relevance bands.
+ */
+async function discoveryRowsFor(userId: number): Promise<PressRow[]> {
+  const [rows, artists] = await Promise.all([rowsFor(userId), taste(userId)]);
+  return rows
+    .filter((row) => classifyPressDiscoveryArticle(row).eligible)
+    .sort((a, b) => {
+      const aKey =
+        a.matchedArtist && artists.direct.has(norm(a.matchedArtist)) ? 0 :
+        a.matchedArtist && artists.seeded.has(norm(a.matchedArtist)) ? 1 : 2;
+      const bKey =
+        b.matchedArtist && artists.direct.has(norm(b.matchedArtist)) ? 0 :
+        b.matchedArtist && artists.seeded.has(norm(b.matchedArtist)) ? 1 : 2;
+      return aKey - bKey || compareNewestFirst(a, b);
+    });
 }
 
 function pagination(items: Awaited<ReturnType<typeof rowsFor>>, req: Parameters<typeof page>[0]) {
@@ -70,9 +118,7 @@ function pagination(items: Awaited<ReturnType<typeof rowsFor>>, req: Parameters<
 router.get("/me/press", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const query = GetMyPressQueryParams.parse(req.query);
-  const items = await rowsFor(user.id);
-  const ordered = [...items.filter((a) => a.overlap), ...items.filter((a) => !a.overlap)];
-  res.json(GetMyPressResponse.parse(pagination(ordered, query.offset)));
+  res.json(GetMyPressResponse.parse(pagination(await discoveryRowsFor(user.id), query.offset)));
 }));
 
 router.get("/me/press/saved", h(async (req, res) => {
