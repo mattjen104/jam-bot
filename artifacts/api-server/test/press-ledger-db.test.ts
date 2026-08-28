@@ -13,7 +13,7 @@ import { applyRssArticlesMigration } from "../src/lore/rss-articles-migration.js
 
 const run = randomUUID().slice(0, 8);
 const sidA = `press-a-${run}`, sidB = `press-b-${run}`;
-let userA = 0, userB = 0, pressPicker = 0, emptyPicker = 0, duplicatePicker = 0, ingestPicker = 0;
+let userA = 0, userB = 0, pressPicker = 0, emptyPicker = 0, ingestPicker = 0;
 let server: Server, baseUrl = "", dbAvailable = false;
 const ids: number[] = [];
 
@@ -34,9 +34,8 @@ beforeAll(async () => {
   const pickers = await db.insert(pickersTable).values([
     { pickerType: "blog", name: `Press ${run}`, handle: `press-${run}`, sourceRef: { feedUrl: `https://feed.example/${run}` } },
     { pickerType: "blog", name: `Empty ${run}`, handle: `empty-${run}`, sourceRef: { feedUrl: `https://empty.example/${run}` } },
-    { pickerType: "blog", name: `Press section ${run}`, handle: `press-section-${run}`, sourceRef: { feedUrl: `https://section.example/${run}` } },
   ]).returning({ id: pickersTable.id });
-  pressPicker = pickers[0]!.id; emptyPicker = pickers[1]!.id; duplicatePicker = pickers[2]!.id;
+  pressPicker = pickers[0]!.id; emptyPicker = pickers[1]!.id;
 
   // Future fixture dates keep this test's pagination deterministic even on a
   // shared development database.  Two crossings must precede every unmatched
@@ -50,16 +49,6 @@ beforeAll(async () => {
   }));
   const inserted = await db.insert(rssArticlesTable).values(articles).returning({ id: rssArticlesTable.id });
   ids.push(...inserted.map((r) => r.id));
-  const [duplicate] = await db.insert(rssArticlesTable).values({
-    pickerId: duplicatePicker,
-    guid: `g-${run}-0`,
-    url: `https://press.example/${run}/0/`,
-    title: `Article 0 ${run}`,
-    publishedAt: new Date(Date.UTC(2098, 0, 31)),
-    matchedArtist: `Matched Artist ${run}`,
-    matchedWork: "Work 0",
-  }).returning({ id: rssArticlesTable.id });
-  ids.push(duplicate!.id);
   server = app.listen(0);
   const address = server.address();
   baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -70,7 +59,7 @@ afterAll(async () => {
   server?.close();
   await db.delete(rssArticleBookmarksTable).where(inArray(rssArticleBookmarksTable.articleId, ids));
   await db.delete(rssArticlesTable).where(inArray(rssArticlesTable.id, ids));
-  for (const id of [pressPicker, emptyPicker, duplicatePicker, ingestPicker]) if (id) {
+  for (const id of [pressPicker, emptyPicker, ingestPicker]) if (id) {
     // Article rows reference the publication; remove their bookmarks first.
     const articleRows = await db.select({ id: rssArticlesTable.id }).from(rssArticlesTable).where(eq(rssArticlesTable.pickerId, id));
     if (articleRows.length) {
@@ -133,16 +122,6 @@ describe("RSS article ledger ingestion", () => {
 });
 
 describe("ledger-backed Press reads", () => {
-  it("deduplicates the same article across feeds in combined views", async () => {
-    if (!dbAvailable) return;
-    const combined = await request("/api/me/press", sidA);
-    const duplicateUrl = `https://press.example/${run}/0`;
-    expect(combined.body.items.filter((a: any) => a.url.replace(/\/+$/, "") === duplicateUrl)).toHaveLength(1);
-
-    const publication = await request(`/api/me/press/publications/press-section-${run}`, sidA);
-    expect(publication.body.items).toHaveLength(1);
-  });
-
   it("partitions crossings, retains cold-listener unmatched items, and pages without duplicates", async () => {
     if (!dbAvailable) return;
     const first = await request("/api/me/press", sidA);

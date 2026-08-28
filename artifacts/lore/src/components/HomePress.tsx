@@ -9,6 +9,31 @@ import {
 } from "../lib/meHooks";
 import type { PressArticle } from "@workspace/api-client-react";
 
+function normalizePressText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Matched artist/work is useful when the headline does not identify the
+ * listener's match. RSS headlines often do, though, so don't print the same
+ * artist and work immediately above the title a second time.
+ */
+export function shouldShowPressMatch(article: Pick<PressArticle, "title" | "matchedArtist" | "matchedWork">): boolean {
+  if (!article.matchedArtist) return false;
+
+  const title = normalizePressText(article.title);
+  const artist = normalizePressText(article.matchedArtist);
+  if (!artist || !title.includes(artist)) return true;
+
+  if (!article.matchedWork) return false;
+  const work = normalizePressText(article.matchedWork);
+  return !work || !title.includes(work);
+}
+
 export function PressArticleRow({
   article,
   onBookmark,
@@ -44,7 +69,7 @@ export function PressArticleRow({
   return (
     <div className="home-press__row" data-testid={`press-row-${article.id}`}>
       <div className="home-press__content">
-        {article.matchedArtist && (
+        {shouldShowPressMatch(article) && article.matchedArtist && (
           <span className="home-press__matched-artist">
             {article.matchedArtist} {article.matchedWork ? `· ${article.matchedWork}` : ""}
           </span>

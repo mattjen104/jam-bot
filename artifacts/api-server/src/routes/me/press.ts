@@ -57,26 +57,6 @@ async function rowsFor(userId: number, pickerId?: number) {
   }));
 }
 
-type PressRow = Awaited<ReturnType<typeof rowsFor>>[number];
-
-/**
- * A publisher's general and section-specific feeds can contain the same
- * article. Keep one representative in combined views, but leave publication
- * archives untouched. Prefer a saved copy so an existing bookmark remains
- * visible and actionable.
- */
-function dedupeCombinedRows(items: PressRow[]): PressRow[] {
-  const byUrl = new Map<string, PressRow>();
-  for (const item of items) {
-    const key = item.url.trim().replace(/\/+$/, "");
-    const existing = byUrl.get(key);
-    if (!existing || (!existing.saved && item.saved)) {
-      byUrl.set(key, item);
-    }
-  }
-  return [...byUrl.values()];
-}
-
 function pagination(items: Awaited<ReturnType<typeof rowsFor>>, req: Parameters<typeof page>[0]) {
   const offset = page(req, 0);
   return { items: items.slice(offset, offset + 30), offset, limit: 30, total: items.length,
@@ -87,7 +67,7 @@ function pagination(items: Awaited<ReturnType<typeof rowsFor>>, req: Parameters<
 router.get("/me/press", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const query = GetMyPressQueryParams.parse(req.query);
-  const items = dedupeCombinedRows(await rowsFor(user.id));
+  const items = await rowsFor(user.id);
   const ordered = [...items.filter((a) => a.overlap), ...items.filter((a) => !a.overlap)];
   res.json(GetMyPressResponse.parse(pagination(ordered, query.offset)));
 }));
@@ -95,7 +75,7 @@ router.get("/me/press", h(async (req, res) => {
 router.get("/me/press/saved", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const query = GetMySavedPressQueryParams.parse(req.query);
-  const items = dedupeCombinedRows((await rowsFor(user.id)).filter((a) => a.saved))
+  const items = (await rowsFor(user.id)).filter((a) => a.saved)
     .sort((a, b) => (b.savedAt ?? "").localeCompare(a.savedAt ?? ""));
   res.json(GetMySavedPressResponse.parse(pagination(items, query.offset)));
 }));
