@@ -11882,7 +11882,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   max-width: 100%;
   margin: 0 auto;
-  padding: 34px 24px 96px;
+  padding: 22px 24px 96px;
 }
 .split-home__lens-toggle {
   display: inline-flex;
@@ -12141,6 +12141,39 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
+}
+.home-discovery__lens-links {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+  font-size: var(--lore-size-small);
+  white-space: nowrap;
+}
+.home-discovery__lens-link,
+.home-discovery__lens-back {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.home-discovery__lens-link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home-discovery__lens-link:hover,
+.home-discovery__lens-back:hover {
+  color: hsl(var(--foreground));
+}
+.home-discovery__lens-link--active {
+  color: hsl(var(--foreground));
+}
+.home-discovery__lens-back {
+  color: inherit;
+  text-align: left;
 }
 .home-discovery__heading {
   margin: 0 0 10px;

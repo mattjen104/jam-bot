@@ -86,36 +86,6 @@ export default function SplitHome() {
   return (
     <main className="split-home split-home--discovery">
       <div className="split-home__discovery-shell">
-        <header className="split-home__discovery-intro">
-          <div className="split-home__lens-toggle" role="group" aria-label="Lens selection">
-            <button
-              type="button"
-              className={`split-home__lens-btn${lens === "radio" ? " split-home__lens-btn--active" : ""}`}
-              aria-pressed={lens === "radio"}
-              onClick={() => handleSetLens("radio")}
-            >
-              Lore radio
-            </button>
-            <span className="split-home__lens-sep" aria-hidden="true">|</span>
-            <button
-              type="button"
-              className={`split-home__lens-btn${lens === "firstPlays" ? " split-home__lens-btn--active" : ""}`}
-              aria-pressed={lens === "firstPlays"}
-              onClick={() => handleSetLens("firstPlays")}
-            >
-              First plays
-            </button>
-            <span className="split-home__lens-sep" aria-hidden="true">|</span>
-            <button
-              type="button"
-              className={`split-home__lens-btn${lens === "press" ? " split-home__lens-btn--active" : ""}`}
-              aria-pressed={lens === "press"}
-              onClick={() => handleSetLens("press")}
-            >
-              Press
-            </button>
-          </div>
-        </header>
         {lens === "radio" ? (
           <HomeDiscovery
             rows={rows}
@@ -125,11 +95,49 @@ export default function SplitHome() {
             libraryItems={libraryItems}
             crossingScope={crossingScope}
             onCycleCrossingScope={onCycleCrossingScope}
+            onFirstPlays={() => handleSetLens("firstPlays")}
+            onPress={() => handleSetLens("press")}
           />
         ) : lens === "firstPlays" ? (
-          <FirstPlayFeed />
+          <>
+            <div className="home-discovery__heading-row home-discovery__lens-row">
+              <h2 className="home-discovery__heading">
+                <button type="button" className="home-discovery__lens-back" onClick={() => handleSetLens("radio")}>
+                  On the air
+                </button>
+              </h2>
+              <nav className="home-discovery__lens-links" aria-label="Home sections">
+                <button type="button" className="home-discovery__lens-link home-discovery__lens-link--active" aria-pressed="true">
+                  First plays
+                </button>
+                <span aria-hidden="true">|</span>
+                <button type="button" className="home-discovery__lens-link" onClick={() => handleSetLens("press")}>
+                  Press
+                </button>
+              </nav>
+            </div>
+            <FirstPlayFeed />
+          </>
         ) : (
-          <HomePress />
+          <>
+            <div className="home-discovery__heading-row home-discovery__lens-row">
+              <h2 className="home-discovery__heading">
+                <button type="button" className="home-discovery__lens-back" onClick={() => handleSetLens("radio")}>
+                  On the air
+                </button>
+              </h2>
+              <nav className="home-discovery__lens-links" aria-label="Home sections">
+                <button type="button" className="home-discovery__lens-link" onClick={() => handleSetLens("firstPlays")}>
+                  First plays
+                </button>
+                <span aria-hidden="true">|</span>
+                <button type="button" className="home-discovery__lens-link home-discovery__lens-link--active" aria-pressed="true">
+                  Press
+                </button>
+              </nav>
+            </div>
+            <HomePress />
+          </>
         )}
       </div>
     </main>

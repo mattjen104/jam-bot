@@ -376,6 +376,8 @@ export function HomeDiscovery({
   libraryItems,
   crossingScope,
   onCycleCrossingScope,
+  onFirstPlays,
+  onPress,
 }: {
   rows: DialLaneRow[];
   activeSlug: string | null;
@@ -384,6 +386,8 @@ export function HomeDiscovery({
   libraryItems: LibraryItem[];
   crossingScope: CrossingScope;
   onCycleCrossingScope: () => void;
+  onFirstPlays: () => void;
+  onPress: () => void;
 }) {
   const stableDisplayRef = useRef<StableDiscoveryState>({
     cards: new Map(),
@@ -464,6 +468,15 @@ export function HomeDiscovery({
       <section className="home-discovery__section" aria-label="On the air">
         <div className="home-discovery__heading-row">
           <h2 className="home-discovery__heading">On the air</h2>
+          <nav className="home-discovery__lens-links" aria-label="Home sections">
+            <button type="button" className="home-discovery__lens-link" onClick={onFirstPlays}>
+              First plays
+            </button>
+            <span aria-hidden="true">|</span>
+            <button type="button" className="home-discovery__lens-link" onClick={onPress}>
+              Press
+            </button>
+          </nav>
           <CrossingScopePill
             scope={crossingScope}
             enabled
