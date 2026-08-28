@@ -123,7 +123,7 @@ export function LoreOnAirRecordPiles() {
         <header className="air-header">
           <div>
             <div className="air-kicker">Lore / on air</div>
-            <h1>Radio in motion.</h1>
+            <h1>Your records are on the radio right now.</h1>
             <p className="air-deck">Add artists to see which stations are playing your music.</p>
             <section className="air-command" aria-label="Add artists">
               <form className="air-artist-cli" onSubmit={submitArtistCommand}>
