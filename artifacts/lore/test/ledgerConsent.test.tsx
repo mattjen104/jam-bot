@@ -169,93 +169,26 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Ledger consent prompt visibility", () => {
-  it("shows the consent prompt when ledgerEnabled=false and localStorage is clear", async () => {
+  it("does not place the consent prompt above the release crate", async () => {
     await renderLibrary();
-    expect(screen.getByTestId("ledger-consent-prompt")).toBeTruthy();
+    expect(screen.queryByTestId("ledger-consent-prompt")).toBeNull();
+    expect(screen.queryByTestId("ledger-enable-button")).toBeNull();
+    expect(screen.queryByTestId("ledger-dismiss-button")).toBeNull();
   });
 
-  it("does NOT show the consent prompt when ledgerEnabled=true", async () => {
+  it("remains absent when ledger recording is already enabled", async () => {
     mockUseMyPreferences.mockImplementation(() => ({ data: { ledgerEnabled: true } }));
 
     await renderLibrary();
     expect(screen.queryByTestId("ledger-consent-prompt")).toBeNull();
   });
 
-  it("does NOT show the consent prompt when the dismiss TTL has not expired", async () => {
-    // Simulate a recent dismissal (30 days TTL, still active).
+  it("remains absent regardless of the old dismissal TTL", async () => {
     localStorage.setItem(
       LEDGER_DISMISSED_KEY,
       String(Date.now() + 30 * 24 * 60 * 60 * 1000),
     );
 
-    await renderLibrary();
-    expect(screen.queryByTestId("ledger-consent-prompt")).toBeNull();
-  });
-
-  it("shows the consent prompt again after the dismiss TTL has expired", async () => {
-    // Simulate an expired dismissal (set well in the past).
-    localStorage.setItem(LEDGER_DISMISSED_KEY, String(Date.now() - 60_000));
-
-    await renderLibrary();
-    expect(screen.getByTestId("ledger-consent-prompt")).toBeTruthy();
-  });
-});
-
-describe("'Start recording' button", () => {
-  it("calls patchPreferences({ ledgerEnabled: true })", async () => {
-    await renderLibrary();
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("ledger-enable-button"));
-    });
-
-    expect(mockPatchPreferences).toHaveBeenCalledTimes(1);
-    expect(mockPatchPreferences).toHaveBeenCalledWith({ ledgerEnabled: true });
-  });
-
-  it("hides the prompt after successfully enabling the ledger", async () => {
-    await renderLibrary();
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("ledger-enable-button"));
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("ledger-consent-prompt")).toBeNull();
-    });
-  });
-});
-
-describe("'Not now' dismissal", () => {
-  it("hides the prompt immediately without calling patchPreferences", async () => {
-    await renderLibrary();
-
-    expect(screen.getByTestId("ledger-consent-prompt")).toBeTruthy();
-
-    fireEvent.click(screen.getByTestId("ledger-dismiss-button"));
-
-    expect(screen.queryByTestId("ledger-consent-prompt")).toBeNull();
-    expect(mockPatchPreferences).not.toHaveBeenCalled();
-  });
-
-  it("stores a future TTL in localStorage after 'Not now'", async () => {
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("ledger-dismiss-button"));
-
-    const stored = Number(localStorage.getItem(LEDGER_DISMISSED_KEY) ?? 0);
-    // Should be roughly now + 30 days.
-    expect(stored).toBeGreaterThan(Date.now());
-    expect(stored).toBeLessThanOrEqual(
-      Date.now() + 31 * 24 * 60 * 60 * 1000,
-    );
-  });
-
-  it("does not show the prompt on next render after 'Not now' dismissal", async () => {
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("ledger-dismiss-button"));
-    cleanup();
-
-    // Re-render simulates a page revisit within the TTL window.
     await renderLibrary();
     expect(screen.queryByTestId("ledger-consent-prompt")).toBeNull();
   });

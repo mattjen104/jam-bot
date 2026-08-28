@@ -105,8 +105,8 @@ afterEach(() => {
 // Stat section — retry pass resolves more tracks
 // ---------------------------------------------------------------------------
 
-describe("Library hero — matched-count stat after retry pass", () => {
-  it("displays the live library resolved count, not the frozen job resolved count", async () => {
+describe("Library crate — matched-count chrome", () => {
+  it("does not render the old matched-count statistic above the crate", async () => {
     const { useLatestImportJob, useMyImportStats } = await import("../src/lib/meHooks");
 
     // The import job finished with 150 resolved (frozen at import time).
@@ -132,16 +132,10 @@ describe("Library hero — matched-count stat after retry pass", () => {
 
     renderLibraryPage();
 
-    // The stat should read "190 of 200 from Spotify matched" — live count.
-    const stat = screen.getByText(/of 200 from spotify matched/i);
-    expect(stat).toBeTruthy();
-
-    // The live resolved count (190) must appear, not the frozen job value (150).
-    expect(stat.textContent).toContain("190");
-    expect(stat.textContent).not.toContain("150");
+    expect(screen.queryByText(/from spotify matched/i)).toBeNull();
   });
 
-  it("displays the correct count when the retry pass resolved all remaining tracks", async () => {
+  it("keeps the statistic absent when every imported track is matched", async () => {
     const { useLatestImportJob, useMyImportStats } = await import("../src/lib/meHooks");
 
     vi.mocked(useLatestImportJob).mockReturnValue({
@@ -166,10 +160,7 @@ describe("Library hero — matched-count stat after retry pass", () => {
 
     renderLibraryPage();
 
-    const stat = screen.getByText(/of 100 from spotify matched/i);
-    expect(stat).toBeTruthy();
-    expect(stat.textContent).toContain("100");
-    expect(stat.textContent).not.toContain("80");
+    expect(screen.queryByText(/from spotify matched/i)).toBeNull();
   });
 });
 

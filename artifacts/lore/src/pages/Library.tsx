@@ -1463,6 +1463,7 @@ export default function Library() {
   // modal, but only when they have no library, no seeds, and haven't already
   // chosen an avatar.  Fires once per browser session via sessionStorage.
   useEffect(() => {
+    if (isStackView) return;
     // Wait for library + avatar data to resolve before deciding
     if (keptData === undefined || albumAvatar === undefined) return;
     // User already has music or seeds — returning user, skip auto-open
@@ -1495,7 +1496,7 @@ export default function Library() {
 
   return (
     <div className="dial-root">
-      {searchOpen && (
+      {!isStackView && searchOpen && (
         <SearchOverlay
           dialStations={[]}
           libraryItems={keptItems}
@@ -1512,38 +1513,27 @@ export default function Library() {
       <div className="dial-topbar">
         <span className="dial-topbar__wordmark">Lore</span>
         <span className="dial-topbar__title dial-topbar__title--active">Stack</span>
-        {isStackView ? (
-          /* Stack view: compact import button replaces the track-count chip */
-          <button
-            type="button"
-            onClick={openImportModal}
-            className="dial-topbar__sort-chip"
-            style={{ cursor: "pointer", border: "none", background: "none" }}
-            aria-label="Add music"
-            data-testid="library-import-open"
-          >
-            <Music2 style={{ display: "inline", width: 10, height: 10, marginRight: 3, verticalAlign: "middle" }} />
-            Add music
-          </button>
-        ) : (libraryTotal ?? keptItems.length) > 0 ? (
+        {!isStackView && (libraryTotal ?? keptItems.length) > 0 ? (
           <span className="dial-topbar__sort-chip">
             {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
             {(libraryTotal ?? keptItems.length).toLocaleString()}
           </span>
         ) : null}
-        <button
-          type="button"
-          className="dial-topbar__search"
-          onClick={() => setSearchOpen(true)}
-          aria-label="Search"
-        >
-          <Search size={14} />
-        </button>
+        {!isStackView && (
+          <button
+            type="button"
+            className="dial-topbar__search"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search"
+          >
+            <Search size={14} />
+          </button>
+        )}
       </div>
       {!isStackView && <AlbumAvatarPicker showCurrent />}
 
       {/* Import banner — shown while import is running and for 60s after done */}
-      {showImportBanner && jobData && (
+      {!isStackView && showImportBanner && jobData && (
         <LibraryImportBanner
           job={jobData}
           onDismiss={() => setBannerDismissed(true)}
@@ -1551,7 +1541,7 @@ export default function Library() {
       )}
 
       {/* Unresolved review section — shown after import when some tracks couldn't be matched */}
-      {showReviewSection && jobData && (
+      {!isStackView && showReviewSection && jobData && (
         <div
           style={{
             borderBottom: "1px solid hsl(var(--border))",
@@ -1774,7 +1764,7 @@ export default function Library() {
         )}
 
         {/* ── Reconnect prompt (has library, lost Spotify) ── */}
-        {showReconnectPrompt && (
+        {!isStackView && showReconnectPrompt && (
           <div
             style={{ padding: "14px 15px", borderBottom: "1px solid hsl(var(--border))" }}
             data-testid="library-reconnect-prompt"
@@ -1803,7 +1793,7 @@ export default function Library() {
         )}
 
         {/* ── Ledger consent ── (transient consent prompt; kept in Stack too) */}
-        {ledgerPromptVisible && !ledgerEnabled && (
+        {!isStackView && ledgerPromptVisible && !ledgerEnabled && (
           <div
             style={{ borderBottom: "1px solid hsl(var(--border))", padding: "12px 15px", background: "hsl(var(--card))" }}
             data-testid="ledger-consent-prompt"
@@ -1856,7 +1846,7 @@ export default function Library() {
         )}
 
         {/* ── Lens controls remain available above the crate on deep links. ── */}
-        {lens !== "" && (
+        {!isStackView && lens !== "" && (
           <>
             <div
               style={{
@@ -2095,7 +2085,7 @@ export default function Library() {
           </>
         )}
 
-        {isAuthenticated && hasSpotify && (
+        {!isStackView && isAuthenticated && hasSpotify && (
           <div data-testid="library-sync-stack">
             <SyncBar
               syncJobData={syncJobData}
@@ -2112,7 +2102,8 @@ export default function Library() {
           </div>
         )}
 
-        {jobData?.status === "done" &&
+        {!isStackView &&
+          jobData?.status === "done" &&
           sourceFilter !== "keep" &&
           importStats != null &&
           importStats.total > 0 && (
@@ -2144,8 +2135,6 @@ export default function Library() {
             items={keptItems}
             seedArtists={visibleSeeds}
             sort={sortFilter}
-            unopenedOnly={new URLSearchParams(search).get("unopened") === "1"}
-            activeLens={lens !== ""}
             onImport={openImportModal}
           />
         ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (

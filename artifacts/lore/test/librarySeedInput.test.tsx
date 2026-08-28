@@ -130,12 +130,10 @@ describe("Library top add-artist banner", () => {
     ).toBeNull();
   });
 
-  it("still renders the Add music entry point so users can reach the import flow", () => {
+  it("keeps Add music inside the empty crate instead of above it", () => {
     renderLibrary();
 
-    // The hero-area "Add music" button must remain as the surviving entry point.
-    expect(
-      screen.getByTestId("library-import-open"),
-    ).toBeTruthy();
+    expect(screen.queryByTestId("library-import-open")).toBeNull();
+    expect(screen.getByTestId("library-import-cta")).toBeTruthy();
   });
 });

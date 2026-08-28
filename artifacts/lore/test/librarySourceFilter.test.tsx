@@ -211,75 +211,71 @@ describe("Lens tabs are only rendered in non-default views", () => {
     expect(screen.queryByTestId("library-grouped-partial-notice")).toBeNull();
   });
 
-  it("keeps essential operational entry points in the default Stack view", async () => {
+  it("removes the top-bar controls from the default Stack view", async () => {
     mockUseSearch.mockReturnValue("");
     await renderLibrary();
-    // Import (Add music) access must survive the chrome removal.
-    expect(screen.getByTestId("library-import-open")).toBeTruthy();
+    expect(screen.queryByTestId("library-import-open")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    // Empty libraries retain one contextual way to add music inside the crate.
+    expect(screen.getByTestId("library-import-cta")).toBeTruthy();
   });
 
-  it("renders all lens pills when a non-default lens is active (e.g. lens=recent)", async () => {
+  it("shows every saved song with its album name and its own cover", async () => {
+    const makeItem = (mbid: string, title: string, artworkUrl: string) => ({
+      mbid,
+      spotifyId: null,
+      addedAt: `2026-08-${mbid === "track-1" ? "27" : "26"}T00:00:00.000Z`,
+      removed: false,
+      fuzzyMatch: false,
+      provenance: {
+        kind: "keep",
+        stationName: "WFMU",
+        sourceKeepDate: true,
+      },
+      recording: {
+        title,
+        artist: "The Artist",
+        artistMbid: null,
+        artworkUrl,
+        albumTitle: "Shared Album",
+        releaseGroupMbid: "release-group-1",
+        releaseYear: 2026,
+        spotifyUrl: null,
+      },
+    });
+    mockUseMyLibraryInfinite.mockReturnValue({
+      data: {
+        pages: [{
+          items: [
+            makeItem("track-1", "First song", "https://images.example/first.jpg"),
+            makeItem("track-2", "Second song", "https://images.example/second.jpg"),
+          ],
+          total: 2,
+        }],
+      },
+      isLoading: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+    });
+
+    const { container } = await renderLibrary();
+    expect(screen.getAllByTestId("library-crate-track")).toHaveLength(2);
+    expect(screen.getByText("First song")).toBeTruthy();
+    expect(screen.getByText("Second song")).toBeTruthy();
+    expect(screen.getAllByText("Shared Album")).toHaveLength(2);
+    expect(container.querySelectorAll(".library-crate__track-swatch img")).toHaveLength(2);
+  });
+
+  it("does not revive lens controls from a legacy deep link", async () => {
     mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
-    // When not in the default Stack, all lens options are shown.
-    expect(screen.getByTestId("library-lens-timeline")).toBeTruthy();
-    expect(screen.getByTestId("library-lens-recent")).toBeTruthy();
-    expect(screen.getByTestId("library-lens-artists")).toBeTruthy();
-    expect(screen.getByTestId("library-lens-lore")).toBeTruthy();
-    expect(screen.getByTestId("library-lens-matching")).toBeTruthy();
-    // "Albums" is no longer a named lens pill — the Stack default IS albums.
+    expect(screen.queryByTestId("library-lens-timeline")).toBeNull();
+    expect(screen.queryByTestId("library-lens-recent")).toBeNull();
+    expect(screen.queryByTestId("library-lens-artists")).toBeNull();
+    expect(screen.queryByTestId("library-lens-lore")).toBeNull();
+    expect(screen.queryByTestId("library-lens-matching")).toBeNull();
     expect(screen.queryByTestId("library-lens-albums")).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// URL writes — selecting a lens updates the URL
-// ---------------------------------------------------------------------------
-
-describe("Selecting a lens updates the URL", () => {
-  // Lens pills are only rendered when a non-default (non-Stack) lens is active.
-  // Start from lens=artists (a non-track-list lens that always renders all pills).
-  it("clicking 'Recent keeps' calls setLocation with ?lens=recent", async () => {
-    mockUseSearch.mockReturnValue("lens=artists");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-lens-recent"));
-    expect(mockSetLocation).toHaveBeenCalledTimes(1);
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("lens=recent");
-  });
-
-  it("clicking 'Needs matching' calls setLocation with ?lens=matching", async () => {
-    mockUseSearch.mockReturnValue("lens=artists");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-lens-matching"));
-    expect(mockSetLocation).toHaveBeenCalledTimes(1);
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("lens=matching");
-  });
-
-  it("clicking 'From Lore' calls setLocation with ?lens=lore", async () => {
-    mockUseSearch.mockReturnValue("lens=artists");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-lens-lore"));
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("lens=lore");
-  });
-
-  it("clicking 'Timeline' calls setLocation WITHOUT a lens param", async () => {
-    mockUseSearch.mockReturnValue("lens=recent");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-lens-timeline"));
-    expect(mockSetLocation).toHaveBeenCalledTimes(1);
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).not.toContain("lens=");
-  });
-
-  it("'Timeline' navigates to the bare path when the only param was lens", async () => {
-    mockUseSearch.mockReturnValue("lens=artists");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-lens-timeline"));
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toBe("/library");
   });
 });
 
@@ -338,54 +334,16 @@ describe("Pre-selecting lens from URL on load", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Empty state CTA — "Show all" vs "Open the dial"
-// ---------------------------------------------------------------------------
-
-describe("Empty state CTA with and without active lens", () => {
-  it("shows 'Open the dial' when library is empty and no lens is active", async () => {
-    mockUseSearch.mockReturnValue("");
-    await renderLibrary();
-    expect(screen.getByText(/open the dial/i)).toBeTruthy();
-    expect(screen.queryByText(/show all/i)).toBeNull();
-  });
-
-  it("shows 'Show all' instead of 'Open the dial' when lens=recent and library is empty", async () => {
-    mockUseSearch.mockReturnValue("lens=recent");
-    await renderLibrary();
-    expect(screen.getByText(/show all/i)).toBeTruthy();
-    expect(screen.queryByText(/open the dial/i)).toBeNull();
-  });
-
-  it("shows 'Show all' instead of 'Open the dial' when lens=matching and library is empty", async () => {
-    mockUseSearch.mockReturnValue("lens=matching");
-    await renderLibrary();
-    expect(screen.getByText(/show all/i)).toBeTruthy();
-    expect(screen.queryByText(/open the dial/i)).toBeNull();
-  });
-
-  it("'Show all' button clears the lens from the URL", async () => {
-    mockUseSearch.mockReturnValue("lens=recent");
-    await renderLibrary();
-    fireEvent.click(screen.getByText(/show all/i));
-    expect(mockSetLocation).toHaveBeenCalledTimes(1);
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).not.toContain("lens=");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Sort controls — rendering
 // ---------------------------------------------------------------------------
 
 describe("Sort controls rendering", () => {
-  it("renders Added, Artist, and Title sort buttons in a track-view lens (e.g. recent)", async () => {
-    // Sort controls only appear when a track-list lens is active.
-    // The default Stack view is album-first and has no sort controls.
+  it("does not render sort buttons from a legacy track-view lens", async () => {
     mockUseSearch.mockReturnValue("lens=recent");
     await renderLibrary();
-    expect(screen.getByTestId("library-sort-added")).toBeTruthy();
-    expect(screen.getByTestId("library-sort-artist")).toBeTruthy();
-    expect(screen.getByTestId("library-sort-title")).toBeTruthy();
+    expect(screen.queryByTestId("library-sort-added")).toBeNull();
+    expect(screen.queryByTestId("library-sort-artist")).toBeNull();
+    expect(screen.queryByTestId("library-sort-title")).toBeNull();
   });
 
   it("hides sort buttons in the default Stack (album-first) view", async () => {
@@ -398,60 +356,6 @@ describe("Sort controls rendering", () => {
     mockUseSearch.mockReturnValue("lens=albums");
     await renderLibrary();
     expect(screen.queryByTestId("library-sort-added")).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Sort controls — URL writes
-// ---------------------------------------------------------------------------
-
-// Sort controls are only shown in track-view lenses (recent, lore, matching, critic).
-// All URL-write tests therefore activate lens=recent first so the sort bar renders.
-describe("Selecting a sort button updates the URL", () => {
-  it("clicking 'Artist' calls setLocation with ?sort=artist", async () => {
-    mockUseSearch.mockReturnValue("lens=recent");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-sort-artist"));
-    expect(mockSetLocation).toHaveBeenCalledTimes(1);
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("sort=artist");
-  });
-
-  it("clicking 'Title' calls setLocation with ?sort=title", async () => {
-    mockUseSearch.mockReturnValue("lens=recent");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-sort-title"));
-    expect(mockSetLocation).toHaveBeenCalledTimes(1);
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("sort=title");
-  });
-
-  it("clicking 'Added' (default) calls setLocation WITHOUT a sort param", async () => {
-    mockUseSearch.mockReturnValue("lens=recent&sort=artist");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-sort-added"));
-    expect(mockSetLocation).toHaveBeenCalledTimes(1);
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).not.toContain("sort=");
-  });
-
-  it("'Added' drops only the sort param when lens is still active", async () => {
-    mockUseSearch.mockReturnValue("lens=recent&sort=title");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-sort-added"));
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    // lens stays; sort is dropped
-    expect(url).toContain("lens=recent");
-    expect(url).not.toContain("sort=");
-  });
-
-  it("preserves existing lens param when changing sort", async () => {
-    mockUseSearch.mockReturnValue("lens=recent");
-    await renderLibrary();
-    fireEvent.click(screen.getByTestId("library-sort-artist"));
-    const [url] = mockSetLocation.mock.calls[0] as [string];
-    expect(url).toContain("lens=recent");
-    expect(url).toContain("sort=artist");
   });
 });
 
