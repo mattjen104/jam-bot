@@ -4,6 +4,7 @@ import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin, DialStation } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
 import { CrossingScopePill } from "./dial/CrossingScopePill";
+import { HomeLensNav } from "./HomeLensNav";
 import {
   crossingCountForScope,
   crossingScopeLabel,
@@ -376,8 +377,7 @@ export function HomeDiscovery({
   libraryItems,
   crossingScope,
   onCycleCrossingScope,
-  onFirstPlays,
-  onPress,
+  onSelectLens,
 }: {
   rows: DialLaneRow[];
   activeSlug: string | null;
@@ -386,8 +386,7 @@ export function HomeDiscovery({
   libraryItems: LibraryItem[];
   crossingScope: CrossingScope;
   onCycleCrossingScope: () => void;
-  onFirstPlays: () => void;
-  onPress: () => void;
+  onSelectLens: (lens: "radio" | "firstPlays" | "press") => void;
 }) {
   const stableDisplayRef = useRef<StableDiscoveryState>({
     cards: new Map(),
@@ -467,16 +466,7 @@ export function HomeDiscovery({
     <div className="home-discovery">
       <section className="home-discovery__section" aria-label="On the air">
         <div className="home-discovery__heading-row">
-          <h2 className="home-discovery__heading">On the air</h2>
-          <nav className="home-discovery__lens-links" aria-label="Home sections">
-            <button type="button" className="home-discovery__lens-link" onClick={onFirstPlays}>
-              First plays
-            </button>
-            <span aria-hidden="true">|</span>
-            <button type="button" className="home-discovery__lens-link" onClick={onPress}>
-              Press
-            </button>
-          </nav>
+          <HomeLensNav activeLens="radio" onSelect={onSelectLens} />
           <CrossingScopePill
             scope={crossingScope}
             enabled

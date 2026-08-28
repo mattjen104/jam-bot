@@ -12095,7 +12095,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--muted-foreground));
 }
 
-.split-home__discovery-intro { margin: 0 0 34px; }
 .split-home__eyebrow,
 .home-discovery__heading,
 .home-discovery__more,
@@ -12117,19 +12116,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--muted-foreground));
   font-weight: var(--lore-weight-medium);
 }
-.split-home__discovery-intro h1 {
-  margin: 0;
-  color: hsl(var(--foreground));
-  font-family: var(--lore-font-display);
-  font-size: var(--lore-size-signature);
-  font-weight: var(--lore-weight-semibold);
-  line-height: 1.12;
-}
-.split-home__discovery-intro > p:last-child {
-  margin: 8px 0 0;
-  color: hsl(var(--muted-foreground));
-  font-size: var(--lore-size-interface);
-}
 .home-discovery {
   display: flex;
   flex-direction: column;
@@ -12142,7 +12128,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   justify-content: space-between;
   gap: 16px;
 }
-.home-discovery__lens-links {
+.home-discovery__lens-nav {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
@@ -12151,8 +12137,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-size: var(--lore-size-small);
   white-space: nowrap;
 }
-.home-discovery__lens-link,
-.home-discovery__lens-back {
+.home-discovery__lens-link {
   padding: 0;
   border: 0;
   background: transparent;
@@ -12164,16 +12149,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.home-discovery__lens-link:hover,
-.home-discovery__lens-back:hover {
+.home-discovery__lens-link:hover {
   color: hsl(var(--foreground));
 }
 .home-discovery__lens-link--active {
   color: hsl(var(--foreground));
-}
-.home-discovery__lens-back {
-  color: inherit;
-  text-align: left;
 }
 .home-discovery__heading {
   margin: 0 0 10px;
@@ -12470,7 +12450,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 
 @media (max-width: 680px) {
   .split-home__discovery-shell { padding: 22px 14px 104px; }
-  .split-home__discovery-intro { margin-bottom: 22px; }
   .home-discovery { gap: 24px; }
   .split-home--discovery .home-discovery__row {
     grid-template-columns: 1fr;

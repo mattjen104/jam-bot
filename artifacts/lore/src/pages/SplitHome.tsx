@@ -17,6 +17,7 @@ import {
   writeCrossingScope,
 } from "../lib/crossingScope";
 import { HomePress } from "../components/HomePress";
+import { HomeLensNav } from "../components/HomeLensNav";
 import { readHomeLens, writeHomeLens, type HomeLens } from "../lib/homeLensState";
 
 export default function SplitHome() {
@@ -95,47 +96,16 @@ export default function SplitHome() {
             libraryItems={libraryItems}
             crossingScope={crossingScope}
             onCycleCrossingScope={onCycleCrossingScope}
-            onFirstPlays={() => handleSetLens("firstPlays")}
-            onPress={() => handleSetLens("press")}
+            onSelectLens={handleSetLens}
           />
         ) : lens === "firstPlays" ? (
           <>
-            <div className="home-discovery__heading-row home-discovery__lens-row">
-              <h2 className="home-discovery__heading">
-                <button type="button" className="home-discovery__lens-back" onClick={() => handleSetLens("radio")}>
-                  On the air
-                </button>
-              </h2>
-              <nav className="home-discovery__lens-links" aria-label="Home sections">
-                <button type="button" className="home-discovery__lens-link home-discovery__lens-link--active" aria-pressed="true">
-                  First plays
-                </button>
-                <span aria-hidden="true">|</span>
-                <button type="button" className="home-discovery__lens-link" onClick={() => handleSetLens("press")}>
-                  Press
-                </button>
-              </nav>
-            </div>
+            <HomeLensNav activeLens={lens} onSelect={handleSetLens} />
             <FirstPlayFeed />
           </>
         ) : (
           <>
-            <div className="home-discovery__heading-row home-discovery__lens-row">
-              <h2 className="home-discovery__heading">
-                <button type="button" className="home-discovery__lens-back" onClick={() => handleSetLens("radio")}>
-                  On the air
-                </button>
-              </h2>
-              <nav className="home-discovery__lens-links" aria-label="Home sections">
-                <button type="button" className="home-discovery__lens-link" onClick={() => handleSetLens("firstPlays")}>
-                  First plays
-                </button>
-                <span aria-hidden="true">|</span>
-                <button type="button" className="home-discovery__lens-link home-discovery__lens-link--active" aria-pressed="true">
-                  Press
-                </button>
-              </nav>
-            </div>
+            <HomeLensNav activeLens={lens} onSelect={handleSetLens} />
             <HomePress />
           </>
         )}

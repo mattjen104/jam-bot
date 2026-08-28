@@ -258,7 +258,6 @@ export function HomePress() {
     <div className="home-press">
       {overlapArticles.length > 0 && (
         <section className="home-discovery__section" aria-label="In your library">
-          <h2 className="home-discovery__heading">In your library</h2>
           <div className="home-press__list">
             {overlapArticles.map((article) => (
               <PressArticleRow 
