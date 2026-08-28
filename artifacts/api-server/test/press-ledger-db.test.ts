@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db, loreUsersTable, pickersTable, rssArticlesTable, rssArticleBookmarksTable,
   tasteSeedsTable, picksTable, blogListCandidatesTable,
@@ -46,6 +46,9 @@ beforeAll(async () => {
     publishedAt: i === 32 ? null : new Date(Date.UTC(2099, 0, 31 - i)),
     matchedArtist: i < 2 ? `Matched Artist ${run}` : null,
     matchedWork: i < 2 ? `Work ${i}` : null,
+    author: i === 0 ? `Writer ${run}` : null,
+    imageUrl: i === 0 ? `https://press.example/${run}/cover.jpg` : null,
+    excerpt: i === 0 ? `Excerpt ${run}` : null,
   }));
   const inserted = await db.insert(rssArticlesTable).values(articles).returning({ id: rssArticlesTable.id });
   ids.push(...inserted.map((r) => r.id));
@@ -91,6 +94,19 @@ describe("RSS article ledger ingestion", () => {
       const rows = await db.select().from(rssArticlesTable).where(eq(rssArticlesTable.pickerId, ingestPicker));
       expect(rows).toHaveLength(2);
       expect(rows.some((r) => r.matchedArtist == null)).toBe(true);
+      const enrichedXml = xml.replace(
+        "<guid>one</guid>",
+        `<guid>one</guid><dc:creator>Feed Writer ${run}</dc:creator><media:thumbnail url="https://article.example/${run}/cover.jpg"/><description><![CDATA[<p>Feed excerpt ${run}</p>]]></description>`,
+      );
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(enrichedXml, { status: 200 })));
+      expect((await ingestBlogFeed({ feedUrl, name: `Ingest ${run}` })).inserted).toBe(0);
+      const [enriched] = await db.select().from(rssArticlesTable)
+        .where(and(eq(rssArticlesTable.pickerId, ingestPicker), eq(rssArticlesTable.guid, "one")));
+      expect(enriched).toMatchObject({
+        author: `Feed Writer ${run}`,
+        imageUrl: `https://article.example/${run}/cover.jpg`,
+        excerpt: `Feed excerpt ${run}`,
+      });
       // Same URL with a changed GUID is also idempotent per publication.
       const dupUrl = xml.replace("<guid>two</guid>", "<guid>different-guid</guid>");
       vi.stubGlobal("fetch", vi.fn(async () => new Response(dupUrl, { status: 200 })));
@@ -130,6 +146,12 @@ describe("ledger-backed Press reads", () => {
     expect(firstNonOverlap).toBeGreaterThan(0);
     expect(first.body.items.slice(0, firstNonOverlap).every((a: any) => a.overlap)).toBe(true);
     expect(first.body.items.slice(firstNonOverlap).every((a: any) => !a.overlap)).toBe(true);
+    const enriched = first.body.items.find((a: any) => a.id === ids[0]);
+    expect(enriched).toMatchObject({
+      author: `Writer ${run}`,
+      imageUrl: `https://press.example/${run}/cover.jpg`,
+      excerpt: `Excerpt ${run}`,
+    });
     const seen = new Set<number>();
     let offset: number | null = 0;
     for (let pageNumber = 0; offset !== null && pageNumber < 100; pageNumber++) {

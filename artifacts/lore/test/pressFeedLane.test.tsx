@@ -4,7 +4,7 @@
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PressFeedLane } from "../src/components/dial/PressFeedLane";
 import type { PressArticle } from "@workspace/api-client-react";
@@ -19,6 +19,9 @@ const ARTICLE: PressArticle = {
   title: "A great review",
   url: "https://example.com/review",
   guid: "test-guid",
+  author: "Test Author",
+  imageUrl: "https://example.com/review.jpg",
+  excerpt: "A short feed-provided excerpt.",
   publishedAt: "2023-01-01T00:00:00.000Z",
   tags: ["Review"],
   matchedArtist: "Fleetwood Mac",
@@ -60,6 +63,17 @@ describe("PressFeedLane rows", () => {
     expect(link.getAttribute("href")).toBe("https://example.com/review");
     expect(link.textContent).toContain("A great review");
     expect(container.textContent).toContain("Fleetwood Mac");
+    expect(container.textContent).toContain("By Test Author");
+    expect(container.textContent).toContain("A short feed-provided excerpt.");
+    expect(screen.getByTestId("press-image-1").getAttribute("src")).toBe(
+      "https://example.com/review.jpg",
+    );
+  });
+
+  it("falls back safely when an article image fails", () => {
+    renderLane();
+    fireEvent.error(screen.getByTestId("press-image-1"));
+    expect(screen.getByTestId("press-image-fallback-1").textContent).toBe("P");
   });
 
   it("handles empty states correctly", () => {

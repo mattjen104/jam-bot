@@ -39,6 +39,8 @@ async function rowsFor(userId: number, pickerId?: number) {
   const articles = await db.select({
     id: rssArticlesTable.id, title: rssArticlesTable.title, url: rssArticlesTable.url,
     guid: rssArticlesTable.guid, publishedAt: rssArticlesTable.publishedAt,
+    author: rssArticlesTable.author, imageUrl: rssArticlesTable.imageUrl,
+    excerpt: rssArticlesTable.excerpt,
     tags: rssArticlesTable.tags, matchedArtist: rssArticlesTable.matchedArtist,
     matchedWork: rssArticlesTable.matchedWork, pickerId: pickersTable.id,
     publication: pickersTable.name, handle: pickersTable.handle,
@@ -52,6 +54,7 @@ async function rowsFor(userId: number, pickerId?: number) {
   const artists = await taste(userId);
   return articles.filter((a) => isSafeArticleUrl(a.url)).map((a) => ({
     ...a, publishedAt: a.publishedAt?.toISOString() ?? null,
+    imageUrl: a.imageUrl && isSafeArticleUrl(a.imageUrl) ? a.imageUrl : null,
     overlap: Boolean(a.matchedArtist && artists.has(norm(a.matchedArtist))),
     saved: savedById.has(a.id), savedAt: savedById.get(a.id)?.toISOString() ?? null,
   }));

@@ -8150,6 +8150,12 @@ components:
         title: { type: string }
         url: { type: string }
         guid: { type: string }
+        author:
+          type: [string, "null"]
+        imageUrl:
+          type: [string, "null"]
+        excerpt:
+          type: [string, "null"]
         publishedAt: { type: string, nullable: true }
         tags: { type: array, items: { type: string }, nullable: true }
         matchedArtist: { type: string, nullable: true }
@@ -8160,7 +8166,7 @@ components:
         overlap: { type: boolean }
         saved: { type: boolean }
         savedAt: { type: string, nullable: true }
-      required: [id, title, url, guid, publishedAt, tags, matchedArtist, matchedWork, pickerId, publication, handle, overlap, saved, savedAt]
+      required: [id, title, url, guid, author, imageUrl, excerpt, publishedAt, tags, matchedArtist, matchedWork, pickerId, publication, handle, overlap, saved, savedAt]
     PressPage:
       type: object
       properties:

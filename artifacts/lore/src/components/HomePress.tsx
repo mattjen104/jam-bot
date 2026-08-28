@@ -17,6 +17,16 @@ function normalizePressText(value: string): string {
     .replace(/[^a-z0-9]+/g, "");
 }
 
+function safePressImageUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Matched artist/work is useful when the headline does not identify the
  * listener's match. RSS headlines often do, though, so don't print the same
@@ -44,7 +54,11 @@ export function PressArticleRow({
   onUnbookmark: (id: number) => Promise<unknown>;
 }) {
   const [optimisticSaved, setOptimisticSaved] = useState<boolean | null>(null);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const isSaved = optimisticSaved ?? article.saved;
+  const imageUrl = safePressImageUrl(article.imageUrl);
+  const showImage = imageUrl != null && imageUrl !== failedImageUrl;
+  const publicationInitial = article.publication.trim().charAt(0).toUpperCase() || "L";
 
   const handleBookmark = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -68,6 +82,27 @@ export function PressArticleRow({
 
   return (
     <div className="home-press__row" data-testid={`press-row-${article.id}`}>
+      <div className="home-press__media" aria-hidden="true">
+        {showImage ? (
+          <img
+            src={imageUrl}
+            alt=""
+            className="home-press__image"
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => setFailedImageUrl(imageUrl)}
+            data-testid={`press-image-${article.id}`}
+          />
+        ) : (
+          <span
+            className="home-press__image-fallback"
+            data-testid={`press-image-fallback-${article.id}`}
+          >
+            {publicationInitial}
+          </span>
+        )}
+      </div>
       <div className="home-press__content">
         {shouldShowPressMatch(article) && article.matchedArtist && (
           <span className="home-press__matched-artist">
@@ -84,20 +119,31 @@ export function PressArticleRow({
           <span className="home-press__title">{article.title}</span>
         </a>
         <div className="home-press__meta">
+          {article.author && (
+            <>
+              <span className="home-press__author">By {article.author}</span>
+              <span aria-hidden="true">·</span>
+            </>
+          )}
           <Link href={`/archive/selectors/${article.handle}`} className="home-press__pub-link">
             {article.publication}
           </Link>
           {article.publishedAt && (
-            <span className="home-press__date">
-              {" · "}
-              {new Date(article.publishedAt).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric"
-              })}
-            </span>
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="home-press__date">
+                {new Date(article.publishedAt).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric"
+                })}
+              </span>
+            </>
           )}
         </div>
+        {article.excerpt && (
+          <p className="home-press__excerpt">{article.excerpt}</p>
+        )}
       </div>
       <button
         type="button"

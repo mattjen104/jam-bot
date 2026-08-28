@@ -1,5 +1,5 @@
 import { db, pickersTable, rssArticlesTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { upsertPicker } from "./picks.js";
 
 /**
@@ -616,7 +616,28 @@ export async function ingestBlogFeed(args: {
       matchedArtist: guess?.artist ?? null, matchedWork: guess?.title ?? null,
       author: item.author ?? null, imageUrl: item.imageUrl ?? null, excerpt: item.excerpt ?? null,
     }).onConflictDoNothing().returning({ id: rssArticlesTable.id });
-    if (wrote.length) inserted++;
+    if (wrote.length) {
+      inserted++;
+    } else {
+      // Existing ledger rows predate these optional fields. Enrich them on the
+      // next feed delivery without rewriting GUID/URL identity.
+      await db.update(rssArticlesTable).set({
+        title: item.title,
+        tags: item.tags,
+        matchedArtist: guess?.artist ?? null,
+        matchedWork: guess?.title ?? null,
+        ...(item.publishedAt ? { publishedAt: item.publishedAt } : {}),
+        ...(item.author ? { author: item.author } : {}),
+        ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+        ...(item.excerpt ? { excerpt: item.excerpt } : {}),
+      }).where(and(
+        eq(rssArticlesTable.pickerId, picker.id),
+        or(
+          eq(rssArticlesTable.guid, item.guid),
+          eq(rssArticlesTable.url, item.link),
+        ),
+      ));
+    }
   }
 
   if (inserted > 0) {

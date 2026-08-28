@@ -11,6 +11,12 @@ export interface PressArticle {
   title: string;
   url: string;
   guid: string;
+  /** @nullable */
+  author: string | null;
+  /** @nullable */
+  imageUrl: string | null;
+  /** @nullable */
+  excerpt: string | null;
   publishedAt: string | null;
   tags: string[] | null;
   matchedArtist: string | null;

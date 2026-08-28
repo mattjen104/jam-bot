@@ -151,13 +151,16 @@ describe("parseDiscogsList", () => {
 });
 
 describe("parseFeedItems", () => {
-  it("parses RSS items (title, link, guid, pubDate, categories)", () => {
+  it("parses RSS items with lightweight article metadata", () => {
     const xml = `<?xml version="1.0"?><rss><channel>
       <item>
         <title>Big Blog Premiere</title>
         <link>https://blog.example/post-1</link>
         <guid>guid-1</guid>
         <pubDate>Wed, 01 Jan 2020 00:00:00 GMT</pubDate>
+        <dc:creator><![CDATA[Jane Critic]]></dc:creator>
+        <media:content url="https://cdn.example/post-1.jpg" medium="image"/>
+        <description><![CDATA[<p>A concise <strong>feed summary</strong> of the article.</p>]]></description>
         <category>Post-Punk</category>
         <category>New Music</category>
       </item>
@@ -169,15 +172,21 @@ describe("parseFeedItems", () => {
     expect(items[0]!.guid).toBe("guid-1");
     expect(items[0]!.tags).toContain("Post-Punk");
     expect(items[0]!.publishedAt?.getUTCFullYear()).toBe(2020);
+    expect(items[0]!.author).toBe("Jane Critic");
+    expect(items[0]!.imageUrl).toBe("https://cdn.example/post-1.jpg");
+    expect(items[0]!.excerpt).toBe("A concise feed summary of the article.");
   });
 
-  it("parses Atom entries (href link, id, CDATA title)", () => {
+  it("parses Atom author, thumbnail, and summary metadata", () => {
     const xml = `<feed>
       <entry>
         <title><![CDATA[Cool Track]]></title>
         <link href="https://blog.example/atom-1" rel="alternate"/>
         <id>atom-id-1</id>
         <updated>2021-06-15T00:00:00Z</updated>
+        <author><name>Atom Writer</name></author>
+        <media:thumbnail url="https://cdn.example/atom-1.webp"/>
+        <summary>Short Atom summary.</summary>
       </entry>
     </feed>`;
     const items = parseFeedItems(xml);
@@ -185,6 +194,32 @@ describe("parseFeedItems", () => {
     expect(items[0]!.title).toBe("Cool Track");
     expect(items[0]!.link).toBe("https://blog.example/atom-1");
     expect(items[0]!.guid).toBe("atom-id-1");
+    expect(items[0]!.author).toBe("Atom Writer");
+    expect(items[0]!.imageUrl).toBe("https://cdn.example/atom-1.webp");
+    expect(items[0]!.excerpt).toBe("Short Atom summary.");
+  });
+
+  it("accepts image enclosures, rejects unsafe images, and bounds excerpts", () => {
+    const longSummary = "word ".repeat(100);
+    const xml = `<rss><channel>
+      <item>
+        <title>Image enclosure</title>
+        <link>https://blog.example/image</link>
+        <enclosure url="https://cdn.example/cover.png" type="image/png"/>
+        <description>${longSummary}</description>
+      </item>
+      <item>
+        <title>Unsafe image</title>
+        <link>https://blog.example/unsafe</link>
+        <media:thumbnail url="javascript:alert(1)"/>
+      </item>
+    </channel></rss>`;
+    const items = parseFeedItems(xml);
+    expect(items[0]!.imageUrl).toBe("https://cdn.example/cover.png");
+    expect(items[0]!.excerpt).toHaveLength(280);
+    expect(items[0]!.excerpt?.endsWith("…")).toBe(true);
+    expect(items[1]!.imageUrl).toBeUndefined();
+    expect(items[1]!.excerpt).toBeUndefined();
   });
 
   it("falls back to link as guid and skips items missing title/link", () => {

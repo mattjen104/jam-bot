@@ -10,8 +10,9 @@ import { ingestBlogFeed } from "./blog.js";
  * thing that works: staggered per feed on boot, every tick wrapped so one dead
  * feed never throws, never blocks requests, and never kills the loop. Ingest is
  * idempotent (picks dedup by (pickerId, externalId) on the post's guid) and
- * conservative (only confidently-parsed posts become picks; feed body text is
- * never stored), so re-polling only ever fills gaps.
+ * conservative (only confidently-parsed posts become picks; only a bounded
+ * plain-text feed summary is retained, never article-page content), so
+ * re-polling only ever fills gaps.
  *
  * Health tracking:
  *   - `ingestBlogFeed` returns `success: false` when the feed fetch/HTTP fails
