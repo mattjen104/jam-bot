@@ -115,20 +115,6 @@ export default function SplitHome() {
               Press
             </button>
           </div>
-          <h1>
-            {lens === "press"
-              ? "Source and respect"
-              : lens === "firstPlays"
-                ? "First plays"
-                : "Hear what’s moving"}
-          </h1>
-          <p>
-            {lens === "press"
-              ? "Music publications and the records you caught."
-              : lens === "firstPlays"
-                ? "Recent first appearances from the radio."
-                : "Live music, human choices, and the records you caught."}
-          </p>
         </header>
         {lens === "radio" ? (
           <HomeDiscovery
