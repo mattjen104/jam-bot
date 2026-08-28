@@ -306,7 +306,7 @@ function byline(provenance: DiscoveryProvenance) {
   if (provenance.kind === "claim") {
     return <><span>Station claim</span><span> · </span>{station}</>;
   }
-  return <><span>Unknown · no claim</span><span> · </span>{station}</>;
+  return station;
 }
 
 function DiscoveryRow({
