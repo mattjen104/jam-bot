@@ -12189,6 +12189,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: transparent;
   color: inherit;
   font: inherit;
+  text-transform: uppercase;
   cursor: pointer;
 }
 .home-discovery__lens-link {
