@@ -2997,6 +2997,19 @@ export interface MePickerOverlapResult {
   items: PickerOverlapItem[];
 }
 
+/**
+ * Why this article is surfaced: library for an active Lore keep or Spotify import, seed for a listener taste seed, or coverage for eligible music reporting without a personal artist match.
+
+ */
+export type PressArticleRelevance =
+  (typeof PressArticleRelevance)[keyof typeof PressArticleRelevance];
+
+export const PressArticleRelevance = {
+  library: "library",
+  seed: "seed",
+  coverage: "coverage",
+} as const;
+
 export interface PressArticle {
   id: number;
   title: string;
@@ -3012,6 +3025,9 @@ export interface PressArticle {
   tags: string[] | null;
   matchedArtist: string | null;
   matchedWork: string | null;
+  /** Why this article is surfaced: library for an active Lore keep or Spotify import, seed for a listener taste seed, or coverage for eligible music reporting without a personal artist match.
+   */
+  relevance: PressArticleRelevance;
   pickerId: number;
   publication: string;
   handle: string;

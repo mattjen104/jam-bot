@@ -8,6 +8,7 @@ import {
   useUnsavePressArticleAction 
 } from "../lib/meHooks";
 import type { PressArticle } from "@workspace/api-client-react";
+import { pressRelevance, pressRelevanceLabel } from "./pressPresentation";
 
 function normalizePressText(value: string): string {
   return value
@@ -104,6 +105,12 @@ export function PressArticleRow({
         )}
       </div>
       <div className="home-press__content">
+        <span
+          className="home-press__relevance"
+          data-testid={`press-relevance-${article.id}`}
+        >
+          {pressRelevanceLabel(article)}
+        </span>
         {shouldShowPressMatch(article) && article.matchedArtist && (
           <span className="home-press__matched-artist">
             {article.matchedArtist} {article.matchedWork ? `· ${article.matchedWork}` : ""}
@@ -182,15 +189,43 @@ export function HomePress() {
     [savedQuery.data]
   );
 
-  const overlapArticles = useMemo(
-    () => allArticles.filter(a => a.overlap),
+  const libraryArticles = useMemo(
+    () => allArticles.filter((article) => pressRelevance(article) === "library"),
     [allArticles]
   );
-  
-  const recentArticles = useMemo(
-    () => allArticles.filter(a => !a.overlap),
+  const seedArticles = useMemo(
+    () => allArticles.filter((article) => pressRelevance(article) === "seed"),
     [allArticles]
   );
+  const coverageArticles = useMemo(
+    () => allArticles.filter((article) => {
+      return pressRelevance(article) === "coverage";
+    }),
+    [allArticles]
+  );
+  const legacyMatchArticles = useMemo(
+    () => allArticles.filter((article) => pressRelevance(article) === "legacy-match"),
+    [allArticles]
+  );
+
+  const renderArticleSection = useCallback((
+    articles: PressArticle[],
+    label: string,
+  ) => articles.length > 0 && (
+    <section className="home-discovery__section" aria-label={label}>
+      <h2 className="home-discovery__heading">{label}</h2>
+      <div className="home-press__list">
+        {articles.map((article) => (
+          <PressArticleRow
+            key={article.id}
+            article={article}
+            onBookmark={handleBookmark}
+            onUnbookmark={handleUnbookmark}
+          />
+        ))}
+      </div>
+    </section>
+  ), [handleBookmark, handleUnbookmark]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const savedSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -256,37 +291,10 @@ export function HomePress() {
 
   return (
     <div className="home-press">
-      {overlapArticles.length > 0 && (
-        <section className="home-discovery__section" aria-label="In your library">
-          <div className="home-press__list">
-            {overlapArticles.map((article) => (
-              <PressArticleRow 
-                key={article.id} 
-                article={article} 
-                onBookmark={handleBookmark}
-                onUnbookmark={handleUnbookmark}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {recentArticles.length > 0 && (
-        <section className="home-discovery__section" aria-label="Recent press">
-          <h2 className="home-discovery__heading">Recent press</h2>
-          <div className="home-press__list">
-            {recentArticles.map((article) => (
-              <PressArticleRow 
-                key={article.id} 
-                article={article} 
-                onBookmark={handleBookmark}
-                onUnbookmark={handleUnbookmark}
-              />
-            ))}
-          </div>
-          
-        </section>
-      )}
+      {renderArticleSection(libraryArticles, "In your library")}
+      {renderArticleSection(seedArticles, "From your taste seeds")}
+      {renderArticleSection(legacyMatchArticles, "Matches your taste")}
+      {renderArticleSection(coverageArticles, "Music coverage")}
 
       {pressQuery.hasNextPage && (
         <div

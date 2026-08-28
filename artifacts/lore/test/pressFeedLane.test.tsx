@@ -29,6 +29,7 @@ const ARTICLE: PressArticle = {
   pickerId: 10,
   publication: "Pitchfork",
   handle: "pitchfork",
+  relevance: "library",
   overlap: true,
   saved: false,
   savedAt: null,
@@ -63,11 +64,27 @@ describe("PressFeedLane rows", () => {
     expect(link.getAttribute("href")).toBe("https://example.com/review");
     expect(link.textContent).toContain("A great review");
     expect(container.textContent).toContain("Fleetwood Mac");
+    expect(screen.getByTestId("press-relevance-1").textContent).toBe("In your library");
     expect(container.textContent).toContain("By Test Author");
     expect(container.textContent).toContain("A short feed-provided excerpt.");
     expect(screen.getByTestId("press-image-1").getAttribute("src")).toBe(
       "https://example.com/review.jpg",
     );
+  });
+
+  it("does not describe a seed match as a library keep", () => {
+    renderLane({
+      items: [{ ...ARTICLE, relevance: "seed", overlap: true }],
+    });
+    expect(screen.getByTestId("press-relevance-1").textContent).toBe("From a taste seed");
+    expect(screen.getByTestId("press-relevance-1").textContent).not.toContain("library");
+  });
+
+  it("degrades safely for a legacy article without relevance", () => {
+    renderLane({
+      items: [{ ...ARTICLE, relevance: undefined, overlap: true } as PressArticle],
+    });
+    expect(screen.getByTestId("press-relevance-1").textContent).toBe("Matches your taste");
   });
 
   it("falls back safely when an article image fails", () => {

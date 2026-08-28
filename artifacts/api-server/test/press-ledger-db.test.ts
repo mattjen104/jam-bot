@@ -226,6 +226,7 @@ describe("ledger-backed Press reads", () => {
       author: `Writer ${run}`,
       imageUrl: `https://press.example/${run}/cover.jpg`,
       excerpt: `Excerpt ${run}`,
+      relevance: "seed",
     });
     const seen = new Set<number>();
     let offset: number | null = 0;
@@ -239,6 +240,7 @@ describe("ledger-backed Press reads", () => {
     expect(seen.size).toBe(33);
     const cold = await request("/api/me/press", sidB);
     expect(cold.body.items.some((a: any) => a.pickerId === pressPicker && !a.overlap)).toBe(true);
+    expect(cold.body.items.find((a: any) => a.pickerId === pressPicker)?.relevance).toBe("coverage");
   });
 
   it("ranks active library artists ahead of newer music coverage and ignores removed keeps", async () => {
@@ -260,8 +262,12 @@ describe("ledger-backed Press reads", () => {
     ]);
     expect(rankingItems[0].overlap).toBe(true);
     expect(rankingItems[1].overlap).toBe(true);
+    expect(rankingItems[0].relevance).toBe("library");
+    expect(rankingItems[1].relevance).toBe("library");
     expect(rankingItems[2].overlap).toBe(false);
     expect(rankingItems[3].overlap).toBe(false);
+    expect(rankingItems[2].relevance).toBe("coverage");
+    expect(rankingItems[3].relevance).toBe("coverage");
 
     const archive = await request(`/api/me/press/publications/ranking-${run}`, sidA);
     expect(archive.body.total).toBe(6);

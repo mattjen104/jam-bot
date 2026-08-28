@@ -8577,7 +8577,9 @@ export function useGetMyPressCrossings<
 }
 
 /**
- * @summary Retained RSS Press feed, with library crossings first
+ * Returns only RSS articles with positive music evidence in their retained feed metadata (title, tags, excerpt, or a confident artist/work extraction). Articles with a direct match to an active Lore keep or Spotify import come first, followed by seed matches and other eligible music coverage; each band is newest first. This filtering and ordering happens before offset pagination. Retained publication history and listener bookmarks remain available through their dedicated endpoints.
+
+ * @summary Music Press discovery feed, with library crossings first
  */
 export const getGetMyPressUrl = (params?: GetMyPressParams) => {
   const normalizedParams = new URLSearchParams();
@@ -8644,7 +8646,7 @@ export type GetMyPressQueryResult = NonNullable<
 export type GetMyPressQueryError = ErrorType<unknown>;
 
 /**
- * @summary Retained RSS Press feed, with library crossings first
+ * @summary Music Press discovery feed, with library crossings first
  */
 
 export function useGetMyPress<

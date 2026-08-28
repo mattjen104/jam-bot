@@ -1,6 +1,23 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { shouldShowPressMatch } from "../src/components/HomePress";
+import { pressRelevanceLabel } from "../src/components/pressPresentation";
+
+describe("pressRelevanceLabel", () => {
+  it("distinguishes direct library evidence from a taste seed", () => {
+    expect(pressRelevanceLabel({ relevance: "library", overlap: true })).toBe("In your library");
+    expect(pressRelevanceLabel({ relevance: "seed", overlap: true })).toBe("From a taste seed");
+  });
+
+  it("labels eligible unmatched articles as music coverage", () => {
+    expect(pressRelevanceLabel({ relevance: "coverage", overlap: false })).toBe("Music coverage");
+  });
+
+  it("uses a neutral label for legacy overlap payloads", () => {
+    expect(pressRelevanceLabel({ overlap: true })).toBe("Matches your taste");
+    expect(pressRelevanceLabel({ overlap: false })).toBe("Music coverage");
+  });
+});
 
 describe("shouldShowPressMatch", () => {
   it("hides extracted details already present in the headline", () => {

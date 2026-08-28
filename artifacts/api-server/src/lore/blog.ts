@@ -43,6 +43,9 @@ export interface PressDiscoveryArticle {
   matchedWork?: string | null;
 }
 
+/** The listener-facing reason an eligible article appears in the Press feed. */
+export type PressArticleRelevance = "library" | "seed" | "coverage";
+
 export type PressDiscoveryReason =
   | "artist-or-work-extraction"
   | "music-signal"

@@ -8168,13 +8168,20 @@ components:
         tags: { type: array, items: { type: string }, nullable: true }
         matchedArtist: { type: string, nullable: true }
         matchedWork: { type: string, nullable: true }
+        relevance:
+          type: string
+          enum: [library, seed, coverage]
+          description: >
+            Why this article is surfaced: library for an active Lore keep or
+            Spotify import, seed for a listener taste seed, or coverage for
+            eligible music reporting without a personal artist match.
         pickerId: { type: integer }
         publication: { type: string }
         handle: { type: string }
         overlap: { type: boolean }
         saved: { type: boolean }
         savedAt: { type: string, nullable: true }
-      required: [id, title, url, guid, author, imageUrl, excerpt, publishedAt, tags, matchedArtist, matchedWork, pickerId, publication, handle, overlap, saved, savedAt]
+      required: [id, title, url, guid, author, imageUrl, excerpt, publishedAt, tags, matchedArtist, matchedWork, relevance, pickerId, publication, handle, overlap, saved, savedAt]
     PressPage:
       type: object
       properties:

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PressArticleRelevance } from "./pressArticleRelevance";
 
 export interface PressArticle {
   id: number;
@@ -21,6 +22,9 @@ export interface PressArticle {
   tags: string[] | null;
   matchedArtist: string | null;
   matchedWork: string | null;
+  /** Why this article is surfaced: library for an active Lore keep or Spotify import, seed for a listener taste seed, or coverage for eligible music reporting without a personal artist match.
+   */
+  relevance: PressArticleRelevance;
   pickerId: number;
   publication: string;
   handle: string;

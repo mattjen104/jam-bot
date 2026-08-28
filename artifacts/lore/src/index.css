@@ -11970,6 +11970,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-direction: column;
   gap: 4px;
 }
+.home-press__relevance {
+  width: fit-content;
+  padding: 2px 6px;
+  border: 1px solid hsl(var(--accent) / 0.35);
+  border-radius: 3px;
+  color: hsl(var(--accent));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .home-press__matched-artist {
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);

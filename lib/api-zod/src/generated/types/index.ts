@@ -244,6 +244,7 @@ export * from "./pickerStationOverlaps";
 export * from "./postEmbedResolutionRequeueResponse";
 export * from "./postEmbedResolutionRequeueResponseRequeuedItem";
 export * from "./pressArticle";
+export * from "./pressArticleRelevance";
 export * from "./pressBookmarkResult";
 export * from "./pressMentionItem";
 export * from "./pressMentionItemKind";

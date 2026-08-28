@@ -5000,7 +5000,9 @@ export const GetMyPressCrossingsResponse = zod.object({
 });
 
 /**
- * @summary Retained RSS Press feed, with library crossings first
+ * Returns only RSS articles with positive music evidence in their retained feed metadata (title, tags, excerpt, or a confident artist/work extraction). Articles with a direct match to an active Lore keep or Spotify import come first, followed by seed matches and other eligible music coverage; each band is newest first. This filtering and ordering happens before offset pagination. Retained publication history and listener bookmarks remain available through their dedicated endpoints.
+
+ * @summary Music Press discovery feed, with library crossings first
  */
 export const getMyPressQueryOffsetMin = 0;
 
@@ -5022,6 +5024,11 @@ export const GetMyPressResponse = zod.object({
       tags: zod.array(zod.string()).nullable(),
       matchedArtist: zod.string().nullable(),
       matchedWork: zod.string().nullable(),
+      relevance: zod
+        .enum(["library", "seed", "coverage"])
+        .describe(
+          "Why this article is surfaced: library for an active Lore keep or Spotify import, seed for a listener taste seed, or coverage for eligible music reporting without a personal artist match.\n",
+        ),
       pickerId: zod.number(),
       publication: zod.string(),
       handle: zod.string(),
@@ -5059,6 +5066,11 @@ export const GetMySavedPressResponse = zod.object({
       tags: zod.array(zod.string()).nullable(),
       matchedArtist: zod.string().nullable(),
       matchedWork: zod.string().nullable(),
+      relevance: zod
+        .enum(["library", "seed", "coverage"])
+        .describe(
+          "Why this article is surfaced: library for an active Lore keep or Spotify import, seed for a listener taste seed, or coverage for eligible music reporting without a personal artist match.\n",
+        ),
       pickerId: zod.number(),
       publication: zod.string(),
       handle: zod.string(),
@@ -5139,6 +5151,11 @@ export const GetMyPressPublicationResponse = zod
         tags: zod.array(zod.string()).nullable(),
         matchedArtist: zod.string().nullable(),
         matchedWork: zod.string().nullable(),
+        relevance: zod
+          .enum(["library", "seed", "coverage"])
+          .describe(
+            "Why this article is surfaced: library for an active Lore keep or Spotify import, seed for a listener taste seed, or coverage for eligible music reporting without a personal artist match.\n",
+          ),
         pickerId: zod.number(),
         publication: zod.string(),
         handle: zod.string(),

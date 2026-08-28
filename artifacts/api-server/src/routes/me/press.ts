@@ -16,6 +16,7 @@ import { type AuthedRequest } from "./auth.js";
 import {
   classifyPressDiscoveryArticle,
   isSafeArticleUrl,
+  type PressArticleRelevance,
 } from "../../lore/blog.js";
 
 const router: IRouter = Router();
@@ -35,6 +36,15 @@ interface PressTaste {
   direct: Set<string>;
   /** Seeds are useful taste overlap, but are not library keeps. */
   seeded: Set<string>;
+}
+
+function relevanceFor(
+  matchedArtist: string | null,
+  artists: PressTaste,
+): PressArticleRelevance {
+  if (matchedArtist && artists.direct.has(norm(matchedArtist))) return "library";
+  if (matchedArtist && artists.seeded.has(norm(matchedArtist))) return "seed";
+  return "coverage";
 }
 
 async function taste(userId: number): Promise<PressTaste> {
@@ -72,6 +82,7 @@ async function rowsFor(userId: number, pickerId?: number) {
   return articles.filter((a) => isSafeArticleUrl(a.url)).map((a) => ({
     ...a, publishedAt: a.publishedAt?.toISOString() ?? null,
     imageUrl: a.imageUrl && isSafeArticleUrl(a.imageUrl) ? a.imageUrl : null,
+    relevance: relevanceFor(a.matchedArtist, artists),
     overlap: Boolean(
       a.matchedArtist &&
       (artists.direct.has(norm(a.matchedArtist)) || artists.seeded.has(norm(a.matchedArtist))),
