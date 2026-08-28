@@ -1,9 +1,8 @@
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import "./_group.css";
 
 type Scope = "15m" | "hour" | "day" | "lifetime";
 type Cover = { title: string; artist: string; year: string; className: string; imageUrl: string; detail: string };
-type FirstPlay = { title: string; artist: string; imageUrl?: string };
 type SelectedCover = { cover: Cover; stationName: string };
 type Station = {
   name: string;
@@ -12,9 +11,6 @@ type Station = {
   track: string;
   matches: Record<Scope, number>;
   covers: Cover[];
-  caughtCount: number;
-  firstPlays?: { count: number; records: FirstPlay[] };
-  kept?: { count: number; records: FirstPlay[] };
 };
 
 const SCOPE_COPY: Record<Scope, { label: string }> = {
@@ -51,21 +47,6 @@ const STATIONS: Station[] = [
       { title: "Dragging a Dead Deer Up a Hill", artist: "Grouper", year: "2008", className: "cover-b", imageUrl: "/__mockup/images/grouper-dragging-a-dead-deer.jpg", detail: "A submerged collection of songs, pulled toward the light one guitar at a time." },
       { title: "Grid of Points", artist: "Grouper", year: "2018", className: "cover-c", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg", detail: "Nine brief sketches with the grain left in." },
     ], matches: { "15m": 2, hour: 8, day: 36, lifetime: 312 },
-    firstPlays: {
-      count: 6,
-      records: [
-        { title: "Ruins", artist: "Grouper", imageUrl: "/__mockup/images/grouper-ruins.jpg" },
-        { title: "Grid of Points", artist: "Grouper", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg" },
-      ],
-    },
-    caughtCount: 28,
-    kept: {
-      count: 4,
-      records: [
-        { title: "Dragging a Dead Deer Up a Hill", artist: "Grouper", imageUrl: "/__mockup/images/grouper-dragging-a-dead-deer.jpg" },
-        { title: "Grid of Points", artist: "Grouper", imageUrl: "/__mockup/images/grouper-grid-of-points.jpg" },
-      ],
-    },
   },
   {
     name: "KEXP", frequency: "90.3 FM · SEATTLE",
@@ -74,15 +55,6 @@ const STATIONS: Station[] = [
       { title: "The Noise Made by People", artist: "Broadcast", year: "2000", className: "cover-e", imageUrl: "/__mockup/images/broadcast-noise-made-by-people.jpg", detail: "A careful collision between library music, psychedelia, and a future that never arrived." },
       { title: "Haha Sound", artist: "Broadcast", year: "2003", className: "cover-f", imageUrl: "/__mockup/images/broadcast-haha-sound.jpg", detail: "The point where Broadcast's experiments became a language of their own." },
     ], matches: { "15m": 1, hour: 5, day: 24, lifetime: 204 },
-    firstPlays: {
-      count: 4,
-      records: [
-        { title: "Tender Buttons", artist: "Broadcast", imageUrl: "/__mockup/images/broadcast-tender-buttons.jpg" },
-        { title: "The Noise Made by People", artist: "Broadcast", imageUrl: "/__mockup/images/broadcast-noise-made-by-people.jpg" },
-        { title: "Haha Sound", artist: "Broadcast", imageUrl: "/__mockup/images/broadcast-haha-sound.jpg" },
-      ],
-    },
-    caughtCount: 19,
   },
   {
     name: "KCRW", frequency: "89.9 FM · SANTA MONICA",
@@ -91,20 +63,6 @@ const STATIONS: Station[] = [
       { title: "Emperor Tomato Ketchup", artist: "Stereolab", year: "1996", className: "cover-a", imageUrl: "/__mockup/images/stereolab-emperor-tomato-ketchup.jpg", detail: "The record where the laboratory opened its doors." },
       { title: "Cobra and Phases", artist: "Stereolab", year: "1999", className: "cover-d", imageUrl: "/__mockup/images/stereolab-cobra-and-phases.jpg", detail: "A long-form, many-windowed portrait of a band refusing the straight line." },
     ], matches: { "15m": 3, hour: 11, day: 41, lifetime: 116 },
-    firstPlays: {
-      count: 2,
-      records: [
-        { title: "Emperor Tomato Ketchup", artist: "Stereolab" },
-      ],
-    },
-    caughtCount: 34,
-    kept: {
-      count: 7,
-      records: [
-        { title: "Cobra and Phases", artist: "Stereolab", imageUrl: "/__mockup/images/stereolab-cobra-and-phases.jpg" },
-        { title: "Dots and Loops", artist: "Stereolab", imageUrl: "/__mockup/images/stereolab-dots-and-loops.jpg" },
-      ],
-    },
   },
   {
     name: "KBOO", frequency: "90.7 FM · PORTLAND",
@@ -113,13 +71,6 @@ const STATIONS: Station[] = [
       { title: "Ptah, the El Daoud", artist: "Alice Coltrane", year: "1970", className: "cover-c", imageUrl: "/__mockup/images/alice-ptah-the-el-daoud.jpg", detail: "Two saxophones orbit a spiritual center." },
       { title: "Universal Consciousness", artist: "Alice Coltrane", year: "1971", className: "cover-e", imageUrl: "/__mockup/images/alice-universal-consciousness.jpg", detail: "Strings and organ reaching for the same horizon." },
     ], matches: { "15m": 2, hour: 13, day: 27, lifetime: 52 },
-    caughtCount: 12,
-    kept: {
-      count: 2,
-      records: [
-        { title: "Journey in Satchidananda", artist: "Alice Coltrane", imageUrl: "/__mockup/images/alice-journey-in-satchidananda.jpg" },
-      ],
-    },
   },
 ];
 
@@ -140,105 +91,12 @@ function RecordCover({ cover, selected, onSelect }: { cover: Cover; selected: bo
   );
 }
 
-function RecordPath({
-  label,
-  count,
-  stationName,
-  href,
-  records,
-}: {
-  label: string;
-  count: number;
-  stationName: string;
-  href: string;
-  records?: FirstPlay[];
-}) {
-  const resolvedRecords = records?.filter((record) => record.imageUrl).slice(0, 3) ?? [];
-  return (
-    <div className={`air-record-path${resolvedRecords.length === 0 ? " air-record-path--text-only" : ""}`}>
-      <a
-        className="air-record-path__link"
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`Open ${label} for ${stationName}, ${count} records`}
-      >
-        <span className="air-record-path__copy">
-          <span className="air-record-path__label">{label}</span>
-          <span className="air-record-path__count">{count} from {stationName}</span>
-        </span>
-        {resolvedRecords.length > 0 && (
-          <span className="air-record-path__pile" aria-hidden="true">
-            {resolvedRecords.map((record, index) => (
-              <img
-                key={record.title}
-                src={record.imageUrl}
-                alt=""
-                style={{ "--record-path-index": index } as CSSProperties}
-              />
-            ))}
-          </span>
-        )}
-        <span className="air-record-path__arrow" aria-hidden="true">↗</span>
-      </a>
-    </div>
-  );
-}
-
-function StationRecordPaths({ station }: { station: Station }) {
-  const stationParam = encodeURIComponent(station.name);
-  return (
-    <div className="air-record-paths">
-      <div className="air-record-paths__head">
-        <span className="air-record-paths__title">Your paths</span>
-        <a
-          className="air-apple-link"
-          href={`/apple-music?station=${stationParam}&view=station-records`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Play in Apple Music <span aria-hidden="true">↗</span>
-        </a>
-      </div>
-      <div className="air-record-paths__grid">
-        <RecordPath
-          label="Caught here"
-          count={station.caughtCount}
-          stationName={station.name}
-          href={`/heard?station=${stationParam}`}
-        />
-        {station.firstPlays && station.firstPlays.count > 0 && (
-          <RecordPath
-            label="First plays"
-            count={station.firstPlays.count}
-            stationName={station.name}
-            href={`/first-plays?station=${stationParam}`}
-            records={station.firstPlays.records}
-          />
-        )}
-        {station.kept && station.kept.count > 0 && (
-          <RecordPath
-            label="Kept here"
-            count={station.kept.count}
-            stationName={station.name}
-            href={`/library?station=${stationParam}&view=kept`}
-            records={station.kept.records}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function LoreOnAirRecordPiles() {
   const scope: Scope = "hour";
   const [selected, setSelected] = useState<SelectedCover | null>(null);
   const [expandedStation, setExpandedStation] = useState<string | null>(null);
   const [artistCommand, setArtistCommand] = useState("");
   const [addedArtists, setAddedArtists] = useState<string[]>([]);
-  const [playingStation, setPlayingStation] = useState<string | null>(null);
-  const [battleOpen, setBattleOpen] = useState(false);
-  const [battleStation, setBattleStation] = useState(STATIONS[0].name);
 
   const submitArtistCommand = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -292,55 +150,6 @@ export function LoreOnAirRecordPiles() {
           <div className="air-live-mark"><span className="air-live-dot" aria-hidden="true" /> live crossing</div>
         </header>
 
-        <div className="air-battle-toggle">
-          <button type="button" onClick={() => setBattleOpen((open) => !open)} aria-expanded={battleOpen}>
-            <span>Battle station</span>
-            <span className="air-battle-toggle__hint">compare two live signals</span>
-            <span aria-hidden="true">{battleOpen ? "↙" : "↗"}</span>
-          </button>
-        </div>
-
-        {battleOpen && (
-          <section className="air-battle" aria-label="Battle station comparison">
-            <div className="air-battle__head">
-              <div>
-                <div className="air-battle__kicker">Battle station</div>
-                <p>Pick the signal. One shared player keeps the choice clear.</p>
-              </div>
-              <button type="button" className="air-battle__close" onClick={() => setBattleOpen(false)} aria-label="Close Battle station">×</button>
-            </div>
-            <div className="air-battle__choices">
-              {STATIONS.slice(0, 2).map((station) => {
-                const selectedBattleStation = battleStation === station.name;
-                return (
-                  <button
-                    key={station.name}
-                    type="button"
-                    className={`air-battle__choice${selectedBattleStation ? " air-battle__choice--selected" : ""}`}
-                    aria-pressed={selectedBattleStation}
-                    onClick={() => setBattleStation(station.name)}
-                  >
-                    <span className="air-battle__choice-station">{station.name}</span>
-                    <span>{station.artist} · {station.track}</span>
-                    <span className="air-battle__choice-state">{selectedBattleStation ? "selected" : "choose"}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="air-battle__footer">
-              <span>Selected signal: <strong>{battleStation}</strong></span>
-              <button
-                type="button"
-                className="air-battle__play"
-                aria-pressed={playingStation === battleStation}
-                onClick={() => setPlayingStation((current) => current === battleStation ? null : battleStation)}
-              >
-                {playingStation === battleStation ? "Playing" : `Play ${battleStation}`}
-              </button>
-            </div>
-          </section>
-        )}
-
         <section className="air-grid" aria-label={`Live stations, ${SCOPE_COPY[scope].label}`}>
           {STATIONS.map((station, stationIndex) => {
             const now = SCOPE_NOW[scope][stationIndex];
@@ -355,18 +164,7 @@ export function LoreOnAirRecordPiles() {
                   <div className="air-station">{station.name}</div>
                   <div className="air-frequency">{station.frequency}</div>
                 </div>
-                <div className="air-card-head__actions">
-                  <div className="air-card-live"><span className="air-live-dot" aria-hidden="true" /> now</div>
-                  <button
-                    type="button"
-                    className="air-listen"
-                    aria-pressed={playingStation === station.name}
-                    onClick={() => setPlayingStation((current) => current === station.name ? null : station.name)}
-                  >
-                    <span aria-hidden="true">{playingStation === station.name ? "■" : "▶"}</span>
-                    {playingStation === station.name ? "Playing" : "Play station"}
-                  </button>
-                </div>
+                <div className="air-card-live"><span className="air-live-dot" aria-hidden="true" /> now</div>
               </div>
               <div className="air-now">
                 <div>
@@ -401,7 +199,6 @@ export function LoreOnAirRecordPiles() {
                   <span className="air-complete">fully readable</span>
                 )}
               </div>
-              <StationRecordPaths station={station} />
               {isExpanded && hasOverflow && (
                 <div id={`${station.name}-overflow`} className="air-overflow-note">
                   <span aria-hidden="true">↳</span>
