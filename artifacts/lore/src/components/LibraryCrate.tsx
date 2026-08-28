@@ -468,12 +468,22 @@ export interface LibraryCrateProps {
   seedArtists: string[];
   sort: "added" | "artist" | "title";
   unopenedOnly?: boolean;
+  /** True when a deep-linked Library lens is currently narrowing the crate. */
+  activeLens?: boolean;
   onImport: () => void;
 }
 
-export function LibraryCrate({ items, seedArtists, sort, unopenedOnly = false, onImport }: LibraryCrateProps) {
+export function LibraryCrate({
+  items,
+  seedArtists,
+  sort,
+  unopenedOnly = false,
+  activeLens = false,
+  onImport,
+}: LibraryCrateProps) {
   const [location, setLocation] = useLocation();
   const [opened, markOpened] = useOpenedKeys();
+  const [showAllAdded, setShowAllAdded] = useState(false);
   const [catalogue, setCatalogue] = useState<Record<string, { artistMbid: string | null; releases: ArtistCatalogueRelease[] }>>({});
   const { dated, undated } = useMemo(() => partitionCrateItems(items), [items]);
   const releases = useMemo(() => sortCrateReleases(buildCrateReleases(dated), sort), [dated, sort]);
@@ -495,7 +505,8 @@ export function LibraryCrate({ items, seedArtists, sort, unopenedOnly = false, o
   }, [addedArtistNames]);
 
   const visibleReleases = unopenedOnly ? releases.filter((release) => !opened.has(release.releaseGroupMbid ?? release.key)) : releases;
-  const visibleArtists = (unopenedOnly ? addedArtists.filter((artist) => !opened.has(artist.key)) : addedArtists).slice(0, 20);
+  const filteredArtists = unopenedOnly ? addedArtists.filter((artist) => !opened.has(artist.key)) : addedArtists;
+  const visibleArtists = showAllAdded ? filteredArtists : filteredArtists.slice(0, 20);
   const hasItems = releases.length > 0 || addedArtists.length > 0;
   const setUnopened = (value: boolean) => {
     const path = location.split("?")[0] ?? "/library";
@@ -516,8 +527,20 @@ export function LibraryCrate({ items, seedArtists, sort, unopenedOnly = false, o
     return (
       <div className="library-crate__empty" data-testid="library-crate-empty">
         <p>Your crate is empty.</p>
-        <button type="button" onClick={onImport} data-testid="library-import-cta">Add music</button>
-        <Link href="/" className="library-crate__empty-dial">Open the dial</Link>
+        {activeLens ? (
+          <button
+            type="button"
+            onClick={() => setLocation(location.split("?")[0] ?? "/library")}
+            data-testid="library-show-all"
+          >
+            Show all
+          </button>
+        ) : (
+          <>
+            <button type="button" onClick={onImport} data-testid="library-import-cta">Add music</button>
+            <Link href="/" className="library-crate__empty-dial">Open the dial</Link>
+          </>
+        )}
       </div>
     );
   }
@@ -581,8 +604,17 @@ export function LibraryCrate({ items, seedArtists, sort, unopenedOnly = false, o
           ) : (
             <p className="library-crate__section-empty">Every added artist has been opened.</p>
           )}
-          {addedArtists.length > 20 && (
-            <Link href="/index" className="library-crate__index-link">Showing 20 of {addedArtists.length}. Browse all in Index →</Link>
+          {filteredArtists.length > 20 && (
+            <button
+              type="button"
+              className="library-crate__index-link"
+              onClick={() => setShowAllAdded((value) => !value)}
+              data-testid="library-added-show-all"
+            >
+              {showAllAdded
+                ? "Show fewer added artists"
+                : `Showing 20 of ${filteredArtists.length}. Show all added artists →`}
+            </button>
           )}
         </section>
       )}

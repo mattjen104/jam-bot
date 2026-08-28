@@ -102,3 +102,24 @@ test("renders the honest fanned release crate and preserves controls", async ({ 
   await page.getByRole("button", { name: "Show all" }).click();
   await expect(page).not.toHaveURL(/unopened=1/);
 });
+
+test("keeps an alternate Library lens inside the fanned crate", async ({ page }) => {
+  await page.goto("/lore/library?lens=recent");
+  await expect(page.getByTestId("library-crate")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Kept" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Added" })).toBeVisible();
+  await expect(page.getByTestId("library-album-view")).toHaveCount(0);
+});
+
+test("reveals every added artist without leaving Library", async ({ page }) => {
+  const artists = Array.from({ length: 21 }, (_, index) => `Added Artist ${index + 1}`);
+  await page.route("**/api/me/taste-seeds", (route) =>
+    route.fulfill({ json: { artists } }),
+  );
+
+  await page.goto("/lore/library");
+  await expect(page.getByTestId("library-crate-added-artist")).toHaveCount(20);
+  await page.getByTestId("library-added-show-all").click();
+  await expect(page.getByTestId("library-crate-added-artist")).toHaveCount(21);
+  await expect(page.getByText("Added Artist 21", { exact: true })).toBeVisible();
+});

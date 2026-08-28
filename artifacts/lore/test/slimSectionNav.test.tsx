@@ -17,11 +17,16 @@ vi.mock("wouter", () => ({
 
 import { SlimSectionNav, sectionFor } from "../src/components/SlimSectionNav";
 
-describe("sectionFor — two-section model", () => {
+describe("sectionFor — three-section model", () => {
   it("classifies library-family pages as library", () => {
     for (const path of ["/library", "/library/albums", "/journal", "/journal/2026-08", "/following"]) {
       expect(sectionFor(path)).toBe("library");
     }
+  });
+
+  it("classifies the Heard page separately", () => {
+    expect(sectionFor("/heard")).toBe("heard");
+    expect(sectionFor("/heard/today")).toBe("heard");
   });
 
   it("classifies selector, DJ, and archive pages as part of Lore", () => {
@@ -48,11 +53,11 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     mockLocation.value = "/";
   });
 
-  it("renders exactly two hyperlinks — Feed and Stack", () => {
+  it("renders exactly three hyperlinks — Feed, Heard, and Stack", () => {
     render(<SlimSectionNav />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const links = Array.from(nav.querySelectorAll("a"));
-    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Stack"]);
+    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack"]);
     // No button-styled nav items remain.
     expect(nav.querySelectorAll("button").length).toBe(0);
   });
@@ -61,6 +66,7 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     mockLocation.value = "/";
     render(<SlimSectionNav />);
     expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/feed");
+    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("href")).toBe("/heard");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
   });
 
@@ -68,13 +74,15 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     mockLocation.value = "/library";
     render(<SlimSectionNav />);
     expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("href")).toBe("/heard");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
   });
 
-  it("pins Feed to the left corner and Stack to the right corner", () => {
+  it("pins Feed to the left corner and the other sections to the right side", () => {
     render(<SlimSectionNav />);
     expect(screen.getByRole("link", { name: "Feed" }).className).toContain("corner-nav__link--left");
     expect(screen.getByRole("link", { name: "Stack" }).className).toContain("corner-nav__link--right");
+    expect(screen.getByRole("link", { name: "Heard" }).className).toContain("corner-nav__link--right");
   });
 
   it("marks Feed active on the front door", () => {
@@ -83,6 +91,15 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     const lore = screen.getByRole("link", { name: "Feed" });
     expect(lore.getAttribute("aria-current")).toBe("page");
     expect(lore.className).toContain("corner-nav__link--active");
+    expect(screen.getByRole("link", { name: "Stack" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("marks Heard active only on the Heard route", () => {
+    mockLocation.value = "/heard";
+    render(<SlimSectionNav />);
+    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBeNull();
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("aria-current")).toBeNull();
   });
 
@@ -110,7 +127,7 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
     mockLocation.value = "/";
   });
 
-  it("renders the same two links inside a .bottom-nav row", () => {
+  it("renders the same three links inside a .bottom-nav row", () => {
     // On the split homepage the Feed label targets the full Dial at /feed.
     mockLocation.value = "/";
     render(<SlimSectionNav variant="bottom" />);
@@ -118,8 +135,8 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
     expect(nav.className).toContain("bottom-nav");
     expect(nav.className).not.toContain("corner-nav");
     const links = Array.from(nav.querySelectorAll("a"));
-    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Stack"]);
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/feed", "/library"]);
+    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/feed", "/heard", "/library"]);
   });
 
   it("uses bottom-nav link classes with the same data-section hooks", () => {

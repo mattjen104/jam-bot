@@ -6,20 +6,21 @@ import {
   recordWordmarkPressEnd,
 } from "../lib/eraGenreMode";
 
-type Section = "lore" | "library";
+type Section = "lore" | "heard" | "library";
 
 export function sectionFor(location: string): Section {
   if (location === "/library" || location.startsWith("/library/") ||
       location === "/journal" || location.startsWith("/journal/") ||
       location === "/sets" || location.startsWith("/sets/") ||
       location === "/following" || location.startsWith("/following/")) return "library";
+  if (location === "/heard" || location.startsWith("/heard/")) return "heard";
   // Everything else — including selector/archive/DJ pages — is part of the
   // Lore listening surface.
   return "lore";
 }
 
 /**
- * Section nav — the [lore] / [my library] plain-text hyperlinks.
+ * Section nav — the Feed / Heard / Stack plain-text hyperlinks.
  *
  * Two placements share one component:
  *  - variant="corner" (default): fixed bottom-corner links layered above the
@@ -29,7 +30,7 @@ export function sectionFor(location: string): Section {
  *    bottom shell, below the mini player, at the very bottom of the screen.
  *    CSS shows this variant only at phone widths.
  *
- * Same links, same targets — only the placement differs.
+ * Same three links, same targets — only the placement differs.
  *
  * The [lore] wordmark carries an unadvertised gesture: five taps within
  * three seconds toggle Sleep Radio mode (see lib/sleepMode.ts). While the
@@ -87,13 +88,13 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
   if (variant === "bottom") {
     return (
       <nav className="bottom-nav" aria-label="Primary">
-        {(["lore", "library"] as Section[]).map((section) => {
+        {(["lore", "heard", "library"] as Section[]).map((section) => {
           const active = activeSection === section;
-          const label = section === "lore" ? "Feed" : "Stack";
+          const label = section === "lore" ? "Feed" : section === "heard" ? "Heard" : "Stack";
           return (
             <Link
               key={section}
-              href={section === "lore" ? loreHref : "/library"}
+              href={section === "lore" ? loreHref : section === "heard" ? "/heard" : "/library"}
               className={`bottom-nav__link${active ? " bottom-nav__link--active" : ""}`}
               data-section={section}
               aria-current={active ? "page" : undefined}
@@ -111,13 +112,13 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
   }
   return (
     <nav className="corner-nav" aria-label="Primary">
-      {(["lore", "library"] as Section[]).map((section) => {
+      {(["lore", "heard", "library"] as Section[]).map((section) => {
         const active = activeSection === section;
-        const label = section === "lore" ? "Feed" : "Stack";
+        const label = section === "lore" ? "Feed" : section === "heard" ? "Heard" : "Stack";
         return (
           <Link
             key={section}
-            href={section === "lore" ? loreHref : "/library"}
+            href={section === "lore" ? loreHref : section === "heard" ? "/heard" : "/library"}
             className={`corner-nav__link corner-nav__link--${section === "lore" ? "left" : "right"}${active ? " corner-nav__link--active" : ""}`}
             data-section={section}
             aria-current={active ? "page" : undefined}

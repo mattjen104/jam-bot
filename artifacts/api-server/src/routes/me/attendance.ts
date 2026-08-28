@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
   db,
   listenSessionsTable,
@@ -7,8 +7,18 @@ import {
   attendanceWeeklyRollupsTable,
   spinsTable,
   recordingsTable,
+  stationsTable,
+  showsTable,
 } from "@workspace/db";
-import { eq, and, isNull, lt, desc, sql } from "drizzle-orm";
+import {
+  eq,
+  and,
+  isNull,
+  lt,
+  desc,
+  asc,
+  sql,
+} from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // ISO week helpers
@@ -597,6 +607,138 @@ router.get("/me/attendance/counts", h(async (req, res) => {
 
   return res.json(counts);
 }));
+
+// ---------------------------------------------------------------------------
+// GET /api/me/attendance/heard
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the individual confirmed attendance rows for the listener's current
+ * local calendar day.  This is intentionally a different read model from the
+ * weekly rollups: Heard is a chronological catch log, not a keep list or a
+ * per-recording aggregate.
+ *
+ * Query params:
+ *   tz — optional IANA timezone. Defaults to UTC when omitted.
+ *
+ * The query is bounded to one local day and reads only attendance rows that
+ * crossed the dwell gate.  The extra row lets the response say that the day
+ * is partial without pretending the first 200 rows are the complete history.
+ */
+export interface HeardDayWindow {
+  day: string;
+  timezone: string;
+  start: Date;
+  end: Date;
+}
+
+export function currentLocalDayWindow(
+  tz: string,
+  now = new Date(),
+): HeardDayWindow {
+  const current = localDateParts(now, tz);
+  const nextDay = new Date(Date.UTC(current.year, current.month - 1, current.day + 1));
+  const next = {
+    year: nextDay.getUTCFullYear(),
+    month: nextDay.getUTCMonth() + 1,
+    day: nextDay.getUTCDate(),
+  };
+  return {
+    day: `${current.year}-${String(current.month).padStart(2, "0")}-${String(current.day).padStart(2, "0")}`,
+    timezone: tz,
+    start: localMidnightToUtc(current.year, current.month, current.day, tz),
+    end: localMidnightToUtc(next.year, next.month, next.day, tz),
+  };
+}
+
+async function getHeardToday(req: Request, res: Response) {
+  const user = (req as AuthedRequest).loreUser;
+  const tzParam = typeof req.query["tz"] === "string" ? req.query["tz"] : "UTC";
+
+  if (!isValidIanaTz(tzParam)) {
+    return res.status(400).json({
+      error: `Invalid timezone: "${tzParam}". Provide a valid IANA timezone, e.g. "America/Los_Angeles".`,
+    });
+  }
+
+  const window = currentLocalDayWindow(tzParam);
+  const rows = await db
+    .select({
+      attendanceId: attendanceTable.id,
+      spinId: spinsTable.id,
+      playedAt: spinsTable.playedAt,
+      rawTitle: spinsTable.rawTitle,
+      rawArtist: spinsTable.rawArtist,
+      dwellSeconds: attendanceTable.dwellSeconds,
+      recordingMbid: recordingsTable.mbid,
+      recordingTitle: recordingsTable.title,
+      recordingArtist: recordingsTable.artist,
+      recordingArtistMbid: recordingsTable.artistMbid,
+      recordingArtworkUrl: recordingsTable.artworkUrl,
+      recordingDurationMs: recordingsTable.durationMs,
+      stationId: stationsTable.id,
+      stationSlug: stationsTable.slug,
+      stationName: stationsTable.name,
+      showId: showsTable.id,
+      showName: showsTable.name,
+      showDjName: showsTable.djName,
+    })
+    .from(attendanceTable)
+    .innerJoin(spinsTable, eq(attendanceTable.spinId, spinsTable.id))
+    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .leftJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .where(
+      and(
+        eq(attendanceTable.userId, user.id),
+        eq(attendanceTable.rollupCounted, true),
+        sql`${spinsTable.playedAt} >= ${window.start}`,
+        sql`${spinsTable.playedAt} < ${window.end}`,
+      ),
+    )
+    .orderBy(asc(spinsTable.playedAt), asc(attendanceTable.id))
+    .limit(201);
+
+  const partial = rows.length > 200;
+  const items = rows.slice(0, 200).map((row) => ({
+    attendanceId: row.attendanceId,
+    spinId: row.spinId,
+    heardAt: row.playedAt.toISOString(),
+    rawTitle: row.rawTitle ?? null,
+    rawArtist: row.rawArtist ?? null,
+    dwellSeconds: row.dwellSeconds,
+    recording: row.recordingMbid
+      ? {
+          mbid: row.recordingMbid,
+          title: row.recordingTitle,
+          artist: row.recordingArtist,
+          artistMbid: row.recordingArtistMbid ?? null,
+          artworkUrl: row.recordingArtworkUrl ?? null,
+          durationMs: row.recordingDurationMs ?? null,
+        }
+      : null,
+    station: row.stationId
+      ? { id: row.stationId, slug: row.stationSlug, name: row.stationName }
+      : null,
+    show: row.showId
+      ? { id: row.showId, name: row.showName, djName: row.showDjName ?? null }
+      : null,
+  }));
+
+  return res.json({
+    day: window.day,
+    timezone: window.timezone,
+    dayStart: window.start.toISOString(),
+    dayEnd: window.end.toISOString(),
+    partial,
+    items,
+  });
+}
+
+// `/today` is retained as a small compatibility alias for clients that used
+// the first name of this read model while Heard was being prototyped.
+router.get("/me/attendance/heard", h(getHeardToday));
+router.get("/me/attendance/today", h(getHeardToday));
 
 // ---------------------------------------------------------------------------
 // GET /api/me/attendance/weekly

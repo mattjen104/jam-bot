@@ -1853,6 +1853,7 @@
 .corner-nav__link:hover { color: hsl(var(--dim)); }
 .corner-nav__link:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
 .corner-nav__link--active[data-section="lore"]    { color: hsl(var(--accent)); }
+.corner-nav__link--active[data-section="heard"]   { color: hsl(var(--primary)); }
 .corner-nav__link--active[data-section="library"] { color: hsl(var(--library)); }
 
 /* ── Sleep Radio moon — subtle indicator beside the [lore] wordmark while
@@ -1918,7 +1919,148 @@
 .bottom-nav__link:hover { color: hsl(var(--dim)); }
 .bottom-nav__link:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
 .bottom-nav__link--active[data-section="lore"]    { color: hsl(var(--accent)); }
+.bottom-nav__link--active[data-section="heard"]   { color: hsl(var(--primary)); }
 .bottom-nav__link--active[data-section="library"] { color: hsl(var(--library)); }
+
+/* ── Heard — a compact, chronological attendance ledger ──────────────── */
+.heard-page {
+  width: min(760px, calc(100vw - 40px));
+  margin: 0 auto;
+  padding: 86px 0 150px;
+}
+.heard-page__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+.heard-page__header h1 {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-family: var(--lore-font-display);
+  font-size: clamp(28px, 5vw, 46px);
+  font-weight: 500;
+  letter-spacing: -.03em;
+}
+.heard-page__header p,
+.heard-page__intent,
+.heard-page__partial {
+  margin: 8px 0 0;
+  color: hsl(var(--dim));
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-small);
+}
+.heard-page__count {
+  color: hsl(var(--primary));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  white-space: nowrap;
+}
+.heard-page__intent {
+  border-bottom: 1px solid hsl(var(--border) / .45);
+  padding-bottom: 18px;
+}
+.heard-page__list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 22px;
+  border-top: 1px solid hsl(var(--border) / .55);
+}
+.heard-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  border-bottom: 1px solid hsl(var(--border) / .4);
+  padding: 10px 0;
+}
+.heard-row__art {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border) / .5);
+  color: hsl(var(--dim));
+}
+.heard-row__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.heard-row__body { min-width: 0; }
+.heard-row__title,
+.heard-row__artist,
+.heard-row__context {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.heard-row__title {
+  color: hsl(var(--foreground));
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-interface);
+}
+.heard-row__title a,
+.heard-row__artist a,
+.heard-row__context a {
+  color: inherit;
+  text-decoration: none;
+}
+.heard-row__title a:hover,
+.heard-row__artist a:hover,
+.heard-row__context a:hover {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.heard-row__artist {
+  color: hsl(var(--dim));
+  font-family: var(--lore-font-display);
+  font-size: var(--lore-size-small);
+}
+.heard-row__context {
+  color: hsl(var(--faint));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .03em;
+}
+.heard-row__play {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid hsl(var(--border) / .7);
+  border-radius: 50%;
+  background: transparent;
+  color: hsl(var(--primary));
+  cursor: pointer;
+}
+.heard-row__play:hover,
+.heard-row__play:focus-visible {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / .1);
+}
+.heard-page__state {
+  display: grid;
+  gap: 8px;
+  min-height: 280px;
+  place-content: center;
+  padding: 30px;
+  color: hsl(var(--dim));
+  font-family: var(--lore-font-display);
+  text-align: center;
+}
+.heard-page__state span {
+  color: hsl(var(--faint));
+  font-size: var(--lore-size-small);
+}
+.heard-page__partial {
+  margin-top: 14px;
+  color: hsl(var(--faint));
+}
 
 /* Wordmark used in Library / Selectors pages — typography only. */
 
@@ -3263,8 +3405,23 @@
   font-family: var(--lore-font-display);
   font-size: var(--lore-size-small);
 }
+.library-crate__index-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
 .library-crate__index-link:hover,
 .library-crate__index-link:focus-visible { color: hsl(var(--foreground)); }
+.library-crate__import-stat {
+  padding: 8px 15px;
+  border-bottom: 1px solid hsl(var(--border) / .45);
+  color: hsl(var(--dim));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+}
+.library-crate__import-stat b { color: hsl(var(--library)); }
 .library-crate__empty {
   display: grid;
   place-items: center;
@@ -3292,6 +3449,15 @@
   text-decoration: underline;
 }
 @media (max-width: 640px) {
+  .heard-page {
+    width: calc(100vw - 28px);
+    padding-top: 70px;
+  }
+  .heard-page__header { align-items: start; }
+  .heard-page__header h1 { font-size: 32px; }
+  .heard-row { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 9px; }
+  .heard-row__art { width: 32px; height: 32px; }
+  .heard-row__context { font-size: 9px; }
   .library-crate { --crate-art: 148px; }
   .library-crate__card {
     grid-template-columns: var(--crate-art) minmax(0, 1fr);

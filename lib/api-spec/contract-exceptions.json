@@ -6,6 +6,8 @@
     { "method": "GET", "path": "/health", "kind": "plain-json", "reason": "Ops health detail; only /healthz is part of the public contract." },
     { "method": "GET", "path": "/health/migrations", "kind": "plain-json", "reason": "Ops migration status, consumed by curl/ops tooling." },
     { "method": "GET", "path": "/health/station-silence", "kind": "plain-json", "reason": "Ops silence monitor, consumed by curl/ops tooling." },
+    { "method": "GET", "path": "/me/attendance/heard", "kind": "plain-json", "reason": "Confirmed Heard-day read model consumed by a hand-written fetch hook; intentionally outside generated client types." },
+    { "method": "GET", "path": "/me/attendance/today", "kind": "plain-json", "reason": "Compatibility alias for the hand-written Heard-day read model; intentionally outside generated client types." },
 
     { "method": "GET", "path": "/admin/stations/coverage", "kind": "admin", "reason": "Admin ops endpoint (now-playing coverage report)." },
     { "method": "POST", "path": "/admin/radio-browser/bulk-reprobe", "kind": "admin", "reason": "Admin ops endpoint (bulk stream re-probe)." },

@@ -55,21 +55,25 @@ falls back to alphabetical ordering, even while current tracks are available.
 **How to apply:** retain an honest source-time field whenever a consumer needs
 cross-station recency ordering; only use the restamped time for live/fresh UI.
 
-## Landed (Stack full-screen slice)
-- Default `/library` (no `?lens=` param) is a chrome-free full-height album
-  list: no hero/stats, week card, avatar picker, lens pills, sort bar, group
-  filter, tier headers, sync/export section, or footer. Collapsed row grammar
-  is `album · artist` (album leads), single value with no dangling dot when
-  one is missing, "Unknown album" when both absent; chevron is the ONLY
-  collapsed affordance (no keep counts / ✳ markers).
-- Non-default lenses (`?lens=recent|artists|…`) still render the full
-  dashboard chrome. **Any test (unit or e2e) that needs hero stats, sync bar,
-  reconnect prompt, lens/sort controls, or ledger-adjacent dashboard cards
-  must mount with a lens param** (e.g. `?lens=recent`) — mounting bare
-  `/library` silently renders none of that chrome and the test times out.
-- Exception kept in Stack: the transient ledger consent prompt and the
-  Add-music entry (`library-import-open`, now in the Stack top bar) — these
-  are operational flows, not dashboard chrome.
+## Landed (fanned Library crate)
+- Every reachable `/library` lens (`?lens=recent|artists|…` included) renders
+  the same fanned Kept/Added crate rather than switching to a legacy dashboard
+  or flat list. Deep-linked lenses retain their lens controls above the crate;
+  the crate owns sorting, unopened filtering, import access, release/artist
+  navigation, caught-track playback, and removed-item actions.
+- The default crate keeps the operational Add-music entry and the connected
+  Spotify sync bar. An empty deep-linked lens offers “Show all” in place,
+  while an empty default crate offers Add music and Open the dial.
+- Added artists remain bounded initially, but expand in place to reveal the
+  complete list; they never hand off to a separate Index route.
+
+**Why:** the old split made the same Library URL feel like unrelated products
+and left Added artists at a dead end. A single crate preserves the useful
+controls while making every entry path visually and behaviorally consistent.
+
+**How to apply:** keep new Library entry paths inside the crate read model.
+Preserve explicit provenance/date/attendance wording, and never merge
+automatic Heard attendance into intentional keeps.
 
 ## Still separate tasks (do not duplicate in spike task)
 - Expand-then-keep Feed row behavior + byline (own task)

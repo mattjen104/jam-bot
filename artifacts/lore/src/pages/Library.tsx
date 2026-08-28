@@ -1081,10 +1081,10 @@ export default function Library() {
     lens === "artists" ? "artist" :
     (lens === "recent" || lens === "lore" || lens === "matching" || lens === "critic") ? "track" :
     "album"; // default (lens="") and lens="albums"
-  // True when the default full-screen Stack is the active surface.
-  // Other lenses (artists, recent, lore, matching, critic) use the
-  // dashboard shell; only the plain album Stack strips it.
-  const isStackView = viewMode === "album";
+  // Every reachable Library URL is the same fanned crate. URL lenses still
+  // scope the server query, while the crate remains the single visual shell
+  // instead of reviving the retired dashboard/list presentation.
+  const isStackView = true;
 
   // appConfig retained for other consumers in this file
   useAppConfig();
@@ -1169,21 +1169,19 @@ export default function Library() {
   );
 
 
-  // Sentinel for IntersectionObserver — used in track-view lenses only.
-  // In the album-first Stack view (viewMode === "album") we eagerly pre-fetch
-  // all pages so buildAlbumGroups sees the complete library (including all
-  // historical Spotify imports), rather than only the first N scrolled rows.
+  // The crate is the only Library surface now, so every lens must receive the
+  // complete bounded library before it groups releases. This also prevents a
+  // deep-linked track lens from quietly stopping at the first page.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    // Album view: fire next-page fetches without waiting for scroll.
-    // We gate on !isFetchingNextPage so we don't queue concurrent fetches.
-    if (viewMode === "album" && hasNextPage && !isFetchingNextPage) {
+    if (isStackView && hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
     }
-  }, [viewMode, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [isStackView, hasNextPage, isFetchingNextPage, fetchNextPage]);
   useEffect(() => {
-    // Track-view lenses: use IntersectionObserver as before.
-    if (viewMode === "album") return;
+    // The legacy track/artist list no longer renders, so its scroll sentinel
+    // must not start a second pagination loop.
+    if (isStackView) return;
     const el = sentinelRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -1775,8 +1773,8 @@ export default function Library() {
           </a>
         )}
 
-        {/* ── Reconnect prompt (has library, lost Spotify) — non-Stack only ── */}
-        {!isStackView && showReconnectPrompt && (
+        {/* ── Reconnect prompt (has library, lost Spotify) ── */}
+        {showReconnectPrompt && (
           <div
             style={{ padding: "14px 15px", borderBottom: "1px solid hsl(var(--border))" }}
             data-testid="library-reconnect-prompt"
@@ -1857,8 +1855,8 @@ export default function Library() {
           </div>
         )}
 
-        {/* ── Lenses + Sort + Filter controls (non-Stack lenses only) ── */}
-        {!isStackView && (
+        {/* ── Lens controls remain available above the crate on deep links. ── */}
+        {lens !== "" && (
           <>
             <div
               style={{
@@ -2097,6 +2095,36 @@ export default function Library() {
           </>
         )}
 
+        {isAuthenticated && hasSpotify && (
+          <div data-testid="library-sync-stack">
+            <SyncBar
+              syncJobData={syncJobData}
+              syncBusy={syncBusy}
+              isSyncActive={isSyncActive}
+              syncError={syncError}
+              syncNeedsReconnect={syncNeedsReconnect}
+              syncReceiptOpen={syncReceiptOpen}
+              reconnectBusy={reconnectBusy}
+              onSync={() => void handleSync()}
+              onReconnect={() => void handleReconnect()}
+              onToggleReceipt={() => setSyncReceiptOpen((value) => !value)}
+            />
+          </div>
+        )}
+
+        {jobData?.status === "done" &&
+          sourceFilter !== "keep" &&
+          importStats != null &&
+          importStats.total > 0 && (
+            <div
+              className="library-crate__import-stat"
+              data-testid="library-import-match-stat"
+            >
+              <b>{(importStats.total - importStats.softCount).toLocaleString()}</b>{" "}
+              of {importStats.total.toLocaleString()} from Spotify matched
+            </div>
+          )}
+
         {libLoading ? (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {[0, 1, 2, 3, 4].map((i) => (
@@ -2117,6 +2145,7 @@ export default function Library() {
             seedArtists={visibleSeeds}
             sort={sortFilter}
             unopenedOnly={new URLSearchParams(search).get("unopened") === "1"}
+            activeLens={lens !== ""}
             onImport={openImportModal}
           />
         ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (
@@ -2575,7 +2604,7 @@ export default function Library() {
           </>
         )}
 
-        {/* ── Sync & export receipts (non-Stack only) ── */}
+        {/* ── Sync & export receipts (legacy lens-only shell) ── */}
         {!isStackView && (
           <>
             <TierHd label="Sync & export" hint="receipts, not content" />
@@ -2750,6 +2779,54 @@ export default function Library() {
                 something, it says less rather than guessing.
               </p>
             </div>
+          </>
+        )}
+
+        {/* The crate's SyncBar lives above the content; keep its receipt rows
+            available there too, without bringing back the legacy export shell. */}
+        {isStackView && syncReceiptOpen && (
+          <>
+            {unavailableItems.length > 0 && syncJobData && (
+              <>
+                <TierHd
+                  label="Not on Spotify"
+                  count={syncJobData.results?.unavailable ?? unavailableItems.length}
+                />
+                {unavailableItems.map((item) => (
+                  <UnavailableRow key={item.mbid} item={item} />
+                ))}
+                {(syncJobData.results?.unavailable ?? 0) > 200 && (
+                  <div style={{ padding: "8px 15px" }}>
+                    <a
+                      href={`/api/me/library/sync/${syncJobData.jobId}/unavailable?format=csv`}
+                      download
+                      style={{
+                        fontFamily: "var(--app-font-mono)",
+                        fontSize: 10,
+                        color: "hsl(var(--library))",
+                        textDecoration: "none",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
+                      }}
+                      data-testid="library-sync-unavailable-download"
+                    >
+                      Download all ({syncJobData.results?.unavailable}) ↓
+                    </a>
+                  </div>
+                )}
+              </>
+            )}
+            {searchMatchedItems.length > 0 && syncJobData && (
+              <>
+                <TierHd
+                  label="Matched by search"
+                  count={syncJobData.results?.searchMatched ?? searchMatchedItems.length}
+                />
+                {searchMatchedItems.map((item) => (
+                  <SearchMatchedRow key={item.mbid} item={item} />
+                ))}
+              </>
+            )}
           </>
         )}
 

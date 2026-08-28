@@ -20,6 +20,7 @@ import Journal from "@/pages/Journal";
 import WeeklyRecap from "@/pages/WeeklyRecap";
 import Following from "@/pages/Following";
 import Library from "@/pages/Library";
+import Heard from "@/pages/Heard";
 import ImportedSets from "@/pages/ImportedSets";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
@@ -111,6 +112,7 @@ function Router() {
         <Route path="/weekly-recap" component={WeeklyRecap} />
         <Route path="/following" component={Following} />
         <Route path="/library" component={Library} />
+        <Route path="/heard" component={Heard} />
         {/* Imported portable sets (XSPF/JSPF uploads) — personal material,
             structurally separate from the radio archive. */}
         <Route path="/sets" component={ImportedSets} />

@@ -1730,6 +1730,74 @@ export function useMyWeeklySummary(week: string | null) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Confirmed listening today — GET /api/me/attendance/heard
+// ---------------------------------------------------------------------------
+
+export interface HeardItem {
+  attendanceId: number;
+  spinId: number;
+  heardAt: string;
+  rawTitle: string | null;
+  rawArtist: string | null;
+  dwellSeconds: number;
+  recording: {
+    mbid: string;
+    title: string;
+    artist: string;
+    artistMbid: string | null;
+    artworkUrl: string | null;
+    durationMs: number | null;
+  } | null;
+  station: { id: number; slug: string; name: string } | null;
+  show: { id: number; name: string; djName: string | null } | null;
+}
+
+export interface HeardToday {
+  day: string;
+  timezone: string;
+  dayStart: string;
+  dayEnd: string;
+  partial: boolean;
+  items: HeardItem[];
+}
+
+export const ME_HEARD_TODAY_KEY = ["me", "attendance", "heard"] as const;
+
+function localTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+function isHeardToday(value: unknown): value is HeardToday {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      Array.isArray((value as { items?: unknown }).items) &&
+      typeof (value as { timezone?: unknown }).timezone === "string",
+  );
+}
+
+/** Confirmed individual spins for the current day in the listener's timezone. */
+export function useMyHeardToday() {
+  const tz = localTimezone();
+  return useQuery({
+    queryKey: [...ME_HEARD_TODAY_KEY, tz] as const,
+    queryFn: async () => {
+      const value = await fetchOrNull<unknown>(
+        `/api/me/attendance/heard?tz=${encodeURIComponent(tz)}`,
+      );
+      return isHeardToday(value) ? value : null;
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+}
+
 /**
  * Returns the server's canonical current ISO week label (e.g. "2026-W31").
  * This is the authoritative source for the current week — it must not be
