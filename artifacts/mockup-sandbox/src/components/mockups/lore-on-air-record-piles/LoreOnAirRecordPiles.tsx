@@ -126,32 +126,30 @@ export function LoreOnAirRecordPiles() {
             <div className="air-kicker">Lore / on air</div>
             <h1>Radio in motion.</h1>
             <p className="air-deck">Add artists to see which stations are playing your music.</p>
+            <section className="air-command" aria-label="Add artists">
+              <form className="air-artist-cli" onSubmit={submitArtistCommand}>
+                <span className="air-artist-cli__prompt" aria-hidden="true">&gt;_</span>
+                <input
+                  aria-label="Add artists"
+                  value={artistCommand}
+                  onChange={(event) => setArtistCommand(event.target.value)}
+                  placeholder="/add Radiohead, Grouper"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                />
+                <button type="submit">Add</button>
+              </form>
+              <p className="air-command-hint">Type <code>/add artist, artist</code> to see where they’re playing</p>
+              {addedArtists.length > 0 && (
+                <div className="air-added-artists" aria-live="polite">
+                  {addedArtists.map((artist) => <span key={artist}>{artist}</span>)}
+                </div>
+              )}
+            </section>
           </div>
           <div className="air-live-mark"><span className="air-live-dot" aria-hidden="true" /> live crossing</div>
         </header>
-
-        <section className="air-command" aria-label="Add artists">
-          <p className="air-command-label">FOLLOW THE SIGNAL</p>
-          <form className="air-artist-cli" onSubmit={submitArtistCommand}>
-            <span className="air-artist-cli__prompt" aria-hidden="true">&gt;_</span>
-            <input
-              aria-label="Add artists"
-              value={artistCommand}
-              onChange={(event) => setArtistCommand(event.target.value)}
-              placeholder="/add Radiohead, Grouper"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-            />
-            <button type="submit">Add</button>
-          </form>
-          <p className="air-command-hint">Type <code>/add artist, artist</code> to see where they’re playing</p>
-          {addedArtists.length > 0 && (
-            <div className="air-added-artists" aria-live="polite">
-              {addedArtists.map((artist) => <span key={artist}>{artist}</span>)}
-            </div>
-          )}
-        </section>
 
         <section aria-label="Crossing time scope">
           <div className="air-scope">
