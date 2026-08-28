@@ -12193,8 +12193,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   cursor: pointer;
 }
 .home-discovery__lens-link {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 .home-discovery__lens-link:hover {
   color: hsl(var(--foreground));
