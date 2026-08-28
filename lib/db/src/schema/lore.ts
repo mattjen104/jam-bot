@@ -157,6 +157,17 @@ export const stationsTable = pgTable("stations", {
   scheduleUrl: text("schedule_url"),
   donateUrl: text("donate_url"),
   logoUrl: text("logo_url"),
+  /**
+   * Provenance of logoUrl. "curated" is operator/seed-owned and must never be
+   * replaced automatically; "website" was discovered on the official
+   * homepage; "radio_browser" is the directory favicon fallback.
+   */
+  logoSource: text("logo_source"),
+  /** Intrinsic raster dimensions recorded by the homepage logo probe. */
+  logoWidth: integer("logo_width"),
+  logoHeight: integer("logo_height"),
+  /** Last completed station-logo discovery attempt. Null = never checked. */
+  logoCheckedAt: timestamp("logo_checked_at"),
   /** Now-playing adapter key, e.g. "radio_paradise" | "kexp" | "bbc". */
   nowPlayingSource: text("now_playing_source"),
   /**

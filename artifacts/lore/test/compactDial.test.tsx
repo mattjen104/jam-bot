@@ -1253,7 +1253,8 @@ describe("CompactDial first-play rail", () => {
       "/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&home=1",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    expect(tile.querySelector("img")).toBeNull();
+    expect(tile.querySelector("img[data-testid='compact-first-play-art']")?.getAttribute("src"))
+      .toContain("/api/art?src=");
     expect(tile.querySelector(".compact-first-plays__artist")?.textContent).toBe("New Artist");
     expect(tile.querySelector(".compact-first-plays__release-date")?.textContent).toBe("17 May 2024");
     expect(tile.textContent).toContain("KEXP");

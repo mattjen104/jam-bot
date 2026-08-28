@@ -1000,7 +1000,9 @@ router.post("/admin/radio-browser/enroll", h(async (req, res) => {
       tier: "longtail",
       active: true,
       nowPlayingSource: "radio_browser_icy",
-      ...(rbStation.favicon?.trim() ? { logoUrl: rbStation.favicon.trim() } : {}),
+      ...(rbStation.favicon?.trim()
+        ? { logoUrl: rbStation.favicon.trim(), logoSource: "radio_browser" }
+        : {}),
       ...(rbStation.country?.trim() ? { country: rbStation.country.trim() } : {}),
       nowPlayingConfig: {},
       updatedAt: new Date(),

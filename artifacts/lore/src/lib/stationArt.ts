@@ -1,19 +1,21 @@
-import { safeHttpUrl } from "./utils";
+/** A compact, deterministic badge label for stations without trustworthy art. */
+export function stationInitials(name: string): string {
+  const words = name
+    .replace(/\b(?:AM|FM)\b/gi, " ")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return "RAD";
 
-/**
- * Use the station homepage's domain favicon as a lightweight identity fallback
- * when a station has no curated or Radio Browser logo. The returned URL still
- * goes through /api/art in StationMark, so the browser and server cache it.
- */
-export function stationFaviconUrl(homepageUrl: string | null | undefined): string | null {
-  const safe = safeHttpUrl(homepageUrl);
-  if (!safe) return null;
-
-  try {
-    const homepage = new URL(safe);
-    const domain = `${homepage.protocol}//${homepage.host}`;
-    return `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(domain)}`;
-  } catch {
-    return null;
-  }
+  const callsign = words.find(
+    (word) => /^[A-Z0-9]{2,5}$/.test(word) && /[A-Z]/.test(word),
+  );
+  if (callsign) return callsign.slice(0, 4);
+  if (words.length === 1) return words[0]!.slice(0, 3).toUpperCase();
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
 }

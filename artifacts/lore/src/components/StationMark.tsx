@@ -13,16 +13,15 @@
  *  - External URLs route through the existing art proxy (same caching and
  *    mixed-content upgrade as other external imagery); non-http(s) values
  *    are rejected by safeHttpUrl.
- *  - Missing, invalid, or failed logo URLs try the station homepage favicon
- *    before falling back to a neutral radio-glyph mark — never a broken image
- *    or album artwork.
+ *  - Missing, invalid, failed, or undersized logo URLs use a sharp generated
+ *    station badge — never a stretched favicon, broken image, or album art.
  *  - Decorative: adjacent station-name text stays the accessible identity,
  *    so the mark is hidden from assistive tech and never interactive.
  */
 import { useState } from "react";
 import { Radio } from "lucide-react";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { stationFaviconUrl } from "../lib/stationArt";
+import { stationInitials } from "../lib/stationArt";
 import { safeHttpUrl } from "../lib/utils";
 
 export interface StationMarkProps {
@@ -40,7 +39,6 @@ export interface StationMarkProps {
 export function StationMark({
   name,
   logoUrl,
-  homepageUrl,
   variant = "inline",
   className,
 }: StationMarkProps) {
@@ -48,12 +46,8 @@ export function StationMark({
   // a fresh attempt instead of inheriting the failure.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const safe = safeHttpUrl(logoUrl);
-  const fallback = stationFaviconUrl(homepageUrl);
-  const fallbackSrc = fallback ? proxyArtUrl(fallback) : null;
   const primarySrc = safe ? proxyArtUrl(safe) : null;
-  // A failed explicit logo should not strand the station on a glyph when its
-  // homepage still has a usable domain favicon.
-  const src = primarySrc && failedSrc !== primarySrc ? primarySrc : fallbackSrc;
+  const src = primarySrc && failedSrc !== primarySrc ? primarySrc : null;
 
   const cls = ["station-mark", `station-mark--${variant}`, className]
     .filter(Boolean)
@@ -67,7 +61,8 @@ export function StationMark({
         aria-hidden="true"
         data-station-mark="fallback"
       >
-        <Radio aria-hidden="true" />
+        <Radio className="station-mark__radio" aria-hidden="true" />
+        <span className="station-mark__initials">{stationInitials(name)}</span>
       </span>
     );
   }
@@ -81,6 +76,25 @@ export function StationMark({
       loading="lazy"
       decoding="async"
       draggable={false}
+      onLoad={(event) => {
+        const image = event.currentTarget;
+        const renderedSide = Math.max(
+          image.clientWidth,
+          image.clientHeight,
+          variant === "cube" ? 22 : 14,
+        );
+        // Require roughly 2x source pixels for the largest rendered edge. This
+        // accepts normal 128px station assets at the 58px home size while
+        // refusing 16/32px favicons that browsers would visibly blur.
+        if (
+          image.naturalWidth > 0 &&
+          image.naturalHeight > 0 &&
+          Math.min(image.naturalWidth, image.naturalHeight) <
+            Math.ceil(renderedSide * 2)
+        ) {
+          setFailedSrc(src);
+        }
+      }}
       onError={() => setFailedSrc(src)}
       data-station-mark="logo"
     />

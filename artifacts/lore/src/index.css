@@ -198,7 +198,7 @@
   height: 14px;
   border-radius: 3px;
   overflow: hidden;
-  object-fit: cover;
+  object-fit: contain;
   background: hsl(var(--secondary));
 }
 /* Cube treatment — left of the now-playing text in single-station lists. */
@@ -215,6 +215,21 @@
 .station-mark--fallback svg {
   width: 62%;
   height: 62%;
+}
+.station-mark__initials {
+  display: none;
+  font-family: var(--lore-font-home-heading);
+  font-size: 0.36em;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.station-mark--cube.station-mark--fallback .station-mark__radio {
+  display: none;
+}
+.station-mark--cube.station-mark--fallback .station-mark__initials {
+  display: block;
 }
 
 /* ── Ticker strip ───────────────────────────────────────────────────────────
@@ -6993,11 +7008,17 @@
 /* /feed rows with a direct play button — button + row share a line. */
 #dial-feed-rows .dial-feed-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
-#dial-feed-rows .dial-feed-row > .fdrow,
-#dial-feed-rows .dial-feed-row > :last-child {
+#dial-feed-rows .dial-feed-row__station-mark {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-self: center;
+}
+#dial-feed-rows .dial-feed-row__body {
   flex: 1;
   min-width: 0;
 }
@@ -9138,7 +9159,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-self: center;
   margin-left: 6px;
   border-radius: 3px;
-  object-fit: cover;
+  object-fit: contain;
   background: hsl(var(--secondary) / 0.6);
 }
 .compact-category-dial__station-lines {
@@ -10615,6 +10636,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--foreground));
   text-align: left;
   cursor: pointer;
+}
+.compact-first-plays__art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-bottom: 5px;
+  border-radius: 3px;
+  object-fit: cover;
+  background: hsl(var(--secondary) / 0.6);
 }
 .compact-first-plays__tile:focus-visible {
   outline: 2px solid hsl(var(--primary));

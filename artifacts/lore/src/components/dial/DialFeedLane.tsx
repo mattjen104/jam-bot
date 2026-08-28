@@ -31,6 +31,7 @@ import { StationAdminContextMenu } from "./StationAdminContextMenu";
 import { CompactPlayButton } from "../CompactPlayButton";
 import { resolvePlaybackSource, type PlayerStatus } from "../../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../../lib/utils";
+import { StationMark } from "../StationMark";
 import { type CrossingScope, DEFAULT_CROSSING_SCOPE, hasAnyCrossing } from "../../lib/crossingScope";
 
 /** The shape shared by all sorted dial rows (reason / dj / rest bands). */
@@ -256,9 +257,17 @@ export function DialFeedLane({
         >
         <div
           data-feed-band={band}
-          className={actionSlot ? "dial-feed-row" : undefined}
+          className="dial-feed-row"
         >
+          <StationMark
+            name={row.ds.station.name}
+            logoUrl={row.ds.station.logoUrl}
+            homepageUrl={row.ds.station.homepageUrl}
+            variant="cube"
+            className="dial-feed-row__station-mark"
+          />
           {actionSlot}
+          <div className="dial-feed-row__body">
           {asReason ? (
             <FrontDoorRow
               ds={row.ds}
@@ -275,6 +284,7 @@ export function DialFeedLane({
               onAddArtist={onAddArtist}
               onSetExpand={() => onSetExpand(row)}
               compactSentence
+               showStationMark={false}
                siteLinkInTier1={false}
               crossingScope={crossingScope}
               hasCrossing={hasCrossing}
@@ -293,12 +303,14 @@ export function DialFeedLane({
               artworkUrl={artworkUrl}
               popLine={suppressCrossings ? null : popLineFor(row.ds.station.slug)}
               compactSentence
+               showStationMark={false}
                siteLinkInTier1={false}
               suppressCrossings={suppressCrossings}
               crossingScope={crossingScope}
               hasCrossing={hasCrossing}
             />
           )}
+          </div>
         </div>
         </StationAdminContextMenu>
         );

@@ -335,6 +335,8 @@ export interface FrontDoorRowProps {
    * (or long-press on collapsed) tunes in.
    */
   compactSentence?: boolean;
+  /** DialFeedLane renders the station mark in its own left rail. */
+  showStationMark?: boolean;
   /**
    * When true, a ✳ superscript marker appears after the artist lead to
    * indicate that artist investigation sources are available.
@@ -372,7 +374,7 @@ export interface FrontDoorRowProps {
   unchangedSinceScan?: boolean;
 }
 
-export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, siteLinkInTier1 = true, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false, hasCrossing = false, crossingScope = DEFAULT_CROSSING_SCOPE, onCrossingDetail, onOpenLastSet, lastSetSummary, unchangedSinceScan = false }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist, onSetExpand, compactSentence, showStationMark = true, siteLinkInTier1 = true, hasInvestigationSources = false, onKeep, onOpenArtistInvestigation, suppressCrossings = false, hasCrossing = false, crossingScope = DEFAULT_CROSSING_SCOPE, onCrossingDetail, onOpenLastSet, lastSetSummary, unchangedSinceScan = false }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -557,11 +559,13 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {/* Station identity mark — the station's own logo (or a neutral
             fallback), never track artwork. Decorative; the station name
             beside it stays the accessible identity. */}
-        <StationMark
-          name={ds.station.name}
-          logoUrl={ds.station.logoUrl}
-          homepageUrl={ds.station.homepageUrl}
-        />
+        {showStationMark && (
+          <StationMark
+            name={ds.station.name}
+            logoUrl={ds.station.logoUrl}
+            homepageUrl={ds.station.homepageUrl}
+          />
+        )}
         <span className="fdrow__compact-station">{compact.station}</span>
         {/* ⬤ crossing indicator — present iff the station has ≥1 crossing at
             the active scope. Tapping toggles the inline scope detail. */}

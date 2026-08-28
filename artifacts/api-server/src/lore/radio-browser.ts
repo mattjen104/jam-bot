@@ -525,6 +525,7 @@ export async function upsertRadioBrowserStations(
           country: clamp(s.country) ?? null,
           homepageUrl: clamp(s.homepage) ?? null,
           logoUrl: clamp(s.favicon) ?? null,
+          logoSource: clamp(s.favicon) ? "radio_browser" : null,
           source: "radio_browser",
           tier: "longtail",
           tags,

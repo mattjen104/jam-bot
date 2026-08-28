@@ -80,13 +80,12 @@ describe("StationMark", () => {
     expect(container.querySelector("img")).toBeNull();
   });
 
-  it("uses a proxied homepage favicon when the station has no logo URL", () => {
+  it("uses a sharp generated badge instead of fetching a homepage favicon", () => {
     const { container } = render(
       <StationMark name="KEXP" logoUrl={null} homepageUrl="https://kexp.org/schedule/" />,
     );
-    const img = container.querySelector("img[data-station-mark='logo']");
-    const favicon = "https://www.google.com/s2/favicons?sz=128&domain_url=https%3A%2F%2Fkexp.org";
-    expect(img?.getAttribute("src")).toBe(`/api/art?src=${encodeURIComponent(favicon)}`);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector(".station-mark__initials")?.textContent).toBe("KEXP");
   });
 
   it("rejects non-http(s) URLs instead of rendering them", () => {
@@ -113,15 +112,44 @@ describe("StationMark", () => {
     expect(container.querySelector("img[data-station-mark='logo']")).not.toBeNull();
   });
 
-  it("uses the homepage favicon after an explicit logo fails", () => {
+  it("uses the generated station badge after an explicit logo fails", () => {
     const { container } = render(
       <StationMark name="KEXP" logoUrl={LOGO} homepageUrl="https://kexp.org" />,
     );
     fireEvent.error(container.querySelector("img[data-station-mark='logo']")!);
-    const fallback = "https://www.google.com/s2/favicons?sz=128&domain_url=https%3A%2F%2Fkexp.org";
-    expect(container.querySelector("img[data-station-mark='logo']")?.getAttribute("src")).toBe(
-      `/api/art?src=${encodeURIComponent(fallback)}`,
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector(".station-mark__initials")?.textContent).toBe("KEXP");
+  });
+
+  it("rejects a loaded raster that is too small for its rendered size", () => {
+    const { container } = render(
+      <StationMark name="KEXP" logoUrl={LOGO} variant="cube" />,
     );
+    const img = container.querySelector("img[data-station-mark='logo']") as HTMLImageElement;
+    Object.defineProperties(img, {
+      clientWidth: { configurable: true, value: 58 },
+      clientHeight: { configurable: true, value: 58 },
+      naturalWidth: { configurable: true, value: 32 },
+      naturalHeight: { configurable: true, value: 32 },
+    });
+    fireEvent.load(img);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector(".station-mark__initials")?.textContent).toBe("KEXP");
+  });
+
+  it("keeps a loaded raster with enough pixels for the rendered mark", () => {
+    const { container } = render(
+      <StationMark name="KEXP" logoUrl={LOGO} variant="cube" />,
+    );
+    const img = container.querySelector("img[data-station-mark='logo']") as HTMLImageElement;
+    Object.defineProperties(img, {
+      clientWidth: { configurable: true, value: 58 },
+      clientHeight: { configurable: true, value: 58 },
+      naturalWidth: { configurable: true, value: 256 },
+      naturalHeight: { configurable: true, value: 256 },
+    });
+    fireEvent.load(img);
+    expect(container.querySelector("img[data-station-mark='logo']")).not.toBeNull();
   });
 });
 

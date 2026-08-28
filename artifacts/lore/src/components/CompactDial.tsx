@@ -60,6 +60,8 @@ import { cleanLiveValue } from "./dialViewHelpers";
 import { StationMark } from "./StationMark";
 import { usePlayer } from "../player/PlayerProvider";
 import { releaseDateLabel } from "../lib/firstPlayDate";
+import { proxyArtUrl } from "../lib/proxyArt";
+import { RUMOURS, onArtError } from "../lib/rumours";
 
 const COMPACT_DIAL_SIZE = 5;
 /** Rows per page at the "compact" (name-only remote) density. */
@@ -657,6 +659,17 @@ export function FirstPlayFeed() {
               );
             }}
           >
+            <img
+              className="compact-first-plays__art"
+              src={proxyArtUrl(item.artworkUrl) ?? RUMOURS}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              onError={onArtError}
+              data-testid="compact-first-play-art"
+            />
             <span className="compact-first-plays__artist">{item.artist}</span>
             <span className="compact-first-plays__title">{item.title}</span>
             <span className="compact-first-plays__byline">
