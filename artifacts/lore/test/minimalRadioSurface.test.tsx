@@ -115,17 +115,29 @@ describe("MinimalRadioSurface", () => {
   });
 
   it("falls through timeframes and can force lifetime counts on every station", () => {
+    const setRow = row("set", "Set", true, 11);
+    const dayRow = row("day", "Day", false, 12);
+    dayRow.ds.crossings = 3;
+    const weekRow = row("week", "Week", false, 13);
+    weekRow.ds.weekArtistCrossings = 4;
+    const monthRow = row("month", "Month", false, 14);
+    monthRow.ds.monthCrossings = 6;
     render(
       <MinimalRadioSurface
-        rows={[row("alpha", "Alpha", false, 5), row("beta", "Beta", false, 7)]}
+        rows={[setRow, dayRow, weekRow, monthRow]}
         libraryItems={[]}
         preset="now"
       />,
     );
-    expect(screen.getByTestId("minimal-radio-station-meta-alpha").textContent).toBe("5 · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-set").textContent).toBe("1 · this set");
+    expect(screen.getByTestId("minimal-radio-station-meta-day").textContent).toBe("3 · 24 hr");
+    expect(screen.getByTestId("minimal-radio-station-meta-week").textContent).toBe("4 · 7d");
+    expect(screen.getByTestId("minimal-radio-station-meta-month").textContent).toBe("6 · 30d");
     fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
-    expect(screen.getByTestId("minimal-radio-station-meta-alpha").textContent).toBe("5 · lifetime");
-    expect(screen.getByTestId("minimal-radio-station-meta-beta").textContent).toBe("7 · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-set").textContent).toBe("11 · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-day").textContent).toBe("12 · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-week").textContent).toBe("13 · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-month").textContent).toBe("14 · lifetime");
     expect(screen.getByRole("button", { name: "Show lifetime crossings" }).textContent).toBe("Auto");
   });
 });
