@@ -1,7 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { db, embedLinkTable, recordingsTable } from "@workspace/db";
+import request from "supertest";
+import {
+  db,
+  embedLinkTable,
+  recordingsTable,
+  stationsTable,
+} from "@workspace/db";
+import app from "../src/app.js";
 import {
   EMBED_TTL_MS,
   chooseEmbedRelease,
@@ -14,12 +21,15 @@ import {
   normalizeEmbedText,
   parseBandcampReleasePage,
   parseYouTubeSearch,
+  startEmbedResolutionWorker,
+  stopEmbedResolutionWorker,
   upsertEmbedResolution,
   type EmbedResolutionInput,
 } from "../src/lore/embed-resolution.js";
 
 const run = randomUUID().slice(0, 8);
 const mbid = `test-embed-resolution-${run}`;
+const stationSlug = `test-embed-resolution-station-${run}`;
 let dbAvailable = false;
 
 function input(
@@ -51,6 +61,12 @@ beforeAll(async () => {
       title: "Embed Resolution Track",
       artist: "Embed Resolution Artist",
     });
+    await db.insert(stationsTable).values({
+      slug: stationSlug,
+      name: "Embed Resolution Station",
+      streamUrl: "https://stream.example.invalid/embed-resolution",
+      stationClass: "community",
+    });
     dbAvailable = true;
   } catch {
     // Database-backed suites are allowed to skip when DATABASE_URL is absent.
@@ -61,6 +77,7 @@ afterAll(async () => {
   if (!dbAvailable) return;
   await db.delete(embedLinkTable).where(eq(embedLinkTable.recordingMbid, mbid));
   await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
+  await db.delete(stationsTable).where(eq(stationsTable.slug, stationSlug));
 });
 
 describe("role-aware embed resolution", () => {
@@ -364,5 +381,56 @@ describe("off-request provider resolution guards", () => {
         [videos[2]!],
       ),
     ).toBeNull();
+  });
+});
+
+describe("embed resolution worker runtime isolation", () => {
+  it("contains a claim timeout, re-arms, and leaves listener routes available", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const timeout = new Error("timeout acquiring a database connection");
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const unhandled: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    const select = vi.spyOn(db, "select").mockImplementation(() => {
+      throw timeout;
+    });
+
+    process.on("unhandledRejection", onUnhandledRejection);
+    vi.useFakeTimers();
+    try {
+      startEmbedResolutionWorker();
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "database pool may be under pressure. Retrying with backoff: timeout acquiring a database connection",
+        ),
+      );
+      expect(unhandled).toEqual([]);
+      expect(vi.getTimerCount()).toBe(1);
+    } finally {
+      stopEmbedResolutionWorker();
+      vi.useRealTimers();
+      select.mockRestore();
+      process.off("unhandledRejection", onUnhandledRejection);
+      warning.mockRestore();
+    }
+
+    const health = await request(app).get("/api/health");
+    expect(health.status).toBe(200);
+    expect(health.body).toMatchObject({ ok: true, db: "ok" });
+
+    const station = await request(app).get(
+      `/api/stations/${stationSlug}/now-playing`,
+    );
+    expect(station.status).toBe(200);
+    expect(station.body).toMatchObject({
+      station: { slug: stationSlug },
+      nowPlaying: null,
+    });
   });
 });
