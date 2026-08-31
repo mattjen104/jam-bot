@@ -91,6 +91,7 @@ function StationPresetButton({
   const logo = safeLogo ? proxyArtUrl(safeLogo) : null;
   const showLogo = Boolean(logo && !imageFailed);
   const summary = crossingSummary(row, lifetimeOnly);
+  const artist = liveTrack(row)?.artist?.trim() || "—";
 
   return (
     <div className="minimal-radio__station-option">
@@ -122,6 +123,13 @@ function StationPresetButton({
           <span>{row.ds.station.name}</span>
         )}
       </button>
+      <span
+        className="minimal-radio__station-artist"
+        data-testid={`minimal-radio-station-artist-${row.ds.station.slug}`}
+        title={artist === "—" ? undefined : artist}
+      >
+        {artist}
+      </span>
     </div>
   );
 }

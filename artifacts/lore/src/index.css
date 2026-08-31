@@ -13062,6 +13062,19 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font: 8px/1 var(--app-font-mono);
   white-space: nowrap;
 }
+.minimal-radio__station-artist {
+  width: 100%;
+  height: 27px;
+  min-height: 27px;
+  overflow: hidden;
+  color: hsl(var(--dim));
+  font: 8px/1.1 var(--app-font-mono);
+  text-align: center;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .minimal-radio__station-option > button {
   display: flex;
   align-items: center;

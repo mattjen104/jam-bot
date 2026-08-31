@@ -93,6 +93,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByRole("button", { name: "Select Alpha" }).textContent).toBe("Alpha");
     expect(screen.getByTestId("minimal-radio-station-meta-alpha").textContent).toBe("1 · this set");
     expect(screen.getByTestId("minimal-radio-station-meta-beta").textContent).toBe("5 · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-artist-alpha").textContent).toBe("Alpha artist");
     fireEvent.click(screen.getByTitle("Select Beta"));
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(toggle).not.toHaveBeenCalled();
