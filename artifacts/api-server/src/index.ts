@@ -393,7 +393,16 @@ async function bootLore(): Promise<void> {
     await resumeReplayResolutionJobs();
     await resumePendingImportedSets();
     await resumeReplayMaterializationJobs();
-    await resumeEmbedResolutionJobs();
+    try {
+      await resumeEmbedResolutionJobs();
+    } catch (err) {
+      // Embed discovery is optional background work. A saturated database
+      // must not prevent its worker from starting or take the API offline.
+      console.warn(
+        "[lore] embed resolution resume deferred: database pool may be under pressure; worker will retry",
+        err,
+      );
+    }
     startEmbedResolutionWorker();
     startSessionExpiryWorker();
     scheduleAnonCleanup();

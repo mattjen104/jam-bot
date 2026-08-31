@@ -603,6 +603,19 @@ const QUEUE_BATCH_SIZE = 4;
 const QUEUE_TICK_MS = 15_000;
 const QUEUE_RETRY_BASE_MS = 60_000;
 const QUEUE_RETRY_MAX_MS = 6 * 60 * 60 * 1000;
+const QUEUE_DB_BACKOFF_MS = 60_000;
+const queueRecovery = new Map<number, string>();
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function logQueueDatabaseFailure(scope: string, error: unknown): void {
+  console.warn(
+    `[lore] embed resolution worker ${scope} failed; database pool may be under pressure. ` +
+      `Retrying with backoff: ${errorMessage(error)}`,
+  );
+}
 
 function weekStart(date: Date): Date {
   const value = new Date(date);
@@ -890,9 +903,38 @@ async function claimQueueJob(): Promise<EmbedResolutionQueueJob | null> {
   return claimed ?? null;
 }
 
+async function recoverQueueJobs(): Promise<void> {
+  for (const [id, recovery] of queueRecovery) {
+    try {
+      const now = new Date();
+      await db
+        .update(embedResolutionQueueTable)
+        .set({
+          status: "retry",
+          lockedAt: null,
+          lastError: recovery,
+          nextAttemptAt: new Date(now.getTime() + QUEUE_RETRY_BASE_MS),
+          updatedAt: now,
+        })
+        .where(eq(embedResolutionQueueTable.id, id));
+      queueRecovery.delete(id);
+    } catch (error) {
+      logQueueDatabaseFailure(`could not requeue job ${id}`, error);
+      throw error;
+    }
+  }
+}
+
 async function processEmbedQueue(): Promise<void> {
+  await recoverQueueJobs();
   for (let i = 0; i < QUEUE_BATCH_SIZE; i++) {
-    const job = await claimQueueJob();
+    let job: EmbedResolutionQueueJob | null;
+    try {
+      job = await claimQueueJob();
+    } catch (error) {
+      logQueueDatabaseFailure("could not claim a job", error);
+      return;
+    }
     if (!job) return;
     queueActive.add(job.id);
     try {
@@ -904,19 +946,29 @@ async function processEmbedQueue(): Promise<void> {
       const attempts = job.attempts;
       const terminal = attempts >= MAX_ATTEMPTS;
       const delay = Math.min(QUEUE_RETRY_MAX_MS, QUEUE_RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1));
-      await db.update(embedResolutionQueueTable).set({
-        status: terminal ? "done" : "retry",
-        lockedAt: null,
-        lastError: String(error),
-        nextAttemptAt: new Date(Date.now() + delay),
-        updatedAt: new Date(),
-      }).where(eq(embedResolutionQueueTable.id, job.id));
+      const errorText = errorMessage(error);
+      try {
+        await db.update(embedResolutionQueueTable).set({
+          status: terminal ? "done" : "retry",
+          lockedAt: null,
+          lastError: errorText,
+          nextAttemptAt: new Date(Date.now() + delay),
+          updatedAt: new Date(),
+        }).where(eq(embedResolutionQueueTable.id, job.id));
+      } catch (persistenceError) {
+        // The job is already marked running, so remember it locally when the
+        // database is too busy to persist the retry. The next healthy tick
+        // requeues it before claiming more work.
+        queueRecovery.set(job.id, errorText);
+        logQueueDatabaseFailure(`could not persist failure for job ${job.id}`, persistenceError);
+        return;
+      }
       if (terminal) {
         const fetchedAt = new Date();
         const decision: EmbedResolutionInput = {
           recordingMbid: job.recordingMbid, provider: job.provider as EmbedProvider,
           role: job.role as EmbedRole, rung: 6, outcome: "transient_failure",
-          resolvedVia: "cache", confidence: "none", reason: String(error), fetchedAt,
+          resolvedVia: "cache", confidence: "none", reason: errorText, fetchedAt,
         };
         await upsertEmbedResolution(decision).catch(() => undefined);
         await recordEmbedMetric(job, decision, fetchedAt).catch(() => undefined);
@@ -940,9 +992,17 @@ export function startEmbedResolutionWorker(): void {
   if (queueStarted) return;
   queueStarted = true;
   const tick = (): void => {
-    void processEmbedQueue().finally(() => {
-      if (queueStarted) queueTimer = setTimeout(tick, QUEUE_TICK_MS);
-    });
+    void processEmbedQueue()
+      .then(
+        () => QUEUE_TICK_MS,
+        (error) => {
+          logQueueDatabaseFailure("queue tick", error);
+          return QUEUE_DB_BACKOFF_MS;
+        },
+      )
+      .then((delay) => {
+        if (queueStarted) queueTimer = setTimeout(tick, delay);
+      });
   };
   queueTimer = setTimeout(tick, QUEUE_TICK_MS);
 }
