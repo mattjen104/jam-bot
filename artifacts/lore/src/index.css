@@ -12934,7 +12934,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 
 /* ── Minimal Radio / Library front door ─────────────────────────────────── */
 .split-home--front-door {
+  display: block;
+  height: auto;
   min-height: calc(100dvh - var(--shell-h, 0px));
+  padding: 0;
+  overflow: visible;
   background:
     radial-gradient(circle at 10% 0%, hsl(var(--accent) / 0.08), transparent 34rem),
     hsl(var(--background));
