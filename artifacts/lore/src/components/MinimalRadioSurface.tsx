@@ -173,6 +173,7 @@ function crossingAlbums(
   row: DialLaneRow,
   libraryItems: LibraryItem[],
   stationSpins: readonly CrossingSpin[],
+  crossing: CrossingSummary,
 ): CrossingAlbum[] {
   const track = liveTrack(row);
   const crossingSpins = [
@@ -233,6 +234,30 @@ function crossingAlbums(
     }
     if (albums.length >= 5) break;
   }
+
+  // Lifetime/older crossing totals do not carry individual historical spins.
+  // When no exact recent release is available, use one saved crate album for
+  // each server-confirmed crossing artist rather than leaving the section
+  // empty or guessing from the current non-crossing track.
+  if (albums.length === 0 && crossing.count > 0) {
+    const fallbackArtists =
+      crossing.label === "24 hr"
+        ? row.ds.topArtistNames24h
+        : crossing.label === "7d"
+          ? row.ds.topArtistNames7d
+          : row.ds.topArtistNamesLifetime;
+    const usedArtists = new Set<string>();
+    for (const artist of fallbackArtists) {
+      const key = artist.trim().toLowerCase();
+      if (!key || usedArtists.has(key)) continue;
+      usedArtists.add(key);
+      add(libraryItems.find(
+        (item) => item.recording?.artist.trim().toLowerCase() === key,
+      ));
+      if (albums.length >= 5) break;
+    }
+  }
+
   return albums.slice(0, 5);
 }
 
@@ -258,8 +283,8 @@ function MinimalRadioCard({
   const { isSkipped, toggleSkip } = useDialSkipped();
   const track = liveTrack(row);
   const albums = useMemo(
-    () => crossingAlbums(row, libraryItems, stationSpins),
-    [row, libraryItems, stationSpins],
+    () => crossingAlbums(row, libraryItems, stationSpins, crossing),
+    [row, libraryItems, stationSpins, crossing],
   );
   const artwork = artForTrack(row, libraryItems);
   const playable = resolvePlaybackSource(row.ds.station) != null;

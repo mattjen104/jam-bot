@@ -247,6 +247,25 @@ describe("MinimalRadioSurface", () => {
     ).toBe("/album/release-7");
   });
 
+  it("fills From your crate for an older lifetime crossing when no recent spin detail remains", () => {
+    const station = row("alpha", "Alpha", false, 3);
+    station.ds.topArtistNamesLifetime = ["Artist 12"];
+
+    render(
+      <MinimalRadioSurface
+        rows={[station]}
+        libraryItems={[libraryItem(12)]}
+        preset="now"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Open Album 12 by Artist 12" }).getAttribute("href"),
+    ).toBe("/album/release-12");
+    expect(screen.queryByText("Your saved albums will appear here when this station crosses them."))
+      .toBeNull();
+  });
+
   it("keeps one hero above the compact remote and synchronizes station clicks and keyboard navigation", () => {
     render(
       <MinimalRadioSurface
