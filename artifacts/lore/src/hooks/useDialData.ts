@@ -968,6 +968,7 @@ export function useDialData(
   const applyNowPlayingOverride = useCallback((slug: string, entry: {
     mbid: string | null;
     artistMbid: string | null;
+    releaseGroupMbid?: string | null;
     title: string;
     artist: string;
     playedAt: string;
@@ -980,6 +981,8 @@ export function useDialData(
       const sameTrack = existing != null && existing.mbid != null && existing.mbid === entry.mbid;
       next.set(slug, {
         ...entry,
+        releaseGroupMbid: entry.releaseGroupMbid
+          ?? (sameTrack ? existing.releaseGroupMbid : null),
         releaseDate: entry.releaseDate ?? null,
         isFirstSpin: sameTrack ? existing.isFirstSpin : false,
         isLibraryHit: sameTrack ? existing.isLibraryHit : false,

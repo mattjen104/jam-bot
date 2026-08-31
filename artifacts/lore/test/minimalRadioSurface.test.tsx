@@ -242,8 +242,9 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "Open Track 7 by Artist 7" }))
-      .toHaveAttribute("href", "/album/release-7");
+    expect(
+      screen.getByRole("link", { name: "Open Track 7 by Artist 7" }).getAttribute("href"),
+    ).toBe("/album/release-7");
   });
 
   it("keeps one hero above the compact remote and synchronizes station clicks and keyboard navigation", () => {

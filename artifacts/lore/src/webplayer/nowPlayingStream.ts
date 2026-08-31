@@ -42,6 +42,8 @@ export interface SpinStreamEvent {
   isArtistHit?: boolean;
   /** MusicBrainz artist MBID when the spin has been resolved. */
   artistMbid?: string | null;
+  /** Primary MusicBrainz release-group MBID when the spin has been resolved. */
+  releaseGroupMbid?: string | null;
   /** MusicBrainz first-release year for the recording; null when unknown. */
   releaseYear?: number | null;
   /** MusicBrainz first-release date in partial-ISO form; null when unknown. */
@@ -110,6 +112,7 @@ function openStream(): void {
           ...(data.isLibraryHit != null ? { isLibraryHit: data.isLibraryHit } : {}),
           ...(data.isArtistHit != null ? { isArtistHit: data.isArtistHit } : {}),
           ...(data.artistMbid != null ? { artistMbid: data.artistMbid } : {}),
+          ...(data.releaseGroupMbid != null ? { releaseGroupMbid: data.releaseGroupMbid } : {}),
           ...(data.releaseYear != null ? { releaseYear: data.releaseYear } : {}),
           ...(data.releaseDate != null ? { releaseDate: data.releaseDate } : {}),
           ...(data.isFirstSpin != null ? { isFirstSpin: data.isFirstSpin } : {}),

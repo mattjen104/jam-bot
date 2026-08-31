@@ -205,7 +205,7 @@ function crossingAlbums(
   }
   const seen = new Set<string>();
   const albums: CrossingAlbum[] = [];
-  const add = (item: LibraryItem | undefined, spin?: typeof track) => {
+  const add = (item: LibraryItem | undefined, spin?: CrossingSpin) => {
     const recording = item?.recording;
     const releaseGroupMbid = spin?.releaseGroupMbid ?? recording?.releaseGroupMbid;
     if (!releaseGroupMbid || seen.has(releaseGroupMbid)) return;
