@@ -88,9 +88,11 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Now" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Lifetime" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Show lifetime crossings" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^Station type/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select Alpha" }).textContent).toBe("Alpha");
+    expect(screen.getByTestId("minimal-radio-station-meta-alpha").textContent).toBe("1 · this set");
+    expect(screen.getByTestId("minimal-radio-station-meta-beta").textContent).toBe("5 · lifetime");
     fireEvent.click(screen.getByTitle("Select Beta"));
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(toggle).not.toHaveBeenCalled();
@@ -110,5 +112,20 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(document.querySelector(".fdrow__crossing-dot")).toBeNull();
     expect(screen.queryByText(/crossing/i)).toBeNull();
+  });
+
+  it("falls through timeframes and can force lifetime counts on every station", () => {
+    render(
+      <MinimalRadioSurface
+        rows={[row("alpha", "Alpha", false, 5), row("beta", "Beta", false, 7)]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+    expect(screen.getByTestId("minimal-radio-station-meta-alpha").textContent).toBe("5 · lifetime");
+    fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
+    expect(screen.getByTestId("minimal-radio-station-meta-alpha").textContent).toBe("5 · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-beta").textContent).toBe("7 · lifetime");
+    expect(screen.getByRole("button", { name: "Show lifetime crossings" }).textContent).toBe("Auto");
   });
 });

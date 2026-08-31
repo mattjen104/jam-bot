@@ -93,7 +93,9 @@ export default function SplitHome() {
     crossingsEnabled: true,
     deferEnrichment: false,
   });
-  const libraryQuery = useMyLibraryInfinite({ source: "lore", sort: "added" }, 50);
+  // The Radio card needs the listener's actual imported library as well as
+  // Lore-kept tracks so imported albums can appear in crossing context.
+  const libraryQuery = useMyLibraryInfinite({ sort: "added" }, 50);
   const libraryItems = useMemo(
     () => libraryQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [libraryQuery.data],

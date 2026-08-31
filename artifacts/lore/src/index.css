@@ -12999,7 +12999,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   order: 2;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 12px;
   padding: 16px;
   border: 1px solid hsl(var(--border));
@@ -13018,14 +13018,51 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding: 0 8px;
   font-size: 9px;
 }
+.minimal-radio__station-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+}
+.minimal-radio__lifetime-toggle {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--dim));
+  font: 600 9px/1 var(--app-font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.minimal-radio__lifetime-toggle.is-active {
+  border-color: hsl(var(--accent));
+  background: hsl(var(--accent) / 0.14);
+  color: hsl(var(--accent));
+}
 .minimal-radio__station-buttons {
   display: flex;
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
   margin: 0;
   overflow-x: auto;
 }
-.minimal-radio__station-buttons button {
+.minimal-radio__station-option {
+  display: flex;
+  flex: 0 0 58px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.minimal-radio__station-crossing {
+  min-height: 10px;
+  color: hsl(var(--faint));
+  font: 8px/1 var(--app-font-mono);
+  white-space: nowrap;
+}
+.minimal-radio__station-option > button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13041,7 +13078,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font: 600 8px/1.12 var(--app-font-mono);
   cursor: pointer;
 }
-.minimal-radio__station-buttons button img {
+.minimal-radio__station-option > button img {
   display: block;
   width: 100%;
   height: 100%;
@@ -13050,7 +13087,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   object-fit: contain;
   background: hsl(var(--card));
 }
-.minimal-radio__station-buttons button span {
+.minimal-radio__station-option > button span {
   display: -webkit-box;
   overflow: hidden;
   padding: 5px;
@@ -13059,7 +13096,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
 }
-.minimal-radio__station-buttons button.is-active {
+.minimal-radio__station-option > button.is-active {
   border-color: hsl(var(--accent));
   background: hsl(var(--accent) / 0.14);
   color: hsl(var(--accent));
@@ -13239,6 +13276,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     padding: 11px 12px;
     border-radius: 11px;
   }
+  .minimal-radio__station-heading {
+    min-height: 48px;
+  }
   .minimal-radio__remote-label { display: none; }
   .minimal-radio__station-buttons {
     display: flex;
@@ -13248,7 +13288,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     margin: 0;
     overflow-x: auto;
   }
-  .minimal-radio__station-buttons button {
+  .minimal-radio__station-option {
+    flex-basis: 48px;
+  }
+  .minimal-radio__station-option > button {
     flex-basis: 48px;
     width: 48px;
     height: 48px;

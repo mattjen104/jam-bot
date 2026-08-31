@@ -44,42 +44,85 @@ function scoreFor(row: DialLaneRow, preset: RadioPreset): number {
   return row.ds.lifetimeCrossings + row.ds.lifetimeArtistCrossings;
 }
 
+interface CrossingSummary {
+  count: number;
+  label: "this set" | "24 hr" | "7d" | "30d" | "lifetime";
+}
+
+function crossingSummary(row: DialLaneRow, lifetimeOnly: boolean): CrossingSummary {
+  const track = liveTrack(row);
+  const liveHit =
+    track && !track.resolving && (track.isLibraryHit || track.isArtistHit) ? 1 : 0;
+  const summaries: CrossingSummary[] = [
+    {
+      // The live pulse can arrive before the schedule's show-spin poll, so
+      // preserve a current confirmed hit in the "this set" fallback.
+      count: Math.max(
+        liveHit,
+        (row.show?.crossings ?? 0) + (row.show?.artistCrossings ?? 0),
+      ),
+      label: "this set",
+    },
+    { count: row.ds.crossings + row.ds.artistCrossings, label: "24 hr" },
+    { count: row.ds.weekCrossings + row.ds.weekArtistCrossings, label: "7d" },
+    { count: row.ds.monthCrossings + row.ds.monthArtistCrossings, label: "30d" },
+    {
+      count: row.ds.lifetimeCrossings + row.ds.lifetimeArtistCrossings,
+      label: "lifetime",
+    },
+  ];
+  if (lifetimeOnly) return summaries[summaries.length - 1]!;
+  return summaries.find((summary) => summary.count > 0) ?? summaries[summaries.length - 1]!;
+}
+
 function StationPresetButton({
   row,
   active,
   onSelect,
+  lifetimeOnly,
 }: {
   row: DialLaneRow;
   active: boolean;
   onSelect: () => void;
+  lifetimeOnly: boolean;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const safeLogo = safeHttpUrl(row.ds.station.logoUrl);
   const logo = safeLogo ? proxyArtUrl(safeLogo) : null;
   const showLogo = Boolean(logo && !imageFailed);
+  const summary = crossingSummary(row, lifetimeOnly);
 
   return (
-    <button
-      type="button"
-      className={active ? "is-active" : ""}
-      aria-pressed={active}
-      aria-label={`Select ${row.ds.station.name}`}
-      onClick={onSelect}
-      title={`Select ${row.ds.station.name}`}
-    >
-      {showLogo ? (
-        <img
-          src={logo!}
-          alt=""
-          aria-hidden="true"
-          loading="lazy"
-          decoding="async"
-          onError={() => setImageFailed(true)}
-        />
-      ) : (
-        <span>{row.ds.station.name}</span>
-      )}
-    </button>
+    <div className="minimal-radio__station-option">
+      <span
+        className="minimal-radio__station-crossing"
+        data-testid={`minimal-radio-station-meta-${row.ds.station.slug}`}
+        aria-label={`${summary.count} crossings ${summary.label}`}
+      >
+        {summary.count} · {summary.label}
+      </span>
+      <button
+        type="button"
+        className={active ? "is-active" : ""}
+        aria-pressed={active}
+        aria-label={`Select ${row.ds.station.name}`}
+        onClick={onSelect}
+        title={`Select ${row.ds.station.name}`}
+      >
+        {showLogo ? (
+          <img
+            src={logo!}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <span>{row.ds.station.name}</span>
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -247,6 +290,7 @@ export function MinimalRadioSurface({
   onRetry,
 }: MinimalRadioSurfaceProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [lifetimeOnly, setLifetimeOnly] = useState(false);
   const candidates = useMemo(
     () => [...rows]
       .filter((row) => liveTrack(row) != null || row.ds.station.streamUrl != null || row.ds.station.relayUrl != null)
@@ -338,7 +382,18 @@ export function MinimalRadioSurface({
             className="minimal-radio__category-filter"
           />
         ) : null}
-        <div className="minimal-radio__remote-label">Stations</div>
+        <div className="minimal-radio__station-heading">
+          <div className="minimal-radio__remote-label">Stations</div>
+          <button
+            type="button"
+            className={`minimal-radio__lifetime-toggle${lifetimeOnly ? " is-active" : ""}`}
+            aria-label="Show lifetime crossings"
+            aria-pressed={lifetimeOnly}
+            onClick={() => setLifetimeOnly((previous) => !previous)}
+          >
+            {lifetimeOnly ? "Auto" : "Lifetime"}
+          </button>
+        </div>
         <div className="minimal-radio__station-buttons">
           {candidates.map((row, index) => (
             <StationPresetButton
@@ -346,6 +401,7 @@ export function MinimalRadioSurface({
               row={row}
               active={selectedIndex === index}
               onSelect={() => setSelectedSlug(row.ds.station.slug)}
+              lifetimeOnly={lifetimeOnly}
             />
           ))}
         </div>
