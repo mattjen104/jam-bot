@@ -130,10 +130,10 @@ describe("Library top add-artist banner", () => {
     ).toBeNull();
   });
 
-  it("keeps Add music inside the empty crate instead of above it", () => {
+  it("keeps the empty Stack surface free of import controls", () => {
     renderLibrary();
 
     expect(screen.queryByTestId("library-import-open")).toBeNull();
-    expect(screen.getByTestId("library-import-cta")).toBeTruthy();
+    expect(screen.queryByTestId("library-import-cta")).toBeNull();
   });
 });

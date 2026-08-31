@@ -1539,17 +1539,17 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         />
       )}
 
-      {/* Topbar */}
-      <div className="dial-topbar">
-        <span className="dial-topbar__wordmark">Lore</span>
-        <span className="dial-topbar__title dial-topbar__title--active">Stack</span>
-        {!isStackView && (libraryTotal ?? keptItems.length) > 0 ? (
-          <span className="dial-topbar__sort-chip">
-            {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
-            {(libraryTotal ?? keptItems.length).toLocaleString()}
-          </span>
-        ) : null}
-        {!isStackView && (
+      {/* The Library Stack is intentionally chrome-free. */}
+      {!isStackView && (
+        <div className="dial-topbar">
+          <span className="dial-topbar__wordmark">Lore</span>
+          <span className="dial-topbar__title dial-topbar__title--active">Stack</span>
+          {(libraryTotal ?? keptItems.length) > 0 ? (
+            <span className="dial-topbar__sort-chip">
+              {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
+              {(libraryTotal ?? keptItems.length).toLocaleString()}
+            </span>
+          ) : null}
           <button
             type="button"
             className="dial-topbar__search"
@@ -1558,8 +1558,8 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
           >
             <Search size={14} />
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {!isStackView && <AlbumAvatarPicker showCurrent />}
 
       {/* Import banner — shown while import is running and for 60s after done */}
@@ -2165,7 +2165,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
             items={keptItems}
             seedArtists={visibleSeeds}
             sort={sortFilter}
-            onImport={openImportModal}
           />
         ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (
           /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */

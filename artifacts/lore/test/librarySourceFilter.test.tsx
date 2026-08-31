@@ -216,8 +216,8 @@ describe("Lens tabs are only rendered in non-default views", () => {
     await renderLibrary();
     expect(screen.queryByTestId("library-import-open")).toBeNull();
     expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
-    // Empty libraries retain one contextual way to add music inside the crate.
-    expect(screen.getByTestId("library-import-cta")).toBeTruthy();
+    // The default Stack surface is intentionally free of import controls.
+    expect(screen.queryByTestId("library-import-cta")).toBeNull();
   });
 
   it("shows every saved song with its album name and its own cover", async () => {

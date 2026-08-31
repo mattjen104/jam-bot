@@ -3264,7 +3264,7 @@
 .library-crate__section-heading span { color: hsl(var(--faint)); }
 .library-crate__track-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   width: min(100%, 1120px);
   padding: 6px max(16px, calc((100vw - 980px) / 2)) 30px;
@@ -3272,7 +3272,7 @@
 .library-crate__track {
   display: grid;
   grid-template-columns: 92px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 14px;
   min-width: 0;
   padding: 10px;
@@ -3550,7 +3550,6 @@
 .library-crate__empty {
   display: grid;
   place-items: center;
-  gap: 12px;
   min-height: 48vh;
   color: hsl(var(--dim));
   font-family: var(--lore-font-display);

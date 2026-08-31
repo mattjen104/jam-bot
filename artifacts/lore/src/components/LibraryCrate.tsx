@@ -635,7 +635,6 @@ export interface LibraryCrateProps {
   unopenedOnly?: boolean;
   /** True when a deep-linked Library lens is currently narrowing the crate. */
   activeLens?: boolean;
-  onImport: () => void;
 }
 
 export function LibraryCrate({
@@ -643,7 +642,6 @@ export function LibraryCrate({
   sort,
   unopenedOnly = false,
   activeLens = false,
-  onImport,
 }: LibraryCrateProps) {
   const [location, setLocation] = useLocation();
   const [opened, markOpened] = useOpenedKeys();
@@ -691,12 +689,7 @@ export function LibraryCrate({
 
   if (!hasItems) {
     return (
-      <div className="library-crate__empty" data-testid="library-crate-empty">
-        <p>Your crate is empty.</p>
-        {!activeLens && (
-          <button type="button" onClick={onImport} data-testid="library-import-cta">Add music</button>
-        )}
-      </div>
+      <div className="library-crate__empty" data-testid="library-crate-empty" aria-hidden="true" />
     );
   }
 
