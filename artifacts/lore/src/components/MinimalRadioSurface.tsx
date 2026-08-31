@@ -8,14 +8,25 @@ import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError, RUMOURS } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
+import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
+import {
+  STATION_CATEGORY_DEFINITIONS,
+  type StationCategory,
+} from "../lib/dialCategories";
+import { safeHttpUrl } from "../lib/utils";
 
 export type RadioPreset = "now" | "lifetime";
+
+const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
+  ({ cat, label, title }) => ({ value: cat, label, title }),
+);
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
   libraryItems: LibraryItem[];
   preset: RadioPreset;
-  onPresetChange: (preset: RadioPreset) => void;
+  activeCategories?: ReadonlySet<StationCategory>;
+  onToggleCategory?: (category: StationCategory) => void;
   loading?: boolean;
   error?: boolean;
   onRetry?: () => void;
@@ -31,6 +42,45 @@ function scoreFor(row: DialLaneRow, preset: RadioPreset): number {
     return (track?.isLibraryHit ? 2 : 0) + (track?.isArtistHit ? 1 : 0);
   }
   return row.ds.lifetimeCrossings + row.ds.lifetimeArtistCrossings;
+}
+
+function StationPresetButton({
+  row,
+  active,
+  onSelect,
+}: {
+  row: DialLaneRow;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const safeLogo = safeHttpUrl(row.ds.station.logoUrl);
+  const logo = safeLogo ? proxyArtUrl(safeLogo) : null;
+  const showLogo = Boolean(logo && !imageFailed);
+
+  return (
+    <button
+      type="button"
+      className={active ? "is-active" : ""}
+      aria-pressed={active}
+      aria-label={`Select ${row.ds.station.name}`}
+      onClick={onSelect}
+      title={`Select ${row.ds.station.name}`}
+    >
+      {showLogo ? (
+        <img
+          src={logo!}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <span>{row.ds.station.name}</span>
+      )}
+    </button>
+  );
 }
 
 function crossingAlbums(row: DialLaneRow, libraryItems: LibraryItem[]): LibraryItem[] {
@@ -190,7 +240,8 @@ export function MinimalRadioSurface({
   rows,
   libraryItems,
   preset,
-  onPresetChange,
+  activeCategories = new Set<StationCategory>(),
+  onToggleCategory,
   loading = false,
   error = false,
   onRetry,
@@ -276,34 +327,26 @@ export function MinimalRadioSurface({
       </div>
 
       <div className="minimal-radio__remote" role="group" aria-label="Radio presets and stations">
-        <div className="minimal-radio__preset-label">Preset</div>
-        <div className="minimal-radio__presets">
-          {(["now", "lifetime"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={preset === value ? "is-active" : ""}
-              aria-pressed={preset === value}
-              onClick={() => onPresetChange(value)}
-              data-testid={`radio-preset-${value}`}
-            >
-              {value === "now" ? "Now" : "Lifetime"}
-            </button>
-          ))}
-        </div>
+        {onToggleCategory ? (
+          <FilterDropdownMenu
+            label="Station type"
+            ariaLabel="Station categories"
+            options={STATION_CATEGORY_OPTIONS}
+            active={activeCategories}
+            onToggle={onToggleCategory}
+            variant="chips"
+            className="minimal-radio__category-filter"
+          />
+        ) : null}
         <div className="minimal-radio__remote-label">Stations</div>
         <div className="minimal-radio__station-buttons">
           {candidates.map((row, index) => (
-            <button
+            <StationPresetButton
               key={row.ds.station.slug}
-              type="button"
-              className={selectedIndex === index ? "is-active" : ""}
-              aria-pressed={selectedIndex === index}
-              onClick={() => setSelectedSlug(row.ds.station.slug)}
-              title={`Select ${row.ds.station.name}`}
-            >
-              {index + 1}
-            </button>
+              row={row}
+              active={selectedIndex === index}
+              onSelect={() => setSelectedSlug(row.ds.station.slug)}
+            />
           ))}
         </div>
       </div>

@@ -9,12 +9,17 @@ import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { useMyLibraryInfinite, useAppConfig } from "../lib/meHooks";
 import { DialCliBar } from "../components/dial/DialCliBar";
-import { MinimalRadioSurface, type RadioPreset } from "../components/MinimalRadioSurface";
+import { MinimalRadioSurface } from "../components/MinimalRadioSurface";
 import { HomeLensNav } from "../components/HomeLensNav";
 import { FirstPlayFeed } from "../components/CompactDial";
 import { HomePress } from "../components/HomePress";
 import Library from "./Library";
 import { readHomeLens, writeHomeLens, type HomeLens } from "../lib/homeLensState";
+import {
+  DEFAULT_ACTIVE_STATION_CATEGORIES,
+  toggleStationCategory,
+} from "../lib/dialFilterState";
+import type { StationCategory } from "../lib/dialCategories";
 
 type FrontDoorMode = "radio" | "library";
 
@@ -40,12 +45,13 @@ export default function SplitHome() {
   const showArchiveNav = appConfig?.listenerArchiveNavEnabled === true;
   const [mode, setMode] = useState<FrontDoorMode>(readFrontDoorMode);
   const [lens, setLens] = useState<HomeLens>(readHomeLens);
-  const [preset, setPreset] = useState<RadioPreset>("now");
+  const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
+    () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
+  );
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!showArchiveNav && lens !== "radio") {
-      setLens("radio");
       writeHomeLens("radio");
     }
   }, [lens, showArchiveNav]);
@@ -60,6 +66,10 @@ export default function SplitHome() {
   const handleSetLens = useCallback((newLens: HomeLens) => {
     setLens(newLens);
     writeHomeLens(newLens);
+  }, []);
+
+  const handleToggleCategory = useCallback((category: StationCategory) => {
+    setActiveCategories((previous) => toggleStationCategory(previous, category));
   }, []);
 
   const handleAddArtists = useCallback((names: string[]) => {
@@ -78,6 +88,7 @@ export default function SplitHome() {
     stationsError,
     refetchStations,
   } = useDialData("personal", {
+    categories: activeCategories,
     includeAllStations: false,
     crossingsEnabled: true,
     deferEnrichment: false,
@@ -151,9 +162,9 @@ export default function SplitHome() {
           <DialCliBar
             variant="strip"
             activeTiers={new Set()}
-            activeCategories={new Set()}
+            activeCategories={activeCategories}
             onToggleTier={() => {}}
-            onToggleCategory={() => {}}
+            onToggleCategory={handleToggleCategory}
             onAddArtists={handleAddArtists}
             onLibrary={() => changeMode("library")}
             onHome={() => changeMode("radio")}
@@ -180,11 +191,11 @@ export default function SplitHome() {
             />
             {activeLens === "radio" ? (
               <MinimalRadioSurface
-                key={preset}
                 rows={rows}
                 libraryItems={libraryItems}
-                preset={preset}
-                onPresetChange={setPreset}
+                preset="now"
+                activeCategories={activeCategories}
+                onToggleCategory={handleToggleCategory}
                 loading={isCoreLoading}
                 error={stationsError}
                 onRetry={refetchStations}

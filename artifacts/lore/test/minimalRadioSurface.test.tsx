@@ -81,11 +81,16 @@ describe("MinimalRadioSurface", () => {
         rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5)]}
         libraryItems={[]}
         preset="now"
-        onPresetChange={vi.fn()}
+        activeCategories={new Set(["campus"])}
+        onToggleCategory={vi.fn()}
       />,
     );
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Lifetime" })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Station type/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Select Alpha" }).textContent).toBe("Alpha");
     fireEvent.click(screen.getByTitle("Select Beta"));
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(toggle).not.toHaveBeenCalled();
@@ -99,7 +104,6 @@ describe("MinimalRadioSurface", () => {
         rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5)]}
         libraryItems={[]}
         preset="now"
-        onPresetChange={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Next station" }));
