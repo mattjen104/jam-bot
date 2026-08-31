@@ -122,7 +122,7 @@ export default function SplitHome() {
         <header className="front-door-header">
           <div className="front-door-header__intro">
             <span className="front-door-header__kicker">Lore radio</span>
-            <h1>Listen with intention.</h1>
+            <h1>Your records are on the radio right now.</h1>
             <p>Live stations, chosen around what you already love.</p>
           </div>
           <nav className="front-door-modes" aria-label="Front door mode">
