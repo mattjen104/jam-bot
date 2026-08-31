@@ -116,7 +116,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByText(/crossing/i)).toBeNull();
   });
 
-  it("keeps the hero first, synchronizes station clicks and keyboard navigation", () => {
+  it("keeps one hero above the compact remote and synchronizes station clicks and keyboard navigation", () => {
     render(
       <MinimalRadioSurface
         rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5), row("gamma", "Gamma", false, 3)]}
@@ -124,12 +124,14 @@ describe("MinimalRadioSurface", () => {
         preset="now"
       />,
     );
-    const rail = screen.getByTestId("minimal-radio-rail");
-    expect(rail.firstElementChild?.getAttribute("data-testid")).toBe("minimal-radio-hero-slide");
+    const hero = screen.getByTestId("minimal-radio-hero");
+    const remote = screen.getByTestId("minimal-radio-rail");
+    expect(hero.compareDocumentPosition(remote) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
     expect(screen.getAllByTestId(/minimal-radio-station-slide-/)).toHaveLength(3);
     expect(screen.getByTestId("minimal-radio-selection").textContent).toContain("Alpha");
 
-    fireEvent.keyDown(rail, { key: "ArrowRight" });
+    fireEvent.keyDown(hero, { key: "ArrowRight" });
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-selection").textContent).toContain("Beta");
 
@@ -139,7 +141,7 @@ describe("MinimalRadioSurface", () => {
       .toBe("Gamma station selection, selected");
   });
 
-  it("commits a native rail scroll after snap settling and avoids a fake swipe for one station", () => {
+  it("keeps the station remote compact and avoids a duplicate station card for one station", () => {
     const { unmount } = render(
       <MinimalRadioSurface
         rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5)]}
@@ -147,10 +149,10 @@ describe("MinimalRadioSurface", () => {
         preset="now"
       />,
     );
-    const rail = screen.getByTestId("minimal-radio-rail");
-    Object.defineProperty(rail, "clientWidth", { configurable: true, value: 320 });
-    Object.defineProperty(rail, "scrollLeft", { configurable: true, writable: true, value: 640 });
-    fireEvent.scroll(rail);
+    const remote = screen.getByTestId("minimal-radio-rail");
+    expect(remote.querySelectorAll(".minimal-radio-card")).toHaveLength(0);
+    expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Select Beta" }));
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     unmount();
 
@@ -162,7 +164,7 @@ describe("MinimalRadioSurface", () => {
       />,
     );
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
-    expect(screen.queryByTestId(/minimal-radio-station-slide-/)).toBeNull();
+    expect(screen.queryByTestId("minimal-radio-rail")).toBeNull();
   });
 
   it("advances on a horizontal touch swipe without capturing a vertical gesture", () => {
@@ -173,13 +175,13 @@ describe("MinimalRadioSurface", () => {
         preset="now"
       />,
     );
-    const rail = screen.getByTestId("minimal-radio-rail");
-    fireEvent.touchStart(rail, { touches: [{ clientX: 220, clientY: 120 }] });
-    fireEvent.touchEnd(rail, { changedTouches: [{ clientX: 110, clientY: 130 }] });
+    const hero = screen.getByTestId("minimal-radio-hero");
+    fireEvent.touchStart(hero, { touches: [{ clientX: 220, clientY: 120 }] });
+    fireEvent.touchEnd(hero, { changedTouches: [{ clientX: 110, clientY: 130 }] });
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
 
-    fireEvent.touchStart(rail, { touches: [{ clientX: 110, clientY: 120 }] });
-    fireEvent.touchEnd(rail, { changedTouches: [{ clientX: 125, clientY: 260 }] });
+    fireEvent.touchStart(hero, { touches: [{ clientX: 110, clientY: 120 }] });
+    fireEvent.touchEnd(hero, { changedTouches: [{ clientX: 125, clientY: 260 }] });
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
   });
 

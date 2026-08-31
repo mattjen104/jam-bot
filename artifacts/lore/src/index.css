@@ -13022,84 +13022,46 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 12px;
 }
 .minimal-radio__controls {
+  order: 0;
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+}
+.minimal-radio__hero-region {
   order: 1;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas:
-    "category heading"
-    "stations stations";
-  align-items: start;
-  gap: 12px;
-  padding: 16px;
+  min-width: 0;
+  outline: none;
+}
+.minimal-radio__hero-region:focus-visible {
+  border-radius: 18px;
+  outline: 2px solid hsl(var(--accent) / 0.7);
+  outline-offset: 4px;
+}
+.minimal-radio__hero-slide {
+  min-width: 0;
+}
+.minimal-radio__remote-panel {
+  order: 2;
+  min-width: 0;
+  padding: 12px 14px 10px;
   border: 1px solid hsl(var(--border));
   border-radius: 14px;
   background: hsl(var(--card) / 0.88);
   box-shadow: 0 18px 54px hsl(0 0% 0% / 0.18);
   backdrop-filter: blur(14px);
 }
-.minimal-radio__rail {
-  order: 2;
+.minimal-radio__remote {
   display: flex;
   min-width: 0;
+  align-items: flex-start;
+  gap: 7px;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
+  padding: 2px 0 4px;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x pan-y;
-  border-radius: 18px;
 }
-.minimal-radio__rail::-webkit-scrollbar { display: none; }
-.minimal-radio__slide {
-  flex: 0 0 100%;
-  min-width: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
-.minimal-radio__hero-slide {
-  min-width: 100%;
-}
-.minimal-radio__station-slide {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 330px;
-  padding: 28px;
-  box-sizing: border-box;
-  border: 1px solid hsl(var(--border));
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 50% 35%, hsl(var(--accent) / 0.1), transparent 14rem),
-    hsl(var(--card));
-  box-shadow: 0 24px 80px hsl(0 0% 0% / 0.2);
-}
-.minimal-radio__station-slide .minimal-radio__station-option {
-  width: min(100%, 260px);
-  flex: 0 1 auto;
-  gap: 10px;
-}
-.minimal-radio__station-slide .minimal-radio__station-crossing {
-  font-size: 10px;
-}
-.minimal-radio__station-slide .minimal-radio__station-artist {
-  height: auto;
-  min-height: 27px;
-  font-size: 10px;
-}
-.minimal-radio__station-slide .minimal-radio__station-option > button {
-  flex-basis: 92px;
-  width: 92px;
-  height: 92px;
-  border-radius: 12px;
-  font-size: 10px;
-}
-.minimal-radio__station-slide .minimal-radio__station-option > button img {
-  padding: 8px;
-}
-.minimal-radio__station-slide .minimal-radio__station-option > button span {
-  padding: 8px;
-}
+.minimal-radio__remote::-webkit-scrollbar { display: none; }
 .minimal-radio__presets {
   display: flex;
   margin: 0;
@@ -13111,14 +13073,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-size: 9px;
 }
 .minimal-radio__station-heading {
-  grid-area: heading;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 10px;
   min-height: 32px;
 }
-.minimal-radio__category-filter { grid-area: category; align-self: center; }
+.minimal-radio__remote-hint {
+  color: hsl(var(--faint));
+  font: 10px/1 var(--app-font-mono);
+}
 .minimal-radio__lifetime-toggle {
   min-height: 26px;
   padding: 0 8px;
@@ -13137,7 +13101,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--accent));
 }
 .minimal-radio__station-buttons {
-  grid-area: stations;
   display: flex;
   align-items: flex-start;
   gap: 6px;
@@ -13407,18 +13370,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     flex-basis: 48px;
     width: 48px;
     height: 48px;
-  }
-  .minimal-radio__station-slide {
-    min-height: 286px;
-    padding: 20px;
-  }
-  .minimal-radio__station-slide .minimal-radio__station-option > button {
-    flex-basis: 72px;
-    width: 72px;
-    height: 72px;
-  }
-  .minimal-radio__station-slide .minimal-radio__station-option > button img {
-    padding: 6px;
   }
   .minimal-radio-card__heading,
   .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }

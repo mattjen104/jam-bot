@@ -87,11 +87,13 @@ function StationPresetButton({
   active,
   onSelect,
   lifetimeOnly,
+  testId,
 }: {
   row: DialLaneRow;
   active: boolean;
   onSelect: () => void;
   lifetimeOnly: boolean;
+  testId?: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const safeLogo = safeHttpUrl(row.ds.station.logoUrl);
@@ -101,7 +103,12 @@ function StationPresetButton({
   const artist = liveTrack(row)?.artist?.trim() || "—";
 
   return (
-    <div className="minimal-radio__station-option">
+    <div
+      className="minimal-radio__station-option"
+      data-testid={testId}
+      role="group"
+      aria-label={`${row.ds.station.name} station selection${active ? ", selected" : ""}`}
+    >
       <span
         className="minimal-radio__station-crossing"
         data-testid={`minimal-radio-station-meta-${row.ds.station.slug}`}
@@ -294,9 +301,7 @@ export function MinimalRadioSurface({
 }: MinimalRadioSurfaceProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [lifetimeOnly, setLifetimeOnly] = useState(false);
-  const railRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number; stationIndex: number } | null>(null);
-  const programmaticPositionRef = useRef<number | null>(null);
   const candidates = useMemo(
     () => [...rows]
       .filter((row) => liveTrack(row) != null || row.ds.station.streamUrl != null || row.ds.station.relayUrl != null)
@@ -309,51 +314,17 @@ export function MinimalRadioSurface({
   );
   const selected = candidates[selectedIndex] ?? null;
 
-  const scrollRailTo = useCallback((position: number, behavior: ScrollBehavior = "smooth") => {
-    const rail = railRef.current;
-    if (!rail || rail.clientWidth <= 0) return;
-    const left = position * rail.clientWidth;
-    programmaticPositionRef.current = position;
-    if (typeof rail.scrollTo === "function") {
-      rail.scrollTo({ left, behavior });
-    } else {
-      rail.scrollLeft = left;
-    }
-  }, []);
-
-  const selectStation = useCallback((index: number, behavior: ScrollBehavior = "smooth") => {
+  const selectStation = useCallback((index: number) => {
     const next = candidates[index];
     if (!next) return;
     setSelectedSlug(next.ds.station.slug);
-    scrollRailTo(index + 1, behavior);
-  }, [candidates, scrollRailTo]);
+  }, [candidates]);
 
   const selectOffset = useCallback((offset: number) => {
     if (candidates.length === 0) return;
     const nextIndex = (selectedIndex + offset + candidates.length) % candidates.length;
     selectStation(nextIndex);
   }, [candidates.length, selectStation, selectedIndex]);
-
-  const commitRailPosition = useCallback(() => {
-    const rail = railRef.current;
-    if (!rail || rail.clientWidth <= 0) return;
-    const position = Math.max(0, Math.min(
-      candidates.length,
-      Math.round(rail.scrollLeft / rail.clientWidth),
-    ));
-    const programmaticPosition = programmaticPositionRef.current;
-    if (programmaticPosition !== null) {
-      const targetLeft = programmaticPosition * rail.clientWidth;
-      if (Math.abs(rail.scrollLeft - targetLeft) > Math.max(2, rail.clientWidth * 0.08)) return;
-      programmaticPositionRef.current = null;
-    }
-    if (position > 0) {
-      const stationIndex = position - 1;
-      if (stationIndex !== selectedIndex) {
-        setSelectedSlug(candidates[stationIndex]?.ds.station.slug ?? null);
-      }
-    }
-  }, [candidates, selectedIndex]);
 
   const handleRailKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
@@ -365,20 +336,20 @@ export function MinimalRadioSurface({
       selectOffset(-1);
     } else if (event.key === "Home") {
       event.preventDefault();
-      scrollRailTo(0);
+      selectStation(0);
     } else if (event.key === "End") {
       event.preventDefault();
       selectStation(candidates.length - 1);
     }
-  }, [candidates.length, scrollRailTo, selectOffset, selectStation]);
+  }, [candidates.length, selectOffset, selectStation]);
 
-  const handleRailTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const handleHeroTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0];
     if (!touch) return;
     touchStartRef.current = { x: touch.clientX, y: touch.clientY, stationIndex: selectedIndex };
   }, [selectedIndex]);
 
-  const handleRailTouchEnd = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const handleHeroTouchEnd = useCallback((event: TouchEvent<HTMLDivElement>) => {
     const start = touchStartRef.current;
     touchStartRef.current = null;
     const touch = event.changedTouches[0];
@@ -442,34 +413,20 @@ export function MinimalRadioSurface({
             className="minimal-radio__category-filter"
           />
         ) : null}
-        <div className="minimal-radio__station-heading">
-          <div className="minimal-radio__remote-label">Stations</div>
-          <button
-            type="button"
-            className={`minimal-radio__lifetime-toggle${lifetimeOnly ? " is-active" : ""}`}
-            aria-label="Show lifetime crossings"
-            aria-pressed={lifetimeOnly}
-            onClick={() => setLifetimeOnly((previous) => !previous)}
-          >
-            {lifetimeOnly ? "Auto" : "Lifetime"}
-          </button>
-        </div>
       </div>
 
       <div
-        ref={railRef}
-        className="minimal-radio__rail"
-        data-testid="minimal-radio-rail"
+        className="minimal-radio__hero-region"
+        data-testid="minimal-radio-hero"
         role="region"
-        aria-label="Radio station rail"
+        aria-label="Selected radio station"
         tabIndex={0}
-        onScroll={commitRailPosition}
         onKeyDown={handleRailKeyDown}
-        onTouchStart={handleRailTouchStart}
-        onTouchEnd={handleRailTouchEnd}
+        onTouchStart={handleHeroTouchStart}
+        onTouchEnd={handleHeroTouchEnd}
       >
         <div
-          className="minimal-radio__slide minimal-radio__hero-slide"
+          className="minimal-radio__hero-slide"
           data-testid="minimal-radio-hero-slide"
           role="group"
           aria-label={`${selected?.ds.station.name ?? "Current"} now-playing hero`}
@@ -494,25 +451,42 @@ export function MinimalRadioSurface({
             />
           ) : null}
         </div>
+      </div>
 
-        {candidates.length > 1
-          ? candidates.map((row, index) => (
-            <div
-              key={row.ds.station.slug}
-              className={`minimal-radio__slide minimal-radio__station-slide${selectedIndex === index ? " is-selected" : ""}`}
-              data-testid={`minimal-radio-station-slide-${row.ds.station.slug}`}
-              role="group"
-              aria-label={`${row.ds.station.name} station selection${selectedIndex === index ? ", selected" : ""}`}
-            >
+      <div className="minimal-radio__remote-panel">
+        <div className="minimal-radio__station-heading">
+          <div className="minimal-radio__remote-label">Stations</div>
+          <span className="minimal-radio__remote-hint">Choose a station</span>
+          <button
+            type="button"
+            data-testid="radio-preset-lifetime"
+            className={`minimal-radio__lifetime-toggle${lifetimeOnly ? " is-active" : ""}`}
+            aria-label="Show lifetime crossings"
+            aria-pressed={lifetimeOnly}
+            onClick={() => setLifetimeOnly((previous) => !previous)}
+          >
+            {lifetimeOnly ? "Auto" : "Lifetime"}
+          </button>
+        </div>
+        {candidates.length > 1 ? (
+          <div
+            className="minimal-radio__remote"
+            data-testid="minimal-radio-rail"
+            role="region"
+            aria-label="Radio station remote"
+          >
+            {candidates.map((row, index) => (
               <StationPresetButton
+                key={row.ds.station.slug}
                 row={row}
                 active={selectedIndex === index}
                 onSelect={() => selectStation(index)}
                 lifetimeOnly={lifetimeOnly}
+                testId={`minimal-radio-station-slide-${row.ds.station.slug}`}
               />
-            </div>
-          ))
-          : null}
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
