@@ -8418,6 +8418,9 @@ components:
             properties:
               releaseGroupMbid:
                 type: string
+                nullable: true
+              recordingMbid:
+                type: string
               title:
                 type: string
               artist:
@@ -8425,7 +8428,7 @@ components:
               artworkUrl:
                 type: string
                 nullable: true
-            required: [releaseGroupMbid, title, artist, artworkUrl]
+            required: [releaseGroupMbid, recordingMbid, title, artist, artworkUrl]
       required: [stationSlug, crossings, artistCrossings, weekCrossings, weekArtistCrossings, monthCrossings, monthArtistCrossings, lifetimeCrossings, lifetimeArtistCrossings]
     StationsScheduleResult:
       type: object

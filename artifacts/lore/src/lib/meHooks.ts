@@ -611,7 +611,8 @@ export interface DialCrossing {
   /** Top crossing artist names over all time (personal mode; up to 3). */
   topArtistNamesLifetime?: string[];
   albumCrossings?: Array<{
-    releaseGroupMbid: string;
+    releaseGroupMbid: string | null;
+    recordingMbid: string;
     title: string;
     artist: string;
     artworkUrl: string | null;

@@ -151,7 +151,8 @@ function StationPresetButton({
 }
 
 interface CrossingAlbum {
-  releaseGroupMbid: string;
+  key: string;
+  href: string;
   title: string;
   artist: string;
   artworkUrl: string;
@@ -207,12 +208,20 @@ function crossingAlbums(
   const seen = new Set<string>();
   const albums: CrossingAlbum[] = [];
   for (const album of row.ds.albumCrossings ?? []) {
-    if (seen.has(album.releaseGroupMbid)) continue;
-    seen.add(album.releaseGroupMbid);
+    const key = album.releaseGroupMbid ?? album.recordingMbid;
+    if (seen.has(key)) continue;
+    seen.add(key);
     albums.push({
-      ...album,
+      key,
+      href: album.releaseGroupMbid
+        ? `/album/${album.releaseGroupMbid}`
+        : `/song/${album.recordingMbid}`,
+      title: album.title,
+      artist: album.artist,
       artworkUrl: album.artworkUrl
-        ?? `https://coverartarchive.org/release-group/${album.releaseGroupMbid}/front-1200`,
+        ?? (album.releaseGroupMbid
+          ? `https://coverartarchive.org/release-group/${album.releaseGroupMbid}/front-1200`
+          : RUMOURS),
     });
     if (albums.length >= 5) return albums;
   }
@@ -222,7 +231,8 @@ function crossingAlbums(
     if (!releaseGroupMbid || seen.has(releaseGroupMbid)) return;
     seen.add(releaseGroupMbid);
     albums.push({
-      releaseGroupMbid,
+      key: releaseGroupMbid,
+      href: `/album/${releaseGroupMbid}`,
       title: recording?.albumTitle ?? recording?.title ?? spin?.title ?? "Album",
       artist: recording?.artist ?? spin?.artist ?? "",
       artworkUrl: recording?.artworkUrl
@@ -352,8 +362,8 @@ function MinimalRadioCard({
           <div className="minimal-radio-card__album-grid">
             {albums.map((album) => (
               <a
-                key={album.releaseGroupMbid}
-                href={`/album/${album.releaseGroupMbid}`}
+                key={album.key}
+                href={album.href}
                 className="minimal-radio-card__album"
                 title={`${album.title} by ${album.artist}`}
                 aria-label={`Open ${album.title} by ${album.artist}`}

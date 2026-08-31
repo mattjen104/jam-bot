@@ -4982,7 +4982,8 @@ export const GetMyCrossingsResponse = zod.object({
       albumCrossings: zod
         .array(
           zod.object({
-            releaseGroupMbid: zod.string(),
+            releaseGroupMbid: zod.string().nullable(),
+            recordingMbid: zod.string(),
             title: zod.string(),
             artist: zod.string(),
             artworkUrl: zod.string().nullable(),
@@ -5447,7 +5448,8 @@ export const GetMyBlendedCrossingsResponse = zod.object({
       albumCrossings: zod
         .array(
           zod.object({
-            releaseGroupMbid: zod.string(),
+            releaseGroupMbid: zod.string().nullable(),
+            recordingMbid: zod.string(),
             title: zod.string(),
             artist: zod.string(),
             artworkUrl: zod.string().nullable(),

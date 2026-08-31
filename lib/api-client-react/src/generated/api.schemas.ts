@@ -3142,7 +3142,8 @@ export interface MePressCrossingsResponse {
 }
 
 export type DialCrossingItemAlbumCrossingsItem = {
-  releaseGroupMbid: string;
+  releaseGroupMbid: string | null;
+  recordingMbid: string;
   title: string;
   artist: string;
   artworkUrl: string | null;

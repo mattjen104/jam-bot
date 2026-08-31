@@ -2414,7 +2414,8 @@ export interface CrossingsRow {
   topArtistNamesLifetime?: string[];
   /** Exact crate albums this station has aired, newest crossing first. */
   albumCrossings?: Array<{
-    releaseGroupMbid: string;
+    releaseGroupMbid: string | null;
+    recordingMbid: string;
     title: string;
     artist: string;
     artworkUrl: string | null;

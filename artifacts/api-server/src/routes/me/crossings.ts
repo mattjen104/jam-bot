@@ -77,7 +77,8 @@ function cacheTtlMs(data: CrossingsRow[]): number {
 
 function hasAlbumCrossingShape(data: CrossingsRow[]): boolean {
   return data.every((row) =>
-    row.lifetimeCrossings === 0 || Array.isArray(row.albumCrossings),
+    row.lifetimeCrossings === 0
+    || (Array.isArray(row.albumCrossings) && row.albumCrossings.length > 0),
   );
 }
 
@@ -395,7 +396,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   // Collects every recording MBID that could yield a crossing for this user:
   // exact library hits, recordings sharing a primary release group with a
   // library item, and any recording by a library artist (MBID or soft-name).
-  const relevantMbids = sql`(
+  const exactLibraryMbids = sql`(
     select ${libraryItemsTable.mbid} from ${libraryItemsTable}
       where ${libraryItemsTable.userId} = ${userId}
         and ${libraryItemsTable.removedAt} is null
@@ -403,6 +404,10 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
     select ${recordingReleaseGroupsTable.recordingMbid} from ${recordingReleaseGroupsTable}
       where ${recordingReleaseGroupsTable.isPrimary} = true
         and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
+  )`;
+
+  const relevantMbids = sql`(
+    ${exactLibraryMbids}
     union
     select ${recordingsTable.mbid} from ${recordingsTable}
       where ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
@@ -498,15 +503,16 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       .select({
         stationSlug: stationsTable.slug,
         releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
-        title: sql<string>`min(${recordingsTable.title})`,
-        artist: sql<string>`min(${recordingsTable.artist})`,
-        artworkUrl: sql<string | null>`max(${recordingsTable.artworkUrl})`,
+        recordingMbid: recordingsTable.mbid,
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artworkUrl: recordingsTable.artworkUrl,
         lastPlayedAt: sql<Date>`max(${spinsTable.playedAt})`,
       })
       .from(spinsTable)
       .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
       .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
-      .innerJoin(
+      .leftJoin(
         recordingReleaseGroupsTable,
         and(
           eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
@@ -516,9 +522,8 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       .where(
         and(
           isNotNull(spinsTable.mbid),
-          isNotNull(recordingReleaseGroupsTable.releaseGroupMbid),
           eq(stationsTable.hidden, false),
-          sql`${spinsTable.mbid} in ${relevantMbids}`,
+          sql`${spinsTable.mbid} in ${exactLibraryMbids}`,
           libHit,
         ),
       )
@@ -526,6 +531,10 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         stationsTable.id,
         stationsTable.slug,
         recordingReleaseGroupsTable.releaseGroupMbid,
+        recordingsTable.mbid,
+        recordingsTable.title,
+        recordingsTable.artist,
+        recordingsTable.artworkUrl,
       )
       .orderBy(sql`max(${spinsTable.playedAt}) desc`),
   ]);
@@ -537,11 +546,15 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
   const albumsBySlug = new Map<string, CrossingsRow["albumCrossings"]>();
   for (const album of albumRows) {
-    if (!album.releaseGroupMbid) continue;
     const stationAlbums = albumsBySlug.get(album.stationSlug) ?? [];
     if (stationAlbums.length >= 5) continue;
+    const key = album.releaseGroupMbid ?? album.recordingMbid;
+    if (stationAlbums.some((item) =>
+      (item.releaseGroupMbid ?? item.recordingMbid) === key,
+    )) continue;
     stationAlbums.push({
       releaseGroupMbid: album.releaseGroupMbid,
+      recordingMbid: album.recordingMbid,
       title: album.title,
       artist: album.artist,
       artworkUrl: album.artworkUrl,

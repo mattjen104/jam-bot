@@ -157,3 +157,4 @@
 - [Admin health payload compatibility](admin-health-payload-compatibility.md) — health panels must default newly added metrics because older fixtures and deployments may omit fields.
 - [Home on-air stable cells](home-on-air-stable-cells.md) — unchanged station cards keep their exact cells through enrichment; changed cards fill vacancies without pulling later rows upward.
 - [Library release metadata gaps](library-release-metadata-gaps.md) — saved recordings may lack release-group rows; hydrate missing album identity in rate-limited MB batches and derive CAA art.
+- [Crossing cover fallback](crossing-cover-fallback.md) — exact crossed crate tracks may have artwork but no release-group bridge; never suppress covers solely because album identity is absent.

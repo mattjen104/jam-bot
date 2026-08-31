@@ -180,7 +180,8 @@ export interface DialStation {
    */
   topArtistNamesLifetime: string[];
   albumCrossings: Array<{
-    releaseGroupMbid: string;
+    releaseGroupMbid: string | null;
+    recordingMbid: string;
     title: string;
     artist: string;
     artworkUrl: string | null;
@@ -1203,7 +1204,8 @@ export function useDialData(
       topArtistNames7d: string[];
       topArtistNamesLifetime: string[];
       albumCrossings: Array<{
-        releaseGroupMbid: string;
+        releaseGroupMbid: string | null;
+        recordingMbid: string;
         title: string;
         artist: string;
         artworkUrl: string | null;
