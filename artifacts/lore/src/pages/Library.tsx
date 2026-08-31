@@ -2394,7 +2394,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
                       marginBottom: 8,
                     }}
                   >
-                    Your music, on the radio
+                    Your records are on the radio right now.
                   </div>
                   <div
                     style={{
