@@ -71,6 +71,7 @@ function row(slug: string, name: string, nowHit: boolean, lifetime: number): Dia
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -113,6 +114,73 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(document.querySelector(".fdrow__crossing-dot")).toBeNull();
     expect(screen.queryByText(/crossing/i)).toBeNull();
+  });
+
+  it("keeps the hero first, synchronizes station clicks and keyboard navigation", () => {
+    render(
+      <MinimalRadioSurface
+        rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5), row("gamma", "Gamma", false, 3)]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+    const rail = screen.getByTestId("minimal-radio-rail");
+    expect(rail.firstElementChild?.getAttribute("data-testid")).toBe("minimal-radio-hero-slide");
+    expect(screen.getAllByTestId(/minimal-radio-station-slide-/)).toHaveLength(3);
+    expect(screen.getByTestId("minimal-radio-selection").textContent).toContain("Alpha");
+
+    fireEvent.keyDown(rail, { key: "ArrowRight" });
+    expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
+    expect(screen.getByTestId("minimal-radio-selection").textContent).toContain("Beta");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select Gamma" }));
+    expect(screen.getByRole("heading", { name: "Gamma" })).toBeTruthy();
+    expect(screen.getByTestId("minimal-radio-station-slide-gamma").getAttribute("aria-label"))
+      .toBe("Gamma station selection, selected");
+  });
+
+  it("commits a native rail scroll after snap settling and avoids a fake swipe for one station", () => {
+    const { unmount } = render(
+      <MinimalRadioSurface
+        rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5)]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+    const rail = screen.getByTestId("minimal-radio-rail");
+    Object.defineProperty(rail, "clientWidth", { configurable: true, value: 320 });
+    Object.defineProperty(rail, "scrollLeft", { configurable: true, writable: true, value: 640 });
+    fireEvent.scroll(rail);
+    expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
+    unmount();
+
+    render(
+      <MinimalRadioSurface
+        rows={[row("solo", "Solo", true, 1)]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+    expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
+    expect(screen.queryByTestId(/minimal-radio-station-slide-/)).toBeNull();
+  });
+
+  it("advances on a horizontal touch swipe without capturing a vertical gesture", () => {
+    render(
+      <MinimalRadioSurface
+        rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5)]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+    const rail = screen.getByTestId("minimal-radio-rail");
+    fireEvent.touchStart(rail, { touches: [{ clientX: 220, clientY: 120 }] });
+    fireEvent.touchEnd(rail, { changedTouches: [{ clientX: 110, clientY: 130 }] });
+    expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
+
+    fireEvent.touchStart(rail, { touches: [{ clientX: 110, clientY: 120 }] });
+    fireEvent.touchEnd(rail, { changedTouches: [{ clientX: 125, clientY: 260 }] });
+    expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
   });
 
   it("falls through timeframes and can force lifetime counts on every station", () => {

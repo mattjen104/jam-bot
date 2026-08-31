@@ -13017,11 +13017,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-direction: column;
   gap: 12px;
 }
-.minimal-radio__dial {
-  order: 2;
-  min-width: 0;
-}
-.minimal-radio__remote {
+.minimal-radio__controls {
   order: 1;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -13036,6 +13032,69 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: hsl(var(--card) / 0.88);
   box-shadow: 0 18px 54px hsl(0 0% 0% / 0.18);
   backdrop-filter: blur(14px);
+}
+.minimal-radio__rail {
+  order: 2;
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  border-radius: 18px;
+}
+.minimal-radio__rail::-webkit-scrollbar { display: none; }
+.minimal-radio__slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.minimal-radio__hero-slide {
+  min-width: 100%;
+}
+.minimal-radio__station-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 330px;
+  padding: 28px;
+  box-sizing: border-box;
+  border: 1px solid hsl(var(--border));
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 35%, hsl(var(--accent) / 0.1), transparent 14rem),
+    hsl(var(--card));
+  box-shadow: 0 24px 80px hsl(0 0% 0% / 0.2);
+}
+.minimal-radio__station-slide .minimal-radio__station-option {
+  width: min(100%, 260px);
+  flex: 0 1 auto;
+  gap: 10px;
+}
+.minimal-radio__station-slide .minimal-radio__station-crossing {
+  font-size: 10px;
+}
+.minimal-radio__station-slide .minimal-radio__station-artist {
+  height: auto;
+  min-height: 27px;
+  font-size: 10px;
+}
+.minimal-radio__station-slide .minimal-radio__station-option > button {
+  flex-basis: 92px;
+  width: 92px;
+  height: 92px;
+  border-radius: 12px;
+  font-size: 10px;
+}
+.minimal-radio__station-slide .minimal-radio__station-option > button img {
+  padding: 8px;
+}
+.minimal-radio__station-slide .minimal-radio__station-option > button span {
+  padding: 8px;
 }
 .minimal-radio__presets {
   display: flex;
@@ -13315,7 +13374,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .split-home__front-door-shell { padding-top: 22px; }
   .front-door-header { align-items: stretch; flex-direction: column; gap: 18px; }
   .front-door-modes { align-self: flex-start; }
-  .minimal-radio__remote {
+  .minimal-radio__controls {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
       "category heading"
@@ -13344,6 +13403,18 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     flex-basis: 48px;
     width: 48px;
     height: 48px;
+  }
+  .minimal-radio__station-slide {
+    min-height: 286px;
+    padding: 20px;
+  }
+  .minimal-radio__station-slide .minimal-radio__station-option > button {
+    flex-basis: 72px;
+    width: 72px;
+    height: 72px;
+  }
+  .minimal-radio__station-slide .minimal-radio__station-option > button img {
+    padding: 6px;
   }
   .minimal-radio-card__heading,
   .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }

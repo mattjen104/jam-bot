@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type TouchEvent,
+} from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, Heart, Radio, SkipForward } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { LibraryItem } from "../lib/meHooks";
@@ -166,13 +173,9 @@ function artForTrack(row: DialLaneRow, libraryItems: LibraryItem[]): string | nu
 function MinimalRadioCard({
   row,
   libraryItems,
-  onPrevious,
-  onNext,
 }: {
   row: DialLaneRow;
   libraryItems: LibraryItem[];
-  onPrevious: () => void;
-  onNext: () => void;
 }) {
   const { radio } = usePlayer();
   const keep = useMutationKeep();
@@ -199,14 +202,6 @@ function MinimalRadioCard({
       className="minimal-radio-card"
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
-      onTouchStart={(event) => {
-        (event.currentTarget as HTMLElement).dataset.touchX = String(event.touches[0]?.clientX ?? 0);
-      }}
-      onTouchEnd={(event) => {
-        const start = Number((event.currentTarget as HTMLElement).dataset.touchX ?? 0);
-        const end = event.changedTouches[0]?.clientX ?? start;
-        if (Math.abs(end - start) > 48) (end < start ? onNext : onPrevious)();
-      }}
     >
       <div className="minimal-radio-card__heading">
         <div className="minimal-radio-card__station">
@@ -299,6 +294,9 @@ export function MinimalRadioSurface({
 }: MinimalRadioSurfaceProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [lifetimeOnly, setLifetimeOnly] = useState(false);
+  const railRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number; stationIndex: number } | null>(null);
+  const programmaticPositionRef = useRef<number | null>(null);
   const candidates = useMemo(
     () => [...rows]
       .filter((row) => liveTrack(row) != null || row.ds.station.streamUrl != null || row.ds.station.relayUrl != null)
@@ -311,11 +309,87 @@ export function MinimalRadioSurface({
   );
   const selected = candidates[selectedIndex] ?? null;
 
+  const scrollRailTo = useCallback((position: number, behavior: ScrollBehavior = "smooth") => {
+    const rail = railRef.current;
+    if (!rail || rail.clientWidth <= 0) return;
+    const left = position * rail.clientWidth;
+    programmaticPositionRef.current = position;
+    if (typeof rail.scrollTo === "function") {
+      rail.scrollTo({ left, behavior });
+    } else {
+      rail.scrollLeft = left;
+    }
+  }, []);
+
+  const selectStation = useCallback((index: number, behavior: ScrollBehavior = "smooth") => {
+    const next = candidates[index];
+    if (!next) return;
+    setSelectedSlug(next.ds.station.slug);
+    scrollRailTo(index + 1, behavior);
+  }, [candidates, scrollRailTo]);
+
   const selectOffset = useCallback((offset: number) => {
     if (candidates.length === 0) return;
     const nextIndex = (selectedIndex + offset + candidates.length) % candidates.length;
-    setSelectedSlug(candidates[nextIndex]!.ds.station.slug);
+    selectStation(nextIndex);
+  }, [candidates.length, selectStation, selectedIndex]);
+
+  const commitRailPosition = useCallback(() => {
+    const rail = railRef.current;
+    if (!rail || rail.clientWidth <= 0) return;
+    const position = Math.max(0, Math.min(
+      candidates.length,
+      Math.round(rail.scrollLeft / rail.clientWidth),
+    ));
+    const programmaticPosition = programmaticPositionRef.current;
+    if (programmaticPosition !== null) {
+      const targetLeft = programmaticPosition * rail.clientWidth;
+      if (Math.abs(rail.scrollLeft - targetLeft) > Math.max(2, rail.clientWidth * 0.08)) return;
+      programmaticPositionRef.current = null;
+    }
+    if (position > 0) {
+      const stationIndex = position - 1;
+      if (stationIndex !== selectedIndex) {
+        setSelectedSlug(candidates[stationIndex]?.ds.station.slug ?? null);
+      }
+    }
   }, [candidates, selectedIndex]);
+
+  const handleRailKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      selectOffset(1);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      selectOffset(-1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      scrollRailTo(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      selectStation(candidates.length - 1);
+    }
+  }, [candidates.length, scrollRailTo, selectOffset, selectStation]);
+
+  const handleRailTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, stationIndex: selectedIndex };
+  }, [selectedIndex]);
+
+  const handleRailTouchEnd = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch || candidates.length < 2) return;
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+    const offset = deltaX < 0 ? 1 : -1;
+    const nextIndex = (start.stationIndex + offset + candidates.length) % candidates.length;
+    selectStation(nextIndex);
+  }, [candidates.length, selectStation]);
 
   if (loading && rows.length === 0) {
     return (
@@ -356,29 +430,7 @@ export function MinimalRadioSurface({
 
   return (
     <section className="minimal-radio" data-testid="minimal-radio-surface">
-      <div className="minimal-radio__dial">
-        <div className="minimal-radio__nav" role="group" aria-label="Radio station navigation">
-          <button type="button" onClick={() => selectOffset(-1)} aria-label="Previous station">
-            <ChevronLeft size={18} aria-hidden="true" /> Previous
-          </button>
-          <span aria-live="polite">{selectedIndex + 1} of {candidates.length}</span>
-          <button type="button" onClick={() => selectOffset(1)} aria-label="Next station">
-            Next <ChevronRight size={18} aria-hidden="true" />
-          </button>
-        </div>
-
-        {selected ? (
-          <MinimalRadioCard
-            key={selected.ds.station.slug}
-            row={selected}
-            libraryItems={libraryItems}
-            onPrevious={() => selectOffset(-1)}
-            onNext={() => selectOffset(1)}
-          />
-        ) : null}
-      </div>
-
-      <div className="minimal-radio__remote" role="group" aria-label="Radio presets and stations">
+      <div className="minimal-radio__controls" role="group" aria-label="Radio presets and stations">
         {onToggleCategory ? (
           <FilterDropdownMenu
             label="Station type"
@@ -402,17 +454,65 @@ export function MinimalRadioSurface({
             {lifetimeOnly ? "Auto" : "Lifetime"}
           </button>
         </div>
-        <div className="minimal-radio__station-buttons">
-          {candidates.map((row, index) => (
-            <StationPresetButton
-              key={row.ds.station.slug}
-              row={row}
-              active={selectedIndex === index}
-              onSelect={() => setSelectedSlug(row.ds.station.slug)}
-              lifetimeOnly={lifetimeOnly}
+      </div>
+
+      <div
+        ref={railRef}
+        className="minimal-radio__rail"
+        data-testid="minimal-radio-rail"
+        role="region"
+        aria-label="Radio station rail"
+        tabIndex={0}
+        onScroll={commitRailPosition}
+        onKeyDown={handleRailKeyDown}
+        onTouchStart={handleRailTouchStart}
+        onTouchEnd={handleRailTouchEnd}
+      >
+        <div
+          className="minimal-radio__slide minimal-radio__hero-slide"
+          data-testid="minimal-radio-hero-slide"
+          role="group"
+          aria-label={`${selected?.ds.station.name ?? "Current"} now-playing hero`}
+        >
+          <div className="minimal-radio__nav" role="group" aria-label="Radio station navigation">
+            <button type="button" onClick={() => selectOffset(-1)} aria-label="Previous station">
+              <ChevronLeft size={18} aria-hidden="true" /> Previous
+            </button>
+            <span data-testid="minimal-radio-selection" aria-live="polite">
+              {selected?.ds.station.name ?? "Current"} · {selectedIndex + 1} of {candidates.length}
+            </span>
+            <button type="button" onClick={() => selectOffset(1)} aria-label="Next station">
+              Next <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </div>
+
+          {selected ? (
+            <MinimalRadioCard
+              key={selected.ds.station.slug}
+              row={selected}
+              libraryItems={libraryItems}
             />
-          ))}
+          ) : null}
         </div>
+
+        {candidates.length > 1
+          ? candidates.map((row, index) => (
+            <div
+              key={row.ds.station.slug}
+              className={`minimal-radio__slide minimal-radio__station-slide${selectedIndex === index ? " is-selected" : ""}`}
+              data-testid={`minimal-radio-station-slide-${row.ds.station.slug}`}
+              role="group"
+              aria-label={`${row.ds.station.name} station selection${selectedIndex === index ? ", selected" : ""}`}
+            >
+              <StationPresetButton
+                row={row}
+                active={selectedIndex === index}
+                onSelect={() => selectStation(index)}
+                lifetimeOnly={lifetimeOnly}
+              />
+            </div>
+          ))
+          : null}
       </div>
     </section>
   );
