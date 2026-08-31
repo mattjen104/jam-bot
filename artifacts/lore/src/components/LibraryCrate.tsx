@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import {
   spotifyPlay,
@@ -633,17 +633,13 @@ export interface LibraryCrateProps {
   seedArtists: string[];
   sort: "added" | "artist" | "title";
   unopenedOnly?: boolean;
-  /** True when a deep-linked Library lens is currently narrowing the crate. */
-  activeLens?: boolean;
 }
 
 export function LibraryCrate({
   items,
   sort,
   unopenedOnly = false,
-  activeLens = false,
 }: LibraryCrateProps) {
-  const [location, setLocation] = useLocation();
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
   const releases = useMemo(() => sortCrateReleases(buildCrateReleases(items), sort), [items, sort]);
