@@ -9,6 +9,7 @@ import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { useMyLibraryInfinite, useAppConfig } from "../lib/meHooks";
 import { DialCliBar } from "../components/dial/DialCliBar";
+import { ArtistDocument } from "../components/ArtistDocument";
 import { MinimalRadioSurface } from "../components/MinimalRadioSurface";
 import { HomeLensNav } from "../components/HomeLensNav";
 import { FirstPlayFeed } from "../components/CompactDial";
@@ -40,7 +41,7 @@ function writeFrontDoorMode(mode: FrontDoorMode): void {
 }
 
 export default function SplitHome() {
-  const { addSeed } = useSeedManager();
+  const { visibleSeeds, addSeed, replaceSeeds } = useSeedManager();
   const { data: appConfig } = useAppConfig();
   const showArchiveNav = appConfig?.listenerArchiveNavEnabled === true;
   const [mode, setMode] = useState<FrontDoorMode>(readFrontDoorMode);
@@ -49,6 +50,7 @@ export default function SplitHome() {
     () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
   );
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
+  const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
 
   useEffect(() => {
     if (!showArchiveNav && lens !== "radio") {
@@ -79,7 +81,9 @@ export default function SplitHome() {
     setSeedStatus(`Adding ${unique.join(", ")}…`);
     void Promise.all(unique.map((name) => addSeed(name)))
       .then(() => setSeedStatus(`${unique.join(", ")} added to your artists`))
-      .catch(() => setSeedStatus("Couldn’t add that artist. Try again."));
+      .catch((error) => setSeedStatus(
+        error instanceof Error ? error.message : "Couldn’t add that artist. Try again.",
+      ));
   }, [addSeed]);
 
   const {
@@ -136,7 +140,19 @@ export default function SplitHome() {
           <div className="front-door-header__intro">
             <span className="front-door-header__kicker">Lore radio</span>
             <h1>Your records are on the radio right now.</h1>
-            <p>Live stations, chosen around what you already love.</p>
+            <p className="front-door-subtitle">
+              <button
+                type="button"
+                className="front-door-subtitle__button"
+                onClick={() => setArtistDocumentOpen((open) => !open)}
+                aria-expanded={artistDocumentOpen}
+                aria-controls="front-door-artist-document"
+                data-testid="front-door-add-artists"
+              >
+                Add artists
+              </button>{" "}
+              to see which stations cross your library.
+            </p>
           </div>
           <nav className="front-door-modes" aria-label="Front door mode">
             <button
@@ -159,6 +175,16 @@ export default function SplitHome() {
             </button>
           </nav>
         </header>
+
+        {artistDocumentOpen ? (
+          <div id="front-door-artist-document">
+            <ArtistDocument
+              artists={visibleSeeds}
+              onSave={replaceSeeds}
+              onClose={() => setArtistDocumentOpen(false)}
+            />
+          </div>
+        ) : null}
 
         <div className="front-door-cli" data-testid="front-door-cli">
           <DialCliBar

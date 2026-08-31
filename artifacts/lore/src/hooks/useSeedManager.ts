@@ -9,64 +9,79 @@
  *   addSeed      — append an artist (serialized, case-insensitive dedup)
  *   removeSeed   — remove an artist (serialized, case-insensitive match)
  */
-import { useState, useRef, useCallback, useEffect } from "react";
-import { useMyTasteSeeds, useSetTasteSeeds } from "../lib/meHooks";
+import { useCallback, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ME_TASTE_SEEDS_KEY, useMyTasteSeeds, useSetTasteSeeds } from "../lib/meHooks";
 import { MAX_TASTE_SEEDS } from "./useDialData";
 
+let seedWriteQueue: Promise<string[]> = Promise.resolve([]);
+
+function normalizeSeeds(artists: string[]): string[] {
+  const seen = new Set<string>();
+  return artists
+    .map((artist) => artist.trim())
+    .filter((artist) => {
+      const key = artist.toLocaleLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+export class TasteSeedLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TasteSeedLimitError";
+  }
+}
+
 export function useSeedManager() {
+  const queryClient = useQueryClient();
   const { data: seedArtists = [] } = useMyTasteSeeds();
   const setSeedsMutation = useSetTasteSeeds();
-  const seedWriteRef = useRef<Promise<string[]> | null>(null);
-  // Keep the cloud responsive while the serialized PUT queue is in flight.
-  // The server query remains the source of truth; this optimistic mirror only
-  // prevents a fast click from looking unselected until the round trip ends.
-  const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
-  const visibleSeeds = optimisticSeeds ?? seedArtists;
 
-  const addSeed = useCallback((artist: string) => {
-    const trimmed = artist.trim();
-    if (!trimmed) return Promise.resolve(visibleSeeds);
-    // Serialize rapid picker clicks. Without this, two clicks in the same
-    // render both read the old query result and the later PUT can overwrite
-    // the first selected artist.
-    const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
-    seedWriteRef.current = base.then(async (current) => {
-      const lower = trimmed.toLowerCase();
-      if (current.some((s) => s.toLowerCase() === lower) || current.length >= MAX_TASTE_SEEDS) return current;
-      const next = [...current, trimmed];
-      setOptimisticSeeds(next);
+  const enqueue = useCallback((change: (current: string[]) => string[]) => {
+    const operation = seedWriteQueue.catch(() => []).then(async () => {
+      const current = queryClient.getQueryData<string[]>(ME_TASTE_SEEDS_KEY) ?? seedArtists;
+      const next = normalizeSeeds(change(current));
+      if (next.length > MAX_TASTE_SEEDS) {
+        throw new TasteSeedLimitError(`You can keep up to ${MAX_TASTE_SEEDS} artists.`);
+      }
+      if (next.length === current.length && next.every((artist, index) => artist === current[index])) {
+        return current;
+      }
+      // Put the optimistic list in the shared query cache so an open document,
+      // Radio crossings, and Library placeholders all update together.
+      queryClient.setQueryData(ME_TASTE_SEEDS_KEY, next);
       try {
         const result = await setSeedsMutation.mutateAsync(next);
-        setOptimisticSeeds(result.artists);
+        queryClient.setQueryData(ME_TASTE_SEEDS_KEY, result.artists);
         return result.artists;
-      } catch (error) {
-        setOptimisticSeeds(null);
-        throw error;
+      } catch (cause) {
+        // Restore the last confirmed list; never replace a failed write with
+        // an empty or partially-normalised fallback.
+        queryClient.setQueryData(ME_TASTE_SEEDS_KEY, current);
+        throw cause;
       }
     });
-    return seedWriteRef.current;
-  }, [seedArtists, setSeedsMutation, visibleSeeds]);
+    seedWriteQueue = operation.catch(() => queryClient.getQueryData<string[]>(ME_TASTE_SEEDS_KEY) ?? seedArtists);
+    return operation;
+  }, [queryClient, seedArtists, setSeedsMutation]);
 
-  const removeSeed = useCallback((artist: string) => {
-    const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
-    seedWriteRef.current = base.then(async (current) => {
-      const lower = artist.toLowerCase();
-      const next = current.filter((s) => s.toLowerCase() !== lower);
-      if (next.length === current.length) return current;
-      setOptimisticSeeds(next);
-      try {
-        const result = await setSeedsMutation.mutateAsync(next);
-        setOptimisticSeeds(result.artists);
-        return result.artists;
-      } catch (error) {
-        setOptimisticSeeds(null);
-        throw error;
-      }
-    });
-    void seedWriteRef.current.catch(() => undefined);
-  }, [seedArtists, setSeedsMutation, visibleSeeds]);
+  const addSeed = useCallback(
+    (artist: string) => enqueue((current) => [...current, artist]),
+    [enqueue],
+  );
+
+  const removeSeed = useCallback(
+    (artist: string) => enqueue((current) => current.filter((seed) => seed.toLocaleLowerCase() !== artist.trim().toLocaleLowerCase())),
+    [enqueue],
+  );
+
+  const replaceSeeds = useCallback(
+    (artists: string[]) => enqueue(() => artists),
+    [enqueue],
+  );
 
   // Bridge: player-ticker artist clicks → addSeed (ticker lives in PlayerBar)
   useEffect(() => {
@@ -75,5 +90,5 @@ export function useSeedManager() {
     return () => window.removeEventListener("lore:add-ticker-artist", handler);
   }, [addSeed]);
 
-  return { visibleSeeds, addSeed, removeSeed };
+  return { visibleSeeds: seedArtists, addSeed, removeSeed, replaceSeeds };
 }

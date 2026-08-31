@@ -17,8 +17,7 @@ import {
   postImportLibraryFile,
   useMyPreferences,
   patchPreferences,
-  useMyTasteSeeds,
-  useSetTasteSeeds,
+  useMyTasteSeedCatalogue,
   useAppConfig,
   ME_PREFERENCES_KEY,
   ME_LATEST_IMPORT_JOB_KEY,
@@ -57,6 +56,8 @@ import { YourWeekCard } from "../components/YourWeekCard";
 import { toast } from "../hooks/use-toast";
 import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
 import { LibraryCrate } from "../components/LibraryCrate";
+import { useSeedManager } from "../hooks/useSeedManager";
+import { ArtistDocument } from "../components/ArtistDocument";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -1359,54 +1360,10 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     }
   }, [connLoading, hasSpotify, isImportActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Taste seeds — zero-friction artist onboarding (shared with the Dial) ──
-  const { data: seedArtists = [] } = useMyTasteSeeds();
-  const setSeedsMutation = useSetTasteSeeds();
-  const seedWriteRef = useRef<Promise<string[]> | null>(null);
-  const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
-  const visibleSeeds = optimisticSeeds ?? seedArtists;
-
-  const _addSeed = useCallback((artist: string) => {
-    const trimmed = artist.trim();
-    if (!trimmed) return;
-    const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
-    seedWriteRef.current = base.then(async (current) => {
-      const lower = trimmed.toLowerCase();
-      if (current.some((s) => s.toLowerCase() === lower) || current.length >= 10) return current;
-      const next = [...current, trimmed];
-      setOptimisticSeeds(next);
-      try {
-        const result = await setSeedsMutation.mutateAsync(next);
-        setOptimisticSeeds(result.artists);
-        return result.artists;
-      } catch {
-        setOptimisticSeeds(null);
-        throw new Error("seed write failed");
-      }
-    });
-    void seedWriteRef.current.catch(() => undefined);
-  }, [seedArtists, setSeedsMutation, visibleSeeds]);
-
-  const _removeSeed = useCallback((artist: string) => {
-    const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
-    seedWriteRef.current = base.then(async (current) => {
-      const lower = artist.toLowerCase();
-      const next = current.filter((s) => s.toLowerCase() !== lower);
-      if (next.length === current.length) return current;
-      setOptimisticSeeds(next);
-      try {
-        const result = await setSeedsMutation.mutateAsync(next);
-        setOptimisticSeeds(result.artists);
-        return result.artists;
-      } catch {
-        setOptimisticSeeds(null);
-        throw new Error("seed write failed");
-      }
-    });
-    void seedWriteRef.current.catch(() => undefined);
-  }, [seedArtists, setSeedsMutation, visibleSeeds]);
+  // ── Taste seeds — one shared source for CLI, document, Radio, and Library. ──
+  const { visibleSeeds, replaceSeeds } = useSeedManager();
+  const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
+  const { data: seedCatalogue = {} } = useMyTasteSeedCatalogue(visibleSeeds);
 
   const libLoading = keptLoading;
   const isEmpty = !libLoading && keptItems.length === 0;
@@ -1496,7 +1453,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     // Wait for library + avatar data to resolve before deciding
     if (keptData === undefined || albumAvatar === undefined) return;
     // User already has music or seeds — returning user, skip auto-open
-    if (keepCount > 0 || seedArtists.length > 0) return;
+    if (keepCount > 0 || visibleSeeds.length > 0) return;
     // User already has an avatar (needsChoice===false && current set) — skip
     if (albumAvatar.needsChoice === false && albumAvatar.current != null) return;
     // Only fire once per browser session
@@ -1506,7 +1463,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     } catch { return; }
     openImportModal();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keptData, albumAvatar, keepCount, seedArtists.length]);
+  }, [keptData, albumAvatar, keepCount, visibleSeeds.length]);
   const selectorCount = useMemo(() => {
     const handles = new Set<string>();
     for (const item of keptItems) {
@@ -1558,6 +1515,29 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
       {!isStackView && <AlbumAvatarPicker showCurrent />}
+      {!embedded ? (
+        <div className="library-artist-editor" data-testid="library-artist-editor">
+          <div className="front-door-artist-onboarding">
+            <button
+              type="button"
+              onClick={() => setArtistDocumentOpen((open) => !open)}
+              aria-expanded={artistDocumentOpen}
+              aria-controls="library-artist-document"
+            >
+              Add artists
+            </button>
+          </div>
+          {artistDocumentOpen ? (
+            <div id="library-artist-document">
+              <ArtistDocument
+                artists={visibleSeeds}
+                onSave={replaceSeeds}
+                onClose={() => setArtistDocumentOpen(false)}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Import banner — shown while import is running and for 60s after done */}
       {!isStackView && showImportBanner && jobData && (
@@ -2122,6 +2102,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
           <LibraryCrate
             items={keptItems}
             seedArtists={visibleSeeds}
+            catalogue={seedCatalogue}
             sort={sortFilter}
           />
         ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (

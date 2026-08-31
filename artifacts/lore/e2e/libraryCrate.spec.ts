@@ -39,9 +39,13 @@ test.beforeEach(async ({ page }) => {
       },
     }),
   );
-  await page.route("**/api/me/taste-seeds", (route) =>
-    route.fulfill({ json: { artists: ["Beta", "Alpha"] } }),
-  );
+  let artists = ["Beta", "Alpha"];
+  await page.route("**/api/me/taste-seeds", async (route) => {
+    if (route.request().method() === "PUT") {
+      artists = (route.request().postDataJSON() as { artists: string[] }).artists;
+    }
+    await route.fulfill({ json: { artists } });
+  });
   await page.route("**/api/me/library?**", (route) =>
     route.fulfill({
       json: {
@@ -109,6 +113,21 @@ test("keeps an alternate Library lens inside the fanned crate", async ({ page })
   await expect(page.getByRole("heading", { name: "Kept" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Added" })).toBeVisible();
   await expect(page.getByTestId("library-album-view")).toHaveCount(0);
+});
+
+test("edits artist placeholders from the standalone Library without removing kept tracks", async ({ page }) => {
+  await page.goto("/lore/library");
+  await page.getByTestId("library-artist-editor").getByRole("button", { name: "Add artists" }).click();
+  const document = page.getByRole("textbox", { name: "Artists, one per line" });
+  await expect(document).toHaveValue("Beta\nAlpha");
+  await document.fill("Broadcast");
+  await page.getByRole("button", { name: "Save artists" }).click();
+
+  await expect(
+    page.getByTestId("library-crate-added-artist").getByText("Broadcast", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Caught Song", { exact: true })).toBeVisible();
+  await expect(page.getByText("Alpha", { exact: true })).toHaveCount(0);
 });
 
 test("reveals every added artist without leaving Library", async ({ page }) => {

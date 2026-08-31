@@ -127,6 +127,18 @@ describe("Library crate read model", () => {
     expect(added.map((artist) => artist.name)).toEqual(["Alpha", "Beta", "Zulu"]);
   });
 
+  it("does not remove a real track-backed item when its artist seed is absent", () => {
+    const kept = item({
+      mbid: "real-track",
+      title: "Still Here",
+      artist: "Removed Seed Artist",
+      date: "2026-08-30T00:00:00Z",
+      kind: "keep",
+    });
+    expect(buildAddedArtists([], {}, [])).toEqual([]);
+    expect(buildCrateReleases([kept]).flatMap((release) => release.items)).toContain(kept);
+  });
+
   it("uses honest provenance and unknown attendance grammar", () => {
     const foreign = item({
       mbid: "foreign",

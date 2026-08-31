@@ -59,7 +59,11 @@ function makeNowPlaying(index: number) {
 const STATIONS = Array.from({ length: STATION_COUNT }, (_, index) => makeStation(index));
 const NOW_PLAYING = STATIONS.map((_, index) => makeNowPlaying(index));
 
-async function installRoutes(page: Page, listenerArchiveNavEnabled = false) {
+async function installRoutes(
+  page: Page,
+  listenerArchiveNavEnabled = false,
+  libraryItems: unknown[] = [],
+) {
   // Avoid reaching external radio streams; the player still commits the tuned
   // station before the browser reports that this fixture stream is unavailable.
   await page.route("https://stream.example.test/**", (route) => route.abort());
@@ -92,10 +96,10 @@ async function installRoutes(page: Page, listenerArchiveNavEnabled = false) {
     route.fulfill({ json: { candidates: [], needsChoice: false } }),
   );
   await page.route("**/api/me/library?**", (route) =>
-    route.fulfill({ json: { items: [], nextCursor: null } }),
+    route.fulfill({ json: { items: libraryItems, nextCursor: null } }),
   );
   await page.route("**/api/me/library", (route) =>
-    route.fulfill({ json: { items: [], nextCursor: null } }),
+    route.fulfill({ json: { items: libraryItems, nextCursor: null } }),
   );
 
   await page.route("**/api/stations?**", (route) =>
@@ -154,8 +158,12 @@ async function installRoutes(page: Page, listenerArchiveNavEnabled = false) {
   );
 }
 
-async function loadStationDial(page: Page, listenerArchiveNavEnabled = false) {
-  await installRoutes(page, listenerArchiveNavEnabled);
+async function loadStationDial(
+  page: Page,
+  listenerArchiveNavEnabled = false,
+  libraryItems: unknown[] = [],
+) {
+  await installRoutes(page, listenerArchiveNavEnabled, libraryItems);
   await page.goto("/lore/");
   await expect(page.getByTestId("minimal-radio-surface")).toBeVisible({
     timeout: 20_000,
@@ -190,17 +198,47 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
 
   test("CLI artist entry and Library mode work while archive links follow the admin reveal", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await loadStationDial(page, true);
+    await loadStationDial(page, true, [{
+      mbid: "real-kept-track",
+      addedAt: "2026-08-30T12:00:00.000Z",
+      provenance: { kind: "keep", stationName: "WFMU" },
+      recording: {
+        title: "Caught Song",
+        artist: "A Tribe Called Quest",
+        artistMbid: null,
+        artworkUrl: null,
+        albumTitle: "Real Album",
+        releaseGroupMbid: "real-release-group",
+        releaseYear: 2025,
+        spotifyUrl: null,
+      },
+    }]);
 
+    await expect(page.getByText("Type an artist name into the CLI")).toHaveCount(0);
+    await expect(page.locator(".front-door-header p").getByTestId("front-door-add-artists"))
+      .toBeVisible();
+    await page.getByTestId("front-door-add-artists").click();
+    const document = page.getByRole("textbox", { name: "Artists, one per line" });
+    await expect(document).toHaveValue("");
     const input = page.getByRole("textbox", { name: "Dial command" });
     await input.fill("A Tribe Called Quest");
     await input.press("Enter");
-    await expect(page.getByRole("status")).toContainText("A Tribe Called Quest added");
+    await expect(page.getByTestId("front-door-cli").getByRole("status"))
+      .toContainText("A Tribe Called Quest added");
+    await expect(document).toHaveValue("A Tribe Called Quest");
+
+    await document.fill("Broadcast\nPortishead\nbroadcast");
+    await page.getByRole("button", { name: "Save artists" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
 
     await expect(page.getByRole("link", { name: "Heard" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Index" })).toBeVisible();
     await page.getByTestId("front-door-library-mode").click();
     await expect(page.getByTestId("front-door-library")).toBeVisible();
     await expect(page.getByTestId("minimal-radio-card")).toHaveCount(0);
+    await expect(page.getByText("Caught Song", { exact: true })).toBeVisible();
+    await expect(page.getByText("Broadcast", { exact: true })).toBeVisible();
+    await expect(page.getByText("Portishead", { exact: true })).toBeVisible();
+    await expect(page.getByText("A Tribe Called Quest", { exact: true })).toBeVisible();
   });
 });

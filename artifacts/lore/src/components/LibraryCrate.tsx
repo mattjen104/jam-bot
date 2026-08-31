@@ -631,18 +631,26 @@ function useReleaseAttendance(releases: CrateRelease[]) {
 export interface LibraryCrateProps {
   items: LibraryItem[];
   seedArtists: string[];
+  catalogue?: Record<string, { artistMbid: string | null; releases: ArtistCatalogueRelease[] }>;
   sort: "added" | "artist" | "title";
   unopenedOnly?: boolean;
 }
 
 export function LibraryCrate({
   items,
+  seedArtists,
+  catalogue = {},
   sort,
   unopenedOnly = false,
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
   const releases = useMemo(() => sortCrateReleases(buildCrateReleases(items), sort), [items, sort]);
+  const addedArtists = useMemo(
+    () => buildAddedArtists(seedArtists, catalogue),
+    [catalogue, seedArtists],
+  );
+  const [showAllArtists, setShowAllArtists] = useState(false);
 
   useEffect(() => {
     const missing = items
@@ -681,7 +689,8 @@ export function LibraryCrate({
     }),
     [sort, visibleReleases],
   );
-  const hasItems = tracks.length > 0;
+  const visibleArtists = showAllArtists ? addedArtists : addedArtists.slice(0, 20);
+  const hasItems = tracks.length > 0 || addedArtists.length > 0;
 
   if (!hasItems) {
     return (
@@ -693,7 +702,7 @@ export function LibraryCrate({
     <div className="library-crate" data-testid="library-crate">
       <section className="library-crate__section" data-testid="library-crate-kept">
         <header className="library-crate__section-heading">
-          <h2>Release crate</h2>
+          <h2>Kept</h2>
           <span>
             {tracks.length} {tracks.length === 1 ? "song" : "songs"}
           </span>
@@ -716,6 +725,36 @@ export function LibraryCrate({
           <p className="library-crate__section-empty">No songs in this view.</p>
         )}
       </section>
+      {addedArtists.length > 0 ? (
+        <section className="library-crate__section" data-testid="library-crate-added">
+          <header className="library-crate__section-heading">
+            <h2>Added</h2>
+            <span>
+              {addedArtists.length} {addedArtists.length === 1 ? "artist" : "artists"} · artist-only
+            </span>
+          </header>
+          <div className="library-crate__rail">
+            {visibleArtists.map((artist, index) => (
+              <AddedArtistCard
+                key={artist.key}
+                artist={artist}
+                position={index}
+                onOpened={markOpened}
+              />
+            ))}
+          </div>
+          {addedArtists.length > visibleArtists.length ? (
+            <button
+              type="button"
+              className="library-crate__index-link"
+              onClick={() => setShowAllArtists(true)}
+              data-testid="library-added-show-all"
+            >
+              Show all {addedArtists.length} artists
+            </button>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

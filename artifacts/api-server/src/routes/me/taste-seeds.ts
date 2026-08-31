@@ -116,7 +116,7 @@ router.get("/me/taste-seeds/catalog", h(async (req, res) => {
 
 /**
  * Replace the full seed list atomically.
- * - Max 10 seeds; each name max 100 chars.
+ * - Max 50 seeds; each name max 100 chars.
  * - Names are normalised (trim + deduplicate case-insensitively) before persist.
  * - Busts crossings + library-hit caches so Zone 1 reflects seeds immediately.
  */
@@ -139,7 +139,10 @@ router.put("/me/taste-seeds", h(async (req, res) => {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const raw of incoming) {
-    const display = raw.trim().slice(0, MAX_ARTIST_LEN);
+    const display = raw.trim();
+    if (display.length > MAX_ARTIST_LEN) {
+      return res.status(400).json({ error: `Artist names must be ${MAX_ARTIST_LEN} characters or fewer` });
+    }
     const key = display.toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);

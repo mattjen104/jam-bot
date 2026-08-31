@@ -681,6 +681,32 @@ export function useMyTasteSeeds() {
   });
 }
 
+export interface TasteSeedCatalogue {
+  artistMbid: string | null;
+  releases: Array<{
+    releaseGroupMbid: string;
+    title: string | null;
+    primaryType: string | null;
+    releaseYear: number | null;
+    artworkUrl: string | null;
+  }>;
+}
+
+export function useMyTasteSeedCatalogue(artists: string[]) {
+  const names = artists.map((artist) => artist.trim()).filter(Boolean);
+  const key = names.map((artist) => artist.toLocaleLowerCase()).join("|");
+  return useQuery({
+    queryKey: [...ME_TASTE_SEEDS_KEY, "catalog", key],
+    queryFn: () =>
+      fetchOrNull<{ artists: Record<string, TasteSeedCatalogue> }>(
+        `/api/me/taste-seeds/catalog?artists=${names.map(encodeURIComponent).join(",")}`,
+      ).then((data) => data?.artists ?? {}),
+    enabled: names.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /**
  * Replace the full seed list.  After a successful write the seeds query is
  * updated in place and the crossings query is invalidated so Zone 1 refreshes
