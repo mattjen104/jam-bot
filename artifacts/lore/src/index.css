@@ -13407,7 +13407,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .minimal-radio-card__heading,
   .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }
   .minimal-radio-card__album-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .minimal-radio-card__album:nth-child(5) { display: none; }
   .minimal-radio-card__track { grid-template-columns: 48px minmax(0, 1fr); }
   .minimal-radio-card__track-art img { width: 48px; height: 48px; }
   .minimal-radio-card__play { grid-column: 1 / -1; width: 100%; }

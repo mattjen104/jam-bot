@@ -60,6 +60,8 @@ export function normalizeDjName(s: string): string {
 export interface DialSpin {
   mbid: string | null;
   artistMbid: string | null;
+  /** MusicBrainz release-group identity for album-level crossings and links. */
+  releaseGroupMbid?: string | null;
   title: string;
   artist: string;
   playedAt: string;
@@ -1556,6 +1558,7 @@ export function useDialData(
             return {
               mbid: sp.mbid,
               artistMbid: sp.artistMbid ?? null,
+              releaseGroupMbid: sp.releaseGroupMbid ?? null,
               title: sp.title,
               artist: sp.artist,
               playedAt: sp.playedAt,

@@ -148,27 +148,71 @@ function StationPresetButton({
   );
 }
 
-function crossingAlbums(row: DialLaneRow, libraryItems: LibraryItem[]): LibraryItem[] {
+interface CrossingAlbum {
+  releaseGroupMbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string;
+}
+
+function crossingAlbums(row: DialLaneRow, libraryItems: LibraryItem[]): CrossingAlbum[] {
   const track = liveTrack(row);
-  const spins = row.show?.spins ?? [];
-  const artists = new Set(
-    [track?.artist, ...spins.filter((spin) => spin.isLibraryHit || spin.isArtistHit).map((spin) => spin.artist)]
-      .filter((artist): artist is string => Boolean(artist?.trim()))
-      .map((artist) => artist.trim().toLowerCase()),
+  const crossingSpins = [
+    ...(track && !track.resolving && (track.isLibraryHit || track.isArtistHit) ? [track] : []),
+    ...[...(row.show?.spins ?? [])]
+      .reverse()
+      .filter((spin) => !spin.resolving && (spin.isLibraryHit || spin.isArtistHit)),
+  ];
+  const byMbid = new Map(
+    libraryItems
+      .filter((item): item is LibraryItem & { mbid: string } => Boolean(item.mbid))
+      .map((item) => [item.mbid, item]),
   );
-  const matched = libraryItems.filter((item) => {
+  const byReleaseGroup = new Map(
+    libraryItems
+      .filter((item) => Boolean(item.recording?.releaseGroupMbid))
+      .map((item) => [item.recording!.releaseGroupMbid!, item]),
+  );
+  const byArtist = new Map<string, LibraryItem[]>();
+  for (const item of libraryItems) {
     const recording = item.recording;
-    if (!recording) return false;
-    if (track?.mbid && item.mbid === track.mbid) return true;
-    return artists.has(recording.artist.trim().toLowerCase());
-  });
+    if (!recording?.releaseGroupMbid) continue;
+    const key = (recording.artistMbid ?? recording.artist).trim().toLowerCase();
+    const matches = byArtist.get(key) ?? [];
+    matches.push(item);
+    byArtist.set(key, matches);
+  }
   const seen = new Set<string>();
-  return matched.filter((item) => {
-    const key = item.recording?.releaseGroupMbid ?? item.recording?.albumTitle ?? item.mbid;
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, 5);
+  const albums: CrossingAlbum[] = [];
+  const add = (item: LibraryItem | undefined, spin?: typeof track) => {
+    const recording = item?.recording;
+    const releaseGroupMbid = spin?.releaseGroupMbid ?? recording?.releaseGroupMbid;
+    if (!releaseGroupMbid || seen.has(releaseGroupMbid)) return;
+    seen.add(releaseGroupMbid);
+    albums.push({
+      releaseGroupMbid,
+      title: recording?.albumTitle ?? recording?.title ?? spin?.title ?? "Album",
+      artist: recording?.artist ?? spin?.artist ?? "",
+      artworkUrl: recording?.artworkUrl
+        ?? `https://coverartarchive.org/release-group/${releaseGroupMbid}/front-1200`,
+    });
+  };
+
+  for (const spin of crossingSpins) {
+    if (spin.isLibraryHit) {
+      add(
+        (spin.releaseGroupMbid ? byReleaseGroup.get(spin.releaseGroupMbid) : undefined)
+        ?? (spin.mbid ? byMbid.get(spin.mbid) : undefined),
+        spin,
+      );
+    } else if (spin.isArtistHit) {
+      if (spin.releaseGroupMbid) add(byReleaseGroup.get(spin.releaseGroupMbid), spin);
+      const artistKey = (spin.artistMbid ?? spin.artist).trim().toLowerCase();
+      for (const item of byArtist.get(artistKey) ?? []) add(item);
+    }
+    if (albums.length >= 5) break;
+  }
+  return albums.slice(0, 5);
 }
 
 function artForTrack(row: DialLaneRow, libraryItems: LibraryItem[]): string | null {
@@ -245,19 +289,22 @@ function MinimalRadioCard({
         <div className="minimal-radio-card__eyebrow">From your crate</div>
         {albums.length > 0 ? (
           <div className="minimal-radio-card__album-grid">
-            {albums.map((item) => (
+            {albums.map((album) => (
               <a
-                key={item.mbid}
-                href={item.recording?.releaseGroupMbid ? `/album/${item.recording.releaseGroupMbid}` : `/recording/${item.mbid}`}
+                key={album.releaseGroupMbid}
+                href={`/album/${album.releaseGroupMbid}`}
                 className="minimal-radio-card__album"
-                title={`${item.recording?.albumTitle ?? item.recording?.title ?? "Album"} by ${item.recording?.artist ?? ""}`}
+                title={`${album.title} by ${album.artist}`}
+                aria-label={`Open ${album.title} by ${album.artist}`}
               >
                 <img
-                  src={proxyArtUrl(item.recording?.artworkUrl) ?? RUMOURS}
+                  src={proxyArtUrl(album.artworkUrl) ?? RUMOURS}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   onError={onArtError}
                 />
-                <span>{item.recording?.albumTitle ?? item.recording?.title ?? "Untitled"}</span>
+                <span>{album.title}</span>
               </a>
             ))}
           </div>

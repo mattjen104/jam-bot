@@ -3,6 +3,8 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
+import type { DialSpin } from "../src/hooks/useDialData";
+import type { LibraryItem } from "../src/lib/meHooks";
 import { MinimalRadioSurface } from "../src/components/MinimalRadioSurface";
 
 const { toggle, keepMutate } = vi.hoisted(() => ({
@@ -69,6 +71,39 @@ function row(slug: string, name: string, nowHit: boolean, lifetime: number): Dia
   } as DialLaneRow;
 }
 
+function crossingSpin(index: number): DialSpin {
+  return {
+    mbid: `recording-${index}`,
+    artistMbid: `artist-${index}`,
+    releaseGroupMbid: `release-${index}`,
+    title: `Track ${index}`,
+    artist: `Artist ${index}`,
+    playedAt: new Date(2026, 7, 31, 12, index).toISOString(),
+    isLibraryHit: true,
+    isArtistHit: false,
+    isFirstSpin: false,
+    releaseYear: 2000 + index,
+    ageTier: null,
+  };
+}
+
+function libraryItem(index: number, artworkUrl: string | null = `https://art.example/${index}.jpg`): LibraryItem {
+  return {
+    mbid: `recording-${index}`,
+    provenance: { kind: "keep" },
+    addedAt: new Date(2026, 7, 31, 12, index).toISOString(),
+    recording: {
+      title: `Track ${index}`,
+      artist: `Artist ${index}`,
+      artistMbid: `artist-${index}`,
+      artworkUrl,
+      albumTitle: `Album ${index}`,
+      releaseGroupMbid: `release-${index}`,
+      spotifyUrl: null,
+    },
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -116,6 +151,82 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("5 crossings · lifetime");
     expect(screen.getByTestId("minimal-radio-hero-crossing").getAttribute("aria-label"))
       .toBe("5 crossings lifetime");
+  });
+
+  it("links up to five exact crossing album covers to their album pages", () => {
+    const station = row("alpha", "Alpha", true, 6);
+    const spins = Array.from({ length: 6 }, (_, index) => crossingSpin(index + 1));
+    station.ds.liveTrack = spins[5]!;
+    station.show = {
+      runId: 1,
+      showName: "The Test Show",
+      djName: "DJ Test",
+      startedAt: "2026-08-31T12:00:00.000Z",
+      endedAt: "2026-08-31T14:00:00.000Z",
+      ianaTimezone: "America/Los_Angeles",
+      state: "live",
+      spins,
+      crossings: 6,
+      artistCrossings: 0,
+      topArtists: [],
+      topArtistNames: [],
+      currentTrack: spins[5]!,
+      isPickerShow: false,
+      pickerId: null,
+    };
+    const libraryItems = [
+      ...Array.from({ length: 6 }, (_, index) => libraryItem(index + 1, index === 5 ? null : undefined)),
+      {
+        ...libraryItem(99),
+        recording: {
+          ...libraryItem(99).recording!,
+          artist: "Artist 6",
+          artistMbid: "artist-6",
+        },
+      },
+    ];
+
+    render(
+      <MinimalRadioSurface
+        rows={[station]}
+        libraryItems={libraryItems}
+        preset="now"
+      />,
+    );
+
+    const albumLinks = screen.getAllByRole("link", { name: /^Open Album/ });
+    expect(albumLinks).toHaveLength(5);
+    expect(albumLinks.map((link) => link.getAttribute("href"))).toEqual([
+      "/album/release-6",
+      "/album/release-5",
+      "/album/release-4",
+      "/album/release-3",
+      "/album/release-2",
+    ]);
+    expect(screen.queryByRole("link", { name: "Open Album 1 by Artist 1" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open Album 99 by Artist 6" })).toBeNull();
+    expect(albumLinks[0]?.querySelector("img")?.getAttribute("src")).toContain(
+      encodeURIComponent("https://coverartarchive.org/release-group/release-6/front-1200"),
+    );
+  });
+
+  it("shows a release-group crossing cover even when that album is outside the loaded library page", () => {
+    const station = row("alpha", "Alpha", true, 1);
+    station.ds.liveTrack = crossingSpin(42);
+
+    render(
+      <MinimalRadioSurface
+        rows={[station]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+
+    const album = screen.getByRole("link", { name: "Open Track 42 by Artist 42" });
+    expect(album.getAttribute("href")).toBe("/album/release-42");
+    expect(album.querySelector("img")?.getAttribute("src")).toContain(
+      encodeURIComponent("https://coverartarchive.org/release-group/release-42/front-1200"),
+    );
   });
 
   it("keeps one hero above the compact remote and synchronizes station clicks and keyboard navigation", () => {
