@@ -75,6 +75,12 @@ function cacheTtlMs(data: CrossingsRow[]): number {
   return data.length === 0 ? crossingsEmptyCacheTtlMs : CROSSINGS_CACHE_TTL_MS;
 }
 
+function hasAlbumCrossingShape(data: CrossingsRow[]): boolean {
+  return data.every((row) =>
+    row.lifetimeCrossings === 0 || Array.isArray(row.albumCrossings),
+  );
+}
+
 /**
  * Light, symmetric artist-name normalization used for soft-name matching
  * (taste seeds + unresolved Spotify imports): lowercase, strip ONE leading
@@ -206,6 +212,7 @@ async function _readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
     if (rows.length === 0) return null;
     const row = rows[0]!;
     if (Date.now() - row.builtAt.getTime() >= cacheTtlMs(row.data)) return null;
+    if (!hasAlbumCrossingShape(row.data)) return null;
     // `data` is typed CrossingsRow[] via the schema's $type — no cast needed.
     return row.data;
   } catch {
@@ -228,6 +235,7 @@ async function readL2CacheAny(userId: number): Promise<{ data: CrossingsRow[]; i
       .limit(1);
     if (rows.length === 0) return null;
     const row = rows[0]!;
+    if (!hasAlbumCrossingShape(row.data)) return null;
     const isStale = Date.now() - row.builtAt.getTime() >= cacheTtlMs(row.data);
     return { data: row.data, isStale };
   } catch {
@@ -405,7 +413,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         )
   )`;
 
-  const [rows, lifetimeRows] = await Promise.all([
+  const [rows, lifetimeRows, albumRows] = await Promise.all([
     // ── Bounded rolling query (scanCutoff = 30 days) ─────────────────────────
     // Uses spins_station_played_at_idx; computes 24h / 7d / 30d rolling counts.
     db
@@ -486,6 +494,40 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         sql`count(*) filter (where ${libHit}) > 0
          or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
       ),
+    db
+      .select({
+        stationSlug: stationsTable.slug,
+        releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+        title: sql<string>`min(${recordingsTable.title})`,
+        artist: sql<string>`min(${recordingsTable.artist})`,
+        artworkUrl: sql<string | null>`max(${recordingsTable.artworkUrl})`,
+        lastPlayedAt: sql<Date>`max(${spinsTable.playedAt})`,
+      })
+      .from(spinsTable)
+      .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+      .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+      .innerJoin(
+        recordingReleaseGroupsTable,
+        and(
+          eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+          eq(recordingReleaseGroupsTable.isPrimary, true),
+        ),
+      )
+      .where(
+        and(
+          isNotNull(spinsTable.mbid),
+          isNotNull(recordingReleaseGroupsTable.releaseGroupMbid),
+          eq(stationsTable.hidden, false),
+          sql`${spinsTable.mbid} in ${relevantMbids}`,
+          libHit,
+        ),
+      )
+      .groupBy(
+        stationsTable.id,
+        stationsTable.slug,
+        recordingReleaseGroupsTable.releaseGroupMbid,
+      )
+      .orderBy(sql`max(${spinsTable.playedAt}) desc`),
   ]);
 
   // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
@@ -493,6 +535,19 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   // lifetime rows; freshly-active stations may only have rolling rows.
   const lifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
   const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
+  const albumsBySlug = new Map<string, CrossingsRow["albumCrossings"]>();
+  for (const album of albumRows) {
+    if (!album.releaseGroupMbid) continue;
+    const stationAlbums = albumsBySlug.get(album.stationSlug) ?? [];
+    if (stationAlbums.length >= 5) continue;
+    stationAlbums.push({
+      releaseGroupMbid: album.releaseGroupMbid,
+      title: album.title,
+      artist: album.artist,
+      artworkUrl: album.artworkUrl,
+    });
+    albumsBySlug.set(album.stationSlug, stationAlbums);
+  }
   const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
 
   return [...allSlugs].map((slug) => {
@@ -515,6 +570,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       topArtistNames24h:       topArtistsFromRaw(r?.topArtistNamesRaw24h ?? null),
       topArtistNames7d:        topArtistsFromRaw(r?.topArtistNamesRaw7d  ?? null),
       topArtistNamesLifetime:  topArtistsFromRaw(l?.topArtistNamesRawLifetime ?? null),
+      albumCrossings:          albumsBySlug.get(slug) ?? [],
     };
   });
 }

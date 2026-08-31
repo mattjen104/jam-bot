@@ -3141,6 +3141,13 @@ export interface MePressCrossingsResponse {
   hasTaste: boolean;
 }
 
+export type DialCrossingItemAlbumCrossingsItem = {
+  releaseGroupMbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+};
+
 export interface DialCrossingItem {
   stationSlug: string;
   crossings: number;
@@ -3159,6 +3166,8 @@ export interface DialCrossingItem {
   lifetimeArtistCrossings: number;
   /** First-ever Lore plays that are also crossings over the full archive. */
   lifetimeFirstPlayCrossings?: number;
+  /** Up to five exact crate albums aired by this station, newest crossing first. */
+  albumCrossings?: DialCrossingItemAlbumCrossingsItem[];
 }
 
 export interface MeBlendedCrossingsResult {

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DialCrossingItemAlbumCrossingsItem } from "./dialCrossingItemAlbumCrossingsItem";
 
 export interface DialCrossingItem {
   stationSlug: string;
@@ -24,4 +25,6 @@ export interface DialCrossingItem {
   lifetimeArtistCrossings: number;
   /** First-ever Lore plays that are also crossings over the full archive. */
   lifetimeFirstPlayCrossings?: number;
+  /** Up to five exact crate albums aired by this station, newest crossing first. */
+  albumCrossings?: DialCrossingItemAlbumCrossingsItem[];
 }

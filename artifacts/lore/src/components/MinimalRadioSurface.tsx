@@ -206,6 +206,16 @@ function crossingAlbums(
   }
   const seen = new Set<string>();
   const albums: CrossingAlbum[] = [];
+  for (const album of row.ds.albumCrossings ?? []) {
+    if (seen.has(album.releaseGroupMbid)) continue;
+    seen.add(album.releaseGroupMbid);
+    albums.push({
+      ...album,
+      artworkUrl: album.artworkUrl
+        ?? `https://coverartarchive.org/release-group/${album.releaseGroupMbid}/front-1200`,
+    });
+    if (albums.length >= 5) return albums;
+  }
   const add = (item: LibraryItem | undefined, spin?: CrossingSpin) => {
     const recording = item?.recording;
     const releaseGroupMbid = spin?.releaseGroupMbid ?? recording?.releaseGroupMbid;

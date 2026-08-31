@@ -4979,6 +4979,19 @@ export const GetMyCrossingsResponse = zod.object({
         .describe(
           "First-ever Lore plays that are also crossings over the full archive.",
         ),
+      albumCrossings: zod
+        .array(
+          zod.object({
+            releaseGroupMbid: zod.string(),
+            title: zod.string(),
+            artist: zod.string(),
+            artworkUrl: zod.string().nullable(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Up to five exact crate albums aired by this station, newest crossing first.",
+        ),
     }),
   ),
   computing: zod.boolean().optional(),
@@ -5430,6 +5443,19 @@ export const GetMyBlendedCrossingsResponse = zod.object({
         .optional()
         .describe(
           "First-ever Lore plays that are also crossings over the full archive.",
+        ),
+      albumCrossings: zod
+        .array(
+          zod.object({
+            releaseGroupMbid: zod.string(),
+            title: zod.string(),
+            artist: zod.string(),
+            artworkUrl: zod.string().nullable(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Up to five exact crate albums aired by this station, newest crossing first.",
         ),
     }),
   ),

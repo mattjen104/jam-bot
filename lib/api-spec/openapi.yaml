@@ -8410,6 +8410,22 @@ components:
         lifetimeFirstPlayCrossings:
           type: integer
           description: First-ever Lore plays that are also crossings over the full archive.
+        albumCrossings:
+          type: array
+          description: Up to five exact crate albums aired by this station, newest crossing first.
+          items:
+            type: object
+            properties:
+              releaseGroupMbid:
+                type: string
+              title:
+                type: string
+              artist:
+                type: string
+              artworkUrl:
+                type: string
+                nullable: true
+            required: [releaseGroupMbid, title, artist, artworkUrl]
       required: [stationSlug, crossings, artistCrossings, weekCrossings, weekArtistCrossings, monthCrossings, monthArtistCrossings, lifetimeCrossings, lifetimeArtistCrossings]
     StationsScheduleResult:
       type: object

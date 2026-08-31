@@ -179,6 +179,12 @@ export interface DialStation {
    * Top crossing artist names over all time (personal mode only; up to 3).
    */
   topArtistNamesLifetime: string[];
+  albumCrossings: Array<{
+    releaseGroupMbid: string;
+    title: string;
+    artist: string;
+    artworkUrl: string | null;
+  }>;
 }
 
 export interface LiveArtistSuggestion {
@@ -1196,6 +1202,12 @@ export function useDialData(
       topArtistNames24h: string[];
       topArtistNames7d: string[];
       topArtistNamesLifetime: string[];
+      albumCrossings: Array<{
+        releaseGroupMbid: string;
+        title: string;
+        artist: string;
+        artworkUrl: string | null;
+      }>;
     }>();
     for (const cx of selectedCrossings ?? []) {
       m.set(cx.stationSlug, {
@@ -1215,6 +1227,7 @@ export function useDialData(
         topArtistNames24h: cx.topArtistNames24h ?? [],
         topArtistNames7d: cx.topArtistNames7d ?? [],
         topArtistNamesLifetime: cx.topArtistNamesLifetime ?? [],
+        albumCrossings: cx.albumCrossings ?? [],
       });
     }
     return m;
@@ -1692,6 +1705,8 @@ export function useDialData(
         displayMode !== "blended" ? (serverCx?.topArtistNames7d ?? []) : [];
       const topArtistNamesLifetime: string[] =
         displayMode !== "blended" ? (serverCx?.topArtistNamesLifetime ?? []) : [];
+      const albumCrossings =
+        displayMode !== "blended" ? (serverCx?.albumCrossings ?? []) : [];
 
       return {
         station,
@@ -1713,6 +1728,7 @@ export function useDialData(
         topArtistNames24h,
         topArtistNames7d,
         topArtistNamesLifetime,
+        albumCrossings,
         liveTrack: isLive ? (nowPlayingBySlug.get(station.slug) ?? null) : null,
       };
     })

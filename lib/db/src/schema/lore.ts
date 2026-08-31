@@ -2412,6 +2412,13 @@ export interface CrossingsRow {
    * Optional for the same backward-compat reason as topArtistNames24h.
    */
   topArtistNamesLifetime?: string[];
+  /** Exact crate albums this station has aired, newest crossing first. */
+  albumCrossings?: Array<{
+    releaseGroupMbid: string;
+    title: string;
+    artist: string;
+    artworkUrl: string | null;
+  }>;
 }
 
 export const crossingsCacheTable = pgTable("crossings_cache", {
