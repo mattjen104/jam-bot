@@ -253,6 +253,28 @@ export function MinimalRadioSurface({
 
   return (
     <section className="minimal-radio" data-testid="minimal-radio-surface">
+      <div className="minimal-radio__dial">
+        <div className="minimal-radio__nav" role="group" aria-label="Radio station navigation">
+          <button type="button" onClick={() => selectOffset(-1)} aria-label="Previous station">
+            <ChevronLeft size={18} aria-hidden="true" /> Previous
+          </button>
+          <span aria-live="polite">{selectedIndex + 1} of {candidates.length}</span>
+          <button type="button" onClick={() => selectOffset(1)} aria-label="Next station">
+            Next <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        </div>
+
+        {selected ? (
+          <MinimalRadioCard
+            key={selected.ds.station.slug}
+            row={selected}
+            libraryItems={libraryItems}
+            onPrevious={() => selectOffset(-1)}
+            onNext={() => selectOffset(1)}
+          />
+        ) : null}
+      </div>
+
       <div className="minimal-radio__remote" role="group" aria-label="Radio presets and stations">
         <div className="minimal-radio__preset-label">Preset</div>
         <div className="minimal-radio__presets">
@@ -285,26 +307,6 @@ export function MinimalRadioSurface({
           ))}
         </div>
       </div>
-
-      <div className="minimal-radio__nav" role="group" aria-label="Radio station navigation">
-        <button type="button" onClick={() => selectOffset(-1)} aria-label="Previous station">
-          <ChevronLeft size={18} aria-hidden="true" /> Previous
-        </button>
-        <span aria-live="polite">{selectedIndex + 1} of {candidates.length}</span>
-        <button type="button" onClick={() => selectOffset(1)} aria-label="Next station">
-          Next <ChevronRight size={18} aria-hidden="true" />
-        </button>
-      </div>
-
-      {selected ? (
-        <MinimalRadioCard
-          key={selected.ds.station.slug}
-          row={selected}
-          libraryItems={libraryItems}
-          onPrevious={() => selectOffset(-1)}
-          onNext={() => selectOffset(1)}
-        />
-      ) : null}
     </section>
   );
 }

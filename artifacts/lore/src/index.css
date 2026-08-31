@@ -12988,15 +12988,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font: 11px/1.3 var(--app-font-mono);
 }
 .minimal-radio {
-  display: grid;
-  grid-template-columns: 188px minmax(0, 1fr);
-  gap: 20px 28px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.minimal-radio__dial {
+  min-width: 0;
 }
 .minimal-radio__remote {
-  position: sticky;
-  top: 16px;
-  grid-row: 1 / span 2;
+  order: 2;
   padding: 16px;
   border: 1px solid hsl(var(--border));
   border-radius: 14px;
@@ -13205,12 +13205,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .split-home__front-door-shell { padding-top: 22px; }
   .front-door-header { align-items: stretch; flex-direction: column; gap: 18px; }
   .front-door-modes { align-self: flex-start; }
-  .minimal-radio { grid-template-columns: 1fr; gap: 12px; }
   .minimal-radio__remote {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    grid-row: auto;
     padding: 11px 12px;
     border-radius: 11px;
   }
