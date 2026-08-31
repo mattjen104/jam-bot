@@ -49,6 +49,16 @@ export type MusicKitInstance = {
   addEventListener: (event: string, listener: (event: unknown) => void) => void;
   removeEventListener: (event: string, listener: (event: unknown) => void) => void;
   storefrontId?: string;
+  isAuthorized?: boolean;
+  api?: {
+    music?: (
+      path: string,
+      options?: { limit?: number; offset?: number },
+    ) => Promise<unknown>;
+    library?: {
+      songs: (options?: { limit?: number; offset?: number }) => Promise<unknown>;
+    };
+  };
 };
 
 export type MusicKitGlobal = {
@@ -107,6 +117,179 @@ export function musicKitEvent(
 
 export function musicKitGlobal(): MusicKitGlobal | null {
   return typeof window !== "undefined" ? window.MusicKit ?? null : null;
+}
+
+export type AppleMusicClientConfig = {
+  configured: boolean;
+  developerToken: string | null;
+  appName: string;
+  storefront: string;
+};
+
+export type AppleLibrarySong = {
+  appleId: string;
+  title: string;
+  artist: string;
+  albumName: string | null;
+  artworkUrl: string | null;
+  isrc: string | null;
+};
+
+export type AppleMusicImportProgress = {
+  pages: number;
+  received: number;
+  resolved: number;
+  total: number | null;
+};
+
+/** Load, configure, and authorize MusicKit without requiring playback first. */
+export async function authorizeAppleMusic(
+  config: AppleMusicClientConfig,
+): Promise<MusicKitInstance> {
+  if (!config.configured || !config.developerToken) {
+    throw new Error("Apple Music is unavailable because this site is not configured.");
+  }
+  const global = await loadMusicKit();
+  global.configure({
+    developerToken: config.developerToken,
+    appName: config.appName,
+    storefrontId: config.storefront,
+  });
+  const music = global.getInstance();
+  if (!music.isAuthorized) await music.authorize();
+  return music;
+}
+
+function extractLibrarySongs(value: unknown): { songs: AppleLibrarySong[]; hasNext: boolean } {
+  const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const data = root.data && typeof root.data === "object" ? root.data as Record<string, unknown> : root;
+  const raw = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+  const songs = raw.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const item = entry as Record<string, unknown>;
+    const attrs = item.attributes && typeof item.attributes === "object"
+      ? item.attributes as Record<string, unknown>
+      : item;
+    const id = typeof item.id === "string" ? item.id : "";
+    const title = typeof attrs.name === "string" ? attrs.name : "";
+    const artist = typeof attrs.artistName === "string" ? attrs.artistName : "";
+    if (!id || !title || !artist) return [];
+    const album = typeof attrs.albumName === "string" ? attrs.albumName : null;
+    const artwork = attrs.artwork && typeof attrs.artwork === "object"
+      ? attrs.artwork as Record<string, unknown>
+      : null;
+    const url = typeof artwork?.url === "string"
+      ? artwork.url.replace("{w}", "600").replace("{h}", "600")
+      : null;
+    return [{
+      appleId: id,
+      title,
+      artist,
+      albumName: album,
+      artworkUrl: url,
+      isrc: typeof attrs.isrc === "string" ? attrs.isrc : null,
+    }];
+  });
+  const next = root.next ?? data.next;
+  return { songs, hasNext: typeof next === "string" && next.length > 0 };
+}
+
+/**
+ * Import every Apple library page through the canonical batch endpoint.
+ * Pages are bounded and each POST is idempotent on (listener, Apple song ID),
+ * so an interrupted or repeated run can safely resume.
+ */
+export async function importAppleMusicLibrary(
+  config: AppleMusicClientConfig,
+  options: {
+    signal?: AbortSignal;
+    onProgress?: (progress: AppleMusicImportProgress) => void;
+    pageLimit?: number;
+    maxPages?: number;
+  } = {},
+): Promise<AppleMusicImportProgress> {
+  const music = await authorizeAppleMusic(config);
+  const pageLimit = Math.min(Math.max(options.pageLimit ?? 100, 1), 100);
+  const maxPages = Math.min(Math.max(options.maxPages ?? 1000, 1), 1000);
+  let offset = 0;
+  let pages = 0;
+  let received = 0;
+  let resolved = 0;
+  let total: number | null = null;
+
+  for (; pages < maxPages; pages++) {
+    if (options.signal?.aborted) throw new DOMException("Import cancelled", "AbortError");
+    if (!music.api?.library?.songs && !music.api?.music) {
+      throw new Error("Apple Music library access is unavailable in this browser.");
+    }
+    const response = music.api.library?.songs
+      ? await music.api.library.songs({ limit: pageLimit, offset })
+      : await music.api.music!("/v1/me/library/songs", { limit: pageLimit, offset });
+    const page = extractLibrarySongs(response);
+    if (page.songs.length === 0) {
+      break;
+    }
+    const upload = await fetch("/api/me/apple-library-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ songs: page.songs }),
+      signal: options.signal,
+    });
+    if (!upload.ok && upload.status !== 207) {
+      let detail = "";
+      try {
+        const body = await upload.json() as { error?: string };
+        detail = body.error ? `: ${body.error}` : "";
+      } catch { /* use status below */ }
+      throw new Error(`Apple Music import failed (${upload.status})${detail}`);
+    }
+    const result = await upload.json() as {
+      received?: number;
+      resolved?: number;
+      total?: number;
+      failures?: Array<{ index: number; reason: string }>;
+    };
+    if (upload.status === 207 || (result.failures?.length ?? 0) > 0) {
+      throw new Error(
+        `Apple Music imported part of this page; ${result.failures?.length ?? 1} track(s) need a retry.`,
+      );
+    }
+    received += result.received ?? page.songs.length;
+    resolved += result.resolved ?? 0;
+    total = typeof result.total === "number" ? result.total : total;
+    offset += page.songs.length;
+    const progress = { pages: pages + 1, received, resolved, total };
+    options.onProgress?.(progress);
+    if (!page.hasNext && page.songs.length < pageLimit) break;
+  }
+
+  const completion = await fetch("/api/me/apple-library-import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ songs: [], complete: true }),
+    signal: options.signal,
+  });
+  if (!completion.ok) throw new Error(`Apple Music import could not be finalized (${completion.status})`);
+  const finalStatus = await getAppleMusicImportStatus();
+  options.onProgress?.(finalStatus);
+  return finalStatus;
+}
+
+export async function getAppleMusicImportStatus(): Promise<AppleMusicImportProgress & {
+  unresolved: number;
+  complete: boolean;
+}> {
+  const response = await fetch("/api/me/apple-library-import/status", {
+    credentials: "include",
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`Could not read Apple Music import status (${response.status})`);
+  return response.json() as Promise<AppleMusicImportProgress & {
+    unresolved: number;
+    complete: boolean;
+  }>;
 }
 
 export function loadMusicKit(): Promise<MusicKitGlobal> {

@@ -14,9 +14,16 @@ import {
   useSetAlbumAvatar,
   useSetTasteSeeds,
   useMyTasteSeeds,
+  useAppConfig,
   ME_LATEST_IMPORT_JOB_KEY,
   ME_CONNECTIONS_KEY,
 } from "../lib/meHooks";
+import {
+  importAppleMusicLibrary,
+  getAppleMusicImportStatus,
+  describeMusicKitError,
+  type AppleMusicImportProgress,
+} from "../lib/appleMusicReplay";
 import {
   useGetStationsArtistFrequency,
   getGetStationsArtistFrequencyQueryKey,
@@ -351,6 +358,10 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
   const [lbUsername, setLbUsername] = useState("");
   const [lfmUsername, setLfmUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const { data: appConfig } = useAppConfig();
+  const [appleImporting, setAppleImporting] = useState(false);
+  const [appleProgress, setAppleProgress] = useState<AppleMusicImportProgress | null>(null);
+  const [appleComplete, setAppleComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [images, setImages] = useState<ScreenshotImage[]>([]);
@@ -358,6 +369,19 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
   const [imageBusy, setImageBusy] = useState(false);
   /** True while we're waiting for the Spotify OAuth tab to complete. */
   const [spotifyOAuthWaiting, setSpotifyOAuthWaiting] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "service-guide" || selectedService !== "applemusic") return;
+    let cancelled = false;
+    void getAppleMusicImportStatus()
+      .then((status) => {
+        if (cancelled || status.received === 0) return;
+        setAppleProgress(status);
+        setAppleComplete(status.complete);
+      })
+      .catch(() => { /* A new listener has no Apple import state yet. */ });
+    return () => { cancelled = true; };
+  }, [mode, selectedService]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
@@ -469,6 +493,26 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not connect to Spotify.");
       }
+    }
+  };
+
+  const handleAppleMusicImport = async () => {
+    setAppleImporting(true);
+    setAppleComplete(false);
+    setError(null);
+    try {
+      if (!appConfig?.appleMusic) throw new Error("Apple Music configuration is unavailable.");
+      const result = await importAppleMusicLibrary(appConfig.appleMusic, {
+        onProgress: setAppleProgress,
+      });
+      setAppleProgress(result);
+      setAppleComplete(true);
+      await qc.invalidateQueries({ queryKey: ["me", "library"] });
+      onImportStarted?.();
+    } catch (err) {
+      setError(describeMusicKitError(err).message);
+    } finally {
+      setAppleImporting(false);
     }
   };
 
@@ -1060,6 +1104,35 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
         {/* ── Apple Music service guide ────────────────────────────────── */}
         {mode === "service-guide" && selectedService === "applemusic" && (
           <div className="flex flex-col gap-3">
+            <div className="rounded-xl border border-primary/40 px-4 py-4 flex flex-col gap-3" style={{ background: "hsl(var(--primary)/0.06)" }}>
+              <div>
+                <p className="font-mono text-[14px] text-foreground">Connect Apple Music</p>
+                <p className="mt-1 font-mono text-[13px] text-muted-foreground">
+                  Requires an active Apple Music subscription. Lore also needs server-side MusicKit credentials; audio stays in Apple Music and is never proxied.
+                </p>
+              </div>
+              {!appConfig?.appleMusic?.configured && (
+                <p className="font-mono text-[13px] text-destructive" role="alert">
+                  Apple Music is unavailable because this Lore server is not configured for MusicKit.
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={appleImporting || !appConfig?.appleMusic?.configured}
+                onClick={() => void handleAppleMusicImport()}
+                className="rounded-lg bg-primary px-4 py-2 font-mono text-[13px] text-primary-foreground disabled:opacity-50"
+                data-testid="apple-music-connect-import"
+              >
+                {appleImporting ? "Scanning Apple Music…" : appleComplete ? "Import again" : appleProgress ? "Resume import" : "Connect and import"}
+              </button>
+              {appleProgress && (
+                <p className="font-mono text-[13px] text-muted-foreground" aria-live="polite">
+                  {appleProgress.received} songs scanned · {appleProgress.resolved} matched
+                  {appleComplete ? " · complete" : ""}
+                </p>
+              )}
+              {error && <p className="font-mono text-[13px] text-destructive" role="alert">{error} You can retry without creating duplicates.</p>}
+            </div>
             {/* Option 1: TuneMyMusic CSV */}
             <div className="rounded-xl border border-border px-4 py-4 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.2)" }}>
               <p className="font-mono text-[14px] font-normal text-foreground">Export via TuneMyMusic</p>

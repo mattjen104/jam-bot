@@ -24,7 +24,8 @@ export async function applyAppleLibraryItemsMigration(): Promise<void> {
       artwork_url  text,
       isrc         text,
       added_at     timestamp NOT NULL DEFAULT now(),
-      mbid         text REFERENCES recordings(mbid)
+      mbid         text REFERENCES recordings(mbid),
+      removed_at   timestamp
     )
   `);
 
@@ -41,5 +42,23 @@ export async function applyAppleLibraryItemsMigration(): Promise<void> {
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS apple_library_items_isrc_idx
       ON apple_library_items (isrc)
+  `);
+  await db.execute(sql`
+    ALTER TABLE apple_library_items
+      ADD COLUMN IF NOT EXISTS removed_at timestamp
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS apple_library_items_user_mbid_idx
+      ON apple_library_items (user_id, mbid)
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS apple_library_import_state (
+      user_id      integer PRIMARY KEY REFERENCES lore_users(id) ON DELETE CASCADE,
+      pages        integer NOT NULL DEFAULT 0,
+      complete     boolean NOT NULL DEFAULT false,
+      last_error   text,
+      updated_at   timestamp NOT NULL DEFAULT now(),
+      completed_at timestamp
+    )
   `);
 }

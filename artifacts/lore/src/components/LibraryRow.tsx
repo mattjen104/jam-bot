@@ -146,7 +146,16 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
   const artist = rec?.artist ?? "";
   const artworkUrl = rec?.artworkUrl ?? null;
 
-  const seed: RideSeed = { mbid, title, artist, artworkUrl, links: [] };
+  const appleMusicId = rec?.appleMusicId ?? null;
+  const seed: RideSeed = {
+    mbid,
+    title,
+    artist,
+    artworkUrl,
+    links: appleMusicId
+      ? [{ kind: "exact", name: "apple_music", url: `https://music.apple.com/song/i=${appleMusicId}` }]
+      : [],
+  };
 
   const spotifyEligible = spotify.connected && spotify.premium;
 
@@ -180,7 +189,9 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
         title: t.title,
         artist: t.artist,
         artworkUrl: null,
-        links: [],
+        links: t.appleMusicId
+          ? [{ kind: "exact", name: "apple_music", url: `https://music.apple.com/song/i=${t.appleMusicId}` }]
+          : [],
       }));
       if (seeds.length > 0) {
         ride.startReplay(seeds, data.rgTitle ?? title, { timeOrientation: "curated", context: "library" });

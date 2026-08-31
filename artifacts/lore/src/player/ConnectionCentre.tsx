@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import type { SpotifyConnectApi } from "./useSpotifyConnect";
 import type { LocalFileDriverExtras } from "./useLocalFileDriver";
+import { useAppConfig } from "../lib/meHooks";
+import { authorizeAppleMusic, describeMusicKitError } from "../lib/appleMusicReplay";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -155,6 +157,7 @@ export function ConnectionCentre({
   onConnectAppleMusic,
   localFiles,
 }: ConnectionCentreProps) {
+  const { data: appConfig } = useAppConfig();
   const handleSpotifyConnect = useCallback(() => {
     spotify.connect();
   }, [spotify]);
@@ -184,30 +187,17 @@ export function ConnectionCentre({
     setAmConnecting(true);
     setAmAuthError(null);
     try {
-      // MusicKit JS is loaded and initialized by the Apple Music driver when
-      // the developer token is configured.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mk = (window as any).MusicKit as
-        | { getInstance?: () => { authorize?: () => Promise<unknown> } }
-        | undefined;
-      const instance = mk?.getInstance?.();
-      if (!instance?.authorize) {
-        throw new Error(
-          "Apple Music hasn't loaded yet — try playing a track first to initialize it.",
-        );
-      }
-      await instance.authorize();
+      if (!appConfig?.appleMusic) throw new Error("Apple Music configuration is unavailable.");
+      await authorizeAppleMusic(appConfig.appleMusic);
       // Authorization succeeded — notify PlayerProvider so it marks Apple Music
       // as connected (the prop updates asynchronously on the next render).
       onConnectAppleMusic();
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Authorization failed — please try again.";
-      setAmAuthError(msg);
+      setAmAuthError(describeMusicKitError(err).message);
     } finally {
       setAmConnecting(false);
     }
-  }, [onConnectAppleMusic]);
+  }, [appConfig, onConnectAppleMusic]);
 
   if (!open) return null;
 

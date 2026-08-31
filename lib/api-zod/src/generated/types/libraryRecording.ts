@@ -15,4 +15,5 @@ export interface LibraryRecording {
   releaseGroupMbid: string | null;
   releaseYear: number | null;
   spotifyUrl: string | null;
+  appleMusicId: string | null;
 }

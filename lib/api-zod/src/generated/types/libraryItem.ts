@@ -15,6 +15,7 @@ export interface LibraryItem {
   recording: LibraryRecording | null;
   soft?: boolean;
   spotifyId?: string;
+  appleMusicId?: string;
   fuzzyMatch?: boolean;
   removed?: boolean;
   removedAt?: string | null;

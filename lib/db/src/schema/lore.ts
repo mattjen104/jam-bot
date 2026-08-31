@@ -2321,6 +2321,42 @@ export type InsertSpotifyLibraryItem =
   typeof spotifyLibraryItemsTable.$inferInsert;
 
 /**
+ * Apple Music library tracks captured by MusicKit in the browser.
+ *
+ * Apple IDs are provider identities, not canonical Lore identities. Keep this
+ * staging row even after an ISRC match promotes a recording into
+ * library_items so playback can queue the exact Apple song without guessing
+ * from title/artist metadata.
+ */
+export const appleLibraryItemsTable = pgTable(
+  "apple_library_items",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    appleId: text("apple_id").notNull(),
+    title: text("title").notNull(),
+    artist: text("artist").notNull(),
+    albumName: text("album_name"),
+    artworkUrl: text("artwork_url"),
+    isrc: text("isrc"),
+    addedAt: timestamp("added_at").defaultNow().notNull(),
+    mbid: text("mbid").references(() => recordingsTable.mbid),
+    removedAt: timestamp("removed_at"),
+  },
+  (t) => [
+    uniqueIndex("apple_library_items_user_apple_idx").on(t.userId, t.appleId),
+    index("apple_library_items_user_added_idx").on(t.userId, t.addedAt),
+    index("apple_library_items_isrc_idx").on(t.isrc),
+    index("apple_library_items_user_mbid_idx").on(t.userId, t.mbid),
+  ],
+);
+
+export type AppleLibraryItem = typeof appleLibraryItemsTable.$inferSelect;
+export type InsertAppleLibraryItem = typeof appleLibraryItemsTable.$inferInsert;
+
+/**
  * Shared persistent cache for per-user crossing results.
  *
  * Keyed on `user_id` (one row per user).  A server restart reads from here

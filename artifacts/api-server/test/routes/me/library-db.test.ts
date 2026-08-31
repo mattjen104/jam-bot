@@ -7,6 +7,7 @@ import {
   loreUsersTable,
   spotifyConnectionsTable,
   libraryItemsTable,
+  appleLibraryItemsTable,
   pendingKeepsTable,
   recordingsTable,
 } from "@workspace/db";
@@ -34,7 +35,10 @@ const MBIDS = {
   second: `test-rt-lib-b-${run}`,
   third: `test-rt-lib-c-${run}`,
   keepTarget: `test-rt-lib-keep-${run}`,
+  appleResolved: `test-rt-lib-apple-${run}`,
 };
+const APPLE_Q = `applefixture${randomUUID().slice(0, 8)}`;
+const APPLE_ISRC = `TST${randomUUID().replaceAll("-", "").slice(0, 9).toUpperCase()}`;
 
 let dbAvailable = false;
 let userId: number | null = null;
@@ -82,6 +86,12 @@ beforeAll(async () => {
     { mbid: MBIDS.second, title: "Second Song", artist: `RT Lib Artist ${run}` },
     { mbid: MBIDS.third, title: "Third Song", artist: `RT Lib Artist ${run}` },
     { mbid: MBIDS.keepTarget, title: "Keep Me", artist: `RT Lib Keeper ${run}` },
+    {
+      mbid: MBIDS.appleResolved,
+      title: `Resolved ${APPLE_Q}`,
+      artist: "Apple Fixture Artist",
+      isrc: APPLE_ISRC,
+    },
   ]);
 
   const base = Date.now();
@@ -90,6 +100,29 @@ beforeAll(async () => {
     { userId, mbid: MBIDS.second, provenance: { kind: "import", service: "spotify" }, addedAt: new Date(base - 1000) },
     { userId, mbid: MBIDS.third, provenance: { kind: "keep" }, addedAt: new Date(base - 2000) },
   ]);
+  await db.insert(appleLibraryItemsTable).values([
+    {
+      userId,
+      appleId: `apple-resolved-${run}`,
+      title: `Resolved ${APPLE_Q}`,
+      artist: "Apple Fixture Artist",
+      albumName: "Exact Apple Album",
+      isrc: APPLE_ISRC,
+      mbid: MBIDS.appleResolved,
+    },
+    {
+      userId,
+      appleId: `apple-soft-${run}`,
+      title: `Unresolved ${APPLE_Q}`,
+      artist: "Apple Fixture Artist",
+      albumName: "Unresolved Apple Album",
+    },
+  ]);
+  await db.insert(libraryItemsTable).values({
+    userId,
+    mbid: MBIDS.appleResolved,
+    provenance: { kind: "import", service: "apple_music", sourceKeepDate: false },
+  });
 
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -103,6 +136,7 @@ afterAll(async () => {
   const ids = [userId, emptyUserId].filter((v): v is number => v != null);
   if (ids.length > 0) {
     await db.delete(pendingKeepsTable).where(inArray(pendingKeepsTable.userId, ids));
+    await db.delete(appleLibraryItemsTable).where(inArray(appleLibraryItemsTable.userId, ids));
     await db.delete(libraryItemsTable).where(inArray(libraryItemsTable.userId, ids));
     await db.delete(loreUsersTable).where(inArray(loreUsersTable.id, ids));
   }
@@ -139,6 +173,62 @@ describe("session behaviour on /api/me/library", () => {
 });
 
 describe("GET /api/me/library", () => {
+  it("shows resolved and unresolved Apple rows with exact IDs and honest provenance", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await authed({ q: APPLE_Q, limit: "10" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const resolved = body.items.find((item: { mbid: string | null }) =>
+      item.mbid === MBIDS.appleResolved);
+    const soft = body.items.find((item: { appleMusicId?: string }) =>
+      item.appleMusicId === `apple-soft-${run}`);
+
+    expect(resolved).toMatchObject({
+      mbid: MBIDS.appleResolved,
+      provenance: { kind: "import", service: "apple_music", sourceKeepDate: false },
+      recording: { appleMusicId: `apple-resolved-${run}` },
+    });
+    expect(soft).toMatchObject({
+      mbid: null,
+      soft: true,
+      appleMusicId: `apple-soft-${run}`,
+      provenance: { kind: "import", service: "apple_music", sourceKeepDate: false },
+      recording: {
+        title: `Unresolved ${APPLE_Q}`,
+        albumTitle: "Unresolved Apple Album",
+      },
+    });
+  });
+
+  it("re-imports the same Apple song idempotently and keeps exact identity", async (ctx) => {
+    if (!dbAvailable || userId == null) return ctx.skip();
+    const payload = {
+      songs: [{
+        appleId: `apple-resolved-${run}`,
+        title: `Resolved ${APPLE_Q}`,
+        artist: "Apple Fixture Artist",
+        albumName: "Exact Apple Album",
+        isrc: APPLE_ISRC,
+      }],
+    };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(`${baseUrl}/api/me/apple-library-import`, {
+        method: "POST",
+        headers: { cookie: `lore_sid=${SID}`, "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      expect(res.status).toBe(200);
+    }
+    const rows = await db
+      .select()
+      .from(appleLibraryItemsTable)
+      .where(and(
+        eq(appleLibraryItemsTable.userId, userId),
+        eq(appleLibraryItemsTable.appleId, `apple-resolved-${run}`),
+      ));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.mbid).toBe(MBIDS.appleResolved);
+  });
   it("returns the items + cursor + page-1 total shape", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
     const res = await authed({ q: run, limit: "50" });

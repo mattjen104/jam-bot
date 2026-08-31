@@ -62,6 +62,8 @@ export interface LibraryRecording {
   releaseYear?: number | null;
   /** Spotify track URL from Odesli resolution, when available. */
   spotifyUrl: string | null;
+  /** Exact Apple catalog song ID supplied by MusicKit, never inferred. */
+  appleMusicId?: string | null;
 }
 
 export interface LibraryProvenance {
@@ -100,6 +102,8 @@ export interface LibraryItem {
   soft?: boolean;
   /** Spotify track ID, populated on soft rows. */
   spotifyId?: string | null;
+  /** Exact Apple song ID, populated on Apple soft rows. */
+  appleMusicId?: string | null;
   /**
    * True when the track was matched via MusicBrainz scored text search
    * (Tier 3 / "text" resolution tier).  Shown as a "(fuzzy match)" badge so

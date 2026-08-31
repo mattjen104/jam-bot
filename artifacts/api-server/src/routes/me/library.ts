@@ -14,6 +14,7 @@ import {
   listSourcesTable,
   resolutionCacheTable,
   spotifyLibraryItemsTable,
+  appleLibraryItemsTable,
   importItemsTable,
   spinsTable,
   stationsTable,
@@ -2715,12 +2716,13 @@ router.post("/me/library/removal", h(async (req, res) => {
   const body = req.body ?? {};
   const mbid = typeof body.mbid === "string" ? body.mbid.trim() : "";
   const spotifyId = typeof body.spotifyId === "string" ? body.spotifyId.trim() : "";
+  const appleMusicId = typeof body.appleMusicId === "string" ? body.appleMusicId.trim() : "";
   const removed = body.removed;
   if (typeof removed !== "boolean") {
     return res.status(400).json({ error: "removed (boolean) is required" });
   }
-  if (!mbid && !spotifyId) {
-    return res.status(400).json({ error: "mbid or spotifyId is required" });
+  if (!mbid && !spotifyId && !appleMusicId) {
+    return res.status(400).json({ error: "mbid, spotifyId, or appleMusicId is required" });
   }
 
   const removedAt = removed ? new Date() : null;
@@ -2732,7 +2734,7 @@ router.post("/me/library/removal", h(async (req, res) => {
       .set({ removedAt })
       .where(and(eq(libraryItemsTable.userId, user.id), eq(libraryItemsTable.mbid, mbid)))
       .returning({ removedAt: libraryItemsTable.removedAt });
-  } else {
+  } else if (spotifyId) {
     updated = await db
       .update(spotifyLibraryItemsTable)
       .set({ removedAt })
@@ -2741,6 +2743,15 @@ router.post("/me/library/removal", h(async (req, res) => {
         eq(spotifyLibraryItemsTable.spotifyId, spotifyId),
       ))
       .returning({ removedAt: spotifyLibraryItemsTable.removedAt });
+  } else {
+    updated = await db
+      .update(appleLibraryItemsTable)
+      .set({ removedAt })
+      .where(and(
+        eq(appleLibraryItemsTable.userId, user.id),
+        eq(appleLibraryItemsTable.appleId, appleMusicId),
+      ))
+      .returning({ removedAt: appleLibraryItemsTable.removedAt });
   }
   if (updated.length === 0) {
     return res.status(404).json({ error: "No matching library row" });
@@ -2824,13 +2835,26 @@ router.get("/me/library", h(async (req, res) => {
   let softCount: number | undefined;
   let criticCount: number | undefined;
   if (!cursor) {
-    const [resolvedCount, rawSoftCount, rawKeepCount, rawCriticCount] = await Promise.all([
+    const [resolvedCount, rawSpotifySoftCount, rawAppleSoftCount, rawKeepCount, rawCriticCount] = await Promise.all([
       includeResolved
         ? db
             .select({ count: sql<number>`count(*)::int` })
             .from(libraryItemsTable)
             .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
             .where(and(...conditions))
+            .then((r) => r[0]?.count ?? 0)
+        : Promise.resolve(0),
+      includeSoft
+        ? db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(appleLibraryItemsTable)
+            .where(and(
+              eq(appleLibraryItemsTable.userId, user.id),
+              isNull(appleLibraryItemsTable.mbid),
+              ...(q.length > 0
+                ? [sql`(${appleLibraryItemsTable.title} ILIKE ${`%${escapeLike(q)}%`} OR ${appleLibraryItemsTable.artist} ILIKE ${`%${escapeLike(q)}%`})`]
+                : []),
+            ))
             .then((r) => r[0]?.count ?? 0)
         : Promise.resolve(0),
       includeSoft
@@ -2879,7 +2903,7 @@ router.get("/me/library", h(async (req, res) => {
         )
         .then((r) => r[0]?.count ?? 0),
     ]);
-    softCount = rawSoftCount;
+    softCount = rawSpotifySoftCount + rawAppleSoftCount;
     total = resolvedCount + softCount;
     keepCount = rawKeepCount;
     criticCount = rawCriticCount;
@@ -2906,6 +2930,21 @@ router.get("/me/library", h(async (req, res) => {
       ? sql<string>`lower(coalesce(${spotifyLibraryItemsTable.artist}, '') || ' ' || coalesce(${spotifyLibraryItemsTable.title}, ''))`
       : sql<string>`lower(coalesce(${spotifyLibraryItemsTable.title}, '') || ' ' || coalesce(${spotifyLibraryItemsTable.artist}, ''))`;
 
+  const appleSoftConds = [
+    eq(appleLibraryItemsTable.userId, user.id),
+    isNull(appleLibraryItemsTable.mbid),
+  ];
+  if (q.length > 0) {
+    const pattern = `%${escapeLike(q)}%`;
+    appleSoftConds.push(
+      sql`(${appleLibraryItemsTable.title} ILIKE ${pattern} OR ${appleLibraryItemsTable.artist} ILIKE ${pattern})`,
+    );
+  }
+  const appleSoftSortKeyExpr =
+    sort === "artist"
+      ? sql<string>`lower(coalesce(${appleLibraryItemsTable.artist}, '') || ' ' || coalesce(${appleLibraryItemsTable.title}, ''))`
+      : sql<string>`lower(coalesce(${appleLibraryItemsTable.title}, '') || ' ' || coalesce(${appleLibraryItemsTable.artist}, ''))`;
+
   let legacyNameCursor = false;
   if (cursor) {
     if (sort === "added") {
@@ -2925,9 +2964,13 @@ router.get("/me/library", h(async (req, res) => {
         softConds.push(
           sql`(${spotifyLibraryItemsTable.addedAt}, ${spotifyLibraryItemsTable.spotifyId} COLLATE "C") < (${tsPart}::timestamptz, ${keyPart})`,
         );
+        appleSoftConds.push(
+          sql`(${appleLibraryItemsTable.addedAt}, ${appleLibraryItemsTable.appleId} COLLATE "C") < (${tsPart}::timestamptz, ${keyPart})`,
+        );
       } else {
         conditions.push(sql`${libraryItemsTable.addedAt} < ${cursor}::timestamptz`);
         softConds.push(sql`${spotifyLibraryItemsTable.addedAt} < ${cursor}::timestamptz`);
+        appleSoftConds.push(sql`${appleLibraryItemsTable.addedAt} < ${cursor}::timestamptz`);
       }
     } else {
       const sep = cursor.lastIndexOf(LIB_CURSOR_SEP);
@@ -2944,6 +2987,9 @@ router.get("/me/library", h(async (req, res) => {
         softConds.push(
           sql`(${softSortKeyExpr}, ${spotifyLibraryItemsTable.addedAt}) > (${keyPart}, ${suffixPart}::timestamptz)`,
         );
+        appleSoftConds.push(
+          sql`(${appleSoftSortKeyExpr}, ${appleLibraryItemsTable.addedAt}) > (${keyPart}, ${suffixPart}::timestamptz)`,
+        );
       } else {
         conditions.push(
           sql`(${sortKeyExpr}, ${libraryItemsTable.mbid}) > (${keyPart}, ${suffixPart})`,
@@ -2957,7 +3003,7 @@ router.get("/me/library", h(async (req, res) => {
     mbid: string; provenance: LibraryItemProvenance; addedAt: Date; removedAt: Date | null;
     title: string | null; artist: string | null; artistMbid: string | null; artworkUrl: string | null;
     links: Array<{ url: string }> | null; sortKey: string; albumTitle: string | null;
-    releaseGroupMbid: string | null; releaseYear: number | null;
+    releaseGroupMbid: string | null; releaseYear: number | null; appleMusicId: string | null;
   };
   let resolvedRows: ResolvedRow[] = [];
   if (includeResolved) resolvedRows = await db
@@ -2984,6 +3030,13 @@ router.get("/me/library", h(async (req, res) => {
       releaseGroupMbid: sql<string | null>`(
         SELECT release_group_mbid FROM recording_release_groups
         WHERE recording_mbid = ${libraryItemsTable.mbid} AND is_primary = true
+        LIMIT 1
+      )`,
+      appleMusicId: sql<string | null>`(
+        SELECT apple_id FROM apple_library_items
+        WHERE user_id = ${user.id}
+          AND mbid = ${libraryItemsTable.mbid}
+        ORDER BY added_at DESC
         LIMIT 1
       )`,
     })
@@ -3051,12 +3104,23 @@ router.get("/me/library", h(async (req, res) => {
 
   void legacyNameCursor;
 
-  type SoftRow = { spotifyId: string; addedAt: Date; removedAt: Date | null; title: string; artist: string; artworkUrl: string | null; albumName: string | null; sortKey: string };
+  type SoftRow = {
+    provider: "spotify" | "apple_music";
+    externalId: string;
+    addedAt: Date;
+    removedAt: Date | null;
+    title: string;
+    artist: string;
+    artworkUrl: string | null;
+    albumName: string | null;
+    sortKey: string;
+  };
   let softRows: SoftRow[] = [];
   if (includeSoft) {
-    softRows = await db
+    const spotifyRows = await db
       .select({
-        spotifyId: spotifyLibraryItemsTable.spotifyId,
+        provider: sql<"spotify">`'spotify'`,
+        externalId: spotifyLibraryItemsTable.spotifyId,
         addedAt: spotifyLibraryItemsTable.addedAt,
         removedAt: spotifyLibraryItemsTable.removedAt,
         title: spotifyLibraryItemsTable.title,
@@ -3073,11 +3137,38 @@ router.get("/me/library", h(async (req, res) => {
           : [asc(softSortKeyExpr), asc(spotifyLibraryItemsTable.addedAt)]),
       )
       .limit(limit + 1);
+    const appleRows = await db
+      .select({
+        provider: sql<"apple_music">`'apple_music'`,
+        externalId: appleLibraryItemsTable.appleId,
+        addedAt: appleLibraryItemsTable.addedAt,
+        removedAt: appleLibraryItemsTable.removedAt,
+        title: appleLibraryItemsTable.title,
+        artist: appleLibraryItemsTable.artist,
+        artworkUrl: appleLibraryItemsTable.artworkUrl,
+        albumName: appleLibraryItemsTable.albumName,
+        sortKey: appleSoftSortKeyExpr.as("apple_soft_sort_key"),
+      })
+      .from(appleLibraryItemsTable)
+      .where(and(...appleSoftConds))
+      .orderBy(
+        ...(sort === "added"
+          ? [desc(appleLibraryItemsTable.addedAt), desc(sql`${appleLibraryItemsTable.appleId} COLLATE "C"`)]
+          : [asc(appleSoftSortKeyExpr), asc(appleLibraryItemsTable.addedAt)]),
+      )
+      .limit(limit + 1);
+    softRows = [...spotifyRows, ...appleRows];
   }
 
   const softSourceDateBySpotifyId = new Map<string, boolean>();
   if (softRows.length > 0) {
-    const visibleSoftIds = softRows.map((row) => row.spotifyId);
+    const visibleSoftIds = softRows
+      .filter((row) => row.provider === "spotify")
+      .map((row) => row.externalId);
+    if (visibleSoftIds.length === 0) {
+      // Apple Music does not provide a stable saved-at timestamp through the
+      // MusicKit library API, so there are no source-date facts to recover.
+    } else {
     const sourceFacts = await db.execute<{ external_id: string; added_at: string | null }>(sql`
       SELECT DISTINCT ON (entry->>'externalId')
         entry->>'externalId' AS external_id,
@@ -3104,6 +3195,7 @@ router.get("/me/library", h(async (req, res) => {
         }) !== null,
       );
     }
+    }
   }
 
   const unified = [
@@ -3111,6 +3203,7 @@ router.get("/me/library", h(async (req, res) => {
       soft: false as const,
       mbid: r.mbid as string | null,
       spotifyId: null as string | null,
+      appleMusicId: r.appleMusicId,
       provenance: r.provenance,
       addedAt: r.addedAt,
       removedAt: r.removedAt,
@@ -3127,11 +3220,14 @@ router.get("/me/library", h(async (req, res) => {
     ...softRows.map((s) => ({
       soft: true as const,
       mbid: null as string | null,
-      spotifyId: s.spotifyId,
+      spotifyId: s.provider === "spotify" ? s.externalId : null,
+      appleMusicId: s.provider === "apple_music" ? s.externalId : null,
       provenance: {
         kind: "import" as const,
-        service: "spotify",
-        sourceKeepDate: softSourceDateBySpotifyId.get(s.spotifyId) ?? false,
+        service: s.provider,
+        sourceKeepDate: s.provider === "spotify"
+          ? softSourceDateBySpotifyId.get(s.externalId) ?? false
+          : false,
       },
       addedAt: s.addedAt,
       removedAt: s.removedAt,
@@ -3153,8 +3249,8 @@ router.get("/me/library", h(async (req, res) => {
     unified.sort((a, b) => {
       const t = b.addedAt.getTime() - a.addedAt.getTime();
       if (t !== 0) return t;
-      const ka = a.mbid ?? a.spotifyId ?? "";
-      const kb = b.mbid ?? b.spotifyId ?? "";
+      const ka = a.mbid ?? a.spotifyId ?? a.appleMusicId ?? "";
+      const kb = b.mbid ?? b.spotifyId ?? b.appleMusicId ?? "";
       // Bytewise (code-unit) compare to match the SQL COLLATE "C" tie-break.
       return ka < kb ? 1 : ka > kb ? -1 : 0;
     });
@@ -3173,7 +3269,7 @@ router.get("/me/library", h(async (req, res) => {
   const nextCursor = !hasMore || !last
     ? null
     : sort === "added"
-      ? `${last.addedAt.toISOString()}${LIB_CURSOR_SEP}${last.mbid ?? last.spotifyId ?? ""}`
+      ? `${last.addedAt.toISOString()}${LIB_CURSOR_SEP}${last.mbid ?? last.spotifyId ?? last.appleMusicId ?? ""}`
       : `${last.sortKey}${LIB_CURSOR_SEP}${last.addedAt.toISOString()}`;
 
   return res.json({
@@ -3192,9 +3288,14 @@ router.get("/me/library", h(async (req, res) => {
             releaseYear: r.releaseYear ?? null,
             spotifyUrl:
               r.links?.find((l) => l.url.includes("open.spotify.com"))?.url ?? null,
+            appleMusicId: r.appleMusicId ?? null,
           }
         : null,
-      ...(r.soft ? { soft: true, spotifyId: r.spotifyId } : {}),
+      ...(r.soft ? {
+        soft: true,
+        ...(r.spotifyId ? { spotifyId: r.spotifyId } : {}),
+        ...(r.appleMusicId ? { appleMusicId: r.appleMusicId } : {}),
+      } : {}),
       ...(r.mbid && fuzzyMbidSet.has(r.mbid) ? { fuzzyMatch: true } : {}),
       ...(r.mbid && dualSourceMbidSet.has(r.mbid) ? { dualSource: true } : {}),
       ...(r.removedAt != null

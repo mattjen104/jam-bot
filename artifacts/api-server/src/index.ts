@@ -193,6 +193,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyLedgerMigration", applyLedgerMigration);
     await runMigration("applySelectorClaimsMigration", applySelectorClaimsMigration);
     await runMigration("applySpotifyLibraryItemsMigration", applySpotifyLibraryItemsMigration);
+    await runMigration("applyAppleLibraryItemsMigration", applyAppleLibraryItemsMigration);
     await runMigration("applySpinDedupCleanup", applySpinDedupCleanup);
     await runMigration("applyCrossingsCacheMigration", applyCrossingsCacheMigration);
     await runMigration("applyBlendedCrossingsCacheMigration", applyBlendedCrossingsCacheMigration);

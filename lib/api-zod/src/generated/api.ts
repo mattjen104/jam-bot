@@ -1529,6 +1529,7 @@ export const GetRecordingAlbumTracksResponse = zod.object({
       mbid: zod.string(),
       title: zod.string(),
       artist: zod.string(),
+      appleMusicId: zod.string().nullish(),
     }),
   ),
 });
@@ -5878,10 +5879,12 @@ export const ListMyLibraryResponse = zod.object({
           releaseGroupMbid: zod.string().nullable(),
           releaseYear: zod.number().nullable(),
           spotifyUrl: zod.string().nullable(),
+          appleMusicId: zod.string().nullable(),
         })
         .nullable(),
       soft: zod.boolean().optional(),
       spotifyId: zod.string().optional(),
+      appleMusicId: zod.string().optional(),
       fuzzyMatch: zod.boolean().optional(),
       removed: zod.boolean().optional(),
       removedAt: zod.string().datetime({}).nullish(),

@@ -394,7 +394,15 @@ function TrackPlayButton({ item }: { item: LibraryItem }) {
   const artist = rec?.artist ?? "";
   const play = () => {
     if (!item.mbid) return;
-    const seed: RideSeed = { mbid: item.mbid, title, artist, artworkUrl: rec?.artworkUrl ?? null, links: [] };
+    const seed: RideSeed = {
+      mbid: item.mbid,
+      title,
+      artist,
+      artworkUrl: rec?.artworkUrl ?? null,
+      links: rec?.appleMusicId
+        ? [{ kind: "exact", name: "apple_music", url: `https://music.apple.com/song/i=${rec.appleMusicId}` }]
+        : [],
+    };
     if (spotify.connected && spotify.premium) {
       void spotifyPlay({ mbid: item.mbid, deviceId: spotify.pinnedDevice?.id })
         .then(() => toast({ title: `Playing on Spotify: ${title}` }))

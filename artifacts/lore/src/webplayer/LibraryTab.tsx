@@ -19,6 +19,11 @@ import {
 } from "../lib/meHooks";
 import { useWpLoreCounts, useWpRecordingSpins, useWpAlbumTracks, type WpSpinRow } from "./hooks";
 import { LoreChip } from "./LoreChip";
+import {
+  importAppleMusicLibrary,
+  getAppleMusicImportStatus,
+  describeMusicKitError,
+} from "../lib/appleMusicReplay";
 
 function VinylIcon({ size = 20 }: { size?: number }) {
   return (
@@ -748,120 +753,40 @@ export function LibraryTab({
   const [amImportDone, setAmImportDone] = useState(false);
   const [amImportError, setAmImportError] = useState<string | null>(null);
 
-  const handleAppleMusicImport = useCallback(async () => {
-    // Access MusicKit instance (initialized by the Apple Music driver).
-    const mk = (window as unknown as Record<string, unknown>).MusicKit;
-    if (!mk || typeof (mk as { getInstance?: () => { isAuthorized?: boolean; api?: unknown } }).getInstance !== "function") {
-      setAmImportError("Apple Music not available — connect it from the player first.");
-      return;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const instance = (mk as any).getInstance() as {
-      isAuthorized?: boolean;
-      api?: {
-        music?: (
-          path: string,
-          opts?: { limit?: number; offset?: number },
-        ) => Promise<{
-          data: {
-            data?: Array<{
-              id: string;
-              attributes?: {
-                name?: string;
-                artistName?: string;
-                albumName?: string;
-                artwork?: { url?: string };
-                isrc?: string;
-              };
-            }>;
-          };
-        }>;
-      };
-    };
-    if (!instance.isAuthorized) {
-      setAmImportError("Authorize Apple Music first by playing a track.");
-      return;
-    }
+  useEffect(() => {
+    if (!appleMusicConfigured) return;
+    let cancelled = false;
+    void getAppleMusicImportStatus()
+      .then((status) => {
+        if (cancelled || status.received === 0) return;
+        setAmImportProgress(status);
+        setAmImportDone(status.complete);
+      })
+      .catch(() => { /* No prior import state is a normal first-run case. */ });
+    return () => { cancelled = true; };
+  }, [appleMusicConfigured]);
 
+  const handleAppleMusicImport = useCallback(async () => {
     setAmImporting(true);
     setAmImportDone(false);
     setAmImportError(null);
     setAmImportProgress({ received: 0, total: null, resolved: 0 });
 
     try {
-      const limit = 100;
-      let offset = 0;
-      const total: number | null = null;
-      let received = 0;
-      let resolved = 0;
-
-      // Track whether the loop ended normally (reached last page) vs. via error.
-      let fetchError: Error | null = null;
-
-      while (true) {
-        // Fetch a page of library songs via MusicKit JS.
-        let page: { data: { data?: Array<{ id: string; attributes?: { name?: string; artistName?: string; albumName?: string; artwork?: { url?: string }; isrc?: string } }> } };
-        try {
-          page = await instance.api!.music!("/v1/me/library/songs", { limit, offset });
-        } catch (e) {
-          // MusicKit API error — abort the import with an error state.
-          // Do NOT treat this as a natural end-of-library: the user would
-          // see "done" when the import is actually incomplete.
-          fetchError = e instanceof Error ? e : new Error("MusicKit API error");
-          break;
-        }
-
-        const songs = page.data.data ?? [];
-
-        // Empty page = confirmed end of library.
-        if (songs.length === 0) break;
-
-        // Build batch payload.
-        const batch = songs.map((s) => ({
-          appleId: s.id,
-          title: s.attributes?.name ?? "",
-          artist: s.attributes?.artistName ?? "",
-          albumName: s.attributes?.albumName ?? null,
-          artworkUrl: s.attributes?.artwork?.url?.replace("{w}x{h}", "300x300") ?? null,
-          isrc: s.attributes?.isrc ?? null,
-        }));
-
-        // POST batch to server.
-        const res = await fetch("/api/me/apple-library-import", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ songs: batch }),
-        });
-        if (res.ok) {
-          const json = await res.json() as { inserted?: number; resolved?: number };
-          received += songs.length;
-          resolved += json.resolved ?? 0;
-          setAmImportProgress({ received, total, resolved });
-        } else {
-          // Server-side error posting this batch — abort with error.
-          fetchError = new Error(`Server error ${res.status} while importing batch`);
-          break;
-        }
-
-        offset += limit;
-        // songs.length < limit = last page (Apple returns shorter final pages).
-        if (songs.length < limit) break;
-      }
-
-      if (fetchError) {
-        // A fetch/server error occurred — report it rather than marking done.
-        setAmImportError(fetchError.message);
-      } else {
-        setAmImportDone(true);
-        setAmImportProgress({ received, total, resolved });
-      }
+      if (!appConfig?.appleMusic) throw new Error("Apple Music configuration is unavailable.");
+      const result = await importAppleMusicLibrary(appConfig.appleMusic, {
+        onProgress: ({ received, resolved, total }) =>
+          setAmImportProgress({ received, resolved, total }),
+      });
+      setAmImportDone(true);
+      setAmImportProgress(result);
+      await queryClient.invalidateQueries({ queryKey: ["me", "library"] });
     } catch (err) {
-      setAmImportError(err instanceof Error ? err.message : "Import failed — please try again.");
+      setAmImportError(describeMusicKitError(err).message);
     } finally {
       setAmImporting(false);
     }
-  }, []);
+  }, [appConfig, queryClient]);
 
   // Sync state
   const { data: syncJobData } = useLatestSyncJob();

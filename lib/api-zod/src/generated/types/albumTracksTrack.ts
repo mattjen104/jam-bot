@@ -10,4 +10,6 @@ export interface AlbumTracksTrack {
   mbid: string;
   title: string;
   artist: string;
+  /** @nullable */
+  appleMusicId?: string | null;
 }

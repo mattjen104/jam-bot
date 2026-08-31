@@ -4405,7 +4405,8 @@ components:
         releaseGroupMbid: { type: string, nullable: true }
         releaseYear: { type: integer, nullable: true }
         spotifyUrl: { type: string, nullable: true }
-      required: [title, artist, artistMbid, artworkUrl, albumTitle, releaseGroupMbid, releaseYear, spotifyUrl]
+        appleMusicId: { type: string, nullable: true }
+      required: [title, artist, artistMbid, artworkUrl, albumTitle, releaseGroupMbid, releaseYear, spotifyUrl, appleMusicId]
     LibraryItem:
       type: object
       properties:
@@ -4415,6 +4416,7 @@ components:
         recording: { $ref: "#/components/schemas/LibraryRecording", nullable: true }
         soft: { type: boolean }
         spotifyId: { type: string }
+        appleMusicId: { type: string }
         fuzzyMatch: { type: boolean }
         removed: { type: boolean }
         removedAt: { type: string, format: date-time, nullable: true }
@@ -7998,6 +8000,8 @@ components:
           type: string
         artist:
           type: string
+        appleMusicId:
+          type: ["string", "null"]
     AlbumTracksResponse:
       type: object
       required: [rgMbid, rgTitle, rgType, tracks]

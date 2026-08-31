@@ -861,6 +861,7 @@ router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
   if (!rgRow[0]) return res.status(404).json({ error: "not_found" });
 
   const { releaseGroupMbid, title: rgTitle, primaryType, releaseYear } = rgRow[0];
+  const loreUserId = (req as typeof req & { loreUser?: { id: number } }).loreUser?.id;
 
   const tracks = await db
     .select({
@@ -869,6 +870,17 @@ router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
       artist: recordingsTable.artist,
       durationMs: recordingsTable.durationMs,
       artworkUrl: recordingsTable.artworkUrl,
+      appleMusicId: loreUserId
+        ? sql<string | null>`(
+            SELECT apple_id
+            FROM apple_library_items
+            WHERE user_id = ${loreUserId}
+              AND mbid = ${recordingReleaseGroupsTable.recordingMbid}
+              AND removed_at IS NULL
+            ORDER BY added_at DESC
+            LIMIT 1
+          )`.as("apple_music_id")
+        : sql<string | null>`NULL`.as("apple_music_id"),
     })
     .from(recordingReleaseGroupsTable)
     .leftJoin(recordingsTable, eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid))
@@ -890,6 +902,7 @@ router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
       artist: t.artist ?? "",
       durationMs: t.durationMs ?? null,
       position: idx + 1,
+      appleMusicId: t.appleMusicId ?? null,
     })),
   });
 }));

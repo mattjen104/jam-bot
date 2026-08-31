@@ -127,6 +127,7 @@ export interface LibraryRecording {
   releaseGroupMbid: string | null;
   releaseYear: number | null;
   spotifyUrl: string | null;
+  appleMusicId: string | null;
 }
 
 export interface LibraryItem {
@@ -136,6 +137,7 @@ export interface LibraryItem {
   recording: LibraryRecording | null;
   soft?: boolean;
   spotifyId?: string;
+  appleMusicId?: string;
   fuzzyMatch?: boolean;
   removed?: boolean;
   removedAt?: string | null;
@@ -2874,6 +2876,8 @@ export interface AlbumTracksTrack {
   mbid: string;
   title: string;
   artist: string;
+  /** @nullable */
+  appleMusicId?: string | null;
 }
 
 export interface AlbumTracksResponse {
