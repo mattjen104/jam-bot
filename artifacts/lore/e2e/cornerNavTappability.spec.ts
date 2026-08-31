@@ -302,12 +302,9 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       await loreLink.click();
       // After clicking Feed we land back on the dial; tune back in for the
       // library link check.
-      const row = page.locator("[data-scrub-slug][role='button']").filter({
-        hasText: /Some Artist/,
-      }).first();
-      await expect(row).toBeVisible({ timeout: 10_000 });
-      await row.click(); // expand
-      await row.click(); // tune in
+      const tuneIn = page.getByRole("button", { name: "Tune in" });
+      await expect(tuneIn).toBeVisible({ timeout: 10_000 });
+      await tuneIn.click();
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
 
       await libraryLink.click();

@@ -7,36 +7,25 @@
 # they carry no live-data dependence.
 #
 # Included specs:
-#   - importPickerEntryPoints.spec.ts  (service-picker modal, all 4 entry points)
+#   - importPickerEntryPoints.spec.ts  (direct Library import entry points)
 #   - spotifyConnectCallback.spec.ts   (?library=connected callback + /taste-map redirect)
-#   - librarySyncLifecycle.spec.ts     (SyncBar lifecycle: done job, receipt toggle,
-#                                       Sync now trigger, canWrite:false 403 path)
-#   - ntsOnAirBadge.spec.ts            (dial front-door on-air show + DJ attribution)
+#   - librarySyncLifecycle.spec.ts     (direct Library sync lifecycle)
 #   - fallbackNotice.spec.ts           (archive-run fallback notice; all API routes
 #                                       intercepted with fixtures)
-#   - cornerNavTappability.spec.ts     (corner nav links visible + clickable above the
-#                                       player dock at 360×640 portrait and 640×360 landscape)
-#   - microDialRemote.spec.ts          (15-key Micro remote paging, page-two
-#                                       tune-in, and no keypad overflow at
-#                                       mobile + desktop viewport sizes)
+#   - cornerNavTappability.spec.ts     (mobile shell navigation and player dock)
+#   - microDialRemote.spec.ts          (one-card Radio presets and selection-only
+#                                       navigation at mobile + desktop viewport sizes)
 #   - firstRunSidebarOnboarding.spec.ts (first-time visitor sees .frb__block sentences,
 #                                       NOT .z1-placeholder__seedchip chips; data-rung
 #                                       order non-decreasing)
-#   - compactCrossingLabels.spec.ts    (compact Feed row grammar: always
-#                                       "artist · station", ⬤ crossing dot with
-#                                       tap-to-detail, scope pill cycle, and no
-#                                       DJ/show name in collapsed row)
-#   - adminHealthRecovery.spec.ts      (admin re-probe remains visible and
-#                                       completes after reload; scout verdict
-#                                       labels render from the authenticated report)
 #   - liveTrackChange.spec.ts          (SSE fast path: spin-raw provisional cue appears
+#   - adminHealthRecovery.spec.ts      (authenticated admin recovery controls)
 #                                       immediately; spin-changed/spin-raw-failed clear it
 #                                       on WebPlayer ON AIR row; PlayerDock test skipped
 #                                       pending fdrow infrastructure recovery)
-#   - stackDensityPager.spec.ts        (Stack 5/10/15 density paging,
-#                                       localStorage persistence, and page artwork)
-#   - dialSkippedScan.spec.ts          (shared skipped-station preference,
-#                                       ordering, and page/all scan exclusion)
+# Homepage-only specs for the retired multi-row Dial/compact-Stack shell are
+# intentionally not in this gate. Their relevant advanced-Dial behavior lives
+# on /feed and stays covered by the dedicated /feed specs below.
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -102,22 +91,15 @@ RUN_SPECS=(
   e2e/importPickerEntryPoints.spec.ts
   e2e/spotifyConnectCallback.spec.ts
   e2e/librarySyncLifecycle.spec.ts
-  e2e/ntsOnAirBadge.spec.ts
   e2e/fallbackNotice.spec.ts
   e2e/cornerNavTappability.spec.ts
-  e2e/mobileFrontDoor.spec.ts
   e2e/microDialRemote.spec.ts
   e2e/firstRunSidebarOnboarding.spec.ts
   e2e/dialInfiniteScroll.spec.ts
-  e2e/compactCrossingLabels.spec.ts
-  e2e/dialCategoryFilters.spec.ts
   e2e/dialAgeFilter.spec.ts
   e2e/adminHealthRecovery.spec.ts
   e2e/liveTrackChange.spec.ts
-  e2e/compactStackBand.spec.ts
   e2e/stationAdminRemoval.spec.ts
-  e2e/stackDensityPager.spec.ts
-  e2e/dialSkippedScan.spec.ts
   e2e/unifiedScanSession.spec.ts
 )
 

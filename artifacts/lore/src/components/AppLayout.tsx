@@ -5,6 +5,7 @@ import { SlimSectionNav } from "./SlimSectionNav";
 import { ManualImportModal, type ServiceId } from "./ManualImportModal";
 import {
   useMyDialCrossings,
+  useAppConfig,
   ME_PICKER_OVERLAP_KEY,
 } from "../lib/meHooks";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const qc = useQueryClient();
   const isHome = location === "/" || location === "";
+  const { data: appConfig } = useAppConfig();
 
   // Prefetch crossings as soon as the app shell mounts — not just when the
   // Radio tab renders.  React Query deduplicates the call so DialView gets
@@ -89,7 +91,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* ── Main content — pad for bottom shell (optional player dock) ── */}
       {/* Section nav: [lore] / [my library] corner hyperlinks, pinned to the
           bottom corners on every Lore route including the front door. */}
-      <SlimSectionNav />
+      <SlimSectionNav showArchiveNav={appConfig?.listenerArchiveNavEnabled === true} />
       <div className={isHome ? "" : "content-pad-shell"}>{children}</div>
     </>
   );

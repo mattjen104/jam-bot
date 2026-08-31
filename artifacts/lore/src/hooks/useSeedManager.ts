@@ -25,7 +25,7 @@ export function useSeedManager() {
 
   const addSeed = useCallback((artist: string) => {
     const trimmed = artist.trim();
-    if (!trimmed) return;
+    if (!trimmed) return Promise.resolve(visibleSeeds);
     // Serialize rapid picker clicks. Without this, two clicks in the same
     // render both read the old query result and the later PUT can overwrite
     // the first selected artist.
@@ -45,7 +45,7 @@ export function useSeedManager() {
         throw error;
       }
     });
-    void seedWriteRef.current.catch(() => undefined);
+    return seedWriteRef.current;
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
 
   const removeSeed = useCallback((artist: string) => {
@@ -70,7 +70,7 @@ export function useSeedManager() {
 
   // Bridge: player-ticker artist clicks → addSeed (ticker lives in PlayerBar)
   useEffect(() => {
-    const handler = (e: Event) => addSeed((e as CustomEvent<string>).detail);
+    const handler = (e: Event) => { void addSeed((e as CustomEvent<string>).detail).catch(() => undefined); };
     window.addEventListener("lore:add-ticker-artist", handler);
     return () => window.removeEventListener("lore:add-ticker-artist", handler);
   }, [addSeed]);

@@ -39,7 +39,13 @@ export function sectionFor(location: string): Section {
  * mode is active a small moon glyph renders beside the wordmark; tapping
  * the moon deactivates the mode.
  */
-export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "bottom" }) {
+export function SlimSectionNav({
+  variant = "corner",
+  showArchiveNav = true,
+}: {
+  variant?: "corner" | "bottom";
+  showArchiveNav?: boolean;
+}) {
   const [location] = useLocation();
   const activeSection = sectionFor(location);
   // On the split homepage the Feed label expands the Dial to the full
@@ -90,7 +96,7 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
   if (variant === "bottom") {
     return (
       <nav className="bottom-nav" aria-label="Primary">
-        {(["lore", "heard", "library", "index"] as Section[]).map((section) => {
+        {(["lore", "heard", "library", "index"] as Section[]).filter((section) => showArchiveNav || (section !== "heard" && section !== "index")).map((section) => {
           const active = activeSection === section;
           const label = section === "lore" ? "Feed" : section === "heard" ? "Heard" : section === "library" ? "Stack" : "Index";
           return (
@@ -114,7 +120,7 @@ export function SlimSectionNav({ variant = "corner" }: { variant?: "corner" | "b
   }
   return (
     <nav className="corner-nav" aria-label="Primary">
-      {(["lore", "heard", "library", "index"] as Section[]).map((section) => {
+      {(["lore", "heard", "library", "index"] as Section[]).filter((section) => showArchiveNav || (section !== "heard" && section !== "index")).map((section) => {
         const active = activeSection === section;
         const label = section === "lore" ? "Feed" : section === "heard" ? "Heard" : section === "library" ? "Stack" : "Index";
         return (

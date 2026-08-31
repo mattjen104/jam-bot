@@ -59,7 +59,7 @@ function makeNowPlaying(index: number) {
 const STATIONS = Array.from({ length: STATION_COUNT }, (_, index) => makeStation(index));
 const NOW_PLAYING = STATIONS.map((_, index) => makeNowPlaying(index));
 
-async function installRoutes(page: Page) {
+async function installRoutes(page: Page, listenerArchiveNavEnabled = false) {
   // Avoid reaching external radio streams; the player still commits the tuned
   // station before the browser reports that this fixture stream is unavailable.
   await page.route("https://stream.example.test/**", (route) => route.abort());
@@ -71,6 +71,14 @@ async function installRoutes(page: Page) {
   await page.route("**/api/me/connections", (route) =>
     route.fulfill({ json: { connections: [] } }),
   );
+  let tasteSeeds: string[] = [];
+  await page.route("**/api/me/taste-seeds", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as { artists: string[] };
+      tasteSeeds = body.artists;
+    }
+    await route.fulfill({ json: { artists: tasteSeeds } });
+  });
   await page.route("**/api/me/crossings**", (route) =>
     route.fulfill({ json: { items: [], computing: false, failed: false } }),
   );
@@ -135,88 +143,64 @@ async function installRoutes(page: Page) {
   await page.route("**/api/pickers/**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );
+  await page.route("**/api/config", (route) =>
+    route.fulfill({
+      json: {
+        spotifyImportEnabled: false,
+        listenerArchiveNavEnabled,
+        appleMusic: { configured: false, developerToken: null, appName: "Lore", storefront: "us" },
+      },
+    }),
+  );
 }
 
-async function loadStationDial(page: Page) {
-  await installRoutes(page);
+async function loadStationDial(page: Page, listenerArchiveNavEnabled = false) {
+  await installRoutes(page, listenerArchiveNavEnabled);
   await page.goto("/lore/");
-  await expect(page.getByRole("region", { name: "Live stations" })).toBeVisible({
+  await expect(page.getByTestId("minimal-radio-surface")).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.locator(".compact-dial__row")).toHaveCount(STATION_COUNT);
+  await expect(page.getByTestId("minimal-radio-card")).toHaveCount(1);
 }
 
-interface DialGeometry {
-  clientWidth: number;
-  clientHeight: number;
-  scrollWidth: number;
-  scrollHeight: number;
-  bodyScrollWidth: number;
-  viewportWidth: number;
-  rowCount: number;
-  rowsEscapeHorizontally: boolean;
-}
-
-async function readDialGeometry(page: Page): Promise<DialGeometry> {
-  return page.evaluate(() => {
-    const dial = document.querySelector<HTMLElement>(".compact-dial");
-    if (!dial) throw new Error("Station dial did not render");
-    const dialRect = dial.getBoundingClientRect();
-    const rows = Array.from(
-      dial.querySelectorAll<HTMLElement>(".compact-dial__row"),
-    );
-    return {
-      clientWidth: dial.clientWidth,
-      clientHeight: dial.clientHeight,
-      scrollWidth: dial.scrollWidth,
-      scrollHeight: dial.scrollHeight,
-      bodyScrollWidth: document.body.scrollWidth,
-      viewportWidth: window.innerWidth,
-      rowCount: rows.length,
-      rowsEscapeHorizontally: rows.some((row) => {
-        const rect = row.getBoundingClientRect();
-        return (
-          rect.left < dialRect.left - 1 ||
-          rect.right > dialRect.right + 1
-        );
-      }),
-    };
-  });
-}
-
-test.describe("Station dial — real browser scrolling", () => {
-  test("390×844: renders all stations and tunes beyond the initial fold", async ({ page }) => {
+test.describe("Minimal Radio remote — real browser navigation", () => {
+  test("390×844: keeps one card visible and selects stations without playing", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);
 
-    const stationRows = page.locator(".compact-dial__row");
-    await expect(stationRows).toHaveCount(16);
-    const sixteenthRow = stationRows.nth(15);
-    await sixteenthRow.scrollIntoViewIfNeeded();
-    await expect(sixteenthRow).toContainText("Station 16");
-    await sixteenthRow.getByRole("button", { name: "Play Station 16" }).click();
-    await expect(sixteenthRow.locator(".fdrow")).toHaveClass(/fdrow--playing/);
-    await expect(page.locator(".player-bar-row")).toBeVisible();
-
-    const geometry = await readDialGeometry(page);
-    expect(geometry.rowCount).toBe(16);
-    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
-    expect(geometry.scrollHeight).toBeGreaterThanOrEqual(geometry.clientHeight);
-    expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-    expect(geometry.rowsEscapeHorizontally).toBe(false);
+    await expect(page.getByTestId("minimal-radio-card")).toContainText("Station 01");
+    await page.getByTitle("Select Station 16").click();
+    await expect(page.getByTestId("minimal-radio-card")).toContainText("Station 16");
+    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(1);
+    await expect(page.locator(".player-bar-row")).toHaveCount(0);
+    await expect(page.locator("body")).toHaveCSS("overflow-x", /^(visible|clip|hidden)$/);
   });
 
-  test("1280×900: station list stays entirely within its dial band", async ({
-    page,
-  }) => {
+  test("1280×900: presets and next navigation replace the single active card", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await loadStationDial(page);
+    await page.getByTestId("radio-preset-lifetime").click();
+    await expect(page.getByTestId("radio-preset-lifetime")).toHaveAttribute("aria-pressed", "true");
+    const before = await page.getByTestId("minimal-radio-card").textContent();
+    await page.getByRole("button", { name: "Next station" }).click();
+    await expect(page.getByTestId("minimal-radio-card")).not.toHaveText(before ?? "");
+    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(1);
+    await expect(page.locator(".fdrow__crossing-dot")).toHaveCount(0);
+  });
 
-    const geometry = await readDialGeometry(page);
-    expect(geometry.rowCount).toBe(16);
-    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
-    expect(geometry.scrollHeight).toBeGreaterThanOrEqual(geometry.clientHeight);
-    expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-    expect(geometry.rowsEscapeHorizontally).toBe(false);
+  test("CLI artist entry and Library mode work while archive links follow the admin reveal", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await loadStationDial(page, true);
+
+    const input = page.getByRole("textbox", { name: "Dial command" });
+    await input.fill("A Tribe Called Quest");
+    await input.press("Enter");
+    await expect(page.getByRole("status")).toContainText("A Tribe Called Quest added");
+
+    await expect(page.getByRole("link", { name: "Heard" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Index" })).toBeVisible();
+    await page.getByTestId("front-door-library-mode").click();
+    await expect(page.getByTestId("front-door-library")).toBeVisible();
+    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(0);
   });
 });

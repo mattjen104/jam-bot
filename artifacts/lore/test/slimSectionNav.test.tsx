@@ -67,6 +67,14 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     expect(nav.querySelectorAll("button").length).toBe(0);
   });
 
+  it("hides Heard and Index when the listener archive reveal is disabled", () => {
+    render(<SlimSectionNav showArchiveNav={false} />);
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(Array.from(nav.querySelectorAll("a")).map((a) => a.textContent)).toEqual(["Feed", "Stack"]);
+    expect(screen.queryByRole("link", { name: "Heard" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Index" })).toBeNull();
+  });
+
   it("links Feed to the full Dial (/feed) from the split homepage", () => {
     mockLocation.value = "/";
     render(<SlimSectionNav />);

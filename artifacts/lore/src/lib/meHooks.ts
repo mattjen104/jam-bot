@@ -632,6 +632,8 @@ export function useMyPickerNames() {
 
 export interface AppConfig {
   spotifyImportEnabled: boolean;
+  /** Admin-controlled reveal for the temporarily hidden listener destinations. */
+  listenerArchiveNavEnabled?: boolean;
   appleMusic?: {
     configured: boolean;
     developerToken: string | null;

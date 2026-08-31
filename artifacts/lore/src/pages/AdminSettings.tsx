@@ -24,6 +24,11 @@ const SETTING_META: Record<string, { label: string; description: string }> = {
     description:
       "Allow listeners to import their Spotify library directly into Lore. When off, the import route returns 403 and the UI hides the Spotify import option.",
   },
+  listenerArchiveNavEnabled: {
+    label: "Reveal archive navigation",
+    description:
+      "Show Heard, Index, First plays, and Press again in the listener-facing navigation and Radio lens controls. Off by default while this surface is being consolidated.",
+  },
 };
 
 // ─── Token gate ────────────────────────────────────────────────────────────

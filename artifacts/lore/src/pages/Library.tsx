@@ -1056,7 +1056,7 @@ export function ArtistGroupRow({
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
-export default function Library() {
+export default function Library({ embedded = false }: { embedded?: boolean }) {
   const [location, setLocation] = useLocation();
   const search = useSearch();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1525,7 +1525,7 @@ export default function Library() {
   const showReconnectPrompt = isAuthenticated && !hasSpotify && !isEmpty;
 
   return (
-    <div className="dial-root">
+    <div className={`dial-root${embedded ? " dial-root--embedded" : ""}`}>
       {!isStackView && searchOpen && (
         <SearchOverlay
           dialStations={[]}
@@ -1794,7 +1794,7 @@ export default function Library() {
         )}
 
         {/* ── Reconnect prompt (has library, lost Spotify) ── */}
-        {!isStackView && showReconnectPrompt && (
+        {showReconnectPrompt && (
           <div
             style={{ padding: "14px 15px", borderBottom: "1px solid hsl(var(--border))" }}
             data-testid="library-reconnect-prompt"
@@ -2115,7 +2115,7 @@ export default function Library() {
           </>
         )}
 
-        {!isStackView && isAuthenticated && hasSpotify && (
+        {isAuthenticated && hasSpotify && (
           <div data-testid="library-sync-stack">
             <SyncBar
               syncJobData={syncJobData}

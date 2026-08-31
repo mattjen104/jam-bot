@@ -3206,6 +3206,7 @@ router.post("/admin/maintenance/prune-odesli-sentinels", h(async (_req, res) => 
 /** Allowed setting keys and their env-var fallback defaults. */
 const KNOWN_SETTINGS: Record<string, () => boolean> = {
   spotifyImportEnabled: () => process.env["SPOTIFY_IMPORT_ENABLED"] === "true",
+  listenerArchiveNavEnabled: () => false,
 };
 
 /**

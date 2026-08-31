@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
 import { db, loreSettingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
 import { getAppleMusicClientConfig } from "../lore/appleMusic.js";
 
 /**
@@ -15,21 +14,21 @@ const router: IRouter = Router();
 
 /** Simple TTL cache so every page render doesn't hit the DB. */
 const CONFIG_CACHE_TTL_MS = 30_000;
-let configCache: { spotifyImportEnabled: boolean; expiresAt: number } | null = null;
+let configCache: { spotifyImportEnabled: boolean; listenerArchiveNavEnabled: boolean; expiresAt: number } | null = null;
 
-async function readSpotifyImportEnabled(): Promise<boolean> {
+async function readConfigSettings(): Promise<{ spotifyImportEnabled: boolean; listenerArchiveNavEnabled: boolean }> {
   const now = Date.now();
   if (configCache && now < configCache.expiresAt) {
-    return configCache.spotifyImportEnabled;
+    return configCache;
   }
-  const [row] = await db
-    .select()
-    .from(loreSettingsTable)
-    .where(eq(loreSettingsTable.key, "spotifyImportEnabled"))
-    .limit(1);
-  const value = row != null ? row.value : (process.env["SPOTIFY_IMPORT_ENABLED"] === "true");
-  configCache = { spotifyImportEnabled: value, expiresAt: now + CONFIG_CACHE_TTL_MS };
-  return value;
+  const rows = await db.select().from(loreSettingsTable);
+  const values = new Map(rows.map((row) => [row.key, row.value]));
+  const settings = {
+    spotifyImportEnabled: values.get("spotifyImportEnabled") ?? process.env["SPOTIFY_IMPORT_ENABLED"] === "true",
+    listenerArchiveNavEnabled: values.get("listenerArchiveNavEnabled") ?? false,
+  };
+  configCache = { ...settings, expiresAt: now + CONFIG_CACHE_TTL_MS };
+  return settings;
 }
 
 /** Bust the in-process config cache so changes from the admin panel take effect
@@ -41,11 +40,15 @@ export function bustConfigCache() {
 router.get("/config", async (_req, res) => {
   const appleMusic = getAppleMusicClientConfig();
   try {
-    const spotifyImportEnabled = await readSpotifyImportEnabled();
-    res.json({ spotifyImportEnabled, appleMusic });
+    const settings = await readConfigSettings();
+    res.json({ ...settings, appleMusic });
   } catch {
     // Fail open with env var fallback so a DB hiccup doesn't break page load.
-    res.json({ spotifyImportEnabled: process.env["SPOTIFY_IMPORT_ENABLED"] === "true", appleMusic });
+    res.json({
+      spotifyImportEnabled: process.env["SPOTIFY_IMPORT_ENABLED"] === "true",
+      listenerArchiveNavEnabled: false,
+      appleMusic,
+    });
   }
 });
 

@@ -207,6 +207,15 @@ export function DialCliBar({
     if (lower === "/radio") { onRadioMode?.(true); setValue(""); return; }
     if (lower === "/crossings") { onRadioMode?.(false); setValue(""); return; }
 
+    // A bare artist name is the front-door shorthand for adding one taste
+    // seed. Feed mode still only uses slash commands because it wires the
+    // same component without an onboarding callback.
+    if (!trimmed.startsWith("/") && trimmed && onAddArtists) {
+      onAddArtists([trimmed]);
+      setValue("");
+      return;
+    }
+
     const tier = TIER_BY_COMMAND.get(lower);
 
     if (tier) {

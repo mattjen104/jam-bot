@@ -41,6 +41,7 @@ import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
 import { SlimSectionNav } from "./components/SlimSectionNav";
+import { useAppConfig } from "./lib/meHooks";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
 
@@ -112,7 +113,7 @@ function Router() {
         <Route path="/journal" component={Journal} />
         <Route path="/weekly-recap" component={WeeklyRecap} />
         <Route path="/following" component={Following} />
-        <Route path="/library" component={Library} />
+        <Route path="/library">{() => <Library />}</Route>
         <Route path="/heard" component={Heard} />
         <Route path="/index" component={Index} />
         {/* Imported portable sets (XSPF/JSPF uploads) — personal material,
@@ -181,6 +182,7 @@ function Shell() {
  *  page padding and the dial's own height always match the real shell size
  *  (covers grow with viewport width, player dock comes and goes). */
 function BottomShell() {
+  const { data: appConfig } = useAppConfig();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = wrapRef.current;
@@ -211,7 +213,10 @@ function BottomShell() {
         {/* Spotify-style mobile nav row — [lore] / [my library] at the very
             bottom of the screen, below the mini player. CSS shows this only
             at phone widths; desktop keeps the corner-link treatment. */}
-        <SlimSectionNav variant="bottom" />
+        <SlimSectionNav
+          variant="bottom"
+          showArchiveNav={appConfig?.listenerArchiveNavEnabled === true}
+        />
         {/* RecordPeekNav (record-sleeve tabs) hidden for now — section nav
             moved into the page space as SlimSectionNav (AppLayout/DialView). */}
       </div>

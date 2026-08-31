@@ -52,6 +52,7 @@ vi.mock("../src/components/CompactStack", () => ({
 }));
 
 vi.mock("../src/lib/meHooks", () => ({
+  useAppConfig: () => ({ data: { listenerArchiveNavEnabled: false } }),
   useMattStarterLibrary: () => ({ data: { available: true, addedCount: 0, totalCount: 2 } }),
   useStartMattLibrary: () => ({ mutate: mockStartMattLibrary, isPending: false, data: undefined, error: null }),
   // SplitHome reads the first library page itself to size the stack pager.
@@ -540,6 +541,19 @@ describe.skip("SplitHome — retired front-door remote", () => {
       (screen.getByRole("button", { name: "scan all stations" }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
+});
+
+describe("SplitHome — archive lens compatibility", () => {
+  it.each(["press", "firstPlays"])(
+    "coerces a persisted %s lens back to Radio when archive navigation is hidden",
+    (persistedLens) => {
+      localStorage.setItem("lore:homeLens", persistedLens);
+      render(<SplitHome />);
+
+      expect(screen.getByTestId("minimal-radio-empty")).toBeTruthy();
+      expect(localStorage.getItem("lore:homeLens")).toBe("radio");
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

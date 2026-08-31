@@ -48,6 +48,15 @@ function type(input: HTMLInputElement, value: string) {
 }
 
 describe("DialCliBar", () => {
+  it("treats a plain multi-word value as one artist when artist entry is wired", () => {
+    const onAddArtists = vi.fn();
+    const { input } = renderCli({ onAddArtists });
+    type(input, "A Tribe Called Quest");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onAddArtists).toHaveBeenCalledWith(["A Tribe Called Quest"]);
+    expect(input.value).toBe("");
+  });
+
   it("renders the command input with no wordmark when idle, and no cursor glyph", () => {
     renderCli();
     const bar = document.querySelector(".dial-cli-overlay");
