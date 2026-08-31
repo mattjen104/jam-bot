@@ -135,5 +135,6 @@ describe("Library top add-artist banner", () => {
 
     expect(screen.queryByTestId("library-import-open")).toBeNull();
     expect(screen.queryByTestId("library-import-cta")).toBeNull();
+    expect(screen.queryByText("Add music")).toBeNull();
   });
 });

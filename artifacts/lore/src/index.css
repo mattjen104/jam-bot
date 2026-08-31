@@ -3268,11 +3268,13 @@
   gap: 14px;
   width: min(100%, 1120px);
   padding: 6px max(16px, calc((100vw - 980px) / 2)) 30px;
+  box-sizing: border-box;
 }
 .library-crate__track {
   display: grid;
   grid-template-columns: 92px minmax(0, 1fr);
   align-items: start;
+  box-sizing: border-box;
   gap: 14px;
   min-width: 0;
   padding: 10px;
@@ -3285,11 +3287,20 @@
   width: 92px;
   height: 92px;
 }
+.library-crate__track-art {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  overflow: hidden;
+}
 .library-crate__track-swatch {
   transform: none;
   box-shadow: 0 8px 18px rgb(0 0 0 / .32);
 }
 .library-crate__track-copy {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
   min-width: 0;
 }
 .library-crate__track-title,
@@ -3330,10 +3341,11 @@
   z-index: var(--crate-z);
   display: grid;
   grid-template-columns: var(--crate-art) minmax(0, 1fr);
+  box-sizing: border-box;
   width: min(900px, calc(100vw - 18px));
   min-height: calc(var(--crate-art) * .72);
-  margin-left: clamp(-46px, -3.6vw, -18px);
-  margin-top: calc(var(--crate-art) * -.34);
+  margin-left: 0;
+  margin-top: 14px;
   filter: drop-shadow(0 16px 18px rgb(0 0 0 / .46));
 }
 .library-crate__card:first-child { margin-top: 0; }
@@ -3369,6 +3381,15 @@
   height: 100%;
   object-fit: cover;
 }
+.library-crate__track .library-crate__track-swatch,
+.library-crate__track .library-crate__cover-link {
+  width: 92px;
+  height: 92px;
+  transform: none;
+}
+.library-crate__track .library-crate__cover-link {
+  overflow: hidden;
+}
 .library-crate__swatch-fallback {
   display: grid;
   place-items: end start;
@@ -3398,14 +3419,14 @@
   position: relative;
   align-self: center;
   min-width: 0;
-  margin-left: calc(var(--crate-art) * -.33);
-  padding: 30px 24px 24px calc(var(--crate-art) * .42);
+  margin-left: 0;
+  padding: 30px 24px 24px;
   text-shadow: 0 2px 10px rgb(0 0 0 / .95), 0 1px 2px rgb(0 0 0);
 }
 .library-crate__scrim {
   position: absolute;
   z-index: -1;
-  inset: 6px 0 4px calc(var(--crate-art) * -.28);
+  inset: 6px 0 4px 0;
   border-radius: 2px;
   background: linear-gradient(90deg, transparent, rgb(8 7 11 / .78) 20%, rgb(8 7 11 / .94) 62%, rgb(8 7 11 / .28));
 }
@@ -3596,15 +3617,20 @@
     width: 72px;
     height: 72px;
   }
+  .library-crate__track .library-crate__track-swatch,
+  .library-crate__track .library-crate__cover-link {
+    width: 72px;
+    height: 72px;
+  }
   .library-crate__card {
     grid-template-columns: var(--crate-art) minmax(0, 1fr);
-    width: calc(100vw + 26px);
-    margin-left: -38px;
-    margin-top: -44px;
+    width: 100%;
+    margin-left: 0;
+    margin-top: 14px;
   }
   .library-crate__content {
-    margin-left: -42px;
-    padding: 24px 14px 20px 54px;
+    margin-left: 0;
+    padding: 24px 14px 20px;
   }
   .library-crate__caught-title,
   .library-crate__caught--artist > span { font-size: var(--lore-size-interface); }

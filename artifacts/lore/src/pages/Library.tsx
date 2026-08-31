@@ -47,7 +47,6 @@ import {
   ChevronUp,
   ExternalLink,
   Loader2,
-  Music2,
   Radio,
   Search,
   Upload,
@@ -1522,8 +1521,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     syncJobData?.status === "done" ? syncJobData.results?.searchMatchedItems ?? [] : [];
 
   // Reconnect prompt: authenticated, no Spotify, but has kept items
-  const showReconnectPrompt = isAuthenticated && !hasSpotify && !isEmpty;
-
   return (
     <div className={`dial-root${embedded ? " dial-root--embedded" : ""}`}>
       {!isStackView && searchOpen && (
@@ -1765,16 +1762,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
                   <b>{selectorCount}</b> selector{selectorCount === 1 ? "" : "s"} fed it
                 </Link>
               )}
-              {/* Import action — always visible so returning users can add more music */}
-              <button
-                type="button"
-                onClick={openImportModal}
-                className="lib-hero__stat lib-hero__stat--warm"
-                style={{ cursor: "pointer", border: "none" }}
-              >
-                <Music2 style={{ width: 10, height: 10 }} />
-                Add music
-              </button>
             </div>
           </div>
         )}
@@ -1791,35 +1778,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
             <span className="lib-live__text"><b>N of yours</b> are on air right now</span>
             <span className="lib-live__go">See ›</span>
           </a>
-        )}
-
-        {/* ── Reconnect prompt (has library, lost Spotify) ── */}
-        {showReconnectPrompt && (
-          <div
-            style={{ padding: "14px 15px", borderBottom: "1px solid hsl(var(--border))" }}
-            data-testid="library-reconnect-prompt"
-          >
-            <div
-              style={{
-                fontFamily: "var(--app-font-reading)",
-                fontSize: 15,
-                color: "hsl(var(--muted-foreground))",
-                marginBottom: 10,
-              }}
-            >
-              Want to add more tracks or import from another service?
-            </div>
-            <button
-              type="button"
-              onClick={openImportModal}
-              className="dial-ctabtn dial-ctabtn--keep"
-              data-testid="library-import-open"
-              style={{ fontSize: 13, padding: "8px 14px" }}
-            >
-              <Music2 style={{ display: "inline", width: 11, height: 11, marginRight: 5, verticalAlign: "middle" }} />
-              Add music
-            </button>
-          </div>
         )}
 
         {/* ── Ledger consent ── (transient consent prompt; kept in Stack too) */}
@@ -2408,32 +2366,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
                     it follows.
                   </div>
                 </div>
-
-                {/* CTA */}
-                <button
-                  type="button"
-                  onClick={openImportModal}
-                  data-testid="library-import-cta"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontFamily: "var(--app-font-display)",
-                    fontSize: 13,
-                    fontWeight: 400,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.07em",
-                    color: "hsl(var(--keep-foreground))",
-                    background: "hsl(var(--keep))",
-                    border: "none",
-                    borderRadius: 4,
-                    padding: "9px 18px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Music2 style={{ width: 11, height: 11 }} />
-                  Add music
-                </button>
 
                 {/* Radio link */}
                 <Link
