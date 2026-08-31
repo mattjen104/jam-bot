@@ -590,6 +590,7 @@ export function mergeOnboardingArtists(
 interface SseSpinEntry {
   mbid: string | null;
   artistMbid: string | null;
+  releaseGroupMbid: string | null;
   title: string;
   artist: string;
   playedAt: string;
@@ -901,6 +902,7 @@ export function useDialData(
               ? {
                   mbid: existing.mbid,
                   artistMbid: existing.artistMbid,
+                  releaseGroupMbid: existing.releaseGroupMbid,
                   title: existing.title,
                   artist: existing.artist,
                   playedAt: existing.playedAt,
@@ -914,6 +916,7 @@ export function useDialData(
           next.set(ev.stationSlug, {
             mbid: null,
             artistMbid: ev.artistMbid ?? null,
+            releaseGroupMbid: null,
             title: ev.rawTitle ?? "",
             artist: ev.rawArtist ?? "",
             playedAt: observedAt,
@@ -938,6 +941,7 @@ export function useDialData(
         next.set(ev.stationSlug, {
           mbid: ev.mbid ?? null,
           artistMbid: ev.artistMbid ?? null,
+          releaseGroupMbid: ev.releaseGroupMbid ?? null,
           title: ev.rawTitle ?? "",
           artist: ev.rawArtist ?? "",
           playedAt: ev.observedAt ?? new Date().toISOString(),
@@ -1283,7 +1287,11 @@ export function useDialData(
       const mbid = (np as { mbid?: string | null }).mbid ?? null;
       const artistMbid = (np as { artistMbid?: string | null }).artistMbid ?? null;
       // releaseYear/releaseDate live on the resolved recording sub-object.
-      const recording = (np as { recording?: { releaseYear?: number | null; releaseDate?: string | null } | null }).recording;
+      const recording = (np as { recording?: { releaseGroupMbid?: string | null; releaseYear?: number | null; releaseDate?: string | null } | null }).recording;
+      const releaseGroupMbid =
+        recording?.releaseGroupMbid
+        ?? (np as { releaseGroupMbid?: string | null }).releaseGroupMbid
+        ?? null;
       const releaseYear = recording?.releaseYear ?? null;
       const releaseDate = recording?.releaseDate ?? null;
       const isFirstSpin = (np as { isFirstSpin?: boolean }).isFirstSpin ?? false;
@@ -1300,6 +1308,7 @@ export function useDialData(
       m.set(item.slug, {
         mbid,
         artistMbid,
+        releaseGroupMbid,
         title,
         artist,
         playedAt: sourcePlayedAt,

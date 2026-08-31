@@ -229,6 +229,23 @@ describe("MinimalRadioSurface", () => {
     );
   });
 
+  it("shows covers from station-level recent spins when the station has no schedule run", () => {
+    const station = row("alpha", "Alpha", false, 1);
+    const stationSpin = crossingSpin(7);
+
+    render(
+      <MinimalRadioSurface
+        rows={[station]}
+        libraryItems={[]}
+        recentSpinsBySlug={new Map([["alpha", [stationSpin]]])}
+        preset="now"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Open Track 7 by Artist 7" }))
+      .toHaveAttribute("href", "/album/release-7");
+  });
+
   it("keeps one hero above the compact remote and synchronizes station clicks and keyboard navigation", () => {
     render(
       <MinimalRadioSurface

@@ -88,6 +88,7 @@ export default function SplitHome() {
 
   const {
     stations,
+    spinsBySlug,
     isCoreLoading,
     stationsError,
     refetchStations,
@@ -221,6 +222,7 @@ export default function SplitHome() {
               <MinimalRadioSurface
                 rows={rows}
                 libraryItems={libraryItems}
+                recentSpinsBySlug={spinsBySlug}
                 preset="now"
                 activeCategories={activeCategories}
                 onToggleCategory={handleToggleCategory}

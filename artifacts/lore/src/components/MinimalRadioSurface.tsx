@@ -8,6 +8,7 @@ import {
 } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, Heart, Radio, SkipForward } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
+import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
 import { useMutationKeep } from "../lib/meHooks";
 import { useDialSkipped } from "../lib/dialFilterState";
@@ -31,6 +32,7 @@ const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
   libraryItems: LibraryItem[];
+  recentSpinsBySlug?: ReadonlyMap<string, readonly CrossingSpin[]>;
   preset: RadioPreset;
   activeCategories?: ReadonlySet<StationCategory>;
   onToggleCategory?: (category: StationCategory) => void;
@@ -155,10 +157,29 @@ interface CrossingAlbum {
   artworkUrl: string;
 }
 
-function crossingAlbums(row: DialLaneRow, libraryItems: LibraryItem[]): CrossingAlbum[] {
+type CrossingSpin = Pick<
+  DialSpin,
+  | "mbid"
+  | "artistMbid"
+  | "releaseGroupMbid"
+  | "title"
+  | "artist"
+  | "isLibraryHit"
+  | "isArtistHit"
+  | "resolving"
+>;
+
+function crossingAlbums(
+  row: DialLaneRow,
+  libraryItems: LibraryItem[],
+  stationSpins: readonly CrossingSpin[],
+): CrossingAlbum[] {
   const track = liveTrack(row);
   const crossingSpins = [
     ...(track && !track.resolving && (track.isLibraryHit || track.isArtistHit) ? [track] : []),
+    ...stationSpins.filter(
+      (spin) => !spin.resolving && (spin.isLibraryHit || spin.isArtistHit),
+    ),
     ...[...(row.show?.spins ?? [])]
       .reverse()
       .filter((spin) => !spin.resolving && (spin.isLibraryHit || spin.isArtistHit)),
@@ -224,17 +245,22 @@ function artForTrack(row: DialLaneRow, libraryItems: LibraryItem[]): string | nu
 function MinimalRadioCard({
   row,
   libraryItems,
+  stationSpins,
   crossing,
 }: {
   row: DialLaneRow;
   libraryItems: LibraryItem[];
+  stationSpins: readonly CrossingSpin[];
   crossing: CrossingSummary;
 }) {
   const { radio } = usePlayer();
   const keep = useMutationKeep();
   const { isSkipped, toggleSkip } = useDialSkipped();
   const track = liveTrack(row);
-  const albums = useMemo(() => crossingAlbums(row, libraryItems), [row, libraryItems]);
+  const albums = useMemo(
+    () => crossingAlbums(row, libraryItems, stationSpins),
+    [row, libraryItems, stationSpins],
+  );
   const artwork = artForTrack(row, libraryItems);
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const isCurrent = radio.station?.slug === row.ds.station.slug;
@@ -352,6 +378,7 @@ function MinimalRadioCard({
 export function MinimalRadioSurface({
   rows,
   libraryItems,
+  recentSpinsBySlug = new Map(),
   preset,
   activeCategories = new Set<StationCategory>(),
   onToggleCategory,
@@ -509,6 +536,7 @@ export function MinimalRadioSurface({
               key={selected.ds.station.slug}
               row={selected}
               libraryItems={libraryItems}
+              stationSpins={recentSpinsBySlug.get(selected.ds.station.slug) ?? []}
               crossing={selectedCrossing}
             />
           ) : null}
