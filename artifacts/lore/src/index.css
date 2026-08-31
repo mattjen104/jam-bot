@@ -13227,6 +13227,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--dim));
   font: 13px/1.35 var(--app-font-reading);
 }
+.minimal-radio-card__crossing {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 13px;
+  color: hsl(var(--accent));
+  font: 600 10px/1 var(--app-font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.minimal-radio-card__crossing strong {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+.minimal-radio-card__crossing span:last-child {
+  color: hsl(var(--dim));
+}
 .minimal-radio-card__site {
   display: inline-flex;
   align-items: center;

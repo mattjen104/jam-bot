@@ -112,7 +112,7 @@ function StationPresetButton({
       <span
         className="minimal-radio__station-crossing"
         data-testid={`minimal-radio-station-meta-${row.ds.station.slug}`}
-        aria-label={`${summary.count} crossings ${summary.label}`}
+        aria-label={`${summary.count} ${summary.count === 1 ? "crossing" : "crossings"} ${summary.label}`}
       >
         {summary.count} · {summary.label}
       </span>
@@ -180,9 +180,11 @@ function artForTrack(row: DialLaneRow, libraryItems: LibraryItem[]): string | nu
 function MinimalRadioCard({
   row,
   libraryItems,
+  crossing,
 }: {
   row: DialLaneRow;
   libraryItems: LibraryItem[];
+  crossing: CrossingSummary;
 }) {
   const { radio } = usePlayer();
   const keep = useMutationKeep();
@@ -215,6 +217,17 @@ function MinimalRadioCard({
           <span className="minimal-radio-card__live"><Radio size={13} aria-hidden="true" /> ON AIR</span>
           <h2>{row.ds.station.name}</h2>
           {row.show?.showName ? <p>{row.show.showName}</p> : null}
+          <div
+            className="minimal-radio-card__crossing"
+            data-testid="minimal-radio-hero-crossing"
+            aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"} ${crossing.label}`}
+          >
+            <strong>{crossing.count}</strong>
+            {" "}
+            <span>{crossing.count === 1 ? "crossing" : "crossings"}</span>
+            {" · "}
+            <span>{crossing.label}</span>
+          </div>
         </div>
         <a
           className="minimal-radio-card__site"
@@ -313,6 +326,7 @@ export function MinimalRadioSurface({
     candidates.findIndex((row) => row.ds.station.slug === selectedSlug),
   );
   const selected = candidates[selectedIndex] ?? null;
+  const selectedCrossing = selected ? crossingSummary(selected, lifetimeOnly) : null;
 
   const selectStation = useCallback((index: number) => {
     const next = candidates[index];
@@ -443,11 +457,12 @@ export function MinimalRadioSurface({
             </button>
           </div>
 
-          {selected ? (
+          {selected && selectedCrossing ? (
             <MinimalRadioCard
               key={selected.ds.station.slug}
               row={selected}
               libraryItems={libraryItems}
+              crossing={selectedCrossing}
             />
           ) : null}
         </div>

@@ -102,7 +102,7 @@ describe("MinimalRadioSurface", () => {
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
-  it("uses previous/next controls and exposes no crossing chips or counts", () => {
+  it("shows the selected station crossing summary without adding crossing chips", () => {
     render(
       <MinimalRadioSurface
         rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5)]}
@@ -113,7 +113,9 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next station" }));
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(document.querySelector(".fdrow__crossing-dot")).toBeNull();
-    expect(screen.queryByText(/crossing/i)).toBeNull();
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("5 crossings · lifetime");
+    expect(screen.getByTestId("minimal-radio-hero-crossing").getAttribute("aria-label"))
+      .toBe("5 crossings lifetime");
   });
 
   it("keeps one hero above the compact remote and synchronizes station clicks and keyboard navigation", () => {
@@ -134,9 +136,11 @@ describe("MinimalRadioSurface", () => {
     fireEvent.keyDown(hero, { key: "ArrowRight" });
     expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-selection").textContent).toContain("Beta");
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toContain("5");
 
     fireEvent.click(screen.getByRole("button", { name: "Select Gamma" }));
     expect(screen.getByRole("heading", { name: "Gamma" })).toBeTruthy();
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toContain("3");
     expect(screen.getByTestId("minimal-radio-station-slide-gamma").getAttribute("aria-label"))
       .toBe("Gamma station selection, selected");
   });
@@ -204,11 +208,61 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByTestId("minimal-radio-station-meta-day").textContent).toBe("3 · 24 hr");
     expect(screen.getByTestId("minimal-radio-station-meta-week").textContent).toBe("4 · 7d");
     expect(screen.getByTestId("minimal-radio-station-meta-month").textContent).toBe("6 · 30d");
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("1 crossing · this set");
+    expect(screen.getByTestId("minimal-radio-hero-crossing").getAttribute("aria-label"))
+      .toBe("1 crossing this set");
+    fireEvent.click(screen.getByRole("button", { name: "Select Day" }));
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("3 crossings · 24 hr");
+    fireEvent.click(screen.getByRole("button", { name: "Select Week" }));
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("4 crossings · 7d");
+    fireEvent.click(screen.getByRole("button", { name: "Select Month" }));
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("6 crossings · 30d");
+    fireEvent.click(screen.getByRole("button", { name: "Select Set" }));
     fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
     expect(screen.getByTestId("minimal-radio-station-meta-set").textContent).toBe("11 · lifetime");
     expect(screen.getByTestId("minimal-radio-station-meta-day").textContent).toBe("12 · lifetime");
     expect(screen.getByTestId("minimal-radio-station-meta-week").textContent).toBe("13 · lifetime");
     expect(screen.getByTestId("minimal-radio-station-meta-month").textContent).toBe("14 · lifetime");
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("11 crossings · lifetime");
     expect(screen.getByRole("button", { name: "Show lifetime crossings" }).textContent).toBe("Auto");
+  });
+
+  it("shows an honest zero-lifetime summary when no timeframe has crossings", () => {
+    render(
+      <MinimalRadioSurface
+        rows={[row("quiet", "Quiet", false, 0)]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("0 crossings · lifetime");
+    expect(screen.getByTestId("minimal-radio-hero-crossing").getAttribute("aria-label"))
+      .toBe("0 crossings lifetime");
+  });
+
+  it("keeps the hero and remote summaries aligned when lifetime mode is toggled", () => {
+    const first = row("first", "First", true, 9);
+    const second = row("second", "Second", false, 12);
+    second.ds.crossings = 4;
+    render(
+      <MinimalRadioSurface
+        rows={[first, second]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("1 crossing · this set");
+    expect(screen.getByTestId("minimal-radio-station-meta-first").textContent).toBe("1 · this set");
+    fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("9 crossings · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-first").textContent).toBe("9 · lifetime");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select Second" }));
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("12 crossings · lifetime");
+    expect(screen.getByTestId("minimal-radio-station-meta-second").textContent).toBe("12 · lifetime");
+    fireEvent.click(screen.getByTestId("radio-preset-lifetime"));
+    expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toBe("4 crossings · 24 hr");
+    expect(screen.getByTestId("minimal-radio-station-meta-second").textContent).toBe("4 · 24 hr");
   });
 });
