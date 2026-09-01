@@ -13141,9 +13141,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card__station-crossing {
   position: absolute;
-  top: 3px;
-  right: 3px;
-  left: 3px;
+  top: 0;
+  right: 0;
+  left: 0;
   z-index: 2;
   justify-content: center;
   gap: 2px;
@@ -13565,9 +13565,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     padding: 7px 5px;
   }
   .minimal-radio-card__station-crossing {
-    top: 2px;
-    right: 2px;
-    left: 2px;
+    top: 0;
+    right: 0;
+    left: 0;
     padding: 2px;
     gap: 2px;
     font-size: 7px;
