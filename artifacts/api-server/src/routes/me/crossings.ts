@@ -55,6 +55,7 @@ const router: IRouter = Router();
 // bustCrossingsCache() directly, so the dial updates immediately after a
 // library change without needing a short poll interval.
 const CROSSINGS_CACHE_TTL_MS = 30 * 60 * 1000;
+const MAX_ALBUM_CROSSINGS_PER_STATION = 24;
 
 // Empty results expire much sooner: an empty crossings result is usually a
 // user waiting for their first match, and a fresh qualifying spin (e.g. their
@@ -547,7 +548,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   const albumsBySlug = new Map<string, CrossingsRow["albumCrossings"]>();
   for (const album of albumRows) {
     const stationAlbums = albumsBySlug.get(album.stationSlug) ?? [];
-    if (stationAlbums.length >= 5) continue;
+    if (stationAlbums.length >= MAX_ALBUM_CROSSINGS_PER_STATION) continue;
     const key = album.releaseGroupMbid ?? album.recordingMbid;
     if (stationAlbums.some((item) =>
       (item.releaseGroupMbid ?? item.recordingMbid) === key,

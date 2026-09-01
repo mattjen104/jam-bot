@@ -13044,17 +13044,33 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 28px;
 }
 .minimal-radio__hero-region {
-  order: 1;
+  height: min(440px, calc(100dvh - var(--shell-h, 0px) - 260px));
+  min-height: 420px;
   min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   outline: none;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
 }
+.minimal-radio__hero-region::-webkit-scrollbar { display: none; }
 .minimal-radio__hero-region:focus-visible {
   border-radius: 18px;
   outline: 2px solid hsl(var(--accent) / 0.7);
   outline-offset: 4px;
 }
-.minimal-radio__hero-slide {
+.minimal-radio__hero-frame {
+  order: 1;
   min-width: 0;
+}
+.minimal-radio__hero-slide {
+  display: flex;
+  min-height: 100%;
+  min-width: 0;
+  padding-bottom: 10px;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 .minimal-radio__remote-panel {
   order: 2;
@@ -13211,20 +13227,27 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font: 10px/1 var(--app-font-mono);
 }
 .minimal-radio-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 100%;
+  min-width: 0;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
   border-radius: 18px;
   background: hsl(var(--card));
   box-shadow: 0 24px 80px hsl(0 0% 0% / 0.2);
-  touch-action: pan-y;
+  touch-action: auto;
+}
+.minimal-radio-card__broadcast {
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
 }
 .minimal-radio-card__heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 24px 26px 20px;
-  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  padding: 22px 26px 12px;
 }
 .minimal-radio-card__live {
   display: inline-flex;
@@ -13268,37 +13291,47 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font: 10px/1 var(--app-font-mono);
   text-decoration: none;
 }
-.minimal-radio-card__albums { padding: 20px 26px 24px; }
+.minimal-radio-card__albums {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 26px 20px;
+}
+.minimal-radio-card__album-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+.minimal-radio-card__album-heading .minimal-radio-card__crossing {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
 .minimal-radio-card__album-grid {
   display: flex;
-  align-items: flex-end;
-  min-height: clamp(150px, 18vw, 220px);
+  align-items: flex-start;
+  gap: 12px;
   margin-top: 14px;
-  padding: 12px 0 6px;
-  overflow: visible;
+  padding: 2px 2px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-color: hsl(var(--border)) transparent;
+  scrollbar-width: thin;
+  touch-action: pan-x;
 }
 .minimal-radio-card__album {
   position: relative;
-  z-index: 1;
-  flex: 0 0 clamp(122px, 16vw, 190px);
+  flex: 0 0 clamp(112px, 14vw, 158px);
   min-width: 0;
   color: hsl(var(--foreground));
   text-decoration: none;
-  transform: rotate(0deg) translateY(0);
-  transition: transform 180ms ease, z-index 180ms ease;
+  scroll-snap-align: start;
+  transition: transform 180ms ease;
 }
-.minimal-radio-card__album + .minimal-radio-card__album {
-  margin-left: clamp(-76px, -5.4vw, -34px);
-}
-.minimal-radio-card__album:nth-child(1) { z-index: 5; transform: rotate(-7deg) translateY(8px); }
-.minimal-radio-card__album:nth-child(2) { z-index: 4; transform: rotate(4deg) translateY(-2px); }
-.minimal-radio-card__album:nth-child(3) { z-index: 3; transform: rotate(-2deg) translateY(4px); }
-.minimal-radio-card__album:nth-child(4) { z-index: 2; transform: rotate(6deg) translateY(-5px); }
-.minimal-radio-card__album:nth-child(5) { z-index: 1; transform: rotate(-5deg) translateY(7px); }
 .minimal-radio-card__album:hover,
 .minimal-radio-card__album:focus-visible {
-  z-index: 5;
-  transform: rotate(0deg) translateY(-14px) scale(1.04);
+  transform: translateY(-2px);
   outline: none;
 }
 .minimal-radio-card__album img {
@@ -13359,8 +13392,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  padding: 14px 18px;
-  border-top: 1px solid hsl(var(--border));
+  padding: 10px 26px 16px;
   background: hsl(var(--secondary) / 0.7);
 }
 .minimal-radio-card__track-art img {
@@ -13497,12 +13529,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .minimal-radio-card__heading,
   .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }
+  .minimal-radio__hero-region {
+    height: min(510px, calc(100dvh - var(--shell-h, 0px) - 230px));
+    min-height: 420px;
+  }
   .minimal-radio-card__album-grid {
-    min-height: 140px;
     padding-right: 4px;
   }
-  .minimal-radio-card__album { flex-basis: 116px; }
-  .minimal-radio-card__album + .minimal-radio-card__album { margin-left: -48px; }
+  .minimal-radio-card__album { flex-basis: 112px; }
   .minimal-radio-card__track { grid-template-columns: 48px minmax(0, 1fr); }
   .minimal-radio-card__track-art img { width: 48px; height: 48px; }
   .minimal-radio-card__play { grid-column: 1 / -1; width: 100%; }

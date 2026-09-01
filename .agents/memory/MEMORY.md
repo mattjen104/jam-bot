@@ -117,7 +117,6 @@
 - [Imported portable sets](imported-sets-pattern.md) — XSPF/JSPF uploads: no-FK isolation from spins, claimed MBIDs only honored if already local (else file could plant spine rows), DTD regex-reject before parse.
 - [api-server vitest contention flakes](api-server-vitest-contention.md) — full-suite DB-test flakes under the running dev server: retry failing files in isolation; stop the API Server workflow before validation.
 - [React-compiler rules now error](react-compiler-rules-error.md) — four hook rules block merges in lore; PlayerProvider's ref-mirror inline disables are deliberate, don't remove.
-- [Pre-existing red lore tests](lore-preexisting-red-tests.md) — stash-compare failures against master before blaming your diff; several dial/topbar tests are red on master.
 - [Now-playing cold-start partial](np-cold-start-partial.md) — boot prewarm + single-flight fill + stations snapshot; boot DB contention makes even trivial SELECTs take seconds, so partials must avoid the pool.
 - [Station context as sidebar tab](context-sidebar-tab.md) — context tab (fixed id) lives in the set-panel strip only in landscape; portrait keeps in-body region; jsdom lacks matchMedia so guard it.
 - [Crossings soft-name normalization](crossings-soft-name-normalization.md) — article/punct-tolerant seed matching is personal-compute only (blended, library-hits, lifetime-job still exact); empty results cache short (~2 min).
@@ -157,3 +156,4 @@
 - [Home on-air stable cells](home-on-air-stable-cells.md) — unchanged station cards keep their exact cells through enrichment; changed cards fill vacancies without pulling later rows upward.
 - [Library release metadata gaps](library-release-metadata-gaps.md) — saved recordings may lack release-group rows; hydrate missing album identity in rate-limited MB batches and derive CAA art.
 - [Crossing cover fallback](crossing-cover-fallback.md) — exact crossed crate tracks may have artwork but no release-group bridge; never suppress covers solely because album identity is absent.
+- [Radio hero axis model](radio-hero-axis-model.md) — stations scroll vertically, lifetime covers horizontally, and the remote stays a quiet horizontal mini-map.

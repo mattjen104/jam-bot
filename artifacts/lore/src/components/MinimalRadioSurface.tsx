@@ -4,7 +4,6 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type TouchEvent,
 } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, Heart, Radio, SkipForward } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
@@ -28,6 +27,7 @@ export type RadioPreset = "now" | "lifetime";
 const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
   ({ cat, label, title }) => ({ value: cat, label, title }),
 );
+const MAX_CROSSING_ALBUMS = 24;
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
@@ -109,15 +109,8 @@ function StationPresetButton({
       className="minimal-radio__station-option"
       data-testid={testId}
       role="group"
-      aria-label={`${row.ds.station.name} station selection${active ? ", selected" : ""}`}
+      aria-label={`${row.ds.station.name} station selection${active ? ", selected" : ""}; ${summary.count} ${summary.count === 1 ? "crossing" : "crossings"} ${summary.label}; now playing ${artist}`}
     >
-      <span
-        className="minimal-radio__station-crossing"
-        data-testid={`minimal-radio-station-meta-${row.ds.station.slug}`}
-        aria-label={`${summary.count} ${summary.count === 1 ? "crossing" : "crossings"} ${summary.label}`}
-      >
-        {summary.count} · {summary.label}
-      </span>
       <button
         type="button"
         className={active ? "is-active" : ""}
@@ -139,13 +132,6 @@ function StationPresetButton({
           <span>{row.ds.station.name}</span>
         )}
       </button>
-      <span
-        className="minimal-radio__station-artist"
-        data-testid={`minimal-radio-station-artist-${row.ds.station.slug}`}
-        title={artist === "—" ? undefined : artist}
-      >
-        {artist}
-      </span>
     </div>
   );
 }
@@ -223,7 +209,7 @@ function crossingAlbums(
           ? `https://coverartarchive.org/release-group/${album.releaseGroupMbid}/front-1200`
           : RUMOURS),
     });
-    if (albums.length >= 5) return albums;
+    if (albums.length >= MAX_CROSSING_ALBUMS) return albums;
   }
   const add = (item: LibraryItem | undefined, spin?: CrossingSpin) => {
     const recording = item?.recording;
@@ -252,7 +238,7 @@ function crossingAlbums(
       const artistKey = (spin.artistMbid ?? spin.artist).trim().toLowerCase();
       for (const item of byArtist.get(artistKey) ?? []) add(item);
     }
-    if (albums.length >= 5) break;
+    if (albums.length >= MAX_CROSSING_ALBUMS) break;
   }
 
   // Lifetime/older crossing totals do not carry individual historical spins.
@@ -274,11 +260,11 @@ function crossingAlbums(
       add(libraryItems.find(
         (item) => item.recording?.artist.trim().toLowerCase() === key,
       ));
-      if (albums.length >= 5) break;
+      if (albums.length >= MAX_CROSSING_ALBUMS) break;
     }
   }
 
-  return albums.slice(0, 5);
+  return albums.slice(0, MAX_CROSSING_ALBUMS);
 }
 
 function artForTrack(row: DialLaneRow, libraryItems: LibraryItem[]): string | null {
@@ -292,11 +278,13 @@ function MinimalRadioCard({
   libraryItems,
   stationSpins,
   crossing,
+  active,
 }: {
   row: DialLaneRow;
   libraryItems: LibraryItem[];
   stationSpins: readonly CrossingSpin[];
   crossing: CrossingSummary;
+  active: boolean;
 }) {
   const { radio } = usePlayer();
   const keep = useMutationKeep();
@@ -327,14 +315,54 @@ function MinimalRadioCard({
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
     >
-      <div className="minimal-radio-card__heading">
-        <div className="minimal-radio-card__station">
-          <span className="minimal-radio-card__live"><Radio size={13} aria-hidden="true" /> ON AIR</span>
-          <h2>{row.ds.station.name}</h2>
-          {row.show?.showName ? <p>{row.show.showName}</p> : null}
+      <div className="minimal-radio-card__broadcast">
+        <div className="minimal-radio-card__heading">
+          <div className="minimal-radio-card__station">
+            <span className="minimal-radio-card__live"><Radio size={13} aria-hidden="true" /> ON AIR</span>
+            <h2>{row.ds.station.name}</h2>
+            {row.show?.showName ? <p>{row.show.showName}</p> : null}
+          </div>
+          <a
+            className="minimal-radio-card__site"
+            href={row.ds.station.homepageUrl ?? `/archive/stations/${row.ds.station.slug}`}
+            target={row.ds.station.homepageUrl ? "_blank" : undefined}
+            rel={row.ds.station.homepageUrl ? "noopener noreferrer" : undefined}
+            aria-label={`Open ${row.ds.station.name} station page`}
+          >
+            <ExternalLink size={15} aria-hidden="true" />
+            station
+          </a>
+        </div>
+
+        <section className="minimal-radio-card__track" aria-label="Current track">
+          <div className="minimal-radio-card__track-art">
+            <img src={proxyArtUrl(artwork) ?? RUMOURS} alt="" onError={onArtError} />
+          </div>
+          <div className="minimal-radio-card__track-copy">
+            <div className="minimal-radio-card__eyebrow">Now playing</div>
+            <strong>{track?.title || "Waiting for track metadata"}</strong>
+            <span>{track?.artist || "The station is live"}</span>
+          </div>
+          <button
+            type="button"
+            className="minimal-radio-card__play"
+            disabled={!playable}
+            onClick={play}
+            aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
+          >
+            {isPlaying ? "Pause" : "Tune in"}
+          </button>
+        </section>
+      </div>
+
+      <section className="minimal-radio-card__albums" aria-label="Lifetime crossings with this station">
+        <div className="minimal-radio-card__album-heading">
+          <div className="minimal-radio-card__eyebrow">Lifetime crossings</div>
           <div
             className="minimal-radio-card__crossing"
-            data-testid="minimal-radio-hero-crossing"
+            data-testid={active
+              ? "minimal-radio-hero-crossing"
+              : `minimal-radio-hero-crossing-${row.ds.station.slug}`}
             aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"} ${crossing.label}`}
           >
             <strong>{crossing.count}</strong>
@@ -344,20 +372,6 @@ function MinimalRadioCard({
             <span>{crossing.label}</span>
           </div>
         </div>
-        <a
-          className="minimal-radio-card__site"
-          href={row.ds.station.homepageUrl ?? `/archive/stations/${row.ds.station.slug}`}
-          target={row.ds.station.homepageUrl ? "_blank" : undefined}
-          rel={row.ds.station.homepageUrl ? "noopener noreferrer" : undefined}
-          aria-label={`Open ${row.ds.station.name} station page`}
-        >
-          <ExternalLink size={15} aria-hidden="true" />
-          station
-        </a>
-      </div>
-
-      <section className="minimal-radio-card__albums" aria-label="Albums crossing with this station">
-        <div className="minimal-radio-card__eyebrow">From your crate</div>
         {albums.length > 0 ? (
           <div className="minimal-radio-card__album-grid">
             {albums.map((album) => (
@@ -385,26 +399,6 @@ function MinimalRadioCard({
         ) : (
           <p className="minimal-radio-card__empty-albums">Your saved albums will appear here when this station crosses them.</p>
         )}
-      </section>
-
-      <section className="minimal-radio-card__track" aria-label="Current track">
-        <div className="minimal-radio-card__track-art">
-          <img src={proxyArtUrl(artwork) ?? RUMOURS} alt="" onError={onArtError} />
-        </div>
-        <div className="minimal-radio-card__track-copy">
-          <div className="minimal-radio-card__eyebrow">Now playing</div>
-          <strong>{track?.title || "Waiting for track metadata"}</strong>
-          <span>{track?.artist || "The station is live"}</span>
-        </div>
-        <button
-          type="button"
-          className="minimal-radio-card__play"
-          disabled={!playable}
-          onClick={play}
-          aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
-        >
-          {isPlaying ? "Pause" : "Tune in"}
-        </button>
       </section>
 
       <div className="minimal-radio-card__actions">
@@ -436,7 +430,8 @@ export function MinimalRadioSurface({
 }: MinimalRadioSurfaceProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [lifetimeOnly, setLifetimeOnly] = useState(false);
-  const touchStartRef = useRef<{ x: number; y: number; stationIndex: number } | null>(null);
+  const heroRegionRef = useRef<HTMLDivElement>(null);
+  const slideRefs = useRef(new Map<string, HTMLDivElement>());
   const candidates = useMemo(
     () => [...rows]
       .filter((row) => liveTrack(row) != null || row.ds.station.streamUrl != null || row.ds.station.relayUrl != null)
@@ -448,12 +443,16 @@ export function MinimalRadioSurface({
     candidates.findIndex((row) => row.ds.station.slug === selectedSlug),
   );
   const selected = candidates[selectedIndex] ?? null;
-  const selectedCrossing = selected ? crossingSummary(selected, lifetimeOnly) : null;
 
   const selectStation = useCallback((index: number) => {
     const next = candidates[index];
     if (!next) return;
     setSelectedSlug(next.ds.station.slug);
+    const slide = slideRefs.current.get(next.ds.station.slug);
+    heroRegionRef.current?.scrollTo?.({
+      top: slide?.offsetTop ?? 0,
+      behavior: "smooth",
+    });
   }, [candidates]);
 
   const selectOffset = useCallback((offset: number) => {
@@ -464,10 +463,10 @@ export function MinimalRadioSurface({
 
   const handleRailKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
-    if (event.key === "ArrowRight") {
+    if (event.key === "ArrowDown") {
       event.preventDefault();
       selectOffset(1);
-    } else if (event.key === "ArrowLeft") {
+    } else if (event.key === "ArrowUp") {
       event.preventDefault();
       selectOffset(-1);
     } else if (event.key === "Home") {
@@ -479,24 +478,24 @@ export function MinimalRadioSurface({
     }
   }, [candidates.length, selectOffset, selectStation]);
 
-  const handleHeroTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    if (!touch) return;
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY, stationIndex: selectedIndex };
-  }, [selectedIndex]);
-
-  const handleHeroTouchEnd = useCallback((event: TouchEvent<HTMLDivElement>) => {
-    const start = touchStartRef.current;
-    touchStartRef.current = null;
-    const touch = event.changedTouches[0];
-    if (!start || !touch || candidates.length < 2) return;
-    const deltaX = touch.clientX - start.x;
-    const deltaY = touch.clientY - start.y;
-    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
-    const offset = deltaX < 0 ? 1 : -1;
-    const nextIndex = (start.stationIndex + offset + candidates.length) % candidates.length;
-    selectStation(nextIndex);
-  }, [candidates.length, selectStation]);
+  const handleHeroScroll = useCallback(() => {
+    const container = heroRegionRef.current;
+    if (!container) return;
+    const viewportCenter = container.scrollTop + container.clientHeight / 2;
+    let closestIndex = selectedIndex;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    candidates.forEach((row, index) => {
+      const slide = slideRefs.current.get(row.ds.station.slug);
+      if (!slide) return;
+      const distance = Math.abs(slide.offsetTop + slide.offsetHeight / 2 - viewportCenter);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    });
+    const next = candidates[closestIndex];
+    if (next && next.ds.station.slug !== selectedSlug) setSelectedSlug(next.ds.station.slug);
+  }, [candidates, selectedIndex, selectedSlug]);
 
   if (loading && rows.length === 0) {
     return (
@@ -551,43 +550,51 @@ export function MinimalRadioSurface({
         ) : null}
       </div>
 
-      <div
-        className="minimal-radio__hero-region"
-        data-testid="minimal-radio-hero"
-        role="region"
-        aria-label="Selected radio station"
-        tabIndex={0}
-        onKeyDown={handleRailKeyDown}
-        onTouchStart={handleHeroTouchStart}
-        onTouchEnd={handleHeroTouchEnd}
-      >
+      <div className="minimal-radio__hero-frame">
+        <div className="minimal-radio__nav" role="group" aria-label="Radio station navigation">
+          <button type="button" onClick={() => selectOffset(-1)} aria-label="Previous station">
+            <ChevronLeft size={18} aria-hidden="true" /> Previous
+          </button>
+          <span data-testid="minimal-radio-selection" aria-live="polite">
+            {selected?.ds.station.name ?? "Current"} · {selectedIndex + 1} of {candidates.length}
+          </span>
+          <button type="button" onClick={() => selectOffset(1)} aria-label="Next station">
+            Next <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        </div>
         <div
-          className="minimal-radio__hero-slide"
-          data-testid="minimal-radio-hero-slide"
-          role="group"
-          aria-label={`${selected?.ds.station.name ?? "Current"} now-playing hero`}
+          ref={heroRegionRef}
+          className="minimal-radio__hero-region"
+          data-testid="minimal-radio-hero"
+          role="region"
+          aria-label="Live station cards"
+          tabIndex={0}
+          onKeyDown={handleRailKeyDown}
+          onScroll={handleHeroScroll}
         >
-          <div className="minimal-radio__nav" role="group" aria-label="Radio station navigation">
-            <button type="button" onClick={() => selectOffset(-1)} aria-label="Previous station">
-              <ChevronLeft size={18} aria-hidden="true" /> Previous
-            </button>
-            <span data-testid="minimal-radio-selection" aria-live="polite">
-              {selected?.ds.station.name ?? "Current"} · {selectedIndex + 1} of {candidates.length}
-            </span>
-            <button type="button" onClick={() => selectOffset(1)} aria-label="Next station">
-              Next <ChevronRight size={18} aria-hidden="true" />
-            </button>
-          </div>
-
-          {selected && selectedCrossing ? (
-            <MinimalRadioCard
-              key={selected.ds.station.slug}
-              row={selected}
-              libraryItems={libraryItems}
-              stationSpins={recentSpinsBySlug.get(selected.ds.station.slug) ?? []}
-              crossing={selectedCrossing}
-            />
-          ) : null}
+          {candidates.map((row, index) => (
+            <div
+              key={row.ds.station.slug}
+              ref={(node) => {
+                if (node) slideRefs.current.set(row.ds.station.slug, node);
+                else slideRefs.current.delete(row.ds.station.slug);
+              }}
+              className="minimal-radio__hero-slide"
+              data-testid={`minimal-radio-hero-card-${row.ds.station.slug}`}
+              role="group"
+              aria-label={`${row.ds.station.name} now-playing hero${selectedIndex === index ? ", selected" : ""}`}
+              aria-hidden={selectedIndex !== index}
+              inert={selectedIndex !== index ? true : undefined}
+            >
+              <MinimalRadioCard
+                row={row}
+                libraryItems={libraryItems}
+                stationSpins={recentSpinsBySlug.get(row.ds.station.slug) ?? []}
+                crossing={crossingSummary(row, lifetimeOnly)}
+                active={selectedIndex === index}
+              />
+            </div>
+          ))}
         </div>
       </div>
 
