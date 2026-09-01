@@ -280,8 +280,9 @@ describe("MinimalRadioSurface", () => {
     expect(remote.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(3);
     expect(screen.getAllByTestId(/minimal-radio-station-slide-/)).toHaveLength(3);
-    expect(remote.firstElementChild?.getAttribute("data-testid")).toBe("minimal-radio-station-slide-alpha");
-    expect(remote.firstElementChild?.classList.contains("is-primary")).toBe(true);
+    expect(
+      remote.querySelector(".minimal-radio__station-option.is-primary")?.getAttribute("data-testid"),
+    ).toBe("minimal-radio-station-slide-alpha");
     expect(screen.getByTestId("minimal-radio-selection").textContent).toContain("Alpha");
 
     fireEvent.keyDown(hero, { key: "ArrowDown" });
@@ -292,7 +293,9 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select Gamma" }));
     expect(screen.getByRole("heading", { name: "Gamma" })).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toContain("3");
-    expect(remote.firstElementChild?.getAttribute("data-testid")).toBe("minimal-radio-station-slide-gamma");
+    expect(
+      remote.querySelector(".minimal-radio__station-option.is-primary")?.getAttribute("data-testid"),
+    ).toBe("minimal-radio-station-slide-gamma");
     expect(screen.getByRole("button", { name: "Previous station" }).textContent).toBe("");
     expect(screen.getByRole("button", { name: "Next station" }).textContent).toBe("");
     expect(screen.getByTestId("minimal-radio-station-slide-gamma").getAttribute("aria-label"))
@@ -322,7 +325,8 @@ describe("MinimalRadioSurface", () => {
       />,
     );
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
-    expect(screen.queryByTestId("minimal-radio-rail")).toBeNull();
+    expect(screen.getByTestId("minimal-radio-rail")).toBeTruthy();
+    expect(screen.queryByTestId("minimal-radio-scrubber")).toBeNull();
   });
 
   it("uses vertical keyboard navigation and leaves horizontal gestures to the album rail", () => {
