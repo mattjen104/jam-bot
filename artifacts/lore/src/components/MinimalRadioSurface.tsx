@@ -381,13 +381,13 @@ function MinimalRadioCard({
               type="button"
               className="minimal-radio-card__first-plays"
               data-testid="minimal-radio-first-plays"
-              aria-label={`${row.ds.lifetimeFirstPlayCrossings} first plays, lifetime`}
+              aria-label={`${row.ds.lifetimeFirstPlayCrossings} premieres`}
               aria-expanded={firstPlayExpanded}
               disabled={firstPlayAlbumItems.length === 0}
               onClick={() => setFirstPlayExpanded((expanded) => !expanded)}
             >
               <strong>{row.ds.lifetimeFirstPlayCrossings}</strong>
-              <span>first plays · lifetime</span>
+              <span>premieres</span>
             </button>
           </div>
         </div>

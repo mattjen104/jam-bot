@@ -264,7 +264,7 @@ describe("MinimalRadioSurface", () => {
 
     const firstPlays = await waitFor(() => {
       const heading = screen.getByTestId("minimal-radio-first-plays");
-      expect(heading.textContent).toContain("4first plays · lifetime");
+      expect(heading.textContent).toContain("4premieres");
       return heading;
     });
     const firstPlayColumn = screen
