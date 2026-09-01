@@ -76,7 +76,13 @@ const CROSSINGS = STATIONS.map((station) => ({
   monthArtistCrossings: 0,
   lifetimeCrossings: 1,
   lifetimeArtistCrossings: 0,
-  albumCrossings: [],
+  albumCrossings: [1, 2].map((ordinal) => ({
+    releaseGroupMbid: `${station.slug}-release-${ordinal}`,
+    recordingMbid: `${station.slug}-recording-${ordinal}`,
+    title: `Album ${ordinal}`,
+    artist: `Artist ${ordinal}`,
+    artworkUrl: `https://art.example.test/${station.slug}-${ordinal}.jpg`,
+  })),
 }));
 
 async function installRoutes(
@@ -87,6 +93,12 @@ async function installRoutes(
   // Avoid reaching external radio streams; the player still commits the tuned
   // station before the browser reports that this fixture stream is unavailable.
   await page.route("https://stream.example.test/**", (route) => route.abort());
+  await page.route("**/api/art?src=**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: "<svg xmlns='http://www.w3.org/2000/svg' width='152' height='152'><rect width='152' height='152' fill='#7e6a9c'/></svg>",
+    }),
+  );
 
   // Register the broad route first: Playwright evaluates later routes first.
   await page.route("**/api/me/**", (route) =>
@@ -216,6 +228,42 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.getByTestId("minimal-radio-card")).toHaveCount(STATION_COUNT);
     await expect(page.locator(".player-bar-row")).toHaveCount(0);
     await expect(page.locator("body")).toHaveCSS("overflow-x", /^(visible|clip|hidden)$/);
+  });
+
+  test("crossing header clips the large two-cover panel until expanded", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loadStationDial(page);
+    await page.screenshot({ path: "/tmp/lore-radio-cards-fixed.png" });
+
+    const card = page.getByTestId("minimal-radio-card").first();
+    const covers = card.locator(".minimal-radio-card__albums");
+    const collapsed = await card.evaluate((node) => {
+      const cardRect = node.getBoundingClientRect();
+      const albumsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect();
+      const albumNode = node.querySelector<HTMLElement>(".minimal-radio-card__album");
+      const imageRect = node.querySelector<HTMLImageElement>(".minimal-radio-card__album img")?.getBoundingClientRect();
+      return {
+        cardHeight: cardRect.height,
+        albumsHeight: albumsRect?.height,
+        albumWidth: albumNode?.getBoundingClientRect().width,
+        imageHeight: imageRect?.height,
+        imageWidth: imageRect?.width,
+        albumStyle: albumNode ? {
+          width: getComputedStyle(albumNode).width,
+          flexBasis: getComputedStyle(albumNode).flexBasis,
+        } : null,
+      };
+    });
+    console.log("collapsed radio geometry", collapsed);
+    expect(collapsed.imageWidth).toBe(152);
+    expect(collapsed.imageHeight).toBe(152);
+    expect(collapsed.albumsHeight).toBeLessThan(collapsed.imageHeight!);
+    expect(collapsed.cardHeight).toBeLessThan(180);
+    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(2);
+
+    await card.getByTestId("minimal-radio-crossing").click();
+    await expect(card).toHaveClass(/is-expanded/);
+    await expect(covers).toHaveCSS("height", "152px");
   });
 
   test("1280×900: presets and keyboard navigation change the active card", async ({ page }) => {

@@ -13796,22 +13796,29 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio__hero-slide {
   height: auto;
+  width: 100%;
   min-height: 152px;
   padding-bottom: 12px;
 }
 .minimal-radio-card {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 6px;
-  height: auto;
-  min-height: 0;
+  height: 152px;
+  min-height: 152px;
+  width: 100%;
+  min-width: 0;
   padding: 8px 14px;
   overflow: hidden;
   border: 1px solid hsl(var(--border) / .8);
   border-radius: 10px;
   background: hsl(var(--card));
   box-shadow: 0 8px 24px hsl(0 0% 0% / .14);
+}
+.minimal-radio-card.is-expanded {
+  height: 254px;
+  min-height: 254px;
 }
 .minimal-radio-card__station-line {
   display: flex;
@@ -13956,7 +13963,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: 0 0 50px;
   min-width: 0;
   height: 50px;
   min-height: 50px;
@@ -13969,6 +13976,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card.is-expanded .minimal-radio-card__albums {
   height: 152px;
   min-height: 152px;
+  flex: 0 0 152px;
   flex-basis: 152px;
 }
 .minimal-radio-card__albums.is-empty {
@@ -13992,6 +14000,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   height: 50px;
   min-height: 50px;
+  flex: 0 0 50px;
   flex-basis: 50px;
   margin: 0;
   padding: 0 24px 0 0;
@@ -14004,6 +14013,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   height: 152px;
   min-height: 152px;
   flex-basis: 152px;
+  flex: 0 0 152px;
 }
 .minimal-radio-card__album-grid::-webkit-scrollbar { display: none; }
 .minimal-radio-card__album {
@@ -14081,8 +14091,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     min-height: 616px;
   }
   .minimal-radio-card {
-    height: auto;
-    min-height: 0;
+    height: 152px;
+    min-height: 152px;
     padding: 8px 14px;
   }
   .minimal-radio-card__station-identity h2 {
