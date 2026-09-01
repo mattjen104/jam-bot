@@ -76,7 +76,7 @@ const CROSSINGS = STATIONS.map((station) => ({
   monthArtistCrossings: 0,
   lifetimeCrossings: 1,
   lifetimeArtistCrossings: 0,
-  albumCrossings: [1, 2].map((ordinal) => ({
+  albumCrossings: [1, 2, 3, 4, 5].map((ordinal) => ({
     releaseGroupMbid: `${station.slug}-release-${ordinal}`,
     recordingMbid: `${station.slug}-recording-${ordinal}`,
     title: `Album ${ordinal}`,
@@ -230,7 +230,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.locator("body")).toHaveCSS("overflow-x", /^(visible|clip|hidden)$/);
   });
 
-  test("latest crossing cover expands into a vertical lifetime stack", async ({ page }) => {
+  test("latest crossing cover expands into a four-wide lifetime grid", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);
 
@@ -262,7 +262,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
-    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(2);
+    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(5);
     const expanded = await card.evaluate((node) => {
       const albums = node.querySelector<HTMLElement>(".minimal-radio-card__albums");
       const grid = node.querySelector<HTMLElement>(".minimal-radio-card__album-grid");
@@ -270,17 +270,28 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
       return {
         albumsHeight: albums?.getBoundingClientRect().height,
         gridHeight: grid?.getBoundingClientRect().height,
+        albumsWidth: albums?.getBoundingClientRect().width,
+        gridWidth: grid?.getBoundingClientRect().width,
         imageHeight: image?.getBoundingClientRect().height,
+        imageWidth: image?.getBoundingClientRect().width,
+        gridDisplay: grid ? getComputedStyle(grid).display : null,
+        gridTemplateColumns: grid ? getComputedStyle(grid).gridTemplateColumns : null,
+        gridGap: grid ? getComputedStyle(grid).gap : null,
+        gridPaddingRight: grid ? getComputedStyle(grid).paddingRight : null,
         gridOverflowY: grid ? getComputedStyle(grid).overflowY : null,
-        gridDirection: grid ? getComputedStyle(grid).flexDirection : null,
         gridTouchAction: grid ? getComputedStyle(grid).touchAction : null,
       };
     });
     expect(expanded.albumsHeight).toBeGreaterThan(152);
-    expect(expanded.gridHeight).toBe(expanded.albumsHeight);
-    expect(expanded.imageHeight).toBeGreaterThan(152);
+    expect(expanded.gridHeight).toBeLessThanOrEqual(expanded.albumsHeight!);
+    expect(expanded.gridWidth).toBe(expanded.albumsWidth);
+    expect(expanded.imageHeight).toBeGreaterThan(80);
+    expect(expanded.imageWidth).toBe(expanded.imageHeight);
+    expect(expanded.gridDisplay).toBe("grid");
+    expect(expanded.gridTemplateColumns?.split(" ")).toHaveLength(4);
+    expect(expanded.gridGap).toBe("0px");
+    expect(expanded.gridPaddingRight).toBe("0px");
     expect(expanded.gridOverflowY).toBe("auto");
-    expect(expanded.gridDirection).toBe("column");
     expect(expanded.gridTouchAction).toBe("pan-y");
     await expect(card.locator(".minimal-radio-card__station-line")).toHaveCSS("border-bottom-width", "1px");
   });
