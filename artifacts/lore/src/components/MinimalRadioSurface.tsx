@@ -50,8 +50,8 @@ function liveTrack(row: DialLaneRow) {
   return row.ds.liveTrack ?? row.show?.currentTrack ?? null;
 }
 
-function stationLocation(station: { city?: string | null; country?: string | null }): string {
-  return station.city?.trim() || station.country?.trim() || "Location unavailable";
+function stationCity(station: { city?: string | null }): string | null {
+  return station.city?.trim() || null;
 }
 
 function scoreFor(row: DialLaneRow, preset: RadioPreset): number {
@@ -274,15 +274,16 @@ function MinimalRadioCard({
             variant="cube"
             className="minimal-radio-card__station-mark"
           />
-          <h2 className="minimal-radio-card__station-title">{row.ds.station.name}</h2>
-        </div>
-        <div className="minimal-radio-card__station-details">
-          <div
-            className="minimal-radio-card__station-location"
-            data-testid={`minimal-radio-station-location-${row.ds.station.slug}`}
+          <h2
+            className="minimal-radio-card__station-title"
+            aria-label={row.ds.station.name}
+            data-testid={`minimal-radio-station-label-${row.ds.station.slug}`}
           >
-            {stationLocation(row.ds.station)}
-          </div>
+            <span>{row.ds.station.name}</span>
+            {stationCity(row.ds.station) ? (
+              <small>{stationCity(row.ds.station)}</small>
+            ) : null}
+          </h2>
         </div>
       </div>
 
