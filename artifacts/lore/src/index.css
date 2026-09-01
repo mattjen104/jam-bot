@@ -14004,17 +14004,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card__crossing strong,
 .minimal-radio-card__first-plays strong {
-  display: inline-flex;
+  display: inline;
   flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: hsl(var(--accent));
-  color: hsl(var(--background));
-  font-size: 12px;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--accent));
+  font-size: 15px;
   letter-spacing: -.02em;
 }
 .minimal-radio-card__crossing:focus-visible,
