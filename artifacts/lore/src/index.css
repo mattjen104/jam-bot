@@ -13833,7 +13833,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
 }
 .minimal-radio-card__crossing-column {
   display: flex;
@@ -13895,9 +13895,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   min-height: 20px;
   margin: 0;
-  padding: 0 0 8px;
+  padding: 6px 0 0;
   border: 0;
-  border-bottom: 1px solid hsl(var(--border) / .7);
+  border-top: 1px solid hsl(var(--border) / .7);
   background: transparent;
   color: hsl(var(--foreground));
   text-align: left;
