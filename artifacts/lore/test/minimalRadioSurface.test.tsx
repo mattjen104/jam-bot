@@ -207,6 +207,10 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
+    const nowPlaying = screen.getByLabelText("Current track");
+    expect(nowPlaying.textContent).toContain("Artist 6");
+    expect(nowPlaying.textContent).not.toContain("Track 6");
+    expect(nowPlaying.textContent).toContain("The Test Show");
     const albumLinks = screen.getAllByRole("link", { name: /^Open Album/ });
     expect(albumLinks).toHaveLength(6);
     expect(albumLinks.map((link) => link.getAttribute("href"))).toEqual([
@@ -221,6 +225,23 @@ describe("MinimalRadioSurface", () => {
     expect(albumLinks[0]?.querySelector("img")?.getAttribute("src")).toContain(
       encodeURIComponent("https://coverartarchive.org/release-group/release-6/front-1200"),
     );
+  });
+
+  it("hides placeholder show names from the now-playing cell", () => {
+    const station = row("alpha", "Alpha", true, 1);
+    station.show = { showName: "Unknown show" } as NonNullable<typeof station.show>;
+
+    render(
+      <MinimalRadioSurface
+        rows={[station]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+
+    const nowPlaying = screen.getByLabelText("Current track");
+    expect(nowPlaying.textContent).toContain("Alpha artist");
+    expect(nowPlaying.textContent).not.toMatch(/unknown show/i);
   });
 
   it("shows a release-group crossing cover even when that album is outside the loaded library page", () => {

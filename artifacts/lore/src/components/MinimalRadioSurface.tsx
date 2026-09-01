@@ -52,6 +52,12 @@ function stationCity(station: { city?: string | null }): string | null {
   return station.city?.trim() || null;
 }
 
+function knownShowName(showName: string | null | undefined): string | null {
+  const normalized = showName?.trim();
+  if (!normalized || /^unknown(?:\s+show)?$/i.test(normalized)) return null;
+  return normalized;
+}
+
 function scoreFor(row: DialLaneRow, preset: RadioPreset): number {
   if (preset === "now") {
     const track = liveTrack(row);
@@ -245,6 +251,7 @@ function MinimalRadioCard({
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";
+  const showName = knownShowName(row.show?.showName);
   const kept = Boolean(track?.mbid && libraryItems.some((item) => item.mbid === track.mbid));
 
   const play = useCallback(() => {
@@ -292,9 +299,8 @@ function MinimalRadioCard({
 
       <section className="minimal-radio-card__track" aria-label="Current track">
         <div className="minimal-radio-card__eyebrow">Now playing</div>
-        <strong>{track?.title || "Waiting for track metadata"}</strong>
-        <span>{track?.artist || "The station is live"}</span>
-        {row.show?.showName ? <small>{row.show.showName}</small> : null}
+        <strong>{track?.artist || "The station is live"}</strong>
+        {showName ? <small>{showName}</small> : null}
       </section>
 
       <section className="minimal-radio-card__albums" aria-label="Lifetime crossings with this station">
