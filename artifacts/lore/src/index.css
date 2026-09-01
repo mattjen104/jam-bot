@@ -13290,11 +13290,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album + .minimal-radio-card__album {
   margin-left: clamp(-76px, -5.4vw, -34px);
 }
-.minimal-radio-card__album:nth-child(1) { transform: rotate(-7deg) translateY(8px); }
-.minimal-radio-card__album:nth-child(2) { transform: rotate(4deg) translateY(-2px); }
-.minimal-radio-card__album:nth-child(3) { transform: rotate(-2deg) translateY(4px); }
-.minimal-radio-card__album:nth-child(4) { transform: rotate(6deg) translateY(-5px); }
-.minimal-radio-card__album:nth-child(5) { transform: rotate(-5deg) translateY(7px); }
+.minimal-radio-card__album:nth-child(1) { z-index: 5; transform: rotate(-7deg) translateY(8px); }
+.minimal-radio-card__album:nth-child(2) { z-index: 4; transform: rotate(4deg) translateY(-2px); }
+.minimal-radio-card__album:nth-child(3) { z-index: 3; transform: rotate(-2deg) translateY(4px); }
+.minimal-radio-card__album:nth-child(4) { z-index: 2; transform: rotate(6deg) translateY(-5px); }
+.minimal-radio-card__album:nth-child(5) { z-index: 1; transform: rotate(-5deg) translateY(7px); }
 .minimal-radio-card__album:hover,
 .minimal-radio-card__album:focus-visible {
   z-index: 5;
