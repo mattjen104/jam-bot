@@ -13787,17 +13787,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   min-height: 22px;
 }
-.minimal-radio-card__station-tools {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 7px;
-}
-.minimal-radio-card__category-filter .home-cli-strip__filter-chip {
-  height: 22px;
-  padding: 0 6px;
-  font-size: 9px;
-}
 .minimal-radio-card__station-identity {
   display: flex;
   align-items: baseline;
