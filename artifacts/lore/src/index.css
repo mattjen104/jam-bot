@@ -13425,9 +13425,32 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .dial-root--embedded { min-height: auto; }
 
 @media (max-width: 700px) {
-  .split-home__front-door-shell { padding-top: 22px; }
-  .front-door-header { align-items: stretch; flex-direction: column; gap: 18px; }
-  .front-door-modes { align-self: flex-start; }
+  .split-home__front-door-shell {
+    padding-top: 18px;
+    padding-bottom: calc(var(--shell-h, 0px) + 112px);
+  }
+  .front-door-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0;
+    padding-bottom: 12px;
+  }
+  .front-door-modes {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--shell-h, 0px) + 32px);
+    z-index: 35;
+    align-self: auto;
+    transform: translateX(-50%);
+    box-shadow: 0 8px 24px hsl(0 0% 0% / .38);
+    backdrop-filter: blur(14px);
+  }
+  .front-door-modes button {
+    min-height: 34px;
+    padding: 0 16px;
+  }
+  .front-door-cli { margin-bottom: 8px; }
+  .minimal-radio { gap: 8px; }
   .minimal-radio__controls {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
@@ -13435,11 +13458,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
       "stations stations";
     gap: 8px;
     overflow: hidden;
-    padding: 11px 12px;
+    padding: 7px 12px 8px;
     border-radius: 11px;
   }
   .minimal-radio__station-heading {
-    min-height: 30px;
+    min-height: 26px;
   }
   .minimal-radio__remote-label { display: none; }
   .minimal-radio__station-buttons {
