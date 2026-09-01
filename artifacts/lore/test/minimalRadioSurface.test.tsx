@@ -187,6 +187,29 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByText("Quiet track")).toBeNull();
   });
 
+  it("switches to a compact station remote and tunes from its tiles", () => {
+    render(
+      <MinimalRadioSurface
+        rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", true, 2)]}
+        libraryItems={[]}
+        preset="now"
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
+
+    expect(screen.getByTestId("minimal-radio-remote-view")).toBeTruthy();
+    expect(screen.queryByTestId("minimal-radio-sheet-header")).toBeNull();
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(2);
+    expect(screen.getByLabelText("Alpha: Alpha artist").textContent)
+      .toContain("Alpha artist");
+
+    fireEvent.click(screen.getByLabelText("Alpha: Alpha artist"));
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Alpha: Alpha artist").getAttribute("aria-pressed"))
+      .toBe("true");
+  });
+
   it("shows one crossing cover collapsed and continues the lifetime grid expanded", () => {
     const station = row("alpha", "Alpha", true, 6);
     const spins = Array.from({ length: 6 }, (_, index) => crossingSpin(index + 1));

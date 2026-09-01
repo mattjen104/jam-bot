@@ -255,6 +255,36 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.locator("body")).toHaveCSS("overflow-x", /^(visible|clip|hidden)$/);
   });
 
+  test("grid control opens the compact station remote on the floating-control plane", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loadStationDial(page);
+
+    const toggle = page.getByTestId("minimal-radio-remote-toggle");
+    const filter = page.locator(".minimal-radio__floating-filter").first();
+    const toggleBox = await toggle.boundingBox();
+    const filterBox = await filter.boundingBox();
+    expect(toggleBox).not.toBeNull();
+    expect(filterBox).not.toBeNull();
+    expect(Math.abs(
+      (toggleBox!.y + toggleBox!.height) - (filterBox!.y + filterBox!.height),
+    )).toBeLessThanOrEqual(1);
+    expect(toggleBox!.x).toBeLessThan(filterBox!.x);
+
+    await toggle.click();
+
+    await expect(page.getByTestId("minimal-radio-remote-view")).toBeVisible();
+    await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
+    await expect(page.getByTestId("minimal-radio-remote-station").first())
+      .toContainText("Station 01");
+    await expect(page.getByTestId("minimal-radio-remote-station").first())
+      .toContainText("Artist 1");
+    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(0);
+
+    await page.getByTestId("minimal-radio-remote-station").first().click();
+    await expect(page.getByTestId("minimal-radio-remote-station").first())
+      .toHaveAttribute("aria-pressed", "true");
+  });
+
   test("latest crossing cover expands into a lifetime grid", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);

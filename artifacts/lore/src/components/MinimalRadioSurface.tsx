@@ -6,7 +6,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Radio, SlidersHorizontal } from "lucide-react";
+import { Grid2X2, Radio, SlidersHorizontal } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
@@ -250,6 +250,57 @@ function firstPlayAlbums(items: readonly FirstPlayHistoryItem[]): CrossingAlbum[
   return albums;
 }
 
+function MinimalRadioRemoteTile({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: DialLaneRow;
+  selected: boolean;
+  onSelect: (slug: string) => void;
+}) {
+  const { radio } = usePlayer();
+  const [logoFailed, setLogoFailed] = useState(false);
+  const track = liveTrack(row);
+  const artist = track?.artist?.trim() || "Not broadcasting";
+  const station = row.ds.station;
+  const playable = resolvePlaybackSource(station) != null;
+
+  const tune = () => {
+    onSelect(station.slug);
+    if (playable) void radio.toggle(station);
+  };
+
+  return (
+    <button
+      type="button"
+      className={`minimal-radio__remote-station${selected ? " is-selected" : ""}`}
+      data-testid="minimal-radio-remote-station"
+      aria-label={`${station.name}: ${artist}`}
+      aria-pressed={selected}
+      disabled={!playable}
+      onClick={tune}
+    >
+      <span className="minimal-radio__remote-mark" aria-hidden="true">
+        {station.logoUrl && !logoFailed ? (
+          <img
+            src={station.logoUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={() => setLogoFailed(true)}
+          />
+        ) : (
+          <span>{station.name}</span>
+        )}
+      </span>
+      <span className="minimal-radio__remote-copy">
+        <span>{artist}</span>
+      </span>
+    </button>
+  );
+}
+
 function MinimalRadioCard({
   row,
   libraryItems,
@@ -473,6 +524,7 @@ export function MinimalRadioSurface({
 }: MinimalRadioSurfaceProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [lifetimeOnly, setLifetimeOnly] = useState(false);
+  const [remoteView, setRemoteView] = useState(false);
   const heroRegionRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef(new Map<string, HTMLDivElement>());
   const candidates = useMemo(
@@ -612,6 +664,16 @@ export function MinimalRadioSurface({
           />
         </div>
       ) : null}
+      <button
+        type="button"
+        className="minimal-radio__remote-toggle"
+        data-testid="minimal-radio-remote-toggle"
+        aria-label={remoteView ? "Show full station cards" : "Show compact remote view"}
+        aria-pressed={remoteView}
+        onClick={() => setRemoteView((visible) => !visible)}
+      >
+        <Grid2X2 size={18} strokeWidth={2} aria-hidden="true" />
+      </button>
 
       {candidates.length === 0 ? (
         <section className="minimal-radio-state" data-testid="minimal-radio-no-candidates">
@@ -621,50 +683,70 @@ export function MinimalRadioSurface({
         </section>
       ) : (
         <div className="minimal-radio__hero-frame">
-          <div
-            className="minimal-radio__sheet-header"
-            data-testid="minimal-radio-sheet-header"
-            aria-label="Radio insight columns"
-          >
-            <span aria-hidden="true" />
-            <div className="minimal-radio__sheet-header-insights">
-              <span>Crossing</span>
-              <span>Premiere</span>
-            </div>
-          </div>
-          <div
-            ref={heroRegionRef}
-            className="minimal-radio__hero-region"
-            data-testid="minimal-radio-hero"
-            role="region"
-            aria-label="Live station cards"
-            tabIndex={0}
-            onKeyDown={handleHeroKeyDown}
-            onScroll={handleHeroScroll}
-          >
-            {candidates.map((row, index) => (
-              <div
-                key={row.ds.station.slug}
-                ref={(node) => {
-                  if (node) slideRefs.current.set(row.ds.station.slug, node);
-                  else slideRefs.current.delete(row.ds.station.slug);
-                }}
-                className="minimal-radio__hero-slide"
-                data-testid={`minimal-radio-hero-card-${row.ds.station.slug}`}
-                role="group"
-                aria-label={`${row.ds.station.name} now-playing hero${selectedIndex === index ? ", selected" : ""}`}
-                aria-hidden={selectedIndex !== index}
-                inert={selectedIndex !== index ? true : undefined}
-              >
-                <MinimalRadioCard
+          {remoteView ? (
+            <div
+              className="minimal-radio__remote-view"
+              data-testid="minimal-radio-remote-view"
+              role="list"
+              aria-label="Compact station remote"
+            >
+              {candidates.map((row) => (
+                <MinimalRadioRemoteTile
+                  key={row.ds.station.slug}
                   row={row}
-                  libraryItems={libraryItems}
-                  stationSpins={recentSpinsBySlug.get(row.ds.station.slug) ?? []}
-                  crossing={crossingSummary(row, lifetimeOnly)}
+                  selected={row.ds.station.slug === selectedSlug}
+                  onSelect={setSelectedSlug}
                 />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div
+                className="minimal-radio__sheet-header"
+                data-testid="minimal-radio-sheet-header"
+                aria-label="Radio insight columns"
+              >
+                <span aria-hidden="true" />
+                <div className="minimal-radio__sheet-header-insights">
+                  <span>Crossing</span>
+                  <span>Premiere</span>
+                </div>
               </div>
-            ))}
-          </div>
+              <div
+                ref={heroRegionRef}
+                className="minimal-radio__hero-region"
+                data-testid="minimal-radio-hero"
+                role="region"
+                aria-label="Live station cards"
+                tabIndex={0}
+                onKeyDown={handleHeroKeyDown}
+                onScroll={handleHeroScroll}
+              >
+                {candidates.map((row, index) => (
+                  <div
+                    key={row.ds.station.slug}
+                    ref={(node) => {
+                      if (node) slideRefs.current.set(row.ds.station.slug, node);
+                      else slideRefs.current.delete(row.ds.station.slug);
+                    }}
+                    className="minimal-radio__hero-slide"
+                    data-testid={`minimal-radio-hero-card-${row.ds.station.slug}`}
+                    role="group"
+                    aria-label={`${row.ds.station.name} now-playing hero${selectedIndex === index ? ", selected" : ""}`}
+                    aria-hidden={selectedIndex !== index}
+                    inert={selectedIndex !== index ? true : undefined}
+                  >
+                    <MinimalRadioCard
+                      row={row}
+                      libraryItems={libraryItems}
+                      stationSpins={recentSpinsBySlug.get(row.ds.station.slug) ?? []}
+                      crossing={crossingSummary(row, lifetimeOnly)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </section>
