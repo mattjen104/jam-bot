@@ -360,12 +360,9 @@ function MinimalRadioCard({
   const isPlaying = isCurrent && radio.status === "playing";
   const lifetimeCrossingCount = row.ds.lifetimeCrossings + row.ds.lifetimeArtistCrossings;
   const artist = track?.artist?.trim() || "";
-  const title = track?.title?.trim() || "";
   const nowPlayingLabel = !track
     ? "Not broadcasting"
-    : artist || title
-      ? `${artist}${artist && title ? " — " : ""}${title}`
-      : "No metadata";
+    : artist || "No metadata";
 
   const play = useCallback(() => {
     if (playable) void radio.toggle(row.ds.station);
@@ -399,14 +396,7 @@ function MinimalRadioCard({
           >
             <span className="minimal-radio-card__now-label">Now</span>
             <span className="minimal-radio-card__now-copy">
-              {track && artist && title ? (
-                <>
-                  <strong>{artist}</strong>
-                  <span> — {title}</span>
-                </>
-              ) : (
-                nowPlayingLabel
-              )}
+              {nowPlayingLabel}
             </span>
           </button>
         </div>

@@ -111,7 +111,7 @@ afterEach(() => {
 });
 
 describe("MinimalRadioSurface", () => {
-  it("renders roomy three-line rows, keeps identity first, and tunes from Now", () => {
+  it("renders artist-only Now rows, keeps identity first, and tunes from Now", () => {
     render(
       <MinimalRadioSurface
         rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", true, 5)]}
@@ -131,7 +131,8 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByTestId("minimal-radio-sheet-header").textContent).toContain("Premiere");
     expect(screen.getByText("Alpha artist")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).textContent)
-      .toContain("Alpha track");
+      .toContain("Alpha artist");
+    expect(screen.queryByText("Alpha track")).toBeNull();
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).className)
       .toContain("minimal-radio-card__now");
     expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(1);
@@ -174,7 +175,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByTestId("minimal-radio-hero-crossing")).toBeNull();
   });
 
-  it("renders both artist and track, and uses honest off-air metadata", () => {
+  it("renders only artist metadata and uses honest off-air metadata", () => {
     const station = row("quiet", "Quiet", false, 1);
     station.ds.crossings = 1;
     station.ds.liveTrack = null;
