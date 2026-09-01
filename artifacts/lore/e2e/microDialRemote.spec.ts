@@ -230,7 +230,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.locator("body")).toHaveCSS("overflow-x", /^(visible|clip|hidden)$/);
   });
 
-  test("latest crossing cover expands into a four-wide lifetime grid", async ({ page }) => {
+  test("latest crossing cover expands into a lifetime grid", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);
 
@@ -254,16 +254,15 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(collapsed.imageWidth).toBeGreaterThan(80);
     expect(collapsed.imageHeight).toBe(collapsed.imageWidth);
     expect(collapsed.albumsHeight).toBeLessThan(collapsed.imageHeight!);
-    expect(collapsed.albumGridWidth).toBeGreaterThan(300);
+    expect(collapsed.albumGridWidth).toBeGreaterThan(140);
     expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
-    expect(collapsed.albumWidths).toHaveLength(4);
-    expect(collapsed.albumWidths[0]).toBe(collapsed.albumWidths[1]);
-    expect(collapsed.albumWidths[1]).toBe(collapsed.albumWidths[2]);
-    expect(collapsed.albumWidths[2]).toBe(collapsed.albumWidths[3]);
+    expect(collapsed.albumWidths).toHaveLength(1);
+    expect(collapsed.albumWidths[0]).toBeGreaterThan(80);
     expect(collapsed.cardHeight).toBeLessThan(180);
-    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(4);
+    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(1);
     await expect(card.locator(".minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
     await expect(card.locator(".minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");
+    await expect(card.locator(".minimal-radio-card__crossing-column")).toHaveCSS("border-left-width", "1px");
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
@@ -293,7 +292,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(expanded.imageHeight).toBeGreaterThan(80);
     expect(expanded.imageWidth).toBe(expanded.imageHeight);
     expect(expanded.gridDisplay).toBe("grid");
-    expect(expanded.gridTemplateColumns?.split(" ")).toHaveLength(4);
+    expect(expanded.gridTemplateColumns?.split(" ")).toHaveLength(2);
     expect(expanded.gridGap).toBe("0px");
     expect(expanded.gridPaddingRight).toBe("0px");
     expect(expanded.gridOverflowY).toBe("auto");

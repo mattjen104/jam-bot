@@ -132,7 +132,7 @@ describe("MinimalRadioSurface", () => {
       .toContain("Alpha track");
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).className)
       .toContain("minimal-radio-card__now");
-    expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(4);
+    expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(2);
     expect(document.querySelector("[data-station-mark='logo']")).toBeNull();
     expect(screen.queryByText(/matched|shown/i)).toBeNull();
     expect(screen.getAllByTestId("minimal-radio-crossing")).toHaveLength(2);
@@ -146,7 +146,7 @@ describe("MinimalRadioSurface", () => {
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the crossing count and range below Now Playing", () => {
+  it("shows the crossing count and range in the heading column", () => {
     const station = row("alpha", "Alpha", false, 1);
     station.ds.crossings = 2;
 
@@ -158,8 +158,8 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByTestId("minimal-radio-crossing").textContent)
       .toContain("2crossings · 24 hr");
     expect(
-      screen.getByTestId("minimal-radio-crossing").previousElementSibling
-        ?.classList.contains("minimal-radio-card__now"),
+      screen.getByTestId("minimal-radio-crossing").parentElement
+        ?.classList.contains("minimal-radio-card__crossing-column"),
     ).toBe(true);
     expect(screen.queryByTestId("minimal-radio-hero-crossing")).toBeNull();
   });
@@ -177,7 +177,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByText("Quiet track")).toBeNull();
   });
 
-  it("shows four crossing covers collapsed and continues the lifetime grid expanded", () => {
+  it("shows one crossing cover collapsed and continues the lifetime grid expanded", () => {
     const station = row("alpha", "Alpha", true, 6);
     const spins = Array.from({ length: 6 }, (_, index) => crossingSpin(index + 1));
     station.ds.liveTrack = spins[5]!;
@@ -211,11 +211,11 @@ describe("MinimalRadioSurface", () => {
     );
 
     const albumLinks = screen.getAllByRole("link", { name: /^Open / });
-    expect(albumLinks).toHaveLength(4);
+    expect(albumLinks).toHaveLength(1);
     expect(albumLinks[0]?.getAttribute("href")).toBe("/album/release-5");
-    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(4);
+    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(1);
     expect(document.querySelectorAll(".minimal-radio-card__album-swatch")).toHaveLength(0);
-    expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(4);
+    expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(1);
     const crossingHeader = screen.getByTestId("minimal-radio-crossing");
     expect(crossingHeader.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(crossingHeader);

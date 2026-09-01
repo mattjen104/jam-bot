@@ -262,7 +262,7 @@ function MinimalRadioCard({
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
     [row, libraryItems, stationSpins, crossing],
   );
-  const visibleAlbums = albumsExpanded ? albums : albums.slice(0, 4);
+  const visibleAlbums = albumsExpanded ? albums : albums.slice(0, 1);
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";
@@ -292,6 +292,56 @@ function MinimalRadioCard({
             <span>{stationCity(row.ds.station)}</span>
           ) : null}
         </div>
+        <div className="minimal-radio-card__crossing-column">
+          <button
+            type="button"
+            className={`minimal-radio-card__crossing${recency.live ? " is-live" : ""}`}
+            data-testid="minimal-radio-crossing"
+            aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"}, ${crossing.label}`}
+            aria-expanded={albumsExpanded}
+            disabled={albums.length === 0}
+            onClick={() => setAlbumsExpanded((expanded) => !expanded)}
+          >
+            {recency.live ? <i aria-hidden="true" /> : null}
+            <strong>{crossing.count}</strong>
+            <span>{crossing.count === 1 ? "crossing" : "crossings"} · {crossing.label}</span>
+          </button>
+
+          <section
+            className={`minimal-radio-card__albums${albums.length === 0 ? " is-empty" : ""}`}
+            aria-label={albumsExpanded ? "Lifetime crossing album covers" : "Latest crossing album cover"}
+          >
+            {visibleAlbums.length > 0 ? (
+              <div className="minimal-radio-card__album-grid">
+                {visibleAlbums.map((album) => {
+                  const artworkUrl = album.artworkUrl ? proxyArtUrl(album.artworkUrl) : null;
+                  if (!artworkUrl) return null;
+                  return (
+                    <a
+                      key={album.key}
+                      href={album.href}
+                      className="minimal-radio-card__album"
+                      title={`${album.title} by ${album.artist}`}
+                      aria-label={`Open ${album.title} by ${album.artist}`}
+                    >
+                      <img
+                        src={artworkUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        onError={onArtError}
+                      />
+                      <span className="minimal-radio-card__album-caption">
+                        <b>{album.title}</b>
+                        <small>{album.artist}</small>
+                      </span>
+                    </a>
+                  );
+                })}
+              </div>
+            ) : null}
+          </section>
+        </div>
       </header>
 
       <button
@@ -314,54 +364,6 @@ function MinimalRadioCard({
         </span>
       </button>
 
-      <button
-        type="button"
-        className={`minimal-radio-card__crossing${recency.live ? " is-live" : ""}`}
-        data-testid="minimal-radio-crossing"
-        aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"}, ${crossing.label}`}
-        aria-expanded={albumsExpanded}
-        disabled={albums.length === 0}
-        onClick={() => setAlbumsExpanded((expanded) => !expanded)}
-      >
-        {recency.live ? <i aria-hidden="true" /> : null}
-        <strong>{crossing.count}</strong>
-        <span>{crossing.count === 1 ? "crossing" : "crossings"} · {crossing.label}</span>
-      </button>
-
-      <section
-        className={`minimal-radio-card__albums${albums.length === 0 ? " is-empty" : ""}`}
-        aria-label={albumsExpanded ? "Lifetime crossing album covers" : "Latest crossing album cover"}
-      >
-        {visibleAlbums.length > 0 ? (
-          <div className="minimal-radio-card__album-grid">
-            {visibleAlbums.map((album) => {
-              const artworkUrl = album.artworkUrl ? proxyArtUrl(album.artworkUrl) : null;
-              if (!artworkUrl) return null;
-              return (
-                <a
-                  key={album.key}
-                  href={album.href}
-                  className="minimal-radio-card__album"
-                  title={`${album.title} by ${album.artist}`}
-                  aria-label={`Open ${album.title} by ${album.artist}`}
-                >
-                  <img
-                    src={artworkUrl}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    onError={onArtError}
-                  />
-                  <span className="minimal-radio-card__album-caption">
-                    <b>{album.title}</b>
-                    <small>{album.artist}</small>
-                  </span>
-                </a>
-              );
-            })}
-          </div>
-        ) : null}
-      </section>
     </article>
   );
 }

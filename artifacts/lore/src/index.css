@@ -13797,7 +13797,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio__hero-slide {
   height: auto;
   width: 100%;
-  min-height: 152px;
+  min-height: 124px;
   padding-bottom: 12px;
 }
 .minimal-radio-card {
@@ -13805,8 +13805,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex: 1 1 auto;
   flex-direction: column;
   gap: 6px;
-  height: 152px;
-  min-height: 152px;
+  height: 124px;
+  min-height: 124px;
   width: 100%;
   min-width: 0;
   padding: 8px 14px;
@@ -13821,13 +13821,21 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 254px;
 }
 .minimal-radio-card__station-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
   min-width: 0;
-  min-height: 29px;
-  padding-bottom: 6px;
+  min-height: 70px;
+  padding-bottom: 0;
+}
+.minimal-radio-card__crossing-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 1px solid hsl(var(--border) / .7);
 }
 .minimal-radio-card__station-identity {
   display: flex;
@@ -13937,6 +13945,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   white-space: nowrap;
   cursor: pointer;
 }
+.minimal-radio-card__crossing-column .minimal-radio-card__crossing {
+  width: 100%;
+}
 .minimal-radio-card__crossing.is-live {
   color: hsl(var(--accent));
 }
@@ -13989,7 +14000,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album-grid {
   display: grid;
   align-items: flex-start;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(80px, 84px);
   gap: 0;
   width: 100%;
   min-width: 0;
@@ -14006,7 +14017,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album-grid::-webkit-scrollbar { display: none; }
 .minimal-radio-card.is-expanded .minimal-radio-card__album-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   flex: 0 0 auto;
   height: auto;
   min-height: 0;
@@ -14098,8 +14109,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     min-height: 616px;
   }
   .minimal-radio-card {
-    height: 152px;
-    min-height: 152px;
+    height: 124px;
+    min-height: 124px;
     padding: 8px 14px;
   }
   .minimal-radio-card__station-identity h2 {
