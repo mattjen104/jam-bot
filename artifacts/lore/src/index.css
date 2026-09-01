@@ -13106,11 +13106,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-height: 38px;
 }
 .minimal-radio-card__station-title {
-  margin: 0 0 3px;
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  left: 3px;
+  z-index: 1;
+  margin: 0;
+  padding: 4px 5px;
+  overflow: hidden;
+  border: 1px solid hsl(0 0% 100% / .2);
+  border-radius: 3px;
+  background: hsl(0 0% 0% / .82);
   color: hsl(var(--foreground));
-  font: 600 12px/1.2 var(--app-font-mono);
+  font: 600 8px/1.1 var(--app-font-mono);
   letter-spacing: 0.08em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .minimal-radio-card__station-identity {
   display: flex;
@@ -13125,6 +13137,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 12px;
   min-width: 0;
   padding: 10px 16px;
+}
+.minimal-radio-card__station-mark-wrap {
+  position: relative;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
 }
 .minimal-radio-card__station-mark {
   width: 52px;
@@ -13503,9 +13521,18 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     height: 36px;
     border-radius: 7px;
   }
+  .minimal-radio-card__station-mark-wrap {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+  }
   .minimal-radio-card__station-title {
-    font-size: 9px;
-    letter-spacing: .05em;
+    right: 2px;
+    bottom: 2px;
+    left: 2px;
+    padding: 3px 2px;
+    font-size: 6px;
+    letter-spacing: .03em;
   }
   .minimal-radio-card__station-location {
     font-size: 8px;
