@@ -269,6 +269,12 @@ function MinimalRadioCard({
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
     >
+      <section className="minimal-radio-card__track" aria-label="Current track">
+        <div className="minimal-radio-card__eyebrow">Now playing</div>
+        <strong>{track?.artist || "The station is live"}</strong>
+        {showName ? <small>{showName}</small> : null}
+      </section>
+
       <button
         type="button"
         className="minimal-radio-card__station"
@@ -296,12 +302,6 @@ function MinimalRadioCard({
           </h2>
         </div>
       </button>
-
-      <section className="minimal-radio-card__track" aria-label="Current track">
-        <div className="minimal-radio-card__eyebrow">Now playing</div>
-        <strong>{track?.artist || "The station is live"}</strong>
-        {showName ? <small>{showName}</small> : null}
-      </section>
 
       <section className="minimal-radio-card__albums" aria-label="Lifetime crossings with this station">
         <div className="minimal-radio-card__album-heading">
