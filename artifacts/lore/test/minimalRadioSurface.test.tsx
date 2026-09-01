@@ -132,7 +132,11 @@ describe("MinimalRadioSurface", () => {
       .toContain("Alpha track");
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).className)
       .toContain("minimal-radio-card__now");
-    expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(2);
+    expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "Tune in to Alpha" }).parentElement
+        ?.classList.contains("minimal-radio-card__station-column"),
+    ).toBe(true);
     expect(document.querySelector("[data-station-mark='logo']")).toBeNull();
     expect(screen.queryByText(/matched|shown/i)).toBeNull();
     expect(screen.getAllByTestId("minimal-radio-crossing")).toHaveLength(2);

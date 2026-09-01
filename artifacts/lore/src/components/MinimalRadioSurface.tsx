@@ -286,11 +286,33 @@ function MinimalRadioCard({
       aria-label={`${row.ds.station.name} station card`}
     >
       <header className="minimal-radio-card__station-line">
-        <div className="minimal-radio-card__station-identity">
-          <h2 aria-label={row.ds.station.name}>{row.ds.station.name}</h2>
-          {stationCity(row.ds.station) ? (
-            <span>{stationCity(row.ds.station)}</span>
-          ) : null}
+        <div className="minimal-radio-card__station-column">
+          <div className="minimal-radio-card__station-identity">
+            <h2 aria-label={row.ds.station.name}>{row.ds.station.name}</h2>
+            {stationCity(row.ds.station) ? (
+              <span>{stationCity(row.ds.station)}</span>
+            ) : null}
+          </div>
+
+          <button
+            type="button"
+            className={`minimal-radio-card__now${!track ? " is-empty" : ""}`}
+            disabled={!playable}
+            onClick={play}
+            aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
+          >
+            <span className="minimal-radio-card__now-label">Now</span>
+            <span className="minimal-radio-card__now-copy">
+              {track && artist && title ? (
+                <>
+                  <strong>{artist}</strong>
+                  <span> — {title}</span>
+                </>
+              ) : (
+                nowPlayingLabel
+              )}
+            </span>
+          </button>
         </div>
         <div className="minimal-radio-card__crossing-column">
           <button
@@ -343,27 +365,6 @@ function MinimalRadioCard({
           </section>
         </div>
       </header>
-
-      <button
-        type="button"
-        className={`minimal-radio-card__now${!track ? " is-empty" : ""}`}
-        disabled={!playable}
-        onClick={play}
-        aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
-      >
-        <span className="minimal-radio-card__now-label">Now</span>
-        <span className="minimal-radio-card__now-copy">
-          {track && artist && title ? (
-            <>
-              <strong>{artist}</strong>
-              <span> — {title}</span>
-            </>
-          ) : (
-            nowPlayingLabel
-          )}
-        </span>
-      </button>
-
     </article>
   );
 }

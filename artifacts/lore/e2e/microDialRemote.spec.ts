@@ -258,7 +258,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
     expect(collapsed.albumWidths).toHaveLength(1);
     expect(collapsed.albumWidths[0]).toBeGreaterThan(80);
-    expect(collapsed.cardHeight).toBeLessThan(180);
+    expect(collapsed.cardHeight).toBeLessThan(120);
     await expect(card.locator(".minimal-radio-card__album")).toHaveCount(1);
     await expect(card.locator(".minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
     await expect(card.locator(".minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");
