@@ -9,13 +9,11 @@ import {
   ExternalLink,
   Heart,
   Radio,
-  SkipForward,
 } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
 import { useMutationKeep } from "../lib/meHooks";
-import { useDialSkipped } from "../lib/dialFilterState";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError, RUMOURS } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
@@ -239,7 +237,6 @@ function MinimalRadioCard({
 }) {
   const { radio } = usePlayer();
   const keep = useMutationKeep();
-  const { isSkipped, toggleSkip } = useDialSkipped();
   const track = liveTrack(row);
   const albums = useMemo(
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
@@ -292,6 +289,15 @@ function MinimalRadioCard({
         <strong>{track?.title || "Waiting for track metadata"}</strong>
         <span>{track?.artist || "The station is live"}</span>
         {row.show?.showName ? <small>{row.show.showName}</small> : null}
+        <button
+          type="button"
+          className="minimal-radio-card__play"
+          disabled={!playable}
+          onClick={play}
+          aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
+        >
+          {isPlaying ? "Pause" : "Tune in"}
+        </button>
       </section>
 
       <section className="minimal-radio-card__albums" aria-label="Lifetime crossings with this station">
@@ -351,24 +357,8 @@ function MinimalRadioCard({
           <ExternalLink size={14} aria-hidden="true" />
           <span>station</span>
         </a>
-        <button
-          type="button"
-          className="minimal-radio-card__play"
-          disabled={!playable}
-          onClick={play}
-          aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
-        >
-          {isPlaying ? "Pause" : "Tune in"}
-        </button>
         <button type="button" onClick={handleKeep} disabled={!track?.mbid || keep.isPending || kept} aria-pressed={kept}>
           <Heart size={14} aria-hidden="true" /> {kept ? "Kept" : keep.isPending ? "Keeping…" : "Keep"}
-        </button>
-        <button
-          type="button"
-          onClick={() => toggleSkip(row.ds.station.slug)}
-          aria-pressed={isSkipped(row.ds.station.slug)}
-        >
-          <SkipForward size={14} aria-hidden="true" /> {isSkipped(row.ds.station.slug) ? "Skipped" : "Skip"}
         </button>
       </div>
     </article>

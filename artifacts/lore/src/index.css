@@ -13074,8 +13074,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio__hero-slide {
   display: flex;
-  height: 132px;
-  min-height: 132px;
+  height: 112px;
+  min-height: 112px;
   min-width: 0;
   padding-bottom: 8px;
   box-sizing: border-box;
@@ -13151,7 +13151,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 12px 16px;
+  padding: 0 16px;
 }
 .minimal-radio-card__station-mark-wrap {
   position: relative;
@@ -13366,7 +13366,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 10px 14px;
+  gap: 2px;
+  padding: 8px 14px;
   border-left: 1px solid hsl(var(--border) / .65);
   background: hsl(var(--secondary) / .45);
 }
@@ -13421,7 +13422,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font: 11px/1.2 var(--app-font-mono);
 }
 .minimal-radio-card__play {
-  min-height: 28px;
+  align-self: flex-start;
+  min-height: 24px;
   border: 0;
   border-radius: 999px;
   padding: 0 11px;
@@ -13438,7 +13440,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   justify-content: center;
   flex-direction: column;
   gap: 4px;
-  min-width: 76px;
+  min-width: 64px;
   padding: 8px 10px;
   border-left: 1px solid hsl(var(--border) / .65);
 }
@@ -13515,13 +13517,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .minimal-radio-card__heading,
   .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }
   .minimal-radio__hero-region {
-    height: min(512px, calc(100dvh - var(--shell-h, 0px) - 170px));
-    min-height: 480px;
+    height: min(400px, calc(100dvh - var(--shell-h, 0px) - 220px));
+    min-height: 360px;
   }
   .minimal-radio__hero-slide {
-    height: 120px;
-    min-height: 120px;
-    padding-bottom: 6px;
+    height: 80px;
+    min-height: 80px;
+    padding-bottom: 8px;
   }
   .minimal-radio-card {
     grid-template-columns: minmax(112px, 1.15fr) minmax(92px, 1fr) minmax(72px, .8fr) 56px;
@@ -13529,7 +13531,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .minimal-radio-card__station {
     gap: 6px;
-    padding: 7px;
+    padding: 0 7px;
   }
   .minimal-radio-card__station-mark {
     width: 72px;
@@ -13582,7 +13584,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     -webkit-line-clamp: 3;
   }
   .minimal-radio-card__track {
-    padding: 7px 8px;
+    padding: 6px 8px;
   }
   .minimal-radio-card__track > .minimal-radio-card__eyebrow {
     font-size: 7px;
@@ -13613,8 +13615,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     height: 10px;
   }
   .minimal-radio-card__play {
-    width: 100%;
-    min-height: 22px;
+    width: fit-content;
+    min-height: 20px;
     font-size: 7px;
   }
 }
