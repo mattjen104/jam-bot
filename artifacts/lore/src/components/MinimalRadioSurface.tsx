@@ -325,7 +325,6 @@ function MinimalRadioCard({
       <div className="minimal-radio-card__broadcast">
         <section className="minimal-radio-card__track" aria-label="Current track">
           <div className="minimal-radio-card__track-copy">
-            <span className="minimal-radio-card__live"><Radio size={13} aria-hidden="true" /> ON AIR</span>
             <h2 className="minimal-radio-card__station-title--sr">{row.ds.station.name}</h2>
             <div className="minimal-radio-card__eyebrow">Now playing</div>
             <strong>{track?.title || "Waiting for track metadata"}</strong>
@@ -587,8 +586,8 @@ export function MinimalRadioSurface({
             ) : null}
             {candidates.length > 1 ? (
               <div className="minimal-radio__station-rail-shell" role="group" aria-label="Other stations">
-                <button type="button" className="minimal-radio__station-chevron" onClick={() => selectOffset(-1)} aria-label="Previous station">
-                  <ChevronUp size={20} aria-hidden="true" />
+                <button type="button" className="minimal-radio__station-chevron" onClick={() => selectOffset(1)} aria-label="Next station">
+                  <ChevronDown size={20} aria-hidden="true" />
                 </button>
                 <div className="minimal-radio__remote" data-testid="minimal-radio-scrubber">
                   {railCandidates.slice(1).map((row) => {
@@ -605,8 +604,8 @@ export function MinimalRadioSurface({
                     );
                   })}
                 </div>
-                <button type="button" className="minimal-radio__station-chevron" onClick={() => selectOffset(1)} aria-label="Next station">
-                  <ChevronDown size={20} aria-hidden="true" />
+                <button type="button" className="minimal-radio__station-chevron" onClick={() => selectOffset(-1)} aria-label="Previous station">
+                  <ChevronUp size={20} aria-hidden="true" />
                 </button>
               </div>
             ) : null}
