@@ -109,7 +109,6 @@ interface FirstPlayHistoryItem {
   title: string;
   artist: string;
   artworkUrl: string | null;
-  playedAt: string;
   station: { slug: string; name: string };
 }
 
@@ -123,55 +122,7 @@ type CrossingSpin = Pick<
   | "isLibraryHit"
   | "isArtistHit"
   | "resolving"
-  | "playedAt"
-  | "sourcePlayedAt"
 >;
-
-function mostRecentCrossingPlayedAt(
-  row: DialLaneRow,
-  stationSpins: readonly CrossingSpin[],
-  historyPlayedAt: string | null,
-): string | null {
-  const track = liveTrack(row);
-  const candidates = [
-    historyPlayedAt,
-    ...(
-      track && !track.resolving && (track.isLibraryHit || track.isArtistHit)
-        ? [track.sourcePlayedAt ?? track.playedAt]
-        : []
-    ),
-    ...stationSpins
-      .filter((spin) => !spin.resolving && (spin.isLibraryHit || spin.isArtistHit))
-      .map((spin) => spin.sourcePlayedAt ?? spin.playedAt),
-    ...[...(row.show?.spins ?? [])]
-      .filter((spin) => !spin.resolving && (spin.isLibraryHit || spin.isArtistHit))
-      .map((spin) => spin.sourcePlayedAt ?? spin.playedAt),
-  ].filter((value): value is string => Boolean(value));
-
-  return candidates.reduce<string | null>((latest, value) => {
-    const timestamp = new Date(value).getTime();
-    if (!Number.isFinite(timestamp)) return latest;
-    if (!latest || timestamp > new Date(latest).getTime()) return value;
-    return latest;
-  }, null);
-}
-
-function playedAtParts(value: string | null): { date: string; time: string } | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return null;
-  return {
-    date: date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }),
-    time: date.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-  };
-}
 
 function crossingAlbums(
   row: DialLaneRow,
@@ -314,8 +265,6 @@ function MinimalRadioCard({
   const [albumsExpanded, setAlbumsExpanded] = useState(false);
   const [firstPlayExpanded, setFirstPlayExpanded] = useState(false);
   const [firstPlayAlbumItems, setFirstPlayAlbumItems] = useState<CrossingAlbum[]>([]);
-  const [latestFirstPlayAt, setLatestFirstPlayAt] = useState<string | null>(null);
-  const [latestCrossingHistoryAt, setLatestCrossingHistoryAt] = useState<string | null>(null);
   const track = liveTrack(row);
   const albums = useMemo(
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
@@ -328,38 +277,20 @@ function MinimalRadioCard({
     const timeoutId = setTimeout(() => controller.abort(), 8_000);
     const station = encodeURIComponent(row.ds.station.slug);
 
-    const fetchHistory = async (filter: "crossings" | "firstPlays", limit: number) => {
-      const response = await fetch(
-        `/api/player/history?scope=lifetime&filter=${filter}&order=desc&limit=${limit}&station=${station}`,
-        { signal: controller.signal },
-      );
-      if (!response.ok) throw new Error(`${filter} history unavailable`);
-      return response.json() as Promise<{ items?: FirstPlayHistoryItem[] }>;
-    };
-
-    const firstPlayRequest = fetchHistory("firstPlays", MAX_CROSSING_ALBUMS)
+    void fetch(
+      `/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=${MAX_CROSSING_ALBUMS}&station=${station}`,
+      { signal: controller.signal },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error("first plays unavailable");
+        return response.json() as Promise<{ items?: FirstPlayHistoryItem[] }>;
+      })
       .then((data) => {
-        if (!cancelled) {
-          setFirstPlayAlbumItems(firstPlayAlbums(data.items ?? []));
-          setLatestFirstPlayAt(data.items?.[0]?.playedAt ?? null);
-        }
+        if (!cancelled) setFirstPlayAlbumItems(firstPlayAlbums(data.items ?? []));
       })
       .catch(() => {
-        if (!cancelled) {
-          setFirstPlayAlbumItems([]);
-          setLatestFirstPlayAt(null);
-        }
-      });
-
-    const crossingRequest = fetchHistory("crossings", 1)
-      .then((data) => {
-        if (!cancelled) setLatestCrossingHistoryAt(data.items?.[0]?.playedAt ?? null);
+        if (!cancelled) setFirstPlayAlbumItems([]);
       })
-      .catch(() => {
-        if (!cancelled) setLatestCrossingHistoryAt(null);
-      });
-
-    void Promise.allSettled([firstPlayRequest, crossingRequest])
       .finally(() => clearTimeout(timeoutId));
 
     return () => {
@@ -377,13 +308,6 @@ function MinimalRadioCard({
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";
   const lifetimeCrossingCount = row.ds.lifetimeCrossings + row.ds.lifetimeArtistCrossings;
-  const latestCrossingAt = mostRecentCrossingPlayedAt(
-    row,
-    stationSpins,
-    latestCrossingHistoryAt,
-  );
-  const crossingPlayedAt = playedAtParts(latestCrossingAt);
-  const firstPlayPlayedAt = playedAtParts(latestFirstPlayAt);
   const artist = track?.artist?.trim() || "";
   const title = track?.title?.trim() || "";
   const nowPlayingLabel = !track
@@ -420,26 +344,12 @@ function MinimalRadioCard({
               type="button"
               className="minimal-radio-card__crossing"
               data-testid="minimal-radio-crossing"
-              aria-label={`${lifetimeCrossingCount} lifetime crossings${
-                crossingPlayedAt
-                  ? `, most recent ${crossingPlayedAt.date} at ${crossingPlayedAt.time}`
-                  : ""
-              }`}
+              aria-label={`${lifetimeCrossingCount} lifetime crossings`}
               aria-expanded={albumsExpanded}
               disabled={albums.length === 0}
               onClick={() => setAlbumsExpanded((expanded) => !expanded)}
             >
               <strong>{lifetimeCrossingCount}</strong>
-              <time dateTime={latestCrossingAt ?? undefined}>
-                {crossingPlayedAt ? (
-                  <>
-                    <span>{crossingPlayedAt.date}</span>
-                    <span>{crossingPlayedAt.time}</span>
-                  </>
-                ) : (
-                  <span>—</span>
-                )}
-              </time>
             </button>
           </div>
           <div className="minimal-radio-card__insight-heading-column">
@@ -447,26 +357,12 @@ function MinimalRadioCard({
               type="button"
               className="minimal-radio-card__first-plays"
               data-testid="minimal-radio-first-plays"
-              aria-label={`${row.ds.lifetimeFirstPlayCrossings} lifetime premieres${
-                firstPlayPlayedAt
-                  ? `, most recent ${firstPlayPlayedAt.date} at ${firstPlayPlayedAt.time}`
-                  : ""
-              }`}
+              aria-label={`${row.ds.lifetimeFirstPlayCrossings} lifetime premieres`}
               aria-expanded={firstPlayExpanded}
               disabled={firstPlayAlbumItems.length === 0}
               onClick={() => setFirstPlayExpanded((expanded) => !expanded)}
             >
               <strong>{row.ds.lifetimeFirstPlayCrossings}</strong>
-              <time dateTime={latestFirstPlayAt ?? undefined}>
-                {firstPlayPlayedAt ? (
-                  <>
-                    <span>{firstPlayPlayedAt.date}</span>
-                    <span>{firstPlayPlayedAt.time}</span>
-                  </>
-                ) : (
-                  <span>—</span>
-                )}
-              </time>
             </button>
           </div>
         </div>

@@ -127,7 +127,6 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByRole("heading", { name: "Alpha" }).textContent).toBe("Alpha");
     expect(screen.getByText("Alpha City")).toBeTruthy();
     expect(screen.queryByText("UK")).toBeNull();
-    expect(document.querySelectorAll(".minimal-radio-card__crossing time")).toHaveLength(2);
     expect(screen.getByText("Alpha artist")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).textContent)
       .toContain("Alpha track");
@@ -145,8 +144,7 @@ describe("MinimalRadioSurface", () => {
     expect(crossingHeaders.map((element) => element.querySelector("strong")?.textContent))
       .toEqual(["1", "5"]);
     expect(crossingHeaders.every((element) => (
-      element.querySelector("time") != null
-      && !element.textContent?.includes("crossing")
+      !element.textContent?.includes("crossing")
     ))).toBe(true);
 
     const hero = screen.getByTestId("minimal-radio-hero");
@@ -156,25 +154,22 @@ describe("MinimalRadioSurface", () => {
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the lifetime crossing badge and latest crossing timestamp", () => {
+  it("shows the lifetime crossing badge", () => {
     const station = row("alpha", "Alpha", false, 1);
     station.ds.crossings = 2;
-    const latestCrossing = crossingSpin(7);
 
     render(
       <MinimalRadioSurface
         rows={[station]}
         libraryItems={[]}
-        recentSpinsBySlug={new Map([["alpha", [latestCrossing]]])}
         preset="now"
       />,
     );
 
     const heading = screen.getByTestId("minimal-radio-crossing");
     expect(heading.querySelector("strong")?.textContent).toBe("1");
-    expect(heading.querySelector("time")?.getAttribute("datetime")).toBe(latestCrossing.playedAt);
     expect(heading.textContent).not.toContain("crossing");
-    expect(heading.getAttribute("aria-label")).toContain("1 lifetime crossings, most recent");
+    expect(heading.getAttribute("aria-label")).toBe("1 lifetime crossings");
     expect(
       screen.getByTestId("minimal-radio-crossing").parentElement
         ?.classList.contains("minimal-radio-card__insight-heading-column"),
@@ -290,12 +285,10 @@ describe("MinimalRadioSurface", () => {
     const firstPlays = await waitFor(() => {
       const heading = screen.getByTestId("minimal-radio-first-plays");
       expect(heading.querySelector("strong")?.textContent).toBe("4");
-      expect(heading.querySelector("time")?.getAttribute("datetime"))
-        .toBe("2026-08-29T15:30:00.000Z");
       return heading;
     });
-    expect(firstPlays.textContent).not.toContain("premieres");
-    expect(firstPlays.getAttribute("aria-label")).toContain("4 lifetime premieres, most recent");
+    expect(firstPlays.textContent).toBe("4");
+    expect(firstPlays.getAttribute("aria-label")).toBe("4 lifetime premieres");
     const firstPlayColumn = screen
       .getByTestId("minimal-radio-card")
       .querySelector(".minimal-radio-card__album-column--first-plays") as HTMLElement;

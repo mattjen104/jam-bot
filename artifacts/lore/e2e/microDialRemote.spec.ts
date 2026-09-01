@@ -305,10 +305,6 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
       .toHaveText("1");
     await expect(card.getByTestId("minimal-radio-first-plays").locator("strong"))
       .toHaveText("5");
-    await expect(card.getByTestId("minimal-radio-crossing").locator("time"))
-      .toHaveAttribute("datetime", NOW_PLAYING[0]!.playedAt);
-    await expect(card.getByTestId("minimal-radio-first-plays").locator("time"))
-      .toHaveAttribute("datetime", /2026-08-31/);
     await expect(card.getByTestId("minimal-radio-crossing")).not.toContainText("crossing");
     await expect(card.getByTestId("minimal-radio-first-plays")).not.toContainText("premieres");
 

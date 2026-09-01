@@ -14017,24 +14017,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-size: 12px;
   letter-spacing: -.02em;
 }
-.minimal-radio-card__crossing time,
-.minimal-radio-card__first-plays time {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-  color: hsl(var(--dim));
-  font: 500 8px/1.15 var(--app-font-mono);
-  letter-spacing: 0;
-  text-transform: none;
-}
-.minimal-radio-card__crossing time span,
-.minimal-radio-card__first-plays time span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .minimal-radio-card__crossing:focus-visible,
 .minimal-radio-card__first-plays:focus-visible {
   outline: 2px solid hsl(var(--accent) / .75);
