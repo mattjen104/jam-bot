@@ -216,6 +216,11 @@ describe("MinimalRadioSurface", () => {
     expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(2);
     expect(document.querySelectorAll(".minimal-radio-card__album-swatch")).toHaveLength(0);
     expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(2);
+    const crossingHeader = screen.getByTestId("minimal-radio-crossing");
+    expect(crossingHeader.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(crossingHeader);
+    expect(crossingHeader.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("minimal-radio-card").className).toContain("is-expanded");
   });
 
   it("uses station-level recent crossing spins when the saved cover is resolved", () => {

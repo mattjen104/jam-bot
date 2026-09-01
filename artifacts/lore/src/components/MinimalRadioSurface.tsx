@@ -256,6 +256,7 @@ function MinimalRadioCard({
   crossing: CrossingSummary;
 }) {
   const { radio } = usePlayer();
+  const [albumsExpanded, setAlbumsExpanded] = useState(false);
   const track = liveTrack(row);
   const albums = useMemo(
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
@@ -279,7 +280,7 @@ function MinimalRadioCard({
 
   return (
     <article
-      className="minimal-radio-card"
+      className={`minimal-radio-card${albumsExpanded && albums.length > 0 ? " is-expanded" : ""}`}
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
     >
@@ -312,17 +313,24 @@ function MinimalRadioCard({
         </span>
       </button>
 
-      <div
+      <button
+        type="button"
         className={`minimal-radio-card__crossing${recency.live ? " is-live" : ""}`}
         data-testid="minimal-radio-crossing"
         aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"}, ${crossing.label}`}
+        aria-expanded={albumsExpanded}
+        disabled={albums.length === 0}
+        onClick={() => setAlbumsExpanded((expanded) => !expanded)}
       >
         {recency.live ? <i aria-hidden="true" /> : null}
         <strong>{crossing.count}</strong>
         <span>{crossing.count === 1 ? "crossing" : "crossings"} · {crossing.label}</span>
-      </div>
+      </button>
 
-      <section className="minimal-radio-card__albums" aria-label="Crossing album covers">
+      <section
+        className={`minimal-radio-card__albums${albums.length === 0 ? " is-empty" : ""}`}
+        aria-label="Crossing album covers"
+      >
         {albums.length > 0 ? (
           <div className="minimal-radio-card__album-grid">
             {albums.map((album) => {
