@@ -13487,7 +13487,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .front-door-modes {
     position: fixed;
     left: 50%;
-    bottom: calc(var(--shell-h, 0px) + 32px);
+    bottom: calc(var(--shell-h, 0px) + 16px);
     z-index: 35;
     align-self: auto;
     transform: translateX(-50%);
@@ -13518,16 +13518,16 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     align-items: center;
     justify-content: center;
     gap: 8px;
-    height: 50px;
-    min-width: 132px;
-    padding: 0 18px 0 14px;
+    height: 38px;
+    min-width: 0;
+    padding: 0 14px 0 12px;
     border: 1px solid hsl(var(--foreground) / 0.3);
     border-radius: 999px;
     background: hsl(var(--foreground));
     color: hsl(var(--background));
     box-shadow: 0 8px 24px hsl(0 0% 0% / 0.42);
     font-family: var(--app-font-display);
-    font-size: 16px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0;
   }
