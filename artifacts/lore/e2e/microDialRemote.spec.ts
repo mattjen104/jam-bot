@@ -29,8 +29,7 @@ function makeStation(index: number) {
     logoUrl: null,
     attribution: true,
     tags: null,
-    // Micro-key paging is independent of the category-first card view.
-    stationCategories: [],
+    stationCategories: [index % 2 === 0 ? "campus" : "anchor"],
     mayHaveAds: false,
     votes: 0,
     clickcount: 0,
@@ -182,19 +181,33 @@ async function installRoutes(
     const stationSlug = url.searchParams.get("station") ?? "";
     const filter = url.searchParams.get("filter");
     const station = STATIONS.find((candidate) => candidate.slug === stationSlug);
+    const requestedCategories = new Set(
+      (url.searchParams.get("categories") ?? "").split(",").filter(Boolean),
+    );
+    const globalStations = STATIONS
+      .filter((candidate) => (
+        requestedCategories.size === 0
+        || candidate.stationCategories.some((category) => requestedCategories.has(category))
+      ))
+      .slice(0, 10);
+    const historyStations = station ? [station] : globalStations;
     return route.fulfill({
       json: {
-        items: station
-          ? [1, 2, 3, 4, 5].map((ordinal) => ({
-              id: station.id * 100 + ordinal,
-              mbid: `${station.slug}-${filter}-${ordinal}`,
+        items: historyStations.flatMap((historyStation) => {
+          const count = station ? 5 : 1;
+          return Array.from({ length: count }, (_, itemIndex) => {
+            const ordinal = itemIndex + 1;
+            return {
+              id: historyStation.id * 100 + ordinal,
+              mbid: `${historyStation.slug}-${filter}-${ordinal}`,
               title: filter === "crossings" ? `Crossing ${ordinal}` : `First Play ${ordinal}`,
               artist: filter === "crossings" ? `Known Artist ${ordinal}` : `New Artist ${ordinal}`,
-              artworkUrl: `https://art.example.test/${station.slug}-${filter}-${ordinal}.jpg`,
+              artworkUrl: `https://art.example.test/${historyStation.slug}-${filter}-${ordinal}.jpg`,
               playedAt: new Date(Date.UTC(2026, 7, 31, 12, 30 - ordinal)).toISOString(),
-              station: { slug: station.slug, name: station.name },
-            }))
-          : [],
+              station: { slug: historyStation.slug, name: historyStation.name },
+            };
+          });
+        }),
       },
     });
   });
@@ -225,6 +238,8 @@ async function loadStationDial(
   await expect(page.getByTestId("minimal-radio-surface")).toBeVisible({
     timeout: 20_000,
   });
+  await page.getByTestId("minimal-radio-cards-toggle").click();
+
   const cards = page.getByTestId("minimal-radio-card");
   await expect(cards).toHaveCount(STATION_COUNT);
   const fullyVisibleRows = await cards.evaluateAll((nodes) => {
@@ -240,6 +255,32 @@ async function loadStationDial(
 }
 
 test.describe("Minimal Radio remote — real browser navigation", () => {
+  test("category overview groups live stations and scopes global history", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installRoutes(page);
+    await page.goto("/lore/");
+
+    await expect(page.getByTestId("minimal-radio-overview")).toBeVisible();
+    await expect(page.getByTestId("overview-category-campus")).toContainText("Campus Radio");
+    await expect(page.getByTestId("overview-category-anchor")).toContainText("Anchor Stations");
+    await expect(page.getByTestId("overview-category-campus")).toContainText("Artist 1");
+    await expect(page.getByTestId("overview-category-campus")).not.toContainText("Track 1");
+    await expect(page.getByTestId("overview-history-crossings-item")).toHaveCount(10);
+    await expect(page.getByTestId("overview-history-firstPlays-item")).toHaveCount(10);
+
+    await page.getByTestId("overview-scope-campus").click();
+
+    await expect(page.getByTestId("overview-category-campus")).toBeVisible();
+    await expect(page.getByTestId("overview-category-anchor")).toHaveCount(0);
+    await expect(page.getByTestId("overview-history-crossings-item")).toHaveCount(8);
+    await expect(page.getByTestId("overview-history-firstPlays-item")).toHaveCount(8);
+    await expect(page.getByTestId("overview-history-crossings")).toContainText("Campus Radio");
+
+    await page.getByRole("button", { name: "View Campus Radio cards" }).click();
+    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(8);
+    await expect(page.getByTestId("minimal-radio-hero-card-micro-01")).toContainText("Station 01");
+  });
+
   test("390×844: keeps the card stack reachable and selects stations without playing", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);

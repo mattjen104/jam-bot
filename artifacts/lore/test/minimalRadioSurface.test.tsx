@@ -5,19 +5,28 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { DialSpin } from "../src/hooks/useDialData";
 import type { LibraryItem } from "../src/lib/meHooks";
+import type { StationCategory } from "../src/lib/dialCategories";
 import { MinimalRadioSurface } from "../src/components/MinimalRadioSurface";
 
-const { toggle } = vi.hoisted(() => ({
+const { toggle, startReplay } = vi.hoisted(() => ({
   toggle: vi.fn(),
+  startReplay: vi.fn(),
 }));
 
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: () => ({
     radio: { station: null, status: "idle", toggle },
+    ride: { startReplay },
   }),
 }));
 
-function row(slug: string, name: string, nowHit: boolean, lifetime: number): DialLaneRow {
+function row(
+  slug: string,
+  name: string,
+  nowHit: boolean,
+  lifetime: number,
+  category?: StationCategory,
+): DialLaneRow {
   return {
     ds: {
       station: {
@@ -29,6 +38,7 @@ function row(slug: string, name: string, nowHit: boolean, lifetime: number): Dia
         country: "UK",
         streamUrl: `https://stream.example/${slug}`,
         relayUrl: null,
+        stationCategories: category ? [category] : [],
       },
       isLive: true,
       shows: [],
@@ -111,6 +121,145 @@ afterEach(() => {
 });
 
 describe("MinimalRadioSurface", () => {
+  it("groups live stations and switches global history into a category view", async () => {
+    const historyItems = [
+      {
+        id: 801,
+        mbid: "alpha-history",
+        title: "Alpha history",
+        artist: "Alpha archive artist",
+        artworkUrl: "https://art.example/alpha.jpg",
+        station: { slug: "alpha", name: "Alpha" },
+      },
+      {
+        id: 802,
+        mbid: "beta-history",
+        title: "Beta history",
+        artist: "Beta archive artist",
+        artworkUrl: "https://art.example/beta.jpg",
+        station: { slug: "beta", name: "Beta" },
+      },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: historyItems }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const categoryByStationSlug = new Map<string, StationCategory>([
+      ["alpha", "campus"],
+      ["beta", "anchor"],
+    ]);
+
+    render(
+      <MinimalRadioSurface
+        rows={[
+          row("alpha", "Alpha", true, 2, "campus"),
+          row("beta", "Beta", true, 2, "anchor"),
+        ]}
+        libraryItems={[]}
+        categoryByStationSlug={categoryByStationSlug}
+        preset="now"
+      />,
+    );
+
+    expect(screen.getByTestId("minimal-radio-overview")).toBeTruthy();
+    expect(screen.getByTestId("overview-category-campus")).toBeTruthy();
+    expect(screen.getByTestId("overview-category-anchor")).toBeTruthy();
+    expect(screen.getByLabelText("Tune in to Alpha, playing Alpha artist")).toBeTruthy();
+    expect(screen.queryByText("Alpha track")).toBeNull();
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("overview-history-crossings"))
+        .getAllByTestId("overview-history-crossings-item")).toHaveLength(2);
+      expect(within(screen.getByTestId("overview-history-firstPlays"))
+        .getAllByTestId("overview-history-firstPlays-item")).toHaveLength(2);
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).every((url) => !url.includes("station=")))
+      .toBe(true);
+
+    fireEvent.click(screen.getByTestId("overview-scope-campus"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("overview-category-anchor")).toBeNull();
+      expect(within(screen.getByTestId("overview-history-crossings"))
+        .getAllByTestId("overview-history-crossings-item")).toHaveLength(1);
+      expect(within(screen.getByTestId("overview-history-firstPlays"))
+        .getAllByTestId("overview-history-firstPlays-item")).toHaveLength(1);
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url)))
+      .toContain("/api/player/history?scope=7d&filter=crossings&order=desc&limit=60&categories=campus");
+
+    fireEvent.click(
+      within(screen.getByTestId("overview-category-campus"))
+        .getByRole("button", { name: "View Campus Radio cards" }),
+    );
+    expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
+  });
+
+  it("fetches category premieres beyond the unfiltered home page", async () => {
+    const globalItems = Array.from({ length: 18 }, (_, index) => ({
+      id: 900 + index,
+      mbid: `anchor-${index}`,
+      title: `Anchor premiere ${index}`,
+      artist: `Anchor artist ${index}`,
+      artworkUrl: null,
+      station: { slug: "beta", name: "Beta" },
+    }));
+    const campusItem = {
+      id: 999,
+      mbid: "campus-beyond-global-page",
+      title: "Campus premiere",
+      artist: "Campus archive artist",
+      artworkUrl: null,
+      station: { slug: "alpha", name: "Alpha" },
+    };
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => ({
+      ok: true,
+      json: async () => ({
+        items:
+          input.includes("filter=firstPlays") && input.includes("categories=campus")
+            ? [campusItem]
+            : input.includes("filter=firstPlays")
+              ? globalItems
+              : [],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MinimalRadioSurface
+        rows={[
+          row("alpha", "Alpha", true, 2, "campus"),
+          row("beta", "Beta", true, 2, "anchor"),
+        ]}
+        libraryItems={[]}
+        categoryByStationSlug={new Map([
+          ["alpha", "campus"],
+          ["beta", "anchor"],
+        ])}
+        preset="now"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("overview-history-firstPlays"))
+        .queryByText("Campus archive artist")).toBeNull();
+      expect(within(screen.getByTestId("overview-history-firstPlays"))
+        .getAllByTestId("overview-history-firstPlays-item")).toHaveLength(18);
+    });
+
+    fireEvent.click(screen.getByTestId("overview-scope-campus"));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("overview-history-firstPlays"))
+        .getByText("Campus archive artist")).toBeTruthy();
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+      "/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&home=1&categories=campus",
+    );
+  });
+
   it("renders artist-only Now rows, keeps identity first, and tunes from Now", () => {
     render(
       <MinimalRadioSurface
@@ -121,6 +270,8 @@ describe("MinimalRadioSurface", () => {
         onToggleCategory={vi.fn()}
       />,
     );
+
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
 
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(2);
     expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
@@ -164,6 +315,8 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
+
     const heading = screen.getByTestId("minimal-radio-crossing");
     expect(heading.querySelector("strong")?.textContent).toBe("1");
     expect(heading.textContent).not.toContain("crossing");
@@ -183,6 +336,8 @@ describe("MinimalRadioSurface", () => {
     render(
       <MinimalRadioSurface rows={[station]} libraryItems={[]} preset="now" />,
     );
+
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
 
     expect(screen.getByText("Not broadcasting")).toBeTruthy();
     expect(screen.queryByText("Quiet track")).toBeNull();
@@ -244,6 +399,8 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
+
     const crossingColumn = document.querySelector(".minimal-radio-card__album-column--crossings");
     expect(crossingColumn).toBeTruthy();
     const albumLinks = within(crossingColumn as HTMLElement).getAllByRole("link", { name: /^Open / });
@@ -303,6 +460,8 @@ describe("MinimalRadioSurface", () => {
 
     render(<MinimalRadioSurface rows={[station]} libraryItems={[]} preset="now" />);
 
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
+
     const firstPlays = await waitFor(() => {
       const heading = screen.getByTestId("minimal-radio-first-plays");
       expect(heading.querySelector("strong")?.textContent).toBe("4");
@@ -339,6 +498,8 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
+
     expect(
       screen.getByRole("link", { name: "Open Album 7 by Artist 7" }).getAttribute("href"),
     ).toBe("/album/release-7");
@@ -353,6 +514,7 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
     expect(screen.queryAllByTestId("minimal-radio-card")).toHaveLength(0);
     expect(screen.getByTestId("minimal-radio-no-candidates")).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-no-candidates").textContent)
@@ -368,6 +530,7 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
     expect(screen.queryByTestId("minimal-radio-card")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
     expect(screen.getByTestId("minimal-radio-card")).toBeTruthy();

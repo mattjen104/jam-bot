@@ -83,9 +83,10 @@ router.get("/player/history", h(async (req, res) => {
     return res.status(400).json({ error: "Invalid history cursor" });
   }
 
-  // This narrow public fast lane is only for the home rail. A request that
-  // merely happens to carry `surface=home` must keep the regular archive
-  // semantics, including cursoring and listener personalization.
+  // This narrow public fast lane is only for the home rail. It may be scoped
+  // to editorial station categories, but a request that merely happens to
+  // carry `surface=home` must keep the regular archive semantics, including
+  // cursoring and listener personalization.
   const isHomeFirstPlayRail =
     (req.query.home === "1" || req.query.surface === "home") &&
     scope === "7d" &&
@@ -93,7 +94,6 @@ router.get("/player/history", h(async (req, res) => {
     newestFirst &&
     limit === 18 &&
     stationSlug == null &&
-    categories.length === 0 &&
     before == null &&
     beforeId == null &&
     typeof req.query.snapshot !== "string";
@@ -112,7 +112,7 @@ router.get("/player/history", h(async (req, res) => {
     : null;
 
   let stationIds: number[] | null = null;
-  if (!useHomeFastLane) {
+  if (!useHomeFastLane || categories.length > 0) {
     const stationRows = await historyDb.select().from(stationsTable).where(eq(stationsTable.hidden, false));
     const eligibleStations = stationRows.filter((station) => {
       if (stationSlug && station.slug !== stationSlug) return false;
@@ -132,7 +132,7 @@ router.get("/player/history", h(async (req, res) => {
     scope === "24h" ? new Date(snapshot.getTime() - 24 * 60 * 60 * 1000) :
     scope === "7d" ? new Date(snapshot.getTime() - 7 * 24 * 60 * 60 * 1000) : null;
   const predicates = [
-    useHomeFastLane
+    useHomeFastLane && categories.length === 0
       ? eq(stationsTable.hidden, false)
       : inArray(spinsTable.stationId, stationIds!),
     isNotNull(spinsTable.mbid),

@@ -134,6 +134,15 @@ export default function SplitHome() {
       .filter((row) => row.ds.isLive),
     [stations],
   );
+  const categoryByStationSlug = useMemo(
+    () => new Map(
+      stations.flatMap((station) => {
+        const category = station.station.stationCategories?.[0] as StationCategory | undefined;
+        return category ? [[station.station.slug, category] as const] : [];
+      }),
+    ),
+    [stations],
+  );
   return (
     <main className="split-home split-home--front-door">
       <div className="split-home__front-door-shell">
@@ -222,6 +231,7 @@ export default function SplitHome() {
                 rows={rows}
                 libraryItems={libraryItems}
                 recentSpinsBySlug={spinsBySlug}
+                categoryByStationSlug={categoryByStationSlug}
                 preset="now"
                 activeCategories={activeCategories}
                 onToggleCategory={handleToggleCategory}

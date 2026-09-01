@@ -6,7 +6,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Grid2X2, Radio, SlidersHorizontal } from "lucide-react";
+import { Grid2X2, Radio, SlidersHorizontal, LayoutList, GalleryVerticalEnd } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
@@ -31,6 +31,7 @@ interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
   libraryItems: LibraryItem[];
   recentSpinsBySlug?: ReadonlyMap<string, readonly CrossingSpin[]>;
+  categoryByStationSlug?: ReadonlyMap<string, StationCategory>;
   preset: RadioPreset;
   activeCategories?: ReadonlySet<StationCategory>;
   onToggleCategory?: (category: StationCategory) => void;
@@ -103,12 +104,15 @@ interface CrossingAlbum {
   artworkUrl: string | null;
 }
 
-interface FirstPlayHistoryItem {
+interface HistoryItem {
   id: number;
   mbid: string;
   title: string;
   artist: string;
   artworkUrl: string | null;
+  releaseYear?: number | null;
+  releaseDate?: string | null;
+  playedAt?: string;
   station: { slug: string; name: string };
 }
 
@@ -232,7 +236,7 @@ function crossingAlbums(
   return albums.slice(0, MAX_CROSSING_ALBUMS);
 }
 
-function firstPlayAlbums(items: readonly FirstPlayHistoryItem[]): CrossingAlbum[] {
+function firstPlayAlbums(items: readonly HistoryItem[]): CrossingAlbum[] {
   const seen = new Set<string>();
   const albums: CrossingAlbum[] = [];
   for (const item of items) {
@@ -334,7 +338,7 @@ function MinimalRadioCard({
     )
       .then((response) => {
         if (!response.ok) throw new Error("first plays unavailable");
-        return response.json() as Promise<{ items?: FirstPlayHistoryItem[] }>;
+        return response.json() as Promise<{ items?: HistoryItem[] }>;
       })
       .then((data) => {
         if (!cancelled) setFirstPlayAlbumItems(firstPlayAlbums(data.items ?? []));
@@ -501,10 +505,348 @@ function MinimalRadioCard({
   );
 }
 
+function OverviewHistoryView({
+  filter,
+  title,
+  activeCategories,
+  focusedCategory,
+  categoryByStationSlug,
+}: {
+  filter: "crossings" | "firstPlays";
+  title: string;
+  activeCategories: ReadonlySet<StationCategory>;
+  focusedCategory: StationCategory | null;
+  categoryByStationSlug: ReadonlyMap<string, StationCategory>;
+}) {
+  const { ride } = usePlayer();
+  const [items, setItems] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const categoryFilter = useMemo(() => {
+    if (focusedCategory) return new Set<StationCategory>([focusedCategory]);
+    if (
+      activeCategories.size > 0
+      && activeCategories.size < STATION_CATEGORY_DEFINITIONS.length
+    ) {
+      return new Set(activeCategories);
+    }
+    return null;
+  }, [activeCategories, focusedCategory]);
+  const categoryKey = categoryFilter
+    ? [...categoryFilter].sort().join(",")
+    : "";
+  const requestUrl = filter === "firstPlays"
+    ? `/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=18&home=1${
+      categoryKey ? `&categories=${encodeURIComponent(categoryKey)}` : ""
+    }`
+    : `/api/player/history?scope=7d&filter=crossings&order=desc&limit=60${
+      categoryKey ? `&categories=${encodeURIComponent(categoryKey)}` : ""
+    }`;
+
+  useEffect(() => {
+    if (typeof fetch !== "function") return;
+    let cancelled = false;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8_000);
+
+    void fetch(requestUrl, {
+      signal: controller.signal
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("history unavailable");
+        return res.json() as Promise<{ items?: HistoryItem[] }>;
+      })
+      .then(data => {
+        if (!cancelled) {
+          setItems(data.items ?? []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setItems([]);
+          setLoading(false);
+        }
+      })
+      .finally(() => clearTimeout(timeoutId));
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [requestUrl]);
+
+  const visibleItems = categoryFilter
+    ? items.filter((item) => {
+        const category = categoryByStationSlug.get(item.station.slug);
+        return category ? categoryFilter.has(category) : false;
+      })
+    : items;
+  const scopeLabel = focusedCategory
+    ? STATION_CATEGORY_DEFINITIONS.find(({ cat }) => cat === focusedCategory)?.label
+      ?? focusedCategory
+    : "All stations";
+
+  return (
+    <section
+      className="overview-history"
+      data-testid={`overview-history-${filter}`}
+      aria-label={`${title}, ${scopeLabel}`}
+    >
+      <header className="overview-history__heading">
+        <h3 className="overview-history__title">{title}</h3>
+        <span className="overview-history__context">{scopeLabel}</span>
+      </header>
+      <div className="overview-history__scroll">
+        {loading ? (
+          <div className="overview-history__skeleton">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="overview-history__skeleton-card" />
+            ))}
+          </div>
+        ) : visibleItems.length === 0 ? (
+          <p className="overview-history__empty">
+            No {filter === "crossings" ? "crossings" : "premieres"} in this view yet.
+          </p>
+        ) : (
+          visibleItems.map(item => {
+            const category = categoryByStationSlug.get(item.station.slug);
+            const categoryLabel = category
+              ? STATION_CATEGORY_DEFINITIONS.find(({ cat }) => cat === category)?.shortLabel
+              : null;
+            return (
+            <button
+              type="button"
+              key={item.id}
+              className="overview-history__card"
+              data-testid={`overview-history-${filter}-item`}
+              aria-label={`Preview ${item.artist} — ${item.title}, heard on ${item.station.name}${
+                categoryLabel ? ` in ${categoryLabel}` : ""
+              }`}
+              onClick={() => {
+                ride.startReplay(
+                  [{
+                    mbid: item.mbid,
+                    title: item.title,
+                    artist: item.artist,
+                    artworkUrl: item.artworkUrl,
+                    links: [],
+                  }],
+                  `Historical · ${item.station.name}`,
+                  { timeOrientation: "curated", previewOnly: true, previewDwellMs: 7_000 }
+                );
+              }}
+            >
+              <img
+                src={item.artworkUrl ? proxyArtUrl(item.artworkUrl) || RUMOURS : RUMOURS}
+                alt=""
+                loading="lazy"
+                onError={onArtError}
+              />
+              <div className="overview-history__card-text">
+                <span className="overview-history__card-artist">{item.artist}</span>
+                <span className="overview-history__card-title">{item.title}</span>
+                <span className="overview-history__card-provenance">
+                  <span className="overview-history__card-station">{item.station.name}</span>
+                  <span aria-hidden="true"> · </span>
+                  <span>{categoryLabel ?? "Category unavailable"}</span>
+                </span>
+              </div>
+            </button>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OverviewStationRow({ row }: { row: DialLaneRow }) {
+  const { radio } = usePlayer();
+  const [logoFailed, setLogoFailed] = useState(false);
+  const track = liveTrack(row);
+  const artist = track?.artist?.trim() || "Not broadcasting";
+  const playable = resolvePlaybackSource(row.ds.station) != null;
+  const isPlaying =
+    radio.station?.slug === row.ds.station.slug && radio.status === "playing";
+  const showLogo = Boolean(row.ds.station.logoUrl) && !logoFailed;
+
+  return (
+    <button
+      type="button"
+      className={`overview-row ${isPlaying ? "is-playing" : ""}`}
+      onClick={() => playable && void radio.toggle(row.ds.station)}
+      disabled={!playable}
+      aria-label={`Tune in to ${row.ds.station.name}, playing ${artist}`}
+      aria-pressed={isPlaying}
+    >
+      <span className="overview-row__station">
+        <span className="overview-row__mark" aria-hidden="true">
+          {showLogo ? (
+            <img
+              src={row.ds.station.logoUrl ?? ""}
+              className="overview-row__logo"
+              alt=""
+              onError={() => setLogoFailed(true)}
+            />
+          ) : (
+            <span className="overview-row__logo-fallback">{row.ds.station.name}</span>
+          )}
+        </span>
+        <span className="overview-row__name">{row.ds.station.name}</span>
+      </span>
+      <span className="overview-row__artist">{artist}</span>
+    </button>
+  );
+}
+
+function OverviewCategoryGroup({
+  category,
+  title,
+  rows,
+  onDrillDown
+}: {
+  category: StationCategory | "other";
+  title: string;
+  rows: DialLaneRow[];
+  onDrillDown: () => void;
+}) {
+  return (
+    <section className="overview-group" data-testid={`overview-category-${category}`}>
+      <header className="overview-group__header">
+        <div>
+          <h3 className="overview-group__title">{title}</h3>
+          <span className="overview-group__count">
+            {rows.length} {rows.length === 1 ? "station" : "stations"} now
+          </span>
+        </div>
+        <button type="button" className="overview-group__drilldown" onClick={onDrillDown} aria-label={`View ${title} cards`}>
+          Cards
+        </button>
+      </header>
+      <div className="overview-group__rows">
+        {rows.map((row) => (
+          <OverviewStationRow key={row.ds.station.slug} row={row} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MinimalRadioOverview({
+  rows,
+  activeCategories,
+  categoryByStationSlug,
+  onDrillDown,
+}: {
+  rows: DialLaneRow[];
+  activeCategories: ReadonlySet<StationCategory>;
+  categoryByStationSlug: ReadonlyMap<string, StationCategory>;
+  onDrillDown: (category: StationCategory | "other" | null) => void;
+}) {
+  const [focusedCategory, setFocusedCategory] = useState<StationCategory | null>(null);
+  const groups = useMemo(() => {
+    const map = new Map<StationCategory | "other", DialLaneRow[]>();
+    for (const row of rows) {
+      const cat = row.ds.station.stationCategories?.[0] as StationCategory | undefined;
+      const key = cat && STATION_CATEGORY_DEFINITIONS.some(d => d.cat === cat) ? cat : "other";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    }
+    return map;
+  }, [rows]);
+
+  const activeDefs = useMemo(
+    () => STATION_CATEGORY_DEFINITIONS.filter(def =>
+      (activeCategories.size === 0 || activeCategories.has(def.cat)) &&
+      (groups.get(def.cat)?.length ?? 0) > 0
+    ),
+    [activeCategories, groups],
+  );
+
+  const effectiveFocusedCategory =
+    focusedCategory && activeDefs.some(({ cat }) => cat === focusedCategory)
+      ? focusedCategory
+      : null;
+  const showOther =
+    effectiveFocusedCategory === null
+    && activeCategories.size === 0
+    && (groups.get("other")?.length ?? 0) > 0;
+  const visibleDefs = effectiveFocusedCategory
+    ? activeDefs.filter(({ cat }) => cat === effectiveFocusedCategory)
+    : activeDefs;
+
+  return (
+    <div className="minimal-radio-overview" data-testid="minimal-radio-overview">
+      <nav className="minimal-radio-overview__scope" aria-label="Overview category">
+        <button
+          type="button"
+          className={effectiveFocusedCategory === null ? "is-active" : ""}
+          aria-pressed={effectiveFocusedCategory === null}
+          onClick={() => setFocusedCategory(null)}
+          data-testid="overview-scope-all"
+        >
+          All
+        </button>
+        {activeDefs.map((definition) => (
+          <button
+            type="button"
+            key={definition.cat}
+            className={effectiveFocusedCategory === definition.cat ? "is-active" : ""}
+            aria-pressed={effectiveFocusedCategory === definition.cat}
+            onClick={() => setFocusedCategory(definition.cat)}
+            data-testid={`overview-scope-${definition.cat}`}
+          >
+            {definition.shortLabel}
+          </button>
+        ))}
+      </nav>
+      <div className="minimal-radio-overview__highlights">
+         <OverviewHistoryView
+           filter="crossings"
+           title="Crossings"
+           activeCategories={activeCategories}
+           focusedCategory={effectiveFocusedCategory}
+           categoryByStationSlug={categoryByStationSlug}
+         />
+         <OverviewHistoryView
+           filter="firstPlays"
+           title="Premieres"
+           activeCategories={activeCategories}
+           focusedCategory={effectiveFocusedCategory}
+           categoryByStationSlug={categoryByStationSlug}
+         />
+      </div>
+
+      <div className="minimal-radio-overview__groups">
+         {visibleDefs.map(def => (
+           <OverviewCategoryGroup
+             key={def.cat}
+             category={def.cat}
+             title={def.label}
+             rows={groups.get(def.cat)!}
+             onDrillDown={() => onDrillDown(def.cat)}
+           />
+         ))}
+         {showOther && (
+           <OverviewCategoryGroup
+             category="other"
+             title="Other Stations"
+             rows={groups.get("other")!}
+             onDrillDown={() => onDrillDown("other")}
+           />
+         )}
+      </div>
+    </div>
+  );
+}
+
 export function MinimalRadioSurface({
   rows,
   libraryItems,
   recentSpinsBySlug = new Map(),
+  categoryByStationSlug = new Map(),
   preset: _preset,
   activeCategories = new Set<StationCategory>(),
   onToggleCategory,
@@ -514,7 +856,16 @@ export function MinimalRadioSurface({
 }: MinimalRadioSurfaceProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [lifetimeOnly, setLifetimeOnly] = useState(false);
-  const [remoteView, setRemoteView] = useState(false);
+  const [viewMode, setViewMode] = useState<"overview" | "cards" | "remote">("overview");
+  const [drillDownCategory, setDrillDownCategory] = useState<StationCategory | "other" | null>(null);
+
+  const handleViewMode = (mode: "overview" | "cards" | "remote") => {
+    if (mode === "cards" && viewMode !== "cards") {
+      setDrillDownCategory(null);
+    }
+    setViewMode(mode);
+  };
+
   const heroRegionRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef(new Map<string, HTMLDivElement>());
   const candidates = useMemo(
@@ -525,12 +876,31 @@ export function MinimalRadioSurface({
       )),
     [lifetimeOnly, rows],
   );
+  const overviewRows = useMemo(
+    () => rows.filter((row) => (
+      liveTrack(row) != null
+      || row.ds.station.streamUrl != null
+      || row.ds.station.relayUrl != null
+    )),
+    [rows],
+  );
+
+  const displayCandidates = useMemo(() => {
+    if ((viewMode !== "cards" && viewMode !== "remote") || drillDownCategory === null) return candidates;
+    return candidates.filter(row => {
+      const cat = row.ds.station.stationCategories?.[0] as StationCategory | undefined;
+      const key = cat && STATION_CATEGORY_DEFINITIONS.some(d => d.cat === cat) ? cat : "other";
+      return key === drillDownCategory;
+    });
+  }, [candidates, viewMode, drillDownCategory]);
+
   const selectedIndex = Math.max(
     0,
-    candidates.findIndex((row) => row.ds.station.slug === selectedSlug),
+    displayCandidates.findIndex((row) => row.ds.station.slug === selectedSlug),
   );
+
   const selectStation = useCallback((index: number) => {
-    const next = candidates[index];
+    const next = displayCandidates[index];
     if (!next) return;
     setSelectedSlug(next.ds.station.slug);
     const slide = slideRefs.current.get(next.ds.station.slug);
@@ -538,13 +908,13 @@ export function MinimalRadioSurface({
       top: slide?.offsetTop ?? 0,
       behavior: "auto",
     });
-  }, [candidates]);
+  }, [displayCandidates]);
 
   const selectOffset = useCallback((offset: number) => {
-    if (candidates.length === 0) return;
-    const nextIndex = (selectedIndex + offset + candidates.length) % candidates.length;
+    if (displayCandidates.length === 0) return;
+    const nextIndex = (selectedIndex + offset + displayCandidates.length) % displayCandidates.length;
     selectStation(nextIndex);
-  }, [candidates.length, selectStation, selectedIndex]);
+  }, [displayCandidates.length, selectStation, selectedIndex]);
 
   const handleHeroKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
@@ -559,24 +929,24 @@ export function MinimalRadioSurface({
       selectStation(0);
     } else if (event.key === "End") {
       event.preventDefault();
-      selectStation(candidates.length - 1);
+      selectStation(displayCandidates.length - 1);
     }
-  }, [candidates.length, selectOffset, selectStation]);
+  }, [displayCandidates.length, selectOffset, selectStation]);
 
   const handleHeroScroll = useCallback(() => {
     const container = heroRegionRef.current;
     if (!container) return;
     if (
-      candidates.length > 0
+      displayCandidates.length > 0
       && container.scrollTop + container.clientHeight >= container.scrollHeight - 2
     ) {
-      const last = candidates[candidates.length - 1]!;
+      const last = displayCandidates[displayCandidates.length - 1]!;
       if (last.ds.station.slug !== selectedSlug) setSelectedSlug(last.ds.station.slug);
       return;
     }
     let closestIndex = selectedIndex;
     let closestDistance = Number.POSITIVE_INFINITY;
-    candidates.forEach((row, index) => {
+    displayCandidates.forEach((row, index) => {
       const slide = slideRefs.current.get(row.ds.station.slug);
       if (!slide) return;
       const distance = Math.abs(slide.offsetTop - container.scrollTop);
@@ -585,9 +955,9 @@ export function MinimalRadioSurface({
         closestIndex = index;
       }
     });
-    const next = candidates[closestIndex];
+    const next = displayCandidates[closestIndex];
     if (next && next.ds.station.slug !== selectedSlug) setSelectedSlug(next.ds.station.slug);
-  }, [candidates, selectedIndex, selectedSlug]);
+  }, [displayCandidates, selectedIndex, selectedSlug]);
 
   if (loading && rows.length === 0) {
     return (
@@ -654,33 +1024,65 @@ export function MinimalRadioSurface({
           />
         </div>
       ) : null}
-      <button
-        type="button"
-        className="minimal-radio__remote-toggle"
-        data-testid="minimal-radio-remote-toggle"
-        aria-label={remoteView ? "Show full station cards" : "Show compact remote view"}
-        aria-pressed={remoteView}
-        onClick={() => setRemoteView((visible) => !visible)}
-      >
-        <Grid2X2 size={18} strokeWidth={2} aria-hidden="true" />
-      </button>
+      <div className="minimal-radio__view-modes" role="group" aria-label="View modes">
+        <button
+          type="button"
+          className={`minimal-radio__mode-btn ${viewMode === "overview" ? "is-active" : ""}`}
+          onClick={() => handleViewMode("overview")}
+          aria-pressed={viewMode === "overview"}
+          aria-label="Overview mode"
+          data-testid="minimal-radio-overview-toggle"
+        >
+          <LayoutList size={18} strokeWidth={2} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={`minimal-radio__mode-btn ${viewMode === "cards" ? "is-active" : ""}`}
+          onClick={() => handleViewMode("cards")}
+          aria-pressed={viewMode === "cards"}
+          aria-label="Cards mode"
+          data-testid="minimal-radio-cards-toggle"
+        >
+          <GalleryVerticalEnd size={18} strokeWidth={2} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={`minimal-radio__mode-btn ${viewMode === "remote" ? "is-active" : ""}`}
+          onClick={() => handleViewMode("remote")}
+          aria-pressed={viewMode === "remote"}
+          aria-label="Remote mode"
+          data-testid="minimal-radio-remote-toggle"
+        >
+          <Grid2X2 size={18} strokeWidth={2} aria-hidden="true" />
+        </button>
+      </div>
 
-      {candidates.length === 0 ? (
+      {viewMode !== "overview" && candidates.length === 0 ? (
         <section className="minimal-radio-state" data-testid="minimal-radio-no-candidates">
           <Radio size={24} aria-hidden="true" />
           <h2>Nothing crossed your library in this window.</h2>
           <p>{lifetimeOnly ? "There are no saved crossings in the archive yet." : "Try Lifetime to widen the window."}</p>
         </section>
+      ) : viewMode === "overview" ? (
+        <MinimalRadioOverview
+          rows={overviewRows}
+          activeCategories={activeCategories}
+          categoryByStationSlug={categoryByStationSlug}
+          onDrillDown={(cat) => {
+            setDrillDownCategory(cat);
+            setViewMode("cards");
+          }}
+        />
       ) : (
         <div className="minimal-radio__hero-frame">
-          {remoteView ? (
+          {viewMode === "remote" ? (
             <div
               className="minimal-radio__remote-view"
               data-testid="minimal-radio-remote-view"
               role="list"
               aria-label="Compact station remote"
             >
-              {candidates.map((row) => (
+              {displayCandidates.map((row) => (
                 <MinimalRadioRemoteTile
                   key={row.ds.station.slug}
                   row={row}
@@ -712,7 +1114,7 @@ export function MinimalRadioSurface({
                 onKeyDown={handleHeroKeyDown}
                 onScroll={handleHeroScroll}
               >
-                {candidates.map((row, index) => (
+                {displayCandidates.map((row, index) => (
                   <div
                     key={row.ds.station.slug}
                     ref={(node) => {
