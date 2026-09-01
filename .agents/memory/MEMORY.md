@@ -156,4 +156,4 @@
 - [Home on-air stable cells](home-on-air-stable-cells.md) — unchanged station cards keep their exact cells through enrichment; changed cards fill vacancies without pulling later rows upward.
 - [Library release metadata gaps](library-release-metadata-gaps.md) — saved recordings may lack release-group rows; hydrate missing album identity in rate-limited MB batches and derive CAA art.
 - [Crossing cover fallback](crossing-cover-fallback.md) — exact crossed crate tracks may have artwork but no release-group bridge; never suppress covers solely because album identity is absent.
-- [Radio hero axis model](radio-hero-axis-model.md) — stations scroll vertically, lifetime covers horizontally, and the remote stays a quiet horizontal mini-map.
+- [Radio hero axis model](radio-hero-axis-model.md) — four compact station rows stay visible; identity, now-playing, crossing covers, and controls read left-to-right.

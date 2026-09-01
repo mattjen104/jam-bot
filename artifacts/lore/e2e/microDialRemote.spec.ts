@@ -168,7 +168,18 @@ async function loadStationDial(
   await expect(page.getByTestId("minimal-radio-surface")).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByTestId("minimal-radio-card")).toHaveCount(STATION_COUNT);
+  const cards = page.getByTestId("minimal-radio-card");
+  await expect(cards).toHaveCount(STATION_COUNT);
+  const fullyVisibleRows = await cards.evaluateAll((nodes) => {
+    const viewport = nodes[0]?.closest<HTMLElement>("[data-testid='minimal-radio-hero']");
+    if (!viewport) return 0;
+    const viewportRect = viewport.getBoundingClientRect();
+    return nodes.filter((node) => {
+      const rowRect = node.getBoundingClientRect();
+      return rowRect.top >= viewportRect.top - 1 && rowRect.bottom <= viewportRect.bottom + 1;
+    }).length;
+  });
+  expect(fullyVisibleRows).toBeGreaterThanOrEqual(4);
 }
 
 test.describe("Minimal Radio remote — real browser navigation", () => {

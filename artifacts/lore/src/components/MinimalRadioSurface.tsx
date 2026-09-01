@@ -265,55 +265,31 @@ function MinimalRadioCard({
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
     >
-      <div className="minimal-radio-card__broadcast">
-        <section className="minimal-radio-card__track" aria-label="Current track">
-          <div className="minimal-radio-card__track-copy">
-            <div className="minimal-radio-card__station-identity">
-              <StationMark
-                name={row.ds.station.name}
-                logoUrl={row.ds.station.logoUrl}
-                homepageUrl={row.ds.station.homepageUrl}
-                variant="cube"
-                className="minimal-radio-card__station-mark"
-              />
-              <div className="minimal-radio-card__station-details">
-                <h2 className="minimal-radio-card__station-title">{row.ds.station.name}</h2>
-                <div
-                  className="minimal-radio-card__station-location"
-                  data-testid={`minimal-radio-station-location-${row.ds.station.slug}`}
-                >
-                  {stationLocation(row.ds.station)}
-                </div>
-              </div>
-            </div>
-            <div className="minimal-radio-card__eyebrow">Now playing</div>
-            <strong>{track?.title || "Waiting for track metadata"}</strong>
-            <span>{track?.artist || "The station is live"}</span>
-            {row.show?.showName ? <small>{row.show.showName}</small> : null}
+      <div className="minimal-radio-card__station">
+        <StationMark
+          name={row.ds.station.name}
+          logoUrl={row.ds.station.logoUrl}
+          homepageUrl={row.ds.station.homepageUrl}
+          variant="cube"
+          className="minimal-radio-card__station-mark"
+        />
+        <div className="minimal-radio-card__station-details">
+          <h2 className="minimal-radio-card__station-title">{row.ds.station.name}</h2>
+          <div
+            className="minimal-radio-card__station-location"
+            data-testid={`minimal-radio-station-location-${row.ds.station.slug}`}
+          >
+            {stationLocation(row.ds.station)}
           </div>
-          <div className="minimal-radio-card__track-actions">
-            <a
-              className="minimal-radio-card__site"
-              href={row.ds.station.homepageUrl ?? `/archive/stations/${row.ds.station.slug}`}
-              target={row.ds.station.homepageUrl ? "_blank" : undefined}
-              rel={row.ds.station.homepageUrl ? "noopener noreferrer" : undefined}
-              aria-label={`Open ${row.ds.station.name} station page`}
-            >
-              <ExternalLink size={15} aria-hidden="true" />
-              station
-            </a>
-            <button
-              type="button"
-              className="minimal-radio-card__play"
-              disabled={!playable}
-              onClick={play}
-              aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
-            >
-              {isPlaying ? "Pause" : "Tune in"}
-            </button>
-          </div>
-        </section>
+        </div>
       </div>
+
+      <section className="minimal-radio-card__track" aria-label="Current track">
+        <div className="minimal-radio-card__eyebrow">Now playing</div>
+        <strong>{track?.title || "Waiting for track metadata"}</strong>
+        <span>{track?.artist || "The station is live"}</span>
+        {row.show?.showName ? <small>{row.show.showName}</small> : null}
+      </section>
 
       <section className="minimal-radio-card__albums" aria-label="Lifetime crossings with this station">
         <div className="minimal-radio-card__album-heading">
@@ -362,6 +338,25 @@ function MinimalRadioCard({
       </section>
 
       <div className="minimal-radio-card__actions">
+        <a
+          className="minimal-radio-card__site"
+          href={row.ds.station.homepageUrl ?? `/archive/stations/${row.ds.station.slug}`}
+          target={row.ds.station.homepageUrl ? "_blank" : undefined}
+          rel={row.ds.station.homepageUrl ? "noopener noreferrer" : undefined}
+          aria-label={`Open ${row.ds.station.name} station page`}
+        >
+          <ExternalLink size={14} aria-hidden="true" />
+          <span>station</span>
+        </a>
+        <button
+          type="button"
+          className="minimal-radio-card__play"
+          disabled={!playable}
+          onClick={play}
+          aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
+        >
+          {isPlaying ? "Pause" : "Tune in"}
+        </button>
         <button type="button" onClick={handleKeep} disabled={!track?.mbid || keep.isPending || kept} aria-pressed={kept}>
           <Heart size={14} aria-hidden="true" /> {kept ? "Kept" : keep.isPending ? "Keeping…" : "Keep"}
         </button>
@@ -409,7 +404,7 @@ export function MinimalRadioSurface({
     const slide = slideRefs.current.get(next.ds.station.slug);
     heroRegionRef.current?.scrollTo?.({
       top: slide?.offsetTop ?? 0,
-      behavior: "smooth",
+      behavior: "auto",
     });
   }, [candidates]);
 
@@ -439,13 +434,20 @@ export function MinimalRadioSurface({
   const handleHeroScroll = useCallback(() => {
     const container = heroRegionRef.current;
     if (!container) return;
-    const viewportCenter = container.scrollTop + container.clientHeight / 2;
+    if (
+      candidates.length > 0
+      && container.scrollTop + container.clientHeight >= container.scrollHeight - 2
+    ) {
+      const last = candidates[candidates.length - 1]!;
+      if (last.ds.station.slug !== selectedSlug) setSelectedSlug(last.ds.station.slug);
+      return;
+    }
     let closestIndex = selectedIndex;
     let closestDistance = Number.POSITIVE_INFINITY;
     candidates.forEach((row, index) => {
       const slide = slideRefs.current.get(row.ds.station.slug);
       if (!slide) return;
-      const distance = Math.abs(slide.offsetTop + slide.offsetHeight / 2 - viewportCenter);
+      const distance = Math.abs(slide.offsetTop - container.scrollTop);
       if (distance < closestDistance) {
         closestDistance = distance;
         closestIndex = index;

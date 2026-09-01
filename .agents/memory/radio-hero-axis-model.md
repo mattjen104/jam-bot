@@ -3,8 +3,8 @@ name: Radio hero axis model
 description: The interaction and information hierarchy chosen for Lore Radio's front-door station heroes.
 ---
 
-The front door uses a full-left vertical station sidebar below the page hero copy. The current station logo is a fixed square joined edge-to-edge with its Now Playing card as one object. A down chevron sits directly below it, followed by a vertical scrubber whose station logos use the same square size. Lifetime crossing covers scroll horizontally inside the hero card.
+The front door uses a vertically scrolling stack with four complete station rows visible. Each row reads left-to-right: station logo and location, now-playing metadata, a compact horizontal crossing-cover shelf, then Tune in / Keep / Skip controls.
 
-**Why:** The current station needs a stable, unmistakable hero position while the remaining stations act as a scrubber. Joining its logo to the player makes the station/player relationship immediate; equal tile sizes make the rail legible without a second hierarchy.
+**Why:** A separate station rail duplicated identity and limited scan density. Compact rows let listeners compare several stations without hiding the current track or crossing evidence.
 
-**How to apply:** Keep the sidebar flush to the viewport’s left edge and start it below the page hero. Render the current logo outside the scrubber and remove redundant visible ON AIR/station-name copy from the adjoining card; Now Playing starts at the top. Put a down chevron immediately below the current logo, then same-size station logos. Selecting a tile promotes it without starting playback.
+**How to apply:** Keep station selection independent from playback. For scroll-driven selection, follow the row nearest the top edge; at the bottom boundary select the final row. Crossing covers remain horizontally scrollable within each row.
