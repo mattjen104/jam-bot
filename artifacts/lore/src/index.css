@@ -13270,30 +13270,84 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card__albums { padding: 20px 26px 24px; }
 .minimal-radio-card__album-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  display: flex;
+  align-items: flex-end;
+  min-height: clamp(150px, 18vw, 220px);
+  margin-top: 14px;
+  padding: 12px 0 6px;
+  overflow: visible;
 }
 .minimal-radio-card__album {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 clamp(122px, 16vw, 190px);
   min-width: 0;
-  color: hsl(var(--dim));
-  font: 10px/1.25 var(--app-font-mono);
+  color: hsl(var(--foreground));
   text-decoration: none;
+  transform: rotate(0deg) translateY(0);
+  transition: transform 180ms ease, z-index 180ms ease;
+}
+.minimal-radio-card__album + .minimal-radio-card__album {
+  margin-left: clamp(-76px, -5.4vw, -34px);
+}
+.minimal-radio-card__album:nth-child(1) { transform: rotate(-7deg) translateY(8px); }
+.minimal-radio-card__album:nth-child(2) { transform: rotate(4deg) translateY(-2px); }
+.minimal-radio-card__album:nth-child(3) { transform: rotate(-2deg) translateY(4px); }
+.minimal-radio-card__album:nth-child(4) { transform: rotate(6deg) translateY(-5px); }
+.minimal-radio-card__album:nth-child(5) { transform: rotate(-5deg) translateY(7px); }
+.minimal-radio-card__album:hover,
+.minimal-radio-card__album:focus-visible {
+  z-index: 5;
+  transform: rotate(0deg) translateY(-14px) scale(1.04);
+  outline: none;
 }
 .minimal-radio-card__album img {
   display: block;
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  margin-bottom: 6px;
-  border-radius: 6px;
+  border: 1px solid hsl(var(--foreground) / .22);
+  border-radius: 4px;
+  box-shadow: 0 12px 24px hsl(0 0% 0% / .36);
+  background: hsl(var(--secondary));
 }
-.minimal-radio-card__album span {
-  display: -webkit-box;
+.minimal-radio-card__album-caption {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
   overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  border: 1px solid hsl(var(--foreground) / .18);
+  border-radius: 3px;
+  background: hsl(0 0% 0% / .82);
+  color: hsl(var(--foreground));
+  font: 10px/1.2 var(--app-font-mono);
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  pointer-events: none;
+}
+.minimal-radio-card__album:hover .minimal-radio-card__album-caption,
+.minimal-radio-card__album:focus-visible .minimal-radio-card__album-caption {
+  opacity: 1;
+  transform: translateY(0);
+}
+.minimal-radio-card__album-caption b,
+.minimal-radio-card__album-caption small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.minimal-radio-card__album-caption b {
+  font-weight: 600;
+}
+.minimal-radio-card__album-caption small {
+  color: hsl(var(--muted-foreground));
+  font-size: 9px;
 }
 .minimal-radio-card__empty-albums {
   margin: 9px 0 0;
@@ -13406,7 +13460,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .minimal-radio-card__heading,
   .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }
-  .minimal-radio-card__album-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .minimal-radio-card__album-grid {
+    min-height: 140px;
+    padding-right: 4px;
+  }
+  .minimal-radio-card__album { flex-basis: 116px; }
+  .minimal-radio-card__album + .minimal-radio-card__album { margin-left: -48px; }
   .minimal-radio-card__track { grid-template-columns: 48px minmax(0, 1fr); }
   .minimal-radio-card__track-art img { width: 48px; height: 48px; }
   .minimal-radio-card__play { grid-column: 1 / -1; width: 100%; }

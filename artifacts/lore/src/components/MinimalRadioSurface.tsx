@@ -375,7 +375,10 @@ function MinimalRadioCard({
                   decoding="async"
                   onError={onArtError}
                 />
-                <span>{album.title}</span>
+                <span className="minimal-radio-card__album-caption">
+                  <b>{album.title}</b>
+                  <small>{album.artist}</small>
+                </span>
               </a>
             ))}
           </div>
