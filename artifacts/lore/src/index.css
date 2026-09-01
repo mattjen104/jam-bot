@@ -13672,7 +13672,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   margin: 12px 0 16px;
   padding: clamp(14px, 3vw, 22px);
   border: 1px solid hsl(var(--border));
-  border-radius: 4px;
+  border-radius: 0;
   background: hsl(var(--card) / .88);
   box-shadow: 0 18px 44px rgb(0 0 0 / .24);
 }
