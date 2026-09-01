@@ -267,7 +267,7 @@ describe("MinimalRadioSurface", () => {
       .toBeNull();
   });
 
-  it("keeps a vertical hero stack above the compact remote and synchronizes station clicks and keyboard navigation", () => {
+  it("keeps the enlarged active station first in the rail and synchronizes station clicks and keyboard navigation", () => {
     render(
       <MinimalRadioSurface
         rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", false, 5), row("gamma", "Gamma", false, 3)]}
@@ -277,9 +277,11 @@ describe("MinimalRadioSurface", () => {
     );
     const hero = screen.getByTestId("minimal-radio-hero");
     const remote = screen.getByTestId("minimal-radio-rail");
-    expect(hero.compareDocumentPosition(remote) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(remote.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(3);
     expect(screen.getAllByTestId(/minimal-radio-station-slide-/)).toHaveLength(3);
+    expect(remote.firstElementChild?.getAttribute("data-testid")).toBe("minimal-radio-station-slide-alpha");
+    expect(remote.firstElementChild?.classList.contains("is-primary")).toBe(true);
     expect(screen.getByTestId("minimal-radio-selection").textContent).toContain("Alpha");
 
     fireEvent.keyDown(hero, { key: "ArrowDown" });
@@ -290,6 +292,9 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select Gamma" }));
     expect(screen.getByRole("heading", { name: "Gamma" })).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-hero-crossing").textContent).toContain("3");
+    expect(remote.firstElementChild?.getAttribute("data-testid")).toBe("minimal-radio-station-slide-gamma");
+    expect(screen.getByRole("button", { name: "Previous station" }).textContent).toBe("");
+    expect(screen.getByRole("button", { name: "Next station" }).textContent).toBe("");
     expect(screen.getByTestId("minimal-radio-station-slide-gamma").getAttribute("aria-label"))
       .toContain("Gamma station selection, selected");
   });

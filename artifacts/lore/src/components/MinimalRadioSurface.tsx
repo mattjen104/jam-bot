@@ -89,12 +89,14 @@ function StationPresetButton({
   active,
   onSelect,
   lifetimeOnly,
+  primary = false,
   testId,
 }: {
   row: DialLaneRow;
   active: boolean;
   onSelect: () => void;
   lifetimeOnly: boolean;
+  primary?: boolean;
   testId?: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -106,7 +108,7 @@ function StationPresetButton({
 
   return (
     <div
-      className="minimal-radio__station-option"
+      className={`minimal-radio__station-option${active ? " is-active" : ""}${primary ? " is-primary" : ""}${showLogo ? " has-logo" : ""}`}
       data-testid={testId}
       role="group"
       aria-label={`${row.ds.station.name} station selection${active ? ", selected" : ""}; ${summary.count} ${summary.count === 1 ? "crossing" : "crossings"} ${summary.label}; now playing ${artist}`}
@@ -128,9 +130,8 @@ function StationPresetButton({
             decoding="async"
             onError={() => setImageFailed(true)}
           />
-        ) : (
-          <span>{row.ds.station.name}</span>
-        )}
+        ) : null}
+        <span className="minimal-radio__station-name">{row.ds.station.name}</span>
       </button>
     </div>
   );
@@ -319,7 +320,7 @@ function MinimalRadioCard({
         <div className="minimal-radio-card__heading">
           <div className="minimal-radio-card__station">
             <span className="minimal-radio-card__live"><Radio size={13} aria-hidden="true" /> ON AIR</span>
-            <h2>{row.ds.station.name}</h2>
+            <h2 className="minimal-radio-card__station-title--sr">{row.ds.station.name}</h2>
             {row.show?.showName ? <p>{row.show.showName}</p> : null}
           </div>
           <a
@@ -443,6 +444,9 @@ export function MinimalRadioSurface({
     candidates.findIndex((row) => row.ds.station.slug === selectedSlug),
   );
   const selected = candidates[selectedIndex] ?? null;
+  const railCandidates = selected
+    ? [selected, ...candidates.filter((row) => row.ds.station.slug !== selected.ds.station.slug)]
+    : candidates;
 
   const selectStation = useCallback((index: number) => {
     const next = candidates[index];
@@ -551,17 +555,48 @@ export function MinimalRadioSurface({
       </div>
 
       <div className="minimal-radio__hero-frame">
-        <div className="minimal-radio__nav" role="group" aria-label="Radio station navigation">
-          <button type="button" onClick={() => selectOffset(-1)} aria-label="Previous station">
-            <ChevronLeft size={18} aria-hidden="true" /> Previous
-          </button>
+        <div className="minimal-radio__station-rail-header">
+          <span className="minimal-radio__remote-label">Stations</span>
           <span data-testid="minimal-radio-selection" aria-live="polite">
             {selected?.ds.station.name ?? "Current"} · {selectedIndex + 1} of {candidates.length}
           </span>
-          <button type="button" onClick={() => selectOffset(1)} aria-label="Next station">
-            Next <ChevronRight size={18} aria-hidden="true" />
+          <button
+            type="button"
+            data-testid="radio-preset-lifetime"
+            className={`minimal-radio__lifetime-toggle${lifetimeOnly ? " is-active" : ""}`}
+            aria-label="Show lifetime crossings"
+            aria-pressed={lifetimeOnly}
+            onClick={() => setLifetimeOnly((previous) => !previous)}
+          >
+            {lifetimeOnly ? "Auto" : "Lifetime"}
           </button>
         </div>
+        {candidates.length > 1 ? (
+          <div className="minimal-radio__station-rail-shell" role="group" aria-label="Radio station rail">
+            <button type="button" className="minimal-radio__station-chevron" onClick={() => selectOffset(-1)} aria-label="Previous station">
+              <ChevronLeft size={22} aria-hidden="true" />
+            </button>
+            <div className="minimal-radio__remote" data-testid="minimal-radio-rail" role="region" aria-label="Radio station remote">
+              {railCandidates.map((row) => {
+                const index = candidates.findIndex((candidate) => candidate.ds.station.slug === row.ds.station.slug);
+                return (
+                  <StationPresetButton
+                    key={row.ds.station.slug}
+                    row={row}
+                    active={selectedIndex === index}
+                    primary={selectedIndex === index}
+                    onSelect={() => selectStation(index)}
+                    lifetimeOnly={lifetimeOnly}
+                    testId={`minimal-radio-station-slide-${row.ds.station.slug}`}
+                  />
+                );
+              })}
+            </div>
+            <button type="button" className="minimal-radio__station-chevron" onClick={() => selectOffset(1)} aria-label="Next station">
+              <ChevronRight size={22} aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
         <div
           ref={heroRegionRef}
           className="minimal-radio__hero-region"
@@ -596,42 +631,6 @@ export function MinimalRadioSurface({
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="minimal-radio__remote-panel">
-        <div className="minimal-radio__station-heading">
-          <div className="minimal-radio__remote-label">Stations</div>
-          <span className="minimal-radio__remote-hint">Choose a station</span>
-          <button
-            type="button"
-            data-testid="radio-preset-lifetime"
-            className={`minimal-radio__lifetime-toggle${lifetimeOnly ? " is-active" : ""}`}
-            aria-label="Show lifetime crossings"
-            aria-pressed={lifetimeOnly}
-            onClick={() => setLifetimeOnly((previous) => !previous)}
-          >
-            {lifetimeOnly ? "Auto" : "Lifetime"}
-          </button>
-        </div>
-        {candidates.length > 1 ? (
-          <div
-            className="minimal-radio__remote"
-            data-testid="minimal-radio-rail"
-            role="region"
-            aria-label="Radio station remote"
-          >
-            {candidates.map((row, index) => (
-              <StationPresetButton
-                key={row.ds.station.slug}
-                row={row}
-                active={selectedIndex === index}
-                onSelect={() => selectStation(index)}
-                lifetimeOnly={lifetimeOnly}
-                testId={`minimal-radio-station-slide-${row.ds.station.slug}`}
-              />
-            ))}
-          </div>
-        ) : null}
       </div>
     </section>
   );

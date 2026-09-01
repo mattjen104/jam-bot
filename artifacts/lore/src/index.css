@@ -13063,6 +13063,47 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   order: 1;
   min-width: 0;
 }
+.minimal-radio__station-rail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  padding: 0 4px 8px;
+}
+.minimal-radio__station-rail-header > span:not(.minimal-radio__remote-label) {
+  color: hsl(var(--faint));
+  font: 10px/1 var(--app-font-mono);
+}
+.minimal-radio__station-rail-header .minimal-radio__lifetime-toggle {
+  margin-left: auto;
+}
+.minimal-radio__station-rail-shell {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.minimal-radio__station-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 50%;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+.minimal-radio__station-chevron:hover,
+.minimal-radio__station-chevron:focus-visible {
+  border-color: hsl(var(--accent));
+  color: hsl(var(--accent));
+  outline: none;
+}
 .minimal-radio__hero-slide {
   display: flex;
   min-height: 100%;
@@ -13084,11 +13125,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio__remote {
   display: flex;
+  align-items: flex-end;
   min-width: 0;
-  align-items: flex-start;
-  gap: 7px;
+  gap: 8px;
   overflow-x: auto;
-  padding: 2px 0 4px;
+  padding: 4px 2px 8px;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
@@ -13142,10 +13183,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio__station-option {
   display: flex;
-  flex: 0 0 58px;
+  flex: 0 0 64px;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  transition: flex-basis 180ms ease;
 }
 .minimal-radio__station-crossing {
   min-height: 10px;
@@ -13167,16 +13211,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   -webkit-line-clamp: 3;
 }
 .minimal-radio__station-option > button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 58px;
-  width: 58px;
-  height: 58px;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
   padding: 0;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
-  border-radius: 7px;
+  border-radius: 10px;
   background: hsl(var(--secondary));
   color: hsl(var(--faint));
   font: 600 8px/1.12 var(--app-font-mono);
@@ -13186,7 +13231,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: block;
   width: 100%;
   height: 100%;
-  padding: 5px;
+  padding: 7px;
   box-sizing: border-box;
   object-fit: contain;
   background: hsl(var(--card));
@@ -13200,6 +13245,46 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
 }
+.minimal-radio__station-option.has-logo:not(.is-primary) .minimal-radio__station-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.minimal-radio__station-option.is-primary {
+  flex-basis: 148px;
+}
+.minimal-radio__station-option.is-primary > button {
+  flex-basis: 148px;
+  width: 148px;
+  height: 148px;
+  border-radius: 16px;
+  border-color: hsl(var(--accent));
+  background: hsl(var(--accent) / 0.14);
+  box-shadow: 0 12px 28px hsl(0 0% 0% / .28);
+  font-size: 12px;
+}
+.minimal-radio__station-option.is-primary > button img {
+  padding: 16px;
+}
+.minimal-radio__station-option.is-primary .minimal-radio__station-name {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  max-height: 42px;
+  padding: 6px 7px;
+  border: 1px solid hsl(0 0% 100% / .16);
+  border-radius: 6px;
+  background: hsl(0 0% 0% / .76);
+  color: hsl(var(--foreground));
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: left;
+  -webkit-line-clamp: 2;
+}
 .minimal-radio__station-option > button.is-active {
   border-color: hsl(var(--accent));
   background: hsl(var(--accent) / 0.14);
@@ -13210,6 +13295,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   justify-content: space-between;
   min-height: 38px;
+}
+.minimal-radio-card__heading h2.minimal-radio-card__station-title--sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .minimal-radio__nav button,
 .minimal-radio-card__actions button {
@@ -13510,6 +13606,22 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .minimal-radio__station-heading {
     min-height: 26px;
   }
+  .minimal-radio__hero-frame {
+    padding-top: 40px;
+  }
+  .minimal-radio__station-rail-header {
+    min-height: 24px;
+    padding: 0 2px 6px;
+  }
+  .minimal-radio__station-rail-shell {
+    grid-template-columns: 28px minmax(0, 1fr) 28px;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .minimal-radio__station-chevron {
+    width: 28px;
+    height: 28px;
+  }
   .minimal-radio__remote-label { display: none; }
   .minimal-radio__station-buttons {
     display: flex;
@@ -13526,6 +13638,25 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     flex-basis: 48px;
     width: 48px;
     height: 48px;
+  }
+  .minimal-radio__station-option.is-primary {
+    flex-basis: 104px;
+  }
+  .minimal-radio__station-option.is-primary > button {
+    flex-basis: 104px;
+    width: 104px;
+    height: 104px;
+    border-radius: 14px;
+  }
+  .minimal-radio__station-option.is-primary > button img {
+    padding: 11px;
+  }
+  .minimal-radio__station-option.is-primary .minimal-radio__station-name {
+    right: 6px;
+    bottom: 6px;
+    left: 6px;
+    padding: 5px 6px;
+    font-size: 10px;
   }
   .minimal-radio-card__heading,
   .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }
