@@ -14025,7 +14025,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   aspect-ratio: 1;
   min-width: 0;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 0;
   color: hsl(var(--foreground));
   text-decoration: none;
   scroll-snap-align: start;
