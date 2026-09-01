@@ -90,6 +90,7 @@ export default function SplitHome() {
     stations,
     spinsBySlug,
     isCoreLoading,
+    liveLoading,
     stationsError,
     refetchStations,
   } = useDialData("personal", {
@@ -224,7 +225,7 @@ export default function SplitHome() {
                 preset="now"
                 activeCategories={activeCategories}
                 onToggleCategory={handleToggleCategory}
-                loading={isCoreLoading}
+                loading={isCoreLoading || liveLoading}
                 error={stationsError}
                 onRetry={refetchStations}
               />
