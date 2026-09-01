@@ -5,7 +5,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Radio } from "lucide-react";
+import { Radio, SlidersHorizontal } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
@@ -495,6 +495,19 @@ export function MinimalRadioSurface({
           {lifetimeOnly ? "Auto" : "Lifetime"}
         </button>
       </div>
+      {onToggleCategory ? (
+        <div className="minimal-radio__floating-filter">
+          <FilterDropdownMenu
+            label="Filter"
+            ariaLabel="Station categories"
+            options={STATION_CATEGORY_OPTIONS}
+            active={activeCategories}
+            onToggle={onToggleCategory}
+            variant="chips"
+            leadingIcon={<SlidersHorizontal size={21} strokeWidth={2.2} />}
+          />
+        </div>
+      ) : null}
 
       {candidates.length === 0 ? (
         <section className="minimal-radio-state" data-testid="minimal-radio-no-candidates">

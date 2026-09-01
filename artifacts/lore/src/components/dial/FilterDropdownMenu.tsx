@@ -23,7 +23,14 @@
  *   - "chips" — bordered console key (SplitHome remote)
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 
 export interface FilterDropdownOption<V extends string> {
@@ -43,6 +50,7 @@ export interface FilterDropdownMenuProps<V extends string> {
   active: ReadonlySet<V>;
   onToggle: (value: V) => void;
   variant: "bar" | "chips";
+  leadingIcon?: ReactNode;
   className?: string;
 }
 
@@ -53,6 +61,7 @@ export function FilterDropdownMenu<V extends string>({
   active,
   onToggle,
   variant,
+  leadingIcon,
   className,
 }: FilterDropdownMenuProps<V>) {
   const [open, setOpen] = useState(false);
@@ -143,6 +152,11 @@ export function FilterDropdownMenu<V extends string>({
         aria-expanded={open}
         onClick={toggleOpen}
       >
+        {leadingIcon ? (
+          <span className="filter-dropdown__leading-icon" aria-hidden="true">
+            {leadingIcon}
+          </span>
+        ) : null}
         {label}
         {count > 0 && (
           <span className="filter-dropdown__count" aria-hidden="true">

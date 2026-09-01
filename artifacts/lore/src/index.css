@@ -2599,6 +2599,11 @@
   font-family: var(--app-font-mono);
   opacity: 0.85;
 }
+.filter-dropdown__leading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .filter-dropdown__panel {
   position: fixed;
   z-index: 60;
@@ -13051,6 +13056,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   min-height: 28px;
 }
+.minimal-radio__floating-filter {
+  display: none;
+}
 .minimal-radio__hero-region {
   height: min(544px, calc(100dvh - var(--shell-h, 0px) - 180px));
   min-height: 512px;
@@ -13496,15 +13504,41 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     gap: 8px;
   }
   .minimal-radio__controls {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    z-index: 3;
-    width: auto;
-    min-height: 38px;
-    padding: 0;
-    overflow: visible;
-    transform: translateX(-50%);
+    display: none;
+  }
+  .minimal-radio__floating-filter {
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: calc(var(--shell-h, 0px) + 16px);
+    z-index: 41;
+    display: block;
+  }
+  .minimal-radio__floating-filter .home-cli-strip__filter-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 50px;
+    min-width: 132px;
+    padding: 0 18px 0 14px;
+    border: 1px solid hsl(var(--foreground) / 0.3);
+    border-radius: 999px;
+    background: hsl(var(--foreground));
+    color: hsl(var(--background));
+    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.42);
+    font-family: var(--app-font-display);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .minimal-radio__floating-filter .home-cli-strip__filter-chip:hover,
+  .minimal-radio__floating-filter .home-cli-strip__filter-chip:focus-visible {
+    background: hsl(var(--foreground));
+    color: hsl(var(--background));
+    border-color: hsl(var(--foreground) / 0.55);
+  }
+  .minimal-radio__floating-filter .filter-dropdown__count {
+    display: none;
   }
   .minimal-radio__nav > span {
     position: absolute;
@@ -13517,7 +13551,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     border: 0;
   }
   .minimal-radio__hero-frame {
-    padding-top: 40px;
+    padding-top: 0;
   }
   .minimal-radio-card__albums { padding-left: 7px; padding-right: 5px; }
   .minimal-radio__hero-region {
