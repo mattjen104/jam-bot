@@ -1129,7 +1129,7 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* LORE — warm-dark palette. Background #131313, orange accent, blue live, gold selector. Dark-first. */
+/* LORE — warm-dark palette. Background #000000, orange accent, blue live, gold selector. Dark-first. */
 :root {
   --button-outline: rgba(131, 131, 131, .15);
   --badge-outline: rgba(131, 131, 131, .10);
@@ -1140,7 +1140,7 @@
   --elevate-2: rgba(255, 255, 255, .07);
 
   /* ── Warm-dark raw palette tokens ────────────────────────── */
-  /* void     #131313  */ /* H≈38  S≈13% L≈7%  */
+  /* void     #000000  */ /* H=0   S=0%  L=0%  */
   /* panel    #1b1b1b  */ /* H≈35  S≈10% L≈11% */
   /* panel2   #202020  */ /* H≈33  S≈9%  L≈13% */
   /* orange   #838383  */ /* H≈11  S≈77% L≈61% — primary / library */
@@ -1149,7 +1149,7 @@
   /* keep     #dedede  */ /* H≈76  S≈90% L≈60% — keep/save action */
 
   /* ── shadcn semantic mappings ──────────────────────────── */
-  --background: 0 0% 7%;
+  --background: 0 0% 0%;
   --foreground: 0 0% 90%;
 
   --border: 0 0% 18%;
