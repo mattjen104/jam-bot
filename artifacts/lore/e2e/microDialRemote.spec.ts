@@ -262,6 +262,8 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(collapsed.albumWidths[2]).toBe(collapsed.albumWidths[3]);
     expect(collapsed.cardHeight).toBeLessThan(180);
     await expect(card.locator(".minimal-radio-card__album")).toHaveCount(4);
+    await expect(card.locator(".minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
+    await expect(card.locator(".minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
