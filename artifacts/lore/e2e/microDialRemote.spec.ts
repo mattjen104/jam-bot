@@ -296,7 +296,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(expanded.gridPaddingRight).toBe("0px");
     expect(expanded.gridOverflowY).toBe("auto");
     expect(expanded.gridTouchAction).toBe("pan-y");
-    await expect(card.locator(".minimal-radio-card__station-line")).toHaveCSS("border-bottom-width", "1px");
+    await expect(card.locator(".minimal-radio-card__station-line")).toHaveCSS("border-bottom-width", "0px");
   });
 
   test("1280×900: presets and keyboard navigation change the active card", async ({ page }) => {

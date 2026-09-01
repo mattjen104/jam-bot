@@ -6281,7 +6281,7 @@
 .lrow__portal-tile-art {
   width: 48px;
   height: 48px;
-  border-radius: 3px;
+  border-radius: 0;
   object-fit: cover;
   display: block;
   margin: 0 auto;
@@ -6295,7 +6295,7 @@
 .lrow__portal-tile-art--grad {
   width: 48px;
   height: 48px;
-  border-radius: 3px;
+  border-radius: 0;
   display: block;
   margin: 0 auto;
   border: 2px solid transparent;
@@ -10459,7 +10459,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   width: 46px;
   height: 46px;
   object-fit: cover;
-  border-radius: 2px;
+  border-radius: 0;
   pointer-events: none;
 }
 .compact-stack__filmstrip-year {
@@ -13828,7 +13828,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   min-height: 29px;
   padding-bottom: 6px;
-  border-bottom: 1px solid hsl(var(--border) / .7);
 }
 .minimal-radio-card__station-identity {
   display: flex;
