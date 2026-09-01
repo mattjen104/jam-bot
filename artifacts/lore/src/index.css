@@ -13079,6 +13079,30 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   order: 1;
   min-width: 0;
 }
+.minimal-radio__sheet-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  align-items: end;
+  min-width: 0;
+  padding: 0 14px 5px;
+}
+.minimal-radio__sheet-header-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  min-width: 0;
+  border-left: 1px solid hsl(var(--border) / .7);
+}
+.minimal-radio__sheet-header-insights span {
+  min-width: 0;
+  padding: 0 4px;
+  color: hsl(var(--faint));
+  font: 600 9px/1 var(--app-font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.minimal-radio__sheet-header-insights span + span {
+  border-left: 1px solid hsl(var(--border) / .7);
+}
 .minimal-radio__hero-slide {
   display: flex;
   height: 112px;

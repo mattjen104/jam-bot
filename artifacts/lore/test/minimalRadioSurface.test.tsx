@@ -127,6 +127,8 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByRole("heading", { name: "Alpha" }).textContent).toBe("Alpha");
     expect(screen.getByText("Alpha City")).toBeTruthy();
     expect(screen.queryByText("UK")).toBeNull();
+    expect(screen.getByTestId("minimal-radio-sheet-header").textContent).toContain("Crossing");
+    expect(screen.getByTestId("minimal-radio-sheet-header").textContent).toContain("Premiere");
     expect(screen.getByText("Alpha artist")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).textContent)
       .toContain("Alpha track");

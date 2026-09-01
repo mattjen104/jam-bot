@@ -625,6 +625,17 @@ export function MinimalRadioSurface({
       ) : (
         <div className="minimal-radio__hero-frame">
           <div
+            className="minimal-radio__sheet-header"
+            data-testid="minimal-radio-sheet-header"
+            aria-label="Radio insight columns"
+          >
+            <span aria-hidden="true" />
+            <div className="minimal-radio__sheet-header-insights">
+              <span>Crossing</span>
+              <span>Premiere</span>
+            </div>
+          </div>
+          <div
             ref={heroRegionRef}
             className="minimal-radio__hero-region"
             data-testid="minimal-radio-hero"

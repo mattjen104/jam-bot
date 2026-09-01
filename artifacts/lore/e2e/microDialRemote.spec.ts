@@ -260,6 +260,8 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await loadStationDial(page);
 
     const card = page.getByTestId("minimal-radio-card").first();
+    await expect(page.getByTestId("minimal-radio-sheet-header")).toContainText("Crossing");
+    await expect(page.getByTestId("minimal-radio-sheet-header")).toContainText("Premiere");
     const collapsed = await card.evaluate((node) => {
       const cardRect = node.getBoundingClientRect();
       const albumsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect();
