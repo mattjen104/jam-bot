@@ -13859,6 +13859,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
+  min-height: 39px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid hsl(var(--border) / .7);
 }
 .minimal-radio-card__station-identity h2 {
   margin: 0;
@@ -13907,7 +13910,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   margin: 0;
   padding: 6px 0 0;
   border: 0;
-  border-top: 1px solid hsl(var(--border) / .7);
   background: transparent;
   color: hsl(var(--foreground));
   text-align: left;
@@ -13949,8 +13951,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-self: flex-start;
   gap: 6px;
   margin: 0;
-  padding: 0;
+  padding: 0 0 7px;
   border: 0;
+  border-bottom: 1px solid hsl(var(--border) / .7);
   background: transparent;
   min-height: 16px;
   color: hsl(var(--accent));
@@ -13964,6 +13967,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album-column .minimal-radio-card__crossing,
 .minimal-radio-card__first-plays {
   width: 100%;
+  min-height: 39px;
+  box-sizing: border-box;
 }
 .minimal-radio-card__crossing.is-live {
   color: hsl(var(--accent));
@@ -13996,8 +14001,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 5px;
   min-height: 16px;
   margin: 0;
-  padding: 0;
+  padding: 0 0 7px;
   border: 0;
+  border-bottom: 1px solid hsl(var(--border) / .7);
   background: transparent;
   color: hsl(var(--accent));
   font: 600 9.5px/1 var(--app-font-mono);

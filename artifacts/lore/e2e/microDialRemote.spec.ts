@@ -287,6 +287,12 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(card.locator(".minimal-radio-card__albums-columns")).toHaveCSS("border-left-width", "1px");
     await expect(card.locator(".minimal-radio-card__album-column + .minimal-radio-card__album-column"))
       .toHaveCSS("border-left-width", "1px");
+    await expect(card.locator(".minimal-radio-card__station-identity"))
+      .toHaveCSS("border-bottom-width", "1px");
+    await expect(card.getByTestId("minimal-radio-crossing"))
+      .toHaveCSS("border-bottom-width", "1px");
+    await expect(card.getByTestId("minimal-radio-first-plays"))
+      .toHaveCSS("border-bottom-width", "1px");
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
@@ -323,7 +329,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(expanded.gridOverflowY).toBe("auto");
     expect(expanded.gridTouchAction).toBe("pan-y");
     await expect(card.locator(".minimal-radio-card__station-line")).toHaveCSS("border-bottom-width", "0px");
-    await expect(card.locator(".minimal-radio-card__now")).toHaveCSS("border-top-width", "1px");
+    await expect(card.locator(".minimal-radio-card__now")).toHaveCSS("border-top-width", "0px");
     await expect(card.locator(".minimal-radio-card__now")).toHaveCSS("border-bottom-width", "0px");
   });
 
