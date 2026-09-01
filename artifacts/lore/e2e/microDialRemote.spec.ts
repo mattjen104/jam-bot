@@ -233,18 +233,20 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
   test("crossing header clips the large two-cover panel until expanded", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);
-    await page.screenshot({ path: "/tmp/lore-radio-cards-fixed.png" });
 
     const card = page.getByTestId("minimal-radio-card").first();
     const covers = card.locator(".minimal-radio-card__albums");
     const collapsed = await card.evaluate((node) => {
       const cardRect = node.getBoundingClientRect();
       const albumsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect();
+      const albumGridRect = node.querySelector<HTMLElement>(".minimal-radio-card__album-grid")?.getBoundingClientRect();
       const albumNode = node.querySelector<HTMLElement>(".minimal-radio-card__album");
       const imageRect = node.querySelector<HTMLImageElement>(".minimal-radio-card__album img")?.getBoundingClientRect();
       return {
         cardHeight: cardRect.height,
         albumsHeight: albumsRect?.height,
+        albumsWidth: albumsRect?.width,
+        albumGridWidth: albumGridRect?.width,
         albumWidth: albumNode?.getBoundingClientRect().width,
         imageHeight: imageRect?.height,
         imageWidth: imageRect?.width,
@@ -254,10 +256,11 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
         } : null,
       };
     });
-    console.log("collapsed radio geometry", collapsed);
     expect(collapsed.imageWidth).toBe(152);
     expect(collapsed.imageHeight).toBe(152);
     expect(collapsed.albumsHeight).toBeLessThan(collapsed.imageHeight!);
+    expect(collapsed.albumGridWidth).toBeGreaterThan(300);
+    expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
     expect(collapsed.cardHeight).toBeLessThan(180);
     await expect(card.locator(".minimal-radio-card__album")).toHaveCount(2);
 

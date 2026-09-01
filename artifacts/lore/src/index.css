@@ -13998,22 +13998,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 7px;
   width: 100%;
   min-width: 0;
-  height: 50px;
-  min-height: 50px;
-  flex: 0 0 50px;
-  flex-basis: 50px;
+  height: 152px;
+  min-height: 152px;
+  flex: 0 0 100%;
   margin: 0;
   padding: 0 24px 0 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   touch-action: pan-x;
-}
-.minimal-radio-card.is-expanded .minimal-radio-card__album-grid {
-  height: 152px;
-  min-height: 152px;
-  flex-basis: 152px;
-  flex: 0 0 152px;
 }
 .minimal-radio-card__album-grid::-webkit-scrollbar { display: none; }
 .minimal-radio-card__album {
