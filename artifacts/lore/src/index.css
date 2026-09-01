@@ -14021,8 +14021,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   height: min(360px, calc(100vw - 54px));
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   scroll-snap-type: y mandatory;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 .minimal-radio-card__album {
   position: relative;

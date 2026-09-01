@@ -273,6 +273,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
         imageHeight: image?.getBoundingClientRect().height,
         gridOverflowY: grid ? getComputedStyle(grid).overflowY : null,
         gridDirection: grid ? getComputedStyle(grid).flexDirection : null,
+        gridTouchAction: grid ? getComputedStyle(grid).touchAction : null,
       };
     });
     expect(expanded.albumsHeight).toBeGreaterThan(152);
@@ -280,6 +281,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(expanded.imageHeight).toBeGreaterThan(152);
     expect(expanded.gridOverflowY).toBe("auto");
     expect(expanded.gridDirection).toBe("column");
+    expect(expanded.gridTouchAction).toBe("pan-y");
     await expect(card.locator(".minimal-radio-card__station-line")).toHaveCSS("border-bottom-width", "1px");
   });
 
