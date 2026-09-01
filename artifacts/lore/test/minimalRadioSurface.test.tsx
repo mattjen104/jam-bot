@@ -126,16 +126,18 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByRole("heading", { name: "Alpha" }).textContent).toBe("Alpha");
     expect(screen.getByText("Alpha City")).toBeTruthy();
     expect(screen.queryByText("UK")).toBeNull();
-    expect(screen.getAllByText("NOW")).toHaveLength(2);
+    expect(document.querySelectorAll(".minimal-radio-card__crossing.is-live")).toHaveLength(2);
     expect(screen.getByText("Alpha artist")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).textContent)
       .toContain("Alpha track");
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).className)
       .toContain("minimal-radio-card__now");
-    expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(3);
+    expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(4);
     expect(document.querySelector("[data-station-mark='logo']")).toBeNull();
     expect(screen.queryByText(/matched|shown/i)).toBeNull();
-    expect(screen.queryByText(/\d+\s*·/)).toBeNull();
+    expect(screen.getAllByTestId("minimal-radio-crossing")).toHaveLength(2);
+    expect(screen.getAllByTestId("minimal-radio-crossing")
+      .every((element) => element.textContent?.includes("1crossing · this set"))).toBe(true);
 
     const hero = screen.getByTestId("minimal-radio-hero");
     fireEvent.keyDown(hero, { key: "ArrowDown" });
@@ -144,7 +146,7 @@ describe("MinimalRadioSurface", () => {
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
-  it("uses recency words without a crossing count", () => {
+  it("shows the crossing count and range below Now Playing", () => {
     const station = row("alpha", "Alpha", false, 1);
     station.ds.crossings = 2;
 
@@ -152,8 +154,13 @@ describe("MinimalRadioSurface", () => {
       <MinimalRadioSurface rows={[station]} libraryItems={[]} preset="now" />,
     );
 
-    expect(screen.getByLabelText("∩ 1 DAY AGO")).toBeTruthy();
-    expect(screen.queryByText(/\d+\s*·/)).toBeNull();
+    expect(screen.getByLabelText("2 crossings, 24 hr")).toBeTruthy();
+    expect(screen.getByTestId("minimal-radio-crossing").textContent)
+      .toContain("2crossings · 24 hr");
+    expect(
+      screen.getByTestId("minimal-radio-crossing").previousElementSibling
+        ?.classList.contains("minimal-radio-card__now"),
+    ).toBe(true);
     expect(screen.queryByTestId("minimal-radio-hero-crossing")).toBeNull();
   });
 
@@ -257,6 +264,6 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByTestId("minimal-radio-card")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
     expect(screen.getByTestId("minimal-radio-card")).toBeTruthy();
-    expect(screen.getByText("∩ LIFETIME")).toBeTruthy();
+    expect(screen.getByLabelText("5 crossings, lifetime")).toBeTruthy();
   });
 });

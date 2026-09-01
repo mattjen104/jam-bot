@@ -289,13 +289,6 @@ function MinimalRadioCard({
             <span>{stationCity(row.ds.station)}</span>
           ) : null}
         </div>
-        <div
-          className={`minimal-radio-card__recency${recency.live ? " is-live" : ""}`}
-          aria-label={recency.label}
-        >
-          {recency.live ? <i aria-hidden="true" /> : null}
-          <span>{recency.label}</span>
-        </div>
       </header>
 
       <button
@@ -317,6 +310,16 @@ function MinimalRadioCard({
           )}
         </span>
       </button>
+
+      <div
+        className={`minimal-radio-card__crossing${recency.live ? " is-live" : ""}`}
+        data-testid="minimal-radio-crossing"
+        aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"}, ${crossing.label}`}
+      >
+        {recency.live ? <i aria-hidden="true" /> : null}
+        <strong>{crossing.count}</strong>
+        <span>{crossing.count === 1 ? "crossing" : "crossings"} · {crossing.label}</span>
+      </div>
 
       <section className="minimal-radio-card__albums" aria-label="Crossing album covers">
         {albums.length > 0 ? (
