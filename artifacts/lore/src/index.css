@@ -13817,7 +13817,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   box-shadow: 0 8px 24px hsl(0 0% 0% / .14);
 }
 .minimal-radio-card.is-expanded {
-  height: 254px;
+  height: auto;
   min-height: 254px;
 }
 .minimal-radio-card__station-line {
@@ -13974,10 +13974,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: flex-start;
 }
 .minimal-radio-card.is-expanded .minimal-radio-card__albums {
-  height: 152px;
-  min-height: 152px;
-  flex: 0 0 152px;
-  flex-basis: 152px;
+  height: auto;
+  min-height: 0;
+  flex: 0 0 auto;
+  flex-basis: auto;
 }
 .minimal-radio-card__albums.is-empty {
   display: none;
@@ -13993,14 +13993,15 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   pointer-events: none;
 }
 .minimal-radio-card__album-grid {
-  display: flex;
+  display: grid;
   align-items: flex-start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px;
   width: 100%;
   min-width: 0;
-  height: 152px;
-  min-height: 152px;
-  flex: 0 0 100%;
+  height: auto;
+  min-height: 0;
+  flex: 0 0 auto;
   margin: 0;
   padding: 0 24px 0 0;
   overflow-x: auto;
@@ -14011,9 +14012,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album-grid::-webkit-scrollbar { display: none; }
 .minimal-radio-card__album {
   position: relative;
-  flex: 0 0 152px;
-  width: 152px;
-  height: 152px;
+  width: 100%;
+  aspect-ratio: 1;
   min-width: 0;
   overflow: hidden;
   border-radius: 4px;
@@ -14029,8 +14029,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album img,
 .minimal-radio-card__album-swatch {
   display: grid;
-  width: 152px;
-  height: 152px;
+  width: 100%;
+  height: 100%;
   place-items: center;
   object-fit: cover;
   border: 0;

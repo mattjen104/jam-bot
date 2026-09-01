@@ -235,38 +235,40 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await loadStationDial(page);
 
     const card = page.getByTestId("minimal-radio-card").first();
-    const covers = card.locator(".minimal-radio-card__albums");
     const collapsed = await card.evaluate((node) => {
       const cardRect = node.getBoundingClientRect();
       const albumsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect();
       const albumGridRect = node.querySelector<HTMLElement>(".minimal-radio-card__album-grid")?.getBoundingClientRect();
-      const albumNode = node.querySelector<HTMLElement>(".minimal-radio-card__album");
+      const albumNodes = [...node.querySelectorAll<HTMLElement>(".minimal-radio-card__album")];
       const imageRect = node.querySelector<HTMLImageElement>(".minimal-radio-card__album img")?.getBoundingClientRect();
       return {
         cardHeight: cardRect.height,
         albumsHeight: albumsRect?.height,
         albumsWidth: albumsRect?.width,
         albumGridWidth: albumGridRect?.width,
-        albumWidth: albumNode?.getBoundingClientRect().width,
+        albumWidths: albumNodes.map((album) => album.getBoundingClientRect().width),
         imageHeight: imageRect?.height,
         imageWidth: imageRect?.width,
-        albumStyle: albumNode ? {
-          width: getComputedStyle(albumNode).width,
-          flexBasis: getComputedStyle(albumNode).flexBasis,
-        } : null,
       };
     });
-    expect(collapsed.imageWidth).toBe(152);
-    expect(collapsed.imageHeight).toBe(152);
+    expect(collapsed.imageWidth).toBeGreaterThan(152);
+    expect(collapsed.imageHeight).toBe(collapsed.imageWidth);
     expect(collapsed.albumsHeight).toBeLessThan(collapsed.imageHeight!);
     expect(collapsed.albumGridWidth).toBeGreaterThan(300);
     expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
+    expect(collapsed.albumWidths).toHaveLength(2);
+    expect(collapsed.albumWidths[0]).toBe(collapsed.albumWidths[1]);
     expect(collapsed.cardHeight).toBeLessThan(180);
     await expect(card.locator(".minimal-radio-card__album")).toHaveCount(2);
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
-    await expect(covers).toHaveCSS("height", "152px");
+    const expanded = await card.evaluate((node) => ({
+      albumsHeight: node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect().height,
+      imageHeight: node.querySelector<HTMLImageElement>(".minimal-radio-card__album img")?.getBoundingClientRect().height,
+    }));
+    expect(expanded.albumsHeight).toBeGreaterThan(152);
+    expect(expanded.imageHeight).toBe(expanded.albumsHeight);
   });
 
   test("1280×900: presets and keyboard navigation change the active card", async ({ page }) => {
