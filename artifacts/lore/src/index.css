@@ -12959,7 +12959,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   box-sizing: border-box;
 }
 .front-door-header__intro { min-width: 0; }
-.front-door-header__kicker,
 .minimal-radio-card__eyebrow,
 .minimal-radio__preset-label,
 .minimal-radio__remote-label {
@@ -13750,11 +13749,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .front-door-header h1 {
   margin: 5px 0 4px;
-  font: 400 19px/1.1 var(--app-font-reading);
+  font: 400 16px/1.1 var(--app-font-reading);
   letter-spacing: -0.015em;
 }
 .front-door-header p {
-  font: 400 11px/1.35 var(--app-font-mono);
+  font: 400 10px/1.35 var(--app-font-mono);
   letter-spacing: .01em;
 }
 .minimal-radio__hero-region {

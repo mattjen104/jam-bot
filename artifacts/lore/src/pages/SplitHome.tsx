@@ -157,7 +157,6 @@ export default function SplitHome() {
       <div className="split-home__front-door-shell">
         <header className="front-door-header">
           <div className="front-door-header__intro">
-            <span className="front-door-header__kicker">Lore radio</span>
             {!hasRadioCrossing ? (
               <>
                 <h1>Your records are on the radio right now.</h1>
@@ -170,7 +169,7 @@ export default function SplitHome() {
                     aria-controls="front-door-artist-document"
                     data-testid="front-door-add-artists"
                   >
-                    Add artists
+                    Add albums
                   </button>{" "}
                   to see which stations cross your library.
                 </p>
