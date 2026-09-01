@@ -13113,23 +13113,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   z-index: 1;
   margin: 0;
   padding: 4px 5px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   border: 1px solid hsl(0 0% 100% / .2);
   border-radius: 3px;
   background: hsl(0 0% 0% / .82);
   color: hsl(var(--foreground));
   font: 600 9px/1.1 var(--app-font-mono);
   letter-spacing: 0.08em;
-  text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .minimal-radio-card__station-title span,
 .minimal-radio-card__station-title small {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: 100%;
+  overflow-wrap: anywhere;
 }
 .minimal-radio-card__station-title small {
   margin-top: 2px;
@@ -13149,9 +13149,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__station {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  width: 100%;
   min-width: 0;
-  padding: 0 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.minimal-radio-card__station:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+.minimal-radio-card__station:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid hsl(var(--accent) / .8);
+  outline-offset: -3px;
 }
 .minimal-radio-card__station-mark-wrap {
   position: relative;
@@ -13191,7 +13206,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card {
   display: grid;
-  grid-template-columns: minmax(180px, .9fr) minmax(170px, 1.15fr) minmax(150px, 1.1fr) auto;
+  grid-template-columns: 104px minmax(170px, 1.15fr) minmax(150px, 1.1fr) auto;
   flex: 1;
   height: 100%;
   min-height: 0;
@@ -13373,20 +13388,20 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card__track > .minimal-radio-card__eyebrow { margin-bottom: 1px; }
 .minimal-radio-card__track > strong,
-.minimal-radio-card__track > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.minimal-radio-card__track > span,
+.minimal-radio-card__track > small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .minimal-radio-card__track > strong { font: 500 15px/1.2 var(--app-font-reading); }
 .minimal-radio-card__track > span { color: hsl(var(--dim)); font: 11px/1.2 var(--app-font-mono); }
 .minimal-radio-card__track > small {
   margin-top: 3px;
-  overflow: hidden;
+  overflow: visible;
   color: hsl(var(--faint));
   font: 9px/1.1 var(--app-font-mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .minimal-radio-card__track-copy {
   display: flex;
@@ -13421,19 +13436,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--dim));
   font: 11px/1.2 var(--app-font-mono);
 }
-.minimal-radio-card__play {
-  align-self: flex-start;
-  min-height: 24px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 11px;
-  background: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
-  font: 600 10px/1 var(--app-font-mono);
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.minimal-radio-card__play:disabled { opacity: 0.45; cursor: not-allowed; }
 .minimal-radio-card__actions {
   display: flex;
   align-items: stretch;
@@ -13526,12 +13528,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     padding-bottom: 8px;
   }
   .minimal-radio-card {
-    grid-template-columns: minmax(112px, 1.15fr) minmax(92px, 1fr) minmax(72px, .8fr) 56px;
+    grid-template-columns: 72px minmax(92px, 1fr) minmax(72px, .8fr) 56px;
     border-radius: 10px;
   }
   .minimal-radio-card__station {
-    gap: 6px;
-    padding: 0 7px;
+    gap: 0;
+    padding: 0;
   }
   .minimal-radio-card__station-mark {
     width: 72px;
@@ -13613,11 +13615,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .minimal-radio-card__actions button svg {
     width: 10px;
     height: 10px;
-  }
-  .minimal-radio-card__play {
-    width: fit-content;
-    min-height: 20px;
-    font-size: 7px;
   }
 }
 

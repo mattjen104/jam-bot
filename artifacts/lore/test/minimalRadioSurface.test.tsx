@@ -130,6 +130,11 @@ describe("MinimalRadioSurface", () => {
     expect(stationLabel.textContent).toContain("Alpha");
     expect(stationLabel.textContent).toContain("Alpha City");
     expect(stationLabel.textContent).not.toContain("UK");
+    expect(screen.getByRole("button", { name: "Tune in to Alpha" }).className).toContain(
+      "minimal-radio-card__station",
+    );
+    expect(screen.getByTestId("minimal-radio-hero-card-alpha").querySelector(".minimal-radio-card__track .minimal-radio-card__play")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Skip/ })).toBeNull();
     expect(screen.getByTestId("minimal-radio-hero-card-alpha").querySelector("[data-station-mark='logo']")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Now" })).toBeNull();
     expect(screen.getByRole("button", { name: "Show lifetime crossings" })).toBeTruthy();

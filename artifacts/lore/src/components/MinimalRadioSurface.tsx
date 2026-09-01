@@ -262,7 +262,13 @@ function MinimalRadioCard({
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
     >
-      <div className="minimal-radio-card__station">
+      <button
+        type="button"
+        className="minimal-radio-card__station"
+        disabled={!playable}
+        onClick={play}
+        aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
+      >
         <div className="minimal-radio-card__station-mark-wrap">
           <StationMark
             name={row.ds.station.name}
@@ -282,22 +288,13 @@ function MinimalRadioCard({
             ) : null}
           </h2>
         </div>
-      </div>
+      </button>
 
       <section className="minimal-radio-card__track" aria-label="Current track">
         <div className="minimal-radio-card__eyebrow">Now playing</div>
         <strong>{track?.title || "Waiting for track metadata"}</strong>
         <span>{track?.artist || "The station is live"}</span>
         {row.show?.showName ? <small>{row.show.showName}</small> : null}
-        <button
-          type="button"
-          className="minimal-radio-card__play"
-          disabled={!playable}
-          onClick={play}
-          aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
-        >
-          {isPlaying ? "Pause" : "Tune in"}
-        </button>
       </section>
 
       <section className="minimal-radio-card__albums" aria-label="Lifetime crossings with this station">
