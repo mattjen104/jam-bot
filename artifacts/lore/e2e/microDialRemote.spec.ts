@@ -253,12 +253,12 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     });
     expect(collapsed.imageWidth).toBeGreaterThan(80);
     expect(collapsed.imageHeight).toBe(collapsed.imageWidth);
-    expect(collapsed.albumsHeight).toBeLessThan(collapsed.imageHeight!);
+    expect(collapsed.albumsHeight).toBe(collapsed.imageHeight);
     expect(collapsed.albumGridWidth).toBeGreaterThan(140);
     expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
     expect(collapsed.albumWidths).toHaveLength(1);
     expect(collapsed.albumWidths[0]).toBeGreaterThan(80);
-    expect(collapsed.cardHeight).toBeLessThan(120);
+    expect(collapsed.cardHeight).toBeLessThan(140);
     await expect(card.locator(".minimal-radio-card__album")).toHaveCount(1);
     await expect(card.locator(".minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
     await expect(card.locator(".minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");

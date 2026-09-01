@@ -13797,7 +13797,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio__hero-slide {
   height: auto;
   width: 100%;
-  min-height: 108px;
+  min-height: 124px;
   padding-bottom: 12px;
 }
 .minimal-radio-card {
@@ -13805,8 +13805,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   flex: 1 1 auto;
   flex-direction: column;
   gap: 6px;
-  height: 108px;
-  min-height: 108px;
+  height: 124px;
+  min-height: 124px;
   width: 100%;
   min-width: 0;
   padding: 8px 14px;
@@ -13826,7 +13826,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: stretch;
   gap: 0;
   min-width: 0;
-  min-height: 70px;
+  min-height: 104px;
   padding-bottom: 0;
 }
 .minimal-radio-card__station-column {
@@ -13980,11 +13980,11 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: relative;
   display: flex;
   align-items: center;
-  flex: 0 0 50px;
+  flex: 0 0 84px;
   min-width: 0;
-  height: 50px;
-  min-height: 50px;
-  flex-basis: 50px;
+  height: 84px;
+  min-height: 84px;
+  flex-basis: 84px;
   padding: 0;
   overflow: hidden;
   border: 0;
@@ -14114,8 +14114,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     min-height: 616px;
   }
   .minimal-radio-card {
-    height: 108px;
-    min-height: 108px;
+    height: 124px;
+    min-height: 124px;
     padding: 8px 14px;
   }
   .minimal-radio-card__station-identity h2 {
