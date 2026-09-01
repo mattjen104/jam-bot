@@ -13743,3 +13743,264 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .artist-document__save { width: 100%; }
 }
+
+/* ── Roomy radio rows ───────────────────────────────────────────────────── */
+.front-door-header {
+  padding-bottom: 12px;
+}
+.front-door-header h1 {
+  margin: 5px 0 4px;
+  font: 400 19px/1.1 var(--app-font-reading);
+  letter-spacing: -0.015em;
+}
+.front-door-header p {
+  font: 400 11px/1.35 var(--app-font-mono);
+  letter-spacing: .01em;
+}
+.minimal-radio__hero-region {
+  height: min(660px, calc(100dvh - var(--shell-h, 0px) - 130px));
+  min-height: 616px;
+}
+.minimal-radio__hero-slide {
+  height: auto;
+  min-height: 154px;
+  padding-bottom: 12px;
+}
+.minimal-radio-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  height: 142px;
+  min-height: 142px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border) / .8);
+  border-radius: 10px;
+  background: hsl(var(--card));
+  box-shadow: 0 8px 24px hsl(0 0% 0% / .14);
+}
+.minimal-radio-card__station-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 22px;
+}
+.minimal-radio-card__station-identity {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.minimal-radio-card__station-identity h2 {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font: 600 18px/1.1 var(--app-font-reading);
+  letter-spacing: -.01em;
+  overflow-wrap: anywhere;
+}
+.minimal-radio-card__station-identity > span {
+  color: hsl(var(--faint));
+  font: 10.5px/1.2 var(--app-font-mono);
+}
+.minimal-radio-card__recency {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: hsl(var(--faint));
+  font: 10.5px/1 var(--app-font-mono);
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.minimal-radio-card__recency.is-live {
+  color: hsl(var(--accent));
+}
+.minimal-radio-card__recency i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 0 hsl(var(--accent) / .5);
+  animation: minimal-radio-live-pulse 1.7s ease-out infinite;
+}
+@keyframes minimal-radio-live-pulse {
+  70% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.minimal-radio-card__now {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  text-align: left;
+  cursor: pointer;
+}
+.minimal-radio-card__now:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.minimal-radio-card__now:focus-visible {
+  outline: 2px solid hsl(var(--accent) / .75);
+  outline-offset: 3px;
+}
+.minimal-radio-card__now-label {
+  flex: 0 0 auto;
+  color: hsl(var(--faint));
+  font: 600 9.5px/1 var(--app-font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.minimal-radio-card__now-copy {
+  min-width: 0;
+  overflow: hidden;
+  color: hsl(var(--dim));
+  font: 400 13.5px/1.2 var(--app-font-reading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.minimal-radio-card__now-copy strong {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+.minimal-radio-card__now.is-empty .minimal-radio-card__now-copy {
+  color: hsl(var(--faint));
+}
+.minimal-radio-card__albums {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  min-height: 76px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+}
+.minimal-radio-card__albums::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 30px;
+  background: linear-gradient(90deg, transparent, hsl(var(--card)));
+  content: "";
+  pointer-events: none;
+}
+.minimal-radio-card__album-grid {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  min-height: 76px;
+  margin: 0;
+  padding: 0 24px 0 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+.minimal-radio-card__album-grid::-webkit-scrollbar { display: none; }
+.minimal-radio-card__album {
+  position: relative;
+  flex: 0 0 76px;
+  width: 76px;
+  height: 76px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  color: hsl(var(--foreground));
+  text-decoration: none;
+  transition: transform 180ms ease;
+}
+.minimal-radio-card__album:nth-child(4) { opacity: .58; }
+.minimal-radio-card__album:hover,
+.minimal-radio-card__album:focus-visible {
+  transform: translateY(-2px);
+  outline: none;
+}
+.minimal-radio-card__album img,
+.minimal-radio-card__album-swatch {
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  object-fit: cover;
+  border: 0;
+  border-radius: 4px;
+  background: hsl(var(--secondary));
+}
+.minimal-radio-card__album-swatch {
+  box-sizing: border-box;
+  padding: 8px;
+  overflow: hidden;
+  color: hsl(var(--foreground) / .84);
+  font: 600 9px/1.15 var(--app-font-mono);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.minimal-radio-card__album-caption {
+  right: 4px;
+  bottom: 4px;
+  left: 4px;
+  padding: 5px 6px;
+  border: 0;
+  background: hsl(0 0% 0% / .82);
+}
+.minimal-radio-card__empty-albums { display: none; }
+
+@media (max-width: 640px) {
+  .split-home__front-door-shell {
+    padding-top: 14px;
+  }
+  .front-door-header {
+    align-items: flex-start;
+    gap: 12px;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+  .front-door-header__kicker {
+    font-size: 11px;
+    letter-spacing: .18em;
+  }
+  .front-door-modes button {
+    min-height: 32px;
+    padding: 0 12px;
+  }
+  .front-door-cli {
+    margin-bottom: 10px;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+  .minimal-radio__hero-region {
+    height: min(660px, calc(100dvh - var(--shell-h, 0px) - 120px));
+    min-height: 616px;
+  }
+  .minimal-radio-card {
+    height: 142px;
+    min-height: 142px;
+    padding: 14px;
+  }
+  .minimal-radio-card__station-identity h2 {
+    font-size: 18px;
+  }
+  .minimal-radio-card__station-identity > span,
+  .minimal-radio-card__recency {
+    font-size: 9.5px;
+  }
+  .minimal-radio-card__now-copy {
+    font-size: 13.5px;
+  }
+}

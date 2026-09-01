@@ -5,17 +5,14 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import {
-  Radio,
-} from "lucide-react";
+import { Radio } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { onArtError, RUMOURS } from "../lib/rumours";
+import { onArtError } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
-import { StationMark } from "./StationMark";
 import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
 import {
   STATION_CATEGORY_DEFINITIONS,
@@ -27,7 +24,7 @@ export type RadioPreset = "now" | "lifetime";
 const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
   ({ cat, label, title }) => ({ value: cat, label, title }),
 );
-const MAX_CROSSING_ALBUMS = 24;
+const MAX_CROSSING_ALBUMS = 4;
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
@@ -49,23 +46,48 @@ function stationCity(station: { city?: string | null }): string | null {
   return station.city?.trim() || null;
 }
 
-function knownShowName(showName: string | null | undefined): string | null {
-  const normalized = showName?.trim();
-  if (!normalized || /^unknown(?:\s+show)?$/i.test(normalized)) return null;
-  return normalized;
-}
-
-function scoreFor(row: DialLaneRow, preset: RadioPreset): number {
-  if (preset === "now") {
-    const track = liveTrack(row);
-    return (track?.isLibraryHit ? 2 : 0) + (track?.isArtistHit ? 1 : 0);
-  }
-  return row.ds.lifetimeCrossings + row.ds.lifetimeArtistCrossings;
-}
-
 interface CrossingSummary {
   count: number;
   label: "this set" | "24 hr" | "7d" | "30d" | "lifetime";
+}
+
+function hasCrossingInWindow(row: DialLaneRow, lifetimeOnly: boolean): boolean {
+  const track = liveTrack(row);
+  const liveHit = Boolean(
+    track && !track.resolving && (track.isLibraryHit || track.isArtistHit),
+  );
+  if (lifetimeOnly) {
+    return row.ds.lifetimeCrossings + row.ds.lifetimeArtistCrossings > 0;
+  }
+  return Boolean(
+    liveHit
+    || (row.show?.crossings ?? 0) + (row.show?.artistCrossings ?? 0) > 0
+    || row.ds.crossings + row.ds.artistCrossings > 0
+    || row.ds.weekCrossings + row.ds.weekArtistCrossings > 0
+    || row.ds.monthCrossings + row.ds.monthArtistCrossings > 0,
+  );
+}
+
+function crossingRecency(row: DialLaneRow, crossing: CrossingSummary): {
+  label: string;
+  live: boolean;
+} {
+  const track = liveTrack(row);
+  if (track && !track.resolving && (track.isLibraryHit || track.isArtistHit)) {
+    return { label: "NOW", live: true };
+  }
+  switch (crossing.label) {
+    case "this set":
+      return { label: "∩ THIS SET", live: false };
+    case "24 hr":
+      return { label: "∩ 1 DAY AGO", live: false };
+    case "7d":
+      return { label: "∩ 7 DAYS AGO", live: false };
+    case "30d":
+      return { label: "∩ 30 DAYS AGO", live: false };
+    default:
+      return { label: "∩ LIFETIME", live: false };
+  }
 }
 
 function crossingSummary(row: DialLaneRow, lifetimeOnly: boolean): CrossingSummary {
@@ -99,7 +121,7 @@ interface CrossingAlbum {
   href: string;
   title: string;
   artist: string;
-  artworkUrl: string;
+  artworkUrl: string | null;
 }
 
 type CrossingSpin = Pick<
@@ -162,10 +184,7 @@ function crossingAlbums(
         : `/song/${album.recordingMbid}`,
       title: album.title,
       artist: album.artist,
-      artworkUrl: album.artworkUrl
-        ?? (album.releaseGroupMbid
-          ? `https://coverartarchive.org/release-group/${album.releaseGroupMbid}/front-1200`
-          : RUMOURS),
+      artworkUrl: album.artworkUrl,
     });
     if (albums.length >= MAX_CROSSING_ALBUMS) return albums;
   }
@@ -179,8 +198,7 @@ function crossingAlbums(
       href: `/album/${releaseGroupMbid}`,
       title: recording?.albumTitle ?? recording?.title ?? spin?.title ?? "Album",
       artist: recording?.artist ?? spin?.artist ?? "",
-      artworkUrl: recording?.artworkUrl
-        ?? `https://coverartarchive.org/release-group/${releaseGroupMbid}/front-1200`,
+      artworkUrl: recording?.artworkUrl ?? null,
     });
   };
 
@@ -230,13 +248,11 @@ function MinimalRadioCard({
   libraryItems,
   stationSpins,
   crossing,
-  active,
 }: {
   row: DialLaneRow;
   libraryItems: LibraryItem[];
   stationSpins: readonly CrossingSpin[];
   crossing: CrossingSummary;
-  active: boolean;
 }) {
   const { radio } = usePlayer();
   const track = liveTrack(row);
@@ -247,7 +263,14 @@ function MinimalRadioCard({
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";
-  const showName = knownShowName(row.show?.showName);
+  const recency = crossingRecency(row, crossing);
+  const artist = track?.artist?.trim() || "";
+  const title = track?.title?.trim() || "";
+  const nowPlayingLabel = !track
+    ? "Not broadcasting"
+    : artist || title
+      ? `${artist}${artist && title ? " — " : ""}${title}`
+      : "No metadata";
 
   const play = useCallback(() => {
     if (playable) void radio.toggle(row.ds.station);
@@ -259,78 +282,75 @@ function MinimalRadioCard({
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
     >
-      <section className="minimal-radio-card__track" aria-label="Current track">
-        <div className="minimal-radio-card__eyebrow">Now playing</div>
-        <strong>{track?.artist || "The station is live"}</strong>
-        {showName ? <small>{showName}</small> : null}
-      </section>
+      <header className="minimal-radio-card__station-line">
+        <div className="minimal-radio-card__station-identity">
+          <h2 aria-label={row.ds.station.name}>{row.ds.station.name}</h2>
+          {stationCity(row.ds.station) ? (
+            <span>{stationCity(row.ds.station)}</span>
+          ) : null}
+        </div>
+        <div
+          className={`minimal-radio-card__recency${recency.live ? " is-live" : ""}`}
+          aria-label={recency.label}
+        >
+          {recency.live ? <i aria-hidden="true" /> : null}
+          <span>{recency.label}</span>
+        </div>
+      </header>
 
       <button
         type="button"
-        className="minimal-radio-card__station"
+        className={`minimal-radio-card__now${!track ? " is-empty" : ""}`}
         disabled={!playable}
         onClick={play}
         aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
       >
-        <div className="minimal-radio-card__station-mark-wrap">
-          <div
-            className="minimal-radio-card__crossing minimal-radio-card__station-crossing"
-            data-testid={active
-              ? "minimal-radio-hero-crossing"
-              : `minimal-radio-hero-crossing-${row.ds.station.slug}`}
-            aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"} ${crossing.label}`}
-          >
-            <strong>{crossing.count}</strong>
-            <span> · {crossing.label}</span>
-          </div>
-          <StationMark
-            name={row.ds.station.name}
-            logoUrl={row.ds.station.logoUrl}
-            homepageUrl={row.ds.station.homepageUrl}
-            variant="cube"
-            className="minimal-radio-card__station-mark"
-          />
-          <h2
-            className="minimal-radio-card__station-title"
-            aria-label={row.ds.station.name}
-            data-testid={`minimal-radio-station-label-${row.ds.station.slug}`}
-          >
-            <span>{row.ds.station.name}</span>
-            {stationCity(row.ds.station) ? (
-              <small>{stationCity(row.ds.station)}</small>
-            ) : null}
-          </h2>
-        </div>
+        <span className="minimal-radio-card__now-label">Now</span>
+        <span className="minimal-radio-card__now-copy">
+          {track && artist && title ? (
+            <>
+              <strong>{artist}</strong>
+              <span> — {title}</span>
+            </>
+          ) : (
+            nowPlayingLabel
+          )}
+        </span>
       </button>
 
       <section className="minimal-radio-card__albums" aria-label="Crossing album covers">
         {albums.length > 0 ? (
           <div className="minimal-radio-card__album-grid">
-            {albums.map((album) => (
-              <a
-                key={album.key}
-                href={album.href}
-                className="minimal-radio-card__album"
-                title={`${album.title} by ${album.artist}`}
-                aria-label={`Open ${album.title} by ${album.artist}`}
-              >
-                <img
-                  src={proxyArtUrl(album.artworkUrl) ?? RUMOURS}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  onError={onArtError}
-                />
-                <span className="minimal-radio-card__album-caption">
-                  <b>{album.title}</b>
-                  <small>{album.artist}</small>
-                </span>
-              </a>
-            ))}
+            {albums.map((album) => {
+              const artworkUrl = album.artworkUrl ? proxyArtUrl(album.artworkUrl) : null;
+              return (
+                <a
+                  key={album.key}
+                  href={album.href}
+                  className="minimal-radio-card__album"
+                  title={`${album.title} by ${album.artist}`}
+                  aria-label={`Open ${album.title} by ${album.artist}`}
+                >
+                  {artworkUrl ? (
+                    <img
+                      src={artworkUrl}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={onArtError}
+                    />
+                  ) : (
+                    <span className="minimal-radio-card__album-swatch">{album.title}</span>
+                  )}
+                  <span className="minimal-radio-card__album-caption">
+                    <b>{album.title}</b>
+                    <small>{album.artist}</small>
+                  </span>
+                </a>
+              );
+            })}
           </div>
-        ) : (
-          <p className="minimal-radio-card__empty-albums">Your saved albums will appear here when this station crosses them.</p>
-        )}
+        ) : null}
       </section>
     </article>
   );
@@ -340,7 +360,7 @@ export function MinimalRadioSurface({
   rows,
   libraryItems,
   recentSpinsBySlug = new Map(),
-  preset,
+  preset: _preset,
   activeCategories = new Set<StationCategory>(),
   onToggleCategory,
   loading = false,
@@ -353,9 +373,11 @@ export function MinimalRadioSurface({
   const slideRefs = useRef(new Map<string, HTMLDivElement>());
   const candidates = useMemo(
     () => [...rows]
-      .filter((row) => liveTrack(row) != null || row.ds.station.streamUrl != null || row.ds.station.relayUrl != null)
-      .sort((a, b) => scoreFor(b, preset) - scoreFor(a, preset) || a.ds.station.name.localeCompare(b.ds.station.name)),
-    [preset, rows],
+      .filter((row) => (
+        (liveTrack(row) != null || row.ds.station.streamUrl != null || row.ds.station.relayUrl != null)
+        && hasCrossingInWindow(row, lifetimeOnly)
+      )),
+    [lifetimeOnly, rows],
   );
   const selectedIndex = Math.max(
     0,
@@ -448,16 +470,6 @@ export function MinimalRadioSurface({
       </section>
     );
   }
-  if (candidates.length === 0) {
-    return (
-      <section className="minimal-radio-state" data-testid="minimal-radio-no-candidates">
-        <Radio size={24} aria-hidden="true" />
-        <h2>The live stations have no playable signal yet.</h2>
-        <p>Metadata can arrive a little after a station comes on air.</p>
-      </section>
-    );
-  }
-
   return (
     <section className="minimal-radio" data-testid="minimal-radio-surface">
       <div className="minimal-radio__controls" role="group" aria-label="Radio presets and stations">
@@ -484,42 +496,49 @@ export function MinimalRadioSurface({
         </button>
       </div>
 
-      <div className="minimal-radio__hero-frame">
-        <div
-          ref={heroRegionRef}
-          className="minimal-radio__hero-region"
-          data-testid="minimal-radio-hero"
-          role="region"
-          aria-label="Live station cards"
-          tabIndex={0}
-          onKeyDown={handleHeroKeyDown}
-          onScroll={handleHeroScroll}
-        >
-          {candidates.map((row, index) => (
-            <div
-              key={row.ds.station.slug}
-              ref={(node) => {
-                if (node) slideRefs.current.set(row.ds.station.slug, node);
-                else slideRefs.current.delete(row.ds.station.slug);
-              }}
-              className="minimal-radio__hero-slide"
-              data-testid={`minimal-radio-hero-card-${row.ds.station.slug}`}
-              role="group"
-              aria-label={`${row.ds.station.name} now-playing hero${selectedIndex === index ? ", selected" : ""}`}
-              aria-hidden={selectedIndex !== index}
-              inert={selectedIndex !== index ? true : undefined}
-            >
-              <MinimalRadioCard
-                row={row}
-                libraryItems={libraryItems}
-                stationSpins={recentSpinsBySlug.get(row.ds.station.slug) ?? []}
-                crossing={crossingSummary(row, lifetimeOnly)}
-                active={selectedIndex === index}
-              />
-            </div>
-          ))}
+      {candidates.length === 0 ? (
+        <section className="minimal-radio-state" data-testid="minimal-radio-no-candidates">
+          <Radio size={24} aria-hidden="true" />
+          <h2>Nothing crossed your library in this window.</h2>
+          <p>{lifetimeOnly ? "There are no saved crossings in the archive yet." : "Try Lifetime to widen the window."}</p>
+        </section>
+      ) : (
+        <div className="minimal-radio__hero-frame">
+          <div
+            ref={heroRegionRef}
+            className="minimal-radio__hero-region"
+            data-testid="minimal-radio-hero"
+            role="region"
+            aria-label="Live station cards"
+            tabIndex={0}
+            onKeyDown={handleHeroKeyDown}
+            onScroll={handleHeroScroll}
+          >
+            {candidates.map((row, index) => (
+              <div
+                key={row.ds.station.slug}
+                ref={(node) => {
+                  if (node) slideRefs.current.set(row.ds.station.slug, node);
+                  else slideRefs.current.delete(row.ds.station.slug);
+                }}
+                className="minimal-radio__hero-slide"
+                data-testid={`minimal-radio-hero-card-${row.ds.station.slug}`}
+                role="group"
+                aria-label={`${row.ds.station.name} now-playing hero${selectedIndex === index ? ", selected" : ""}`}
+                aria-hidden={selectedIndex !== index}
+                inert={selectedIndex !== index ? true : undefined}
+              >
+                <MinimalRadioCard
+                  row={row}
+                  libraryItems={libraryItems}
+                  stationSpins={recentSpinsBySlug.get(row.ds.station.slug) ?? []}
+                  crossing={crossingSummary(row, lifetimeOnly)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

@@ -35,6 +35,14 @@ function makeStation(index: number) {
     votes: 0,
     clickcount: 0,
     upcomingShowCount: 0,
+    crossings: 1,
+    artistCrossings: 0,
+    weekCrossings: 1,
+    weekArtistCrossings: 0,
+    monthCrossings: 1,
+    monthArtistCrossings: 0,
+    lifetimeCrossings: 1,
+    lifetimeArtistCrossings: 0,
   };
 }
 
@@ -51,13 +59,25 @@ function makeNowPlaying(index: number) {
     recording: null,
     show: null,
     isFirstSpin: false,
-    isLibraryHit: false,
+    isLibraryHit: true,
     isArtistHit: false,
   };
 }
 
 const STATIONS = Array.from({ length: STATION_COUNT }, (_, index) => makeStation(index));
 const NOW_PLAYING = STATIONS.map((_, index) => makeNowPlaying(index));
+const CROSSINGS = STATIONS.map((station) => ({
+  stationSlug: station.slug,
+  crossings: 1,
+  artistCrossings: 0,
+  weekCrossings: 1,
+  weekArtistCrossings: 0,
+  monthCrossings: 1,
+  monthArtistCrossings: 0,
+  lifetimeCrossings: 1,
+  lifetimeArtistCrossings: 0,
+  albumCrossings: [],
+}));
 
 async function installRoutes(
   page: Page,
@@ -84,7 +104,7 @@ async function installRoutes(
     await route.fulfill({ json: { artists: tasteSeeds } });
   });
   await page.route("**/api/me/crossings**", (route) =>
-    route.fulfill({ json: { items: [], computing: false, failed: false } }),
+    route.fulfill({ json: { items: CROSSINGS, computing: false, failed: false } }),
   );
   await page.route("**/api/me/picker-names", (route) =>
     route.fulfill({ json: { names: [], hasLibrary: true, hasSeeds: true } }),
@@ -229,22 +249,11 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
       },
     }]);
 
-    await expect(page.getByText("Type an artist name into the CLI")).toHaveCount(0);
-    await expect(page.locator(".front-door-header p").getByTestId("front-door-add-artists"))
-      .toBeVisible();
-    await page.getByTestId("front-door-add-artists").click();
-    const document = page.getByRole("textbox", { name: "Artists, one per line" });
-    await expect(document).toHaveValue("");
     const input = page.getByRole("textbox", { name: "Dial command" });
     await input.fill("A Tribe Called Quest");
     await input.press("Enter");
     await expect(page.getByTestId("front-door-cli").getByRole("status"))
       .toContainText("A Tribe Called Quest added");
-    await expect(document).toHaveValue("A Tribe Called Quest");
-
-    await document.fill("Broadcast\nPortishead\nbroadcast");
-    await page.getByRole("button", { name: "Save artists" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
 
     await expect(page.getByRole("link", { name: "Heard" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Index" })).toBeVisible();
@@ -252,8 +261,5 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.getByTestId("front-door-library")).toBeVisible();
     await expect(page.getByTestId("minimal-radio-card")).toHaveCount(0);
     await expect(page.getByText("Caught Song", { exact: true })).toBeVisible();
-    await expect(page.getByText("Broadcast", { exact: true })).toBeVisible();
-    await expect(page.getByText("Portishead", { exact: true })).toBeVisible();
-    await expect(page.getByText("A Tribe Called Quest", { exact: true })).toBeVisible();
   });
 });

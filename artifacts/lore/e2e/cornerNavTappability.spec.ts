@@ -67,7 +67,7 @@ function makeNowPlaying() {
     recording: null,
     show: { name: SHOW_NAME, djName: DJ_NAME },
     isFirstSpin: false,
-    isLibraryHit: false,
+    isLibraryHit: true,
     isArtistHit: false,
   };
 }
@@ -302,7 +302,7 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       await loreLink.click();
       // After clicking Feed we land back on the dial; tune back in for the
       // library link check.
-      const tuneIn = page.getByRole("button", { name: "Tune in" });
+      const tuneIn = page.getByRole("button", { name: /^Tune in to / });
       await expect(tuneIn).toBeVisible({ timeout: 10_000 });
       await tuneIn.click();
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });

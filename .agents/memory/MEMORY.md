@@ -1,10 +1,5 @@
 // hint: Logic changed on both sides. Requires understanding intent of each change.
 - [NTS ICY redirect routing](nts-icy-redirect-routing.md) — NTS relay reaches metadata through two redirects; a valid instant can still have an empty title between tracks.
-- [List provenance admin workflow](list-provenance-workflow.md) — 4-table layer: scrape list → enrich recording release-groups → provenance appears; bridge table must be seeded first.
-- [Synced-listening strategy](social-listening-strategy.md) — jam-bot "agnostic spicetify": coordinate-never-redistribute, monetize the conductor, desktop-only, ban-risk reality.
-- [jam-bot persona & escalation](jam-bot-persona.md) — music-teacher voice that escalates when razzed; uses in-memory turn buffer (no Slack history scope) fed to askLLM.
-- [jam-bot persona isolation & intent fast-paths](jam-bot-persona-and-intents.md) — keep she/her but never retone voice/taste: add behavior as layered askLLM opts blocks, leave base SYSTEM_PROMPT alone; every intent needs a deterministic fast-path regex off the LLM hot path.
-- [jam-bot reply routing & ambient gating](jam-bot-reply-routing.md) — no quiet mode: reply where addressed (DM→DM, channel→channel), ambient cards post only when host Jam active (isJamActive fails SAFE + TTL cache); tours follow origin; keep JAM_QUIET_DM_USER name.
 - [jam-bot knowledge/insights clock](jam-bot-knowledge-insights-clock.md) — knowledge+timed insights fire in normal Jam too, off Spotify ISRC+progress_ms (no mic/fingerprint); anchor must re-anchor on track change, clear on pause, arm([]) to disarm.
 - [jam-bot live track insights](jam-bot-track-insights.md) — baseline firing INCLUSIVE so 0:00 notes fire (never backfill mid-join); arm off ISRC not recordingId; off-hot-path scheduler reads status() only, hand-curated seed never fabricated.
 - [jam-bot test DB sharing](jam-bot-test-db-sharing.md) — vitest DB is per-file (shared within a file, isolated across files): use unique artist/ISRC per test to avoid cache-key collisions; wrapped.test.ts is order/load-flaky on timestamp ties.
@@ -157,3 +152,4 @@
 - [Library release metadata gaps](library-release-metadata-gaps.md) — saved recordings may lack release-group rows; hydrate missing album identity in rate-limited MB batches and derive CAA art.
 - [Crossing cover fallback](crossing-cover-fallback.md) — exact crossed crate tracks may have artwork but no release-group bridge; never suppress covers solely because album identity is absent.
 - [Radio hero axis model](radio-hero-axis-model.md) — four compact station rows stay visible; identity, now-playing, crossing covers, and controls read left-to-right.
+- [Minimal radio crossing fixtures](minimal-radio-crossing-fixtures.md) — front-door fixtures need both a live hit and server crossing aggregates for Lifetime mode.
