@@ -13450,16 +13450,30 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     padding: 0 16px;
   }
   .front-door-cli { margin-bottom: 8px; }
-  .minimal-radio { gap: 8px; }
-  .minimal-radio__controls {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      "category heading"
-      "stations stations";
+  .minimal-radio {
+    position: relative;
     gap: 8px;
+  }
+  .minimal-radio__controls {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    z-index: 3;
+    width: auto;
+    min-height: 38px;
+    padding: 0;
+    overflow: visible;
+    transform: translateX(-50%);
+  }
+  .minimal-radio__nav > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
     overflow: hidden;
-    padding: 7px 12px 8px;
-    border-radius: 11px;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .minimal-radio__station-heading {
     min-height: 26px;
