@@ -13813,7 +13813,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   border: 1px solid hsl(var(--border) / .8);
   border-radius: 10px;
-  background: hsl(var(--card));
+  background: hsl(var(--background));
   box-shadow: 0 8px 24px hsl(0 0% 0% / .14);
 }
 .minimal-radio-card.is-expanded {
