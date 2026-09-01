@@ -288,27 +288,39 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(collapsed.albumsColumnsWidth).toBeGreaterThanOrEqual(168);
     expect(collapsed.albumWidths).toHaveLength(1);
     expect(collapsed.albumWidths[0]).toBeGreaterThan(80);
-    expect(collapsed.cardHeight).toBeLessThan(140);
+    expect(collapsed.cardHeight).toBe(84);
     await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album")).toHaveCount(1);
     await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
     await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");
     await expect(card.locator(".minimal-radio-card__albums-columns")).toHaveCSS("border-left-width", "1px");
     await expect(card.locator(".minimal-radio-card__album-column + .minimal-radio-card__album-column"))
       .toHaveCSS("border-left-width", "1px");
-    await expect(card.locator(".minimal-radio-card__station-heading"))
+    await expect(card.locator(".minimal-radio-card__station-copy"))
       .toHaveCSS("border-bottom-width", "1px");
-    await expect(card.locator(".minimal-radio-card__insights-heading"))
-      .toHaveCSS("border-bottom-width", "1px");
+    await expect(card.locator(".minimal-radio-card__insights-heading")).toHaveCount(0);
     await expect(card.getByTestId("minimal-radio-crossing"))
-      .toHaveCSS("border-bottom-width", "0px");
+      .toHaveCSS("border-radius", "3px");
     await expect(card.getByTestId("minimal-radio-first-plays"))
-      .toHaveCSS("border-bottom-width", "0px");
+      .toHaveCSS("border-radius", "3px");
     await expect(card.getByTestId("minimal-radio-crossing").locator("strong"))
       .toHaveText("1");
     await expect(card.getByTestId("minimal-radio-first-plays").locator("strong"))
       .toHaveText("5");
     await expect(card.getByTestId("minimal-radio-crossing")).not.toContainText("crossing");
     await expect(card.getByTestId("minimal-radio-first-plays")).not.toContainText("premieres");
+    await expect(card.getByTestId("minimal-radio-crossing")).toHaveCSS("position", "absolute");
+    await expect(card.getByTestId("minimal-radio-crossing")).toHaveCSS("top", "4px");
+    await expect(card.getByTestId("minimal-radio-crossing")).toHaveCSS("right", "4px");
+
+    const artworkRows = page.locator(
+      ".minimal-radio-card__album-column--crossings .minimal-radio-card__album img",
+    );
+    const firstArtwork = await artworkRows.nth(0).boundingBox();
+    const secondArtwork = await artworkRows.nth(1).boundingBox();
+    expect(firstArtwork).not.toBeNull();
+    expect(secondArtwork).not.toBeNull();
+    expect(Math.abs((firstArtwork!.y + firstArtwork!.height) - secondArtwork!.y))
+      .toBeLessThanOrEqual(1);
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);

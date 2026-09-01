@@ -136,18 +136,12 @@ describe("MinimalRadioSurface", () => {
       .toContain("minimal-radio-card__now");
     expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: "Tune in to Alpha" }).parentElement
-        ?.classList.contains("minimal-radio-card__station-line"),
-    ).toBe(true);
+      screen.getByRole("button", { name: "Tune in to Alpha" })
+        .closest(".minimal-radio-card__station-line"),
+    ).toBeTruthy();
     expect(document.querySelector("[data-station-mark='logo']")).toBeNull();
     expect(screen.queryByText(/matched|shown/i)).toBeNull();
-    const crossingHeaders = screen.getAllByTestId("minimal-radio-crossing");
-    expect(crossingHeaders).toHaveLength(2);
-    expect(crossingHeaders.map((element) => element.querySelector("strong")?.textContent))
-      .toEqual(["1", "5"]);
-    expect(crossingHeaders.every((element) => (
-      !element.textContent?.includes("crossing")
-    ))).toBe(true);
+    expect(document.querySelector(".minimal-radio-card__insights-heading")).toBeNull();
 
     const hero = screen.getByTestId("minimal-radio-hero");
     fireEvent.keyDown(hero, { key: "ArrowDown" });
@@ -159,11 +153,12 @@ describe("MinimalRadioSurface", () => {
   it("shows the lifetime crossing badge", () => {
     const station = row("alpha", "Alpha", false, 1);
     station.ds.crossings = 2;
+    station.ds.liveTrack = crossingSpin(7);
 
     render(
       <MinimalRadioSurface
         rows={[station]}
-        libraryItems={[]}
+        libraryItems={[libraryItem(7)]}
         preset="now"
       />,
     );
@@ -173,9 +168,9 @@ describe("MinimalRadioSurface", () => {
     expect(heading.textContent).not.toContain("crossing");
     expect(heading.getAttribute("aria-label")).toBe("1 lifetime crossings");
     expect(
-      screen.getByTestId("minimal-radio-crossing").parentElement
-        ?.classList.contains("minimal-radio-card__insight-heading-column"),
-    ).toBe(true);
+      screen.getByTestId("minimal-radio-crossing")
+        .closest(".minimal-radio-card__album-column--crossings"),
+    ).toBeTruthy();
     expect(screen.queryByTestId("minimal-radio-hero-crossing")).toBeNull();
   });
 
@@ -303,7 +298,7 @@ describe("MinimalRadioSurface", () => {
     expect(firstPlays.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("minimal-radio-card").className).toContain("is-expanded");
     expect(within(firstPlayColumn).getAllByRole("link", { name: /^Open / })).toHaveLength(2);
-    expect(screen.getByTestId("minimal-radio-crossing").getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("minimal-radio-crossing")).toBeNull();
   });
 
   it("uses station-level recent crossing spins when the saved cover is resolved", () => {
@@ -352,6 +347,6 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByTestId("minimal-radio-card")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
     expect(screen.getByTestId("minimal-radio-card")).toBeTruthy();
-    expect(screen.getByLabelText("5 lifetime crossings")).toBeTruthy();
+    expect(screen.queryByLabelText("5 lifetime crossings")).toBeNull();
   });
 });
