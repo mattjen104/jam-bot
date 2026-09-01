@@ -13139,6 +13139,34 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   letter-spacing: 0.02em;
   text-transform: none;
 }
+.minimal-radio-card__station-crossing {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  left: 3px;
+  z-index: 2;
+  justify-content: center;
+  gap: 2px;
+  margin: 0;
+  padding: 3px 4px;
+  border: 1px solid hsl(0 0% 100% / .2);
+  border-radius: 3px;
+  background: hsl(0 0% 0% / .82);
+  color: hsl(var(--accent));
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.minimal-radio-card__station-crossing strong {
+  font-size: 13px;
+  letter-spacing: -.02em;
+}
+.minimal-radio-card__station-crossing span {
+  color: hsl(var(--dim));
+  font-size: 7px;
+}
 .minimal-radio-card__station-identity {
   display: flex;
   align-items: center;
@@ -13154,6 +13182,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   min-width: 0;
   padding: 0;
   border: 0;
+  border-left: 1px solid hsl(var(--border) / .65);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -13189,8 +13218,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.minimal-radio__nav button,
-.minimal-radio-card__actions button {
+.minimal-radio__nav button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -13206,7 +13234,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card {
   display: grid;
-  grid-template-columns: 104px 104px minmax(150px, 1.1fr) auto;
+  grid-template-columns: 104px 104px minmax(0, 1fr);
   flex: 1;
   height: 100%;
   min-height: 0;
@@ -13262,39 +13290,21 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__crossing span:last-child {
   color: hsl(var(--dim));
 }
-.minimal-radio-card__site {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: hsl(var(--faint));
-  font: 10px/1 var(--app-font-mono);
-  text-decoration: none;
-}
 .minimal-radio-card__albums {
   display: flex;
-  justify-content: center;
-  flex-direction: column;
+  align-items: center;
   min-width: 0;
   min-height: 0;
   padding: 10px 12px;
   overflow: hidden;
   border-left: 1px solid hsl(var(--border) / .65);
 }
-.minimal-radio-card__album-heading {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 3px;
-}
-.minimal-radio-card__album-heading .minimal-radio-card__crossing {
-  flex: 0 0 auto;
-  margin-top: 0;
-}
 .minimal-radio-card__album-grid {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  width: 100%;
   gap: 8px;
-  margin-top: 7px;
+  margin: 0;
   padding: 0 0 2px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -13442,18 +13452,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--dim));
   font: 11px/1.2 var(--app-font-mono);
 }
-.minimal-radio-card__actions {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 64px;
-  padding: 8px 10px;
-  border-left: 1px solid hsl(var(--border) / .65);
-}
-.minimal-radio-card__actions button[aria-pressed="true"] { color: hsl(var(--accent)); }
-.minimal-radio-card__actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 .minimal-radio-state {
   padding: 60px 24px;
   text-align: center;
@@ -13522,8 +13520,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .minimal-radio__hero-frame {
     padding-top: 40px;
   }
-  .minimal-radio-card__heading,
-  .minimal-radio-card__albums { padding-left: 18px; padding-right: 18px; }
+  .minimal-radio-card__albums { padding-left: 7px; padding-right: 5px; }
   .minimal-radio__hero-region {
     height: min(400px, calc(100dvh - var(--shell-h, 0px) - 220px));
     min-height: 360px;
@@ -13534,7 +13531,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     padding-bottom: 8px;
   }
   .minimal-radio-card {
-    grid-template-columns: 72px 72px minmax(72px, .8fr) 56px;
+    grid-template-columns: 72px 72px minmax(0, 1fr);
     border-radius: 10px;
   }
   .minimal-radio-card__station {
@@ -13561,30 +13558,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .minimal-radio-card__album-grid {
     gap: 4px;
-    margin-top: 5px;
     padding-right: 4px;
   }
-  .minimal-radio-card__album { flex-basis: 30px; }
+  .minimal-radio-card__album { flex-basis: 48px; }
   .minimal-radio-card__albums {
     padding: 7px 5px;
   }
-  .minimal-radio-card__album-heading {
-    gap: 1px;
-  }
-  .minimal-radio-card__album-heading .minimal-radio-card__eyebrow {
-    font-size: 7px;
-  }
-  .minimal-radio-card__album-heading .minimal-radio-card__crossing {
+  .minimal-radio-card__station-crossing {
+    top: 2px;
+    right: 2px;
+    left: 2px;
+    padding: 2px;
     gap: 2px;
     font-size: 7px;
     letter-spacing: .02em;
   }
-  .minimal-radio-card__album-heading .minimal-radio-card__crossing strong {
+  .minimal-radio-card__station-crossing strong {
     font-size: 10px;
-  }
-  .minimal-radio-card__album-heading .minimal-radio-card__crossing span:nth-of-type(1),
-  .minimal-radio-card__album-heading .minimal-radio-card__crossing span:last-child {
-    display: none;
   }
   .minimal-radio-card__empty-albums {
     margin-top: 4px;
@@ -13603,28 +13593,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .minimal-radio-card__track > span { font-size: 8px; }
   .minimal-radio-card__track > small { font-size: 7px; }
-  .minimal-radio-card__actions {
-    gap: 2px;
-    min-width: 0;
-    padding: 5px 4px;
-  }
-  .minimal-radio-card__actions .minimal-radio-card__site {
-    justify-content: center;
-  }
-  .minimal-radio-card__actions .minimal-radio-card__site span {
-    display: none;
-  }
-  .minimal-radio-card__actions button {
-    justify-content: center;
-    gap: 3px;
-    min-height: 18px;
-    padding: 0;
-    font-size: 7px;
-  }
-  .minimal-radio-card__actions button svg {
-    width: 10px;
-    height: 10px;
-  }
 }
 
 /* ── Shared front-door artist document ─────────────────────────────────── */

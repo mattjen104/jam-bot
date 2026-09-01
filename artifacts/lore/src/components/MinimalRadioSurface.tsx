@@ -6,14 +6,11 @@ import {
   type KeyboardEvent,
 } from "react";
 import {
-  ExternalLink,
-  Heart,
   Radio,
 } from "lucide-react";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
-import { useMutationKeep } from "../lib/meHooks";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError, RUMOURS } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
@@ -242,7 +239,6 @@ function MinimalRadioCard({
   active: boolean;
 }) {
   const { radio } = usePlayer();
-  const keep = useMutationKeep();
   const track = liveTrack(row);
   const albums = useMemo(
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
@@ -252,16 +248,10 @@ function MinimalRadioCard({
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";
   const showName = knownShowName(row.show?.showName);
-  const kept = Boolean(track?.mbid && libraryItems.some((item) => item.mbid === track.mbid));
 
   const play = useCallback(() => {
     if (playable) void radio.toggle(row.ds.station);
   }, [playable, radio, row.ds.station]);
-
-  const handleKeep = () => {
-    if (!track?.mbid || keep.isPending) return;
-    keep.mutate({ mbid: track.mbid, provenance: { kind: "keep", stationSlug: row.ds.station.slug } });
-  };
 
   return (
     <article
@@ -283,6 +273,16 @@ function MinimalRadioCard({
         aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
       >
         <div className="minimal-radio-card__station-mark-wrap">
+          <div
+            className="minimal-radio-card__crossing minimal-radio-card__station-crossing"
+            data-testid={active
+              ? "minimal-radio-hero-crossing"
+              : `minimal-radio-hero-crossing-${row.ds.station.slug}`}
+            aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"} ${crossing.label}`}
+          >
+            <strong>{crossing.count}</strong>
+            <span> · {crossing.label}</span>
+          </div>
           <StationMark
             name={row.ds.station.name}
             logoUrl={row.ds.station.logoUrl}
@@ -303,23 +303,7 @@ function MinimalRadioCard({
         </div>
       </button>
 
-      <section className="minimal-radio-card__albums" aria-label="Lifetime crossings with this station">
-        <div className="minimal-radio-card__album-heading">
-          <div className="minimal-radio-card__eyebrow">Lifetime crossings</div>
-          <div
-            className="minimal-radio-card__crossing"
-            data-testid={active
-              ? "minimal-radio-hero-crossing"
-              : `minimal-radio-hero-crossing-${row.ds.station.slug}`}
-            aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"} ${crossing.label}`}
-          >
-            <strong>{crossing.count}</strong>
-            {" "}
-            <span>{crossing.count === 1 ? "crossing" : "crossings"}</span>
-            {" · "}
-            <span>{crossing.label}</span>
-          </div>
-        </div>
+      <section className="minimal-radio-card__albums" aria-label="Crossing album covers">
         {albums.length > 0 ? (
           <div className="minimal-radio-card__album-grid">
             {albums.map((album) => (
@@ -348,22 +332,6 @@ function MinimalRadioCard({
           <p className="minimal-radio-card__empty-albums">Your saved albums will appear here when this station crosses them.</p>
         )}
       </section>
-
-      <div className="minimal-radio-card__actions">
-        <a
-          className="minimal-radio-card__site"
-          href={row.ds.station.homepageUrl ?? `/archive/stations/${row.ds.station.slug}`}
-          target={row.ds.station.homepageUrl ? "_blank" : undefined}
-          rel={row.ds.station.homepageUrl ? "noopener noreferrer" : undefined}
-          aria-label={`Open ${row.ds.station.name} station page`}
-        >
-          <ExternalLink size={14} aria-hidden="true" />
-          <span>station</span>
-        </a>
-        <button type="button" onClick={handleKeep} disabled={!track?.mbid || keep.isPending || kept} aria-pressed={kept}>
-          <Heart size={14} aria-hidden="true" /> {kept ? "Kept" : keep.isPending ? "Keeping…" : "Keep"}
-        </button>
-      </div>
     </article>
   );
 }
