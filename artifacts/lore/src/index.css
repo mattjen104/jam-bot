@@ -13341,7 +13341,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   aspect-ratio: 1;
   object-fit: cover;
   border: 1px solid hsl(var(--foreground) / .22);
-  border-radius: 4px;
+  border-radius: 0;
   box-shadow: 0 6px 14px hsl(0 0% 0% / .3);
   background: hsl(var(--secondary));
 }
@@ -14048,9 +14048,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   place-items: center;
   object-fit: cover;
   border: 0;
-  border-radius: 4px;
   background: hsl(var(--secondary));
 }
+.minimal-radio-card__album img { border-radius: 0; }
+.minimal-radio-card__album-swatch { border-radius: 4px; }
 .minimal-radio-card__album-swatch {
   box-sizing: border-box;
   padding: 8px;
