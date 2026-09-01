@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { DialSpin } from "../src/hooks/useDialData";
 import type { LibraryItem } from "../src/lib/meHooks";
@@ -105,6 +105,7 @@ function libraryItem(
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.clearAllMocks();
 });
@@ -163,7 +164,7 @@ describe("MinimalRadioSurface", () => {
       .toContain("2crossings · 24 hr");
     expect(
       screen.getByTestId("minimal-radio-crossing").parentElement
-        ?.classList.contains("minimal-radio-card__crossing-column"),
+        ?.classList.contains("minimal-radio-card__album-column--crossings"),
     ).toBe(true);
     expect(screen.queryByTestId("minimal-radio-hero-crossing")).toBeNull();
   });
@@ -214,19 +215,69 @@ describe("MinimalRadioSurface", () => {
       />,
     );
 
-    const albumLinks = screen.getAllByRole("link", { name: /^Open / });
+    const crossingColumn = document.querySelector(".minimal-radio-card__album-column--crossings");
+    expect(crossingColumn).toBeTruthy();
+    const albumLinks = within(crossingColumn as HTMLElement).getAllByRole("link", { name: /^Open / });
     expect(albumLinks).toHaveLength(1);
     expect(albumLinks[0]?.getAttribute("href")).toBe("/album/release-5");
-    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(1);
+    expect(crossingColumn?.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(1);
     expect(document.querySelectorAll(".minimal-radio-card__album-swatch")).toHaveLength(0);
-    expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(1);
+    expect(crossingColumn?.querySelectorAll(".minimal-radio-card__album")).toHaveLength(1);
     const crossingHeader = screen.getByTestId("minimal-radio-crossing");
     expect(crossingHeader.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(crossingHeader);
     expect(crossingHeader.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("minimal-radio-card").className).toContain("is-expanded");
-    expect(screen.getAllByRole("link", { name: /^Open / })).toHaveLength(5);
-    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(5);
+    expect(within(crossingColumn as HTMLElement).getAllByRole("link", { name: /^Open / })).toHaveLength(5);
+    expect(crossingColumn?.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(5);
+  });
+
+  it("loads station first plays with artwork and expands that column independently", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 701,
+            mbid: "first-play-1",
+            title: "New Song",
+            artist: "New Artist",
+            artworkUrl: "https://art.example/first-1.jpg",
+            station: { slug: "alpha", name: "Alpha" },
+          },
+          {
+            id: 702,
+            mbid: "first-play-2",
+            title: "Another New Song",
+            artist: "Another Artist",
+            artworkUrl: "https://art.example/first-2.jpg",
+            station: { slug: "alpha", name: "Alpha" },
+          },
+        ],
+      }),
+    }));
+    const station = row("alpha", "Alpha", false, 1);
+    station.ds.crossings = 1;
+    station.ds.lifetimeFirstPlayCrossings = 4;
+
+    render(<MinimalRadioSurface rows={[station]} libraryItems={[]} preset="now" />);
+
+    const firstPlays = await waitFor(() => {
+      const heading = screen.getByTestId("minimal-radio-first-plays");
+      expect(heading.textContent).toContain("4first plays · lifetime");
+      return heading;
+    });
+    const firstPlayColumn = firstPlays.parentElement as HTMLElement;
+    expect(within(firstPlayColumn).getAllByRole("link", { name: /^Open / })).toHaveLength(1);
+    expect(firstPlays.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByTestId("minimal-radio-card").className).not.toContain("is-expanded");
+
+    fireEvent.click(firstPlays);
+
+    expect(firstPlays.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("minimal-radio-card").className).toContain("is-expanded");
+    expect(within(firstPlayColumn).getAllByRole("link", { name: /^Open / })).toHaveLength(2);
+    expect(screen.getByTestId("minimal-radio-crossing").getAttribute("aria-expanded")).toBe("false");
   });
 
   it("uses station-level recent crossing spins when the saved cover is resolved", () => {

@@ -153,3 +153,4 @@
 - [Crossing cover fallback](crossing-cover-fallback.md) — exact crossed crate tracks may have artwork but no release-group bridge; never suppress covers solely because album identity is absent.
 - [Radio hero axis model](radio-hero-axis-model.md) — four compact station rows stay visible; identity, now-playing, crossing covers, and controls read left-to-right.
 - [Minimal radio crossing fixtures](minimal-radio-crossing-fixtures.md) — front-door fixtures need both a live hit and server crossing aggregates for Lifetime mode.
+- [Minimal radio first-play previews](minimal-radio-first-play-previews.md) — station cards use the existing station-filtered history read model for first-play art; keep aggregate lifetime counts separate.

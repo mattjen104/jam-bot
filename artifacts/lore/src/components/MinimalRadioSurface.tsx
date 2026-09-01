@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -10,7 +11,7 @@ import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { DialSpin } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { onArtError } from "../lib/rumours";
+import { RUMOURS, onArtError } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
@@ -122,6 +123,15 @@ interface CrossingAlbum {
   title: string;
   artist: string;
   artworkUrl: string | null;
+}
+
+interface FirstPlayHistoryItem {
+  id: number;
+  mbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  station: { slug: string; name: string };
 }
 
 type CrossingSpin = Pick<
@@ -244,6 +254,24 @@ function crossingAlbums(
   return albums.slice(0, MAX_CROSSING_ALBUMS);
 }
 
+function firstPlayAlbums(items: readonly FirstPlayHistoryItem[]): CrossingAlbum[] {
+  const seen = new Set<string>();
+  const albums: CrossingAlbum[] = [];
+  for (const item of items) {
+    if (!item.mbid || seen.has(item.mbid)) continue;
+    seen.add(item.mbid);
+    albums.push({
+      key: `first-play:${item.id}`,
+      href: `/song/${item.mbid}`,
+      title: item.title,
+      artist: item.artist,
+      artworkUrl: item.artworkUrl,
+    });
+    if (albums.length >= MAX_CROSSING_ALBUMS) break;
+  }
+  return albums;
+}
+
 function MinimalRadioCard({
   row,
   libraryItems,
@@ -257,12 +285,47 @@ function MinimalRadioCard({
 }) {
   const { radio } = usePlayer();
   const [albumsExpanded, setAlbumsExpanded] = useState(false);
+  const [firstPlayExpanded, setFirstPlayExpanded] = useState(false);
+  const [firstPlayAlbumItems, setFirstPlayAlbumItems] = useState<CrossingAlbum[]>([]);
   const track = liveTrack(row);
   const albums = useMemo(
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
     [row, libraryItems, stationSpins, crossing],
   );
+  useEffect(() => {
+    if (typeof fetch !== "function") return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8_000);
+    const station = encodeURIComponent(row.ds.station.slug);
+
+    void fetch(
+      `/api/player/history?scope=7d&filter=firstPlays&order=desc&limit=${MAX_CROSSING_ALBUMS}&station=${station}`,
+      { signal: controller.signal },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error("first plays unavailable");
+        return response.json() as Promise<{ items?: FirstPlayHistoryItem[] }>;
+      })
+      .then((data) => {
+        if (!cancelled) setFirstPlayAlbumItems(firstPlayAlbums(data.items ?? []));
+      })
+      .catch(() => {
+        if (!cancelled) setFirstPlayAlbumItems([]);
+      })
+      .finally(() => clearTimeout(timeoutId));
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [row.ds.station.slug]);
+
   const visibleAlbums = albumsExpanded ? albums : albums.slice(0, 1);
+  const visibleFirstPlayAlbums = firstPlayExpanded
+    ? firstPlayAlbumItems
+    : firstPlayAlbumItems.slice(0, 1);
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";
@@ -281,7 +344,12 @@ function MinimalRadioCard({
 
   return (
     <article
-      className={`minimal-radio-card${albumsExpanded && albums.length > 0 ? " is-expanded" : ""}`}
+      className={`minimal-radio-card${
+        (albumsExpanded && albums.length > 0)
+        || (firstPlayExpanded && firstPlayAlbumItems.length > 0)
+          ? " is-expanded"
+          : ""
+      }`}
       data-testid="minimal-radio-card"
       aria-label={`${row.ds.station.name} station card`}
     >
@@ -314,31 +382,79 @@ function MinimalRadioCard({
             </span>
           </button>
         </div>
-        <div className="minimal-radio-card__crossing-column">
-          <button
-            type="button"
-            className={`minimal-radio-card__crossing${recency.live ? " is-live" : ""}`}
-            data-testid="minimal-radio-crossing"
-            aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"}, ${crossing.label}`}
-            aria-expanded={albumsExpanded}
-            disabled={albums.length === 0}
-            onClick={() => setAlbumsExpanded((expanded) => !expanded)}
-          >
-            {recency.live ? <i aria-hidden="true" /> : null}
-            <strong>{crossing.count}</strong>
-            <span>{crossing.count === 1 ? "crossing" : "crossings"} · {crossing.label}</span>
-          </button>
+        <div className="minimal-radio-card__albums-columns">
+          <div className={`minimal-radio-card__album-column minimal-radio-card__album-column--crossings${albumsExpanded ? " is-expanded" : ""}`}>
+            <button
+              type="button"
+              className={`minimal-radio-card__crossing${recency.live ? " is-live" : ""}`}
+              data-testid="minimal-radio-crossing"
+              aria-label={`${crossing.count} ${crossing.count === 1 ? "crossing" : "crossings"}, ${crossing.label}`}
+              aria-expanded={albumsExpanded}
+              disabled={albums.length === 0}
+              onClick={() => setAlbumsExpanded((expanded) => !expanded)}
+            >
+              {recency.live ? <i aria-hidden="true" /> : null}
+              <strong>{crossing.count}</strong>
+              <span>{crossing.count === 1 ? "crossing" : "crossings"} · {crossing.label}</span>
+            </button>
 
-          <section
-            className={`minimal-radio-card__albums${albums.length === 0 ? " is-empty" : ""}`}
-            aria-label={albumsExpanded ? "Lifetime crossing album covers" : "Latest crossing album cover"}
-          >
-            {visibleAlbums.length > 0 ? (
-              <div className="minimal-radio-card__album-grid">
-                {visibleAlbums.map((album) => {
-                  const artworkUrl = album.artworkUrl ? proxyArtUrl(album.artworkUrl) : null;
-                  if (!artworkUrl) return null;
-                  return (
+            <section
+              className={`minimal-radio-card__albums${albums.length === 0 ? " is-empty" : ""}`}
+              aria-label={albumsExpanded ? "Lifetime crossing album covers" : "Latest crossing album cover"}
+            >
+              {visibleAlbums.length > 0 ? (
+                <div className="minimal-radio-card__album-grid">
+                  {visibleAlbums.map((album) => {
+                    const artworkUrl = album.artworkUrl ? proxyArtUrl(album.artworkUrl) : null;
+                    if (!artworkUrl) return null;
+                    return (
+                      <a
+                        key={album.key}
+                        href={album.href}
+                        className="minimal-radio-card__album"
+                        title={`${album.title} by ${album.artist}`}
+                        aria-label={`Open ${album.title} by ${album.artist}`}
+                      >
+                        <img
+                          src={artworkUrl}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          onError={onArtError}
+                        />
+                        <span className="minimal-radio-card__album-caption">
+                          <b>{album.title}</b>
+                          <small>{album.artist}</small>
+                        </span>
+                      </a>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </section>
+          </div>
+
+          <div className={`minimal-radio-card__album-column minimal-radio-card__album-column--first-plays${firstPlayExpanded ? " is-expanded" : ""}`}>
+            <button
+              type="button"
+              className="minimal-radio-card__first-plays"
+              data-testid="minimal-radio-first-plays"
+              aria-label={`${row.ds.lifetimeFirstPlayCrossings} first plays, lifetime`}
+              aria-expanded={firstPlayExpanded}
+              disabled={firstPlayAlbumItems.length === 0}
+              onClick={() => setFirstPlayExpanded((expanded) => !expanded)}
+            >
+              <strong>{row.ds.lifetimeFirstPlayCrossings}</strong>
+              <span>first plays · lifetime</span>
+            </button>
+
+            <section
+              className={`minimal-radio-card__albums${firstPlayAlbumItems.length === 0 ? " is-empty" : ""}`}
+              aria-label={firstPlayExpanded ? "First play album covers" : "Latest first play album cover"}
+            >
+              {visibleFirstPlayAlbums.length > 0 ? (
+                <div className="minimal-radio-card__album-grid">
+                  {visibleFirstPlayAlbums.map((album) => (
                     <a
                       key={album.key}
                       href={album.href}
@@ -347,7 +463,7 @@ function MinimalRadioCard({
                       aria-label={`Open ${album.title} by ${album.artist}`}
                     >
                       <img
-                        src={artworkUrl}
+                        src={album.artworkUrl ? (proxyArtUrl(album.artworkUrl) ?? RUMOURS) : RUMOURS}
                         alt=""
                         loading="lazy"
                         decoding="async"
@@ -358,11 +474,11 @@ function MinimalRadioCard({
                         <small>{album.artist}</small>
                       </span>
                     </a>
-                  );
-                })}
-              </div>
-            ) : null}
-          </section>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          </div>
         </div>
       </header>
     </article>

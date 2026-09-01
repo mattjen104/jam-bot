@@ -173,6 +173,25 @@ async function installRoutes(
   await page.route("**/api/stations/recent-spins**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );
+  await page.route("**/api/player/history?**", (route) => {
+    const url = new URL(route.request().url());
+    const stationSlug = url.searchParams.get("station") ?? "";
+    const station = STATIONS.find((candidate) => candidate.slug === stationSlug);
+    return route.fulfill({
+      json: {
+        items: station
+          ? [1, 2, 3, 4, 5].map((ordinal) => ({
+              id: station.id * 100 + ordinal,
+              mbid: `${station.slug}-first-play-${ordinal}`,
+              title: `First Play ${ordinal}`,
+              artist: `New Artist ${ordinal}`,
+              artworkUrl: `https://art.example.test/${station.slug}-first-${ordinal}.jpg`,
+              station: { slug: station.slug, name: station.name },
+            }))
+          : [],
+      },
+    });
+  });
   await page.route("**/api/stations/artist-frequency**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );
@@ -239,13 +258,15 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
       const cardRect = node.getBoundingClientRect();
       const albumsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect();
       const albumGridRect = node.querySelector<HTMLElement>(".minimal-radio-card__album-grid")?.getBoundingClientRect();
-      const albumNodes = [...node.querySelectorAll<HTMLElement>(".minimal-radio-card__album")];
-      const imageRect = node.querySelector<HTMLImageElement>(".minimal-radio-card__album img")?.getBoundingClientRect();
+      const albumsColumnsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums-columns")?.getBoundingClientRect();
+      const albumNodes = [...node.querySelectorAll<HTMLElement>(".minimal-radio-card__album-column--crossings .minimal-radio-card__album")];
+      const imageRect = node.querySelector<HTMLImageElement>(".minimal-radio-card__album-column--crossings .minimal-radio-card__album img")?.getBoundingClientRect();
       return {
         cardHeight: cardRect.height,
         albumsHeight: albumsRect?.height,
         albumsWidth: albumsRect?.width,
         albumGridWidth: albumGridRect?.width,
+        albumsColumnsWidth: albumsColumnsRect?.width,
         albumWidths: albumNodes.map((album) => album.getBoundingClientRect().width),
         imageHeight: imageRect?.height,
         imageWidth: imageRect?.width,
@@ -254,23 +275,27 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(collapsed.imageWidth).toBeGreaterThan(80);
     expect(collapsed.imageHeight).toBe(collapsed.imageWidth);
     expect(collapsed.albumsHeight).toBe(collapsed.imageHeight);
-    expect(collapsed.albumGridWidth).toBeGreaterThan(140);
+    expect(collapsed.albumGridWidth).toBeGreaterThan(80);
     expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
+    expect(collapsed.albumsColumnsWidth).toBeGreaterThanOrEqual(168);
     expect(collapsed.albumWidths).toHaveLength(1);
     expect(collapsed.albumWidths[0]).toBeGreaterThan(80);
     expect(collapsed.cardHeight).toBeLessThan(140);
-    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(1);
-    await expect(card.locator(".minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
-    await expect(card.locator(".minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");
-    await expect(card.locator(".minimal-radio-card__crossing-column")).toHaveCSS("border-left-width", "1px");
+    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album")).toHaveCount(1);
+    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
+    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");
+    await expect(card.locator(".minimal-radio-card__albums-columns")).toHaveCSS("border-left-width", "1px");
+    await expect(card.locator(".minimal-radio-card__album-column + .minimal-radio-card__album-column"))
+      .toHaveCSS("border-left-width", "1px");
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
-    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(5);
+    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album")).toHaveCount(5);
     const expanded = await card.evaluate((node) => {
-      const albums = node.querySelector<HTMLElement>(".minimal-radio-card__albums");
-      const grid = node.querySelector<HTMLElement>(".minimal-radio-card__album-grid");
-      const image = node.querySelector<HTMLImageElement>(".minimal-radio-card__album img");
+         const crossingColumn = node.querySelector<HTMLElement>(".minimal-radio-card__album-column--crossings");
+         const albums = crossingColumn?.querySelector<HTMLElement>(".minimal-radio-card__albums");
+         const grid = crossingColumn?.querySelector<HTMLElement>(".minimal-radio-card__album-grid");
+         const image = crossingColumn?.querySelector<HTMLImageElement>(".minimal-radio-card__album img");
       return {
         albumsHeight: albums?.getBoundingClientRect().height,
         gridHeight: grid?.getBoundingClientRect().height,
@@ -292,7 +317,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(expanded.imageHeight).toBeGreaterThan(80);
     expect(expanded.imageWidth).toBe(expanded.imageHeight);
     expect(expanded.gridDisplay).toBe("grid");
-    expect(expanded.gridTemplateColumns?.split(" ")).toHaveLength(2);
+     expect(expanded.gridTemplateColumns?.split(" ")).toHaveLength(1);
     expect(expanded.gridGap).toBe("0px");
     expect(expanded.gridPaddingRight).toBe("0px");
     expect(expanded.gridOverflowY).toBe("auto");
