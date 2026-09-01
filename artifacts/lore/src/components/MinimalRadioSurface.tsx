@@ -262,7 +262,7 @@ function MinimalRadioCard({
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
     [row, libraryItems, stationSpins, crossing],
   );
-  const visibleAlbums = albumsExpanded ? albums : albums.slice(0, 1);
+  const visibleAlbums = albumsExpanded ? albums : albums.slice(0, 4);
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";

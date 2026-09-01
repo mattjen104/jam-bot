@@ -177,7 +177,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByText("Quiet track")).toBeNull();
   });
 
-  it("shows the latest crossing cover collapsed and the lifetime stack expanded", () => {
+  it("shows four crossing covers collapsed and continues the lifetime grid expanded", () => {
     const station = row("alpha", "Alpha", true, 6);
     const spins = Array.from({ length: 6 }, (_, index) => crossingSpin(index + 1));
     station.ds.liveTrack = spins[5]!;
@@ -211,11 +211,11 @@ describe("MinimalRadioSurface", () => {
     );
 
     const albumLinks = screen.getAllByRole("link", { name: /^Open / });
-    expect(albumLinks).toHaveLength(1);
+    expect(albumLinks).toHaveLength(4);
     expect(albumLinks[0]?.getAttribute("href")).toBe("/album/release-5");
-    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(1);
+    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(4);
     expect(document.querySelectorAll(".minimal-radio-card__album-swatch")).toHaveLength(0);
-    expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(1);
+    expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(4);
     const crossingHeader = screen.getByTestId("minimal-radio-crossing");
     expect(crossingHeader.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(crossingHeader);

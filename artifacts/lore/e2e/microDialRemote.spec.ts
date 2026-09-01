@@ -251,14 +251,17 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
         imageWidth: imageRect?.width,
       };
     });
-    expect(collapsed.imageWidth).toBeGreaterThan(152);
+    expect(collapsed.imageWidth).toBeGreaterThan(80);
     expect(collapsed.imageHeight).toBe(collapsed.imageWidth);
     expect(collapsed.albumsHeight).toBeLessThan(collapsed.imageHeight!);
     expect(collapsed.albumGridWidth).toBeGreaterThan(300);
     expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
-    expect(collapsed.albumWidths).toHaveLength(1);
+    expect(collapsed.albumWidths).toHaveLength(4);
+    expect(collapsed.albumWidths[0]).toBe(collapsed.albumWidths[1]);
+    expect(collapsed.albumWidths[1]).toBe(collapsed.albumWidths[2]);
+    expect(collapsed.albumWidths[2]).toBe(collapsed.albumWidths[3]);
     expect(collapsed.cardHeight).toBeLessThan(180);
-    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(1);
+    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(4);
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
