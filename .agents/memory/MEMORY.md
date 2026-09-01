@@ -103,7 +103,7 @@
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
 - [Dial unified live feed](dial-unified-feed.md) — one flat feed (reason→dj→rest bands, data-feed-band), infinite scroll w/ jsdom render-all fallback; nudge only when zero live stations; no zone labels or See-all.
-- [Merge-splice duplication](crossings-route-merge-splice.md) — twin route handlers AND e2e test blocks get duplicated/triplicated by merges (duplicate Playwright titles fail the gate); grep for duplicate titles after merges.
+- [Crossings merge-splice failures](crossings-route-merge-splice.md) — merges can duplicate handlers/tests or truncate handler tails; grep duplicate titles and brace-check the route.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
 - [Lore test provider drift](lore-test-provider-drift.md) — new react-query hooks in shared components break provider-less tests; fix via meHooks/api-client barrel mocks, not QueryClientProvider wrapping.
 - [Lore two-layer typography](lore-two-layer-typography.md) — Signifier voice vs system-sans interface; home is Nebula Sans with Semibold headings; sizes still use the 3-token scale.
@@ -119,7 +119,6 @@
 - [React-compiler rules now error](react-compiler-rules-error.md) — four hook rules block merges in lore; PlayerProvider's ref-mirror inline disables are deliberate, don't remove.
 - [Pre-existing red lore tests](lore-preexisting-red-tests.md) — stash-compare failures against master before blaming your diff; several dial/topbar tests are red on master.
 - [Now-playing cold-start partial](np-cold-start-partial.md) — boot prewarm + single-flight fill + stations snapshot; boot DB contention makes even trivial SELECTs take seconds, so partials must avoid the pool.
-- [Merge-splice can truncate whole handler tails](crossings-route-merge-splice.md) — /me/crossings once lost its closing braces on master (typecheck red for everyone); brace-balance the file and reconstruct from the last balanced revision + tests.
 - [Station context as sidebar tab](context-sidebar-tab.md) — context tab (fixed id) lives in the set-panel strip only in landscape; portrait keeps in-body region; jsdom lacks matchMedia so guard it.
 - [Crossings soft-name normalization](crossings-soft-name-normalization.md) — article/punct-tolerant seed matching is personal-compute only (blended, library-hits, lifetime-job still exact); empty results cache short (~2 min).
 - [attendance_rollups FK cleanup](attendance-rollups-fk-cleanup.md) — DB tests must delete attendance_rollups (by test userIds) before recordings, or afterAll 23503s; rollup rows can appear via concurrent global passes.
