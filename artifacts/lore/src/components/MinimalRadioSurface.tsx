@@ -24,7 +24,7 @@ export type RadioPreset = "now" | "lifetime";
 const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
   ({ cat, label, title }) => ({ value: cat, label, title }),
 );
-const MAX_CROSSING_ALBUMS = 4;
+const MAX_CROSSING_ALBUMS = 2;
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
@@ -174,6 +174,7 @@ function crossingAlbums(
   const seen = new Set<string>();
   const albums: CrossingAlbum[] = [];
   for (const album of row.ds.albumCrossings ?? []) {
+    if (!album.artworkUrl) continue;
     const key = album.releaseGroupMbid ?? album.recordingMbid;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -191,7 +192,7 @@ function crossingAlbums(
   const add = (item: LibraryItem | undefined, spin?: CrossingSpin) => {
     const recording = item?.recording;
     const releaseGroupMbid = spin?.releaseGroupMbid ?? recording?.releaseGroupMbid;
-    if (!releaseGroupMbid || seen.has(releaseGroupMbid)) return;
+    if (!releaseGroupMbid || seen.has(releaseGroupMbid) || !recording?.artworkUrl) return;
     seen.add(releaseGroupMbid);
     albums.push({
       key: releaseGroupMbid,
@@ -326,6 +327,7 @@ function MinimalRadioCard({
           <div className="minimal-radio-card__album-grid">
             {albums.map((album) => {
               const artworkUrl = album.artworkUrl ? proxyArtUrl(album.artworkUrl) : null;
+              if (!artworkUrl) return null;
               return (
                 <a
                   key={album.key}
@@ -334,17 +336,13 @@ function MinimalRadioCard({
                   title={`${album.title} by ${album.artist}`}
                   aria-label={`Open ${album.title} by ${album.artist}`}
                 >
-                  {artworkUrl ? (
-                    <img
-                      src={artworkUrl}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      onError={onArtError}
-                    />
-                  ) : (
-                    <span className="minimal-radio-card__album-swatch">{album.title}</span>
-                  )}
+                  <img
+                    src={artworkUrl}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    onError={onArtError}
+                  />
                   <span className="minimal-radio-card__album-caption">
                     <b>{album.title}</b>
                     <small>{album.artist}</small>

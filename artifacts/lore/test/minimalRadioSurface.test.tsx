@@ -177,7 +177,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByText("Quiet track")).toBeNull();
   });
 
-  it("limits the crossing rail to four covers and swatches missing artwork", () => {
+  it("shows the two newest crossing covers with resolved artwork", () => {
     const station = row("alpha", "Alpha", true, 6);
     const spins = Array.from({ length: 6 }, (_, index) => crossingSpin(index + 1));
     station.ds.liveTrack = spins[5]!;
@@ -211,14 +211,14 @@ describe("MinimalRadioSurface", () => {
     );
 
     const albumLinks = screen.getAllByRole("link", { name: /^Open / });
-    expect(albumLinks).toHaveLength(4);
-    expect(albumLinks[0]?.getAttribute("href")).toBe("/album/release-6");
-    expect(albumLinks[0]?.querySelector(".minimal-radio-card__album-swatch")).toBeTruthy();
-    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(3);
-    expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(4);
+    expect(albumLinks).toHaveLength(2);
+    expect(albumLinks[0]?.getAttribute("href")).toBe("/album/release-5");
+    expect(document.querySelectorAll(".minimal-radio-card__album img")).toHaveLength(2);
+    expect(document.querySelectorAll(".minimal-radio-card__album-swatch")).toHaveLength(0);
+    expect(document.querySelectorAll(".minimal-radio-card__album")).toHaveLength(2);
   });
 
-  it("uses station-level recent crossing spins and preserves album links", () => {
+  it("uses station-level recent crossing spins when the saved cover is resolved", () => {
     const station = row("alpha", "Alpha", false, 1);
     station.ds.crossings = 1;
     const stationSpin = crossingSpin(7);
@@ -226,14 +226,14 @@ describe("MinimalRadioSurface", () => {
     render(
       <MinimalRadioSurface
         rows={[station]}
-        libraryItems={[]}
+        libraryItems={[libraryItem(7)]}
         recentSpinsBySlug={new Map([["alpha", [stationSpin]]])}
         preset="now"
       />,
     );
 
     expect(
-      screen.getByRole("link", { name: "Open Track 7 by Artist 7" }).getAttribute("href"),
+      screen.getByRole("link", { name: "Open Album 7 by Artist 7" }).getAttribute("href"),
     ).toBe("/album/release-7");
   });
 

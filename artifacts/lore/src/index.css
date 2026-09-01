@@ -13796,17 +13796,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio__hero-slide {
   height: auto;
-  min-height: 154px;
+  min-height: 266px;
   padding-bottom: 12px;
 }
 .minimal-radio-card {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 8px;
-  height: 142px;
-  min-height: 142px;
-  padding: 14px;
+  gap: 6px;
+  height: 254px;
+  min-height: 254px;
+  padding: 8px 14px;
   overflow: hidden;
   border: 1px solid hsl(var(--border) / .8);
   border-radius: 10px;
@@ -13949,7 +13949,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   align-items: center;
   flex: 1;
   min-width: 0;
-  min-height: 76px;
+  min-height: 152px;
   padding: 0;
   overflow: hidden;
   border: 0;
@@ -13970,7 +13970,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   gap: 7px;
   width: 100%;
   min-width: 0;
-  min-height: 76px;
+  min-height: 152px;
   margin: 0;
   padding: 0 24px 0 0;
   overflow-x: auto;
@@ -13981,9 +13981,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album-grid::-webkit-scrollbar { display: none; }
 .minimal-radio-card__album {
   position: relative;
-  flex: 0 0 76px;
-  width: 76px;
-  height: 76px;
+  flex: 0 0 152px;
+  width: 152px;
+  height: 152px;
   min-width: 0;
   overflow: hidden;
   border-radius: 4px;
@@ -13991,7 +13991,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   text-decoration: none;
   transition: transform 180ms ease;
 }
-.minimal-radio-card__album:nth-child(4) { opacity: .58; }
 .minimal-radio-card__album:hover,
 .minimal-radio-card__album:focus-visible {
   transform: translateY(-2px);
@@ -14000,8 +13999,8 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__album img,
 .minimal-radio-card__album-swatch {
   display: grid;
-  width: 76px;
-  height: 76px;
+  width: 152px;
+  height: 152px;
   place-items: center;
   object-fit: cover;
   border: 0;
@@ -14055,9 +14054,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     min-height: 616px;
   }
   .minimal-radio-card {
-    height: 142px;
-    min-height: 142px;
-    padding: 14px;
+    height: 254px;
+    min-height: 254px;
+    padding: 8px 14px;
   }
   .minimal-radio-card__station-identity h2 {
     font-size: 18px;
