@@ -354,36 +354,14 @@ function MinimalRadioCard({
       aria-label={`${row.ds.station.name} station card`}
     >
       <header className="minimal-radio-card__station-line">
-        <div className="minimal-radio-card__station-column">
+        <div className="minimal-radio-card__station-heading">
           <div className="minimal-radio-card__station-identity">
             <h2 aria-label={row.ds.station.name}>{row.ds.station.name}</h2>
-            {stationCity(row.ds.station) ? (
-              <span>{stationCity(row.ds.station)}</span>
-            ) : null}
+            {stationCity(row.ds.station) ? <span>{stationCity(row.ds.station)}</span> : null}
           </div>
-
-          <button
-            type="button"
-            className={`minimal-radio-card__now${!track ? " is-empty" : ""}`}
-            disabled={!playable}
-            onClick={play}
-            aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
-          >
-            <span className="minimal-radio-card__now-label">Now</span>
-            <span className="minimal-radio-card__now-copy">
-              {track && artist && title ? (
-                <>
-                  <strong>{artist}</strong>
-                  <span> — {title}</span>
-                </>
-              ) : (
-                nowPlayingLabel
-              )}
-            </span>
-          </button>
         </div>
-        <div className="minimal-radio-card__albums-columns">
-          <div className={`minimal-radio-card__album-column minimal-radio-card__album-column--crossings${albumsExpanded ? " is-expanded" : ""}`}>
+        <div className="minimal-radio-card__insights-heading">
+          <div className="minimal-radio-card__insight-heading-column">
             <button
               type="button"
               className={`minimal-radio-card__crossing${recency.live ? " is-live" : ""}`}
@@ -397,7 +375,45 @@ function MinimalRadioCard({
               <strong>{crossing.count}</strong>
               <span>{crossing.count === 1 ? "crossing" : "crossings"} · {crossing.label}</span>
             </button>
+          </div>
+          <div className="minimal-radio-card__insight-heading-column">
+            <button
+              type="button"
+              className="minimal-radio-card__first-plays"
+              data-testid="minimal-radio-first-plays"
+              aria-label={`${row.ds.lifetimeFirstPlayCrossings} first plays, lifetime`}
+              aria-expanded={firstPlayExpanded}
+              disabled={firstPlayAlbumItems.length === 0}
+              onClick={() => setFirstPlayExpanded((expanded) => !expanded)}
+            >
+              <strong>{row.ds.lifetimeFirstPlayCrossings}</strong>
+              <span>first plays · lifetime</span>
+            </button>
+          </div>
+        </div>
 
+        <button
+          type="button"
+          className={`minimal-radio-card__now${!track ? " is-empty" : ""}`}
+          disabled={!playable}
+          onClick={play}
+          aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
+        >
+          <span className="minimal-radio-card__now-label">Now</span>
+          <span className="minimal-radio-card__now-copy">
+            {track && artist && title ? (
+              <>
+                <strong>{artist}</strong>
+                <span> — {title}</span>
+              </>
+            ) : (
+              nowPlayingLabel
+            )}
+          </span>
+        </button>
+
+        <div className="minimal-radio-card__albums-columns">
+          <div className={`minimal-radio-card__album-column minimal-radio-card__album-column--crossings${albumsExpanded ? " is-expanded" : ""}`}>
             <section
               className={`minimal-radio-card__albums${albums.length === 0 ? " is-empty" : ""}`}
               aria-label={albumsExpanded ? "Lifetime crossing album covers" : "Latest crossing album cover"}
@@ -435,19 +451,6 @@ function MinimalRadioCard({
           </div>
 
           <div className={`minimal-radio-card__album-column minimal-radio-card__album-column--first-plays${firstPlayExpanded ? " is-expanded" : ""}`}>
-            <button
-              type="button"
-              className="minimal-radio-card__first-plays"
-              data-testid="minimal-radio-first-plays"
-              aria-label={`${row.ds.lifetimeFirstPlayCrossings} first plays, lifetime`}
-              aria-expanded={firstPlayExpanded}
-              disabled={firstPlayAlbumItems.length === 0}
-              onClick={() => setFirstPlayExpanded((expanded) => !expanded)}
-            >
-              <strong>{row.ds.lifetimeFirstPlayCrossings}</strong>
-              <span>first plays · lifetime</span>
-            </button>
-
             <section
               className={`minimal-radio-card__albums${firstPlayAlbumItems.length === 0 ? " is-empty" : ""}`}
               aria-label={firstPlayExpanded ? "First play album covers" : "Latest first play album cover"}

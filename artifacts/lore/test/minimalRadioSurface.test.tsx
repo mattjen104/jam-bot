@@ -136,7 +136,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(1);
     expect(
       screen.getByRole("button", { name: "Tune in to Alpha" }).parentElement
-        ?.classList.contains("minimal-radio-card__station-column"),
+        ?.classList.contains("minimal-radio-card__station-line"),
     ).toBe(true);
     expect(document.querySelector("[data-station-mark='logo']")).toBeNull();
     expect(screen.queryByText(/matched|shown/i)).toBeNull();
@@ -164,7 +164,7 @@ describe("MinimalRadioSurface", () => {
       .toContain("2crossings · 24 hr");
     expect(
       screen.getByTestId("minimal-radio-crossing").parentElement
-        ?.classList.contains("minimal-radio-card__album-column--crossings"),
+        ?.classList.contains("minimal-radio-card__insight-heading-column"),
     ).toBe(true);
     expect(screen.queryByTestId("minimal-radio-hero-crossing")).toBeNull();
   });
@@ -267,7 +267,9 @@ describe("MinimalRadioSurface", () => {
       expect(heading.textContent).toContain("4first plays · lifetime");
       return heading;
     });
-    const firstPlayColumn = firstPlays.parentElement as HTMLElement;
+    const firstPlayColumn = screen
+      .getByTestId("minimal-radio-card")
+      .querySelector(".minimal-radio-card__album-column--first-plays") as HTMLElement;
     expect(within(firstPlayColumn).getAllByRole("link", { name: /^Open / })).toHaveLength(1);
     expect(firstPlays.getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByTestId("minimal-radio-card").className).not.toContain("is-expanded");

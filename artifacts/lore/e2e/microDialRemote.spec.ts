@@ -287,12 +287,14 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(card.locator(".minimal-radio-card__albums-columns")).toHaveCSS("border-left-width", "1px");
     await expect(card.locator(".minimal-radio-card__album-column + .minimal-radio-card__album-column"))
       .toHaveCSS("border-left-width", "1px");
-    await expect(card.locator(".minimal-radio-card__station-identity"))
+    await expect(card.locator(".minimal-radio-card__station-heading"))
+      .toHaveCSS("border-bottom-width", "1px");
+    await expect(card.locator(".minimal-radio-card__insights-heading"))
       .toHaveCSS("border-bottom-width", "1px");
     await expect(card.getByTestId("minimal-radio-crossing"))
-      .toHaveCSS("border-bottom-width", "1px");
+      .toHaveCSS("border-bottom-width", "0px");
     await expect(card.getByTestId("minimal-radio-first-plays"))
-      .toHaveCSS("border-bottom-width", "1px");
+      .toHaveCSS("border-bottom-width", "0px");
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
