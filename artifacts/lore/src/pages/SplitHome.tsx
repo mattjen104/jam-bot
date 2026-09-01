@@ -40,20 +40,6 @@ function writeFrontDoorMode(mode: FrontDoorMode): void {
   }
 }
 
-function hasActiveCrossing(row: DialLaneRow): boolean {
-  const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
-  const liveHit = Boolean(
-    track && !track.resolving && (track.isLibraryHit || track.isArtistHit),
-  );
-  return Boolean(
-    liveHit
-    || (row.show?.crossings ?? 0) + (row.show?.artistCrossings ?? 0) > 0
-    || row.ds.crossings + row.ds.artistCrossings > 0
-    || row.ds.weekCrossings + row.ds.weekArtistCrossings > 0
-    || row.ds.monthCrossings + row.ds.monthArtistCrossings > 0,
-  );
-}
-
 export default function SplitHome() {
   const { visibleSeeds, addSeed, replaceSeeds } = useSeedManager();
   const { data: appConfig } = useAppConfig();
@@ -147,34 +133,25 @@ export default function SplitHome() {
       .filter((row) => row.ds.isLive),
     [stations],
   );
-  const hasRadioCrossing = useMemo(
-    () => rows.some(hasActiveCrossing),
-    [rows],
-  );
-
   return (
     <main className="split-home split-home--front-door">
       <div className="split-home__front-door-shell">
         <header className="front-door-header">
           <div className="front-door-header__intro">
-            {!hasRadioCrossing ? (
-              <>
-                <h1>Your records are on the radio right now.</h1>
-                <p className="front-door-subtitle">
-                  <button
-                    type="button"
-                    className="front-door-subtitle__button"
-                    onClick={() => setArtistDocumentOpen((open) => !open)}
-                    aria-expanded={artistDocumentOpen}
-                    aria-controls="front-door-artist-document"
-                    data-testid="front-door-add-artists"
-                  >
-                    Add albums
-                  </button>{" "}
-                  to see which stations cross your library.
-                </p>
-              </>
-            ) : null}
+            <h1>Your records are on the radio right now.</h1>
+            <p className="front-door-subtitle">
+              <button
+                type="button"
+                className="front-door-subtitle__button"
+                onClick={() => setArtistDocumentOpen((open) => !open)}
+                aria-expanded={artistDocumentOpen}
+                aria-controls="front-door-artist-document"
+                data-testid="front-door-add-artists"
+              >
+                Add albums
+              </button>{" "}
+              to see which stations cross your library.
+            </p>
           </div>
           <nav className="front-door-modes" aria-label="Front door mode">
             <button

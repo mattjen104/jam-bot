@@ -248,11 +248,17 @@ function MinimalRadioCard({
   libraryItems,
   stationSpins,
   crossing,
+  showCategoryFilter,
+  activeCategories,
+  onToggleCategory,
 }: {
   row: DialLaneRow;
   libraryItems: LibraryItem[];
   stationSpins: readonly CrossingSpin[];
   crossing: CrossingSummary;
+  showCategoryFilter: boolean;
+  activeCategories: ReadonlySet<StationCategory>;
+  onToggleCategory?: (category: StationCategory) => void;
 }) {
   const { radio } = usePlayer();
   const track = liveTrack(row);
@@ -289,12 +295,25 @@ function MinimalRadioCard({
             <span>{stationCity(row.ds.station)}</span>
           ) : null}
         </div>
-        <div
-          className={`minimal-radio-card__recency${recency.live ? " is-live" : ""}`}
-          aria-label={recency.label}
-        >
-          {recency.live ? <i aria-hidden="true" /> : null}
-          <span>{recency.label}</span>
+        <div className="minimal-radio-card__station-tools">
+          {showCategoryFilter && onToggleCategory ? (
+            <FilterDropdownMenu
+              label="Station type"
+              ariaLabel="Station categories"
+              options={STATION_CATEGORY_OPTIONS}
+              active={activeCategories}
+              onToggle={onToggleCategory}
+              variant="chips"
+              className="minimal-radio-card__category-filter"
+            />
+          ) : null}
+          <div
+            className={`minimal-radio-card__recency${recency.live ? " is-live" : ""}`}
+            aria-label={recency.label}
+          >
+            {recency.live ? <i aria-hidden="true" /> : null}
+            <span>{recency.label}</span>
+          </div>
         </div>
       </header>
 
@@ -473,7 +492,7 @@ export function MinimalRadioSurface({
   return (
     <section className="minimal-radio" data-testid="minimal-radio-surface">
       <div className="minimal-radio__controls" role="group" aria-label="Radio presets and stations">
-        {onToggleCategory ? (
+        {candidates.length === 0 && onToggleCategory ? (
           <FilterDropdownMenu
             label="Station type"
             ariaLabel="Station categories"
@@ -533,6 +552,9 @@ export function MinimalRadioSurface({
                   libraryItems={libraryItems}
                   stationSpins={recentSpinsBySlug.get(row.ds.station.slug) ?? []}
                   crossing={crossingSummary(row, lifetimeOnly)}
+                  showCategoryFilter={index === 0}
+                  activeCategories={activeCategories}
+                  onToggleCategory={onToggleCategory}
                 />
               </div>
             ))}
