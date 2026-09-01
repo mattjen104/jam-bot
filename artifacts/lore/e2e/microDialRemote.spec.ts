@@ -230,7 +230,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.locator("body")).toHaveCSS("overflow-x", /^(visible|clip|hidden)$/);
   });
 
-  test("crossing header clips the large two-cover panel until expanded", async ({ page }) => {
+  test("latest crossing cover expands into a vertical lifetime stack", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);
 
@@ -256,19 +256,31 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(collapsed.albumsHeight).toBeLessThan(collapsed.imageHeight!);
     expect(collapsed.albumGridWidth).toBeGreaterThan(300);
     expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
-    expect(collapsed.albumWidths).toHaveLength(2);
-    expect(collapsed.albumWidths[0]).toBe(collapsed.albumWidths[1]);
+    expect(collapsed.albumWidths).toHaveLength(1);
     expect(collapsed.cardHeight).toBeLessThan(180);
-    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(2);
+    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(1);
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);
-    const expanded = await card.evaluate((node) => ({
-      albumsHeight: node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect().height,
-      imageHeight: node.querySelector<HTMLImageElement>(".minimal-radio-card__album img")?.getBoundingClientRect().height,
-    }));
+    await expect(card.locator(".minimal-radio-card__album")).toHaveCount(2);
+    const expanded = await card.evaluate((node) => {
+      const albums = node.querySelector<HTMLElement>(".minimal-radio-card__albums");
+      const grid = node.querySelector<HTMLElement>(".minimal-radio-card__album-grid");
+      const image = node.querySelector<HTMLImageElement>(".minimal-radio-card__album img");
+      return {
+        albumsHeight: albums?.getBoundingClientRect().height,
+        gridHeight: grid?.getBoundingClientRect().height,
+        imageHeight: image?.getBoundingClientRect().height,
+        gridOverflowY: grid ? getComputedStyle(grid).overflowY : null,
+        gridDirection: grid ? getComputedStyle(grid).flexDirection : null,
+      };
+    });
     expect(expanded.albumsHeight).toBeGreaterThan(152);
-    expect(expanded.imageHeight).toBe(expanded.albumsHeight);
+    expect(expanded.gridHeight).toBe(expanded.albumsHeight);
+    expect(expanded.imageHeight).toBeGreaterThan(152);
+    expect(expanded.gridOverflowY).toBe("auto");
+    expect(expanded.gridDirection).toBe("column");
+    await expect(card.locator(".minimal-radio-card__station-line")).toHaveCSS("border-bottom-width", "1px");
   });
 
   test("1280×900: presets and keyboard navigation change the active card", async ({ page }) => {

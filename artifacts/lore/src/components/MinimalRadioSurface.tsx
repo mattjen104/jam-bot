@@ -24,7 +24,7 @@ export type RadioPreset = "now" | "lifetime";
 const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
   ({ cat, label, title }) => ({ value: cat, label, title }),
 );
-const MAX_CROSSING_ALBUMS = 2;
+const MAX_CROSSING_ALBUMS = 5;
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
@@ -262,6 +262,7 @@ function MinimalRadioCard({
     () => crossingAlbums(row, libraryItems, stationSpins, crossing),
     [row, libraryItems, stationSpins, crossing],
   );
+  const visibleAlbums = albumsExpanded ? albums : albums.slice(0, 1);
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const isCurrent = radio.station?.slug === row.ds.station.slug;
   const isPlaying = isCurrent && radio.status === "playing";
@@ -329,11 +330,11 @@ function MinimalRadioCard({
 
       <section
         className={`minimal-radio-card__albums${albums.length === 0 ? " is-empty" : ""}`}
-        aria-label="Crossing album covers"
+        aria-label={albumsExpanded ? "Lifetime crossing album covers" : "Latest crossing album cover"}
       >
-        {albums.length > 0 ? (
+        {visibleAlbums.length > 0 ? (
           <div className="minimal-radio-card__album-grid">
-            {albums.map((album) => {
+            {visibleAlbums.map((album) => {
               const artworkUrl = album.artworkUrl ? proxyArtUrl(album.artworkUrl) : null;
               if (!artworkUrl) return null;
               return (
