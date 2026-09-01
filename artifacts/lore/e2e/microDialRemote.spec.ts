@@ -3,10 +3,10 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * Browser coverage for the simplified SplitHome station dial.
  *
- * The front door now presents one scrollable station list instead of the old
- * density-switching keypad. This spec exercises that rendered list with 16
- * live stations, so it catches clipping and overflow regressions and proves a
- * station beyond the initial five-row fold remains reachable.
+ * The front door presents a vertically scrollable stack of station cards.
+ * This spec exercises that rendered stack with 16 live stations, so it catches
+ * clipping and overflow regressions and proves a station beyond the initial
+ * viewport remains reachable.
  */
 
 const STATION_COUNT = 16;
@@ -168,31 +168,35 @@ async function loadStationDial(
   await expect(page.getByTestId("minimal-radio-surface")).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByTestId("minimal-radio-card")).toHaveCount(1);
+  await expect(page.getByTestId("minimal-radio-card")).toHaveCount(STATION_COUNT);
 }
 
 test.describe("Minimal Radio remote — real browser navigation", () => {
-  test("390×844: keeps one card visible and selects stations without playing", async ({ page }) => {
+  test("390×844: keeps the card stack reachable and selects stations without playing", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);
 
-    await expect(page.getByTestId("minimal-radio-card")).toContainText("Station 01");
-    await page.getByTitle("Select Station 16").click();
-    await expect(page.getByTestId("minimal-radio-card")).toContainText("Station 16");
-    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(1);
+    await expect(page.getByTestId("minimal-radio-hero-card-micro-01")).toContainText("Station 01");
+    const hero = page.getByTestId("minimal-radio-hero");
+    await hero.focus();
+    await hero.press("End");
+    await expect(page.getByTestId("minimal-radio-hero-card-micro-16")).toHaveAttribute("aria-hidden", "false");
+    await expect(page.getByTestId("minimal-radio-hero-card-micro-16")).toContainText("Station 16");
+    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(STATION_COUNT);
     await expect(page.locator(".player-bar-row")).toHaveCount(0);
     await expect(page.locator("body")).toHaveCSS("overflow-x", /^(visible|clip|hidden)$/);
   });
 
-  test("1280×900: presets and next navigation replace the single active card", async ({ page }) => {
+  test("1280×900: presets and keyboard navigation change the active card", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await loadStationDial(page);
     await page.getByTestId("radio-preset-lifetime").click();
     await expect(page.getByTestId("radio-preset-lifetime")).toHaveAttribute("aria-pressed", "true");
-    const before = await page.getByTestId("minimal-radio-card").textContent();
-    await page.getByRole("button", { name: "Next station" }).click();
-    await expect(page.getByTestId("minimal-radio-card")).not.toHaveText(before ?? "");
-    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(1);
+    const hero = page.getByTestId("minimal-radio-hero");
+    await hero.focus();
+    await hero.press("ArrowDown");
+    await expect(page.getByTestId("minimal-radio-hero-card-micro-02")).toHaveAttribute("aria-hidden", "false");
+    await expect(page.getByTestId("minimal-radio-card")).toHaveCount(STATION_COUNT);
     await expect(page.locator(".fdrow__crossing-dot")).toHaveCount(0);
   });
 
