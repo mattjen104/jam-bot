@@ -13206,7 +13206,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card {
   display: grid;
-  grid-template-columns: 104px minmax(170px, 1.15fr) minmax(150px, 1.1fr) auto;
+  grid-template-columns: 104px 104px minmax(150px, 1.1fr) auto;
   flex: 1;
   height: 100%;
   min-height: 0;
@@ -13390,18 +13390,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__track > strong,
 .minimal-radio-card__track > span,
 .minimal-radio-card__track > small {
-  overflow: visible;
-  text-overflow: clip;
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: normal;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
 }
-.minimal-radio-card__track > strong { font: 500 15px/1.2 var(--app-font-reading); }
+.minimal-radio-card__track > strong {
+  font: 500 15px/1.2 var(--app-font-reading);
+  -webkit-line-clamp: 2;
+}
 .minimal-radio-card__track > span { color: hsl(var(--dim)); font: 11px/1.2 var(--app-font-mono); }
 .minimal-radio-card__track > small {
   margin-top: 3px;
   overflow: visible;
   color: hsl(var(--faint));
   font: 9px/1.1 var(--app-font-mono);
+  -webkit-line-clamp: 1;
 }
 .minimal-radio-card__track-copy {
   display: flex;
@@ -13528,7 +13534,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     padding-bottom: 8px;
   }
   .minimal-radio-card {
-    grid-template-columns: 72px minmax(92px, 1fr) minmax(72px, .8fr) 56px;
+    grid-template-columns: 72px 72px minmax(72px, .8fr) 56px;
     border-radius: 10px;
   }
   .minimal-radio-card__station {
@@ -13591,7 +13597,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .minimal-radio-card__track > .minimal-radio-card__eyebrow {
     font-size: 7px;
   }
-  .minimal-radio-card__track > strong { font-size: 12px; }
+  .minimal-radio-card__track > strong {
+    font-size: 10px;
+    -webkit-line-clamp: 2;
+  }
   .minimal-radio-card__track > span { font-size: 8px; }
   .minimal-radio-card__track > small { font-size: 7px; }
   .minimal-radio-card__actions {
