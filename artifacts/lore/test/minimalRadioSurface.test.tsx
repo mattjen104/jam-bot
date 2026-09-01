@@ -127,7 +127,7 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByRole("heading", { name: "Alpha" }).textContent).toBe("Alpha");
     expect(screen.getByText("Alpha City")).toBeTruthy();
     expect(screen.queryByText("UK")).toBeNull();
-    expect(document.querySelectorAll(".minimal-radio-card__crossing.is-live")).toHaveLength(2);
+    expect(document.querySelectorAll(".minimal-radio-card__crossing time")).toHaveLength(2);
     expect(screen.getByText("Alpha artist")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Tune in to Alpha" }).textContent)
       .toContain("Alpha track");
@@ -140,9 +140,14 @@ describe("MinimalRadioSurface", () => {
     ).toBe(true);
     expect(document.querySelector("[data-station-mark='logo']")).toBeNull();
     expect(screen.queryByText(/matched|shown/i)).toBeNull();
-    expect(screen.getAllByTestId("minimal-radio-crossing")).toHaveLength(2);
-    expect(screen.getAllByTestId("minimal-radio-crossing")
-      .every((element) => element.textContent?.includes("1crossing · this set"))).toBe(true);
+    const crossingHeaders = screen.getAllByTestId("minimal-radio-crossing");
+    expect(crossingHeaders).toHaveLength(2);
+    expect(crossingHeaders.map((element) => element.querySelector("strong")?.textContent))
+      .toEqual(["1", "5"]);
+    expect(crossingHeaders.every((element) => (
+      element.querySelector("time") != null
+      && !element.textContent?.includes("crossing")
+    ))).toBe(true);
 
     const hero = screen.getByTestId("minimal-radio-hero");
     fireEvent.keyDown(hero, { key: "ArrowDown" });
@@ -151,17 +156,25 @@ describe("MinimalRadioSurface", () => {
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the crossing count and range in the heading column", () => {
+  it("shows the lifetime crossing badge and latest crossing timestamp", () => {
     const station = row("alpha", "Alpha", false, 1);
     station.ds.crossings = 2;
+    const latestCrossing = crossingSpin(7);
 
     render(
-      <MinimalRadioSurface rows={[station]} libraryItems={[]} preset="now" />,
+      <MinimalRadioSurface
+        rows={[station]}
+        libraryItems={[]}
+        recentSpinsBySlug={new Map([["alpha", [latestCrossing]]])}
+        preset="now"
+      />,
     );
 
-    expect(screen.getByLabelText("2 crossings, 24 hr")).toBeTruthy();
-    expect(screen.getByTestId("minimal-radio-crossing").textContent)
-      .toContain("2crossings · 24 hr");
+    const heading = screen.getByTestId("minimal-radio-crossing");
+    expect(heading.querySelector("strong")?.textContent).toBe("1");
+    expect(heading.querySelector("time")?.getAttribute("datetime")).toBe(latestCrossing.playedAt);
+    expect(heading.textContent).not.toContain("crossing");
+    expect(heading.getAttribute("aria-label")).toContain("1 lifetime crossings, most recent");
     expect(
       screen.getByTestId("minimal-radio-crossing").parentElement
         ?.classList.contains("minimal-radio-card__insight-heading-column"),
@@ -233,29 +246,41 @@ describe("MinimalRadioSurface", () => {
   });
 
   it("loads station first plays with artwork and expands that column independently", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (input: string | URL | Request) => ({
       ok: true,
       json: async () => ({
-        items: [
-          {
-            id: 701,
-            mbid: "first-play-1",
-            title: "New Song",
-            artist: "New Artist",
-            artworkUrl: "https://art.example/first-1.jpg",
-            station: { slug: "alpha", name: "Alpha" },
-          },
-          {
-            id: 702,
-            mbid: "first-play-2",
-            title: "Another New Song",
-            artist: "Another Artist",
-            artworkUrl: "https://art.example/first-2.jpg",
-            station: { slug: "alpha", name: "Alpha" },
-          },
-        ],
+        items: String(input).includes("filter=crossings")
+          ? [{
+              id: 700,
+              mbid: "crossing-1",
+              title: "Known Song",
+              artist: "Known Artist",
+              artworkUrl: "https://art.example/crossing-1.jpg",
+              playedAt: "2026-08-30T16:00:00.000Z",
+              station: { slug: "alpha", name: "Alpha" },
+            }]
+          : [
+              {
+                id: 701,
+                mbid: "first-play-1",
+                title: "New Song",
+                artist: "New Artist",
+                artworkUrl: "https://art.example/first-1.jpg",
+                playedAt: "2026-08-29T15:30:00.000Z",
+                station: { slug: "alpha", name: "Alpha" },
+              },
+              {
+                id: 702,
+                mbid: "first-play-2",
+                title: "Another New Song",
+                artist: "Another Artist",
+                artworkUrl: "https://art.example/first-2.jpg",
+                playedAt: "2026-08-28T14:15:00.000Z",
+                station: { slug: "alpha", name: "Alpha" },
+              },
+            ],
       }),
-    }));
+    })));
     const station = row("alpha", "Alpha", false, 1);
     station.ds.crossings = 1;
     station.ds.lifetimeFirstPlayCrossings = 4;
@@ -264,9 +289,13 @@ describe("MinimalRadioSurface", () => {
 
     const firstPlays = await waitFor(() => {
       const heading = screen.getByTestId("minimal-radio-first-plays");
-      expect(heading.textContent).toContain("4premieres");
+      expect(heading.querySelector("strong")?.textContent).toBe("4");
+      expect(heading.querySelector("time")?.getAttribute("datetime"))
+        .toBe("2026-08-29T15:30:00.000Z");
       return heading;
     });
+    expect(firstPlays.textContent).not.toContain("premieres");
+    expect(firstPlays.getAttribute("aria-label")).toContain("4 lifetime premieres, most recent");
     const firstPlayColumn = screen
       .getByTestId("minimal-radio-card")
       .querySelector(".minimal-radio-card__album-column--first-plays") as HTMLElement;
@@ -328,6 +357,6 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByTestId("minimal-radio-card")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show lifetime crossings" }));
     expect(screen.getByTestId("minimal-radio-card")).toBeTruthy();
-    expect(screen.getByLabelText("5 crossings, lifetime")).toBeTruthy();
+    expect(screen.getByLabelText("5 lifetime crossings")).toBeTruthy();
   });
 });

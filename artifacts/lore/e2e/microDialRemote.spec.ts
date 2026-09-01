@@ -70,12 +70,16 @@ const CROSSINGS = STATIONS.map((station) => ({
   stationSlug: station.slug,
   crossings: 1,
   artistCrossings: 0,
+  firstPlayCrossings: 1,
   weekCrossings: 1,
   weekArtistCrossings: 0,
+  weekFirstPlayCrossings: 2,
   monthCrossings: 1,
   monthArtistCrossings: 0,
+  monthFirstPlayCrossings: 3,
   lifetimeCrossings: 1,
   lifetimeArtistCrossings: 0,
+  lifetimeFirstPlayCrossings: 5,
   albumCrossings: [1, 2, 3, 4, 5].map((ordinal) => ({
     releaseGroupMbid: `${station.slug}-release-${ordinal}`,
     recordingMbid: `${station.slug}-recording-${ordinal}`,
@@ -176,16 +180,18 @@ async function installRoutes(
   await page.route("**/api/player/history?**", (route) => {
     const url = new URL(route.request().url());
     const stationSlug = url.searchParams.get("station") ?? "";
+    const filter = url.searchParams.get("filter");
     const station = STATIONS.find((candidate) => candidate.slug === stationSlug);
     return route.fulfill({
       json: {
         items: station
           ? [1, 2, 3, 4, 5].map((ordinal) => ({
               id: station.id * 100 + ordinal,
-              mbid: `${station.slug}-first-play-${ordinal}`,
-              title: `First Play ${ordinal}`,
-              artist: `New Artist ${ordinal}`,
-              artworkUrl: `https://art.example.test/${station.slug}-first-${ordinal}.jpg`,
+              mbid: `${station.slug}-${filter}-${ordinal}`,
+              title: filter === "crossings" ? `Crossing ${ordinal}` : `First Play ${ordinal}`,
+              artist: filter === "crossings" ? `Known Artist ${ordinal}` : `New Artist ${ordinal}`,
+              artworkUrl: `https://art.example.test/${station.slug}-${filter}-${ordinal}.jpg`,
+              playedAt: new Date(Date.UTC(2026, 7, 31, 12, 30 - ordinal)).toISOString(),
               station: { slug: station.slug, name: station.name },
             }))
           : [],
@@ -295,6 +301,16 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
       .toHaveCSS("border-bottom-width", "0px");
     await expect(card.getByTestId("minimal-radio-first-plays"))
       .toHaveCSS("border-bottom-width", "0px");
+    await expect(card.getByTestId("minimal-radio-crossing").locator("strong"))
+      .toHaveText("1");
+    await expect(card.getByTestId("minimal-radio-first-plays").locator("strong"))
+      .toHaveText("5");
+    await expect(card.getByTestId("minimal-radio-crossing").locator("time"))
+      .toHaveAttribute("datetime", NOW_PLAYING[0]!.playedAt);
+    await expect(card.getByTestId("minimal-radio-first-plays").locator("time"))
+      .toHaveAttribute("datetime", /2026-08-31/);
+    await expect(card.getByTestId("minimal-radio-crossing")).not.toContainText("crossing");
+    await expect(card.getByTestId("minimal-radio-first-plays")).not.toContainText("premieres");
 
     await card.getByTestId("minimal-radio-crossing").click();
     await expect(card).toHaveClass(/is-expanded/);

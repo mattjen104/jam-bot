@@ -13962,21 +13962,17 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio-card__crossing {
   appearance: none;
-  display: inline-flex;
-  align-items: baseline;
+  display: flex;
+  align-items: center;
   align-self: flex-start;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
-  padding: 0;
+  padding: 4px;
   border: 0;
   background: transparent;
   min-height: 16px;
-  color: hsl(var(--accent));
-  font: 600 9.5px/1 var(--app-font-mono);
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font: 600 9px/1.15 var(--app-font-mono);
   cursor: pointer;
 }
 .minimal-radio-card__insight-heading-column .minimal-radio-card__crossing,
@@ -13984,60 +13980,60 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   width: 100%;
   box-sizing: border-box;
 }
-.minimal-radio-card__crossing.is-live {
-  color: hsl(var(--accent));
-}
 .minimal-radio-card__crossing:disabled {
   cursor: default;
-}
-.minimal-radio-card__crossing i {
-  display: block;
-  width: 5px;
-  height: 5px;
-  margin-right: 1px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 0 0 hsl(var(--accent) / .5);
-  animation: minimal-radio-live-pulse 1.7s ease-out infinite;
-}
-.minimal-radio-card__crossing strong {
-  font-size: 15px;
-  letter-spacing: -.02em;
-}
-.minimal-radio-card__crossing span {
-  color: hsl(var(--dim));
 }
 .minimal-radio-card__first-plays {
   appearance: none;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   align-self: flex-start;
-  gap: 5px;
+  gap: 4px;
   min-height: 16px;
   margin: 0;
-  padding: 0;
+  padding: 4px;
   border: 0;
   background: transparent;
-  color: hsl(var(--accent));
-  font: 600 9.5px/1 var(--app-font-mono);
-  letter-spacing: .06em;
+  color: hsl(var(--foreground));
+  font: 600 9px/1.15 var(--app-font-mono);
   text-align: left;
-  text-transform: uppercase;
-  white-space: normal;
-  overflow-wrap: anywhere;
   cursor: pointer;
 }
 .minimal-radio-card__first-plays:disabled {
   cursor: default;
 }
+.minimal-radio-card__crossing strong,
 .minimal-radio-card__first-plays strong {
+  display: inline-flex;
   flex: 0 0 auto;
-  font-size: 15px;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: hsl(var(--accent));
+  color: hsl(var(--background));
+  font-size: 12px;
   letter-spacing: -.02em;
 }
-.minimal-radio-card__first-plays span {
+.minimal-radio-card__crossing time,
+.minimal-radio-card__first-plays time {
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+  gap: 1px;
   color: hsl(var(--dim));
+  font: 500 8px/1.15 var(--app-font-mono);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.minimal-radio-card__crossing time span,
+.minimal-radio-card__first-plays time span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .minimal-radio-card__crossing:focus-visible,
 .minimal-radio-card__first-plays:focus-visible {
