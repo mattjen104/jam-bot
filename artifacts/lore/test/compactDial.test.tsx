@@ -237,7 +237,7 @@ describe("CompactDial category tabs", () => {
     const tabs = within(strip).getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       "All",
-      "Anchor",
+      "Core",
       "Campus",
       "Specialist",
       "Public",
@@ -247,7 +247,7 @@ describe("CompactDial category tabs", () => {
     ]);
     // The All overview is selected initially.
     expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("tab", { name: "Anchor" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("tab", { name: "Core" }).getAttribute("aria-selected")).toBe("false");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby"))
       .toBe("compact-category-tab-all");
   });
@@ -283,7 +283,7 @@ describe("CompactDial category tabs", () => {
       (screen.getByRole("checkbox", { name: "Include Ambient" }) as HTMLInputElement).checked,
     ).toBe(false);
     expect(
-      (screen.getByRole("checkbox", { name: "Include Anchor" }) as HTMLInputElement).checked,
+      (screen.getByRole("checkbox", { name: "Include Core" }) as HTMLInputElement).checked,
     ).toBe(true);
   });
 
@@ -391,7 +391,7 @@ describe("CompactDial category tabs", () => {
     );
     renderDial({ activeRows: [anchor], categoryFirst: true });
 
-    expect(screen.queryByRole("button", { name: "Open Anchor stations" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Core stations" })).toBeNull();
     fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
     expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
     screen.getByRole("button", { name: "The Smile — Bending Hectic · KEXP — tune in" });
@@ -409,7 +409,7 @@ describe("CompactDial category tabs", () => {
 
     fireEvent.click(screen.getByTestId("compact-category-tab-anchor"));
     expect(screen.getByTestId("compact-category-anchor-now-feed")).toBeTruthy();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Include Anchor" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Core" }));
     expect(onToggleCategory).toHaveBeenCalledWith("anchor");
     // Focus falls back to All even before the parent applies the change.
     expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");

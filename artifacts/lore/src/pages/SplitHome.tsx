@@ -7,7 +7,7 @@ import { eligibleDjNames } from "@workspace/lore-attribution";
 import { useDialData } from "../hooks/useDialData";
 import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { useSeedManager } from "../hooks/useSeedManager";
-import { useMyLibraryInfinite, useAppConfig } from "../lib/meHooks";
+import { useAppConfig } from "../lib/meHooks";
 import { DialCliBar } from "../components/dial/DialCliBar";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { MinimalRadioSurface } from "../components/MinimalRadioSurface";
@@ -91,7 +91,6 @@ export default function SplitHome() {
 
   const {
     stations,
-    spinsBySlug,
     isCoreLoading,
     liveLoading,
     stationsError,
@@ -102,13 +101,6 @@ export default function SplitHome() {
     crossingsEnabled: true,
     deferEnrichment: false,
   });
-  // The Radio card needs the listener's actual imported library as well as
-  // Lore-kept tracks so imported albums can appear in crossing context.
-  const libraryQuery = useMyLibraryInfinite({ sort: "added" }, 50);
-  const libraryItems = useMemo(
-    () => libraryQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [libraryQuery.data],
-  );
   const allRows = useMemo<DialLaneRow[]>(
     () => stations
       .map((ds) => {
@@ -236,8 +228,6 @@ export default function SplitHome() {
               <MinimalRadioSurface
                 rows={rows}
                  remoteRows={allRows}
-                libraryItems={libraryItems}
-                recentSpinsBySlug={spinsBySlug}
                 categoryByStationSlug={categoryByStationSlug}
                 preset="now"
                 activeCategories={activeCategories}

@@ -14024,20 +14024,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   background: hsl(var(--background));
   box-shadow: none;
 }
-.minimal-radio-card.is-expanded {
-  height: auto;
-  min-height: 84px;
-}
-.minimal-radio-card.is-expanded .minimal-radio-card__station-line {
-  height: auto;
-  grid-template-rows: auto;
-}
-.minimal-radio-card.is-expanded .minimal-radio-card__albums-columns {
-  height: auto;
-}
 .minimal-radio-card__station-line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 168px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: 84px;
   align-items: stretch;
   gap: 0;
@@ -14059,26 +14048,28 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio-card__station-heading {
   min-width: 0;
 }
-.minimal-radio-card__albums-columns {
+.minimal-radio-card__station-blurb {
   display: flex;
+  align-items: center;
   grid-column: 2;
   grid-row: 1;
   width: 100%;
   min-width: 0;
   height: 84px;
-  flex-direction: row;
-  border-left: 1px solid hsl(var(--border) / .7);
-}
-.minimal-radio-card__album-column {
-  display: flex;
-  min-width: 84px;
-  flex: 0 0 84px;
-  flex-direction: column;
-  gap: 4px;
+  padding: 0 14px;
   overflow: hidden;
-}
-.minimal-radio-card__album-column + .minimal-radio-card__album-column {
   border-left: 1px solid hsl(var(--border) / .7);
+  border-bottom: 1px solid hsl(var(--border) / .7);
+}
+.minimal-radio-card__station-blurb p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: hsl(var(--dim));
+  font: 400 13px/1.35 var(--app-font-reading);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
 }
 .minimal-radio-card__station-identity {
   display: flex;

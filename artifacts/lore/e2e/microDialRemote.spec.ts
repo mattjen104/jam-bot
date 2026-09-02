@@ -25,6 +25,7 @@ function makeStation(index: number) {
     streamFormat: "aac",
     mode: "live",
     homepageUrl: `https://station-${ordinal}.example.test`,
+    homepageBlurb: `Station ${ordinal} broadcasts adventurous music from London.`,
     donateUrl: null,
     logoUrl: null,
     attribution: true,
@@ -262,7 +263,7 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
 
     await expect(page.getByTestId("minimal-radio-overview")).toBeVisible();
     await expect(page.getByTestId("overview-category-campus")).toContainText("Campus Radio");
-    await expect(page.getByTestId("overview-category-anchor")).toContainText("Anchor Stations");
+    await expect(page.getByTestId("overview-category-anchor")).toContainText("Core Stations");
     await expect(page.getByTestId("overview-category-campus")).toContainText("Artist 1");
     await expect(page.getByTestId("overview-category-campus")).not.toContainText("Track 1");
     await expect(page.getByTestId("overview-history-crossings-item")).toHaveCount(10);
@@ -377,117 +378,46 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
       .toHaveAttribute("aria-pressed", "true");
   });
 
-  test("latest crossing cover expands into a lifetime grid", async ({ page }) => {
+  test("station sentences replace the crossing and premiere card columns", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loadStationDial(page);
 
     const card = page.getByTestId("minimal-radio-card").first();
-    await expect(page.getByTestId("minimal-radio-sheet-header")).toContainText("Crossing");
-    await expect(page.getByTestId("minimal-radio-sheet-header")).toContainText("Premiere");
-    const collapsed = await card.evaluate((node) => {
+    await expect(card.getByTestId("minimal-radio-card-blurb"))
+      .toContainText("Station 01 broadcasts adventurous music from London.");
+    await expect(page.getByTestId("minimal-radio-sheet-header")).toHaveCount(0);
+    await expect(card.locator(".minimal-radio-card__albums-columns")).toHaveCount(0);
+    await expect(card.locator(".minimal-radio-card__album-column--crossings")).toHaveCount(0);
+    await expect(card.locator(".minimal-radio-card__album-column--first-plays")).toHaveCount(0);
+    await expect(card.getByTestId("minimal-radio-crossing")).toHaveCount(0);
+    await expect(card.getByTestId("minimal-radio-first-plays")).toHaveCount(0);
+    await expect(card.locator(".minimal-radio-card__station-blurb"))
+      .toHaveCSS("border-left-width", "1px");
+
+    const layout = await card.evaluate((node) => {
       const cardRect = node.getBoundingClientRect();
-      const albumsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums")?.getBoundingClientRect();
-      const albumGridRect = node.querySelector<HTMLElement>(".minimal-radio-card__album-grid")?.getBoundingClientRect();
-      const albumsColumnsRect = node.querySelector<HTMLElement>(".minimal-radio-card__albums-columns")?.getBoundingClientRect();
-      const albumNodes = [...node.querySelectorAll<HTMLElement>(".minimal-radio-card__album-column--crossings .minimal-radio-card__album")];
-      const imageRect = node.querySelector<HTMLImageElement>(".minimal-radio-card__album-column--crossings .minimal-radio-card__album img")?.getBoundingClientRect();
+      const copyRect = node.querySelector<HTMLElement>(".minimal-radio-card__station-copy")?.getBoundingClientRect();
+      const blurbRect = node.querySelector<HTMLElement>(".minimal-radio-card__station-blurb")?.getBoundingClientRect();
       return {
         cardHeight: cardRect.height,
-        albumsHeight: albumsRect?.height,
-        albumsWidth: albumsRect?.width,
-        albumGridWidth: albumGridRect?.width,
-        albumsColumnsWidth: albumsColumnsRect?.width,
-        albumWidths: albumNodes.map((album) => album.getBoundingClientRect().width),
-        imageHeight: imageRect?.height,
-        imageWidth: imageRect?.width,
+        copyWidth: copyRect?.width ?? 0,
+        blurbWidth: blurbRect?.width ?? 0,
       };
     });
-    expect(collapsed.imageWidth).toBeGreaterThan(80);
-    expect(collapsed.imageHeight).toBe(collapsed.imageWidth);
-    expect(collapsed.albumsHeight).toBe(collapsed.imageHeight);
-    expect(collapsed.albumGridWidth).toBeGreaterThan(80);
-    expect(collapsed.albumGridWidth).toBe(collapsed.albumsWidth);
-    expect(collapsed.albumsColumnsWidth).toBeGreaterThanOrEqual(168);
-    expect(collapsed.albumWidths).toHaveLength(1);
-    expect(collapsed.albumWidths[0]).toBeGreaterThan(80);
-    expect(collapsed.cardHeight).toBe(84);
-    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album")).toHaveCount(1);
-    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album").first()).toHaveCSS("border-radius", "0px");
-    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album img").first()).toHaveCSS("border-radius", "0px");
-    await expect(card.locator(".minimal-radio-card__albums-columns")).toHaveCSS("border-left-width", "1px");
-    await expect(card.locator(".minimal-radio-card__album-column + .minimal-radio-card__album-column"))
-      .toHaveCSS("border-left-width", "1px");
+    expect(layout.cardHeight).toBe(84);
+    expect(layout.copyWidth).toBeGreaterThan(120);
+    expect(layout.blurbWidth).toBeGreaterThan(120);
+    expect(Math.abs(layout.copyWidth - layout.blurbWidth)).toBeLessThanOrEqual(1);
     await expect(card.locator(".minimal-radio-card__station-copy"))
       .toHaveCSS("border-bottom-width", "1px");
-    await expect(card.locator(".minimal-radio-card__insights-heading")).toHaveCount(0);
-    await expect(card.getByTestId("minimal-radio-crossing"))
-      .toHaveCSS("border-radius", "3px");
-    await expect(card.getByTestId("minimal-radio-first-plays"))
-      .toHaveCSS("border-radius", "3px");
-    await expect(card.getByTestId("minimal-radio-crossing").locator("strong"))
-      .toHaveText("1");
-    await expect(card.getByTestId("minimal-radio-first-plays").locator("strong"))
-      .toHaveText("5");
-    await expect(card.getByTestId("minimal-radio-crossing")).not.toContainText("crossing");
-    await expect(card.getByTestId("minimal-radio-first-plays")).not.toContainText("premieres");
-    await expect(card.getByTestId("minimal-radio-crossing")).toHaveCSS("position", "absolute");
-    await expect(card.getByTestId("minimal-radio-crossing")).toHaveCSS("top", "4px");
-    await expect(card.getByTestId("minimal-radio-crossing")).toHaveCSS("right", "4px");
-
-    const artworkRows = page.locator(
-      ".minimal-radio-card__album-column--crossings .minimal-radio-card__album img",
-    );
-    const firstArtwork = await artworkRows.nth(0).boundingBox();
-    const secondArtwork = await artworkRows.nth(1).boundingBox();
-    expect(firstArtwork).not.toBeNull();
-    expect(secondArtwork).not.toBeNull();
-    expect(Math.abs((firstArtwork!.y + firstArtwork!.height) - secondArtwork!.y))
-      .toBeLessThanOrEqual(1);
-
-    await card.getByTestId("minimal-radio-crossing").click();
-    await expect(card).toHaveClass(/is-expanded/);
-    await expect(card.locator(".minimal-radio-card__album-column--crossings .minimal-radio-card__album")).toHaveCount(5);
-    const expanded = await card.evaluate((node) => {
-         const crossingColumn = node.querySelector<HTMLElement>(".minimal-radio-card__album-column--crossings");
-         const albums = crossingColumn?.querySelector<HTMLElement>(".minimal-radio-card__albums");
-         const grid = crossingColumn?.querySelector<HTMLElement>(".minimal-radio-card__album-grid");
-         const image = crossingColumn?.querySelector<HTMLImageElement>(".minimal-radio-card__album img");
-      return {
-        albumsHeight: albums?.getBoundingClientRect().height,
-        gridHeight: grid?.getBoundingClientRect().height,
-        albumsWidth: albums?.getBoundingClientRect().width,
-        gridWidth: grid?.getBoundingClientRect().width,
-        imageHeight: image?.getBoundingClientRect().height,
-        imageWidth: image?.getBoundingClientRect().width,
-        gridDisplay: grid ? getComputedStyle(grid).display : null,
-        gridTemplateColumns: grid ? getComputedStyle(grid).gridTemplateColumns : null,
-        gridGap: grid ? getComputedStyle(grid).gap : null,
-        gridPaddingRight: grid ? getComputedStyle(grid).paddingRight : null,
-        gridOverflowY: grid ? getComputedStyle(grid).overflowY : null,
-        gridTouchAction: grid ? getComputedStyle(grid).touchAction : null,
-      };
-    });
-    expect(expanded.albumsHeight).toBeGreaterThan(152);
-    expect(expanded.gridHeight).toBeLessThanOrEqual(expanded.albumsHeight!);
-    expect(expanded.gridWidth).toBe(expanded.albumsWidth);
-    expect(expanded.imageHeight).toBeGreaterThan(80);
-    expect(expanded.imageWidth).toBe(expanded.imageHeight);
-    expect(expanded.gridDisplay).toBe("grid");
-     expect(expanded.gridTemplateColumns?.split(" ")).toHaveLength(1);
-    expect(expanded.gridGap).toBe("0px");
-    expect(expanded.gridPaddingRight).toBe("0px");
-    expect(expanded.gridOverflowY).toBe("auto");
-    expect(expanded.gridTouchAction).toBe("pan-y");
-    await expect(card.locator(".minimal-radio-card__station-line")).toHaveCSS("border-bottom-width", "0px");
     await expect(card.locator(".minimal-radio-card__now")).toHaveCSS("border-top-width", "0px");
     await expect(card.locator(".minimal-radio-card__now")).toHaveCSS("border-bottom-width", "0px");
   });
 
-  test("1280×900: presets and keyboard navigation change the active card", async ({ page }) => {
+  test("1280×900: keyboard navigation changes the active card", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await loadStationDial(page);
-    await page.getByTestId("radio-preset-lifetime").click();
-    await expect(page.getByTestId("radio-preset-lifetime")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("radio-preset-lifetime")).toHaveCount(0);
     const hero = page.getByTestId("minimal-radio-hero");
     await hero.focus();
     await hero.press("ArrowDown");
