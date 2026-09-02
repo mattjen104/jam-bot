@@ -26,9 +26,6 @@ const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
   ({ cat, label, title }) => ({ value: cat, label, title }),
 );
 const MAX_CROSSING_ALBUMS = 5;
-const REMOTE_FIXTURE_STATION_COUNT = 6;
-// Keep the existing two-column pairing, but make each pair a horizontal panel
-// so the compact six-station fixture is actually scrollable.
 const REMOTE_PAGE_SIZE = 2;
 
 interface MinimalRadioSurfaceProps {
@@ -870,16 +867,13 @@ export function MinimalRadioSurface({
     });
   }, [candidates, viewMode, drillDownCategory]);
   const remoteDisplayRows = remoteRows;
-  const visibleRemoteRows = remoteExpanded
-    ? remoteDisplayRows
-    : remoteDisplayRows.slice(0, REMOTE_FIXTURE_STATION_COUNT);
   const remotePages = useMemo(() => {
     const pages: DialLaneRow[][] = [];
-    for (let index = 0; index < visibleRemoteRows.length; index += REMOTE_PAGE_SIZE) {
-      pages.push(visibleRemoteRows.slice(index, index + REMOTE_PAGE_SIZE));
+    for (let index = 0; index < remoteDisplayRows.length; index += REMOTE_PAGE_SIZE) {
+      pages.push(remoteDisplayRows.slice(index, index + REMOTE_PAGE_SIZE));
     }
     return pages;
-  }, [visibleRemoteRows]);
+  }, [remoteDisplayRows]);
 
   const selectedIndex = Math.max(
     0,
@@ -1012,32 +1006,41 @@ export function MinimalRadioSurface({
         </div>
       ) : null}
       {onToggleCategory && onSetCategories ? (
-        <nav
-          className="minimal-radio__remote-categories"
-          aria-label="Filter compact stations by station type"
-        >
-          <button
-            type="button"
-            className={activeCategories.size === 0 ? "is-active" : ""}
-            aria-pressed={activeCategories.size === 0}
-            onClick={() => onSetCategories(new Set())}
-            data-testid="minimal-radio-remote-category-all"
+        <>
+          <nav
+            className="minimal-radio__remote-categories"
+            aria-label="Filter compact stations by station type"
           >
-            All
-          </button>
-          {STATION_CATEGORY_DEFINITIONS.map((definition) => (
             <button
               type="button"
-              key={definition.cat}
-              className={activeCategories.has(definition.cat) ? "is-active" : ""}
-              aria-pressed={activeCategories.has(definition.cat)}
-              onClick={() => onSetCategories(new Set([definition.cat]))}
-              data-testid={`minimal-radio-remote-category-${definition.cat}`}
+              className={activeCategories.size === 0 ? "is-active" : ""}
+              aria-pressed={activeCategories.size === 0}
+              onClick={() => onSetCategories(new Set())}
+              data-testid="minimal-radio-remote-category-all"
             >
-              {definition.shortLabel}
+              All
             </button>
-          ))}
-        </nav>
+            {STATION_CATEGORY_DEFINITIONS.map((definition) => (
+              <button
+                type="button"
+                key={definition.cat}
+                className={activeCategories.has(definition.cat) ? "is-active" : ""}
+                aria-pressed={activeCategories.has(definition.cat)}
+                onClick={() => onSetCategories(new Set([definition.cat]))}
+                data-testid={`minimal-radio-remote-category-${definition.cat}`}
+              >
+                {definition.shortLabel}
+              </button>
+            ))}
+          </nav>
+          <div
+            className="minimal-radio__remote-count"
+            data-testid="minimal-radio-remote-count"
+            aria-live="polite"
+          >
+            {remoteDisplayRows.length} {remoteDisplayRows.length === 1 ? "station" : "stations"} selected
+          </div>
+        </>
       ) : null}
       {onSetCategories ? (
         <div

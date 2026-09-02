@@ -417,7 +417,9 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getByTestId("minimal-radio-remote-view")).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-remote-view").getAttribute("aria-label"))
       .toBe("Compact station preview");
-    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(6);
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(8);
+    expect(screen.getByTestId("minimal-radio-remote-count").textContent)
+      .toContain("8 stations selected");
     expect(screen.getByTestId("minimal-radio-remote-toggle").getAttribute("aria-pressed"))
       .toBe("false");
 
@@ -435,6 +437,8 @@ describe("MinimalRadioSurface", () => {
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-category-campus"));
     expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(1);
+    expect(screen.getByTestId("minimal-radio-remote-count").textContent)
+      .toContain("1 station selected");
     expect(screen.getByLabelText("Alpha: Alpha artist").textContent)
       .toContain("Alpha artist");
 
@@ -445,11 +449,13 @@ describe("MinimalRadioSurface", () => {
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-category-all"));
     expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(8);
+    expect(screen.getByTestId("minimal-radio-remote-count").textContent)
+      .toContain("8 stations selected");
     expect(screen.getByTestId("minimal-radio-remote-category-all").getAttribute("aria-pressed"))
       .toBe("true");
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
-    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(6);
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(8);
     expect(screen.getByTestId("minimal-radio-overview")).toBeTruthy();
   });
 

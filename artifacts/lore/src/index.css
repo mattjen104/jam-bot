@@ -13110,34 +13110,45 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .minimal-radio__remote-view {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
-  height: auto;
+  height: min(66dvh, 680px);
+  min-height: 280px;
   padding: 4px 14px 64px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  touch-action: pan-x;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   scrollbar-width: thin;
 }
 .minimal-radio__remote-view--fixture {
-  height: auto;
-  min-height: 0;
+  width: 100%;
+  height: min(calc(100dvh - var(--shell-h, 0px) - 220px), 680px);
+  min-height: 280px;
   padding: 4px 14px;
   padding-bottom: 4px;
+  box-sizing: border-box;
 }
 .minimal-radio__remote-view--fixture.is-expanded {
-  padding-bottom: 4px;
+  height: min(calc(100dvh - var(--shell-h, 0px) - 160px), 760px);
 }
 .minimal-radio__remote-page {
   display: grid;
-  flex: 0 0 100%;
+  flex: 0 0 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 48px;
   gap: 6px;
   min-width: 0;
-  scroll-snap-align: start;
+  width: 100%;
+}
+.minimal-radio__remote-count {
+  align-self: flex-end;
+  padding: 0 14px 2px;
+  color: hsl(var(--dim));
+  font: 600 9px/1.2 var(--app-font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
 }
 .minimal-radio__remote-categories {
   display: flex;
@@ -14366,14 +14377,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     min-height: 616px;
   }
   .minimal-radio__remote-view {
-    height: auto;
+    height: min(calc(100dvh - var(--shell-h, 0px) - 220px), 680px);
   }
   .minimal-radio__remote-view--fixture {
-    height: auto;
-    min-height: 0;
+    height: min(calc(100dvh - var(--shell-h, 0px) - 220px), 680px);
+    min-height: 280px;
   }
   .minimal-radio__remote-view--fixture.is-expanded {
-    height: auto;
+    height: min(calc(100dvh - var(--shell-h, 0px) - 160px), 760px);
   }
   .minimal-radio-card {
     height: 84px;
