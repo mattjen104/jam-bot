@@ -717,7 +717,7 @@ export type DialDisplayMode = "personal" | "blended";
 
 /**
  * The seven mutually exclusive editorial station categories:
- *  - "ambient"    — Ambient & Sleep utility channels (sleep server mode)
+ *  - "ambient"    — ambient, drone, and atmospheric music
  *  - "campus"     — college/university-operated stations
  *  - "specialist" — genre/era/format-focused channels (era-genre server mode)
  *  - "anchor"     — Core broadly-programmed flagship stations

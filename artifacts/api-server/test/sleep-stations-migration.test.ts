@@ -16,20 +16,19 @@ describe("applySleepStationsMigration", () => {
     vi.clearAllMocks();
   });
 
-  it("adds the sleep_mode column and classifies matching rows", async () => {
+  it("removes utilities and keeps musical ambient rows in the legacy pool", async () => {
     await expect(applySleepStationsMigration()).resolves.toBeUndefined();
 
     const { db } = await import("@workspace/db");
     const execute = db.execute as ReturnType<typeof vi.fn>;
-    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenCalledTimes(3);
 
     // Step 1 — idempotent DDL.
     const ddl: string = JSON.stringify(execute.mock.calls[0]?.[0]);
     expect(ddl).toContain("ADD COLUMN IF NOT EXISTS sleep_mode");
 
-    // Step 2 — classification UPDATE must cover every documented sleep
-    // pattern and all three SomaFM ambient channels.
-    const update: string = JSON.stringify(execute.mock.calls[1]?.[0]);
+    // Step 2 removes every documented non-music utility pattern.
+    const utilityUpdate: string = JSON.stringify(execute.mock.calls[1]?.[0]);
     for (const pattern of [
       "white noise",
       "rain sound",
@@ -42,12 +41,19 @@ describe("applySleepStationsMigration", () => {
       "positively sleep",
       "nature radio sleep",
       "nature radio rain",
-      // SomaFM ambient channels — name-based match covers all variants…
+    ]) {
+      expect(utilityUpdate).toContain(pattern);
+    }
+    expect(utilityUpdate).toContain("sleep_mode = false");
+    expect(utilityUpdate).toContain("hidden");
+
+    // Step 3 keeps musical SomaFM ambient variants in the pool.
+    const ambientUpdate: string = JSON.stringify(execute.mock.calls[2]?.[0]);
+    for (const pattern of [
       "somafm",
       "drone zone",
       "groove salad",
       "space station",
-      // …plus exact slug fallbacks.
       "somafm-drone-zone",
       "somafm-dronezone",
       "somafm-groove-salad",
@@ -55,14 +61,11 @@ describe("applySleepStationsMigration", () => {
       "somafm-space-station",
       "somafm-spacestation",
     ]) {
-      expect(update).toContain(pattern);
+      expect(ambientUpdate).toContain(pattern);
     }
-    // Sets both flags…
-    expect(update).toContain("sleep_mode = true");
-    expect(update).toContain("hidden");
-    // …and must NOT gate on the current hidden value — rows already hidden
-    // for another reason still get classified (idempotent re-runs included).
-    expect(update).not.toContain("hidden = false");
+    expect(ambientUpdate).toContain("sleep_mode = true");
+    expect(ambientUpdate).toContain("hidden");
+    expect(ambientUpdate).not.toContain("hidden = false");
   });
 
   it("is idempotent — a second run issues the same statements without error", async () => {
@@ -71,10 +74,11 @@ describe("applySleepStationsMigration", () => {
 
     const { db } = await import("@workspace/db");
     const execute = db.execute as ReturnType<typeof vi.fn>;
-    expect(execute).toHaveBeenCalledTimes(4);
-    const firstUpdate = JSON.stringify(execute.mock.calls[1]?.[0]);
-    const secondUpdate = JSON.stringify(execute.mock.calls[3]?.[0]);
-    expect(secondUpdate).toBe(firstUpdate);
+    expect(execute).toHaveBeenCalledTimes(6);
+    expect(JSON.stringify(execute.mock.calls[4]?.[0]))
+      .toBe(JSON.stringify(execute.mock.calls[1]?.[0]));
+    expect(JSON.stringify(execute.mock.calls[5]?.[0]))
+      .toBe(JSON.stringify(execute.mock.calls[2]?.[0]));
   });
 
   it("propagates database errors", async () => {

@@ -4,7 +4,7 @@
  * All three filter families share the same additive shape:
  *   - Age tiers (First | Current | Catalog | Deep): additive multi-select;
  *     any subset, including empty (empty = no age filtering).
- *   - Station categories (Ambient & Sleep | Campus | …): additive
+ *   - Station categories (Ambient | Campus | …): additive
  *     multi-select; checked categories are unioned. Empty = all stations.
  *   - Crossings: a single boolean (crossings mode on = crossing-ranked feed,
  *     off = blank radio mode). Callers keep it as the inverse of their
@@ -33,7 +33,7 @@ export const DEFAULT_ACTIVE_AGE_TIERS: ReadonlySet<AgeTier> = new Set([
   "deep",
 ]);
 
-/** Normal radio defaults; Ambient & Sleep stays an explicit opt-in category. */
+/** Normal radio defaults; Ambient stays an explicit opt-in category. */
 export const DEFAULT_ACTIVE_STATION_CATEGORIES: ReadonlySet<StationCategory> = new Set([
   "anchor",
   "campus",

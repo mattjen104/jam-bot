@@ -35,7 +35,7 @@ export const STATION_CATEGORY_DEFINITIONS: {
   shortLabel: string;
   title: string;
 }[] = [
-  { cat: "ambient",    command: "/ambient",    label: "Ambient & Sleep",    shortLabel: "Ambient",    title: "Sleep, nature, drone, and white-noise utility channels" },
+  { cat: "ambient",    command: "/ambient",    label: "Ambient",            shortLabel: "Ambient",    title: "Ambient, drone, and atmospheric music" },
   { cat: "campus",     command: "/campus",     label: "Campus Radio",       shortLabel: "Campus",     title: "College and university-operated stations" },
   { cat: "specialist", command: "/specialist", label: "Specialist Radio",   shortLabel: "Specialist", title: "Genre, era, and format-focused channels — FIP Jazz, FIP Electro, decade radio" },
   { cat: "anchor",     command: "/core",       label: "Core Stations",      shortLabel: "Core",       title: "Lore flagships — KEXP, WFMU, NTS, FIP, KCRW, WWOZ, KUTX, BBC 6 Music, Radio AlHara, and KCHUNG" },
@@ -67,7 +67,7 @@ export function stationCategoryShortLabel(cat: StationCategory): string {
  * filter is active.
  */
 const TAG_CATEGORY_RULES: readonly (readonly [StationCategory, RegExp])[] = [
-  ["ambient", /ambient|sleep|drone|nature|white[\s-]?noise|meditat|relax|downtempo|chill\s?out|lounge|new age/i],
+  ["ambient", /ambient|drone|downtempo|chill\s?out|lounge|new age/i],
   ["campus", /college|campus|universit|student|educational|school/i],
   ["specialist", /jazz|classical|opera|blues|country|bluegrass|folk|metal|reggae|soul|funk|disco|techno|house|trance|electronic|edm|dance|hip[\s-]?hop|\brap\b|punk|goth|industrial|gospel|latin|salsa|ska|\brock\b|\bpop\b|oldies|retro|decade|\b\d{2}'?s\b|soundtrack|swing|r\s*&\s*b|\brnb\b|world music|afrobeat|schlager/i],
   ["public", /public radio|community|non[\s-]?profit|\bnpr\b|\btalk\b|news|speech|spoken/i],

@@ -10,7 +10,7 @@ import {
   MIN_VOTES,
   RADIO_BROWSER_GENRE_WHITELIST,
   RADIO_BROWSER_NAME_BLOCKLIST,
-  SLEEP_STATION_PATTERNS,
+  NON_MUSIC_UTILITY_PATTERNS,
   SLEEP_STATION_SLUGS,
   SEED_GENRE_TAGS,
   type RadioBrowserStation,
@@ -191,17 +191,14 @@ describe("filterStations", () => {
     }
   });
 
-  it("sleep classification wins over the mood-brand blocklist (0R sleep channel)", () => {
-    // "0R - MUSIC FOR SLEEP …" matches both the "0r - " mood-brand blocklist
-    // entry AND the "deep sleep" sleep pattern; the sleep policy must win so
-    // the station stays available via Sleep Radio instead of being dropped.
+  it("rejects mood-brand sleep utilities", () => {
     const name =
       "0R - MUSIC FOR SLEEP || Sleep, Relax, Calm, Meditation, Deep Sleep";
-    expect(isSleepStation(name)).toBe(true);
-    expect(filterStations([makeStation({ name })])).toHaveLength(1);
+    expect(isSleepStation(name)).toBe(false);
+    expect(filterStations([makeStation({ name })])).toHaveLength(0);
   });
 
-  // --- Sleep stations: retained (not blocked) so ingest can classify them ---
+  // --- Non-music utility stations are excluded from the catalogue ---
 
   it.each([
     "White Noise 24/7",
@@ -210,8 +207,8 @@ describe("filterStations", () => {
     "Sleep Radio One",
     "Baby Sleep Music",
     "Deep Sleep FM",
-  ])("keeps sleep-pattern station %j for classification", (name) => {
-    expect(filterStations([makeStation({ name })])).toHaveLength(1);
+  ])("rejects non-music utility station %j", (name) => {
+    expect(filterStations([makeStation({ name })])).toHaveLength(0);
   });
 });
 
@@ -227,8 +224,8 @@ describe("isSleepStation", () => {
     "Lore Sleep Radio",
     "Baby Sleep Music",
     "Deep Sleep FM",
-  ])("classifies %j by name pattern", (name) => {
-    expect(isSleepStation(name)).toBe(true);
+  ])("does not classify non-music utility %j as ambient", (name) => {
+    expect(isSleepStation(name)).toBe(false);
   });
 
   it.each([
@@ -269,27 +266,22 @@ describe("isSleepStation", () => {
     expect(isSleepStation("")).toBe(false);
   });
 
-  it("is case-insensitive on names", () => {
-    expect(isSleepStation("WHITE NOISE HQ")).toBe(true);
+  it("is case-insensitive on musical ambient channel names", () => {
+    expect(isSleepStation("SOMAFM DRONE ZONE")).toBe(true);
   });
 
-  it("every documented sleep pattern and slug is honored (policy/migration sync)", () => {
-    for (const p of SLEEP_STATION_PATTERNS) {
-      expect(isSleepStation(`Station ${p} FM`), p).toBe(true);
-    }
+  it("every documented ambient slug is honored", () => {
     for (const s of SLEEP_STATION_SLUGS) {
       expect(isSleepStation("Any Name", s), s).toBe(true);
     }
   });
 
-  it("sleep patterns never overlap the permanent blocklist", () => {
-    // A name matching a sleep pattern must not also be permanently blocked,
-    // otherwise ingest would drop a station the sleep policy wants to retain.
-    for (const p of SLEEP_STATION_PATTERNS) {
+  it("every non-music utility pattern is permanently blocklisted", () => {
+    for (const p of NON_MUSIC_UTILITY_PATTERNS) {
       const blocked = (RADIO_BROWSER_NAME_BLOCKLIST as readonly string[]).some((b) =>
         p.includes(b),
       );
-      expect(blocked, `sleep pattern "${p}" collides with the blocklist`).toBe(false);
+      expect(blocked, `utility pattern "${p}" is missing from the blocklist`).toBe(true);
     }
   });
 });
@@ -515,18 +507,11 @@ describe("upsertRadioBrowserStations", () => {
     expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
   });
 
-  it("inserts sleep-pattern stations with sleepMode=true and hidden=true", async () => {
+  it("does not insert non-music utility stations", async () => {
     const { db } = await import("@workspace/db");
     const station = makeStation({ name: "Rain Sounds Radio" });
-    await upsertRadioBrowserStations([station], "ambient");
-
-    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
-      values: ReturnType<typeof vi.fn>;
-    };
-    const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(payload).toBeDefined();
-    expect(payload.sleepMode).toBe(true);
-    expect(payload.hidden).toBe(true);
+    expect(await upsertRadioBrowserStations([station], "ambient")).toBe(0);
+    expect(db.insert).not.toHaveBeenCalled();
   });
 
   it("inserts SomaFM ambient channels (by slug) as sleep stations", async () => {
@@ -573,19 +558,11 @@ describe("upsertRadioBrowserStations", () => {
     expect(payload.hidden).toBe(true);
   });
 
-  it("sleep classification wins over era/genre on ingest", async () => {
+  it("rejects non-music utility names even when they include a genre", async () => {
     const { db } = await import("@workspace/db");
-    // Matches a sleep pattern ("deep sleep") AND a genre keyword ("jazz").
     const station = makeStation({ name: "Deep Sleep Jazz" });
-    await upsertRadioBrowserStations([station], "ambient");
-
-    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
-      values: ReturnType<typeof vi.fn>;
-    };
-    const payload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(payload.sleepMode).toBe(true);
-    expect(payload.eraGenreMode).toBe(false);
-    expect(payload.hidden).toBe(true);
+    expect(await upsertRadioBrowserStations([station], "ambient")).toBe(0);
+    expect(db.insert).not.toHaveBeenCalled();
   });
 });
 

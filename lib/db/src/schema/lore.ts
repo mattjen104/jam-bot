@@ -246,11 +246,10 @@ export const stationsTable = pgTable("stations", {
    */
   hidden: boolean("hidden").notNull().default(false),
   /**
-   * Sleep Radio classification. When true, the station is excluded from the
-   * normal public dial (together with hidden=true) but is available via
-   * GET /api/stations?mode=sleep. Intended for ambient utility channels
-   * (white noise, rain sounds, drone, etc.) and designated SomaFM ambient
-   * channels (Drone Zone, Groove Salad, Space Station). Defaults to false.
+   * Legacy ambient-pool classification. When true, the station is excluded
+   * from the normal public dial (together with hidden=true) but is available
+   * via GET /api/stations?mode=sleep. Only musical ambient channels belong in
+   * this pool; non-music sleep/nature/white-noise utilities stay hidden.
    */
   sleepMode: boolean("sleep_mode").notNull().default(false),
   /**

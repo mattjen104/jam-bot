@@ -2,27 +2,23 @@ import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 /**
- * Boot migration: add sleep_mode column and classify matching stations.
+ * Boot migration: maintain the legacy ambient-pool flag.
  *
- * Sleep stations are ambient/utility channels that do not belong in the normal
- * public dial but remain accessible via GET /api/stations?mode=sleep.
+ * Musical ambient channels remain accessible through the Ambient category.
+ * Non-music sleep aids, nature sounds, and white-noise utilities remain
+ * soft-hidden but are removed from the ambient pool.
  *
- * Patterns matched (case-insensitive substring or exact slug):
- *   - "white noise", "rain sound", "sleep sound", "sleep radio",
- *     "baby sleep", "deep sleep", "sleeping pill", "music for sleep",
- *     "positively sleep", "nature radio sleep", "nature radio rain"
- *                                          — utility ambient stations
+ * Musical patterns matched (case-insensitive substring or exact slug):
  *   - SomaFM Drone Zone / Groove Salad / Space Station — matched by channel
  *     name whenever the row's name also mentions SomaFM (covers every
  *     naming/bitrate variant), plus exact slug fallbacks.
  *
  * Idempotent:
  *   - ADD COLUMN IF NOT EXISTS silently skips if already present.
- *   - The UPDATE sets sleep_mode and hidden regardless of current values, so
- *     re-running on a station that was already hidden for another reason still
- *     marks it as a sleep station without changing its other flags.
+ *   - Utility rows are always hidden and removed from sleep_mode.
+ *   - Musical ambient rows are always hidden and added to sleep_mode.
  *
- * @see artifacts/api-server/src/lore/radio-browser.ts (SLEEP_STATION_PATTERNS)
+ * @see artifacts/api-server/src/lore/radio-browser.ts
  */
 export async function applySleepStationsMigration(): Promise<void> {
   // Step 1: ensure the column exists (DDL).
@@ -31,11 +27,12 @@ export async function applySleepStationsMigration(): Promise<void> {
       ADD COLUMN IF NOT EXISTS sleep_mode boolean NOT NULL DEFAULT false
   `);
 
-  // Step 2: mark matching rows as sleep stations (always hidden, sleep_mode=true).
-  const result = await db.execute<{ rowcount: string }>(sql`
+  // Step 2: remove non-music utility rows from the ambient pool while keeping
+  // them soft-hidden so historical station/spin data remains intact.
+  await db.execute(sql`
     UPDATE stations
     SET
-      sleep_mode = true,
+      sleep_mode = false,
       hidden     = true
     WHERE (
       LOWER(name) LIKE '%white noise%'
@@ -49,7 +46,17 @@ export async function applySleepStationsMigration(): Promise<void> {
       OR LOWER(name) LIKE '%positively sleep%'
       OR LOWER(name) LIKE '%nature radio sleep%'
       OR LOWER(name) LIKE '%nature radio rain%'
-      OR (
+    )
+  `);
+
+  // Step 3: keep musical ambient channels in the legacy ambient pool.
+  const result = await db.execute<{ rowcount: string }>(sql`
+    UPDATE stations
+    SET
+      sleep_mode = true,
+      hidden     = true
+    WHERE (
+      (
         LOWER(name) LIKE '%somafm%'
         AND (
           LOWER(name) LIKE '%drone zone%'

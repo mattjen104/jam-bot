@@ -149,3 +149,4 @@
 - [Apple jam room protocol](apple-jam-room-protocol.md) — snapshots and ordered events commit atomically; short room codes are private capabilities, while Apple authorization always stays browser-local.
 - [Resolver cache versions](resolver-cache-versions.md) — text resolver changes need a new key namespace; keep old rows for audit and share one bounded variant policy across live and replay.
 - [Station history source separation](station-history-source-separation.md) — published archives may differ from live metadata; configure history independently and never share their cursors.
+- [Ambient is music-only](ambient-music-only.md) — Ambient means musical ambient/drone/atmospheric radio; sleep aids, nature sounds, and white noise stay soft-hidden and blocked from discovery.

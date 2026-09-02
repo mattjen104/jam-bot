@@ -222,8 +222,8 @@ const INDIE_STATION_SLUGS = new Set([
  * The seven labels form a mutually exclusive taxonomy answering "what kind of
  * station is this?", assigned with the precedence:
  *
- *   1. "ambient"    — Ambient & Sleep utility channels (sleep_mode flag or an
- *                     `ambient` seed tag).
+ *   1. "ambient"    — ambient, drone, and atmospheric music (`sleep_mode`
+ *                     legacy pool flag or an `ambient` seed tag).
  *   2. "campus"     — college/university-operated stations (`college` tag from
  *                     the curated seed or the college-tag boot migration).
  *   3. "specialist" — genre/era/format-focused channels (era_genre_mode flag

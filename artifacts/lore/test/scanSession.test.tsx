@@ -90,7 +90,7 @@ describe("ScanSession selection summary", () => {
       liveNowPlayingBySlug: new Map(),
     });
     expect(screen.getByTestId("scan-selection-summary").textContent).toContain(
-      "Live · Categories: Ambient & Sleep, Specialist Radio · All",
+      "Live · Categories: Ambient, Specialist Radio · All",
     );
     rerender(
       <ScanSession

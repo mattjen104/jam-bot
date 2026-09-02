@@ -123,15 +123,12 @@ describe("isEraGenreStation — FIP slugs", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Precedence — sleep and blocklist win first
+// Precedence — ambient pool and blocklist win first
 // ---------------------------------------------------------------------------
 
 describe("isEraGenreStation — precedence", () => {
-  it("sleep classification takes precedence over era/genre", () => {
-    // "SomaFM Groove Salad" is a sleep station AND matches genre "soul"? No —
-    // use a name that matches both a sleep pattern and a genre keyword.
-    // "Deep Sleep Jazz" matches sleep ("deep sleep") and genre ("jazz").
-    expect(isSleepStation("Deep Sleep Jazz")).toBe(true);
+  it("non-music utility blocklisting takes precedence over era/genre", () => {
+    expect(isSleepStation("Deep Sleep Jazz")).toBe(false);
     expect(isEraGenreStation("Deep Sleep Jazz")).toBe(false);
   });
 

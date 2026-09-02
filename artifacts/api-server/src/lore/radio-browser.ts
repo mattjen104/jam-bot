@@ -65,7 +65,23 @@ export type RadioBrowserGenre = (typeof RADIO_BROWSER_GENRE_WHITELIST)[number];
  * migration so that stations already in the database are retroactively hidden.
  * See `artifacts/api-server/src/lore/station-blocklist-hide-migration.ts`.
  */
+/** Non-music utility streams excluded from Lore's music station catalogue. */
+export const NON_MUSIC_UTILITY_PATTERNS = Object.freeze([
+  "white noise",
+  "rain sound",
+  "sleep sound",
+  "sleep radio",
+  "baby sleep",
+  "deep sleep",
+  "sleeping pill",
+  "music for sleep",
+  "positively sleep",
+  "nature radio sleep",
+  "nature radio rain",
+] as const);
+
 export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
+  ...NON_MUSIC_UTILITY_PATTERNS,
   "epic lounge",
   // Single-artist stations don't fit Lore's mission of discovering music
   // through human-curated radio.  The "Exclusively X" family from Radio
@@ -96,8 +112,7 @@ export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
   "café del mar",
   "hotel lounge",
   // "0R - <MOOD>" is an algorithmic mood-channel brand (HOTEL LOUNGE,
-  // ROMANTIC PIANO, PIANO JAZZ LOUNGE, …). The sleep classification wins
-  // first, so "0R - MUSIC FOR SLEEP" stays available via Sleep Radio.
+  // ROMANTIC PIANO, PIANO JAZZ LOUNGE, …).
   "0r - ",
   "study beats",
   "study lofi",
@@ -120,35 +135,8 @@ export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
 ] as const);
 
 /**
- * Name substrings (case-insensitive) that mark a station as a Sleep Radio
- * station rather than a permanent blocklist exclusion. These stations are
- * retained in the database with sleep_mode=true and hidden=true so they
- * remain available through GET /api/stations?mode=sleep.
- *
- * **Important:** this list and the applySleepStationsMigration SQL predicates
- * must stay in sync. When adding a new pattern here, also add the matching
- * LIKE predicate to the migration.
- * See `artifacts/api-server/src/lore/sleep-stations-migration.ts`.
- */
-export const SLEEP_STATION_PATTERNS = Object.freeze([
-  "white noise",
-  "rain sound",
-  "sleep sound",
-  "sleep radio",
-  "baby sleep",
-  "deep sleep",
-  // Specific sleep-utility brands already in the pool that advertise
-  // themselves as sleep aids without matching the generic patterns above.
-  "sleeping pill",
-  "music for sleep",
-  "positively sleep",
-  "nature radio sleep",
-  "nature radio rain",
-] as const);
-
-/**
- * Designated SomaFM ambient channels moved into Sleep Radio: Drone Zone,
- * Groove Salad, and Space Station. Matched by channel name (case-insensitive)
+ * Designated SomaFM musical ambient channels: Drone Zone, Groove Salad, and
+ * Space Station. Matched by channel name (case-insensitive)
  * whenever the station name also mentions SomaFM — this covers every naming
  * variant in the database ("SomaFM — Drone Zone", "SomaFM Groove Salad
  * (128k MP3)", "SomaFM Space Station Soma (128k AAC)", "SomaFM Groove Salad
@@ -242,13 +230,12 @@ export const ERA_GENRE_ERA_PATTERNS = Object.freeze([
   "classic rock",
 ] as const);
 /**
- * Check if a station name or slug matches the Sleep Radio patterns.
- * Returns true when the station should be retained with sleep_mode=true
- * instead of being permanently blocked.
+ * Check if a station belongs to the legacy server-side ambient pool.
+ * Only musical ambient channels qualify; sleep aids, nature sounds, and
+ * white-noise utilities are permanently excluded by the name blocklist.
  */
 export function isSleepStation(name: string | null | undefined, slug?: string | null): boolean {
   const lower = (name ?? "").toLowerCase();
-  if (SLEEP_STATION_PATTERNS.some((p) => lower.includes(p))) return true;
   // SomaFM ambient channels — matched by channel name so every bitrate/format
   // variant row ("SomaFM Groove Salad (128k MP3)", "SomaFM — Drone Zone", …)
   // classifies consistently.
@@ -423,10 +410,9 @@ export function filterStations(
     if (!s.lastcheckok) continue;
     const streamUrl = (s.url_resolved || s.url || "").trim();
     if (!streamUrl || !s.name?.trim()) continue;
-    // Sleep stations are retained (not permanently blocked) — they pass
-    // filtering and get written to the DB as sleep_mode=true + hidden=true
-    // during upsert. Permanently blocklisted stations are rejected here.
-    if (isNameBlocked(s.name) && !isSleepStation(s.name)) continue;
+    // Musical ambient pool stations are retained and classified during upsert.
+    // Non-music utility and other blocklisted stations are rejected here.
+    if (isNameBlocked(s.name)) continue;
     // Reject if known bitrate is below threshold; bitrate=0 means unknown → allow.
     if (s.bitrate > 0 && s.bitrate < minBitrate) continue;
     // Reject if below community vote threshold.
@@ -484,6 +470,7 @@ export async function upsertRadioBrowserStations(
     if (!streamUrl || !s.name?.trim()) continue;
     // Belt-and-suspenders: filterStations should have caught these, but guard
     // at the DB boundary so direct callers also stay clean.
+    if (isNameBlocked(s.name)) continue;
     if (num(s.votes) < MIN_VOTES) continue;
     if (s.bitrate > 0 && s.bitrate < MIN_BITRATE_KBPS) continue;
 
@@ -505,9 +492,9 @@ export async function upsertRadioBrowserStations(
       tags.push("college");
     }
 
-    // Classify as sleep station before upsert.
+    // Classify legacy musical ambient-pool stations before upsert.
     const sleepStation = isSleepStation(baseName, slug);
-    // Era/genre classification (sleep + blocklist take precedence inside the
+    // Era/genre classification (ambient pool + blocklist take precedence inside the
     // helper). A newly discovered era/genre match is inserted hidden so it
     // never surfaces on the normal dial, and stays reachable via
     // GET /api/stations?mode=era-genre.
@@ -536,7 +523,7 @@ export async function upsertRadioBrowserStations(
           active: false,
           stationClass: "curated",
           nowPlayingSource: "radio_browser_icy",
-          // Sleep and era/genre stations are inserted hidden so they never
+          // Ambient-pool and era/genre stations are inserted hidden so they never
           // surface in the normal public dial. They remain accessible via
           // ?mode=sleep and ?mode=era-genre respectively.
           hidden: hiddenAtInsert,

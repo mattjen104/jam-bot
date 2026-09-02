@@ -206,9 +206,9 @@ describe("Scan lens — mode-pool coverage", () => {
       { wrapper: Wrapper },
     );
 
-    // Ambient & Sleep button shows the fresh pool-exclusive spin and tunes it.
+    // Ambient button shows the fresh pool-exclusive spin and tunes it.
     const ambientBtn = lane
-      .getByText("Ambient & Sleep")
+      .getByText("Ambient")
       .closest("button")!;
     expect(ambientBtn.textContent).toContain("Sleepy Artist");
     expect(ambientBtn.textContent).toContain("Sleepy Fish");

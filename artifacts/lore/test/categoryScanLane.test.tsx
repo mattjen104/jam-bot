@@ -86,7 +86,7 @@ describe("CategoryScanLane", () => {
     const lane = screen.getByTestId("dial-scan-lane");
     const labels = [...lane.querySelectorAll(".dial-scan__label")].map((el) => el.textContent);
     expect(labels).toEqual([
-      "Ambient & Sleep",
+      "Ambient",
       "Campus Radio",
       "Specialist Radio",
       "Core Stations",
@@ -110,7 +110,7 @@ describe("CategoryScanLane", () => {
     // NTS plays "Unknown Artist" → only KEXP counts for Core Stations.
     expect(screen.getByTestId("dial-scan-anchor").textContent).toContain("1 live");
     expect(screen.getByTestId("dial-scan-anchor").textContent).toContain("The Smile");
-    // Sleep Radio's artist is blank → no live stations, honest quiet copy.
+    // The ambient station's artist is blank → no live stations, honest quiet copy.
     const ambient = screen.getByTestId("dial-scan-ambient") as HTMLButtonElement;
     expect(ambient.textContent).toContain("0 live");
     expect(ambient.textContent).toContain("Quiet right now");
