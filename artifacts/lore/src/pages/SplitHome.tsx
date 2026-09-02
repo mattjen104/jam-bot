@@ -49,6 +49,7 @@ export default function SplitHome() {
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
   );
+  const [supportOnly, setSupportOnly] = useState(false);
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
   const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
 
@@ -229,6 +230,8 @@ export default function SplitHome() {
                 activeCategories={activeCategories}
                 onToggleCategory={handleToggleCategory}
                 onSetCategories={handleSetCategories}
+                supportOnly={supportOnly}
+                onToggleSupport={() => setSupportOnly((active) => !active)}
                 loading={isCoreLoading || liveLoading}
                 error={stationsError}
                 onRetry={refetchStations}

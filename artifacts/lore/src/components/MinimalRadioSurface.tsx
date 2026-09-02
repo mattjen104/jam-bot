@@ -13,6 +13,7 @@ import { RUMOURS, onArtError } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
+import { safeHttpUrl } from "../lib/utils";
 import {
   STATION_CATEGORY_DEFINITIONS,
   type StationCategory,
@@ -23,6 +24,13 @@ export type RadioPreset = "now" | "lifetime";
 const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
   ({ cat, label, title }) => ({ value: cat, label, title }),
 );
+const SUPPORT_OPTIONS = [
+  {
+    value: "support",
+    label: "Has support info",
+    title: "Donate, join, membership, Patreon, or another station support link",
+  },
+] as const;
 const REMOTE_PAGE_SIZE = 2;
 
 interface MinimalRadioSurfaceProps {
@@ -35,6 +43,8 @@ interface MinimalRadioSurfaceProps {
   activeCategories?: ReadonlySet<StationCategory>;
   onToggleCategory?: (category: StationCategory) => void;
   onSetCategories?: (categories: ReadonlySet<StationCategory>) => void;
+  supportOnly?: boolean;
+  onToggleSupport?: () => void;
   loading?: boolean;
   error?: boolean;
   onRetry?: () => void;
@@ -53,6 +63,10 @@ function compareRowsByLifetimeCrossings(a: DialLaneRow, b: DialLaneRow): number 
     (b.ds.lifetimeCrossings ?? 0) - (a.ds.lifetimeCrossings ?? 0);
   if (crossingDifference !== 0) return crossingDifference;
   return a.ds.station.name.localeCompare(b.ds.station.name);
+}
+
+function hasSupportInfo(row: DialLaneRow): boolean {
+  return safeHttpUrl(row.ds.station.donateUrl) !== null;
 }
 
 interface HistoryItem {
@@ -479,6 +493,8 @@ export function MinimalRadioSurface({
   activeCategories = new Set<StationCategory>(),
   onToggleCategory,
   onSetCategories,
+  supportOnly = false,
+  onToggleSupport,
   loading = false,
   error = false,
   onRetry,
@@ -498,13 +514,21 @@ export function MinimalRadioSurface({
 
   const heroRegionRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef(new Map<string, HTMLDivElement>());
+  const supportFilteredRows = useMemo(
+    () => supportOnly ? rows.filter(hasSupportInfo) : rows,
+    [rows, supportOnly],
+  );
+  const supportFilteredRemoteRows = useMemo(
+    () => supportOnly ? remoteRows.filter(hasSupportInfo) : remoteRows,
+    [remoteRows, supportOnly],
+  );
   const orderedRows = useMemo(
-    () => [...rows].sort(compareRowsByLifetimeCrossings),
-    [rows],
+    () => [...supportFilteredRows].sort(compareRowsByLifetimeCrossings),
+    [supportFilteredRows],
   );
   const orderedRemoteRows = useMemo(
-    () => [...remoteRows].sort(compareRowsByLifetimeCrossings),
-    [remoteRows],
+    () => [...supportFilteredRemoteRows].sort(compareRowsByLifetimeCrossings),
+    [supportFilteredRemoteRows],
   );
   const candidates = useMemo(
     () => orderedRows.filter((row) => (
@@ -639,6 +663,17 @@ export function MinimalRadioSurface({
             className="minimal-radio__category-filter"
           />
         ) : null}
+        {onToggleSupport ? (
+          <FilterDropdownMenu
+            label="Support"
+            ariaLabel="Station support links"
+            options={SUPPORT_OPTIONS}
+            active={supportOnly ? new Set(["support"]) : new Set<string>()}
+            onToggle={onToggleSupport}
+            variant="chips"
+            className="minimal-radio__support-filter"
+          />
+        ) : null}
       </div>
       {onToggleCategory ? (
         <div className="minimal-radio__floating-filter">
@@ -651,6 +686,17 @@ export function MinimalRadioSurface({
             variant="chips"
             leadingIcon={<SlidersHorizontal size={21} strokeWidth={2.2} />}
           />
+          {onToggleSupport ? (
+            <FilterDropdownMenu
+              label="Support"
+              ariaLabel="Station support links"
+              options={SUPPORT_OPTIONS}
+              active={supportOnly ? new Set(["support"]) : new Set<string>()}
+              onToggle={onToggleSupport}
+              variant="chips"
+              className="minimal-radio__support-filter"
+            />
+          ) : null}
         </div>
       ) : null}
       {onToggleCategory && onSetCategories ? (

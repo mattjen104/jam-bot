@@ -25,6 +25,7 @@ function row(
   lifetime: number,
   category?: StationCategory,
   homepageBlurb?: string | null,
+  donateUrl?: string | null,
 ): DialLaneRow {
   return {
     ds: {
@@ -39,6 +40,7 @@ function row(
         relayUrl: null,
         stationCategories: category ? [category] : [],
         homepageBlurb: homepageBlurb ?? null,
+        donateUrl: donateUrl ?? null,
       },
       isLive: true,
       shows: [],
@@ -500,6 +502,65 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(2);
     expect(screen.queryByTestId("radio-preset-lifetime")).toBeNull();
+  });
+
+  it("filters to valid support links without changing lifetime/name order", () => {
+    function FilterHarness() {
+      const [supportOnly, setSupportOnly] = React.useState(false);
+      return (
+        <MinimalRadioSurface
+          rows={[
+            row("zulu", "Zulu", true, 4, undefined, null, "https://zulu.example/support"),
+            row("alpha", "Alpha", true, 4, undefined, null, " https://alpha.example/join "),
+            row("broken", "Broken", true, 9, undefined, null, "javascript:alert(1)"),
+            row("empty", "Empty", true, 7, undefined, null, "   "),
+            row("none", "None", true, 6),
+          ]}
+          remoteRows={[
+            row("zulu", "Zulu", true, 4, undefined, null, "https://zulu.example/support"),
+            row("alpha", "Alpha", true, 4, undefined, null, "https://alpha.example/join"),
+            row("none", "None", true, 6),
+          ]}
+          preset="now"
+          supportOnly={supportOnly}
+          onToggleSupport={() => setSupportOnly((active) => !active)}
+          onSetCategories={() => {}}
+        />
+      );
+    }
+
+    render(<FilterHarness />);
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
+    const remoteNames = () => screen
+      .getAllByTestId("minimal-radio-remote-station")
+      .map((station) => station.querySelector(".minimal-radio__remote-station-name")?.textContent);
+    expect(remoteNames())
+      .toEqual(["None", "Alpha", "Zulu"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Support/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Has support info/ }));
+
+    expect(remoteNames())
+      .toEqual(["Alpha", "Zulu"]);
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
+    expect(screen.getAllByLabelText(/Tune in to .* playing/).map((station) => station.getAttribute("aria-label")))
+      .toEqual([
+        "Tune in to Alpha, playing Alpha artist",
+        "Tune in to Zulu, playing Zulu artist",
+      ]);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Has support info/ }));
+
+    expect(screen.getAllByLabelText(/Tune in to .* playing/).map((station) => station.getAttribute("aria-label")))
+      .toEqual([
+        "Tune in to Broken, playing Broken artist",
+        "Tune in to Empty, playing Empty artist",
+        "Tune in to None, playing None artist",
+        "Tune in to Alpha, playing Alpha artist",
+        "Tune in to Zulu, playing Zulu artist",
+      ]);
   });
 
   it("shows one empty state when no station can be played", () => {
