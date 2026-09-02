@@ -56,20 +56,28 @@ function toDate(v: unknown): Date | undefined {
  * artist/title/album/cover but no MBID or ISRC, so these resolve via text search.
  * Config: `{ chan: "0" }` (0=Main, 1=Mellow, 2=Rock, ...).
  */
-const radioParadise: NowPlayingAdapter = async (config) => {
-  const chan = str(config.chan) ?? "0";
-  const body = (await getJson(
-    `https://api.radioparadise.com/api/now_playing?chan=${encodeURIComponent(chan)}`,
-  )) as Record<string, unknown>;
-  const rawArtist = str(body.artist);
-  const rawTitle = str(body.title);
+export function parseRadioParadiseNowPlaying(
+  body: unknown,
+): NowPlayingRaw | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const obj = body as Record<string, unknown>;
+  const rawArtist = str(obj.artist);
+  const rawTitle = str(obj.title);
   if (!rawArtist || !rawTitle) return null;
   const out: NowPlayingRaw = { rawArtist, rawTitle };
-  const album = str(body.album);
+  const album = str(obj.album);
   if (album) out.album = album;
-  const artwork = str(body.cover);
+  const artwork = str(obj.cover);
   if (artwork) out.artworkUrl = artwork;
   return out;
+}
+
+const radioParadise: NowPlayingAdapter = async (config) => {
+  const chan = str(config.chan) ?? "0";
+  const body = await getJson(
+    `https://api.radioparadise.com/api/now_playing?chan=${encodeURIComponent(chan)}`,
+  );
+  return parseRadioParadiseNowPlaying(body);
 };
 
 // ---- station_page (now-playing, config-driven, change-detection) -------

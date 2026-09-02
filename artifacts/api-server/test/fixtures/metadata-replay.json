@@ -1,0 +1,310 @@
+[
+  {
+    "id": "radio-paradise-clean",
+    "source": "radio_paradise",
+    "surface": "now_playing JSON",
+    "context": "Public channel payload; fields are intentionally limited to music metadata.",
+    "parser": "radio_paradise",
+    "input": { "artist": "Radiohead", "title": "Weird Fishes/Arpeggi", "album": "In Rainbows", "cover": "https://images.example.test/radiohead.jpg" },
+    "expected": { "status": "accepted", "artist": "Radiohead", "title": "Weird Fishes/Arpeggi", "quality": "usable_pair" }
+  },
+  {
+    "id": "radio-paradise-empty",
+    "source": "radio_paradise",
+    "surface": "now_playing JSON",
+    "context": "Valid public response between tracks.",
+    "parser": "radio_paradise",
+    "input": { "artist": "", "title": null },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "empty_metadata" }
+  },
+  {
+    "id": "station-page-reversed-fields",
+    "source": "station_page",
+    "surface": "configured JSON paths",
+    "context": "A broadcaster publishes title before artist in its own schema; paths preserve the source's declared meaning.",
+    "parser": "station_page",
+    "input": {
+      "body": { "current": { "title": "Teardrop", "performer": "Massive Attack" } },
+      "config": { "artistPath": "current.performer", "titlePath": "current.title" }
+    },
+    "expected": { "status": "accepted", "artist": "Massive Attack", "title": "Teardrop", "quality": "usable_pair" }
+  },
+  {
+    "id": "station-page-malformed-path",
+    "source": "station_page",
+    "surface": "configured JSON paths",
+    "context": "Schema drift: configured fields no longer exist.",
+    "parser": "station_page",
+    "input": {
+      "body": { "current": { "song": "Unknown" } },
+      "config": { "artistPath": "current.performer", "titlePath": "current.title" }
+    },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "missing_configured_fields" }
+  },
+  {
+    "id": "icy-clean",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Standard Artist - Title metadata from a public stream.",
+    "parser": "icy_now_playing",
+    "input": "Beyoncé - Formation",
+    "expected": { "status": "accepted", "artist": "Beyoncé", "title": "Formation", "quality": "usable_pair" }
+  },
+  {
+    "id": "icy-tilde-title-first",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Structured network format is title-first and includes a source recording id.",
+    "parser": "icy_now_playing",
+    "input": "Hoppípolla~Sigur Rós~~2005~~238~2026-07-09T17:34:51~2026-07-09T17:38:49~European Music Network~120~7306359a-ae20-4755-99ca-8a0410618b6d",
+    "expected": { "status": "accepted", "artist": "Sigur Rós", "title": "Hoppípolla", "quality": "usable_pair" }
+  },
+  {
+    "id": "icy-station-id",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Station identifier loop; must never reach resolution.",
+    "parser": "icy_now_playing",
+    "input": "WXYZ - WXYZ",
+    "qualityInput": { "artist": "WXYZ", "title": "WXYZ" },
+    "expected": { "status": "rejected", "artist": null, "title": null, "quality": "junk_metadata", "reason": "identical_station_label" }
+  },
+  {
+    "id": "icy-ad-tag",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Network ad marker observed in a public metadata block.",
+    "parser": "icy_now_playing",
+    "input": "ADWTAG_60000 - Big R Radio",
+    "qualityInput": { "artist": "ADWTAG_60000", "title": "Big R Radio" },
+    "expected": { "status": "rejected", "artist": null, "title": null, "quality": "junk_metadata", "reason": "ad_tag" }
+  },
+  {
+    "id": "icy-backup-label",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Fallback stream marker instead of a performing artist.",
+    "parser": "icy_now_playing",
+    "input": "(BACKUP ONLY!) - Backup Audio",
+    "qualityInput": { "artist": "(BACKUP ONLY!)", "title": "Backup Audio" },
+    "expected": { "status": "rejected", "artist": null, "title": null, "quality": "junk_metadata", "reason": "backup_label" }
+  },
+  {
+    "id": "icy-empty",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Between tracks; the metadata block is present but empty.",
+    "parser": "icy_now_playing",
+    "input": "   ",
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "empty_metadata" }
+  },
+  {
+    "id": "icy-incomplete",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Malformed separator with no title evidence.",
+    "parser": "icy_now_playing",
+    "input": "Artist - ",
+    "qualityInput": { "artist": null, "title": "Artist -" },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "incomplete_pair", "reason": "missing_title" }
+  },
+  {
+    "id": "icy-arabic",
+    "source": "radio_browser_icy",
+    "surface": "ICY StreamTitle",
+    "context": "Multilingual UTF-8 artist and title.",
+    "parser": "icy_now_playing",
+    "input": "فيروز - نسم علينا الهوى",
+    "expected": { "status": "accepted", "artist": "فيروز", "title": "نسم علينا الهوى", "quality": "usable_pair" }
+  },
+  {
+    "id": "kexp-clean",
+    "source": "kexp_api",
+    "surface": "v2 plays JSON",
+    "context": "Public trackplay with direct recording identity and show attribution.",
+    "parser": "kexp_plays",
+    "input": {
+      "body": { "results": [ { "id": 42, "play_type": "trackplay", "artist": "Sharon Van Etten", "song": "Seventeen", "album": "Remind Me Tomorrow", "recording_id": "7306359a-ae20-4755-99ca-8a0410618b6d", "show": 7 } ] },
+      "showMap": [ [ 7, { "name": "Morning Show", "djName": "John R." } ] ]
+    },
+    "expected": { "status": "accepted", "artist": "Sharon Van Etten", "title": "Seventeen", "quality": "usable_pair" }
+  },
+  {
+    "id": "kexp-airbreak",
+    "source": "kexp_api",
+    "surface": "v2 plays JSON",
+    "context": "Non-trackplay record from the public history feed.",
+    "parser": "kexp_plays",
+    "input": { "body": { "results": [ { "id": 43, "play_type": "airbreak", "artist": "Host", "song": "Break" } ] } },
+    "qualityInput": { "artist": "Host", "title": "Break" },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "usable_pair", "reason": "non_track_programming" }
+  },
+  {
+    "id": "spinitron-clean",
+    "source": "spinitron",
+    "surface": "v2 spins JSON",
+    "context": "Public spin with release, ISRC, and playlist attribution.",
+    "parser": "spinitron_spins",
+    "input": {
+      "body": { "items": [ { "id": 555, "artist": "Yo La Tengo", "song": "Autumn Sweater", "release": "I Can Hear the Heart", "isrc": "USABC1234567", "playlist_id": 3 } ] },
+      "playlistMap": [ [ 3, { "name": "Freeform", "djName": "DJ Pat" } ] ]
+    },
+    "expected": { "status": "accepted", "artist": "Yo La Tengo", "title": "Autumn Sweater", "quality": "usable_pair" }
+  },
+  {
+    "id": "spinitron-missing-title",
+    "source": "spinitron",
+    "surface": "v2 spins JSON",
+    "context": "Malformed public item with artist but no song.",
+    "parser": "spinitron_spins",
+    "input": { "body": { "items": [ { "id": 1, "artist": "Saria" } ] } },
+    "qualityInput": { "artist": "Saria", "title": null },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "incomplete_pair", "reason": "missing_title" }
+  },
+  {
+    "id": "bbc-clean",
+    "source": "bbc_api",
+    "surface": "segments/latest JSON",
+    "context": "Public music segment with multilingual punctuation.",
+    "parser": "bbc_segments",
+    "input": { "data": [ { "id": "seg-1", "segment_type": "music", "titles": { "primary": "Björk", "secondary": "Jóga" } } ] },
+    "expected": { "status": "accepted", "artist": "Björk", "title": "Jóga", "quality": "usable_pair" }
+  },
+  {
+    "id": "bbc-show",
+    "source": "bbc_api",
+    "surface": "segments/latest JSON",
+    "context": "Speech segment; the feed identifies its non-music type.",
+    "parser": "bbc_segments",
+    "input": { "data": [ { "id": "seg-2", "segment_type": "speech", "titles": { "primary": "Lauren Laverne", "secondary": "Morning show chat" } } ] },
+    "qualityInput": { "artist": "Lauren Laverne", "title": "Morning show chat" },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "usable_pair", "reason": "non_music_segment" }
+  },
+  {
+    "id": "somafm-clean",
+    "source": "somafm",
+    "surface": "songs JSON",
+    "context": "Public recent-songs entry with an epoch timestamp.",
+    "parser": "somafm_songs",
+    "input": { "channel": "groovesalad", "body": { "songs": [ { "artist": "Boards of Canada", "title": "Dayvan Cowboy", "date": "1720000000" } ] } },
+    "expected": { "status": "accepted", "artist": "Boards of Canada", "title": "Dayvan Cowboy", "quality": "usable_pair" }
+  },
+  {
+    "id": "somafm-station-id",
+    "source": "somafm",
+    "surface": "songs JSON",
+    "context": "SomaFM station/break entry, not a song.",
+    "parser": "somafm_songs",
+    "input": { "channel": "groovesalad", "body": { "songs": [ { "artist": "SomaFM", "title": "Station ID", "date": "1720000001" } ] } },
+    "qualityInput": { "artist": "Station ID", "title": "SomaFM" },
+    "expected": { "status": "rejected", "artist": null, "title": null, "quality": "junk_metadata", "reason": "station_label" }
+  },
+  {
+    "id": "kcrw-clean",
+    "source": "kcrw",
+    "surface": "tracklist JSON",
+    "context": "Public current-track response with program context.",
+    "parser": "kcrw_track",
+    "input": { "feed": "Music", "body": { "artist": "Yussef Dayes", "title": "Blackfriars", "program_title": "Morning Becomes Eclectic", "host": "Novena Carmel" } },
+    "expected": { "status": "accepted", "artist": "Yussef Dayes", "title": "Blackfriars", "quality": "usable_pair" }
+  },
+  {
+    "id": "kcrw-show-only",
+    "source": "kcrw",
+    "surface": "tracklist JSON",
+    "context": "Talk programming has no artist/title pair.",
+    "parser": "kcrw_track",
+    "input": { "feed": "Music", "body": { "program_title": "Morning Becomes Eclectic", "host": "Novena Carmel" } },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "show_only" }
+  },
+  {
+    "id": "nts-show-context",
+    "source": "nts_live",
+    "surface": "live JSON",
+    "context": "NTS live endpoint is show-level; it is context, never track identity.",
+    "parser": "nts_live",
+    "input": { "now": { "broadcast_title": "Hessle Audio", "embeds": { "details": { "name": "Ben UFO" } } } },
+    "expected": { "status": "unknown", "artist": "Ben UFO", "title": "Hessle Audio", "quality": "usable_pair", "reason": "show_only" }
+  },
+  {
+    "id": "fip-clean",
+    "source": "fip",
+    "surface": "livemeta steps JSON",
+    "context": "Active music step selected from the public schedule windows.",
+    "parser": "fip_steps",
+    "input": { "nowSec": 1000000, "steps": { "track": { "start": 999990, "end": 1000010, "depth": 2, "title": "Boléro", "authors": "Ravel" } } },
+    "expected": { "status": "accepted", "artist": "Ravel", "title": "Boléro", "quality": "usable_pair" }
+  },
+  {
+    "id": "fip-silence",
+    "source": "fip",
+    "surface": "livemeta steps JSON",
+    "context": "No active step at the observation time.",
+    "parser": "fip_steps",
+    "input": { "nowSec": 1000000, "steps": { "past": { "start": 999000, "end": 999900, "depth": 1, "title": "Past", "authors": "Artist" } } },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "no_active_step" }
+  },
+  {
+    "id": "radiojar-clean",
+    "source": "radiojar",
+    "surface": "now_playing JSON",
+    "context": "Public platform payload with an actual track.",
+    "parser": "radiojar",
+    "input": { "artist": "Yussef Dayes", "title": "Blackfriars", "album": "Black Classical Music" },
+    "expected": { "status": "accepted", "artist": "Yussef Dayes", "title": "Blackfriars", "quality": "usable_pair" }
+  },
+  {
+    "id": "radiojar-backup-show",
+    "source": "radiojar",
+    "surface": "now_playing JSON",
+    "context": "Platform supplies one show label only; its compatibility fill makes a same-field pair.",
+    "parser": "radiojar",
+    "input": { "artist": "Saria" },
+    "expected": { "status": "rejected", "artist": "Saria", "title": "Saria", "quality": "junk_metadata", "reason": "same_field_fallback" }
+  },
+  {
+    "id": "spinitron-web-clean",
+    "source": "spinitron_web",
+    "surface": "public HTML widget",
+    "context": "Sanitized class-based public widget; no cookies, tokens, or private data.",
+    "parser": "spinitron_web",
+    "input": "<table><tr><td><span class=\"artist\">Joe Louis Walker</span><span class=\"song\">Blue Mirror</span></td></tr></table>",
+    "expected": { "status": "accepted", "artist": "Joe Louis Walker", "title": "Blue Mirror", "quality": "usable_pair" }
+  },
+  {
+    "id": "spinitron-web-malformed",
+    "source": "spinitron_web",
+    "surface": "public HTML widget",
+    "context": "Broken markup with only an artist value.",
+    "parser": "spinitron_web",
+    "input": "<table><tr><td><span class=\"artist\">Artist Only</span></td></tr></table>",
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "incomplete_html" }
+  },
+  {
+    "id": "lot-radio-show",
+    "source": "lot_radio_schedule",
+    "surface": "public schedule RSC payload",
+    "context": "Schedule identifies a live show, not a track; retained as context only.",
+    "parser": "lot_radio_schedule",
+    "input": { "now": "2026-07-09T18:00:00Z", "rsc": "1:{\"schedule\":[{\"summary\":\"Late Show\",\"start\":\"2026-07-09T17:00:00Z\",\"end\":\"2026-07-09T19:00:00Z\"}]}" },
+    "expected": { "status": "unknown", "artist": "Late Show", "title": "Live Session", "quality": "usable_pair", "reason": "show_only" }
+  },
+  {
+    "id": "quality-junk-domain",
+    "source": "metadata_quality",
+    "surface": "shared classifier",
+    "context": "Ad injector puts a sponsor domain in a public metadata field.",
+    "parser": "quality",
+    "input": { "artist": "wellsfargo.com", "title": "Some Song" },
+    "expected": { "status": "rejected", "artist": "wellsfargo.com", "title": "Some Song", "quality": "junk_metadata", "reason": "domain_ad_value" }
+  },
+  {
+    "id": "quality-incomplete",
+    "source": "metadata_quality",
+    "surface": "shared classifier",
+    "context": "Only a title was supplied.",
+    "parser": "quality",
+    "input": { "artist": null, "title": "Morning Jazz Hour" },
+    "expected": { "status": "unknown", "artist": null, "title": "Morning Jazz Hour", "quality": "incomplete_pair", "reason": "missing_artist" }
+  }
+]
