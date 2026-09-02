@@ -21,14 +21,23 @@ describe("applyStationBlocklistHideMigration", () => {
 
     const { db } = await import("@workspace/db");
     const execute = db.execute as ReturnType<typeof vi.fn>;
-    expect(execute).toHaveBeenCalledTimes(1);
-    const sqlArg = execute.mock.calls[0]?.[0];
-    expect(sqlArg).toBeTruthy();
+    expect(execute).toHaveBeenCalledTimes(2);
+    const hideSql = execute.mock.calls[0]?.[0];
+    const backfillSql = execute.mock.calls[1]?.[0];
+    expect(hideSql).toBeTruthy();
+    expect(backfillSql).toBeTruthy();
     // The generated SQL object must reference both dead-end station slugs so
     // existing deployments have them hidden on the next restart.
-    const rendered: string = JSON.stringify(sqlArg);
-    expect(rendered).toContain("chmr");
-    expect(rendered).toContain("cism");
+    for (const statement of [hideSql, backfillSql]) {
+      const rendered = JSON.stringify(statement);
+      expect(rendered).toContain("chmr");
+      expect(rendered).toContain("cism");
+      expect(rendered).toContain("automatic_cull_reason");
+      expect(rendered).toContain("missing_now_playing_source");
+      expect(rendered).toContain("off_mission_name");
+      expect(rendered).toContain("automatic_cull_canonical_station_id");
+    }
+    expect(JSON.stringify(backfillSql)).toContain("automatic_cull_reason IS NULL");
   });
 
   it("covers the coffee-shop/covers/mood patterns retroactively", async () => {
@@ -80,6 +89,17 @@ describe("applyStationBlocklistHideMigration", () => {
 
     await expect(applyStationBlocklistHideMigration()).rejects.toThrow(
       "database unavailable",
+    );
+  });
+
+  it("propagates provenance-backfill errors", async () => {
+    const { db } = await import("@workspace/db");
+    (db.execute as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ rowCount: 0 })
+      .mockRejectedValueOnce(new Error("backfill unavailable"));
+
+    await expect(applyStationBlocklistHideMigration()).rejects.toThrow(
+      "backfill unavailable",
     );
   });
 });

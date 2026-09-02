@@ -246,6 +246,16 @@ export const stationsTable = pgTable("stations", {
    */
   hidden: boolean("hidden").notNull().default(false),
   /**
+   * Provenance for an automatic catalogue cull. A null value means the row
+   * was hidden by an operator (or predates cull provenance tracking).
+   */
+  automaticCullReason: text("automatic_cull_reason"),
+  /**
+   * For duplicate-stream culls, the station row that remained visible as the
+   * canonical copy. Null for other cull reasons.
+   */
+  automaticCullCanonicalStationId: integer("automatic_cull_canonical_station_id"),
+  /**
    * Legacy ambient-pool classification. When true, the station is excluded
    * from the normal public dial (together with hidden=true) but is available
    * via GET /api/stations?mode=sleep. Only musical ambient channels belong in

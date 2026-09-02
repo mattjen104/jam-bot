@@ -81,6 +81,7 @@ import {
 } from "@workspace/db";
 import { bustConfigCache } from "../config.js";
 import { eq, and, asc, desc, sql, isNull, isNotNull, gt, gte } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { runAnonCleanup } from "../../lore/anonCleanup.js";
 import { wireListExtractor } from "../../lore/list-wire.js";
 import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } from "../../lore/list-candidates.js";
@@ -147,6 +148,10 @@ import {
 import { triggerBeatoReset } from "../../lore/beato.js";
 
 const router: IRouter = Router();
+const automaticCullCanonicalStation = alias(
+  stationsTable,
+  "automatic_cull_canonical_station",
+);
 
 // Rate limit: 10 requests per 15 minutes per IP — brute-force protection.
 // Applied before auth so lockout happens before any token comparison.
@@ -2356,8 +2361,22 @@ router.get("/admin/stations/flags", h(async (_req, res) => {
       streamUrl: stationsTable.streamUrl,
       favorite: stationsTable.favorite,
       hidden: stationsTable.hidden,
+      automaticCullReason: stationsTable.automaticCullReason,
+      automaticCullCanonicalStationId:
+        stationsTable.automaticCullCanonicalStationId,
+      automaticCullCanonicalStationSlug:
+        automaticCullCanonicalStation.slug,
+      automaticCullCanonicalStationName:
+        automaticCullCanonicalStation.name,
     })
     .from(stationsTable)
+    .leftJoin(
+      automaticCullCanonicalStation,
+      eq(
+        automaticCullCanonicalStation.id,
+        stationsTable.automaticCullCanonicalStationId,
+      ),
+    )
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
   return res.json({ stations: rows });
 }));
@@ -2659,7 +2678,16 @@ router.patch("/admin/stations/:id/flags", h(async (req, res) => {
 
   const [updated] = await db
     .update(stationsTable)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({
+      ...patch,
+      ...(patch.hidden === false || patch.hidden === true
+        ? {
+            automaticCullReason: null,
+            automaticCullCanonicalStationId: null,
+          }
+        : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(stationsTable.id, id))
     .returning();
   if (!updated) {
@@ -2679,6 +2707,8 @@ router.patch("/admin/stations/:id/flags", h(async (req, res) => {
     slug: updated.slug,
     favorite: updated.favorite,
     hidden: updated.hidden,
+    automaticCullReason: updated.automaticCullReason,
+    automaticCullCanonicalStationId: updated.automaticCullCanonicalStationId,
   });
 }));
 

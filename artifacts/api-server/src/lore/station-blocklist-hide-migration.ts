@@ -49,7 +49,14 @@ import { sql } from "drizzle-orm";
 export async function applyStationBlocklistHideMigration(): Promise<void> {
   const result = await db.execute<{ rowcount: string }>(sql`
     UPDATE stations
-    SET hidden = true
+    SET
+      hidden = true,
+      automatic_cull_reason = CASE
+        WHEN slug IN ('chmr', 'cism') AND now_playing_source IS NULL
+          THEN 'missing_now_playing_source'
+        ELSE 'off_mission_name'
+      END,
+      automatic_cull_canonical_station_id = NULL
     WHERE hidden = false
       AND (
         LOWER(name) LIKE '%exclusively %'
@@ -101,11 +108,72 @@ export async function applyStationBlocklistHideMigration(): Promise<void> {
       AND (sleep_mode IS NULL OR sleep_mode = false)
   `);
   const affected = (result as { rowCount?: number }).rowCount ?? 0;
+
+  // Backfill provenance for rows hidden by an earlier version of this
+  // migration. This keeps the admin review surface complete after upgrading
+  // an existing catalogue, without touching rows with another known reason.
+  const backfilled = await db.execute(sql`
+    UPDATE stations
+    SET
+      automatic_cull_reason = CASE
+        WHEN slug IN ('chmr', 'cism') AND now_playing_source IS NULL
+          THEN 'missing_now_playing_source'
+        ELSE 'off_mission_name'
+      END,
+      automatic_cull_canonical_station_id = NULL
+    WHERE hidden = true
+      AND automatic_cull_reason IS NULL
+      AND (
+        LOWER(name) LIKE '%exclusively %'
+        OR LOWER(name) LIKE '%epic lounge%'
+        OR LOWER(name) LIKE '%café calm%'
+        OR LOWER(name) LIKE '%cafe calm%'
+        OR LOWER(name) LIKE '%chillhop%'
+        OR LOWER(name) LIKE '%lofi girl%'
+        OR LOWER(name) LIKE '%lo-fi girl%'
+        OR LOWER(name) LIKE '%lofi hip hop%'
+        OR LOWER(name) LIKE '%lo-fi hip hop%'
+        OR LOWER(name) LIKE '%lofi hip-hop%'
+        OR LOWER(name) LIKE '%lo-fi hip-hop%'
+        OR LOWER(name) LIKE '%100 percent covers%'
+        OR LOWER(name) LIKE '%100% covers%'
+        OR LOWER(name) LIKE '%coffee%'
+        OR LOWER(name) LIKE '%cafe radio%'
+        OR LOWER(name) LIKE '%café radio%'
+        OR LOWER(name) LIKE '%radio cafe%'
+        OR LOWER(name) LIKE '%radio café%'
+        OR LOWER(name) LIKE '%lounge cafe%'
+        OR LOWER(name) LIKE '%lounge café%'
+        OR LOWER(name) LIKE '%cafe del mar%'
+        OR LOWER(name) LIKE '%café del mar%'
+        OR LOWER(name) LIKE '%hotel lounge%'
+        OR LOWER(name) LIKE '%0r - %'
+        OR LOWER(name) LIKE '%study beats%'
+        OR LOWER(name) LIKE '%study lofi%'
+        OR LOWER(name) LIKE '%chill beats%'
+        OR LOWER(name) LIKE '%relaxing music%'
+        OR LOWER(name) LIKE '%background music%'
+        OR LOWER(name) LIKE '%saudia radio%'
+        OR LOWER(name) LIKE '%sba riyadh%'
+        OR LOWER(name) LIKE '%sba jeddah%'
+        OR LOWER(name) LIKE '%sba saudia%'
+        OR LOWER(name) LIKE '%mbc loud%'
+        OR LOWER(name) LIKE '%galaxy fm ksa%'
+        OR LOWER(name) LIKE '%#1 splash%'
+        OR LOWER(name) LIKE '%drgnu -%'
+        OR LOWER(name) LIKE '%antenne niedersachsen relax%'
+        OR (slug IN ('chmr', 'cism') AND now_playing_source IS NULL)
+      )
+      AND (sleep_mode IS NULL OR sleep_mode = false)
+  `);
+  const backfilledRows = (backfilled as { rowCount?: number }).rowCount ?? 0;
   console.info(
     JSON.stringify({
       severity: "info",
       migration: "applyStationBlocklistHideMigration",
-      affectedRows: affected,
+      affectedRows: affected + backfilledRows,
+      newlyHidden: affected,
+      provenanceBackfilled: backfilledRows,
     }),
   );
 }

@@ -59,9 +59,25 @@ interface FlagStation {
   streamUrl: string | null;
   favorite: boolean;
   hidden: boolean;
+  automaticCullReason: string | null;
+  automaticCullCanonicalStationId: number | null;
+  automaticCullCanonicalStationSlug: string | null;
+  automaticCullCanonicalStationName: string | null;
 }
 
 type StreamFilter = "all" | "playable" | "missing";
+
+const AUTOMATIC_CULL_LABELS: Record<string, string> = {
+  duplicate_stream: "Duplicate stream",
+  off_mission_name: "Off-mission station name",
+  missing_now_playing_source: "Missing now-playing source",
+};
+
+function automaticCullLabel(reason: string | null): string {
+  return reason
+    ? (AUTOMATIC_CULL_LABELS[reason] ?? reason.replaceAll("_", " "))
+    : "Hidden by operator";
+}
 
 export default function AdminStations() {
   const { token, saveToken, clearToken } = useAdminToken();
@@ -193,11 +209,26 @@ function StationsPanel({
           id: number;
           favorite: boolean;
           hidden: boolean;
+          automaticCullReason: string | null;
+          automaticCullCanonicalStationId: number | null;
         };
         setStations((prev) =>
           prev.map((s) =>
             s.id === body.id
-              ? { ...s, favorite: body.favorite, hidden: body.hidden }
+              ? {
+                  ...s,
+                  favorite: body.favorite,
+                  hidden: body.hidden,
+                  automaticCullReason: body.automaticCullReason,
+                  automaticCullCanonicalStationId:
+                    body.automaticCullCanonicalStationId,
+                  ...(body.automaticCullCanonicalStationId === null
+                    ? {
+                        automaticCullCanonicalStationSlug: null,
+                        automaticCullCanonicalStationName: null,
+                      }
+                    : {}),
+                }
               : s,
           ),
         );
@@ -239,6 +270,14 @@ function StationsPanel({
   const hiddenStations = useMemo(
     () => stations.filter((s) => s.hidden && matchesFilters(s)),
     [stations, matchesFilters],
+  );
+  const automaticCulls = useMemo(
+    () => hiddenStations.filter((s) => s.automaticCullReason),
+    [hiddenStations],
+  );
+  const manuallyHiddenStations = useMemo(
+    () => hiddenStations.filter((s) => !s.automaticCullReason),
+    [hiddenStations],
   );
 
   return (
@@ -477,34 +516,59 @@ function StationsPanel({
                 </span>
               </button>
               {hiddenOpen && (
-                <div className="mt-3 flex flex-col gap-1.5">
-                  {hiddenStations.length === 0 ? (
+                <div className="mt-3 space-y-5">
+                  <div>
+                    <p className="font-mono text-[12px] uppercase tracking-wide text-primary">
+                      Automatic culls
+                      <span className="ml-2 rounded-full bg-primary/10 px-1.5 text-primary">
+                        {automaticCulls.length}
+                      </span>
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      These rows were hidden by catalogue cleanup. Their
+                      station and spin history is still intact.
+                    </p>
+                  </div>
+                  {automaticCulls.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      {automaticCulls.map((s) => (
+                        <HiddenStationRow
+                          key={s.id}
+                          station={s}
+                          busy={busyIds.has(s.id)}
+                          onReintroduce={() =>
+                            void patchFlags(s.id, { hidden: false })
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
+                      Other hidden stations
+                      <span className="ml-2 rounded-full bg-secondary px-1.5">
+                        {manuallyHiddenStations.length}
+                      </span>
+                    </p>
+                  </div>
+                  {manuallyHiddenStations.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      {manuallyHiddenStations.map((s) => (
+                        <HiddenStationRow
+                          key={s.id}
+                          station={s}
+                          busy={busyIds.has(s.id)}
+                          onReintroduce={() =>
+                            void patchFlags(s.id, { hidden: false })
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {hiddenStations.length === 0 && (
                     <p className="text-base text-muted-foreground">
                       Nothing hidden.
                     </p>
-                  ) : (
-                    hiddenStations.map((s) => (
-                      <div
-                        key={s.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card/60 px-4 py-2.5"
-                      >
-                        <StationIdentity station={s} dimmed />
-                        <button
-                          type="button"
-                          onClick={() => void patchFlags(s.id, { hidden: false })}
-                          disabled={busyIds.has(s.id)}
-                          data-testid={`reintroduce-${s.slug}`}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 font-mono text-[13px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
-                        >
-                          {busyIds.has(s.id) ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Eye className="h-3 w-3" />
-                          )}
-                          Reintroduce
-                        </button>
-                      </div>
-                    ))
                   )}
                 </div>
               )}
@@ -512,6 +576,63 @@ function StationsPanel({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function HiddenStationRow({
+  station,
+  busy,
+  onReintroduce,
+}: {
+  station: FlagStation;
+  busy: boolean;
+  onReintroduce: () => void;
+}) {
+  return (
+    <div
+      data-testid={
+        station.automaticCullReason
+          ? `automatic-cull-${station.slug}`
+          : `hidden-station-${station.slug}`
+      }
+      className="flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card/60 px-4 py-2.5"
+    >
+      <div className="min-w-0">
+        <StationIdentity station={station} dimmed />
+        <p className="mt-1 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
+          {automaticCullLabel(station.automaticCullReason)}
+        </p>
+        {station.automaticCullReason === "duplicate_stream" &&
+          station.automaticCullCanonicalStationName && (
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Canonical station kept:{" "}
+              <span className="text-foreground">
+                {station.automaticCullCanonicalStationName}
+              </span>
+              {station.automaticCullCanonicalStationSlug && (
+                <span className="font-mono text-[12px]">
+                  {" "}
+                  ({station.automaticCullCanonicalStationSlug})
+                </span>
+              )}
+            </p>
+          )}
+      </div>
+      <button
+        type="button"
+        onClick={onReintroduce}
+        disabled={busy}
+        data-testid={`reintroduce-${station.slug}`}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 font-mono text-[13px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+      >
+        {busy ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Eye className="h-3 w-3" />
+        )}
+        Reintroduce
+      </button>
     </div>
   );
 }
