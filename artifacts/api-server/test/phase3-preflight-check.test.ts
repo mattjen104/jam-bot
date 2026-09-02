@@ -144,6 +144,7 @@ vi.mock("../src/lore/for-you.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { runPhase3RetryPass } from "../src/routes/me/index.js";
+import { normalizeKey } from "../src/lore/resolve.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -447,11 +448,11 @@ describe("runPhase3RetryPass — pre-flight window estimate", () => {
       return chain;
     }
 
-    // Keys the resolution cache would hold after night 1 resolves entries 0..N-1.
-    // normalizeKey("Artist i", "Track i") strips to lowercase ASCII + U+001F sep:
-    //   "artist 0\u001ftrack 0", "artist 1\u001ftrack 1", "artist 2\u001ftrack 2"
+    // Keys the current resolver version would hold after night 1 resolves
+    // entries 0..N-1. Build them through the production helper so a deliberate
+    // cache-version bump does not make this fixture masquerade as legacy data.
     const night1CachedKeys = Array.from({ length: N }, (_, i) => ({
-      key: `artist ${i}\u001ftrack ${i}`,
+      key: normalizeKey(`Artist ${i}`, `Track ${i}`),
     }));
 
     // Select call sequence (4 calls per pass):

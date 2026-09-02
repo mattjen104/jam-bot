@@ -592,6 +592,11 @@ export const spinsTable = pgTable(
     rawTitle: text("raw_title"),
     rawArtist: text("raw_artist"),
     /**
+     * Source-reported track duration, retained so repaired historical metadata
+     * still passes the same wrong-recording guard as live resolution.
+     */
+    durationMs: integer("duration_ms"),
+    /**
      * Ingest source: "radio_paradise" | "kexp" | "kexp_api" | "spinitron" |
      * "bbc_api" | "station_page" | "manual".
      */
@@ -651,16 +656,17 @@ export type Spin = typeof spinsTable.$inferSelect;
 export type InsertSpin = typeof spinsTable.$inferInsert;
 
 /**
- * Local resolution cache for the shared `resolveToMbid` path. Keyed on a
- * normalized `artist\u001ftitle` digest (Unit Separator, not NUL — Postgres
- * rejects NUL in text), it caches BOTH hits (mbid set) and
+ * Local resolution cache for the shared `resolveToMbid` path. Text keys carry
+ * a resolver-version namespace before the normalized
+ * `artist\u001ftitle` digest. Old versions stay in place for audit while only
+ * the current namespace participates in resolution. It caches BOTH hits and
  * misses (mbid null) so a track that never resolves isn't re-queried against
  * MusicBrainz on every spin — the single most important lever for staying under
  * the 1 req/sec MusicBrainz budget while ingesting continuously.
  */
 export const resolutionCacheTable = pgTable("resolution_cache", {
   id: serial("id").primaryKey(),
-  /** Normalized `artist\u001ftitle` digest (lowercased, punctuation-stripped). */
+  /** Versioned normalized digest, or a legacy unversioned key retained for audit. */
   key: text("key").notNull().unique(),
   /** Resolved MBID, or null for a cached miss. */
   mbid: text("mbid"),

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { normalizeKey, durationMismatch } from "../src/lore/resolve.js";
+import {
+  RESOLUTION_CACHE_VERSION,
+  durationMismatch,
+  normalizeKey,
+  normalizeMetadataPair,
+  resolutionTextVariants,
+} from "../src/lore/resolve.js";
 
 describe("normalizeKey", () => {
   it("is case- and punctuation-insensitive", () => {
@@ -30,6 +36,21 @@ describe("normalizeKey", () => {
   it("keeps non-Latin artist and title pairs distinct", () => {
     expect(normalizeKey("Камелия", "Луда по тебе")).not.toBe(normalizeKey("Кино", "Группа крови"));
     expect(normalizeKey("فيروز", "بحبك يا لبنان")).not.toBe(normalizeKey("坂本龍一", "Merry Christmas Mr. Lawrence"));
+  });
+
+  it("namespaces cache keys while retaining an unversioned pair identity", () => {
+    const pair = normalizeMetadataPair("The Beatles", "Hey Jude");
+    expect(normalizeKey("The Beatles", "Hey Jude")).toBe(
+      `v${RESOLUTION_CACHE_VERSION}\u001f${pair}`,
+    );
+    expect(normalizeKey("The Beatles", "Hey Jude")).not.toBe(pair);
+  });
+
+  it("shares only the direct query and one field-order reversal", () => {
+    expect(resolutionTextVariants("Title", "Artist")).toEqual([
+      { artist: "Title", title: "Artist", order: "direct" },
+      { artist: "Artist", title: "Title", order: "swapped" },
+    ]);
   });
 });
 

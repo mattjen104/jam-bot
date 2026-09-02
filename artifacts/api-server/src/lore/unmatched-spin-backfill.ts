@@ -1,22 +1,20 @@
 import {
   db,
-  recordingsTable,
   resolutionCacheTable,
   spinsTable,
 } from "@workspace/db";
+import type { RecordingTextMatch } from "@workspace/song-enrichment";
 import {
   and,
   desc,
-  eq,
   gte,
   inArray,
   isNotNull,
   isNull,
-  sql,
 } from "drizzle-orm";
 import { createMbResolver, musicbrainzEnabled } from "@workspace/song-enrichment";
 import { isJunkMetadata } from "./icy.js";
-import { normalizeKey, upsertRecording } from "./resolve.js";
+import { normalizeKey, resolveTextWithVariants, upsertRecording } from "./resolve.js";
 
 /**
  * Converges recent station spins that were logged before MusicBrainz could
@@ -53,17 +51,23 @@ type Candidate = {
   artist: string;
   title: string;
   spinIds: number[];
+  durationHints: number[];
   hasResolvedSpin: boolean;
   cached?: CacheRow;
+  canonical?: RecordingTextMatch;
 };
 
 export interface UnmatchedSpinBackfillResult {
   candidates: number;
   /** Alias retained for admin callers that describe work as scanned rows. */
   scanned: number;
+  /** Candidates actually attempted in this bounded run. */
+  attempted: number;
   resolved: number;
   deferred: number;
   unavailable: number;
+  /** Definitive MusicBrainz misses; alias of unavailable for older callers. */
+  definitiveMiss: number;
   remaining: number;
   skipped?: boolean;
 }
@@ -101,6 +105,7 @@ async function readRecentRows(unresolvedOnly = false) {
       rawArtist: spinsTable.rawArtist,
       rawTitle: spinsTable.rawTitle,
       playedAt: spinsTable.playedAt,
+      durationMs: spinsTable.durationMs,
     })
     .from(spinsTable)
     .where(
@@ -121,6 +126,7 @@ function groupRows(
     mbid: string | null;
     rawArtist: string | null;
     rawTitle: string | null;
+    durationMs?: number | null;
   }>,
   unresolvedOnly: boolean,
 ): Map<string, Candidate> {
@@ -134,6 +140,9 @@ function groupRows(
     const existing = groups.get(key);
     if (existing) {
       existing.spinIds.push(row.id);
+      if (row.durationMs != null && row.durationMs > 0) {
+        existing.durationHints.push(row.durationMs);
+      }
       if (row.mbid !== null && !row.mbid.startsWith("sp:")) {
         existing.hasResolvedSpin = true;
       }
@@ -143,6 +152,8 @@ function groupRows(
         artist,
         title,
         spinIds: [row.id],
+        durationHints:
+          row.durationMs != null && row.durationMs > 0 ? [row.durationMs] : [],
         hasResolvedSpin: row.mbid !== null && !row.mbid.startsWith("sp:"),
       });
     }
@@ -185,31 +196,6 @@ async function attachSpins(candidate: Candidate, mbid: string): Promise<number> 
     .where(and(inArray(spinsTable.id, candidate.spinIds), isNull(spinsTable.mbid)))
     .returning({ id: spinsTable.id });
   return updated.length;
-}
-
-async function enrichReleaseFacts(mbid: string): Promise<void> {
-  try {
-    const info = await resolver.fetchReleaseDateInfo(
-      mbid,
-      AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
-    );
-    if (!info) return;
-    await db
-      .update(recordingsTable)
-      .set({
-        ...(info.year != null ? { releaseYear: info.year } : {}),
-        ...(info.releaseDate != null ? { releaseDate: info.releaseDate } : {}),
-        ...(info.year != null || info.releaseDate != null
-          ? { yearCheckedAt: sql`now()`, releaseDateCheckedAt: sql`now()` }
-          : {}),
-        updatedAt: sql`now()`,
-      })
-      .where(eq(recordingsTable.mbid, mbid));
-  } catch (err) {
-    // The recording and its spins are already safely promoted. The existing
-    // release-year job will retry release facts independently.
-    console.warn("[lore] unmatched-spin release metadata deferred", mbid, err);
-  }
 }
 
 export async function getUnmatchedSpinHealth(): Promise<UnmatchedSpinHealth> {
@@ -268,9 +254,11 @@ export async function backfillUnmatchedSpinsBatch(
     return {
       candidates: 0,
       scanned: 0,
+      attempted: 0,
       resolved: 0,
       deferred: 0,
       unavailable: 0,
+      definitiveMiss: 0,
       remaining: 0,
       skipped: true,
     };
@@ -297,45 +285,53 @@ export async function backfillUnmatchedSpinsBatch(
     let resolved = 0;
     let deferred = 0;
     let unavailable = 0;
+    let attempted = 0;
     const deadline = Date.now() + BATCH_BUDGET_MS;
 
     for (const candidate of candidates) {
       if (Date.now() > deadline) break;
+      attempted++;
       let mbid = candidate.cached?.mbid ?? null;
       if (!mbid || mbid.startsWith("sp:")) {
         try {
-          const direct = await resolver.resolveByTextWithScoreStatus(
+          const textResult = await resolveTextWithVariants(
             candidate.artist,
             candidate.title,
-            AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+            candidate.durationHints,
+            async (artist, title) => {
+              const result = await resolver.resolveByTextWithScoreStatus(
+                artist,
+                title,
+                AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+              );
+              if (result.status !== "matched") return result;
+              return {
+                status: "matched",
+                match: {
+                  recordingId: result.mbid,
+                  score: result.score,
+                  title: result.title ?? title,
+                  ...(result.artist ? { artist: result.artist } : {}),
+                  ...(result.artistMbid ? { artistMbid: result.artistMbid } : {}),
+                  ...(result.isrc ? { isrc: result.isrc } : {}),
+                  ...(result.durationMs != null
+                    ? { durationMs: result.durationMs }
+                    : {}),
+                },
+              };
+            },
           );
-          if (direct.status === "deferred") {
+          if (textResult.status === "deferred") {
             await writeCache(candidate.key, null, "deferred");
             deferred++;
             continue;
           }
           mbid =
-            direct.status === "matched" && direct.score >= 90
-              ? direct.mbid
+            textResult.status === "matched" && textResult.match.score >= 90
+              ? textResult.match.recordingId
               : null;
-
-          // Historical unresolved spins deserve the same one bounded
-          // artist/title reversal that live ingestion uses for ICY feeds.
-          if (!mbid) {
-            const swapped = await resolver.resolveByTextWithScoreStatus(
-              candidate.title,
-              candidate.artist,
-              AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
-            );
-            if (swapped.status === "deferred") {
-              await writeCache(candidate.key, null, "deferred");
-              deferred++;
-              continue;
-            }
-            mbid =
-              swapped.status === "matched" && swapped.score >= 90
-                ? swapped.mbid
-                : null;
+          if (textResult.status === "matched") {
+            candidate.canonical = textResult.match;
           }
         } catch (err) {
           await writeCache(candidate.key, null, "deferred");
@@ -356,20 +352,32 @@ export async function backfillUnmatchedSpinsBatch(
         continue;
       }
 
-      await upsertRecording(
-        {
-          mbid,
-          confidence: "text",
-          artist: candidate.artist,
-          title: candidate.title,
-          fromCache: Boolean(candidate.cached?.mbid),
-        },
-        undefined,
-        false,
-      );
+      // A positive cache row already points at an existing canonical recording.
+      // Attach waiting spins without rewriting that node from raw station text.
+      if (!candidate.cached?.mbid) {
+        await upsertRecording(
+          {
+            mbid,
+            confidence: "text",
+            artist: candidate.canonical?.artist ?? candidate.artist,
+            title: candidate.canonical?.title || candidate.title,
+            ...(candidate.canonical?.artistMbid
+              ? { artistMbid: candidate.canonical.artistMbid }
+              : {}),
+            ...(candidate.canonical?.isrc
+              ? { isrc: candidate.canonical.isrc }
+              : {}),
+            ...(candidate.canonical?.durationMs != null
+              ? { durationMs: candidate.canonical.durationMs }
+              : {}),
+            fromCache: false,
+          },
+          undefined,
+          false,
+        );
+      }
       await attachSpins(candidate, mbid);
       await writeCache(candidate.key, mbid, "text");
-      await enrichReleaseFacts(mbid);
       resolved++;
     }
 
@@ -377,9 +385,11 @@ export async function backfillUnmatchedSpinsBatch(
     return {
       candidates: candidates.length,
       scanned: candidates.length,
+      attempted,
       resolved,
       deferred,
       unavailable,
+      definitiveMiss: unavailable,
       remaining: health.candidates,
     };
   } finally {

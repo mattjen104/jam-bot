@@ -74,6 +74,7 @@ const spinRows = [
     mbid: null,
     rawArtist: "The Example Band",
     rawTitle: "A Track",
+    durationMs: 240_000,
     playedAt: new Date(),
   },
   {
@@ -81,6 +82,7 @@ const spinRows = [
     mbid: null,
     rawArtist: " the example band ",
     rawTitle: "A Track!",
+    durationMs: 241_000,
     playedAt: new Date(),
   },
   {
@@ -88,6 +90,7 @@ const spinRows = [
     mbid: null,
     rawArtist: "Advertisement",
     rawTitle: "Commercial break",
+    durationMs: null,
     playedAt: new Date(),
   },
 ];
@@ -253,6 +256,51 @@ describe("backfillUnmatchedSpinsBatch", () => {
       "A Track",
       "The Example Band",
       expect.any(AbortSignal),
+    );
+  });
+
+  it("rejects a canonical candidate that conflicts with source duration", async () => {
+    mockResolveByTextWithScore.mockResolvedValue({
+      mbid: "33333333-3333-4333-8333-333333333333",
+      score: 99,
+      durationMs: 30_000,
+    });
+
+    const result = await backfillUnmatchedSpinsBatch();
+
+    expect(result).toMatchObject({
+      attempted: 1,
+      resolved: 0,
+      definitiveMiss: 1,
+    });
+    expect(mockUpsertRecording).not.toHaveBeenCalled();
+    expect(mockDbUpdate).not.toHaveBeenCalled();
+  });
+
+  it("preserves MusicBrainz canonical fields when promoting a fresh match", async () => {
+    mockResolveByTextWithScore.mockResolvedValue({
+      mbid: "44444444-4444-4444-8444-444444444444",
+      score: 98,
+      title: "Canonical Track",
+      artist: "Canonical Artist",
+      artistMbid: "55555555-5555-4555-8555-555555555555",
+      isrc: "USABC1234567",
+      durationMs: 240_500,
+    });
+
+    await backfillUnmatchedSpinsBatch();
+
+    expect(mockUpsertRecording).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mbid: "44444444-4444-4444-8444-444444444444",
+        title: "Canonical Track",
+        artist: "Canonical Artist",
+        artistMbid: "55555555-5555-4555-8555-555555555555",
+        isrc: "USABC1234567",
+        durationMs: 240_500,
+      }),
+      undefined,
+      false,
     );
   });
 });

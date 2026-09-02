@@ -156,3 +156,4 @@
 - [Minimal radio crossing fixtures](minimal-radio-crossing-fixtures.md) — front-door fixtures need both a live hit and server crossing aggregates for Lifetime mode.
 - [Minimal radio first-play previews](minimal-radio-first-play-previews.md) — station cards use the existing station-filtered history read model for first-play art; keep aggregate lifetime counts separate.
 - [Apple jam room protocol](apple-jam-room-protocol.md) — snapshots and ordered events commit atomically; short room codes are private capabilities, while Apple authorization always stays browser-local.
+- [Resolver cache versions](resolver-cache-versions.md) — text resolver changes need a new key namespace; keep old rows for audit and share one bounded variant policy across live and replay.

@@ -236,7 +236,16 @@ export interface IsolatedMbResolver {
     title: string,
     signal?: AbortSignal,
   ): Promise<
-    | { status: "matched"; mbid: string; score: number }
+    | {
+        status: "matched";
+        mbid: string;
+        score: number;
+        title?: string;
+        artist?: string;
+        artistMbid?: string;
+        isrc?: string;
+        durationMs?: number;
+      }
     | { status: "unavailable" }
     | { status: "deferred" }
   >;
@@ -318,7 +327,16 @@ export function createMbResolver(): IsolatedMbResolver {
       title: string,
       signal?: AbortSignal,
     ): Promise<
-      | { status: "matched"; mbid: string; score: number }
+      | {
+          status: "matched";
+          mbid: string;
+          score: number;
+          title?: string;
+          artist?: string;
+          artistMbid?: string;
+          isrc?: string;
+          durationMs?: number;
+        }
       | { status: "unavailable" }
       | { status: "deferred" }
     > {
@@ -336,7 +354,16 @@ export function createMbResolver(): IsolatedMbResolver {
         );
         const match = parseRecordingSearch(body);
         if (!match || match.score < 90) return { status: "unavailable" };
-        return { status: "matched", mbid: match.recordingId, score: match.score };
+        return {
+          status: "matched",
+          mbid: match.recordingId,
+          score: match.score,
+          ...(match.title ? { title: match.title } : {}),
+          ...(match.artist ? { artist: match.artist } : {}),
+          ...(match.artistMbid ? { artistMbid: match.artistMbid } : {}),
+          ...(match.isrc ? { isrc: match.isrc } : {}),
+          ...(match.durationMs != null ? { durationMs: match.durationMs } : {}),
+        };
       } catch (err) {
         const statusMatch = String(err).match(/MusicBrainz (\d{3})/);
         const status = statusMatch ? Number(statusMatch[1]) : 0;

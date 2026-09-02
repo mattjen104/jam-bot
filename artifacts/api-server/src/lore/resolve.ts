@@ -26,6 +26,20 @@ import { eligibleDjName } from "@workspace/lore-attribution";
 import { enqueueRecordingEmbeds } from "./embed-resolution.js";
 import { artDelete } from "../lib/artStorage.js";
 import { captureResolutionGeneration, recordResolutionLatency } from "./resolution-latency-health.js";
+import {
+  normalizeKey,
+  normalizeMetadataPair,
+  resolveTextWithVariants,
+} from "./resolution-query.js";
+
+export {
+  RESOLUTION_CACHE_VERSION,
+  durationMismatch,
+  normalizeKey,
+  normalizeMetadataPair,
+  resolutionTextVariants,
+  resolveTextWithVariants,
+} from "./resolution-query.js";
 
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
 export interface MbidResolution {
@@ -54,52 +68,9 @@ export interface MbidResolution {
    */
   fromCache: boolean;
 }
-
-// ---- Pure helpers (unit-tested; no DB / network) -----------------------
-
-/**
- * Normalize an artist+title pair into a stable cache key. Lowercased, accents
- * and punctuation stripped, whitespace collapsed, joined with a Unit Separator
- * (U+001F) so "The Beatles" / "Hey Jude" can never collide with a
- * differently-split pair. Keep Unicode letters and numbers: reducing
- * non-Latin metadata to ASCII made every Cyrillic/Arabic/CJK pair share the
- * same `\x1f` cache key and could pin unrelated tracks to one recording.
- * A NUL (U+0000) can't be used — Postgres rejects it in a `text` column.
- * Deliberately independent of duration so every edit/pressing of the same
- * artist+title shares one entry.
- */
-export function normalizeKey(artist: string, title: string): string {
-  const norm = (s: string): string =>
-    s
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}]+/gu, " ")
-      .trim()
-      .replace(/\s+/g, " ");
-  return `${norm(artist)}\u001f${norm(title)}`;
-}
-
-/**
- * Whether a source-reported duration and a candidate recording's duration are
- * grossly incompatible. Deliberately lenient (2 min tolerance): only catches a
- * clip-vs-full-song or wrong-recording mismatch, never a normal edit/remaster
- * difference. Returns false whenever either duration is missing — absence is
- * never evidence of a mismatch.
- */
-export function durationMismatch(
-  hintMs?: number,
-  candidateMs?: number,
-  toleranceMs = 120_000,
-): boolean {
-  if (hintMs == null || candidateMs == null) return false;
-  if (hintMs <= 0 || candidateMs <= 0) return false;
-  return Math.abs(hintMs - candidateMs) > toleranceMs;
-}
-
 /** Signature used to detect whether the on-air track actually changed. */
 function sig(artist: string, title: string): string {
-  return normalizeKey(artist, title);
+  return normalizeMetadataPair(artist, title);
 }
 
 // ---- Resolution cache (hits AND misses) --------------------------------
@@ -253,19 +224,14 @@ export async function resolveToMbid(
     return { mbid: cached.mbid, confidence, fromCache: !madeNetworkCall, ...base };
   }
 
-  // eslint-disable-next-line no-useless-assignment
-  madeNetworkCall = true;
-  const directResolution = await resolveRecordingByTextStatus(rawArtist, rawTitle);
-  const match =
-    directResolution.status === "matched" ? directResolution.match : null;
-  let textResolutionDeferred = directResolution.status === "deferred";
-
-  // Track whether the search returned a result that was rejected only for
-  // duration — that means we found the right song but the wrong pressing.
-  // Swapping artist/title would not help and risks pinning the wrong track.
-  const durationRejected = match !== null && durationMismatch(durationMs, match.durationMs);
-
-  if (match && !durationRejected) {
+  const textResolution = await resolveTextWithVariants(
+    rawArtist,
+    rawTitle,
+    [durationMs],
+    resolveRecordingByTextStatus,
+  );
+  if (textResolution.status === "matched") {
+    const match = textResolution.match;
     const result: MbidResolution = {
       mbid: match.recordingId,
       confidence: "text",
@@ -278,40 +244,6 @@ export async function resolveToMbid(
     };
     await writeResolutionCacheSafe(key, result.mbid, "text");
     return result;
-  }
-
-  // 3b. Swap retry — fires only on a true text-search miss (not a
-  //     duration-only rejection). Some ICY stations emit "Title - Artist"
-  //     instead of "Artist - Title"; trying the fields in reverse order
-  //     recovers those spins before falling back to Spotify. The cache key
-  //     remains the raw (unswapped) artist+title so repeat polls of the same
-  //     station still de-duplicate correctly. The canonical artist/title from
-  //     the MusicBrainz response is what lands in the recordings row — the raw
-  //     ICY order is only ever stored in spins.raw_artist / raw_title.
-  if (!durationRejected && directResolution.status === "unavailable") {
-    const swappedResolution = await resolveRecordingByTextStatus(
-      rawTitle,
-      rawArtist,
-    );
-    if (swappedResolution.status === "deferred") {
-      textResolutionDeferred = true;
-    }
-    const swapped =
-      swappedResolution.status === "matched" ? swappedResolution.match : null;
-    if (swapped && !durationMismatch(durationMs, swapped.durationMs)) {
-      const result: MbidResolution = {
-        mbid: swapped.recordingId,
-        confidence: "text",
-        fromCache: false,
-        title: swapped.title || rawTitle,
-        artist: swapped.artist || rawArtist,
-        ...(swapped.artistMbid ? { artistMbid: swapped.artistMbid } : {}),
-        ...(swapped.isrc ? { isrc: swapped.isrc } : {}),
-        ...(swapped.durationMs != null ? { durationMs: swapped.durationMs } : {}),
-      };
-      await writeResolutionCacheSafe(key, result.mbid, "text");
-      return result;
-    }
   }
 
   // 4. Spotify fallback — MusicBrainz couldn't place it (new release, niche
@@ -343,7 +275,7 @@ export async function resolveToMbid(
   await writeResolutionCacheSafe(
     key,
     null,
-    textResolutionDeferred ? "deferred" : "unresolved",
+    textResolution.status === "deferred" ? "deferred" : "unresolved",
   );
   return { mbid: null, confidence: "unresolved", fromCache: false, ...base };
 }
@@ -669,6 +601,7 @@ async function persistSpin(args: {
       mbid: r.mbid,
       rawArtist: raw.rawArtist,
       rawTitle: raw.rawTitle,
+      durationMs: raw.durationMs ?? null,
       source,
       externalId: raw.externalId ?? null,
       citation: citation ?? null,

@@ -75,6 +75,11 @@ export async function setup(): Promise<void> {
     );
     await applySpinsPlayedAtIndexMigration();
 
+    const { applySpinDurationMigration } = await import(
+      "../src/lore/spin-duration-migration.js"
+    );
+    await applySpinDurationMigration();
+
     const { applyLifetimeCrossingsMigration } = await import(
       "../src/lore/lifetime-crossings-migration.js"
     );
