@@ -17,6 +17,7 @@ import {
   parseLotRadioSchedule,
   parseIcyNowPlaying,
   parseSpinitronWebPage,
+  parseSomaFmSongs,
 } from "../src/lore/adapters.js";
 
 describe("pickPath", () => {
@@ -562,8 +563,28 @@ describe("stationArchiveUrl", () => {
 describe("supportsBackfill", () => {
   it("only time-anchored history sources qualify", () => {
     expect(supportsBackfill("kexp_api")).toBe(true);
+    expect(supportsBackfill("somafm")).toBe(true);
     expect(supportsBackfill("radio_paradise")).toBe(false);
     expect(supportsBackfill(null)).toBe(false);
+  });
+});
+
+describe("parseSomaFmSongs", () => {
+  it("keeps stable source timestamps and rejects station IDs", () => {
+    expect(parseSomaFmSongs({
+      songs: [
+        { artist: "Autechre", title: "Bike", date: "1788350400" },
+        { artist: "SomaFM", title: "Station ID", date: "1788350300" },
+        { artist: "", title: "Unknown", date: "1788350200" },
+      ],
+    }, "cliqhop")).toEqual([
+      {
+        rawArtist: "Autechre",
+        rawTitle: "Bike",
+        externalId: "somafm:cliqhop:1788350400",
+        playedAt: new Date("2026-09-02T12:00:00.000Z"),
+      },
+    ]);
   });
 });
 

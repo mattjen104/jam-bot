@@ -99,7 +99,7 @@ describe("DialCliBar", () => {
     ["/ambient",    "ambient"    ],
     ["/campus",     "campus"     ],
     ["/specialist", "specialist" ],
-    ["/anchor",     "anchor"     ],
+    ["/core",       "anchor"     ],
     ["/public",     "public"     ],
     ["/indie",      "indie"      ],
     ["/discovery",  "discovery"  ],

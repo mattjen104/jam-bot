@@ -89,7 +89,7 @@ describe("CategoryScanLane", () => {
       "Ambient & Sleep",
       "Campus Radio",
       "Specialist Radio",
-      "Anchor Stations",
+      "Core Stations",
     ]);
     // The personal station (no server category) renders nothing.
     expect(screen.queryByText(/My Web Station/)).toBeNull();
@@ -107,7 +107,7 @@ describe("CategoryScanLane", () => {
 
   it("skips unknown/blank artists in the live count and shows quiet copy", () => {
     renderLane();
-    // NTS plays "Unknown Artist" → only KEXP counts for Anchor Stations.
+    // NTS plays "Unknown Artist" → only KEXP counts for Core Stations.
     expect(screen.getByTestId("dial-scan-anchor").textContent).toContain("1 live");
     expect(screen.getByTestId("dial-scan-anchor").textContent).toContain("The Smile");
     // Sleep Radio's artist is blank → no live stations, honest quiet copy.

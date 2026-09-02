@@ -4,7 +4,7 @@
  * Layout model
  * ─────────────
  * Category-first (the home Feed): a tab strip — All plus the seven editorial
- * categories under their short labels (Anchor, Campus, Specialist, Public,
+ * categories under their short labels (Core, Campus, Specialist, Public,
  * Indie, Ambient, Discovery). Each category tab also carries an include
  * checkbox: checked categories appear as cards in the All overview;
  * unchecking a tab keeps it in the strip (dimmed) so the listener can

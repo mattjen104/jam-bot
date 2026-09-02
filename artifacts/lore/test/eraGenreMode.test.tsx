@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { memoryLocation } from "wouter/memory-location";
 import { Router } from "wouter";
@@ -131,7 +131,7 @@ describe("useEraGenreMode", () => {
 });
 
 // ---------------------------------------------------------------------------
-// SlimSectionNav — long-press wiring + vinyl indicator
+// SlimSectionNav — legacy listener gesture is retired
 // ---------------------------------------------------------------------------
 
 function renderNav(variant?: "corner" | "bottom") {
@@ -143,56 +143,21 @@ function renderNav(variant?: "corner" | "bottom") {
   );
 }
 
-describe("SlimSectionNav era/genre gesture", () => {
-  it("a long press on [lore] activates era/genre mode and shows the vinyl", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-11T00:00:00Z"));
-    try {
-      renderNav();
-      const loreLink = screen.getByText("Feed");
+describe("SlimSectionNav Specialist visibility", () => {
+  it.each([undefined, "bottom"] as const)(
+    "does not expose the retired era/genre gesture in the %s variant",
+    (variant) => {
+      setEraGenreEnabled(true);
+      renderNav(variant);
+      const feed = screen.getByText("Feed");
+      fireEvent.pointerDown(feed);
+      fireEvent.pointerUp(feed);
       expect(screen.queryByTestId("era-genre-vinyl")).toBeNull();
-      fireEvent.pointerDown(loreLink);
-      vi.advanceTimersByTime(ERA_GENRE_LONGPRESS_MS + 50);
-      fireEvent.pointerUp(loreLink);
-      expect(screen.getByTestId("era-genre-vinyl")).toBeTruthy();
-      expect(localStorage.getItem("lore:eraGenre:enabled")).toBe("true");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+      expect(feed.getAttribute("title")).toBeNull();
+    },
+  );
 
-  it("a quick press does not activate the mode — no vinyl appears", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-11T00:00:00Z"));
-    try {
-      renderNav();
-      const loreLink = screen.getByText("Feed");
-      fireEvent.pointerDown(loreLink);
-      vi.advanceTimersByTime(150);
-      fireEvent.pointerUp(loreLink);
-      expect(screen.queryByTestId("era-genre-vinyl")).toBeNull();
-      expect(localStorage.getItem("lore:eraGenre:enabled")).not.toBe("true");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("tapping the vinyl deactivates era/genre mode", () => {
-    setEraGenreEnabled(true);
-    renderNav();
-    const vinyl = screen.getByTestId("era-genre-vinyl");
-    fireEvent.click(vinyl);
-    expect(screen.queryByTestId("era-genre-vinyl")).toBeNull();
-    expect(localStorage.getItem("lore:eraGenre:enabled")).toBe("false");
-  });
-
-  it("the bottom (phone) variant carries the same gesture and vinyl", () => {
-    setEraGenreEnabled(true);
-    renderNav("bottom");
-    expect(screen.getByTestId("era-genre-vinyl")).toBeTruthy();
-  });
-
-  it("does not advertise the feature while inactive", () => {
+  it("does not advertise the retired feature while inactive", () => {
     renderNav();
     expect(screen.queryByTestId("era-genre-vinyl")).toBeNull();
     expect(screen.queryByText(/era|genre/i)).toBeNull();

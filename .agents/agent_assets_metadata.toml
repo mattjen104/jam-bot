@@ -139,3 +139,17 @@ mtime_ms = 1788363627900
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/4369e808-0942-41d6-b9e8-e578417625c0/38a4dd91-efd3-4977-90b8-5ad0b6a5d6da"
 storage_version_token = "1788363705639159"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "hk_cAnhEFsDhBDhL5uiNO"
+uri = "file://docs/specialist-radio-summary-sentences.md"
+type = "text"
+title = "Specialist Radio summary sentences"
+description = "Editorial summary sentences for the 16 non-SomaFM stations in the final Specialist Radio cohort, with an explicit metadata and history boundary."
+logical_id = "483fd168-928e-461f-849f-26270a232fbb"
+content_hash = "sha256:cc3d56d3c87ea4cf4b4798496e27f9072c746f4db4c4b598283372405d10cfc9"
+size = 4424
+mtime_ms = 1788370069325
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/483fd168-928e-461f-849f-26270a232fbb/e89790b8-72f8-40ad-bd21-e6bebea0785a"
+storage_version_token = "1788370074624665"
+content_type = "text/markdown"

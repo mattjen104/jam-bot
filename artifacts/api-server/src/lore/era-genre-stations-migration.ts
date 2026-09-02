@@ -87,7 +87,8 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
     sql`, `,
   )}]`;
 
-  // Step 2: mark matching visible rows as era/genre stations (hidden=true).
+  // Step 2: classify matching visible rows for Specialist Radio. The flag is
+  // taxonomy, not visibility: these stations stay in the normal directory.
   // Only currently visible (hidden=false), non-sleep, non-FIP, non-blocklisted
   // rows are touched. The explicit blocklist exclusion is required (not just
   // the hidden=false gate) because this migration runs BEFORE the blocklist
@@ -96,7 +97,7 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
     UPDATE stations
     SET
       era_genre_mode = true,
-      hidden         = true
+      hidden         = false
     WHERE hidden = false
       AND (sleep_mode IS NULL OR sleep_mode = false)
       AND slug NOT IN (${fipSlugList})
@@ -115,6 +116,19 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
       AND LOWER(name) LIKE ANY (${blocklistLikeArray})
   `);
   const repaired = (repairResult as { rowCount?: number }).rowCount ?? 0;
+
+  // Restore rows hidden by the retired era/genre listener pool. Sleep,
+  // inactive, and permanent-blocklist rows retain their existing behavior.
+  const unhideResult = await db.execute<{ rowcount: string }>(sql`
+    UPDATE stations
+    SET hidden = false
+    WHERE era_genre_mode = true
+      AND active = true
+      AND hidden = true
+      AND (sleep_mode IS NULL OR sleep_mode = false)
+      AND LOWER(name) NOT LIKE ALL (${blocklistLikeArray})
+  `);
+  const unhidden = (unhideResult as { rowCount?: number }).rowCount ?? 0;
 
   // Step 3: FIP thematic sub-channels — mode flag on, hidden set FALSE so
   // their pollers keep running and spin ingestion continues (hidden = soft-hide
@@ -142,6 +156,7 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
       migration: "applyEraGenreStationsMigration",
       affectedRows: affected + fipAffected,
       nameMatched: affected,
+      specialistRowsRestored: unhidden,
       fipSlugs: fipAffected,
       blocklistRepaired: repaired,
     }),

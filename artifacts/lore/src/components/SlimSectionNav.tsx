@@ -1,10 +1,5 @@
 import { Link, useLocation } from "wouter";
 import { useSleepMode, recordWordmarkTap } from "../lib/sleepMode";
-import {
-  useEraGenreMode,
-  recordWordmarkPressStart,
-  recordWordmarkPressEnd,
-} from "../lib/eraGenreMode";
 
 type Section = "lore" | "heard" | "library" | "index";
 
@@ -53,7 +48,6 @@ export function SlimSectionNav({
   const onSplitHome = location === "/" || location === "";
   const loreHref = onSplitHome ? "/feed" : "/";
   const { enabled: sleepEnabled, toggle: toggleSleep } = useSleepMode();
-  const { enabled: eraGenreEnabled, toggle: toggleEraGenre } = useEraGenreMode();
   const moon = sleepEnabled ? (
     <button
       type="button"
@@ -70,29 +64,6 @@ export function SlimSectionNav({
       ☾
     </button>
   ) : null;
-  const vinyl = eraGenreEnabled ? (
-    <button
-      type="button"
-      className="era-genre-indicator"
-      aria-label="Era/Genre radio active — tap to exit"
-      title="Era/Genre radio"
-      data-testid="era-genre-vinyl"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleEraGenre();
-      }}
-    >
-      ◉
-    </button>
-  ) : null;
-  // Long-press on the [lore] wordmark toggles era/genre mode — distinct from
-  // the five-tap sleep gesture. Both attach to the same wordmark link.
-  const pressHandlers = {
-    onPointerDown: () => { recordWordmarkPressStart(); },
-    onPointerUp: () => { recordWordmarkPressEnd(); },
-    onPointerLeave: () => { recordWordmarkPressEnd(); },
-  } as const;
   if (variant === "bottom") {
     return (
       <nav className="bottom-nav" aria-label="Primary">
@@ -107,11 +78,9 @@ export function SlimSectionNav({
               data-section={section}
               aria-current={active ? "page" : undefined}
               onClick={section === "lore" ? () => { recordWordmarkTap(); } : undefined}
-              {...(section === "lore" ? pressHandlers : {})}
             >
               {label}
               {section === "lore" ? moon : null}
-              {section === "lore" ? vinyl : null}
             </Link>
           );
         })}
@@ -131,11 +100,9 @@ export function SlimSectionNav({
             data-section={section}
             aria-current={active ? "page" : undefined}
             onClick={section === "lore" ? () => { recordWordmarkTap(); } : undefined}
-            {...(section === "lore" ? pressHandlers : {})}
           >
             {label}
             {section === "lore" ? moon : null}
-            {section === "lore" ? vinyl : null}
           </Link>
         );
       })}

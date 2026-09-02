@@ -22,7 +22,6 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSocialMode } from "../lib/social";
 import { useSleepMode } from "../lib/sleepMode";
-import { useEraGenreMode } from "../lib/eraGenreMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
 import { DialCliBar, type MattCliStatus } from "./dial/DialCliBar";
@@ -1566,7 +1565,6 @@ export function DialView() {
   const [searchOpen, setSearchOpen] = useState(false);
   const { enabled: socialEnabled } = useSocialMode();
   const { enabled: sleepEnabled } = useSleepMode();
-  const { enabled: eraGenreEnabled } = useEraGenreMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
 
@@ -1580,7 +1578,7 @@ export function DialView() {
   const [activeTiers, setActiveTiers] = useState<Set<AgeTier>>(
     () => new Set(DEFAULT_ACTIVE_AGE_TIERS),
   );
-  // Anchor, Campus, and Public & Community are selected initially. Checking a
+  // Core, Campus, and Public & Community are selected initially. Checking a
   // category adds it to the filter set; unchecking removes it.
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
@@ -1594,7 +1592,7 @@ export function DialView() {
   const toggleCategory = useCallback((cat: StationCategory) => {
     setActiveCategories((prev) => toggleStationCategory(prev, cat));
   }, []);
-  const hiddenModeActive = sleepEnabled || eraGenreEnabled;
+  const hiddenModeActive = sleepEnabled;
 
   // ── Dial lens — Radio | Press exclusive views over the feed surface.
   // Local-first: persisted in localStorage like pins/journal, never on the
@@ -1662,9 +1660,8 @@ export function DialView() {
     applyNowPlayingOverride,
   } = useDialData(displayMode, {
     sleepMode: sleepEnabled,
-    eraGenreMode: eraGenreEnabled,
-    // Category-driven fetching only applies outside the hidden gesture modes:
-    // while sleep or era-genre is active the legacy single-mode flags win.
+    // Category-driven fetching only pauses for Sleep Radio. Specialist Radio
+    // is now a normal visible category rather than a hidden gesture mode.
     categories: hiddenModeActive ? undefined : activeCategories,
     // Scan lens needs the full curated list regardless of the category
     // filter; only fetch it while the lens is actually selected.

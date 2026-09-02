@@ -15,7 +15,7 @@
  *
  * Commands:
  *   /first /current /catalog /deep      → age-tier toggles
- *   /ambient /campus /specialist /anchor
+ *   /ambient /campus /specialist /core
  *   /public /indie /discovery           → station-category select (radio-style
  *                                         single-select — one active at a time)
  *   /lore                               → navigate home (NOT a category)

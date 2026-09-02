@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * useDialData — metadata-category filtering (/anchor, /campus, /public,
+ * useDialData — metadata-category filtering (/core, /campus, /public,
  * /indie, /discovery).
  *
  * These categories don't trigger extra server fetches: the hook filters the
@@ -82,7 +82,7 @@ describe("useDialData metadata-category filter", () => {
     );
   });
 
-  it("/anchor restricts tagged stations while preserving Other stations", () => {
+  it("/core restricts tagged stations while preserving Other stations", () => {
     expect(slugsFor(new Set(["anchor"]))).toEqual(["kexp", "no-cats", "nts-1"]);
   });
 

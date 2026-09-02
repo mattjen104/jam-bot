@@ -50,6 +50,19 @@ export function spinitronWebSourceForCallsign(
     ? "spinitron_web"
     : null;
 }
+
+/** User-reviewed additions to the listener-facing Core station category. */
+export const CORE_RADIO_ADDITION_SLUGS = [
+  "wfmu",
+  "fip-main",
+  "kcrw-eclectic24",
+  "wwoz",
+  "kutx",
+  "bbc-6music",
+  "rb-308a9f58-fb54-44dc-b95d-bb40fe4f3631",
+  "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f",
+] as const;
+
 export const SEED_STATIONS: InsertStation[] = [
   {
     slug: "kexp",
@@ -67,6 +80,51 @@ export const SEED_STATIONS: InsertStation[] = [
     nowPlayingConfig: {},
     stationClass: "community",
     sortOrder: 40,
+  },
+  {
+    slug: "wwoz",
+    tags: ["anchor"],
+    name: "WWOZ 90.7 FM",
+    org: "WWOZ",
+    city: "New Orleans",
+    country: "US",
+    streamUrl: "https://www.wwoz.org/listen/hi",
+    streamQuality: "128kbps MP3",
+    streamFormat: "mp3",
+    homepageUrl: "https://www.wwoz.org/",
+    scheduleUrl: "https://www.wwoz.org/calendar/weekly",
+    donateUrl: "https://www.wwoz.org/donate",
+    // The verified stream is playable, but no sanctioned track-level source
+    // has been confirmed. Keep Core playback honest rather than parsing show
+    // labels as artist/title metadata.
+    nowPlayingSource: "radio_browser_icy",
+    nowPlayingConfig: { streamUrl: "https://www.wwoz.org/listen/hi" },
+    source: "curated",
+    tier: "longtail",
+    stationClass: "community",
+    automationClass: "human",
+    sortOrder: 41,
+  },
+  {
+    slug: "kutx",
+    tags: ["anchor"],
+    name: "KUTX 98.9 FM",
+    org: "KUTX",
+    city: "Austin",
+    country: "US",
+    streamUrl: "https://streams.kut.org/4428_56?aw_0_1st.playerid=kutx-web",
+    streamQuality: "56kbps AAC+",
+    streamFormat: "aac",
+    homepageUrl: "https://kutx.org/",
+    scheduleUrl: "https://kutx.org/schedule/",
+    donateUrl: "https://support.kut.org/",
+    nowPlayingSource: "radio_browser_icy",
+    nowPlayingConfig: { streamUrl: "https://streams.kut.org/4428_56?aw_0_1st.playerid=kutx-web" },
+    source: "curated",
+    tier: "longtail",
+    stationClass: "community",
+    automationClass: "human",
+    sortOrder: 42,
   },
   {
     slug: "kcrw-eclectic24",
@@ -120,6 +178,7 @@ export const SEED_STATIONS: InsertStation[] = [
   ...nprListStations(),
   ...indieInternetStations(),
   ...criShortlistStations(),
+  ...specialistAdditions(),
   ...canadianCampusStations(),
   ...spinitronJazzStations(),
   ...spinitronCanadianAdditions(),
@@ -478,6 +537,71 @@ function criShortlistStations(): InsertStation[] {
  * null and they are omitted from `ICY_HEALTH_SEEDS`. They are hidden from the
  * dial until a working now-playing source is identified and configured.
  */
+export const SPECIALIST_RADIO_SLUGS = [
+  "kiosk-radio", "lahmacun-radio", "oroko-radio", "lyl-radio",
+  "8ball-radio", "boxout-fm", "cashmere-radio",
+  "somafm-cliqhop", "somafm-lush", "somafm-sonicuniverse",
+  "somafm-suburbsofgoa", "kexp",
+  "dublab", "rinse-fm", "worldwide-fm", "refuge-worldwide",
+  "the-lot-radio", "radio-nopal", "nts-1", "nts-2",
+] as const;
+
+/** Net-new Specialist rows. Existing cohort members are promoted in place. */
+function specialistAdditions(): InsertStation[] {
+  const soma: Array<[string, string, string, string, string[]]> = [
+    ["somafm-cliqhop", "SomaFM — CliqHop IDM", "cliqhop", "https://ice2.somafm.com/cliqhop-128-mp3", ["idm", "experimental"]],
+    ["somafm-lush", "SomaFM — Lush", "lush", "https://ice1.somafm.com/lush-128-mp3", ["dream pop", "electronic"]],
+    ["somafm-sonicuniverse", "SomaFM — Sonic Universe", "sonicuniverse", "https://ice1.somafm.com/sonicuniverse-128-mp3", ["jazz", "avant-garde"]],
+    ["somafm-suburbsofgoa", "SomaFM — Suburbs of Goa", "suburbsofgoa", "https://ice1.somafm.com/suburbsofgoa-128-mp3", ["world", "electronic"]],
+  ];
+  return [
+    {
+      slug: "8ball-radio", name: "8Ball Radio", org: "8 Ball Community",
+      city: "New York", country: "US", streamUrl: "https://8ballradio.nyc/",
+      streamQuality: "Official browser player", streamFormat: "hls",
+      homepageUrl: "https://8ballradio.nyc/", scheduleUrl: "https://8ballradio.nyc/",
+      donateUrl: "https://8ballradio.nyc/", nowPlayingSource: null,
+      nowPlayingConfig: { playbackOnly: true }, source: "curated", tier: "longtail",
+      stationClass: "community", automationClass: "human",
+      tags: ["specialist", "experimental", "community"], favorite: true, sortOrder: 594,
+    },
+    {
+      slug: "boxout-fm", name: "Boxout FM", org: "Boxout FM",
+      city: "New Delhi", country: "IN", streamUrl: "https://boxout.fm/radio",
+      streamQuality: "Official browser player", streamFormat: "hls",
+      homepageUrl: "https://boxout.fm/", scheduleUrl: "https://boxout.fm/radio",
+      donateUrl: null, nowPlayingSource: null,
+      nowPlayingConfig: { playbackOnly: true }, source: "curated", tier: "longtail",
+      stationClass: "community", automationClass: "human",
+      tags: ["specialist", "electronic", "hip-hop", "world"], favorite: true, sortOrder: 595,
+    },
+    {
+      slug: "cashmere-radio", name: "Cashmere Radio", org: "Cashmere Radio e.V.",
+      city: "Berlin", country: "DE",
+      streamUrl: "https://cashmereradio.out.airtime.pro/cashmereradio_b",
+      streamQuality: "192kbps MP3", streamFormat: "mp3",
+      homepageUrl: "https://cashmereradio.com/", scheduleUrl: "https://cashmereradio.com/",
+      donateUrl: "https://spenden.twingle.de/cashmere-radio-e-v/cashmere-radio-e-v/tw5d9bb6d582cf7/page",
+      nowPlayingSource: null,
+      nowPlayingConfig: { playbackOnly: true, metadataLimitation: "programme-label-only" },
+      source: "curated", tier: "longtail", stationClass: "community",
+      automationClass: "human", tags: ["specialist", "experimental", "avant-garde"],
+      favorite: true, sortOrder: 596,
+    },
+    ...soma.map(([slug, name, channel, streamUrl, tags], index): InsertStation => ({
+      slug, name, org: "SomaFM", country: "US", streamUrl,
+      streamQuality: "128kbps MP3", streamFormat: "mp3",
+      homepageUrl: `https://somafm.com/${channel}/`,
+      scheduleUrl: `https://somafm.com/${channel}/played`,
+      donateUrl: "https://somafm.com/support/",
+      nowPlayingSource: "somafm", nowPlayingConfig: { channel },
+      source: "curated", tier: "longtail", stationClass: "curated",
+      automationClass: "automated", tags: ["specialist", ...tags],
+      favorite: true, hidden: false, sortOrder: 597 + index,
+    })),
+  ];
+}
+
 function canadianCampusStations(): InsertStation[] {
   return [
     {
@@ -741,6 +865,14 @@ const ICY_HEALTH_SEEDS: Array<{
   stationSlug: string;
   radioBrowserUuid: string;
 }> = [
+  {
+    stationSlug: "wwoz",
+    radioBrowserUuid: "9ceb61e8-5101-11e9-a4d7-52543be04c81",
+  },
+  {
+    stationSlug: "kutx",
+    radioBrowserUuid: "96652982-5b37-459f-b664-ea46abe8ce5e",
+  },
   {
     stationSlug: "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f",
     radioBrowserUuid: "b58a4aaa-d5be-4925-be71-f69d1cccc13f",
@@ -2560,6 +2692,26 @@ export async function seedStations(): Promise<void> {
           )`,
         );
     }
+  }
+
+  // Specialist is a normal visible category, not a second hidden pool.
+  // Promote by stable slug so existing Radio Browser identities and spins are
+  // retained. Permanent-removal tombstones always win.
+  for (const slug of SPECIALIST_RADIO_SLUGS) {
+    if (excludedSlugs.has(slug)) continue;
+    await db
+      .update(stationsTable)
+      .set({
+        active: true,
+        hidden: false,
+        eraGenreMode: true,
+        tags: sql`CASE WHEN ${stationsTable.tags} @> '["specialist"]'::jsonb
+          THEN ${stationsTable.tags}
+          ELSE COALESCE(${stationsTable.tags}, '[]'::jsonb) || '["specialist"]'::jsonb
+        END`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(stationsTable.slug, slug));
   }
 
   // ICY-polled curated stations additionally need a health row whose id is

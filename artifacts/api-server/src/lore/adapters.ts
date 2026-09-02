@@ -618,9 +618,21 @@ const somaFm: HistoryAdapter = async (config, opts) => {
   const body = await getJson(
     `https://somafm.com/songs/${encodeURIComponent(channel)}.json`,
   );
-  const parsed = parseSomaFmSongs(body, channel);
-  reportReview(opts, Array.isArray((body as { songs?: unknown }).songs) ? (body as { songs: unknown[] }).songs.length : 0, parsed.length);
-  return parsed;
+  const spins = parseSomaFmSongs(body, channel);
+  const filtered = (() => {
+    if (!opts?.before) return spins;
+    const before = new Date(opts.before);
+    if (Number.isNaN(before.getTime())) return [];
+    return spins.filter((spin) => !!spin.playedAt && spin.playedAt < before);
+  })();
+  reportReview(
+    opts,
+    Array.isArray((body as { songs?: unknown }).songs)
+      ? (body as { songs: unknown[] }).songs.length
+      : 0,
+    filtered.length,
+  );
+  return filtered;
 };
 
 // ---- KCRW (history via tracklist API, one current track) ----------------
@@ -1433,7 +1445,9 @@ export function supportsBackfill(
   source: string | null | undefined,
   config?: Record<string, unknown> | null,
 ): boolean {
-  if (source === "kexp_api" || source === "spinitron") return true;
+  if (source === "kexp_api" || source === "spinitron" || source === "somafm") {
+    return true;
+  }
   if (source === "station_history_json") {
     return config?.cursorMode === "time_anchor" && !!str(config.beforeParam);
   }

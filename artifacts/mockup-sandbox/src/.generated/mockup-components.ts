@@ -2,6 +2,7 @@
 type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/CompactTreeExplorer.tsx": () => import("../components/mockups/CompactTreeExplorer.tsx"),
+  "./components/mockups/lore-grayscale/LoreGrayscale.tsx": () => import("../components/mockups/lore-grayscale/LoreGrayscale.tsx"),
   "./components/mockups/lore-consolidated-v2/AlbumLorePanel.tsx": () => import("../components/mockups/lore-consolidated-v2/AlbumLorePanel.tsx"),
   "./components/mockups/lore-consolidated-v2/HomeScreen.tsx": () => import("../components/mockups/lore-consolidated-v2/HomeScreen.tsx"),
   "./components/mockups/lore-consolidated-v2/LoreChip.tsx": () => import("../components/mockups/lore-consolidated-v2/LoreChip.tsx"),

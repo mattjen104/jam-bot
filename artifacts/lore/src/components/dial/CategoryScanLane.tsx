@@ -1,6 +1,6 @@
 /**
  * CategoryScanLane — the Dial's Scan lens: one now-playing button per
- * station category (Campus Radio, Anchor Stations, Public & Community,
+ * station category (Campus Radio, Core Stations, Public & Community,
  * Specialist, Ambient & Sleep, Independent DJ, Discovery).
  *
  * Every category collapses to a single large button that rotates through the

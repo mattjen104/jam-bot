@@ -185,10 +185,16 @@ export async function isPickerOptedOut(pickerId: number): Promise<boolean> {
  */
 const ANCHOR_STATION_SLUGS = new Set([
   "kexp",
+  "wfmu",
   "nts-1",
   "nts-2",
   "bbc-6music",
   "fip-main",
+  "kcrw-eclectic24",
+  "wwoz",
+  "kutx",
+  "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f",
+  "rb-308a9f58-fb54-44dc-b95d-bb40fe4f3631",
   "dublab",
   "rinse-fm",
 ]);
@@ -223,9 +229,8 @@ const INDIE_STATION_SLUGS = new Set([
  *   3. "specialist" — genre/era/format-focused channels (era_genre_mode flag
  *                     or a `specialist` seed tag; e.g. FIP sub-channels,
  *                     decade radio).
- *   4. "anchor"     — broadly-programmed flagship stations (`anchor` tag or
- *                     slug allowlist: KEXP, NTS 1/2, BBC 6 Music, FIP main,
- *                     Dublab, Rinse FM).
+ *   4. "anchor"     — Core: broadly-programmed flagship stations (`anchor`
+ *                     tag or the reviewed Core slug allowlist).
  *   5. "public"     — non-campus terrestrial/nonprofit community stations
  *                     (`public` tag or slug allowlist: KCRW, WBGO, WPFW, …).
  *   6. "indie"      — web-native DJ/selector stations (`indie` tag or slug

@@ -6,7 +6,7 @@
  * The seven categories form a mutually exclusive editorial taxonomy — each
  * curated station has exactly one primary category, assigned server-side by
  * `deriveStationCategories` with the precedence:
- *   Ambient > Campus > Specialist > Anchor > Public & Community >
+ *   Ambient > Campus > Specialist > Core > Public & Community >
  *   Independent DJ > Discovery
  *
  * The category filter is an additive multi-select: any subset of categories
@@ -26,7 +26,7 @@ export type StationCategory =
 
 export const STATION_CATEGORY_DEFINITIONS: {
   cat: StationCategory;
-  command: `/${StationCategory}`;
+  command: `/${string}`;
   label: string;
   /**
    * Short listener-facing label used by the home category tab strip and its
@@ -38,7 +38,7 @@ export const STATION_CATEGORY_DEFINITIONS: {
   { cat: "ambient",    command: "/ambient",    label: "Ambient & Sleep",    shortLabel: "Ambient",    title: "Sleep, nature, drone, and white-noise utility channels" },
   { cat: "campus",     command: "/campus",     label: "Campus Radio",       shortLabel: "Campus",     title: "College and university-operated stations" },
   { cat: "specialist", command: "/specialist", label: "Specialist Radio",   shortLabel: "Specialist", title: "Genre, era, and format-focused channels — FIP Jazz, FIP Electro, decade radio" },
-  { cat: "anchor",     command: "/anchor",     label: "Anchor Stations",    shortLabel: "Anchor",     title: "Broadly-programmed flagship stations — KEXP, NTS, BBC 6 Music, FIP, Dublab, Rinse FM" },
+  { cat: "anchor",     command: "/core",       label: "Core Stations",      shortLabel: "Core",       title: "Lore flagships — KEXP, WFMU, NTS, FIP, KCRW, WWOZ, KUTX, BBC 6 Music, Radio AlHara, and KCHUNG" },
   { cat: "public",     command: "/public",     label: "Public & Community", shortLabel: "Public",     title: "Non-campus terrestrial and nonprofit stations with local programming — KCRW, WBGO, WDIY" },
   { cat: "indie",      command: "/indie",      label: "Independent DJ",     shortLabel: "Indie",      title: "Web-native DJ and selector stations — Worldwide FM, Refuge Worldwide, Balamii, The Lot Radio" },
   { cat: "discovery",  command: "/discovery",  label: "Discovery",          shortLabel: "Discovery",  title: "Long-tail stations that don't fit a stronger editorial category" },
@@ -60,7 +60,8 @@ export function stationCategoryShortLabel(cat: StationCategory): string {
  * server taxonomy — the first matching rule wins and a station gets at most
  * one category, keeping the taxonomy mutually exclusive.
  *
- * "anchor" is intentionally never assigned (anchor status is editorial, not
+ * The internal "anchor" key is retained for saved-filter/API compatibility;
+ * its listener-facing name is Core. It is intentionally never assigned
  * derivable from tags) and "discovery" is not used as a fallback: a personal
  * station whose tags match nothing gets [] and appears only when no category
  * filter is active.

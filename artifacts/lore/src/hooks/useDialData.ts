@@ -720,7 +720,7 @@ export type DialDisplayMode = "personal" | "blended";
  *  - "ambient"    — Ambient & Sleep utility channels (sleep server mode)
  *  - "campus"     — college/university-operated stations
  *  - "specialist" — genre/era/format-focused channels (era-genre server mode)
- *  - "anchor"     — broadly-programmed flagship stations
+ *  - "anchor"     — Core broadly-programmed flagship stations
  *  - "public"     — non-campus terrestrial/nonprofit community stations
  *  - "indie"      — web-native DJ/selector stations
  *  - "discovery"  — long-tail stations without a stronger editorial home
@@ -748,7 +748,7 @@ export function useDialData(
      * contributes its stations to a union (deduplicated by station id):
      *  - Ambient = sleep server mode list
      *  - Specialist = era-genre server mode list
-     *  - Anchor/Campus/Public/Indie/Discovery = client-side filter on the
+     *  - Core/Campus/Public/Indie/Discovery = client-side filter on the
      *    normal Lore list (no extra server fetch needed)
      * The empty set applies no filter (all stations). When omitted the legacy
      * single-mode sleepMode/eraGenreMode flags apply.

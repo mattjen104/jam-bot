@@ -86,16 +86,22 @@ describe("deriveStationCategories", () => {
     expect(deriveStationCategories(makeStation({ tags: ["specialist"] }))).toEqual(["specialist"]);
   });
 
-  it("classifies anchor stations by tag or slug allowlist", () => {
+  it("classifies Core stations by the compatible anchor tag or slug allowlist", () => {
     expect(deriveStationCategories(makeStation({ tags: ["anchor"] }))).toEqual(["anchor"]);
-    for (const slug of ["kexp", "nts-1", "nts-2", "bbc-6music", "fip-main", "dublab", "rinse-fm"]) {
+    for (const slug of [
+      "kexp", "wfmu", "nts-1", "nts-2", "bbc-6music", "fip-main",
+      "kcrw-eclectic24", "wwoz", "kutx",
+      "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f",
+      "rb-308a9f58-fb54-44dc-b95d-bb40fe4f3631",
+      "dublab", "rinse-fm",
+    ]) {
       expect(deriveStationCategories(makeStation({ slug }))).toEqual(["anchor"]);
     }
   });
 
   it("classifies public/community stations by tag or slug allowlist", () => {
     expect(deriveStationCategories(makeStation({ tags: ["public"] }))).toEqual(["public"]);
-    for (const slug of ["kcrw-eclectic24", "wbgo", "wpfw", "wdiy", "ckua"]) {
+    for (const slug of ["wbgo", "wpfw", "wdiy", "ckua"]) {
       expect(deriveStationCategories(makeStation({ slug }))).toEqual(["public"]);
     }
   });
