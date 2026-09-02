@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  ADAPTER_REGISTRY_SOURCE_FAMILIES,
   parseBbcSegments,
   parseFipSteps,
+  parseHistoryJson,
+  parseHistoryJsonLd,
+  parseHistoryRss,
   parseIcyNowPlaying,
   parseKcrwTrack,
   parseKexpPlays,
@@ -36,6 +40,9 @@ type ReplayParser =
   | "radiojar"
   | "spinitron_web"
   | "lot_radio_schedule"
+  | "history_json"
+  | "history_rss"
+  | "history_jsonld"
   | "quality";
 
 interface ReplayFixture {
@@ -140,6 +147,30 @@ function runParser(fixture: ReplayFixture): unknown {
       const input = fixture.input as { rsc: string; now: string };
       return parseLotRadioSchedule(input.rsc, new Date(input.now));
     }
+    case "history_json": {
+      const input = fixture.input as {
+        body: unknown;
+        config: Record<string, unknown>;
+        sourceUrl: string;
+      };
+      return parseHistoryJson(input.body, input.config, input.sourceUrl);
+    }
+    case "history_rss": {
+      const input = fixture.input as {
+        xml: string;
+        config: Record<string, unknown>;
+        sourceUrl: string;
+      };
+      return parseHistoryRss(input.xml, input.config, input.sourceUrl);
+    }
+    case "history_jsonld": {
+      const input = fixture.input as {
+        html: string;
+        config: Record<string, unknown>;
+        sourceUrl: string;
+      };
+      return parseHistoryJsonLd(input.html, input.config, input.sourceUrl);
+    }
     case "quality": {
       const input = fixture.input as {
         artist: string | null;
@@ -175,6 +206,29 @@ function emptyCounts(): SourceCounts {
 describe("reviewed station metadata replay corpus", () => {
   it("covers every source family and enforces the reviewed precision bar", () => {
     expect(corpus.length).toBeGreaterThanOrEqual(30);
+
+    const corpusSources = new Set(corpus.map((fixture) => fixture.source));
+    const missingSources = [
+      ...ADAPTER_REGISTRY_SOURCE_FAMILIES.nowPlaying.map((source) => ({
+        family: "now-playing",
+        source,
+      })),
+      ...ADAPTER_REGISTRY_SOURCE_FAMILIES.history.map((source) => ({
+        family: "history",
+        source,
+      })),
+    ]
+      .filter(({ source }) => !corpusSources.has(source))
+      .map(({ family, source }) => `${family} source "${source}"`);
+
+    expect(
+      missingSources,
+      [
+        "Every registered station metadata adapter must have a reviewed replay fixture family.",
+        `Missing: ${missingSources.join(", ") || "(none)"}`,
+        "Add accepted, rejected, and unknown examples as appropriate; see artifacts/api-server/test/fixtures/metadata-replay.md.",
+      ].join("\n"),
+    ).toEqual([]);
 
     const counts = new Map<string, SourceCounts>();
     const extracted: string[] = [];

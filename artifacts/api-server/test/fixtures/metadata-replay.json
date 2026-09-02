@@ -290,6 +290,123 @@
     "expected": { "status": "unknown", "artist": "Late Show", "title": "Live Session", "quality": "usable_pair", "reason": "show_only" }
   },
   {
+    "id": "station-history-json-clean",
+    "source": "station_history_json",
+    "surface": "configured station JSON history",
+    "context": "A station publishes a recent-play array with configured identity and timestamp paths.",
+    "parser": "history_json",
+    "input": {
+      "sourceUrl": "https://station.example.test/history.json",
+      "config": { "itemsPath": "plays", "artistPath": "artist", "titlePath": "title", "idPath": "id", "playedAtPath": "played_at", "sourceKey": "example-json" },
+      "body": { "plays": [ { "artist": "Floating Points", "title": "Birth4000", "id": "json-1", "played_at": "2026-07-09T17:55:00Z" } ] }
+    },
+    "expected": { "status": "accepted", "artist": "Floating Points", "title": "Birth4000", "quality": "usable_pair" }
+  },
+  {
+    "id": "station-history-json-junk",
+    "source": "station_history_json",
+    "surface": "configured station JSON history",
+    "context": "The source's configured fields contain an advertising domain, which the shared classifier rejects.",
+    "parser": "history_json",
+    "input": {
+      "sourceUrl": "https://station.example.test/history.json",
+      "config": { "itemsPath": "plays", "artistPath": "artist", "titlePath": "title", "idPath": "id", "sourceKey": "example-json" },
+      "body": { "plays": [ { "artist": "wellsfargo.com", "title": "Some Song", "id": "json-junk" } ] }
+    },
+    "expected": { "status": "rejected", "artist": "wellsfargo.com", "title": "Some Song", "quality": "junk_metadata", "reason": "domain_ad_value" }
+  },
+  {
+    "id": "station-history-json-incomplete",
+    "source": "station_history_json",
+    "surface": "configured station JSON history",
+    "context": "Schema drift removes the configured title field.",
+    "parser": "history_json",
+    "input": {
+      "sourceUrl": "https://station.example.test/history.json",
+      "config": { "itemsPath": "plays", "artistPath": "artist", "titlePath": "title", "idPath": "id", "sourceKey": "example-json" },
+      "body": { "plays": [ { "artist": "Artist Only", "id": "json-missing-title" } ] }
+    },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "missing_title" }
+  },
+  {
+    "id": "station-history-rss-clean",
+    "source": "station_history_rss",
+    "surface": "configured station RSS history",
+    "context": "A station publishes a standard RSS item with configured artist/title paths.",
+    "parser": "history_rss",
+    "input": {
+      "sourceUrl": "https://station.example.test/history.rss",
+      "config": { "artistPath": "artist", "titlePath": "title", "idPath": "guid", "playedAtPath": "pubDate", "sourceKey": "example-rss" },
+      "xml": "<rss><channel><item><artist>Khruangbin</artist><title>Time (You and I)</title><guid>rss-1</guid><pubDate>Thu, 09 Jul 2026 17:55:00 GMT</pubDate></item></channel></rss>"
+    },
+    "expected": { "status": "accepted", "artist": "Khruangbin", "title": "Time (You and I)", "quality": "usable_pair" }
+  },
+  {
+    "id": "station-history-rss-junk",
+    "source": "station_history_rss",
+    "surface": "configured station RSS history",
+    "context": "The RSS feed exposes a sponsor domain in a configured metadata field.",
+    "parser": "history_rss",
+    "input": {
+      "sourceUrl": "https://station.example.test/history.rss",
+      "config": { "artistPath": "artist", "titlePath": "title", "idPath": "guid", "sourceKey": "example-rss" },
+      "xml": "<rss><channel><item><artist>wellsfargo.com</artist><title>Some Song</title><guid>rss-junk</guid></item></channel></rss>"
+    },
+    "expected": { "status": "rejected", "artist": "wellsfargo.com", "title": "Some Song", "quality": "junk_metadata", "reason": "domain_ad_value" }
+  },
+  {
+    "id": "station-history-rss-incomplete",
+    "source": "station_history_rss",
+    "surface": "configured station RSS history",
+    "context": "An RSS item is missing its configured title element.",
+    "parser": "history_rss",
+    "input": {
+      "sourceUrl": "https://station.example.test/history.rss",
+      "config": { "artistPath": "artist", "titlePath": "title", "idPath": "guid", "sourceKey": "example-rss" },
+      "xml": "<rss><channel><item><artist>Artist Only</artist><guid>rss-missing-title</guid></item></channel></rss>"
+    },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "missing_title" }
+  },
+  {
+    "id": "station-history-jsonld-clean",
+    "source": "station_history_jsonld",
+    "surface": "configured station JSON-LD history",
+    "context": "A station page embeds a structured ItemList of recent plays.",
+    "parser": "history_jsonld",
+    "input": {
+      "sourceUrl": "https://station.example.test/history",
+      "config": { "itemsPath": "itemListElement", "artistPath": "artist", "titlePath": "title", "idPath": "id", "sourceKey": "example-jsonld" },
+      "html": "<html><script type=\"application/ld+json\">{\"@type\":\"ItemList\",\"itemListElement\":[{\"artist\":\"Little Simz\",\"title\":\"Gorilla\",\"id\":\"jsonld-1\"}]}</script></html>"
+    },
+    "expected": { "status": "accepted", "artist": "Little Simz", "title": "Gorilla", "quality": "usable_pair" }
+  },
+  {
+    "id": "station-history-jsonld-junk",
+    "source": "station_history_jsonld",
+    "surface": "configured station JSON-LD history",
+    "context": "Structured metadata contains a sponsor domain, which is rejected by the shared classifier.",
+    "parser": "history_jsonld",
+    "input": {
+      "sourceUrl": "https://station.example.test/history",
+      "config": { "itemsPath": "itemListElement", "artistPath": "artist", "titlePath": "title", "idPath": "id", "sourceKey": "example-jsonld" },
+      "html": "<html><script type=\"application/ld+json\">{\"itemListElement\":[{\"artist\":\"wellsfargo.com\",\"title\":\"Some Song\",\"id\":\"jsonld-junk\"}]}</script></html>"
+    },
+    "expected": { "status": "rejected", "artist": "wellsfargo.com", "title": "Some Song", "quality": "junk_metadata", "reason": "domain_ad_value" }
+  },
+  {
+    "id": "station-history-jsonld-incomplete",
+    "source": "station_history_jsonld",
+    "surface": "configured station JSON-LD history",
+    "context": "Structured metadata remains valid but no longer contains the configured title field.",
+    "parser": "history_jsonld",
+    "input": {
+      "sourceUrl": "https://station.example.test/history",
+      "config": { "itemsPath": "itemListElement", "artistPath": "artist", "titlePath": "title", "idPath": "id", "sourceKey": "example-jsonld" },
+      "html": "<html><script type=\"application/ld+json\">{\"itemListElement\":[{\"artist\":\"Artist Only\",\"id\":\"jsonld-missing-title\"}]}</script></html>"
+    },
+    "expected": { "status": "unknown", "artist": null, "title": null, "quality": "empty_metadata", "reason": "missing_title" }
+  },
+  {
     "id": "quality-junk-domain",
     "source": "metadata_quality",
     "surface": "shared classifier",

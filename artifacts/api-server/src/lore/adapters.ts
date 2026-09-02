@@ -1414,6 +1414,16 @@ const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {
   station_history_jsonld: stationHistoryJsonLd,
 };
 
+/**
+ * Source keys are intentionally derived from the registries rather than
+ * duplicated in tests or documentation. The metadata replay gate uses this
+ * inventory to require reviewed fixtures whenever a new adapter is added.
+ */
+export const ADAPTER_REGISTRY_SOURCE_FAMILIES = {
+  nowPlaying: Object.freeze(Object.keys(NOW_PLAYING_ADAPTERS)),
+  history: Object.freeze(Object.keys(HISTORY_ADAPTERS)),
+} as const;
+
 /** Look up a now-playing (change-detection) adapter, or null. */
 export function getNowPlayingAdapter(
   source: string | null | undefined,

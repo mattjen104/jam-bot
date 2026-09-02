@@ -17,6 +17,19 @@ tokens, private station data, or production identifiers.
   values must not count toward accepted music pairs.
 - Parser errors are always regressions and must remain at zero.
 
+## Adapter coverage
+
+The replay gate derives the required source families from both adapter
+registries. Every registered now-playing or history source must have at least
+one fixture with the matching `source` value, or the server test gate fails and
+names the missing source here.
+
+When adding a source, add a reviewed fixture family that demonstrates accepted
+music metadata, rejected junk where the source can emit it, and unknown or
+incomplete values where the source can be silent or malformed. Keep the
+examples sanitized and source-shaped; do not add production payloads or use
+replay output to write history.
+
 The replay test prints accepted music pairs, rejected junk, incomplete/empty
 observations, parser errors, extracted fields, and rejection reasons for each
 source family. Add a fixture when a source adapter or metadata-quality rule
