@@ -12964,51 +12964,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   box-sizing: border-box;
 }
 .front-door-header__intro { min-width: 0; }
-.front-door-header__post-import {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-}
-.front-door-header__post-import-label {
-  color: hsl(var(--dim));
-  font: 600 10px/1.2 var(--app-font-mono);
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-.front-door-add-artists {
-  appearance: none;
-  border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  padding: 8px 12px;
-  background: hsl(var(--card) / .72);
-  color: hsl(var(--foreground));
-  cursor: pointer;
-  font: 600 10px/1 var(--app-font-mono);
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-.front-door-add-artists:hover,
-.front-door-add-artists:focus-visible {
-  border-color: hsl(var(--foreground) / .65);
-  outline: 2px solid hsl(var(--accent) / .35);
-  outline-offset: 3px;
-}
-.front-door-artist-seeds {
-  display: flex;
-  flex-basis: 100%;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.front-door-artist-seeds span {
-  border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  padding: 5px 9px;
-  color: hsl(var(--dim));
-  font: 10px/1 var(--app-font-mono);
-}
 .minimal-radio-card__eyebrow,
 .minimal-radio__preset-label,
 .minimal-radio__remote-label {
@@ -13052,42 +13007,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .minimal-radio__presets button.is-active {
   background: hsl(var(--foreground));
   color: hsl(var(--background));
-}
-.front-door-architect {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: hsl(var(--faint));
-  font: 600 9px/1 var(--app-font-mono);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.front-door-architect__options {
-  display: inline-flex;
-  border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  padding: 2px;
-  background: hsl(var(--card) / .55);
-}
-.front-door-architect__options button {
-  min-height: 25px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 8px;
-  background: transparent;
-  color: hsl(var(--faint));
-  cursor: pointer;
-  font: inherit;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-.front-door-architect__options button.is-active {
-  background: hsl(var(--foreground) / .14);
-  color: hsl(var(--foreground));
-}
-.front-door-architect__options button:focus-visible {
-  outline: 2px solid hsl(var(--accent) / .5);
-  outline-offset: 2px;
 }
 .front-door-subtitle__button {
   appearance: none;
@@ -13761,13 +13680,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
     flex-direction: column;
     gap: 0;
     padding-bottom: 12px;
-  }
-  .front-door-architect {
-    align-self: flex-start;
-    margin-top: 10px;
-  }
-  .front-door-header__post-import {
-    gap: 8px 10px;
   }
   .front-door-modes {
     position: fixed;

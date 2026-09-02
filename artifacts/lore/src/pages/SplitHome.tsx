@@ -23,7 +23,6 @@ import {
 import type { StationCategory } from "../lib/dialCategories";
 
 type FrontDoorMode = "radio" | "library";
-type FrontDoorExperience = "onboarding" | "post-import";
 
 function readFrontDoorMode(): FrontDoorMode {
   try {
@@ -41,30 +40,11 @@ function writeFrontDoorMode(mode: FrontDoorMode): void {
   }
 }
 
-function readFrontDoorExperience(): FrontDoorExperience {
-  try {
-    return localStorage.getItem("lore:frontDoorExperience") === "post-import"
-      ? "post-import"
-      : "onboarding";
-  } catch {
-    return "onboarding";
-  }
-}
-
-function writeFrontDoorExperience(experience: FrontDoorExperience): void {
-  try {
-    localStorage.setItem("lore:frontDoorExperience", experience);
-  } catch {
-    // A private browsing context should not prevent the front door loading.
-  }
-}
-
 export default function SplitHome() {
   const { visibleSeeds, addSeed, replaceSeeds } = useSeedManager();
   const { data: appConfig } = useAppConfig();
   const showArchiveNav = appConfig?.listenerArchiveNavEnabled === true;
   const [mode, setMode] = useState<FrontDoorMode>(readFrontDoorMode);
-  const [experience, setExperience] = useState<FrontDoorExperience>(readFrontDoorExperience);
   const [lens, setLens] = useState<HomeLens>(readHomeLens);
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
@@ -83,12 +63,6 @@ export default function SplitHome() {
   const changeMode = useCallback((next: FrontDoorMode) => {
     setMode(next);
     writeFrontDoorMode(next);
-  }, []);
-
-  const changeExperience = useCallback((next: FrontDoorExperience) => {
-    setExperience(next);
-    writeFrontDoorExperience(next);
-    setArtistDocumentOpen(false);
   }, []);
 
   const handleSetLens = useCallback((newLens: HomeLens) => {
@@ -179,45 +153,22 @@ export default function SplitHome() {
     <main className="split-home split-home--front-door">
       <div className="split-home__front-door-shell">
         <header className="front-door-header">
-          {experience === "onboarding" ? (
-            <div className="front-door-header__intro">
-              <h1>Your records are on the radio right now.</h1>
-              <p className="front-door-subtitle">
-                <button
-                  type="button"
-                  className="front-door-subtitle__button"
-                  onClick={() => setArtistDocumentOpen((open) => !open)}
-                  aria-expanded={artistDocumentOpen}
-                  aria-controls="front-door-artist-document"
-                  data-testid="front-door-add-artists"
-                >
-                  Add albums
-                </button>{" "}
-                to see which stations cross your library.
-              </p>
-            </div>
-          ) : (
-            <div className="front-door-header__post-import" data-testid="front-door-post-import">
-              <div className="front-door-header__post-import-label">Post Matt import</div>
+          <div className="front-door-header__intro">
+            <h1>Your records are on the radio right now.</h1>
+            <p className="front-door-subtitle">
               <button
                 type="button"
-                className="front-door-add-artists"
+                className="front-door-subtitle__button"
                 onClick={() => setArtistDocumentOpen((open) => !open)}
                 aria-expanded={artistDocumentOpen}
                 aria-controls="front-door-artist-document"
-                data-testid="front-door-post-import-add-artists"
+                data-testid="front-door-add-artists"
               >
-                Add artists
-              </button>
-              {visibleSeeds.length > 0 ? (
-                <div className="front-door-artist-seeds" aria-label="Your artists">
-                  {visibleSeeds.map((artist) => (
-                    <span key={artist}>{artist}</span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          )}
+                Add albums
+              </button>{" "}
+              to see which stations cross your library.
+            </p>
+          </div>
           <nav className="front-door-modes" aria-label="Front door mode">
             <button
               type="button"
@@ -238,31 +189,6 @@ export default function SplitHome() {
               Library
             </button>
           </nav>
-          {import.meta.env.DEV ? (
-            <div className="front-door-architect" data-testid="front-door-architect-toggle">
-              <span className="front-door-architect__label">Architect preview</span>
-              <div className="front-door-architect__options" role="group" aria-label="Front door experience">
-                <button
-                  type="button"
-                  className={experience === "onboarding" ? "is-active" : ""}
-                  aria-pressed={experience === "onboarding"}
-                  onClick={() => changeExperience("onboarding")}
-                  data-testid="front-door-experience-onboarding"
-                >
-                  Onboarding
-                </button>
-                <button
-                  type="button"
-                  className={experience === "post-import" ? "is-active" : ""}
-                  aria-pressed={experience === "post-import"}
-                  onClick={() => changeExperience("post-import")}
-                  data-testid="front-door-experience-post-import"
-                >
-                  Post import
-                </button>
-              </div>
-            </div>
-          ) : null}
         </header>
 
         {artistDocumentOpen ? (
