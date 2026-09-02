@@ -6,6 +6,7 @@
  * batch fetch the caller already needs to do. Degrades to nulls/unknown
  * rather than fabricating a genre or a score from partial data.
  */
+import { isJunkArtistValue, isJunkMetadata } from "./icy.js";
 
 export interface GenreCount {
   genre: string;
@@ -19,6 +20,262 @@ export interface GenreBreakdown {
   unknownCount: number;
   /** Total tracks considered (resolved + unresolved). */
   totalCount: number;
+}
+
+export type StationReadinessTier = "ready" | "provisional" | "insufficient";
+
+export interface StationRecentProfile {
+  windowDays: 90;
+  sampleSize: number;
+  resolvedCount: number;
+  uniqueTrackCount: number;
+  uniqueArtistCount: number;
+  resolutionRate: number;
+  genreTaggedCount: number;
+  genreCoverage: number;
+  datedTrackCount: number;
+  datedTrackCoverage: number;
+  excludedCount: number;
+  top: GenreCount[];
+  unknownGenreCount: number;
+  latestSpinAt: string | null;
+  updatedAt: string;
+  readinessTier: StationReadinessTier;
+}
+
+export interface StationFreshnessSignal {
+  windowDays: 30;
+  sampleSize: number;
+  resolvedCount: number;
+  resolutionRate: number;
+  latestSpinAt: string | null;
+  hasRecentUsableSpin: boolean;
+  updatedAt: string;
+}
+
+export interface RecentStationSpinRow {
+  mbid: string | null;
+  artistMbid: string | null;
+  artist: string | null;
+  title: string | null;
+  rawArtist: string | null;
+  rawTitle: string | null;
+  showName: string | null;
+  djName: string | null;
+  genres: string[] | null;
+  releaseYear: number | null;
+  playedAt: Date;
+}
+
+const MIN_READY_RESOLVED = 50;
+const MIN_READY_TRACKS = 40;
+const MIN_READY_ARTISTS = 30;
+const MIN_PROVISIONAL_RESOLVED = 20;
+const MIN_PROVISIONAL_TRACKS = 15;
+const MIN_PROVISIONAL_ARTISTS = 10;
+const MIN_READY_GENRE_TAGGED = 10;
+const MIN_READY_GENRE_SUPPORT = 3;
+const MAX_MATERIAL_EXCLUSION_RATE = 0.5;
+
+const POLLUTED_GENRES = new Set([
+  "",
+  "unknown",
+  "unknown genre",
+  "n/a",
+  "na",
+  "none",
+  "null",
+  "undefined",
+]);
+
+/** Reject obvious placeholders before genre counts become listener-facing. */
+export function isSupportedGenre(value: string): boolean {
+  const genre = value.trim().toLowerCase();
+  if (POLLUTED_GENRES.has(genre)) return false;
+  if (genre.length > 80 || !/\p{L}/u.test(genre)) return false;
+  if (/^(?:https?:\/\/|www\.)/i.test(genre)) return false;
+  return true;
+}
+
+function normalized(value: string | null | undefined): string {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+/**
+ * A resolved row can still be unusable evidence when its raw artist is a
+ * station/show label. Keep this predicate pure so the job and tests share the
+ * exact same gate.
+ */
+export function isPollutedStationSpin(
+  row: Pick<
+    RecentStationSpinRow,
+    "artist" | "title" | "rawArtist" | "rawTitle" | "showName" | "djName"
+  >,
+  stationName?: string | null,
+): boolean {
+  const artist = row.rawArtist?.trim() || row.artist?.trim() || "";
+  const title = row.rawTitle?.trim() || row.title?.trim() || "";
+  if (!artist || !title) return true;
+  if (isJunkMetadata(artist, title) || isJunkArtistValue(artist)) return true;
+  const artistKey = normalized(artist);
+  const contextualLabels = [stationName, row.showName, row.djName]
+    .map(normalized)
+    .filter(Boolean);
+  if (contextualLabels.includes(artistKey)) return true;
+
+  // Avoid importing the ICY parser into the shared math module. These are the
+  // high-confidence pollution cases that matter for an already persisted spin.
+  if (artistKey === title.toLocaleLowerCase()) return true;
+  if (/^(?:unknown(?: artist)?|artist unknown|station id|automation|commercial|tba|various artists|n\/a|na|none|null|undefined)$/.test(artistKey)) {
+    return true;
+  }
+  if (/^(?:https?:\/\/|www\.)/i.test(artist) || /\.(?:com|net|org|fm|radio)\b/i.test(artist)) {
+    return true;
+  }
+  if (!/\p{L}/u.test(artist)) return true;
+  return false;
+}
+
+function uniqueGenreTags(rows: RecentStationSpinRow[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const genres = new Set(
+      (row.genres ?? [])
+        .map((genre) => genre.trim())
+        .filter(isSupportedGenre),
+    );
+    for (const genre of genres) {
+      counts.set(genre, (counts.get(genre) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+export function computeStationReadiness(
+  profile: Pick<
+    StationRecentProfile,
+    | "sampleSize"
+    | "resolvedCount"
+    | "uniqueTrackCount"
+    | "uniqueArtistCount"
+    | "genreTaggedCount"
+    | "excludedCount"
+      | "top"
+  >,
+  freshness: Pick<StationFreshnessSignal, "hasRecentUsableSpin">,
+): StationReadinessTier {
+  if (!freshness.hasRecentUsableSpin) return "insufficient";
+  const exclusionRate =
+    profile.sampleSize + profile.excludedCount === 0
+      ? 0
+      : profile.excludedCount / (profile.sampleSize + profile.excludedCount);
+  if (exclusionRate > MAX_MATERIAL_EXCLUSION_RATE) return "insufficient";
+
+  const representative =
+    profile.resolvedCount >= MIN_PROVISIONAL_RESOLVED &&
+    profile.uniqueTrackCount >= MIN_PROVISIONAL_TRACKS &&
+    profile.uniqueArtistCount >= MIN_PROVISIONAL_ARTISTS;
+  if (!representative) return "insufficient";
+
+  const supportedGenreCount = profile.top.filter(
+    ({ count }) => count >= MIN_READY_GENRE_SUPPORT,
+  ).length;
+  if (
+    profile.resolvedCount >= MIN_READY_RESOLVED &&
+    profile.uniqueTrackCount >= MIN_READY_TRACKS &&
+    profile.uniqueArtistCount >= MIN_READY_ARTISTS &&
+    profile.genreTaggedCount >= MIN_READY_GENRE_TAGGED &&
+    supportedGenreCount > 0
+  ) {
+    return "ready";
+  }
+  return "provisional";
+}
+
+/**
+ * Build the stored fact packet for one station's recent spins. The input is
+ * already window-bounded by the caller; unresolved rows stay in the sample
+ * denominator and polluted rows are excluded before every aggregate.
+ */
+export function computeRecentStationProfile(
+  rows: RecentStationSpinRow[],
+  options: {
+    stationName?: string | null;
+    now?: Date;
+    freshnessRows?: RecentStationSpinRow[];
+  } = {},
+): { profile: StationRecentProfile; freshness: StationFreshnessSignal } {
+  const now = options.now ?? new Date();
+  const cleanRows = rows.filter(
+    (row) => !isPollutedStationSpin(row, options.stationName),
+  );
+  const resolvedRows = cleanRows.filter((row) => row.mbid != null);
+  const trackIds = new Set(resolvedRows.map((row) => row.mbid!));
+  const artistIds = new Set(
+    resolvedRows
+      .map((row) => row.artistMbid ?? normalized(row.artist))
+      .filter(Boolean),
+  );
+  const genreCounts = uniqueGenreTags(resolvedRows);
+  const genreTaggedCount = resolvedRows.filter((row) =>
+    (row.genres ?? []).some(isSupportedGenre),
+  ).length;
+  const datedTrackCount = resolvedRows.filter((row) => row.releaseYear != null).length;
+  const latestSpin = cleanRows[0]
+    ? cleanRows.reduce((latest, row) =>
+      row.playedAt > latest.playedAt ? row : latest,
+    ).playedAt
+    : null;
+  const sampleSize = cleanRows.length;
+  const profileBase = {
+    windowDays: 90 as const,
+    sampleSize,
+    resolvedCount: resolvedRows.length,
+    uniqueTrackCount: trackIds.size,
+    uniqueArtistCount: artistIds.size,
+    resolutionRate: sampleSize === 0 ? 0 : resolvedRows.length / sampleSize,
+    genreTaggedCount,
+    genreCoverage: resolvedRows.length === 0 ? 0 : genreTaggedCount / resolvedRows.length,
+    datedTrackCount,
+    datedTrackCoverage: resolvedRows.length === 0 ? 0 : datedTrackCount / resolvedRows.length,
+    excludedCount: rows.length - cleanRows.length,
+    top: [...genreCounts.entries()]
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => b.count - a.count || a.genre.localeCompare(b.genre))
+      .slice(0, 8),
+    unknownGenreCount: resolvedRows.length - genreTaggedCount,
+    latestSpinAt: latestSpin?.toISOString() ?? null,
+    updatedAt: now.toISOString(),
+  };
+
+  const freshnessInput = options.freshnessRows ?? rows;
+  const cleanFreshnessRows = freshnessInput.filter(
+    (row) =>
+      row.playedAt >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) &&
+      !isPollutedStationSpin(row, options.stationName),
+  );
+  const resolvedFreshnessRows = cleanFreshnessRows.filter((row) => row.mbid != null);
+  const latestFreshness = cleanFreshnessRows.length > 0
+    ? cleanFreshnessRows.reduce((latest, row) =>
+      row.playedAt > latest.playedAt ? row : latest,
+    ).playedAt
+    : null;
+  const freshness: StationFreshnessSignal = {
+    windowDays: 30,
+    sampleSize: cleanFreshnessRows.length,
+    resolvedCount: resolvedFreshnessRows.length,
+    resolutionRate: cleanFreshnessRows.length === 0
+      ? 0
+      : resolvedFreshnessRows.length / cleanFreshnessRows.length,
+    latestSpinAt: latestFreshness?.toISOString() ?? null,
+    hasRecentUsableSpin: latestFreshness != null,
+    updatedAt: now.toISOString(),
+  };
+  const profile: StationRecentProfile = {
+    ...profileBase,
+    readinessTier: computeStationReadiness(profileBase, freshness),
+  };
+  return { profile, freshness };
 }
 
 /** Aggregate genre tags across a set of recordings into a ranked breakdown. */

@@ -6993,10 +6993,111 @@ components:
         station:
           $ref: "#/components/schemas/StationRef"
         insights:
-          $ref: "#/components/schemas/GenreInsights"
+          allOf:
+            - $ref: "#/components/schemas/GenreInsights"
+            - type: object
+              properties:
+                recentProfile:
+                  $ref: "#/components/schemas/StationRecentProfile"
+                  nullable: true
+                freshnessSignal:
+                  $ref: "#/components/schemas/StationFreshnessSignal"
+                  nullable: true
+                readinessTier:
+                  type: string
+                  enum: [ready, provisional, insufficient]
+              required: [recentProfile, freshnessSignal, readinessTier]
       required:
         - station
         - insights
+    StationRecentProfile:
+      type: object
+      description: Grounded station character facts from the rolling 90-day spin window.
+      properties:
+        windowDays:
+          type: integer
+          enum: [90]
+        sampleSize:
+          type: integer
+        resolvedCount:
+          type: integer
+        uniqueTrackCount:
+          type: integer
+        uniqueArtistCount:
+          type: integer
+        resolutionRate:
+          type: number
+        genreTaggedCount:
+          type: integer
+        genreCoverage:
+          type: number
+        datedTrackCount:
+          type: integer
+        datedTrackCoverage:
+          type: number
+        excludedCount:
+          type: integer
+        top:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenreCount"
+        unknownGenreCount:
+          type: integer
+        latestSpinAt:
+          type: ["string", "null"]
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        readinessTier:
+          type: string
+          enum: [ready, provisional, insufficient]
+      required:
+        - windowDays
+        - sampleSize
+        - resolvedCount
+        - uniqueTrackCount
+        - uniqueArtistCount
+        - resolutionRate
+        - genreTaggedCount
+        - genreCoverage
+        - datedTrackCount
+        - datedTrackCoverage
+        - excludedCount
+        - top
+        - unknownGenreCount
+        - latestSpinAt
+        - updatedAt
+        - readinessTier
+    StationFreshnessSignal:
+      type: object
+      description: Grounded station freshness facts from the rolling 30-day spin window.
+      properties:
+        windowDays:
+          type: integer
+          enum: [30]
+        sampleSize:
+          type: integer
+        resolvedCount:
+          type: integer
+        resolutionRate:
+          type: number
+        latestSpinAt:
+          type: ["string", "null"]
+          format: date-time
+        hasRecentUsableSpin:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - windowDays
+        - sampleSize
+        - resolvedCount
+        - resolutionRate
+        - latestSpinAt
+        - hasRecentUsableSpin
+        - updatedAt
     StationRunInsights:
       type: object
       properties:

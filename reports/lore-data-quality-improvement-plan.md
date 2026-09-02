@@ -136,6 +136,13 @@ Started in the first implementation slice:
 - Recompute when enough new evidence arrives rather than on every spin.
 - Keep existing cumulative profiles where they serve archive or discovery uses.
 
+### Current status
+
+- The insights worker now stores a separate rolling 90-day fact packet for every active station while preserving the cumulative archive profile.
+- A separate rolling 30-day freshness signal records whether any clean, usable artist/title evidence remains current.
+- Sample size, resolved count, unique track and artist breadth, resolution rate, genre and release-date coverage, exclusions, supported genres, and update timestamps are persisted.
+- The ready/provisional/insufficient tier is computed only from those stored facts. Station IDs, show/DJ labels, placeholders, URLs, and unsupported genre values are excluded before aggregation.
+
 ### Readiness gate
 
 A station is ready only when it has:

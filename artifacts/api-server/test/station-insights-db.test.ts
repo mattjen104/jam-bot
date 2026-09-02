@@ -34,6 +34,33 @@ const CACHED_PROFILE = {
   unknownCount: 3,
   totalCount: 60,
 };
+const RECENT_PROFILE = {
+  windowDays: 90 as const,
+  sampleSize: 80,
+  resolvedCount: 60,
+  uniqueTrackCount: 50,
+  uniqueArtistCount: 35,
+  resolutionRate: 0.75,
+  genreTaggedCount: 30,
+  genreCoverage: 0.5,
+  datedTrackCount: 45,
+  datedTrackCoverage: 0.75,
+  excludedCount: 2,
+  top: [{ genre: "shoegaze", count: 20 }],
+  unknownGenreCount: 30,
+  latestSpinAt: "2026-09-02T10:00:00.000Z",
+  updatedAt: "2026-09-02T12:00:00.000Z",
+  readinessTier: "ready" as const,
+};
+const FRESHNESS_SIGNAL = {
+  windowDays: 30 as const,
+  sampleSize: 24,
+  resolvedCount: 18,
+  resolutionRate: 0.75,
+  latestSpinAt: "2026-09-02T10:00:00.000Z",
+  hasRecentUsableSpin: true,
+  updatedAt: "2026-09-02T12:00:00.000Z",
+};
 
 beforeAll(async () => {
   try {
@@ -52,6 +79,8 @@ beforeAll(async () => {
         streamUrl: "http://example.invalid/si-cached",
         stationClass: "community",
         genreProfile: CACHED_PROFILE,
+        recentProfile: RECENT_PROFILE,
+        freshnessSignal: FRESHNESS_SIGNAL,
         // 82 => "new-music" per labelFromScore thresholds.
         discoveryScore: 82,
       },
@@ -118,6 +147,9 @@ type InsightsResponse = {
       sampleSize: number;
       unknownCount: number;
     };
+    recentProfile: typeof RECENT_PROFILE | null;
+    freshnessSignal: typeof FRESHNESS_SIGNAL | null;
+    readinessTier: "ready" | "provisional" | "insufficient";
   };
 };
 
@@ -142,6 +174,9 @@ describe("GET /api/stations/:slug/insights", () => {
     expect(body.insights.discoveryScore.label).toBe("new-music");
     // Not persisted — degraded, never fabricated.
     expect(body.insights.discoveryScore.medianAgeYears).toBeNull();
+    expect(body.insights.recentProfile).toEqual(RECENT_PROFILE);
+    expect(body.insights.freshnessSignal).toEqual(FRESHNESS_SIGNAL);
+    expect(body.insights.readinessTier).toBe("ready");
   });
 
   it("falls back to live aggregation for a never-scored station", async (ctx) => {
@@ -157,5 +192,8 @@ describe("GET /api/stations/:slug/insights", () => {
     // 2024 release aired now — brand new, so the live score is computable.
     expect(body.insights.discoveryScore.score).not.toBeNull();
     expect(body.insights.discoveryScore.sampleSize).toBe(1);
+    expect(body.insights.recentProfile).toBeNull();
+    expect(body.insights.freshnessSignal).toBeNull();
+    expect(body.insights.readinessTier).toBe("insufficient");
   });
 });

@@ -5,10 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { GenreInsights } from "./genreInsights";
+import type { StationInsightsInsights } from "./stationInsightsInsights";
 import type { StationRef } from "./stationRef";
 
 export interface StationInsights {
   station: StationRef;
-  insights: GenreInsights;
+  insights: StationInsightsInsights;
 }

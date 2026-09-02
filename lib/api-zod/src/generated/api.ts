@@ -1961,6 +1961,53 @@ export const GetStationInsightsResponse = zod.object({
     })
     .describe(
       "Combined genre breakdown + discovery score for a scope (station, run, DJ, or list).",
+    )
+    .and(
+      zod.object({
+        recentProfile: zod
+          .object({
+            windowDays: zod.literal(90),
+            sampleSize: zod.number(),
+            resolvedCount: zod.number(),
+            uniqueTrackCount: zod.number(),
+            uniqueArtistCount: zod.number(),
+            resolutionRate: zod.number(),
+            genreTaggedCount: zod.number(),
+            genreCoverage: zod.number(),
+            datedTrackCount: zod.number(),
+            datedTrackCoverage: zod.number(),
+            excludedCount: zod.number(),
+            top: zod.array(
+              zod.object({
+                genre: zod.string(),
+                count: zod.number(),
+              }),
+            ),
+            unknownGenreCount: zod.number(),
+            latestSpinAt: zod.string().datetime({}).nullable(),
+            updatedAt: zod.string().datetime({}),
+            readinessTier: zod.enum(["ready", "provisional", "insufficient"]),
+          })
+          .nullable()
+          .describe(
+            "Grounded station character facts from the rolling 90-day spin window.",
+          ),
+        freshnessSignal: zod
+          .object({
+            windowDays: zod.literal(30),
+            sampleSize: zod.number(),
+            resolvedCount: zod.number(),
+            resolutionRate: zod.number(),
+            latestSpinAt: zod.string().datetime({}).nullable(),
+            hasRecentUsableSpin: zod.boolean(),
+            updatedAt: zod.string().datetime({}),
+          })
+          .nullable()
+          .describe(
+            "Grounded station freshness facts from the rolling 30-day spin window.",
+          ),
+        readinessTier: zod.enum(["ready", "provisional", "insufficient"]),
+      }),
     ),
 });
 

@@ -362,6 +362,43 @@ export const stationsTable = pgTable("stations", {
     totalCount: number;
   }>(),
   /**
+   * Rolling 90-day station character evidence. Unlike genreProfile, this is
+   * bounded to recent observed spins and carries the complete fact packet
+   * needed to reproduce the sentence-readiness tier.
+   */
+  recentProfile: jsonb("recent_profile").$type<{
+    windowDays: 90;
+    sampleSize: number;
+    resolvedCount: number;
+    uniqueTrackCount: number;
+    uniqueArtistCount: number;
+    resolutionRate: number;
+    genreTaggedCount: number;
+    genreCoverage: number;
+    datedTrackCount: number;
+    datedTrackCoverage: number;
+    excludedCount: number;
+    top: Array<{ genre: string; count: number }>;
+    unknownGenreCount: number;
+    latestSpinAt: string | null;
+    updatedAt: string;
+    readinessTier: "ready" | "provisional" | "insufficient";
+  }>(),
+  /**
+   * Separate 30-day freshness evidence for the rolling station profile.
+   * `hasRecentUsableSpin` is stored so readiness is reproducible without a
+   * request-time clock comparison.
+   */
+  freshnessSignal: jsonb("freshness_signal").$type<{
+    windowDays: 30;
+    sampleSize: number;
+    resolvedCount: number;
+    resolutionRate: number;
+    latestSpinAt: string | null;
+    hasRecentUsableSpin: boolean;
+    updatedAt: string;
+  }>(),
+  /**
    * Best-effort excerpt (title/meta description) scraped from the station's
    * own homepage. Null when never scraped, blocked by robots.txt, or the page
    * had no usable text — never fabricated.

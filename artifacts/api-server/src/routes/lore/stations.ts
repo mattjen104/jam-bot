@@ -65,7 +65,11 @@ import {
 import { classifyFreshness } from "../../lore/freshness.js";
 import { pollStation } from "../../lore/poller.js";
 import { attachListener, isRelayAllowed } from "../../lore/stream-relay.js";
-import { computeGenreBreakdown, computeDiscoveryScore, labelFromScore } from "../../lore/genre-insights.js";
+import {
+  computeGenreBreakdown,
+  computeDiscoveryScore,
+  labelFromScore,
+} from "../../lore/genre-insights.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
 
@@ -1495,7 +1499,12 @@ router.get("/stations/:slug/insights", h(async (req, res) => {
     stationClass: station.stationClass,
   };
 
-  if (station.genreProfile != null || station.discoveryScore != null) {
+  if (
+    station.genreProfile != null ||
+    station.discoveryScore != null ||
+    station.recentProfile != null ||
+    station.freshnessSignal != null
+  ) {
     // Served from the persisted columns. The cached discovery score is just
     // the 0-100 number — medianAgeYears/sampleSize/unknownCount aren't
     // persisted, so they degrade to null/0 rather than being recomputed
@@ -1522,6 +1531,9 @@ router.get("/stations/:slug/insights", h(async (req, res) => {
                   sampleSize: 0,
                   unknownCount: 0,
                 },
+          recentProfile: station.recentProfile ?? null,
+          freshnessSignal: station.freshnessSignal ?? null,
+          readinessTier: station.recentProfile?.readinessTier ?? "insufficient",
         },
       }),
     );
@@ -1545,6 +1557,9 @@ router.get("/stations/:slug/insights", h(async (req, res) => {
         discoveryScore: computeDiscoveryScore(
           rows.map((r) => ({ releaseYear: r.releaseYear, airedAt: r.playedAt })),
         ),
+        recentProfile: null,
+        freshnessSignal: null,
+        readinessTier: "insufficient",
       },
     }),
   );

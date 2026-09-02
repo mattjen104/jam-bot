@@ -2117,9 +2117,84 @@ export interface GenreInsights {
   discoveryScore: DiscoveryScore;
 }
 
+export type StationInsightsInsightsReadinessTier =
+  (typeof StationInsightsInsightsReadinessTier)[keyof typeof StationInsightsInsightsReadinessTier];
+
+export const StationInsightsInsightsReadinessTier = {
+  ready: "ready",
+  provisional: "provisional",
+  insufficient: "insufficient",
+} as const;
+
+export type StationRecentProfileWindowDays =
+  (typeof StationRecentProfileWindowDays)[keyof typeof StationRecentProfileWindowDays];
+
+export const StationRecentProfileWindowDays = {
+  NUMBER_90: 90,
+} as const;
+
+export type StationRecentProfileReadinessTier =
+  (typeof StationRecentProfileReadinessTier)[keyof typeof StationRecentProfileReadinessTier];
+
+export const StationRecentProfileReadinessTier = {
+  ready: "ready",
+  provisional: "provisional",
+  insufficient: "insufficient",
+} as const;
+
+/**
+ * Grounded station character facts from the rolling 90-day spin window.
+ */
+export interface StationRecentProfile {
+  windowDays: StationRecentProfileWindowDays;
+  sampleSize: number;
+  resolvedCount: number;
+  uniqueTrackCount: number;
+  uniqueArtistCount: number;
+  resolutionRate: number;
+  genreTaggedCount: number;
+  genreCoverage: number;
+  datedTrackCount: number;
+  datedTrackCoverage: number;
+  excludedCount: number;
+  top: GenreCount[];
+  unknownGenreCount: number;
+  /** @nullable */
+  latestSpinAt: string | null;
+  updatedAt: string;
+  readinessTier: StationRecentProfileReadinessTier;
+}
+
+export type StationFreshnessSignalWindowDays =
+  (typeof StationFreshnessSignalWindowDays)[keyof typeof StationFreshnessSignalWindowDays];
+
+export const StationFreshnessSignalWindowDays = {
+  NUMBER_30: 30,
+} as const;
+
+/**
+ * Grounded station freshness facts from the rolling 30-day spin window.
+ */
+export interface StationFreshnessSignal {
+  windowDays: StationFreshnessSignalWindowDays;
+  sampleSize: number;
+  resolvedCount: number;
+  resolutionRate: number;
+  /** @nullable */
+  latestSpinAt: string | null;
+  hasRecentUsableSpin: boolean;
+  updatedAt: string;
+}
+
+export type StationInsightsInsights = GenreInsights & {
+  recentProfile: StationRecentProfile | null;
+  freshnessSignal: StationFreshnessSignal | null;
+  readinessTier: StationInsightsInsightsReadinessTier;
+};
+
 export interface StationInsights {
   station: StationRef;
-  insights: GenreInsights;
+  insights: StationInsightsInsights;
 }
 
 export interface StationRunInsights {

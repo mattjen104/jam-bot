@@ -7,8 +7,13 @@ import {
   pickersTable,
   picksTable,
 } from "@workspace/db";
-import { and, asc, eq, sql } from "drizzle-orm";
-import { computeDiscoveryScore, computeGenreBreakdown } from "./genre-insights.js";
+import { and, asc, eq, gte, sql } from "drizzle-orm";
+import {
+  computeDiscoveryScore,
+  computeGenreBreakdown,
+  computeRecentStationProfile,
+  type RecentStationSpinRow,
+} from "./genre-insights.js";
 
 /**
  * Cache insights (discovery score + cumulative genre profile) onto stations,
@@ -31,7 +36,11 @@ const WARMUP_MS = 45_000;
 
 async function scoreStationBatch(offset: number, limit: number): Promise<number> {
   const stations = await db
-    .select({ id: stationsTable.id, slug: stationsTable.slug })
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      name: stationsTable.name,
+    })
     .from(stationsTable)
     .where(eq(stationsTable.active, true))
     .orderBy(asc(stationsTable.id))
@@ -40,7 +49,8 @@ async function scoreStationBatch(offset: number, limit: number): Promise<number>
 
   for (const station of stations) {
     try {
-      const rows = await db
+      const now = new Date();
+      const cumulativeRows = await db
         .select({
           genres: recordingsTable.genres,
           releaseYear: recordingsTable.releaseYear,
@@ -48,18 +58,52 @@ async function scoreStationBatch(offset: number, limit: number): Promise<number>
         })
         .from(spinsTable)
         .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-        .where(and(eq(spinsTable.stationId, station.id)));
-
+        .where(eq(spinsTable.stationId, station.id));
+      const recentRows = await db
+        .select({
+          genres: recordingsTable.genres,
+          releaseYear: recordingsTable.releaseYear,
+          playedAt: spinsTable.playedAt,
+          mbid: spinsTable.mbid,
+          artistMbid: recordingsTable.artistMbid,
+          artist: recordingsTable.artist,
+          title: recordingsTable.title,
+          rawArtist: spinsTable.rawArtist,
+          rawTitle: spinsTable.rawTitle,
+          showName: showsTable.name,
+          djName: showsTable.djName,
+        })
+        .from(spinsTable)
+        .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+        .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+        .where(
+          and(
+            eq(spinsTable.stationId, station.id),
+            gte(spinsTable.playedAt, sql`now() - interval '90 days'`),
+          ),
+        );
       const discovery = computeDiscoveryScore(
-        rows.map((r) => ({ releaseYear: r.releaseYear, airedAt: r.playedAt })),
+        cumulativeRows
+          .filter((r): r is typeof r & { playedAt: Date } => r.playedAt != null)
+          .map((r) => ({ releaseYear: r.releaseYear, airedAt: r.playedAt })),
       );
-      const genreProfile = rows.length > 0 ? computeGenreBreakdown(rows) : null;
+      const genreProfile =
+        cumulativeRows.length > 0 ? computeGenreBreakdown(cumulativeRows) : null;
+      const recent = computeRecentStationProfile(
+        recentRows as RecentStationSpinRow[],
+        {
+          stationName: station.name,
+          now,
+        },
+      );
 
       await db
         .update(stationsTable)
         .set({
           discoveryScore: discovery.score,
           genreProfile,
+          recentProfile: recent.profile,
+          freshnessSignal: recent.freshness,
           updatedAt: sql`now()`,
         })
         .where(eq(stationsTable.id, station.id));
