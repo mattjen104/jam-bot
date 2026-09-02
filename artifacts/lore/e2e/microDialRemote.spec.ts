@@ -255,6 +255,26 @@ async function loadStationDial(
 }
 
 test.describe("Minimal Radio remote — real browser navigation", () => {
+  test("architect preview swaps onboarding and post-import front-door states", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installRoutes(page);
+    await page.goto("/lore/");
+
+    await expect(page.getByTestId("front-door-architect-toggle")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your records are on the radio right now." }))
+      .toBeVisible();
+
+    await page.getByTestId("front-door-experience-post-import").click();
+    await expect(page.getByTestId("front-door-post-import")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your records are on the radio right now." }))
+      .toHaveCount(0);
+    await expect(page.getByTestId("front-door-post-import-add-artists")).toBeVisible();
+
+    await page.getByTestId("front-door-experience-onboarding").click();
+    await expect(page.getByRole("heading", { name: "Your records are on the radio right now." }))
+      .toBeVisible();
+  });
+
   test("category overview groups live stations and scopes global history", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
