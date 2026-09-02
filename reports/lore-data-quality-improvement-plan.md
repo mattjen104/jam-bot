@@ -66,6 +66,13 @@ Aggregate spin volume must never substitute for per-station funnel coverage.
 
 ### Current status
 
+- Status-aware live text resolution now preserves transient failures for retry.
+- Historical unmatched-spin recovery now performs one bounded swap.
+- Recording search now selects the highest-scoring result with a deterministic tie-break.
+- Focused resolver and backfill tests cover these behaviors.
+- Probe, interval-poll, history-poll, and persistent-watcher paths now use one deterministic source-quality vocabulary.
+- Per-station/source attempts persist last response, last usable pair, last reason, source capability, and 30-day rolling outcome counts.
+- The source-coverage report exposes source capability separately from runtime health and gives every roster station an explicit healthy, recoverable, unsupported, or failing reason.
 - The insights worker now stores a separate rolling 90-day fact packet for every active station while preserving the cumulative archive profile.
 - A separate rolling 30-day freshness signal records whether any clean, usable artist/title evidence remains current.
 - Sample size, resolved count, unique track and artist breadth, resolution rate, genre and release-date coverage, exclusions, supported genres, and update timestamps are persisted.

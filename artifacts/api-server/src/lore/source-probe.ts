@@ -10,7 +10,6 @@ import {
   fetchIcyMetadata,
   resolveStreamUrl,
   parseStreamTitle,
-  isJunkMetadata,
   type IcyFetchResult,
 } from "./icy.js";
 import { clearIcyErrorBackoff } from "./adapters.js";
@@ -19,6 +18,12 @@ import {
   getSourceCoverageLedger,
   type SourceProbeOutcome,
 } from "./source-coverage.js";
+import {
+  classifyMetadataQuality,
+  recordMetadataQuality,
+  sourceCapabilityFor,
+  type MetadataQualityOutcome,
+} from "./metadata-quality.js";
 
 /**
  * Bounded, redirect-aware probes of a station's FREE public metadata
@@ -62,6 +67,8 @@ const PROBE_BUDGET_MS = 30_000;
 export interface ProbeResult {
   kind: "icy" | "radiojar";
   outcome: SourceProbeOutcome;
+  /** Canonical quality vocabulary shared with ordinary polling. */
+  qualityOutcome?: MetadataQualityOutcome;
   /** Human-readable detail (error message, what was observed). */
   detail?: string;
   /** Direct stream URL after redirect resolution (usable_pair only). */
@@ -133,9 +140,9 @@ function usablePair(
 ): { artist: string; title: string } | null {
   const artist = rawArtist?.trim() ?? "";
   const title = rawTitle?.trim() ?? "";
-  if (!artist || !title) return null;
-  if (artist === title) return null;
-  if (isJunkMetadata(artist, title)) return null;
+  if (classifyMetadataQuality(artist, title).outcome !== "usable_pair") {
+    return null;
+  }
   return { artist, title };
 }
 
@@ -158,6 +165,7 @@ export async function probeStationPublicMetadata(
       resolve({
         kind: radiojarStreamId(station) ? "radiojar" : "icy",
         outcome: "unreachable",
+        qualityOutcome: "response_error",
         detail: `probe exceeded its ${Math.round(budgetMs / 1000)}s time budget`,
       });
     }, budgetMs);
@@ -190,6 +198,7 @@ async function probeStationPublicMetadataInner(
       return {
         kind: "radiojar",
         outcome: "unreachable",
+        qualityOutcome: "response_error",
         detail: err instanceof Error ? err.message : String(err),
       };
     }
@@ -199,18 +208,20 @@ async function probeStationPublicMetadataInner(
         : {};
     const artist = typeof obj.artist === "string" ? obj.artist : undefined;
     const title = typeof obj.title === "string" ? obj.title : undefined;
+    const quality = classifyMetadataQuality(artist, title);
     const pair = usablePair(artist, title);
     if (!pair) {
       return {
         kind: "radiojar",
         outcome: "blank_metadata",
-        detail:
-          "Radiojar now-playing endpoint answered but carries no usable artist/title pair (stale, empty, or show-level metadata)",
+        qualityOutcome: quality.outcome,
+        detail: quality.detail,
       };
     }
     return {
       kind: "radiojar",
       outcome: "usable_pair",
+      qualityOutcome: "usable_pair",
       sampleArtist: pair.artist,
       sampleTitle: pair.title,
     };
@@ -227,6 +238,7 @@ async function probeStationPublicMetadataInner(
       return {
         kind: "icy",
         outcome: "unsupported",
+        qualityOutcome: "unsupported",
         detail:
           result.message ??
           "server does not honour Icy-MetaData (no icy-metaint header)",
@@ -235,6 +247,7 @@ async function probeStationPublicMetadataInner(
     return {
       kind: "icy",
       outcome: "unreachable",
+      qualityOutcome: "response_error",
       detail: result.message ?? "transient network failure",
     };
   }
@@ -243,18 +256,23 @@ async function probeStationPublicMetadataInner(
     return {
       kind: "icy",
       outcome: "blank_metadata",
+      qualityOutcome: "empty_metadata",
       detail: "ICY metadata block present but StreamTitle is empty",
     };
   }
 
   const parsed = parseStreamTitle(result.streamTitle);
+  const quality = classifyMetadataQuality(
+    parsed?.rawArtist,
+    parsed?.rawTitle ?? result.streamTitle,
+  );
   const pair = usablePair(parsed?.rawArtist, parsed?.rawTitle);
   if (!pair) {
     return {
       kind: "icy",
       outcome: "blank_metadata",
-      detail:
-        "StreamTitle carries no usable artist/title pair (blank, junk, or show-only metadata)",
+      qualityOutcome: quality.outcome,
+      detail: quality.detail,
     };
   }
 
@@ -268,6 +286,7 @@ async function probeStationPublicMetadataInner(
   return {
     kind: "icy",
     outcome: "usable_pair",
+    qualityOutcome: "usable_pair",
     resolvedUrl,
     sampleArtist: pair.artist,
     sampleTitle: pair.title,
@@ -306,6 +325,27 @@ export async function persistProbeResult(
         updatedAt: now,
       },
     });
+  const source = probe.kind === "icy" ? "radio_browser_icy" : "radiojar";
+  const qualityOutcome =
+    probe.qualityOutcome ??
+    (probe.outcome === "usable_pair"
+      ? "usable_pair"
+      : probe.outcome === "unreachable"
+        ? "response_error"
+        : probe.outcome === "unsupported"
+          ? "unsupported"
+          : "empty_metadata");
+  await recordMetadataQuality({
+    stationId,
+    source,
+    capability: sourceCapabilityFor(source),
+    outcomes: [qualityOutcome],
+    responded: qualityOutcome !== "response_error",
+    artist: probe.sampleArtist,
+    title: probe.sampleTitle,
+    detail: probe.detail,
+    at: now,
+  });
 }
 
 // ---- Verified repair --------------------------------------------------------

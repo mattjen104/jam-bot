@@ -1,7 +1,12 @@
 import { db, stationsTable, type Station } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logSpinIfChanged } from "./resolve.js";
-import { parseStreamTitle, isJunkMetadata } from "./icy.js";
+import {
+  classifyMetadataQuality,
+  recordMetadataQuality,
+  sourceCapabilityFor,
+} from "./metadata-quality.js";
+import { parseStreamTitle } from "./icy.js";
 import type { NowPlayingRaw } from "./types.js";
 
 /**
@@ -214,9 +219,27 @@ function stationStreamUrl(station: Station): string | null {
 
 function dispatchStreamTitle(station: Station, streamTitle: string): void {
   const parsed = parseStreamTitle(streamTitle);
-  if (!parsed) return;
+  const quality = classifyMetadataQuality(
+    parsed?.rawArtist,
+    parsed?.rawTitle ?? streamTitle,
+  );
+  if (!parsed || quality.outcome !== "usable_pair") {
+    void recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "multiplex",
+      ),
+      outcomes: [quality.outcome],
+      responded: true,
+      artist: quality.artist,
+      title: quality.title,
+      detail: quality.detail,
+    });
+    return;
+  }
   const rawArtist = parsed.rawArtist ?? "";
-  if (isJunkMetadata(rawArtist, parsed.rawTitle)) return;
   const np: NowPlayingRaw = {
     rawArtist,
     rawTitle: parsed.rawTitle,
@@ -225,7 +248,25 @@ function dispatchStreamTitle(station: Station, streamTitle: string): void {
       ? { recordingId: parsed.sourceRecordingId }
       : {}),
   };
-  void logSpinIfChanged(station, np).then((wrote) => {
+  void logSpinIfChanged(station, np).then(async (wrote) => {
+    await recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "multiplex",
+      ),
+      outcomes: [
+        "usable_pair",
+        ...(wrote ? (["written_spin"] as const) : []),
+      ],
+      responded: true,
+      artist: quality.artist,
+      title: quality.title,
+      detail: wrote
+        ? "Multiplexed metadata produced a new spin."
+        : "Multiplexed metadata matched the current spin.",
+    });
     if (wrote) {
       console.info(
         `[lore] ${station.slug} now playing (host): ${np.rawArtist} — ${np.rawTitle}`,
@@ -239,9 +280,43 @@ function dispatchArtistTitle(
   rawArtist: string,
   rawTitle: string,
 ): void {
-  if (isJunkMetadata(rawArtist, rawTitle)) return;
+  const quality = classifyMetadataQuality(rawArtist, rawTitle);
+  if (quality.outcome !== "usable_pair") {
+    void recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "multiplex",
+      ),
+      outcomes: [quality.outcome],
+      responded: true,
+      artist: quality.artist,
+      title: quality.title,
+      detail: quality.detail,
+    });
+    return;
+  }
   const np: NowPlayingRaw = { rawArtist, rawTitle };
-  void logSpinIfChanged(station, np).then((wrote) => {
+  void logSpinIfChanged(station, np).then(async (wrote) => {
+    await recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "multiplex",
+      ),
+      outcomes: [
+        "usable_pair",
+        ...(wrote ? (["written_spin"] as const) : []),
+      ],
+      responded: true,
+      artist: quality.artist,
+      title: quality.title,
+      detail: wrote
+        ? "Multiplexed metadata produced a new spin."
+        : "Multiplexed metadata matched the current spin.",
+    });
     if (wrote) {
       console.info(
         `[lore] ${station.slug} now playing (host): ${rawArtist} — ${rawTitle}`,
@@ -269,6 +344,27 @@ function groupKey(origin: string, flavor: HostGroup["flavor"]): string {
   return `${flavor}\u001f${origin}`;
 }
 
+function recordHostGroupOutcome(
+  group: HostGroup,
+  outcome: "response_error" | "empty_metadata",
+  detail: string,
+  responded: boolean,
+): void {
+  for (const station of group.stations.values()) {
+    void recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "multiplex",
+      ),
+      outcomes: [outcome],
+      responded,
+      detail,
+    });
+  }
+}
+
 async function pollHostGroup(group: HostGroup): Promise<void> {
   if (group.inFlight) return; // overlap guard — one fetch per host at a time
   group.inFlight = true;
@@ -278,40 +374,111 @@ async function pollHostGroup(group: HostGroup): Promise<void> {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        recordHostGroupOutcome(
+          group,
+          "response_error",
+          `Icecast status endpoint returned HTTP ${res.status}.`,
+          true,
+        );
+        return;
+      }
       const mounts = parseIcecastStatus(await res.json());
-      if (mounts.length === 0) return;
+      if (mounts.length === 0) {
+        recordHostGroupOutcome(
+          group,
+          "empty_metadata",
+          "Icecast status endpoint returned no mounts.",
+          true,
+        );
+        return;
+      }
       const byPath = new Map(mounts.map((m) => [m.path, m]));
       for (const station of group.stations.values()) {
         const url = stationStreamUrl(station);
         const path = url ? mountPath(url) : null;
         const mount = path ? byPath.get(path) : undefined;
         if (mount?.streamTitle) dispatchStreamTitle(station, mount.streamTitle);
+        else {
+          void recordMetadataQuality({
+            stationId: station.id,
+            source: station.nowPlayingSource ?? "radio_browser_icy",
+            capability: sourceCapabilityFor(
+              station.nowPlayingSource ?? "radio_browser_icy",
+              "multiplex",
+            ),
+            outcomes: ["empty_metadata"],
+            responded: true,
+            detail: mount
+              ? "Icecast mount returned no StreamTitle."
+              : "Configured stream mount was absent from Icecast status.",
+          });
+        }
       }
     } else {
       const res = await fetch(`${group.origin}/api/nowplaying`, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        recordHostGroupOutcome(
+          group,
+          "response_error",
+          `AzuraCast now-playing endpoint returned HTTP ${res.status}.`,
+          true,
+        );
+        return;
+      }
       const body = (await res.json()) as unknown[];
-      if (!Array.isArray(body)) return;
+      if (!Array.isArray(body)) {
+        recordHostGroupOutcome(
+          group,
+          "response_error",
+          "AzuraCast now-playing endpoint returned malformed JSON.",
+          true,
+        );
+        return;
+      }
       const byShortcode = new Map<number, string>();
       for (const [id, s] of group.stations) {
         const sc = getMultiplexConfig(s)?.shortcode;
         if (sc) byShortcode.set(id, sc);
       }
+      const dispatched = new Set<number>();
       for (const entry of body) {
         const np = extractAzuraNowPlaying(entry);
         if (!np?.shortcode) continue;
         for (const [id, sc] of byShortcode) {
           if (sc !== np.shortcode) continue;
           const station = group.stations.get(id);
-          if (station) dispatchArtistTitle(station, np.rawArtist, np.rawTitle);
+          if (station) {
+            dispatched.add(id);
+            dispatchArtistTitle(station, np.rawArtist, np.rawTitle);
+          }
         }
       }
+      for (const station of group.stations.values()) {
+        if (dispatched.has(station.id)) continue;
+        void recordMetadataQuality({
+          stationId: station.id,
+          source: station.nowPlayingSource ?? "radio_browser_icy",
+          capability: sourceCapabilityFor(
+            station.nowPlayingSource ?? "radio_browser_icy",
+            "multiplex",
+          ),
+          outcomes: ["empty_metadata"],
+          responded: true,
+          detail: "AzuraCast response contained no current track for this station.",
+        });
+      }
     }
-  } catch {
+  } catch (err) {
+    recordHostGroupOutcome(
+      group,
+      "response_error",
+      err instanceof Error ? err.message : String(err),
+      false,
+    );
     // Transient host failure — next tick retries; per-station history is
     // unaffected (dedup means missed ticks only add latency, never dupes).
   } finally {
@@ -418,6 +585,19 @@ function sseOnFailure(conn: SseConn, message: string): void {
     (t) => now - t < SSE_FAILURE_WINDOW_MS,
   );
   conn.failureTimestamps.push(now);
+  for (const station of conn.stations.values()) {
+    void recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "multiplex",
+      ),
+      outcomes: ["response_error"],
+      responded: false,
+      detail: `AzuraCast SSE failed: ${message}`,
+    });
+  }
   if (conn.failureTimestamps.length >= SSE_FAILURE_LIMIT) {
     degradeSseToPolling(conn);
     return;

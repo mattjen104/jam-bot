@@ -3,10 +3,17 @@ import {
   stationsTable,
   radioBrowserStationsTable,
   stationSourceProbesTable,
+  stationSourceQualityTable,
   type Station,
 } from "@workspace/db";
 import { asc, inArray, sql } from "drizzle-orm";
 import { classifyFreshness } from "./freshness.js";
+import {
+  sourceCapabilityFor,
+  type MetadataOutcomeCounts,
+  type MetadataQualityOutcome,
+  type SourceCapability,
+} from "./metadata-quality.js";
 
 /**
  * Station source-coverage ledger — the read model behind the admin "metadata
@@ -44,6 +51,11 @@ export type SourceCoverageClass =
   | "no_source"
   | "unavailable";
 
+export type SourceRuntimeHealth =
+  | "healthy"
+  | "recoverable"
+  | "unsupported"
+  | "failing";
 /** Mirror of station_source_probes.outcome — kept in sync with the schema. */
 export type SourceProbeOutcome =
   | "usable_pair"
@@ -265,6 +277,9 @@ export interface SourceCoverageEntry {
   class: SourceCoverageClass;
   fingerprintCandidate: boolean;
   guidance: string;
+  sourceCapability: SourceCapability;
+  runtimeHealth: SourceRuntimeHealth;
+  runtimeReason: string;
   /** When the newest usable artist/title spin was observed (any source). */
   lastUsableAt: string | null;
   /** The artist/title pair of that newest usable spin. */
@@ -279,6 +294,33 @@ export interface SourceCoverageEntry {
     sampleTitle: string | null;
     probedAt: string;
   } | null;
+  quality: {
+    source: string;
+    capability: SourceCapability;
+    lastOutcome: MetadataQualityOutcome;
+    lastDetail: string | null;
+    lastAttemptAt: string;
+    lastResponseAt: string | null;
+    lastUsableAt: string | null;
+    lastUsableArtist: string | null;
+    lastUsableTitle: string | null;
+    windowStartedAt: string;
+    outcomeCounts: MetadataOutcomeCounts;
+  } | null;
+  /** Every persisted source row, including prior/probed sources. */
+  qualities: Array<{
+    source: string;
+    capability: SourceCapability;
+    lastOutcome: MetadataQualityOutcome;
+    lastDetail: string | null;
+    lastAttemptAt: string;
+    lastResponseAt: string | null;
+    lastUsableAt: string | null;
+    lastUsableArtist: string | null;
+    lastUsableTitle: string | null;
+    windowStartedAt: string;
+    outcomeCounts: MetadataOutcomeCounts;
+  }>;
 }
 
 export interface SourceCoverageLedger {
@@ -313,6 +355,10 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
     { icyStatus: string; lastStreamTitle: string | null; lastSuccessAt: Date | null }
   >();
   const probeByStation = new Map<number, StationSourceProbeRow>();
+  const qualityByStation = new Map<
+    number,
+    Map<string, StationSourceQualityRow>
+  >();
 
   if (ids.length > 0) {
     // Newest spin with a usable artist+title pair per station. DISTINCT ON
@@ -374,6 +420,24 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
       .from(stationSourceProbesTable)
       .where(inArray(stationSourceProbesTable.stationId, ids));
     for (const row of probeRows) probeByStation.set(row.stationId, row);
+    try {
+      const qualityRows = await db
+        .select()
+        .from(stationSourceQualityTable)
+        .where(inArray(stationSourceQualityTable.stationId, ids));
+      for (const row of qualityRows) {
+        const bySource =
+          qualityByStation.get(row.stationId) ??
+          new Map<string, StationSourceQualityRow>();
+        bySource.set(row.source, row);
+        qualityByStation.set(row.stationId, bySource);
+      }
+    } catch (err) {
+      console.warn(
+        "[lore] station_source_quality unavailable; source coverage is using probe/spin evidence only",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
   }
 
   const counts: Record<SourceCoverageClass, number> = {
@@ -386,6 +450,12 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
 
   const stations: SourceCoverageEntry[] = roster.map((station) => {
     const probeRow = probeByStation.get(station.id);
+    const qualityRows = [
+      ...(qualityByStation.get(station.id)?.values() ?? []),
+    ].sort((a, b) => b.lastAttemptAt.getTime() - a.lastAttemptAt.getTime());
+    const qualityRow = station.nowPlayingSource
+      ? qualityRows.find((row) => row.source === station.nowPlayingSource)
+      : qualityRows[0];
     const verdictResult = classifySourceCoverage({
       station,
       latestUsableSpin: latestSpinByStation.get(station.id) ?? null,
@@ -401,6 +471,24 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
     counts[verdictResult.class] += 1;
     if (verdictResult.fingerprintCandidate) fingerprintCandidateCount += 1;
     const latest = latestSpinByStation.get(station.id);
+    const sourceCapability =
+      (qualityRow?.capability as SourceCapability | undefined) ??
+      sourceCapabilityFor(station.nowPlayingSource);
+    const runtime = classifyRuntimeHealth({
+      source: station.nowPlayingSource,
+      hasStream: !!station.streamUrl,
+      probeOutcome: probeRow?.outcome as SourceProbeOutcome | undefined,
+      quality: qualityRow
+        ? {
+            lastOutcome: qualityRow.lastOutcome as MetadataQualityOutcome,
+            lastAttemptAt: qualityRow.lastAttemptAt,
+            lastUsableAt: qualityRow.lastUsableAt,
+            lastDetail: qualityRow.lastDetail,
+          }
+        : null,
+      latestUsableAt: latest?.observedAt ?? null,
+      now,
+    });
     return {
       id: station.id,
       slug: station.slug,
@@ -412,6 +500,9 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
       class: verdictResult.class,
       fingerprintCandidate: verdictResult.fingerprintCandidate,
       guidance: verdictResult.guidance,
+      sourceCapability,
+      runtimeHealth: runtime.health,
+      runtimeReason: runtime.reason,
       lastUsableAt: latest ? latest.observedAt.toISOString() : null,
       lastArtist: latest ? latest.artist : null,
       lastTitle: latest ? latest.title : null,
@@ -426,6 +517,35 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
             probedAt: probeRow.probedAt.toISOString(),
           }
         : null,
+      quality: qualityRow
+        ? {
+            source: qualityRow.source,
+            capability: qualityRow.capability as SourceCapability,
+            lastOutcome: qualityRow.lastOutcome as MetadataQualityOutcome,
+            lastDetail: qualityRow.lastDetail ?? null,
+            lastAttemptAt: qualityRow.lastAttemptAt.toISOString(),
+            lastResponseAt: qualityRow.lastResponseAt?.toISOString() ?? null,
+            lastUsableAt: qualityRow.lastUsableAt?.toISOString() ?? null,
+            lastUsableArtist: qualityRow.lastUsableArtist ?? null,
+            lastUsableTitle: qualityRow.lastUsableTitle ?? null,
+            windowStartedAt: qualityRow.windowStartedAt.toISOString(),
+            outcomeCounts:
+              qualityRow.outcomeCounts as MetadataOutcomeCounts,
+          }
+        : null,
+      qualities: qualityRows.map((row) => ({
+        source: row.source,
+        capability: row.capability as SourceCapability,
+        lastOutcome: row.lastOutcome as MetadataQualityOutcome,
+        lastDetail: row.lastDetail ?? null,
+        lastAttemptAt: row.lastAttemptAt.toISOString(),
+        lastResponseAt: row.lastResponseAt?.toISOString() ?? null,
+        lastUsableAt: row.lastUsableAt?.toISOString() ?? null,
+        lastUsableArtist: row.lastUsableArtist ?? null,
+        lastUsableTitle: row.lastUsableTitle ?? null,
+        windowStartedAt: row.windowStartedAt.toISOString(),
+        outcomeCounts: row.outcomeCounts as MetadataOutcomeCounts,
+      })),
     };
   });
 
@@ -439,3 +559,75 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
 }
 
 type StationSourceProbeRow = typeof stationSourceProbesTable.$inferSelect;
+
+type StationSourceQualityRow = typeof stationSourceQualityTable.$inferSelect;
+
+export function classifyRuntimeHealth(input: RuntimeHealthInput): {
+  health: SourceRuntimeHealth;
+  reason: string;
+} {
+  const usableAt = input.quality?.lastUsableAt ?? input.latestUsableAt;
+  if (usableAt && input.now.getTime() - usableAt.getTime() <= 24 * 60 * 60_000) {
+    return {
+      health: "healthy",
+      reason: "A usable artist/title pair was observed within the last 24 hours.",
+    };
+  }
+  if (
+    input.quality?.lastOutcome === "unsupported" ||
+    input.probeOutcome === "unsupported" ||
+    (!input.source && !input.hasStream)
+  ) {
+    return {
+      health: "unsupported",
+      reason:
+        input.quality?.lastDetail ??
+        "No supported public metadata source is configured or available.",
+    };
+  }
+  if (
+    input.quality?.lastOutcome === "response_error" ||
+    input.probeOutcome === "unreachable"
+  ) {
+    return {
+      health: "failing",
+      reason:
+        input.quality?.lastDetail ??
+        "The most recent source attempt failed to respond.",
+    };
+  }
+  if (!input.source) {
+    return {
+      health: "recoverable",
+      reason: input.hasStream
+        ? "A stream exists and can be probed or enrolled."
+        : "A metadata source must be configured.",
+    };
+  }
+  if (!input.quality) {
+    return {
+      health: "failing",
+      reason: "The configured source has no persisted poll attempt yet.",
+    };
+  }
+  return {
+    health: "recoverable",
+    reason:
+      input.quality.lastDetail ??
+      "The source responds but has not produced a recent usable pair.",
+  };
+}
+
+interface RuntimeHealthInput {
+  source: string | null;
+  hasStream: boolean;
+  probeOutcome?: SourceProbeOutcome;
+  quality: {
+    lastOutcome: MetadataQualityOutcome;
+    lastAttemptAt: Date;
+    lastUsableAt: Date | null;
+    lastDetail: string | null;
+  } | null;
+  latestUsableAt: Date | null;
+  now: Date;
+}

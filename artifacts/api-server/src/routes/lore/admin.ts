@@ -1239,9 +1239,10 @@ router.get("/admin/radio-browser/bulk-reprobe/status", h(async (_req, res) => {
 
 // GET /api/admin/source-coverage — the source-coverage ledger for the real,
 // non-longtail roster: every station classified as healthy / recoverable /
-// no_source / unavailable, with its configured source, last usable
-// artist/title observation, latest probe evidence, recovery guidance, and
-// the residual fingerprint-candidate count. Plain JSON, outside OpenAPI
+// no_source / unavailable, with its configured source, transport capability,
+// persisted runtime-quality funnel, last usable artist/title observation,
+// latest probe evidence, recovery guidance, and the residual fingerprint-
+// candidate count. Plain JSON, outside OpenAPI
 // (admin-only read model, like the other health endpoints).
 router.get("/admin/source-coverage", h(async (_req, res) => {
   const ledger = await getSourceCoverageLedger();

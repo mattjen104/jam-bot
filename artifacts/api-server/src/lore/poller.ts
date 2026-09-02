@@ -7,6 +7,7 @@ import {
 } from "./adapters.js";
 import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
 import { IcyWatcher } from "./icy-watcher.js";
+import { parseStreamTitle } from "./icy.js";
 import type { HistoryAdapter, RawSpin, NowPlayingRaw } from "./types.js";
 import {
   recordSpinitronWebResult,
@@ -26,6 +27,12 @@ import {
   stopHostMultiplex,
   getStationMultiplexTier,
 } from "./host-multiplex.js";
+import {
+  classifyMetadataQuality,
+  recordMetadataQuality,
+  sourceCapabilityFor,
+  type MetadataQualityOutcome,
+} from "./metadata-quality.js";
 export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
 export { getFeedFreshnessStaleStations } from "./feed-freshness-health.js";
 
@@ -192,6 +199,30 @@ function startStationWatcher(station: Station): boolean {
   const watcher = new IcyWatcher(station.slug, streamUrl);
   stationWatchers.set(station.id, watcher);
 
+  watcher.on("metadata-observed", (streamTitle: string | null) => {
+    const parsed = streamTitle ? parseStreamTitle(streamTitle) : null;
+    const quality = classifyMetadataQuality(
+      parsed?.rawArtist,
+      parsed?.rawTitle ?? streamTitle,
+    );
+    // Usable pairs are recorded by metadata-changed after ingestion so the
+    // same atomic update can include written_spin.
+    if (quality.outcome === "usable_pair") return;
+    void recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "watcher",
+      ),
+      outcomes: [quality.outcome],
+      responded: true,
+      artist: quality.artist,
+      title: quality.title,
+      detail: quality.detail,
+    });
+  });
+
   watcher.on("metadata-changed", (parsed: { rawArtist?: string; rawTitle: string; durationMs?: number; sourceRecordingId?: string }) => {
     const np: NowPlayingRaw = {
       rawArtist: parsed.rawArtist ?? "",
@@ -201,7 +232,24 @@ function startStationWatcher(station: Station): boolean {
         ? { recordingId: parsed.sourceRecordingId }
         : {}),
     };
-    void logSpinIfChanged(station, np).then((wrote) => {
+    void logSpinIfChanged(station, np).then(async (wrote) => {
+      const quality = classifyMetadataQuality(np.rawArtist, np.rawTitle);
+      await recordMetadataQuality({
+        stationId: station.id,
+        source: station.nowPlayingSource ?? "radio_browser_icy",
+        capability: sourceCapabilityFor(
+          station.nowPlayingSource ?? "radio_browser_icy",
+          "watcher",
+        ),
+        outcomes: [
+          quality.outcome,
+          ...(wrote ? (["written_spin"] as const) : []),
+        ],
+        responded: true,
+        artist: quality.artist,
+        title: quality.title,
+        detail: quality.detail,
+      });
       if (wrote) {
         console.info(
           `[lore] ${station.slug} now playing (live): ${np.rawArtist} — ${np.rawTitle}`,
@@ -210,7 +258,18 @@ function startStationWatcher(station: Station): boolean {
     });
   });
 
-  watcher.on("persistent-failed", () => {
+  watcher.on("persistent-failed", (message: string) => {
+    void recordMetadataQuality({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      capability: sourceCapabilityFor(
+        station.nowPlayingSource ?? "radio_browser_icy",
+        "watcher",
+      ),
+      outcomes: ["response_error"],
+      responded: false,
+      detail: `Persistent ICY watcher failed: ${message}`,
+    });
     stationWatchers.delete(station.id);
     // A leased station whose socket keeps failing loses the lease — it keeps
     // interval polling until the next lease cycle re-evaluates it.
@@ -363,6 +422,7 @@ export async function fetchPlaysUntilCursor(
   cursor: string | null,
   maxPlays: number,
   pageSize: number = PAGE_SIZE,
+  onError?: (error: unknown) => void,
 ): Promise<RawSpin[]> {
   const collected: RawSpin[] = [];
   for (let page = 0; collected.length < maxPlays; page++) {
@@ -372,6 +432,7 @@ export async function fetchPlaysUntilCursor(
       batch = await history(config, { limit, page });
     } catch (err) {
       console.error("[lore] history page fetch failed", page, err);
+      onError?.(err);
       break;
     }
     if (!batch.length) break;
@@ -408,13 +469,45 @@ export async function pollStation(station: Station): Promise<void> {
       const current = fresh ?? station;
       const cursor = current.lastSeenCursor ?? null;
       const firstEnroll = !cursor;
+      let fetchError: unknown = null;
       const spins = await fetchPlaysUntilCursor(
         history,
         current.nowPlayingConfig ?? {},
         cursor,
         MAX_CATCHUP,
+        PAGE_SIZE,
+        (error) => {
+          fetchError = error;
+        },
       );
       const logged = await ingestRawSpins(current, spins, source ?? "unknown");
+      const qualities = spins.map((spin) =>
+        classifyMetadataQuality(spin.rawArtist, spin.rawTitle),
+      );
+      const outcomes: MetadataQualityOutcome[] =
+        qualities.length > 0
+          ? qualities.map((quality) => quality.outcome)
+          : [fetchError ? "response_error" : "empty_metadata"];
+      for (let i = 0; i < logged; i += 1) outcomes.push("written_spin");
+      if (fetchError && qualities.length > 0) outcomes.push("response_error");
+      const newestQuality =
+        qualities.find((quality) => quality.outcome === "usable_pair") ??
+        qualities[0];
+      await recordMetadataQuality({
+        stationId: current.id,
+        source: source ?? "unknown",
+        capability: sourceCapabilityFor(source),
+        outcomes,
+        responded: qualities.length > 0 || !fetchError,
+        artist: newestQuality?.artist,
+        title: newestQuality?.title,
+        detail: fetchError
+          ? fetchError instanceof Error
+            ? fetchError.message
+            : String(fetchError)
+          : newestQuality?.detail ??
+            "Source responded without any recent track entries.",
+      });
       if (logged > 0) {
         console.info(
           `[lore] ${current.slug} ingested ${logged} spin(s)` +
@@ -472,13 +565,60 @@ export async function pollStation(station: Station): Promise<void> {
             lastSuccessAt: warning.lastSuccessAt.toISOString(),
           });
         }
+        await recordMetadataQuality({
+          stationId: station.id,
+          source,
+          capability: sourceCapabilityFor(source),
+          outcomes: ["empty_metadata"],
+          responded: true,
+          detail: "Spinitron page responded without a current track pair.",
+        });
         return;
       }
       recordSpinitronWebResult(station.id, station.slug, "success");
     }
 
-    if (!np) return;
+    if (!np) {
+      await recordMetadataQuality({
+        stationId: station.id,
+        source: source ?? "unknown",
+        capability: sourceCapabilityFor(source),
+        outcomes: ["empty_metadata"],
+        responded: true,
+        detail: "Source returned no current metadata.",
+      });
+      return;
+    }
+    const quality = classifyMetadataQuality(np.rawArtist, np.rawTitle);
+    if (quality.outcome !== "usable_pair") {
+      await recordMetadataQuality({
+        stationId: station.id,
+        source: source ?? "unknown",
+        capability: sourceCapabilityFor(source),
+        outcomes: [quality.outcome],
+        responded: true,
+        artist: quality.artist,
+        title: quality.title,
+        detail: quality.detail,
+      });
+      return;
+    }
     const wrote = await logSpinIfChanged(station, np);
+    await recordMetadataQuality({
+      stationId: station.id,
+      source: source ?? "unknown",
+      capability: sourceCapabilityFor(source),
+      outcomes: [
+        "usable_pair",
+        ...(wrote ? (["written_spin"] as const) : []),
+      ],
+      responded: true,
+      artist: quality.artist,
+      title: quality.title,
+      detail: wrote
+        ? "Usable artist/title pair produced a new spin."
+        : "Usable artist/title pair was already current.",
+    });
     if (wrote) {
       console.info(
         `[lore] ${station.slug} now playing: ${np.rawArtist} — ${np.rawTitle}`,
@@ -486,6 +626,16 @@ export async function pollStation(station: Station): Promise<void> {
     }
   } catch (err) {
     console.error("[lore] poll failed", station.slug, err);
+    if (source) {
+      await recordMetadataQuality({
+        stationId: station.id,
+        source,
+        capability: sourceCapabilityFor(source),
+        outcomes: ["response_error"],
+        responded: false,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
   } finally {
     inFlight.delete(station.id);
   }

@@ -3526,6 +3526,41 @@ export type StationSourceProbe =
   typeof stationSourceProbesTable.$inferSelect;
 
 /**
+ * Per-station/source runtime metadata-quality funnel. Unlike probe evidence,
+ * this row is updated by normal polls and persistent watchers and therefore
+ * separates source capability from current operational health.
+ */
+export const stationSourceQualityTable = pgTable(
+  "station_source_quality",
+  {
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    capability: text("capability").notNull(),
+    lastOutcome: text("last_outcome").notNull(),
+    lastDetail: text("last_detail"),
+    lastAttemptAt: timestamp("last_attempt_at").notNull(),
+    lastResponseAt: timestamp("last_response_at"),
+    lastUsableAt: timestamp("last_usable_at"),
+    lastUsableArtist: text("last_usable_artist"),
+    lastUsableTitle: text("last_usable_title"),
+    windowStartedAt: timestamp("window_started_at").notNull().defaultNow(),
+    outcomeCounts: jsonb("outcome_counts")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.stationId, t.source],
+      name: "station_source_quality_pkey",
+    }),
+    index("station_source_quality_attempt_idx").on(t.lastAttemptAt),
+  ],
+);
+/**
  * Private Apple Music listening rooms.  The snapshot is deliberately a
  * server-owned read model: Apple user tokens never enter this table and the
  * record helper only ever submits transient audio for identification.
@@ -3645,3 +3680,9 @@ export const appleMusicJamHelpersTable = pgTable(
 );
 
 export type AppleMusicJamHelper = typeof appleMusicJamHelpersTable.$inferSelect;
+
+export type InsertStationSourceQuality =
+  typeof stationSourceQualityTable.$inferInsert;
+
+export type StationSourceQuality =
+  typeof stationSourceQualityTable.$inferSelect;

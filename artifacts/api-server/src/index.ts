@@ -130,6 +130,7 @@ import { startFingerprintScout } from "./lore/fingerprint-scout.js";
 import { startSourceCoverageProbeRun } from "./lore/source-probe.js";
 import { applyCriCandidatesMigration } from "./lore/cri-candidates-migration.js";
 import { applyAppleMusicJamsMigration } from "./lore/apple-music-jams-migration.js";
+import { applyStationSourceQualityMigration } from "./lore/source-quality-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -257,6 +258,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyRbOrphanCleanupMigration", applyRbOrphanCleanupMigration);
     await runMigration("applyFingerprintScoutMigration", applyFingerprintScoutMigration);
     await runMigration("applyStationSourceProbeMigration", applyStationSourceProbeMigration);
+    await runMigration("applyStationSourceQualityMigration", applyStationSourceQualityMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     await runMigration("applyBeatoMissSentinelMigration", applyBeatoMissSentinelMigration);

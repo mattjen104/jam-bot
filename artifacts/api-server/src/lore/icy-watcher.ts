@@ -17,10 +17,11 @@ import {
  * Holds a raw TCP/TLS socket open against the station's stream URL and feeds
  * every chunk through the allocation-free IcyStreamParser. Emits:
  *
- *   - "metadata-changed" (ParsedStreamTitle) — the StreamTitle differs from
- *     the previous one, is non-empty, and passed the junk filter. Local dedup
- *     here blocks the ~2/sec repeats a stream sends between track changes, so
- *     downstream (DB dedup in logSpinIfChanged) only sees real transitions.
+ *   - "metadata-observed" (string | null) — the raw StreamTitle changed,
+ *     including blank/unparseable metadata.
+ *   - "metadata-changed" (ParsedStreamTitle) — that observation is non-empty
+ *     and passed the junk filter. Local dedup here blocks the ~2/sec repeats a
+ *     stream sends between track changes, so downstream only sees transitions.
  *   - "persistent-failed" — 5 connection failures within 10 minutes, or the
  *     server signalled ICY is unsupported. The watcher stops itself; the
  *     caller should fall back to interval polling.
@@ -52,7 +53,7 @@ export class IcyWatcher extends EventEmitter {
   private connectTimer: NodeJS.Timeout | null = null;
   private backoffMs = BACKOFF_FLOOR_MS;
   private failureTimestamps: number[] = [];
-  private lastStreamTitle: string | null = null;
+  private lastStreamTitle: string | null | undefined = undefined;
   private stopped = false;
   /**
    * The stream URL after one-hop redirect resolution (see resolveStreamUrl).
@@ -177,9 +178,10 @@ export class IcyWatcher extends EventEmitter {
   }
 
   private handleStreamTitle(streamTitle: string | null): void {
-    if (!streamTitle) return;
     if (streamTitle === this.lastStreamTitle) return;
     this.lastStreamTitle = streamTitle;
+    this.emit("metadata-observed", streamTitle);
+    if (!streamTitle) return;
 
     const parsed: ParsedStreamTitle | null = parseStreamTitle(streamTitle);
     if (!parsed) return;
