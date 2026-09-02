@@ -13209,16 +13209,27 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow-wrap: anywhere;
 }
 .minimal-radio__remote-copy {
+  display: grid;
+  align-content: center;
+  gap: 2px;
   min-width: 0;
-  color: hsl(var(--foreground));
-  font: 500 12.5px/1.2 var(--app-font-reading);
+  overflow: hidden;
 }
 .minimal-radio__remote-copy > span {
-  display: -webkit-box;
+  display: block;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   overflow-wrap: anywhere;
+}
+.minimal-radio__remote-station-name {
+  color: hsl(var(--foreground));
+  font: 650 10px/1.15 var(--app-font-mono);
+  letter-spacing: .02em;
+}
+.minimal-radio__remote-artist {
+  color: hsl(var(--dim));
+  font: 500 12px/1.15 var(--app-font-reading);
 }
 .minimal-radio__sheet-header {
   display: grid;

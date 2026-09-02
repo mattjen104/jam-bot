@@ -302,7 +302,12 @@ function MinimalRadioRemoteTile({
         )}
       </span>
       <span className="minimal-radio__remote-copy">
-        <span>{artist}</span>
+        <span className="minimal-radio__remote-station-name" title={station.name}>
+          {station.name}
+        </span>
+        <span className="minimal-radio__remote-artist" title={artist}>
+          {artist}
+        </span>
       </span>
     </button>
   );

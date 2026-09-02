@@ -390,6 +390,8 @@ describe("MinimalRadioSurface", () => {
     expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(3);
     expect(screen.getByTestId("minimal-radio-remote-category-all")).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-remote-category-campus")).toBeTruthy();
+    expect(screen.getByText("Alpha", { selector: ".minimal-radio__remote-station-name" })).toBeTruthy();
+    expect(screen.getByText("Alpha artist", { selector: ".minimal-radio__remote-artist" })).toBeTruthy();
     expect(screen.getByText("Not broadcasting")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-category-campus"));
