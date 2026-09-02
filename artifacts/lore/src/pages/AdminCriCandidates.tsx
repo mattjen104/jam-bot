@@ -235,7 +235,7 @@ function CriPanel({
         <p className="mt-2 text-base text-muted-foreground">
           Stations discovered via the{" "}
           <a
-            href="https://community.radio"
+            href="https://www.community-radio-index.com/"
             target="_blank"
             rel="noreferrer"
             className="text-primary hover:underline"
@@ -462,7 +462,7 @@ function CandidateRow({
           )}
           {candidate.streamUrl && (
             <a
-              href={`https://community.radio/stations/${candidate.criSlug}`}
+              href={`https://www.community-radio-index.com/stations/${candidate.criSlug}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-mono text-[13px] text-muted-foreground/60 hover:text-primary"

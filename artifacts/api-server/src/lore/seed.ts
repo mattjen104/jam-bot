@@ -119,6 +119,7 @@ export const SEED_STATIONS: InsertStation[] = [
   ...spinitronCollegeStations(),
   ...nprListStations(),
   ...indieInternetStations(),
+  ...criShortlistStations(),
   ...canadianCampusStations(),
   ...spinitronJazzStations(),
   ...spinitronCanadianAdditions(),
@@ -318,6 +319,142 @@ function indieInternetStations(): InsertStation[] {
       },
       stationClass: "community",
       sortOrder: 585,
+    },
+  ];
+}
+
+/**
+ * Hand-reviewed Community Radio Index shortlist.
+ *
+ * Editorial source: https://www.community-radio-index.com/
+ * Verified: 2026-09-01
+ *
+ * Each approved station was identity-checked against its CRI page and official
+ * homepage, then matched to Radio Browser only to resolve the exact direct
+ * stream. A live GET with `Icy-MetaData: 1` confirmed HTTPS playback, codec,
+ * bitrate, `icy-metaint`, and a non-empty StreamTitle on the stored URL. These
+ * are deliberately seed-owned curated rows rather than a bulk CRI/Radio Browser
+ * import, so the reviewed roster is reproducible and exempt from directory
+ * purges.
+ *
+ * Reviewed but rejected:
+ *  - 8ballradio — https://www.community-radio-index.com/stations/8ballradio
+ *    Audio was healthy, but the metadata block was only `StreamTitle=' - '`.
+ *  - boxoutfm — https://www.community-radio-index.com/stations/boxoutfm
+ *    No direct, identity-matched Radio Browser stream was available to verify.
+ *  - cashmere-radio —
+ *    https://www.community-radio-index.com/stations/cashmere-radio
+ *    The live metadata identified only the station/archive programme, not
+ *    useful current music (`Cashmere Radio - Cashmere Radio Archive`).
+ */
+export const CRI_SHORTLIST_SLUGS = [
+  "kiosk-radio",
+  "lahmacun-radio",
+  "oroko-radio",
+  "lyl-radio",
+] as const;
+
+function criShortlistStations(): InsertStation[] {
+  return [
+    {
+      // CRI: https://www.community-radio-index.com/stations/kiosk-radio
+      // RB UUID bae70c5c-9f3f-42fc-a83d-6c13920590e0.
+      // Probe: 192kbps AAC; StreamTitle included the current programme.
+      slug: "kiosk-radio",
+      name: "Kiosk Radio",
+      org: "Kiosk Radio",
+      city: "Brussels",
+      country: "BE",
+      streamUrl: "https://kioskradiobxl.out.airtime.pro/kioskradiobxl_b",
+      streamQuality: "192kbps AAC",
+      streamFormat: "aac",
+      homepageUrl: "https://www.kioskradio.com/",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://kioskradiobxl.out.airtime.pro/kioskradiobxl_b",
+      },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      automationClass: "human",
+      tags: ["electronic", "experimental", "club"],
+      favorite: true,
+      sortOrder: 590,
+    },
+    {
+      // CRI: https://www.community-radio-index.com/stations/lahmacun-radio
+      // RB UUID 93d9e19c-c8ce-487e-a57b-a3b62fc922f9.
+      // Probe: 128kbps MP3; StreamTitle included the current programme.
+      slug: "lahmacun-radio",
+      name: "Lahmacun Radio",
+      org: "Lahmacun Radio",
+      city: "Budapest",
+      country: "HU",
+      streamUrl:
+        "https://streaming.lahmacun.hu/listen/lahmacun_radio/radio.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://lahmacun.hu/",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl:
+          "https://streaming.lahmacun.hu/listen/lahmacun_radio/radio.mp3",
+      },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      automationClass: "human",
+      tags: ["electronic", "experimental", "world"],
+      favorite: true,
+      sortOrder: 591,
+    },
+    {
+      // CRI: https://www.community-radio-index.com/stations/oroko-radio
+      // RB UUID 7babd377-ed7c-4a63-9778-47b0fd94983b.
+      // Probe: 320kbps MP3; StreamTitle included the current programme.
+      slug: "oroko-radio",
+      name: "Oroko Radio",
+      org: "Oroko Radio",
+      city: "Accra",
+      country: "GH",
+      streamUrl: "https://oroko-radio.radiocult.fm/stream",
+      streamQuality: "320kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.oroko.live/",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://oroko-radio.radiocult.fm/stream",
+      },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      automationClass: "human",
+      tags: ["world", "electronic", "club"],
+      favorite: true,
+      sortOrder: 592,
+    },
+    {
+      // CRI: https://www.community-radio-index.com/stations/lyl-radio
+      // RB UUID e11c170a-474f-11e9-aa55-52543be04c81.
+      // Probe: 192kbps MP3; StreamTitle included the current programme.
+      slug: "lyl-radio",
+      name: "LYL Radio",
+      org: "LYL Radio",
+      city: "Lyon",
+      country: "FR",
+      streamUrl: "https://icecast.lyl.live/live",
+      streamQuality: "192kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://lyl.live/",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://icecast.lyl.live/live" },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      automationClass: "human",
+      tags: ["experimental", "ambient"],
+      favorite: true,
+      sortOrder: 593,
     },
   ];
 }
@@ -616,6 +753,24 @@ const ICY_HEALTH_SEEDS: Array<{
   {
     stationSlug: "refuge-worldwide",
     radioBrowserUuid: "manual-refuge-worldwide",
+  },
+  // Community Radio Index shortlist — genuine Radio Browser UUIDs were used
+  // only to resolve and cross-check these hand-reviewed direct HTTPS streams.
+  {
+    stationSlug: "kiosk-radio",
+    radioBrowserUuid: "bae70c5c-9f3f-42fc-a83d-6c13920590e0",
+  },
+  {
+    stationSlug: "lahmacun-radio",
+    radioBrowserUuid: "93d9e19c-c8ce-487e-a57b-a3b62fc922f9",
+  },
+  {
+    stationSlug: "oroko-radio",
+    radioBrowserUuid: "7babd377-ed7c-4a63-9778-47b0fd94983b",
+  },
+  {
+    stationSlug: "lyl-radio",
+    radioBrowserUuid: "e11c170a-474f-11e9-aa55-52543be04c81",
   },
   // Canadian campus stations — real Radio Browser UUIDs (confirmed via API).
   // These stations do not have Spinitron pages; ICY metadata is the only
@@ -2325,6 +2480,9 @@ export async function seedStations(): Promise<void> {
           name: s.name,
           org: s.org ?? null,
           country: s.country ?? null,
+          // Populate seed-owned city data without erasing an operator correction
+          // for older stations whose seed does not carry a city.
+          city: sql`COALESCE(EXCLUDED.city, ${stationsTable.city})`,
           streamUrl: s.streamUrl,
           streamQuality: s.streamQuality ?? null,
           streamFormat: s.streamFormat ?? "aac",
