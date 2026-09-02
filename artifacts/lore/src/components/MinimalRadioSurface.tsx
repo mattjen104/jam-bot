@@ -48,6 +48,13 @@ function stationCity(station: { city?: string | null }): string | null {
   return station.city?.trim() || null;
 }
 
+function compareRowsByLifetimeCrossings(a: DialLaneRow, b: DialLaneRow): number {
+  const crossingDifference =
+    (b.ds.lifetimeCrossings ?? 0) - (a.ds.lifetimeCrossings ?? 0);
+  if (crossingDifference !== 0) return crossingDifference;
+  return a.ds.station.name.localeCompare(b.ds.station.name);
+}
+
 interface HistoryItem {
   id: number;
   mbid: string;
@@ -491,13 +498,21 @@ export function MinimalRadioSurface({
 
   const heroRegionRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef(new Map<string, HTMLDivElement>());
+  const orderedRows = useMemo(
+    () => [...rows].sort(compareRowsByLifetimeCrossings),
+    [rows],
+  );
+  const orderedRemoteRows = useMemo(
+    () => [...remoteRows].sort(compareRowsByLifetimeCrossings),
+    [remoteRows],
+  );
   const candidates = useMemo(
-    () => rows.filter((row) => (
+    () => orderedRows.filter((row) => (
       liveTrack(row) != null
       || row.ds.station.streamUrl != null
       || row.ds.station.relayUrl != null
     )),
-    [rows],
+    [orderedRows],
   );
   const overviewRows = candidates;
 
@@ -509,7 +524,7 @@ export function MinimalRadioSurface({
       return key === drillDownCategory;
     });
   }, [candidates, viewMode, drillDownCategory]);
-  const remoteDisplayRows = remoteRows;
+  const remoteDisplayRows = orderedRemoteRows;
   const remotePages = useMemo(() => {
     const pages: DialLaneRow[][] = [];
     for (let index = 0; index < remoteDisplayRows.length; index += REMOTE_PAGE_SIZE) {

@@ -263,6 +263,10 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
 
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(2);
+    expect(screen.getAllByTestId("minimal-radio-card")[0]).toHaveAttribute(
+      "aria-label",
+      "Beta station card",
+    );
     expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Alpha" }).textContent).toBe("Alpha");
     expect(screen.getByText("Alpha City")).toBeTruthy();
@@ -285,9 +289,66 @@ describe("MinimalRadioSurface", () => {
 
     const hero = screen.getByTestId("minimal-radio-hero");
     fireEvent.keyDown(hero, { key: "ArrowDown" });
-    expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Tune in to Beta" }));
+    expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Tune in to Alpha" }));
     expect(toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses lifetime crossings as the default order for All and category-filtered stations", () => {
+    const low = row("low", "Low", true, 2, "campus");
+    const high = row("high", "High", true, 9, "campus");
+    const middle = row("middle", "Middle", true, 5, "anchor");
+
+    function FilterHarness() {
+      const [activeCategories, setActiveCategories] = React.useState<Set<StationCategory>>(
+        new Set(),
+      );
+      const allRows = [low, high, middle];
+      const remoteRows = activeCategories.size === 0
+        ? allRows
+        : allRows.filter((candidate) => {
+            const category = candidate.ds.station.stationCategories?.[0] as StationCategory | undefined;
+            return category ? activeCategories.has(category) : false;
+          });
+      return (
+        <MinimalRadioSurface
+          rows={allRows}
+          remoteRows={remoteRows}
+          preset="now"
+          activeCategories={activeCategories}
+          onToggleCategory={(category) => {
+            setActiveCategories((previous) => {
+              const next = new Set(previous);
+              if (next.has(category)) next.delete(category);
+              else next.add(category);
+              return next;
+            });
+          }}
+          onSetCategories={(categories) => setActiveCategories(new Set(categories))}
+        />
+      );
+    }
+
+    render(<FilterHarness />);
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
+
+    expect(screen.getAllByTestId("minimal-radio-card").map((card) =>
+      within(card).getByRole("heading").textContent,
+    )).toEqual(["High", "Middle", "Low"]);
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
+    expect(screen.getAllByTestId("minimal-radio-remote-station").map((station) =>
+      within(station).getByText(/^(High|Middle|Low)$/, {
+        selector: ".minimal-radio__remote-station-name",
+      }).textContent,
+    )).toEqual(["High", "Middle", "Low"]);
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-category-campus"));
+    expect(screen.getAllByTestId("minimal-radio-remote-station").map((station) =>
+      within(station).getByText(/^(High|Low)$/, {
+        selector: ".minimal-radio__remote-station-name",
+      }).textContent,
+    )).toEqual(["High", "Low"]);
   });
 
   it("shows each available station sentence and removes card insight columns", () => {
