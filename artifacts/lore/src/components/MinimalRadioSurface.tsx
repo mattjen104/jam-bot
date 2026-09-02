@@ -518,20 +518,17 @@ function OverviewHistoryView({
   filter,
   title,
   activeCategories,
-  focusedCategory,
   categoryByStationSlug,
 }: {
   filter: "crossings" | "firstPlays";
   title: string;
   activeCategories: ReadonlySet<StationCategory>;
-  focusedCategory: StationCategory | null;
   categoryByStationSlug: ReadonlyMap<string, StationCategory>;
 }) {
   const { ride } = usePlayer();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const categoryFilter = useMemo(() => {
-    if (focusedCategory) return new Set<StationCategory>([focusedCategory]);
     if (
       activeCategories.size > 0
       && activeCategories.size < STATION_CATEGORY_DEFINITIONS.length
@@ -539,7 +536,7 @@ function OverviewHistoryView({
       return new Set(activeCategories);
     }
     return null;
-  }, [activeCategories, focusedCategory]);
+  }, [activeCategories]);
   const categoryKey = categoryFilter
     ? [...categoryFilter].sort().join(",")
     : "";
@@ -592,10 +589,7 @@ function OverviewHistoryView({
         return category ? categoryFilter.has(category) : false;
       })
     : items;
-  const scopeLabel = focusedCategory
-    ? STATION_CATEGORY_DEFINITIONS.find(({ cat }) => cat === focusedCategory)?.label
-      ?? focusedCategory
-    : "All stations";
+  const scopeLabel = categoryFilter ? "Filtered stations" : "All stations";
 
   return (
     <section
@@ -754,7 +748,6 @@ function MinimalRadioOverview({
   categoryByStationSlug: ReadonlyMap<string, StationCategory>;
   onDrillDown: (category: StationCategory | "other" | null) => void;
 }) {
-  const [focusedCategory, setFocusedCategory] = useState<StationCategory | null>(null);
   const groups = useMemo(() => {
     const map = new Map<StationCategory | "other", DialLaneRow[]>();
     for (const row of rows) {
@@ -774,62 +767,29 @@ function MinimalRadioOverview({
     [activeCategories, groups],
   );
 
-  const effectiveFocusedCategory =
-    focusedCategory && activeDefs.some(({ cat }) => cat === focusedCategory)
-      ? focusedCategory
-      : null;
   const showOther =
-    effectiveFocusedCategory === null
-    && activeCategories.size === 0
+    activeCategories.size === 0
     && (groups.get("other")?.length ?? 0) > 0;
-  const visibleDefs = effectiveFocusedCategory
-    ? activeDefs.filter(({ cat }) => cat === effectiveFocusedCategory)
-    : activeDefs;
 
   return (
     <div className="minimal-radio-overview" data-testid="minimal-radio-overview">
-      <nav className="minimal-radio-overview__scope" aria-label="Overview category">
-        <button
-          type="button"
-          className={effectiveFocusedCategory === null ? "is-active" : ""}
-          aria-pressed={effectiveFocusedCategory === null}
-          onClick={() => setFocusedCategory(null)}
-          data-testid="overview-scope-all"
-        >
-          All
-        </button>
-        {activeDefs.map((definition) => (
-          <button
-            type="button"
-            key={definition.cat}
-            className={effectiveFocusedCategory === definition.cat ? "is-active" : ""}
-            aria-pressed={effectiveFocusedCategory === definition.cat}
-            onClick={() => setFocusedCategory(definition.cat)}
-            data-testid={`overview-scope-${definition.cat}`}
-          >
-            {definition.shortLabel}
-          </button>
-        ))}
-      </nav>
       <div className="minimal-radio-overview__highlights">
          <OverviewHistoryView
            filter="crossings"
            title="Crossings"
            activeCategories={activeCategories}
-           focusedCategory={effectiveFocusedCategory}
            categoryByStationSlug={categoryByStationSlug}
          />
          <OverviewHistoryView
            filter="firstPlays"
            title="Premieres"
            activeCategories={activeCategories}
-           focusedCategory={effectiveFocusedCategory}
            categoryByStationSlug={categoryByStationSlug}
          />
       </div>
 
       <div className="minimal-radio-overview__groups">
-         {visibleDefs.map(def => (
+          {activeDefs.map(def => (
            <OverviewCategoryGroup
              key={def.cat}
              category={def.cat}

@@ -268,13 +268,13 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.getByTestId("overview-history-crossings-item")).toHaveCount(10);
     await expect(page.getByTestId("overview-history-firstPlays-item")).toHaveCount(10);
 
-    await page.getByTestId("overview-scope-campus").click();
+    await page.getByTestId("minimal-radio-remote-category-campus").click();
 
     await expect(page.getByTestId("overview-category-campus")).toBeVisible();
     await expect(page.getByTestId("overview-category-anchor")).toHaveCount(0);
     await expect(page.getByTestId("overview-history-crossings-item")).toHaveCount(8);
     await expect(page.getByTestId("overview-history-firstPlays-item")).toHaveCount(8);
-    await expect(page.getByTestId("overview-history-crossings")).toContainText("Campus Radio");
+    await expect(page.getByTestId("overview-history-crossings")).toContainText("Filtered stations");
 
     await page.getByRole("button", { name: "View Campus Radio cards" }).click();
     await expect(page.getByTestId("minimal-radio-card")).toHaveCount(8);

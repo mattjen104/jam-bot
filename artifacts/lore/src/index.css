@@ -14394,36 +14394,6 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   padding: 16px 12px 64px;
 }
 
-.minimal-radio-overview__scope {
-  display: flex;
-  gap: 6px;
-  padding: 0 0 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.minimal-radio-overview__scope::-webkit-scrollbar { display: none; }
-.minimal-radio-overview__scope button {
-  flex: 0 0 auto;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid hsl(var(--border) / .72);
-  border-radius: 999px;
-  background: transparent;
-  color: hsl(var(--dim));
-  font: 600 9px/1 var(--app-font-mono);
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.minimal-radio-overview__scope button:hover,
-.minimal-radio-overview__scope button:focus-visible,
-.minimal-radio-overview__scope button.is-active {
-  border-color: hsl(var(--accent) / .75);
-  background: hsl(var(--accent) / .12);
-  color: hsl(var(--accent));
-  outline: none;
-}
-
 .minimal-radio-overview__highlights {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

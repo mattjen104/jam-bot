@@ -150,17 +150,31 @@ describe("MinimalRadioSurface", () => {
       ["beta", "anchor"],
     ]);
 
-    render(
-      <MinimalRadioSurface
-        rows={[
-          row("alpha", "Alpha", true, 2, "campus"),
-          row("beta", "Beta", true, 2, "anchor"),
-        ]}
-        libraryItems={[]}
-        categoryByStationSlug={categoryByStationSlug}
-        preset="now"
-      />,
-    );
+    function FilterHarness() {
+      const [activeCategories, setActiveCategories] = React.useState<Set<StationCategory>>(new Set());
+      return (
+        <MinimalRadioSurface
+          rows={[
+            row("alpha", "Alpha", true, 2, "campus"),
+            row("beta", "Beta", true, 2, "anchor"),
+          ]}
+          libraryItems={[]}
+          categoryByStationSlug={categoryByStationSlug}
+          preset="now"
+          activeCategories={activeCategories}
+          onToggleCategory={(category) => {
+            setActiveCategories((previous) => {
+              const next = new Set(previous);
+              if (next.has(category)) next.delete(category);
+              else next.add(category);
+              return next;
+            });
+          }}
+          onSetCategories={(categories) => setActiveCategories(new Set(categories))}
+        />
+      );
+    }
+    render(<FilterHarness />);
 
     expect(screen.getByTestId("minimal-radio-overview")).toBeTruthy();
     expect(screen.getByTestId("overview-category-campus")).toBeTruthy();
@@ -177,7 +191,7 @@ describe("MinimalRadioSurface", () => {
     expect(fetchMock.mock.calls.map(([url]) => String(url)).every((url) => !url.includes("station=")))
       .toBe(true);
 
-    fireEvent.click(screen.getByTestId("overview-scope-campus"));
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-category-campus"));
 
     await waitFor(() => {
       expect(screen.queryByTestId("overview-category-anchor")).toBeNull();
@@ -227,20 +241,34 @@ describe("MinimalRadioSurface", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    render(
-      <MinimalRadioSurface
-        rows={[
-          row("alpha", "Alpha", true, 2, "campus"),
-          row("beta", "Beta", true, 2, "anchor"),
-        ]}
-        libraryItems={[]}
-        categoryByStationSlug={new Map([
-          ["alpha", "campus"],
-          ["beta", "anchor"],
-        ])}
-        preset="now"
-      />,
-    );
+    function FilterHarness() {
+      const [activeCategories, setActiveCategories] = React.useState<Set<StationCategory>>(new Set());
+      return (
+        <MinimalRadioSurface
+          rows={[
+            row("alpha", "Alpha", true, 2, "campus"),
+            row("beta", "Beta", true, 2, "anchor"),
+          ]}
+          libraryItems={[]}
+          categoryByStationSlug={new Map([
+            ["alpha", "campus"],
+            ["beta", "anchor"],
+          ])}
+          preset="now"
+          activeCategories={activeCategories}
+          onToggleCategory={(category) => {
+            setActiveCategories((previous) => {
+              const next = new Set(previous);
+              if (next.has(category)) next.delete(category);
+              else next.add(category);
+              return next;
+            });
+          }}
+          onSetCategories={(categories) => setActiveCategories(new Set(categories))}
+        />
+      );
+    }
+    render(<FilterHarness />);
 
     await waitFor(() => {
       expect(within(screen.getByTestId("overview-history-firstPlays"))
@@ -249,7 +277,7 @@ describe("MinimalRadioSurface", () => {
         .getAllByTestId("overview-history-firstPlays-item")).toHaveLength(18);
     });
 
-    fireEvent.click(screen.getByTestId("overview-scope-campus"));
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-category-campus"));
 
     await waitFor(() => {
       expect(within(screen.getByTestId("overview-history-firstPlays"))
