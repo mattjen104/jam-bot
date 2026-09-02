@@ -1034,11 +1034,15 @@ interface RunBatchResult {
 }
 
 interface UnmatchedRunBatchResult {
-  candidates: number;
-  resolved: number;
-  deferred: number;
-  unavailable: number;
-  remaining: number;
+  candidates?: number;
+  scanned?: number;
+  attempted?: number;
+  resolved?: number;
+  deferred?: number;
+  unavailable?: number;
+  definitiveMiss?: number;
+  remaining?: number;
+  skipped?: boolean;
 }
 
 function ReleaseYearHealthSection({
@@ -1191,22 +1195,30 @@ function ReleaseYearHealthSection({
             <dd className="text-sm text-muted-foreground">canonical recording attached</dd>
           </div>
           <div>
-            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+            <dt className="text-[13px] uppercase tracking-wide text-amber-600 dark:text-amber-400">
               Deferred
             </dt>
-            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+            <dd
+              className="mt-0.5 font-mono text-2xl tabular-nums text-amber-600 dark:text-amber-400"
+              data-testid="unmatched-deferred-count"
+            >
               {unmatchedDeferred.toLocaleString()}
             </dd>
-            <dd className="text-sm text-muted-foreground">temporary provider failure</dd>
+            <dd className="text-sm text-amber-600/80 dark:text-amber-400/80">
+              retryable provider failure
+            </dd>
           </div>
           <div>
-            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
-              Unavailable
+            <dt className="text-[13px] uppercase tracking-wide text-destructive">
+              Definitive misses
             </dt>
-            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+            <dd
+              className="mt-0.5 font-mono text-2xl tabular-nums text-destructive"
+              data-testid="unmatched-definitive-miss-count"
+            >
               {unmatchedUnavailable.toLocaleString()}
             </dd>
-            <dd className="text-sm text-muted-foreground">confirmed no match</dd>
+            <dd className="text-sm text-destructive/80">permanent no match</dd>
           </div>
         </dl>
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm text-muted-foreground">
@@ -1216,22 +1228,34 @@ function ReleaseYearHealthSection({
               : "No convergence lookup has run yet."}
           </span>
           {unmatchedRunResult !== null && (
-            <span>
+            <span data-testid="unmatched-run-receipt">
               {typeof unmatchedRunResult === "string" ? (
                 <span className="text-destructive">{unmatchedRunResult}</span>
               ) : (
                 <>
-                  resolved{" "}
+                  attempted{" "}
                   <span className="font-mono text-foreground">
-                    {unmatchedRunResult.resolved}
+                    {(
+                      unmatchedRunResult.attempted ??
+                      unmatchedRunResult.scanned ??
+                      0
+                    ).toLocaleString()}
+                  </span>
+                  {" · resolved "}
+                  <span className="font-mono text-foreground">
+                    {(unmatchedRunResult.resolved ?? 0).toLocaleString()}
                   </span>
                   {" · deferred "}
-                  <span className="font-mono text-foreground">
-                    {unmatchedRunResult.deferred}
+                  <span className="font-mono text-amber-600 dark:text-amber-400">
+                    {(unmatchedRunResult.deferred ?? 0).toLocaleString()}
                   </span>
-                  {" · unavailable "}
-                  <span className="font-mono text-foreground">
-                    {unmatchedRunResult.unavailable}
+                  {" · definitive misses "}
+                  <span className="font-mono text-destructive">
+                    {(
+                      unmatchedRunResult.definitiveMiss ??
+                      unmatchedRunResult.unavailable ??
+                      0
+                    ).toLocaleString()}
                   </span>
                 </>
               )}

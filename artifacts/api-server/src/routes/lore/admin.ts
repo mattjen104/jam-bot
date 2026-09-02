@@ -2096,6 +2096,8 @@ router.post("/admin/release-year-backfill/run", h(async (_req, res) => {
 // POST /api/admin/unmatched-spin-backfill/run — trigger one bounded convergence
 // batch immediately. The scheduled worker remains the normal path; this is an
 // operational escape hatch for watching a newly repaired source converge.
+// `attempted` and `definitiveMiss` are the preferred operator-facing names;
+// `scanned` and `unavailable` remain in the response for older callers.
 router.post("/admin/unmatched-spin-backfill/run", h(async (_req, res) => {
   const result = await backfillUnmatchedSpinsBatch().catch((err) => {
     throw new HttpError(
@@ -2103,7 +2105,11 @@ router.post("/admin/unmatched-spin-backfill/run", h(async (_req, res) => {
       err instanceof Error ? err.message : "Unmatched-spin batch failed",
     );
   });
-  return res.json(result);
+  return res.json({
+    ...result,
+    attempted: result.attempted ?? result.scanned,
+    definitiveMiss: result.definitiveMiss ?? result.unavailable,
+  });
 }));
 
 // GET /api/admin/feed-freshness-health — stations whose fixed-size feed
