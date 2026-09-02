@@ -27,6 +27,7 @@ const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
 );
 const MAX_CROSSING_ALBUMS = 5;
 const REMOTE_FIXTURE_STATION_COUNT = 6;
+const REMOTE_PAGE_SIZE = 6;
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
@@ -870,6 +871,13 @@ export function MinimalRadioSurface({
   const visibleRemoteRows = remoteExpanded
     ? remoteDisplayRows
     : remoteDisplayRows.slice(0, REMOTE_FIXTURE_STATION_COUNT);
+  const remotePages = useMemo(() => {
+    const pages: DialLaneRow[][] = [];
+    for (let index = 0; index < visibleRemoteRows.length; index += REMOTE_PAGE_SIZE) {
+      pages.push(visibleRemoteRows.slice(index, index + REMOTE_PAGE_SIZE));
+    }
+    return pages;
+  }, [visibleRemoteRows]);
 
   const selectedIndex = Math.max(
     0,
@@ -1036,13 +1044,23 @@ export function MinimalRadioSurface({
           role="list"
           aria-label={remoteExpanded ? "Expanded compact station remote" : "Compact station preview"}
         >
-          {visibleRemoteRows.map((row) => (
-            <MinimalRadioRemoteTile
-              key={row.ds.station.slug}
-              row={row}
-              selected={row.ds.station.slug === selectedSlug}
-              onSelect={setSelectedSlug}
-            />
+          {remotePages.map((page, pageIndex) => (
+            <div
+              key={pageIndex}
+              className="minimal-radio__remote-page"
+              data-testid="minimal-radio-remote-page"
+              role="list"
+              aria-label={`Compact station panel ${pageIndex + 1} of ${remotePages.length}`}
+            >
+              {page.map((row) => (
+                <MinimalRadioRemoteTile
+                  key={row.ds.station.slug}
+                  row={row}
+                  selected={row.ds.station.slug === selectedSlug}
+                  onSelect={setSelectedSlug}
+                />
+              ))}
+            </div>
           ))}
         </div>
       ) : null}

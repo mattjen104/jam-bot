@@ -344,10 +344,15 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.getByTestId("minimal-radio-remote-view"))
       .toHaveAttribute("aria-label", "Expanded compact station remote");
     await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
-    const remoteColumns = await page.getByTestId("minimal-radio-remote-view").evaluate((node) =>
+    const remoteColumns = await page.getByTestId("minimal-radio-remote-page").first().evaluate((node) =>
       getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length
     );
     expect(remoteColumns).toBe(2);
+    const remoteScroll = await page.getByTestId("minimal-radio-remote-view").evaluate((node) => ({
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    }));
+    expect(remoteScroll.scrollWidth).toBeGreaterThan(remoteScroll.clientWidth);
     await expect(page.getByTestId("minimal-radio-remote-station").first())
       .toContainText("Station 01");
     await expect(page.getByTestId("minimal-radio-remote-station").first())
