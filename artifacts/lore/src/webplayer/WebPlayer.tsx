@@ -598,7 +598,7 @@ export function OnAirRow({
         </p>
         {item.now.resolved ? (
           <p style={{ margin: "1px 0 0", fontSize: 14, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
-            {item.now.artist}
+            {item.now.artist} — {item.now.title}
             {isStaleNowPlaying(item.now) && (
               <span
                 className="wp-mono"

@@ -28,6 +28,7 @@ import { test, expect } from "@playwright/test";
 
 const SLUG = "nts-1";
 const ALBUM_ART = "https://images.example.test/album-art.svg";
+const BROKEN_ALBUM_ART = "https://images.example.test/broken-album-art.svg";
 
 const STATION = {
   id: 1,
@@ -290,17 +291,23 @@ test.describe("WebPlayer live track change via SSE", () => {
     await expect(cue).not.toBeVisible({ timeout: 5_000 });
   });
 
-  test("resolved spin-changed artwork appears without polling and null artwork restores the fallback", async ({
+  test("resolved artwork appears without polling and unavailable artwork restores the fallback", async ({
     page,
   }) => {
     await injectFakeEventSource(page);
     await installCommonRoutes(page, makeOnAirResponse());
-    await page.route("**/api/art**", (route) =>
-      route.fulfill({
+    let failedArtworkRequests = 0;
+    await page.route("**/api/art**", (route) => {
+      const source = new URL(route.request().url()).searchParams.get("src");
+      if (source === BROKEN_ALBUM_ART) {
+        failedArtworkRequests++;
+        return route.abort("failed");
+      }
+      return route.fulfill({
         contentType: "image/svg+xml",
         body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#ff0080"/></svg>',
-      }),
-    );
+      });
+    });
 
     let onAirRequests = 0;
     page.on("request", (request) => {
@@ -336,7 +343,30 @@ test.describe("WebPlayer live track change via SSE", () => {
       .poll(async () => artwork.evaluate((image) => (image as HTMLImageElement).naturalWidth))
       .toBeGreaterThan(0);
     await expect(row).toContainText("Art Artist");
+    await expect(row).toContainText("Art Track");
     expect(onAirRequests).toBe(1);
+
+    await dispatchSseFrame(page, {
+      stationSlug: SLUG,
+      rawArtist: "Broken Cover Artist",
+      rawTitle: "Broken Cover Track",
+      mbid: "eeeeeeee-0000-0000-0000-000000000005",
+      artworkUrl: BROKEN_ALBUM_ART,
+      provisional: false,
+      observedAt: new Date().toISOString(),
+    });
+
+    await expect
+      .poll(() => failedArtworkRequests)
+      .toBe(1);
+    await expect(
+      page.locator(`[data-testid="wp-onair-artwork-fallback-${SLUG}"]`),
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.locator(`[data-testid="wp-onair-artwork-${SLUG}"]`),
+    ).toHaveCount(0);
+    await expect(row).toContainText("Broken Cover Artist");
+    await expect(row).toContainText("Broken Cover Track");
 
     await dispatchSseFrame(page, {
       stationSlug: SLUG,
