@@ -311,12 +311,19 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     )).toBeLessThanOrEqual(1);
     expect(toggleBox!.x).toBeLessThan(filterBox!.x);
 
+    await expect(page.getByTestId("minimal-radio-remote-view")).toBeVisible();
+    await expect(page.getByTestId("minimal-radio-remote-view"))
+      .toHaveAttribute("aria-label", "Compact station preview");
+    await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(6);
+    await expect(page.getByTestId("minimal-radio-remote-category-all")).toBeVisible();
+    await expect(page.getByTestId("minimal-radio-remote-category-campus")).toBeVisible();
+
     await toggle.click();
 
     await expect(page.getByTestId("minimal-radio-remote-view")).toBeVisible();
+    await expect(page.getByTestId("minimal-radio-remote-view"))
+      .toHaveAttribute("aria-label", "Expanded compact station remote");
     await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
-    await expect(page.getByTestId("minimal-radio-remote-category-all")).toBeVisible();
-    await expect(page.getByTestId("minimal-radio-remote-category-campus")).toBeVisible();
     const remoteColumns = await page.getByTestId("minimal-radio-remote-view").evaluate((node) =>
       getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length
     );

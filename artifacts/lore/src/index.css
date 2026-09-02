@@ -13120,6 +13120,18 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overscroll-behavior-y: contain;
   scrollbar-width: thin;
 }
+.minimal-radio__remote-view--fixture {
+  height: auto;
+  min-height: 0;
+  padding: 4px 14px;
+  overflow: hidden;
+}
+.minimal-radio__remote-view--fixture.is-expanded {
+  height: min(660px, calc(100dvh - var(--shell-h, 0px) - 130px));
+  min-height: 360px;
+  padding-bottom: 64px;
+  overflow-y: auto;
+}
 .minimal-radio__remote-categories {
   display: flex;
   align-items: center;
@@ -14346,6 +14358,14 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   }
   .minimal-radio__remote-view {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: min(660px, calc(100dvh - var(--shell-h, 0px) - 120px));
+    min-height: 616px;
+  }
+  .minimal-radio__remote-view--fixture {
+    height: auto;
+    min-height: 0;
+  }
+  .minimal-radio__remote-view--fixture.is-expanded {
     height: min(660px, calc(100dvh - var(--shell-h, 0px) - 120px));
     min-height: 616px;
   }

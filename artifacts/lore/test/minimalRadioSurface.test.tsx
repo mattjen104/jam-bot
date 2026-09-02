@@ -349,12 +349,15 @@ describe("MinimalRadioSurface", () => {
     const quiet = row("quiet", "Quiet", false, 0, "public");
     quiet.ds.isLive = false;
     quiet.ds.liveTrack = null;
+    const extras = Array.from({ length: 5 }, (_, index) => (
+      row(`extra-${index}`, `Extra ${index + 1}`, false, index + 3, "public")
+    ));
 
     function RemoteHarness() {
       const [activeCategories, setActiveCategories] = React.useState<Set<StationCategory>>(
         new Set(["campus", "anchor", "public"]),
       );
-      const allRows = [alpha, beta, quiet];
+      const allRows = [alpha, beta, quiet, ...extras];
       const visibleRemoteRows = activeCategories.size === 0
         ? allRows
         : allRows.filter((candidate) => {
@@ -383,11 +386,19 @@ describe("MinimalRadioSurface", () => {
 
     render(<RemoteHarness />);
 
+    expect(screen.getByTestId("minimal-radio-remote-view")).toBeTruthy();
+    expect(screen.getByTestId("minimal-radio-remote-view").getAttribute("aria-label"))
+      .toBe("Compact station preview");
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(6);
+    expect(screen.getByTestId("minimal-radio-remote-toggle").getAttribute("aria-pressed"))
+      .toBe("false");
+
     fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
 
-    expect(screen.getByTestId("minimal-radio-remote-view")).toBeTruthy();
+    expect(screen.getByTestId("minimal-radio-remote-view").getAttribute("aria-label"))
+      .toBe("Expanded compact station remote");
     expect(screen.queryByTestId("minimal-radio-sheet-header")).toBeNull();
-    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(3);
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(8);
     expect(screen.getByTestId("minimal-radio-remote-category-all")).toBeTruthy();
     expect(screen.getByTestId("minimal-radio-remote-category-campus")).toBeTruthy();
     expect(screen.getByText("Alpha", { selector: ".minimal-radio__remote-station-name" })).toBeTruthy();
@@ -405,9 +416,13 @@ describe("MinimalRadioSurface", () => {
       .toBe("true");
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-category-all"));
-    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(3);
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(8);
     expect(screen.getByTestId("minimal-radio-remote-category-all").getAttribute("aria-pressed"))
       .toBe("true");
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(6);
+    expect(screen.getByTestId("minimal-radio-overview")).toBeTruthy();
   });
 
   it("shows one crossing cover collapsed and continues the lifetime grid expanded", () => {
