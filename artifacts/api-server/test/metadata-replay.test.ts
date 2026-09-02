@@ -19,6 +19,7 @@ import {
   parseSpinitronWebPage,
   parseStationPage,
   parseSomaFmSongs,
+  parseWicbHistory,
   parseWxycDailyPlaylist,
 } from "../src/lore/adapters.js";
 import {
@@ -41,6 +42,7 @@ type ReplayParser =
   | "radiojar"
   | "spinitron_web"
   | "lot_radio_schedule"
+  | "wicb_history"
   | "wxyc_history"
   | "history_json"
   | "history_rss"
@@ -149,6 +151,8 @@ function runParser(fixture: ReplayFixture): unknown {
       const input = fixture.input as { rsc: string; now: string };
       return parseLotRadioSchedule(input.rsc, new Date(input.now));
     }
+    case "wicb_history":
+      return parseWicbHistory(fixture.input);
     case "wxyc_history": {
       const input = fixture.input as {
         body: unknown;

@@ -28,10 +28,20 @@ import {
 // module scope is not defined yet when the factory executes).
 // ---------------------------------------------------------------------------
 
-const { mockLimit, mockIngestRawSpins, mockGetHistoryAdapter } = vi.hoisted(() => ({
+const {
+  mockLimit,
+  mockIngestRawSpins,
+  mockGetHistoryAdapter,
+  mockGetNowPlayingAdapter,
+  mockLogSpinIfChanged,
+  mockTryJoinHostGroup,
+} = vi.hoisted(() => ({
   mockLimit: vi.fn(),
   mockIngestRawSpins: vi.fn(),
   mockGetHistoryAdapter: vi.fn(),
+  mockGetNowPlayingAdapter: vi.fn(),
+  mockLogSpinIfChanged: vi.fn(),
+  mockTryJoinHostGroup: vi.fn(),
 }));
 
 // ---- Module mocks ----------------------------------------------------------
@@ -50,13 +60,13 @@ vi.mock("@workspace/db", () => {
 
 vi.mock("../../src/lore/adapters.js", () => ({
   getHistoryAdapter: mockGetHistoryAdapter,
-  getNowPlayingAdapter: vi.fn(() => null),
+  getNowPlayingAdapter: mockGetNowPlayingAdapter,
   isPollable: vi.fn(() => true),
 }));
 
 vi.mock("../../src/lore/resolve.js", () => ({
   ingestRawSpins: mockIngestRawSpins,
-  logSpinIfChanged: vi.fn().mockResolvedValue(false),
+  logSpinIfChanged: mockLogSpinIfChanged,
 }));
 
 vi.mock("../../src/lore/spinitron-web-health.js", () => ({
@@ -66,7 +76,7 @@ vi.mock("../../src/lore/spinitron-web-health.js", () => ({
 
 vi.mock("../../src/lore/host-multiplex.js", () => ({
   initHostMultiplex: vi.fn(),
-  tryJoinHostGroup: vi.fn(() => false),
+  tryJoinHostGroup: mockTryJoinHostGroup,
   queueHostProbe: vi.fn(),
   backfillHostProbes: vi.fn(),
   stopHostMultiplex: vi.fn(),
@@ -75,15 +85,19 @@ vi.mock("../../src/lore/host-multiplex.js", () => ({
 }));
 
 vi.mock("../../src/lore/icy-watcher.js", () => ({
-  IcyWatcher: vi.fn().mockImplementation(() => ({
-    on: vi.fn(),
-    start: vi.fn(),
-    stop: vi.fn(),
-  })),
+  IcyWatcher: class {
+    on = vi.fn();
+    start = vi.fn();
+    stop = vi.fn();
+  },
 }));
 
 // Import the subject AFTER mocks are declared so it picks up the stubs.
-import { pollStation } from "../../src/lore/poller.js";
+import {
+  enrollStationPoller,
+  pollStation,
+  unenrollStationPoller,
+} from "../../src/lore/poller.js";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -121,6 +135,84 @@ beforeEach(() => {
   emptyAdapter.mockClear();
   mockIngestRawSpins.mockReset().mockResolvedValue(0);
   mockGetHistoryAdapter.mockReset().mockReturnValue(emptyAdapter);
+  mockGetNowPlayingAdapter.mockReset().mockReturnValue(null);
+  mockLogSpinIfChanged.mockReset().mockResolvedValue(false);
+  mockTryJoinHostGroup.mockReset().mockReturnValue(false);
+});
+
+function wicbStation(id: number, favorite = false): Station {
+  return {
+    ...makeStation(id, "wicb", "radio_browser_icy"),
+    favorite,
+    nowPlayingConfig: {
+      streamUrl: "https://stream.example.test/wicb",
+      history: {
+        source: "wicb_history",
+        url: "https://api-v2.wicb.org/song/history/WICB",
+      },
+    },
+  } as Station;
+}
+
+function arrangeWicbHistory(station: Station) {
+  const spin = {
+    rawArtist: "Becca Mancari",
+    rawTitle: "Pretend",
+    externalId: "wicb:2088063",
+    playedAt: new Date("2026-09-02T21:37:42Z"),
+  };
+  const historyAdapter = vi.fn().mockResolvedValueOnce([spin]).mockResolvedValue([]);
+  mockLimit.mockResolvedValue([station]);
+  mockGetHistoryAdapter.mockImplementation((source) =>
+    source === "wicb_history" ? historyAdapter : null,
+  );
+  mockIngestRawSpins.mockResolvedValue(1);
+  return { spin, historyAdapter };
+}
+
+it("keeps nested WICB history running beside a persistent watcher", async () => {
+  vi.useFakeTimers();
+  const station = wicbStation(1092, true);
+  const { spin } = arrangeWicbHistory(station);
+
+  try {
+    enrollStationPoller(station);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockGetHistoryAdapter).toHaveBeenCalledWith("wicb_history");
+    expect(mockIngestRawSpins).toHaveBeenCalledWith(
+      station,
+      [spin],
+      "wicb_history",
+    );
+    expect(mockGetNowPlayingAdapter).not.toHaveBeenCalled();
+  } finally {
+    unenrollStationPoller(station.id);
+    vi.useRealTimers();
+  }
+});
+
+it("keeps nested WICB history running beside host multiplexing", async () => {
+  vi.useFakeTimers();
+  const station = wicbStation(1093);
+  const { spin } = arrangeWicbHistory(station);
+  mockTryJoinHostGroup.mockReturnValue(true);
+
+  try {
+    enrollStationPoller(station);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockTryJoinHostGroup).toHaveBeenCalledWith(station);
+    expect(mockIngestRawSpins).toHaveBeenCalledWith(
+      station,
+      [spin],
+      "wicb_history",
+    );
+    expect(mockGetNowPlayingAdapter).not.toHaveBeenCalled();
+  } finally {
+    unenrollStationPoller(station.id);
+    vi.useRealTimers();
+  }
 });
 
 // ---------------------------------------------------------------------------

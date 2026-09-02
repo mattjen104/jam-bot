@@ -1889,6 +1889,19 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wicb.org",
       scheduleUrl: "https://wicb.org/schedule",
       ...spinSource("WICB", "https://icecast.do.zufall.co/wicb_mp3_high"),
+      // Audited 2026-09-02: WICB's own site reads the Last 92 from this
+      // first-party JSON endpoint. Each row has a stable play id plus a local
+      // America/New_York timestamp. Keep it separate from the live ICY source;
+      // the endpoint is a shallow rolling archive and does not support paging.
+      nowPlayingConfig: {
+        ...spinSource("WICB", "https://icecast.do.zufall.co/wicb_mp3_high")
+          .nowPlayingConfig,
+        history: {
+          source: "wicb_history",
+          url: "https://api-v2.wicb.org/song/history/WICB",
+          archiveUrl: "https://wicb.org/last92/",
+        },
+      },
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 645,

@@ -345,6 +345,41 @@
     "expected": { "status": "unknown", "artist": "Late Show", "title": "Live Session", "quality": "usable_pair", "reason": "show_only" }
   },
   {
+    "id": "wicb-history-clean",
+    "source": "wicb_history",
+    "surface": "WICB official Last 92 JSON",
+    "context": "Audited 2026-09-02: the first-party rolling archive supplies a stable play id and a station-local timestamp.",
+    "parser": "wicb_history",
+    "input": [
+      {
+        "id": "2088063",
+        "timestamp": "2026-09-02 17:37:42",
+        "station": "WICB",
+        "title": "Pretend",
+        "artist": "Becca Mancari",
+        "album": "The Greatest Part"
+      }
+    ],
+    "expected": { "status": "accepted", "artist": "Becca Mancari", "title": "Pretend", "quality": "usable_pair" }
+  },
+  {
+    "id": "wicb-history-junk",
+    "source": "wicb_history",
+    "surface": "WICB official Last 92 JSON",
+    "context": "A station-label row keeps its source shape but is rejected by the shared metadata classifier.",
+    "parser": "wicb_history",
+    "input": [
+      {
+        "id": "2088064",
+        "timestamp": "2026-09-02 17:40:00",
+        "station": "WICB",
+        "title": "WICB",
+        "artist": "WICB"
+      }
+    ],
+    "expected": { "status": "rejected", "artist": "WICB", "title": "WICB", "quality": "junk_metadata", "reason": "identical_station_label" }
+  },
+  {
     "id": "station-history-json-clean",
     "source": "station_history_json",
     "surface": "configured station JSON history",

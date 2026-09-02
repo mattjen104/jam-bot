@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   historySourceContract,
+  parseWicbHistory,
   parseWxycDailyPlaylist,
   parseHistoryJson,
   parseHistoryJsonLd,
@@ -21,6 +22,34 @@ const config = {
 };
 
 describe("configured station-history source families", () => {
+  it("parses WICB's stable ids and station-local timestamps", () => {
+    const rows = parseWicbHistory([
+      {
+        id: "2088063",
+        timestamp: "2026-09-02 17:37:42",
+        station: "WICB",
+        title: "Pretend",
+        artist: "Becca Mancari",
+        album: "The Greatest Part",
+      },
+      {
+        id: "bad",
+        timestamp: "2026-09-02 17:38:00",
+        artist: "Missing title",
+      },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      externalId: "wicb:2088063",
+      rawArtist: "Becca Mancari",
+      rawTitle: "Pretend",
+      album: "The Greatest Part",
+      sourceFamily: "official_api",
+      citationUrl: "https://wicb.org/last92/",
+    });
+    expect(rows[0]?.playedAt?.toISOString()).toBe("2026-09-02T21:37:42.000Z");
+  });
+
   it("parses WXYC's nested official daily archive and filters non-track entries", () => {
     const body = {
       shows: [
@@ -164,6 +193,19 @@ describe("historical row safety gate", () => {
 });
 
 describe("history source contract", () => {
+  it("describes WICB as a shallow, independently cited archive", () => {
+    expect(supportsBackfill("wicb_history")).toBe(false);
+    expect(historySourceContract("wicb_history")).toMatchObject({
+      family: "official_api",
+      cursorMode: "fixed_feed",
+      supportsBackfill: false,
+      stableIdentity: "required",
+      reportedTimestamp: "required",
+      archiveCitation: "dated",
+      supportedDepthDays: 1,
+    });
+  });
+
   it("describes WXYC as an independent, time-anchored archive", () => {
     expect(supportsBackfill("wxyc_history")).toBe(true);
     expect(historySourceContract("wxyc_history")).toMatchObject({

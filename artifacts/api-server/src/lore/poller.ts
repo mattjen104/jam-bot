@@ -126,6 +126,8 @@ const timers: NodeJS.Timeout[] = [];
  * picks up the current now-playing state anyway).
  */
 const inFlight = new Set<number>();
+const nestedHistoryInFlight = new Set<number>();
+const NESTED_HISTORY_POLL_MS = 900_000;
 
 /**
  * Per-station interval/kickoff handles, keyed by station id.
@@ -328,6 +330,40 @@ function scheduleIntervalPolling(station: Station, delayMs: number): void {
   trackStationTimer(station.id, kickoff);
 }
 
+function nestedHistoryConfig(
+  station: Station,
+): { source: string; config: Record<string, unknown> } | null {
+  const nested = station.nowPlayingConfig?.history;
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return null;
+  const config = nested as Record<string, unknown>;
+  const source =
+    typeof config.source === "string" ? config.source.trim() : "";
+  return source && getHistoryAdapter(source) ? { source, config } : null;
+}
+
+/**
+ * Run a station's independent archive alongside any live watcher, multiplex
+ * membership, or interval poller. The archive owns separate timer handles and
+ * an overlap guard, so live transport changes cannot silence history recovery.
+ */
+function scheduleNestedHistoryPolling(
+  station: Station,
+  delayMs: number,
+): void {
+  if (!nestedHistoryConfig(station)) return;
+  const kickoff = setTimeout(() => {
+    void pollNestedHistory(station);
+    const interval = setInterval(
+      () => void pollNestedHistory(station),
+      NESTED_HISTORY_POLL_MS,
+    );
+    timers.push(interval);
+    trackStationTimer(station.id, interval);
+  }, delayMs);
+  timers.push(kickoff);
+  trackStationTimer(station.id, kickoff);
+}
+
 function trackStationTimer(stationId: number, handle: NodeJS.Timeout): void {
   const list = stationTimers.get(stationId) ?? [];
   list.push(handle);
@@ -453,12 +489,20 @@ export async function fetchPlaysUntilCursor(
  *
  * @internal Exported for integration tests; treat as an implementation detail.
  */
-export async function pollStation(station: Station): Promise<void> {
-  if (inFlight.has(station.id)) return;
-  inFlight.add(station.id);
+async function pollStationMode(
+  station: Station,
+  nestedHistoryOnly: boolean,
+): Promise<void> {
+  const flightSet = nestedHistoryOnly ? nestedHistoryInFlight : inFlight;
+  if (flightSet.has(station.id)) return;
+  flightSet.add(station.id);
   const source = station.nowPlayingSource;
   try {
-    const history = getHistoryAdapter(source);
+    const nested = nestedHistoryOnly ? nestedHistoryConfig(station) : null;
+    if (nestedHistoryOnly && !nested) return;
+    const historySource = nested?.source ?? source;
+    const historyConfig = nested?.config ?? station.nowPlayingConfig ?? {};
+    const history = getHistoryAdapter(historySource);
     if (history) {
       // Reload for the freshest cursor (advanced by prior ticks / enroll).
       const [fresh] = await db
@@ -472,7 +516,9 @@ export async function pollStation(station: Station): Promise<void> {
       let fetchError: unknown = null;
       const spins = await fetchPlaysUntilCursor(
         history,
-        current.nowPlayingConfig ?? {},
+        nestedHistoryOnly
+          ? nestedHistoryConfig(current)?.config ?? historyConfig
+          : current.nowPlayingConfig ?? historyConfig,
         cursor,
         MAX_CATCHUP,
         PAGE_SIZE,
@@ -480,7 +526,11 @@ export async function pollStation(station: Station): Promise<void> {
           fetchError = error;
         },
       );
-      const logged = await ingestRawSpins(current, spins, source ?? "unknown");
+      const logged = await ingestRawSpins(
+        current,
+        spins,
+        historySource ?? "unknown",
+      );
       const qualities = spins.map((spin) =>
         classifyMetadataQuality(spin.rawArtist, spin.rawTitle),
       );
@@ -495,8 +545,8 @@ export async function pollStation(station: Station): Promise<void> {
         qualities[0];
       await recordMetadataQuality({
         stationId: current.id,
-        source: source ?? "unknown",
-        capability: sourceCapabilityFor(source),
+        source: historySource ?? "unknown",
+        capability: sourceCapabilityFor(historySource),
         outcomes,
         responded: qualities.length > 0 || !fetchError,
         artist: newestQuality?.artist,
@@ -519,12 +569,12 @@ export async function pollStation(station: Station): Promise<void> {
       // (bbc_api, somafm). A poll that returns no new spins after a successful
       // run is normal during low-traffic periods, but sustained silence beyond
       // 2 × the poll interval likely means the feed went dark.
-      if (source && FEED_FRESHNESS_SOURCES.has(source)) {
-        const pollIntervalMs = intervalFor(source);
+      if (historySource && FEED_FRESHNESS_SOURCES.has(historySource)) {
+        const pollIntervalMs = intervalFor(historySource);
         const warning = recordFeedFreshnessResult(
           current.id,
           current.slug,
-          source,
+          historySource,
           logged > 0 ? "success" : "empty",
           pollIntervalMs,
         );
@@ -532,7 +582,7 @@ export async function pollStation(station: Station): Promise<void> {
           console.warn(
             "[lore] feed has been silent beyond 2× poll interval — possible outage or API change",
             {
-              source,
+              source: historySource,
               stationId: current.id,
               slug: current.slug,
               lastSpinAt: warning.lastSpinAt.toISOString(),
@@ -546,6 +596,7 @@ export async function pollStation(station: Station): Promise<void> {
       return;
     }
 
+    if (nestedHistoryOnly) return;
     const nowPlaying = getNowPlayingAdapter(source);
     if (!nowPlaying) return;
     const np = await nowPlaying(station.nowPlayingConfig ?? {});
@@ -637,8 +688,16 @@ export async function pollStation(station: Station): Promise<void> {
       });
     }
   } finally {
-    inFlight.delete(station.id);
+    flightSet.delete(station.id);
   }
+}
+
+export async function pollStation(station: Station): Promise<void> {
+  return pollStationMode(station, false);
+}
+
+async function pollNestedHistory(station: Station): Promise<void> {
+  return pollStationMode(station, true);
 }
 
 /**
@@ -687,6 +746,7 @@ export async function startLorePoller(): Promise<void> {
   const WATCHER_STAGGER_MS = 250;
   let watcherIndex = 0;
   pollable.forEach((station, i) => {
+    scheduleNestedHistoryPolling(station, i * STAGGER_MS);
     // Favorite radio_browser_icy stations get a persistent watcher (instant
     // metadata) when a streamUrl is available; everything else — including
     // non-favorite ICY stations — keeps interval polling. The persistent
@@ -720,6 +780,7 @@ export function stopLorePoller(): void {
   stopBoundaryPolls();
   for (const watcher of stationWatchers.values()) watcher.stop();
   stationWatchers.clear();
+  nestedHistoryInFlight.clear();
   stopHostMultiplex();
   started = false;
 }
@@ -744,6 +805,7 @@ export function enrollStationPoller(station: Station): void {
   // Hidden stations are soft-removed: enrollment is a no-op (the unenroll
   // above already stopped anything running, so this doubles as "apply hide").
   if (station.hidden) return;
+  scheduleNestedHistoryPolling(station, 0);
   if (
     station.nowPlayingSource === "radio_browser_icy" &&
     (station.favorite || leasedIds.has(station.id)) &&
@@ -783,6 +845,7 @@ export function leaseStationWatcher(station: Station): boolean {
   if (station.favorite && stationWatchers.has(station.id)) return true;
   unenrollStationPoller(station.id);
   leasedIds.add(station.id);
+  scheduleNestedHistoryPolling(station, 0);
   if (!startStationWatcher(station)) {
     leasedIds.delete(station.id);
     routePollingTier(station, 0);
@@ -799,7 +862,10 @@ export function leaseStationWatcher(station: Station): boolean {
 export function releaseStationLease(station: Station): void {
   if (!leasedIds.delete(station.id)) return;
   unenrollStationPoller(station.id);
-  if (!station.hidden) routePollingTier(station, 0);
+  if (!station.hidden) {
+    scheduleNestedHistoryPolling(station, 0);
+    routePollingTier(station, 0);
+  }
 }
 
 // ---- Coverage classification --------------------------------------------
@@ -851,6 +917,7 @@ export function unenrollStationPoller(stationId: number): void {
   leasedIds.delete(stationId);
   leaveHostGroups(stationId);
   boundaryStations.delete(stationId);
+  nestedHistoryInFlight.delete(stationId);
   const handles = stationTimers.get(stationId);
   if (handles) {
     for (const h of handles) clearTimeout(h);

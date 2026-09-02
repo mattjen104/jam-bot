@@ -53,6 +53,53 @@ function toDate(v: unknown): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
+/**
+ * Parse a station-local `YYYY-MM-DD HH:mm:ss` timestamp in an IANA timezone.
+ * The WICB archive omits an offset, so treating it as the server timezone
+ * would move every summer play four hours late.
+ */
+function localDateInTimeZone(v: unknown, timeZone: string): Date | undefined {
+  const s = str(v);
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(s ?? "");
+  if (!match) return undefined;
+  const parts = match.slice(1).map(Number);
+  const [year, month, day, hour, minute, second] = parts;
+  const localAsUtc = Date.UTC(year!, month! - 1, day!, hour!, minute!, second!);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const offsetAt = (epochMs: number) => {
+    const values = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(epochMs))
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, Number(part.value)]),
+    );
+    return (
+      Date.UTC(
+        values.year,
+        values.month - 1,
+        values.day,
+        values.hour,
+        values.minute,
+        values.second,
+      ) - epochMs
+    );
+  };
+  let epochMs = localAsUtc - offsetAt(localAsUtc);
+  epochMs = localAsUtc - offsetAt(epochMs);
+  const date = new Date(epochMs);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 function reportReview(
   opts: FetchRecentOptions | undefined,
   seen: number,
@@ -347,6 +394,45 @@ export function parseWxycDailyPlaylist(
   }
   return out;
 }
+
+/**
+ * Parse WICB's official Last 92 JSON. The API supplies a stable play id and a
+ * station-local timestamp for every row. The public Last 92 page is retained
+ * as the dated source citation; this remains a shallow rolling feed.
+ */
+export function parseWicbHistory(
+  body: unknown,
+  sourceUrl = "https://api-v2.wicb.org/song/history/WICB",
+): RawSpin[] {
+  if (!Array.isArray(body)) return [];
+  const out: RawSpin[] = [];
+  for (const item of body) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const id = str(record.id);
+    const rawArtist = str(record.artist);
+    const rawTitle = str(record.title);
+    const playedAt = localDateInTimeZone(
+      record.timestamp,
+      "America/New_York",
+    );
+    if (!id || !rawArtist || !rawTitle || !playedAt) continue;
+    const spin: RawSpin = {
+      rawArtist,
+      rawTitle,
+      externalId: `wicb:${id}`,
+      playedAt,
+      sourceUrl,
+      sourceFamily: "official_api",
+      citationUrl: "https://wicb.org/last92/",
+    };
+    const album = str(record.album);
+    if (album) spin.album = album;
+    out.push(spin);
+  }
+  return out;
+}
+
 const stationHistoryJson: HistoryAdapter = async (config, opts) => {
   const url = str(config.url);
   if (!url) return [];
@@ -365,6 +451,18 @@ const stationHistoryJson: HistoryAdapter = async (config, opts) => {
   const rawItems = itemsPath ? pickPath(body, itemsPath) : body;
   const seen = Array.isArray(rawItems) ? rawItems.length : rawItems ? 1 : 0;
   reportReview(opts, seen, parsed.length);
+  return parsed;
+};
+
+const wicbHistory: HistoryAdapter = async (config, opts) => {
+  const url = str(config.url);
+  if (!url) return [];
+  if ((opts?.page ?? 0) > 0) return [];
+  const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 92);
+  const requestUrl = `${url}${url.includes("?") ? "&" : "?"}limit=${limit}`;
+  const body = await getJson(requestUrl);
+  const parsed = parseWicbHistory(body, requestUrl);
+  reportReview(opts, Array.isArray(body) ? body.length : 0, parsed.length);
   return parsed;
 };
 
@@ -1514,6 +1612,7 @@ const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {
   somafm: somaFm,
   kcrw,
   station_history_json: stationHistoryJson,
+  wicb_history: wicbHistory,
   wxyc_history: wxycHistory,
   station_history_rss: stationHistoryRss,
   station_history_jsonld: stationHistoryJsonLd,
@@ -1665,6 +1764,19 @@ export function historySourceContract(
         reportedTimestamp: "required",
         archiveCitation: "dated",
         supportedDepthDays: null,
+        retryPolicy: "retryable",
+      };
+    case "wicb_history":
+      return {
+        source,
+        family: "official_api",
+        surface: "WICB official Last 92 JSON",
+        cursorMode: "fixed_feed",
+        supportsBackfill: false,
+        stableIdentity: "required",
+        reportedTimestamp: "required",
+        archiveCitation: "dated",
+        supportedDepthDays: 1,
         retryPolicy: "retryable",
       };
     case "station_history_rss":
