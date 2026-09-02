@@ -25,6 +25,9 @@ interface CriCandidate {
   websiteUrl: string | null;
   streamUrl: string | null;
   icyStatus: string;
+  currentArtist: string | null;
+  currentTitle: string | null;
+  stationLabel: string | null;
   alreadyInLore: boolean;
   notes: string | null;
   checkedAt: string;
@@ -34,8 +37,8 @@ type IcyFilter = "" | "yes" | "no" | "unknown";
 type LoreFilter = "" | "true" | "false";
 
 const ICY_LABELS: Record<string, string> = {
-  yes: "ICY ✓",
-  no: "no ICY",
+  yes: "track metadata ✓",
+  no: "no usable metadata",
   unknown: "untested",
 };
 
@@ -185,8 +188,8 @@ function CriPanel({
 
   const icyFilters: { label: string; value: IcyFilter }[] = [
     { label: "All ICY", value: "" },
-    { label: "ICY ✓", value: "yes" },
-    { label: "No ICY", value: "no" },
+    { label: "Track metadata", value: "yes" },
+    { label: "No usable metadata", value: "no" },
     { label: "Untested", value: "unknown" },
   ];
 
@@ -197,7 +200,12 @@ function CriPanel({
   ];
 
   const promotableCount =
-    candidates?.filter((c) => c.icyStatus === "yes" && !c.alreadyInLore).length ?? 0;
+    candidates?.filter(
+      (c) =>
+        c.icyStatus === "yes" &&
+        Boolean(c.currentArtist?.trim() && c.currentTitle?.trim()) &&
+        !c.alreadyInLore,
+    ).length ?? 0;
 
   return (
     <div className="min-h-screen">
@@ -243,8 +251,8 @@ function CriPanel({
             Community Radio Index
           </a>{" "}
           and cross-referenced against Radio Browser. Only stations with{" "}
-          <span className="font-mono text-sm">ICY ✓</span> deliver now-playing
-          metadata and can be promoted to Lore.
+          <span className="font-mono text-sm">track metadata ✓</span> have a
+          verified artist/title metadata block and can be promoted to Lore.
         </p>
 
         {/* Filter bar — row 1: ICY status */}
@@ -364,10 +372,15 @@ function CandidateRow({
   onPromoted: (updated: CriCandidate) => void;
 }) {
   const [promoting, setPromoting] = useState(false);
+  const [reprobing, setReprobing] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
+  const [reprobeError, setReprobeError] = useState<string | null>(null);
   const [promoted, setPromoted] = useState(false);
 
-  const canPromote = candidate.icyStatus === "yes" && !candidate.alreadyInLore && !promoted;
+  const hasVerifiedMetadata =
+    candidate.icyStatus === "yes" &&
+    Boolean(candidate.currentArtist?.trim() && candidate.currentTitle?.trim());
+  const canPromote = hasVerifiedMetadata && !candidate.alreadyInLore && !promoted;
 
   async function handlePromote() {
     setPromoting(true);
@@ -390,6 +403,29 @@ function CandidateRow({
     }
   }
 
+  async function handleReprobe() {
+    setReprobing(true);
+    setReprobeError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/cri/candidates/${encodeURIComponent(candidate.criSlug)}/reprobe`,
+        { method: "POST", headers: { "x-admin-token": token } },
+      );
+      const body = (await res.json()) as {
+        candidate?: CriCandidate;
+        error?: string;
+      };
+      if (!res.ok || !body.candidate) {
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      onPromoted(body.candidate);
+    } catch (err) {
+      setReprobeError(err instanceof Error ? err.message : "Re-probe failed — try again.");
+    } finally {
+      setReprobing(false);
+    }
+  }
+
   return (
     <li className="rounded-xl border border-card-border bg-card px-4 py-3">
       <div className="flex items-start justify-between gap-3">
@@ -401,7 +437,9 @@ function CandidateRow({
                 ICY_COLORS[candidate.icyStatus] ?? "bg-muted/60 text-muted-foreground"
               }`}
             >
-              {ICY_LABELS[candidate.icyStatus] ?? candidate.icyStatus}
+              {candidate.icyStatus === "yes" && !hasVerifiedMetadata
+                ? "re-probe required"
+                : ICY_LABELS[candidate.icyStatus] ?? candidate.icyStatus}
             </span>
             {candidate.alreadyInLore && (
               <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide text-primary">
@@ -417,10 +455,10 @@ function CandidateRow({
                 {[candidate.city, candidate.country].filter(Boolean).join(", ")}
               </span>
             )}
-            {candidate.genres.length > 0 && (
+            {(candidate.genres ?? []).length > 0 && (
               <span className="flex items-center gap-1 font-mono text-[13px] text-muted-foreground/70">
                 <Music className="h-3 w-3" />
-                {candidate.genres.slice(0, 3).join(" · ")}
+                {(candidate.genres ?? []).slice(0, 3).join(" · ")}
               </span>
             )}
           </div>
@@ -435,6 +473,24 @@ function CandidateRow({
               {candidate.streamUrl}
             </a>
           )}
+          {candidate.currentArtist && candidate.currentTitle && (
+            <p className="mt-2 text-sm text-foreground">
+              <span className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground/60">
+                Current metadata
+              </span>
+              <span className="ml-2">
+                {candidate.currentArtist} — {candidate.currentTitle}
+              </span>
+            </p>
+          )}
+          {candidate.stationLabel && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              <span className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground/60">
+                Station/archive label
+              </span>
+              <span className="ml-2">{candidate.stationLabel}</span>
+            </p>
+          )}
           <p className="mt-0.5 font-mono text-[12px] text-muted-foreground/50">
             Checked {fmtDate(candidate.checkedAt)}
           </p>
@@ -442,7 +498,7 @@ function CandidateRow({
 
         {/* Right: links + status icon */}
         <div className="flex shrink-0 items-center gap-2">
-          {candidate.icyStatus === "yes" ? (
+          {hasVerifiedMetadata ? (
             <Wifi className="h-3.5 w-3.5 text-zinc-500" />
           ) : candidate.icyStatus === "no" ? (
             <WifiOff className="h-3.5 w-3.5 text-zinc-500" />
@@ -481,15 +537,26 @@ function CandidateRow({
         </p>
       )}
 
-      {/* Promote button + error */}
-      {(canPromote || candidate.alreadyInLore || promoted) && (
+      {/* Probe/promote controls */}
+      {(candidate.streamUrl || canPromote || candidate.alreadyInLore || promoted) && (
         <div className="mt-3 flex items-center gap-2">
+          {candidate.streamUrl && (
+            <button
+              type="button"
+              disabled={reprobing || promoting}
+              onClick={() => void handleReprobe()}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-mono text-[13px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3 w-3 ${reprobing ? "animate-spin" : ""}`} />
+              {reprobing ? "Probing…" : "Re-probe"}
+            </button>
+          )}
           {candidate.alreadyInLore || promoted ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 font-mono text-[13px] text-primary">
               <Check className="h-3 w-3" />
               Promoted to Lore
             </span>
-          ) : (
+          ) : canPromote ? (
             <button
               type="button"
               disabled={promoting}
@@ -503,11 +570,14 @@ function CandidateRow({
               )}
               {promoting ? "Promoting…" : "Promote to Lore"}
             </button>
-          )}
+          ) : null}
         </div>
       )}
       {promoteError && (
         <p className="mt-1.5 text-sm text-destructive-foreground">{promoteError}</p>
+      )}
+      {reprobeError && (
+        <p className="mt-1.5 text-sm text-destructive-foreground">{reprobeError}</p>
       )}
     </li>
   );

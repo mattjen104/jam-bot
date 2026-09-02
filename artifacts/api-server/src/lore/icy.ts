@@ -177,6 +177,53 @@ export function parseStreamTitle(streamTitle: string): ParsedStreamTitle | null 
   return { rawTitle: trimmed };
 }
 
+export interface ClassifiedIcyStreamTitle {
+  artist: string | null;
+  title: string | null;
+  stationLabel: string | null;
+  usable: boolean;
+}
+
+const BLANK_STREAM_TITLE_RE = /^[\s\-–—|/\\:;,.·_]*$/u;
+const STATION_OR_ARCHIVE_LABEL_RE =
+  /\b(?:station\s*(?:id|identification)|legal\s+id|archive(?:d)?|archivio|archivo|listen\s+back|previously\s+recorded)\b/i;
+
+/**
+ * Classify one observed ICY StreamTitle for discovery/review.
+ *
+ * Promotion requires a genuine artist/title pair. Title-only values and
+ * explicit station/archive labels are retained for operator review, but never
+ * treated as current music metadata.
+ */
+export function classifyIcyStreamTitle(
+  streamTitle: string | null,
+): ClassifiedIcyStreamTitle {
+  const raw = streamTitle?.trim() ?? "";
+  if (!raw || BLANK_STREAM_TITLE_RE.test(raw)) {
+    return { artist: null, title: null, stationLabel: null, usable: false };
+  }
+
+  const parsed = parseStreamTitle(raw);
+  const artist = parsed?.rawArtist?.trim() || null;
+  const title = parsed?.rawTitle?.trim() || null;
+  const isStationOrArchiveLabel = STATION_OR_ARCHIVE_LABEL_RE.test(raw);
+  const usable =
+    Boolean(artist && title) &&
+    !isStationOrArchiveLabel &&
+    !isJunkMetadata(artist ?? "", title ?? "");
+
+  if (usable) {
+    return { artist, title, stationLabel: null, usable: true };
+  }
+
+  return {
+    artist: null,
+    title: null,
+    stationLabel: raw,
+    usable: false,
+  };
+}
+
 /**
  * Non-musical programming labels that appear in the artist field of ICY and
  * adapter metadata when stations carry breaks, IDs, or filler content.

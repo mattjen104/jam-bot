@@ -35,6 +35,7 @@
     { "method": "PATCH", "path": "/admin/stations/{id}/now-playing-source", "kind": "admin", "reason": "Admin ops endpoint (now-playing source override)." },
     { "method": "PATCH", "path": "/admin/stations/{id}/flags", "kind": "admin", "reason": "Admin ops endpoint (station flag edits)." },
     { "method": "GET", "path": "/admin/cri/candidates", "kind": "admin", "reason": "Admin ops endpoint (campus-radio candidate review)." },
+    { "method": "POST", "path": "/admin/cri/candidates/{slug}/reprobe", "kind": "admin", "reason": "Admin ops endpoint (refresh campus-radio candidate metadata evidence)." },
     { "method": "POST", "path": "/admin/cri/candidates/{slug}/promote", "kind": "admin", "reason": "Admin ops endpoint (promote a campus-radio candidate)." },
     { "method": "POST", "path": "/admin/aoty-publications/import", "kind": "admin", "reason": "Admin ops endpoint (AOTY publication import)." },
     { "method": "POST", "path": "/admin/list-candidates/process-batch", "kind": "admin", "reason": "Admin ops endpoint (batch-process list candidates)." },

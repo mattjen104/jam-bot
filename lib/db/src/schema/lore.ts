@@ -1965,11 +1965,17 @@ export const criCandidatesTable = pgTable("cri_candidates", {
   /** Best-guess stream URL sourced from Radio Browser; null if not found. */
   streamUrl: text("stream_url"),
   /**
-   * Whether the stream URL returned ICY now-playing headers.
-   * "yes" = station is Lore-compatible; "no" = stream exists but no metadata;
-   * "unknown" = stream URL untested or timed out.
+   * Whether the stream URL returned usable ICY now-playing metadata.
+   * "yes" = artist and title are present; "no" = stream exists but only
+   * blank/station metadata was observed; "unknown" = untested or timed out.
    */
   icyStatus: text("icy_status").notNull().default("unknown"),
+  /** Artist from the last usable ICY metadata block, if any. */
+  currentArtist: text("current_artist"),
+  /** Title from the last usable ICY metadata block, if any. */
+  currentTitle: text("current_title"),
+  /** Station ID, archive, or other non-track label from the last probe. */
+  stationLabel: text("station_label"),
   /** True when a station with a matching name already exists in the stations table. */
   alreadyInLore: boolean("already_in_lore").notNull().default(false),
   /** Free-form notes from the scraper (e.g. why a stream was skipped). */

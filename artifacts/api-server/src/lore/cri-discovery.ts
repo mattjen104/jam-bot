@@ -2,7 +2,7 @@
  * CRI Discovery Script
  *
  * Scrapes all stations from community-radio-index.com, cross-references
- * them against Radio Browser for stream URLs, tests ICY now-playing headers,
+ * them against Radio Browser for stream URLs, reads ICY now-playing metadata,
  * and writes results to the cri_candidates table.
  *
  * Run:
@@ -17,6 +17,7 @@
 
 import { db, criCandidatesTable, stationsTable } from "@workspace/db";
 import { ilike } from "drizzle-orm";
+import { probeCriStream, type CriStreamProbeResult } from "./cri-probe.js";
 
 const CRI_BASE = "https://www.community-radio-index.com";
 const RB_API = "https://de1.api.radio-browser.info/json";
@@ -24,7 +25,6 @@ const RB_API = "https://de1.api.radio-browser.info/json";
 const CONCURRENCY = 4;
 const SITEMAP_TIMEOUT_MS = 15_000;
 const PAGE_TIMEOUT_MS = 10_000;
-const STREAM_TIMEOUT_MS = 8_000;
 
 // ────────────────────────────────────────────────────────────
 // Sitemap fetch — returns all CRI station slugs
@@ -138,31 +138,6 @@ async function findStreamUrl(name: string): Promise<string | null> {
 }
 
 // ────────────────────────────────────────────────────────────
-// ICY metadata probe
-// ────────────────────────────────────────────────────────────
-async function testIcyStream(url: string): Promise<"yes" | "no" | "unknown"> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), STREAM_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { "Icy-MetaData": "1" },
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    // Check for ICY headers — if present the stream pushes now-playing metadata
-    const hasIcy =
-      res.headers.has("icy-metaint") ||
-      res.headers.has("icy-name") ||
-      res.headers.has("icy-title");
-    return hasIcy ? "yes" : "no";
-  } catch {
-    clearTimeout(t);
-    return "unknown";
-  }
-}
-
-// ────────────────────────────────────────────────────────────
 // Lore DB cross-reference
 // ────────────────────────────────────────────────────────────
 async function isAlreadyInLore(name: string): Promise<boolean> {
@@ -221,9 +196,14 @@ async function main() {
       const streamUrl = await findStreamUrl(meta.name);
 
       // 3. ICY probe
-      let icyStatus: "yes" | "no" | "unknown" = "unknown";
+      let probe: CriStreamProbeResult = {
+        icyStatus: "unknown",
+        currentArtist: null,
+        currentTitle: null,
+        stationLabel: null,
+      };
       if (streamUrl) {
-        icyStatus = await testIcyStream(streamUrl);
+        probe = await probeCriStream(streamUrl);
       }
 
       // 4. Lore cross-reference
@@ -241,7 +221,10 @@ async function main() {
           genres: meta.genres.length ? meta.genres : null,
           websiteUrl: meta.websiteUrl,
           streamUrl,
-          icyStatus,
+          icyStatus: probe.icyStatus,
+          currentArtist: probe.currentArtist,
+          currentTitle: probe.currentTitle,
+          stationLabel: probe.stationLabel,
           alreadyInLore,
           checkedAt: new Date(),
         })
@@ -254,7 +237,10 @@ async function main() {
             genres: meta.genres.length ? meta.genres : null,
             websiteUrl: meta.websiteUrl,
             streamUrl,
-            icyStatus,
+            icyStatus: probe.icyStatus,
+            currentArtist: probe.currentArtist,
+            currentTitle: probe.currentTitle,
+            stationLabel: probe.stationLabel,
             alreadyInLore,
             checkedAt: new Date(),
           },
@@ -263,10 +249,12 @@ async function main() {
       const status =
         alreadyInLore
           ? "already in Lore"
-          : icyStatus === "yes"
-            ? "✅ ICY ready"
-            : icyStatus === "no"
-              ? "stream found (no ICY)"
+          : probe.icyStatus === "yes"
+            ? `✅ ICY ready (${probe.currentArtist} — ${probe.currentTitle})`
+            : probe.icyStatus === "no"
+              ? probe.stationLabel
+                ? `stream found (station/archive label: ${probe.stationLabel})`
+                : "stream found (no usable ICY metadata)"
               : streamUrl
                 ? "stream found (ICY unknown)"
                 : "no stream found";

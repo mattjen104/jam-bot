@@ -108,6 +108,7 @@ import {
   getSourceCoverageProbeStatus,
 } from "../../lore/source-probe.js";
 import { getScoutReport } from "../../lore/fingerprint-scout.js";
+import { probeCriStream } from "../../lore/cri-probe.js";
 import { auddAvailable } from "../../lore/audd.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
 import {
@@ -2562,6 +2563,32 @@ function normalizeCountryToIso2(name: string | null | undefined): string | null 
   return COUNTRY_ISO2[lower] ?? name;
 }
 
+type CriCandidateRow = typeof criCandidatesTable.$inferSelect;
+
+function serializeCriCandidate(r: CriCandidateRow) {
+  return {
+    id: r.id,
+    criSlug: r.criSlug,
+    name: r.name,
+    city: r.city ?? null,
+    country: r.country ?? null,
+    genres: r.genres ?? [],
+    websiteUrl: r.websiteUrl ?? null,
+    streamUrl: r.streamUrl ?? null,
+    icyStatus: r.icyStatus,
+    currentArtist: r.currentArtist ?? null,
+    currentTitle: r.currentTitle ?? null,
+    stationLabel: r.stationLabel ?? null,
+    alreadyInLore: r.alreadyInLore,
+    notes: r.notes ?? null,
+    checkedAt: r.checkedAt.toISOString(),
+  };
+}
+
+function hasVerifiedCriMetadata(r: CriCandidateRow): boolean {
+  return Boolean(r.currentArtist?.trim() && r.currentTitle?.trim());
+}
+
 // GET /api/admin/cri/candidates — list all CRI candidates, optionally filtered
 // by icyStatus and/or alreadyInLore. Ordered newest-checked first.
 // Query params:
@@ -2583,30 +2610,60 @@ router.get("/admin/cri/candidates", h(async (req, res) => {
   const filtered = rows.filter((r) => {
     if (icyFilter && r.icyStatus !== icyFilter) return false;
     if (alreadyInLoreFilter !== null && r.alreadyInLore !== alreadyInLoreFilter) return false;
-    if (onlyPromotable && (r.icyStatus !== "yes" || r.alreadyInLore)) return false;
+    if (
+      onlyPromotable &&
+      (r.icyStatus !== "yes" || !hasVerifiedCriMetadata(r) || r.alreadyInLore)
+    ) return false;
     return true;
   });
 
   return res.json({
-    candidates: filtered.map((r) => ({
-      id: r.id,
-      criSlug: r.criSlug,
-      name: r.name,
-      city: r.city ?? null,
-      country: r.country ?? null,
-      genres: r.genres ?? [],
-      websiteUrl: r.websiteUrl ?? null,
-      streamUrl: r.streamUrl ?? null,
-      icyStatus: r.icyStatus,
-      alreadyInLore: r.alreadyInLore,
-      notes: r.notes ?? null,
-      checkedAt: r.checkedAt.toISOString(),
-    })),
+    candidates: filtered.map(serializeCriCandidate),
   });
 }));
 
+// POST /api/admin/cri/candidates/:slug/reprobe — read a fresh ICY metadata
+// block and replace the candidate's promotability evidence. Reviewed and
+// already-promoted rows remain eligible for re-probing.
+router.post("/admin/cri/candidates/:slug/reprobe", h(async (req, res) => {
+  const criSlug = String(req.params["slug"] ?? "");
+  if (!criSlug) return res.status(400).json({ error: "slug is required" });
+
+  const [candidate] = await db
+    .select()
+    .from(criCandidatesTable)
+    .where(eq(criCandidatesTable.criSlug, criSlug))
+    .limit(1);
+
+  if (!candidate) {
+    return res.status(404).json({ error: `CRI candidate "${criSlug}" not found` });
+  }
+  if (!candidate.streamUrl) {
+    return res.status(422).json({ error: "Candidate has no stream URL to probe" });
+  }
+
+  const probe = await probeCriStream(candidate.streamUrl);
+  const [updated] = await db
+    .update(criCandidatesTable)
+    .set({
+      icyStatus: probe.icyStatus,
+      currentArtist: probe.currentArtist,
+      currentTitle: probe.currentTitle,
+      stationLabel: probe.stationLabel,
+      checkedAt: new Date(),
+    })
+    .where(eq(criCandidatesTable.criSlug, criSlug))
+    .returning();
+
+  if (!updated) {
+    return res.status(500).json({ error: "Failed to update CRI candidate" });
+  }
+  return res.json({ candidate: serializeCriCandidate(updated) });
+}));
+
 // POST /api/admin/cri/candidates/:slug/promote — promote a CRI candidate into
-// the stations table and start polling. Only allowed when icyStatus === "yes".
+// the stations table and start polling. Only allowed after a successful probe
+// persisted both artist and title evidence.
 // Idempotent: re-promoting an already-promoted station re-enables it and
 // re-enrolls it in the poller.
 router.post("/admin/cri/candidates/:slug/promote", h(async (req, res) => {
@@ -2625,6 +2682,11 @@ router.post("/admin/cri/candidates/:slug/promote", h(async (req, res) => {
   if (candidate.icyStatus !== "yes") {
     return res.status(422).json({
       error: `Cannot promote: icyStatus is "${candidate.icyStatus}" (must be "yes")`,
+    });
+  }
+  if (!hasVerifiedCriMetadata(candidate)) {
+    return res.status(422).json({
+      error: "Cannot promote: usable artist/title metadata has not been verified — re-probe first",
     });
   }
   if (!candidate.streamUrl) {

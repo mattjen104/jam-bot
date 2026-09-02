@@ -126,6 +126,7 @@ import { applyStationSourceProbeMigration } from "./lore/source-probe-migration.
 import { applyRssArticlesMigration } from "./lore/rss-articles-migration.js";
 import { startFingerprintScout } from "./lore/fingerprint-scout.js";
 import { startSourceCoverageProbeRun } from "./lore/source-probe.js";
+import { applyCriCandidatesMigration } from "./lore/cri-candidates-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -170,6 +171,7 @@ async function bootLore(): Promise<void> {
     wireSongEnrichment();
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
+     await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
     await runMigration("applyStationLogoMigration", applyStationLogoMigration);
