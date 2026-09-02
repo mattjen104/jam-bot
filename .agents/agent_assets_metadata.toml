@@ -125,3 +125,17 @@ mtime_ms = 1788362661344
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/ae4d8a6a-4206-4c66-acdd-83867dbf1791/f23772e2-82e0-4f92-a672-544739032acd"
 storage_version_token = "1788362711197317"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "A2l27Gt5CYaK_BM2XFdnZ"
+uri = "file://reports/lore-data-quality-improvement-plan.md"
+type = "text"
+title = "Lore Station Data Quality Improvement Plan"
+description = "A six-phase, non-LLM plan for source capture, retry-safe resolution, fair enrichment, recent station profiles, and measurable sentence readiness. The first resolver slice is already implemented."
+logical_id = "4369e808-0942-41d6-b9e8-e578417625c0"
+content_hash = "sha256:8d2d20036453042c0c09982b94d6c60a9de6b3146ef0ba0315c72f0e3b229d5f"
+size = 8509
+mtime_ms = 1788363627900
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/4369e808-0942-41d6-b9e8-e578417625c0/38a4dd91-efd3-4977-90b8-5ad0b6a5d6da"
+storage_version_token = "1788363705639159"
+content_type = "text/markdown"

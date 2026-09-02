@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 vi.mock("@workspace/song-enrichment", () => ({
-  resolveRecordingByText: vi.fn(),
+  resolveRecordingByTextStatus: vi.fn(),
   resolveRecordingId: vi.fn().mockResolvedValue(null),
   fetchRecordingLinks: vi.fn().mockResolvedValue({ platforms: [] }),
   fetchGenreAndYear: vi.fn().mockResolvedValue({ genres: [], year: null }),
@@ -43,7 +43,7 @@ vi.mock("../src/lore/ads.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { resolveToMbid, normalizeKey } from "../src/lore/resolve.js";
-import { resolveRecordingByText } from "@workspace/song-enrichment";
+import { resolveRecordingByTextStatus } from "@workspace/song-enrichment";
 import { db } from "@workspace/db";
 
 // ---------------------------------------------------------------------------
@@ -96,9 +96,9 @@ describe("resolveToMbid — swap retry", () => {
 
   it("fires the swap when the first text search returns null", async () => {
     const swappedMatch = makeMatch({ recordingId: "swap-uuid", title: "When Your Heart Is Weak", artist: "Cock Robin" });
-    vi.mocked(resolveRecordingByText)
-      .mockResolvedValueOnce(null)        // first search (wrong order) → miss
-      .mockResolvedValueOnce(swappedMatch); // swap (correct order) → hit
+    vi.mocked(resolveRecordingByTextStatus)
+      .mockResolvedValueOnce({ status: "unavailable" })
+      .mockResolvedValueOnce({ status: "matched", match: swappedMatch });
 
     const result = await resolveToMbid("When Your Heart Is Weak", "Cock Robin");
 
@@ -108,33 +108,39 @@ describe("resolveToMbid — swap retry", () => {
     expect(result.artist).toBe("Cock Robin");
     expect(result.title).toBe("When Your Heart Is Weak");
     // resolveRecordingByText called twice: normal then swapped.
-    expect(vi.mocked(resolveRecordingByText)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(resolveRecordingByText)).toHaveBeenNthCalledWith(1, "When Your Heart Is Weak", "Cock Robin");
-    expect(vi.mocked(resolveRecordingByText)).toHaveBeenNthCalledWith(2, "Cock Robin", "When Your Heart Is Weak");
+    expect(vi.mocked(resolveRecordingByTextStatus)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(resolveRecordingByTextStatus)).toHaveBeenNthCalledWith(1, "When Your Heart Is Weak", "Cock Robin");
+    expect(vi.mocked(resolveRecordingByTextStatus)).toHaveBeenNthCalledWith(2, "Cock Robin", "When Your Heart Is Weak");
   });
 
   it("does NOT fire the swap when the first search succeeded", async () => {
     const directMatch = makeMatch({ recordingId: "direct-uuid" });
-    vi.mocked(resolveRecordingByText).mockResolvedValueOnce(directMatch);
+    vi.mocked(resolveRecordingByTextStatus).mockResolvedValueOnce({
+      status: "matched",
+      match: directMatch,
+    });
 
     const result = await resolveToMbid("Cock Robin", "When Your Heart Is Weak");
 
     expect(result.mbid).toBe("direct-uuid");
     expect(result.confidence).toBe("text");
     // Only one call — swap was never attempted.
-    expect(vi.mocked(resolveRecordingByText)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(resolveRecordingByTextStatus)).toHaveBeenCalledTimes(1);
   });
 
   it("does NOT fire the swap when the first search had a duration-only rejection", async () => {
     // Match returns a recording, but its duration differs grossly from the hint.
     const durationMismatchedMatch = makeMatch({ recordingId: "wrong-pressing", durationMs: 30_000 });
-    vi.mocked(resolveRecordingByText).mockResolvedValueOnce(durationMismatchedMatch);
+    vi.mocked(resolveRecordingByTextStatus).mockResolvedValueOnce({
+      status: "matched",
+      match: durationMismatchedMatch,
+    });
 
     // Hint says ~8 minutes; match says 30 seconds → gross mismatch (>2 min tolerance).
     const result = await resolveToMbid("Artist", "Title", 480_000);
 
     // Swap was NOT attempted — only one MB call.
-    expect(vi.mocked(resolveRecordingByText)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(resolveRecordingByTextStatus)).toHaveBeenCalledTimes(1);
     // Falls through to Spotify (mocked to null), so result is unresolved.
     expect(result.confidence).toBe("unresolved");
     expect(result.mbid).toBeNull();
@@ -142,9 +148,9 @@ describe("resolveToMbid — swap retry", () => {
 
   it("stores the result under the raw (unswapped) cache key", async () => {
     const swappedMatch = makeMatch({ recordingId: "swap-uuid" });
-    vi.mocked(resolveRecordingByText)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(swappedMatch);
+    vi.mocked(resolveRecordingByTextStatus)
+      .mockResolvedValueOnce({ status: "unavailable" })
+      .mockResolvedValueOnce({ status: "matched", match: swappedMatch });
 
     const rawArtist = "When Your Heart Is Weak";
     const rawTitle = "Cock Robin";
@@ -167,9 +173,9 @@ describe("resolveToMbid — swap retry", () => {
       isrc: "USRC12345678",
       durationMs: 200_000,
     });
-    vi.mocked(resolveRecordingByText)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(richMatch);
+    vi.mocked(resolveRecordingByTextStatus)
+      .mockResolvedValueOnce({ status: "unavailable" })
+      .mockResolvedValueOnce({ status: "matched", match: richMatch });
 
     const result = await resolveToMbid("Title", "Artist");
 
@@ -180,14 +186,32 @@ describe("resolveToMbid — swap retry", () => {
   });
 
   it("swap also skipped when both searches miss — falls through to unresolved", async () => {
-    vi.mocked(resolveRecordingByText)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
+    vi.mocked(resolveRecordingByTextStatus)
+      .mockResolvedValueOnce({ status: "unavailable" })
+      .mockResolvedValueOnce({ status: "unavailable" });
 
     const result = await resolveToMbid("Nobody", "Knowsthis");
 
-    expect(vi.mocked(resolveRecordingByText)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(resolveRecordingByTextStatus)).toHaveBeenCalledTimes(2);
     expect(result.confidence).toBe("unresolved");
     expect(result.mbid).toBeNull();
+  });
+
+  it("keeps transient provider failures retryable", async () => {
+    vi.mocked(resolveRecordingByTextStatus).mockResolvedValueOnce({
+      status: "deferred",
+    });
+
+    await resolveToMbid("Artist", "Track");
+
+    expect(vi.mocked(resolveRecordingByTextStatus)).toHaveBeenCalledTimes(1);
+    const values = vi.mocked(db.insert).mock.results[0]?.value;
+    expect(values?.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: normalizeKey("Artist", "Track"),
+        confidence: "deferred",
+        mbid: null,
+      }),
+    );
   });
 });

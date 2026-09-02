@@ -304,17 +304,39 @@ export async function backfillUnmatchedSpinsBatch(
       let mbid = candidate.cached?.mbid ?? null;
       if (!mbid || mbid.startsWith("sp:")) {
         try {
-          const result = await resolver.resolveByTextWithScoreStatus(
+          const direct = await resolver.resolveByTextWithScoreStatus(
             candidate.artist,
             candidate.title,
             AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
           );
-          if (result.status === "deferred") {
+          if (direct.status === "deferred") {
             await writeCache(candidate.key, null, "deferred");
             deferred++;
             continue;
           }
-          mbid = result.status === "matched" && result.score >= 90 ? result.mbid : null;
+          mbid =
+            direct.status === "matched" && direct.score >= 90
+              ? direct.mbid
+              : null;
+
+          // Historical unresolved spins deserve the same one bounded
+          // artist/title reversal that live ingestion uses for ICY feeds.
+          if (!mbid) {
+            const swapped = await resolver.resolveByTextWithScoreStatus(
+              candidate.title,
+              candidate.artist,
+              AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+            );
+            if (swapped.status === "deferred") {
+              await writeCache(candidate.key, null, "deferred");
+              deferred++;
+              continue;
+            }
+            mbid =
+              swapped.status === "matched" && swapped.score >= 90
+                ? swapped.mbid
+                : null;
+          }
         } catch (err) {
           await writeCache(candidate.key, null, "deferred");
           deferred++;

@@ -12,7 +12,7 @@ import { eq, and, desc, inArray, sql, gte } from "drizzle-orm";
 import { EventEmitter } from "node:events";
 import {
   resolveRecordingId,
-  resolveRecordingByText,
+  resolveRecordingByTextStatus,
   fetchRecordingLinks,
   fetchGenreAndYear,
   type RecordingLink,
@@ -255,7 +255,10 @@ export async function resolveToMbid(
 
   // eslint-disable-next-line no-useless-assignment
   madeNetworkCall = true;
-  const match = await resolveRecordingByText(rawArtist, rawTitle);
+  const directResolution = await resolveRecordingByTextStatus(rawArtist, rawTitle);
+  const match =
+    directResolution.status === "matched" ? directResolution.match : null;
+  let textResolutionDeferred = directResolution.status === "deferred";
 
   // Track whether the search returned a result that was rejected only for
   // duration — that means we found the right song but the wrong pressing.
@@ -285,8 +288,16 @@ export async function resolveToMbid(
   //     station still de-duplicate correctly. The canonical artist/title from
   //     the MusicBrainz response is what lands in the recordings row — the raw
   //     ICY order is only ever stored in spins.raw_artist / raw_title.
-  if (!durationRejected) {
-    const swapped = await resolveRecordingByText(rawTitle, rawArtist);
+  if (!durationRejected && directResolution.status === "unavailable") {
+    const swappedResolution = await resolveRecordingByTextStatus(
+      rawTitle,
+      rawArtist,
+    );
+    if (swappedResolution.status === "deferred") {
+      textResolutionDeferred = true;
+    }
+    const swapped =
+      swappedResolution.status === "matched" ? swappedResolution.match : null;
     if (swapped && !durationMismatch(durationMs, swapped.durationMs)) {
       const result: MbidResolution = {
         mbid: swapped.recordingId,
@@ -327,8 +338,13 @@ export async function resolveToMbid(
     // Spotify unconfigured or rate-limited — fall through to unresolved.
   }
 
-  // Cache the miss so an unresolvable pair isn't re-queried on every spin.
-  await writeResolutionCacheSafe(key, null, "unresolved");
+  // Clear misses are permanent, but provider/network failures must remain
+  // retryable rather than poisoning this artist/title pair forever.
+  await writeResolutionCacheSafe(
+    key,
+    null,
+    textResolutionDeferred ? "deferred" : "unresolved",
+  );
   return { mbid: null, confidence: "unresolved", fromCache: false, ...base };
 }
 

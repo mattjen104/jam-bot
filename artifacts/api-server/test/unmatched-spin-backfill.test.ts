@@ -198,7 +198,7 @@ describe("backfillUnmatchedSpinsBatch", () => {
 
     expect(first.unavailable).toBe(1);
     expect(second.candidates).toBe(0);
-    expect(mockResolveByTextWithScore).toHaveBeenCalledTimes(1);
+    expect(mockResolveByTextWithScore).toHaveBeenCalledTimes(2);
     expect(cacheRows[0]).toMatchObject({
       confidence: "unresolved",
       mbid: null,
@@ -229,5 +229,30 @@ describe("backfillUnmatchedSpinsBatch", () => {
       confidence: "deferred",
       mbid: null,
     });
+  });
+
+  it("recovers historical metadata with one bounded artist/title swap", async () => {
+    mockResolveByTextWithScore
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        mbid: "22222222-2222-4222-8222-222222222222",
+        score: 96,
+      });
+
+    const result = await backfillUnmatchedSpinsBatch();
+
+    expect(result.resolved).toBe(1);
+    expect(mockResolveByTextWithScore).toHaveBeenNthCalledWith(
+      1,
+      "The Example Band",
+      "A Track",
+      expect.any(AbortSignal),
+    );
+    expect(mockResolveByTextWithScore).toHaveBeenNthCalledWith(
+      2,
+      "A Track",
+      "The Example Band",
+      expect.any(AbortSignal),
+    );
   });
 });

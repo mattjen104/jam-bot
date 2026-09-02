@@ -1164,7 +1164,13 @@ export function parseRecordingSearch(body: unknown): RecordingTextMatch | null {
       }>;
     }>;
   };
-  const best = b?.recordings?.find((r) => !!r?.id);
+  const best = [...(b?.recordings ?? [])]
+    .filter((recording) => Boolean(recording?.id?.trim()))
+    .sort((left, right) => {
+      const scoreDifference = (right.score ?? 0) - (left.score ?? 0);
+      if (scoreDifference !== 0) return scoreDifference;
+      return left.id!.localeCompare(right.id!);
+    })[0];
   if (!best?.id) return null;
   const ac = best["artist-credit"]?.[0];
   const artist = ac?.name?.trim() || ac?.artist?.name?.trim() || undefined;
@@ -1323,38 +1329,59 @@ export async function fetchAlbumTracklist(
   }
 }
 
+export type RecordingTextResolutionStatus =
+  | { status: "matched"; match: RecordingTextMatch }
+  | { status: "unavailable" }
+  | { status: "deferred" };
+
 /**
- * Resolve an artist + title (the shape radio now-playing metadata gives us) to a
- * canonical MusicBrainz recording. Best-effort — returns null when MusicBrainz
- * is unconfigured, inputs are empty, or nothing matches above `minScore`.
- * Provider/network failures are thrown so isolated background jobs can preserve
- * retryability; the process-wide resolver below remains the never-throwing
- * live-ingestion path. `minScore` guards against low-confidence junk matches
- * so a bad text search doesn't poison the spine.
+ * Status-aware version of the live, process-wide MusicBrainz text resolver.
+ * Clear misses and invalid inputs are unavailable; network, rate-limit, and
+ * provider failures are deferred so callers do not permanently negative-cache
+ * a temporary outage.
  */
-export async function resolveRecordingByText(
+export async function resolveRecordingByTextStatus(
   artist: string,
   title: string,
   minScore = 90,
-): Promise<RecordingTextMatch | null> {
-  if (!musicbrainzEnabled() || !artist.trim() || !title.trim()) return null;
+): Promise<RecordingTextResolutionStatus> {
+  if (!musicbrainzEnabled() || !artist.trim() || !title.trim()) {
+    return { status: "unavailable" };
+  }
   const a = escapeQuery(artist);
   const t = escapeQuery(title);
-  if (!a || !t) return null;
+  if (!a || !t) return { status: "unavailable" };
   try {
     const query = `recording:"${t}" AND artist:"${a}"`;
     const body = await mbFetch(
       `/recording?query=${encodeURIComponent(query)}&limit=5&fmt=json`,
     );
     const match = parseRecordingSearch(body);
-    if (!match || match.score < minScore) return null;
-    return match;
+    if (!match || match.score < minScore) return { status: "unavailable" };
+    return { status: "matched", match };
   } catch (err) {
     logger.warn("MusicBrainz text resolve failed", {
       artist,
       title,
       error: String(err),
     });
-    return null;
+    const statusMatch = String(err).match(/MusicBrainz (\d{3})/);
+    const status = statusMatch ? Number(statusMatch[1]) : 0;
+    return status === 400 || status === 404 || status === 410
+      ? { status: "unavailable" }
+      : { status: "deferred" };
   }
+}
+
+/**
+ * Resolve an artist + title to a canonical MusicBrainz recording. Best-effort
+ * compatibility wrapper for callers that do not need retry semantics.
+ */
+export async function resolveRecordingByText(
+  artist: string,
+  title: string,
+  minScore = 90,
+): Promise<RecordingTextMatch | null> {
+  const result = await resolveRecordingByTextStatus(artist, title, minScore);
+  return result.status === "matched" ? result.match : null;
 }

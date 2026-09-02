@@ -35,3 +35,19 @@ and keep walking pages until the batch contains the last-seen cursor externalId,
 a page runs short, or a catch-up cap is hit. `ingestRawSpins` dedups the overlap,
 so a generous page size costs no extra MusicBrainz calls (only genuinely-new
 externalIds get resolved).
+
+## Resolver failure semantics
+
+A definitive provider miss may be cached as `unresolved`; a network, rate-limit,
+timeout, or provider failure must be cached as `deferred`. Live ingestion and
+historical convergence must use the same bounded query variants, including at
+most one artist/title reversal after a clear direct miss.
+
+**Why:** Treating a temporary MusicBrainz outage as a permanent miss poisons the
+normalized pair indefinitely. Letting live and historical resolution diverge
+also strands older reversed-field ICY spins even though a later live occurrence
+would resolve.
+
+**How to apply:** Preserve provider outcome status through every resolver layer.
+Retry `deferred` rows on a paced schedule, never swap after a provider failure or
+duration-only rejection, and cap a clear-miss reversal at one additional query.
