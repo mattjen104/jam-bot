@@ -58,7 +58,7 @@ describe("NTS ICY adapter", () => {
     });
   });
 
-  it("falls back to the NTS live show when the ICY stream is unreachable", async () => {
+  it("does not turn the NTS live show into a track when ICY is unreachable", async () => {
     fetchIcyMetadata.mockResolvedValue({
       ok: false,
       kind: "transient_error",
@@ -66,10 +66,6 @@ describe("NTS ICY adapter", () => {
     });
 
     const adapter = getNowPlayingAdapter("radio_browser_icy");
-    await expect(adapter?.(NTS_CONFIG)).resolves.toEqual({
-      rawArtist: "Sam Shepherd",
-      rawTitle: "Floating Points",
-      show: { name: "Floating Points", djName: "Sam Shepherd" },
-    });
+    await expect(adapter?.(NTS_CONFIG)).resolves.toBeNull();
   });
 });

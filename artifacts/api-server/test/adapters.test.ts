@@ -497,8 +497,8 @@ describe("mergeNtsIcyTrackWithLiveShow", () => {
     });
   });
 
-  it("falls back to the legacy NTS live result when ICY is unavailable", () => {
-    expect(mergeNtsIcyTrackWithLiveShow(null, liveShow)).toEqual(liveShow);
+  it("does not turn NTS programme metadata into a track when ICY is unavailable", () => {
+    expect(mergeNtsIcyTrackWithLiveShow(null, liveShow)).toBeNull();
   });
 
   it("still returns the ICY track when live show attribution is unavailable", () => {
@@ -710,13 +710,9 @@ describe("parseIcyNowPlaying", () => {
     expect(result?.rawTitle).toBe("Heart Is A Drum");
   });
 
-  it("retains a title-only entry — NOT flagged as junk even though rawArtist will equal rawTitle", () => {
-    // A station that emits only a title (no ` - ` separator) must not be
-    // discarded: the equality guard must not fire on the synthetic fallback.
-    const result = parseIcyNowPlaying("Landscape on Mars");
-    expect(result).not.toBeNull();
-    expect(result!.rawTitle).toBe("Landscape on Mars");
-    expect(result!.rawArtist).toBe("Landscape on Mars"); // fallback = title
+  it("rejects title-only entries because they do not establish track identity", () => {
+    expect(parseIcyNowPlaying("Lost and Found")).toBeNull();
+    expect(parseIcyNowPlaying("Landscape on Mars")).toBeNull();
   });
 
   it("drops title-only ADWTAG_ junk even with no artist field", () => {

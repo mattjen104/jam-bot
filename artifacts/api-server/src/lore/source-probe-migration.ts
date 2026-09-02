@@ -25,6 +25,61 @@ export const VERIFIED_STATION_SOURCE_PROBES = [
     probedAt: new Date("2026-08-19T21:36:00.538Z"),
   },
   {
+    slug: "nts-1",
+    probeKind: "icy",
+    outcome: "blank_metadata",
+    detail:
+      "GET + Icy-MetaData:1 reached the official NTS 1 stream through its redirect chain; the ICY metadata block had an empty StreamTitle. The NTS live API supplies programme context only, not a live artist/title pair.",
+    resolvedUrl: null,
+    sampleArtist: null,
+    sampleTitle: null,
+    probedAt: new Date("2026-09-02T16:20:00.000Z"),
+  },
+  {
+    slug: "nts-2",
+    probeKind: "icy",
+    outcome: "blank_metadata",
+    detail:
+      "GET + Icy-MetaData:1 reached the official NTS 2 stream through its redirect chain; the ICY metadata block had an empty StreamTitle. The NTS live API supplies programme context only, not a live artist/title pair.",
+    resolvedUrl: null,
+    sampleArtist: null,
+    sampleTitle: null,
+    probedAt: new Date("2026-09-02T16:20:00.000Z"),
+  },
+  {
+    slug: "wrek",
+    probeKind: "icy",
+    outcome: "blank_metadata",
+    detail:
+      "GET + Icy-MetaData:1 reached WREK's official 128 kbps stream; the sampled ICY metadata block had an empty StreamTitle, so no artist/title pair was inferred.",
+    resolvedUrl: null,
+    sampleArtist: null,
+    sampleTitle: null,
+    probedAt: new Date("2026-09-02T16:20:00.000Z"),
+  },
+  {
+    slug: "wmbr",
+    probeKind: "icy",
+    outcome: "blank_metadata",
+    detail:
+      "GET + Icy-MetaData:1 reached WMBR's official high-quality stream; StreamTitle contained only the programme name 'Lost and Found', not an artist/title pair.",
+    resolvedUrl: null,
+    sampleArtist: null,
+    sampleTitle: null,
+    probedAt: new Date("2026-09-02T16:20:00.000Z"),
+  },
+  {
+    slug: "ckut",
+    probeKind: "icy",
+    outcome: "blank_metadata",
+    detail:
+      "GET + Icy-MetaData:1 reached CKUT's direct live broadcast mount; the sampled ICY metadata block had an empty StreamTitle. Backup mounts were rejected because they publish only the 'CKUT (BACKUP ONLY!)' automation label.",
+    resolvedUrl: null,
+    sampleArtist: null,
+    sampleTitle: null,
+    probedAt: new Date("2026-09-02T16:20:00.000Z"),
+  },
+  {
     slug: "balamii",
     probeKind: "icy",
     outcome: "unreachable",

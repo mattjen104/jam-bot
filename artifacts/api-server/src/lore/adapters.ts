@@ -542,7 +542,9 @@ export function mergeNtsIcyTrackWithLiveShow(
   icyTrack: NowPlayingRaw | null,
   ntsLiveTrack: NowPlayingRaw | null,
 ): NowPlayingRaw | null {
-  if (!icyTrack) return ntsLiveTrack;
+  // The live endpoint is programme metadata, never track identity. Returning
+  // it without an ICY track would persist the host/show as a musical spin.
+  if (!icyTrack) return null;
   return ntsLiveTrack?.show
     ? { ...icyTrack, show: ntsLiveTrack.show }
     : icyTrack;
@@ -619,7 +621,8 @@ import { eq as _icyEq } from "drizzle-orm";
  * 1. Tilde-structured format (some station networks) — supplies a direct MB
  *    recording UUID + duration, which bypasses text search entirely.
  * 2. Standard "Artist - Title" split.
- * 3. Title-only — rawArtist falls back to rawTitle for text-search resolution.
+ * Title-only values are rejected. They are commonly programme names, station
+ * labels, or automation placeholders and do not establish track identity.
  *
  * Returns null for junk metadata (ads, break announcements, station IDs) so
  * those slots are never submitted to the resolver or logged as spins.
@@ -630,14 +633,10 @@ export function parseIcyNowPlaying(streamTitle: string): NowPlayingRaw | null {
   const rawTitle = parsed.rawTitle;
   const sourceArtist = parsed.rawArtist;
 
-  // Apply the junk guard. For title-only entries (no source artist) we pass an
-  // empty string so the equality rule cannot fire on the synthetic fallback,
-  // while all non-equality checks (ADWTAG, phrases, digits, slugs) still screen
-  // the title field. When the source provides an artist the full pair is checked.
-  if (isJunkMetadata(sourceArtist ?? "", rawTitle)) return null;
+  if (!sourceArtist) return null;
+  if (isJunkMetadata(sourceArtist, rawTitle)) return null;
 
-  const rawArtist = sourceArtist ?? rawTitle;
-  const out: NowPlayingRaw = { rawArtist, rawTitle };
+  const out: NowPlayingRaw = { rawArtist: sourceArtist, rawTitle };
   if (parsed.sourceRecordingId) out.recordingId = parsed.sourceRecordingId;
   if (parsed.durationMs != null) out.durationMs = parsed.durationMs;
   return out;
@@ -783,11 +782,9 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
   const result = await fetchIcyMetadata(streamUrl);
 
   if (!result.ok) {
-    // NTS stream URLs are CDN-routed and may be temporarily unreachable. Its
-    // public live API remains a complete show-level source, so preserve the
-    // former nts_live behavior rather than marking the station unsupported or
-    // dropping it from the poller.
-    if (ntsLiveResult) return ntsLiveResult;
+    // NTS's public live API can annotate a real ICY track, but it only carries
+    // programme metadata and must never stand in for track identity when the
+    // stream itself is unavailable.
 
     if (result.kind === "icy_unsupported") {
       // Permanent: the stream does not support ICY metadata at all.

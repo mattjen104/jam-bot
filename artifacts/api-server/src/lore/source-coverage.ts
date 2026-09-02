@@ -337,6 +337,7 @@ export async function getSourceCoverageLedger(): Promise<SourceCoverageLedger> {
       )}]::integer[]))
         AND raw_artist IS NOT NULL AND btrim(raw_artist) <> ''
         AND raw_title IS NOT NULL AND btrim(raw_title) <> ''
+        AND lower(btrim(raw_artist)) <> lower(btrim(raw_title))
       ORDER BY station_id, COALESCE(observed_at, created_at) DESC
     `);
     for (const row of spinRows.rows) {
