@@ -129,6 +129,7 @@ const COMPLETE_HISTORY_SOURCES = new Set([
   "kexp_api",
   "bbc_api",
   "somafm",
+  "wxyc_history",
   "station_history_json",
   "station_history_rss",
   "station_history_jsonld",

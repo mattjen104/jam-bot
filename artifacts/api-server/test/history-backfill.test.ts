@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   historySourceContract,
+  parseWxycDailyPlaylist,
   parseHistoryJson,
   parseHistoryJsonLd,
   parseHistoryRss,
@@ -20,6 +21,54 @@ const config = {
 };
 
 describe("configured station-history source families", () => {
+  it("parses WXYC's nested official daily archive and filters non-track entries", () => {
+    const body = {
+      shows: [
+        {
+          signonTime: Date.parse("2026-08-20T10:00:00Z"),
+          entries: [
+            { id: 1, entryType: "talkset", offsetSeconds: 20 },
+            {
+              id: 2,
+              entryType: "playcut",
+              offsetSeconds: 60,
+              artistName: "Alice Coltrane",
+              songTitle: "Journey in Satchidananda",
+              releaseTitle: "Journey in Satchidananda",
+            },
+          ],
+        },
+      ],
+    };
+    const rows = parseWxycDailyPlaylist(
+      body,
+      "https://archive.wxyc.org/api/daily-playlist?date=2026-08-20",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      externalId: "wxyc:2",
+      rawArtist: "Alice Coltrane",
+      rawTitle: "Journey in Satchidananda",
+      album: "Journey in Satchidananda",
+      sourceFamily: "official_api",
+    });
+    expect(rows[0]?.playedAt?.toISOString()).toBe("2026-08-20T10:01:00.000Z");
+    expect(
+      parseWxycDailyPlaylist(
+        body,
+        "https://archive.wxyc.org/api/daily-playlist?date=2026-08-20",
+        "2026-08-20T10:02:00Z",
+      ),
+    ).toHaveLength(1);
+    expect(
+      parseWxycDailyPlaylist(
+        body,
+        "https://archive.wxyc.org/api/daily-playlist?date=2026-08-20",
+        "2026-08-20T10:01:00Z",
+      ),
+    ).toHaveLength(0);
+  });
+
   it("parses only complete rows from official JSON", () => {
     const rows = parseHistoryJson(
       {
@@ -115,6 +164,18 @@ describe("historical row safety gate", () => {
 });
 
 describe("history source contract", () => {
+  it("describes WXYC as an independent, time-anchored archive", () => {
+    expect(supportsBackfill("wxyc_history")).toBe(true);
+    expect(historySourceContract("wxyc_history")).toMatchObject({
+      family: "official_api",
+      cursorMode: "time_anchor",
+      supportsBackfill: true,
+      stableIdentity: "required",
+      reportedTimestamp: "required",
+      archiveCitation: "dated",
+    });
+  });
+
   it("requires an explicit time anchor for generic deep backfill", () => {
     expect(supportsBackfill("station_history_json", {})).toBe(false);
     expect(

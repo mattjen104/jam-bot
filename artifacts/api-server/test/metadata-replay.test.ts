@@ -19,6 +19,7 @@ import {
   parseSpinitronWebPage,
   parseStationPage,
   parseSomaFmSongs,
+  parseWxycDailyPlaylist,
 } from "../src/lore/adapters.js";
 import {
   classifyMetadataQuality,
@@ -40,6 +41,7 @@ type ReplayParser =
   | "radiojar"
   | "spinitron_web"
   | "lot_radio_schedule"
+  | "wxyc_history"
   | "history_json"
   | "history_rss"
   | "history_jsonld"
@@ -146,6 +148,18 @@ function runParser(fixture: ReplayFixture): unknown {
     case "lot_radio_schedule": {
       const input = fixture.input as { rsc: string; now: string };
       return parseLotRadioSchedule(input.rsc, new Date(input.now));
+    }
+    case "wxyc_history": {
+      const input = fixture.input as {
+        body: unknown;
+        sourceUrl?: string;
+        before?: string;
+      };
+      return parseWxycDailyPlaylist(
+        input.body,
+        input.sourceUrl ?? "https://archive.wxyc.org/api/daily-playlist",
+        input.before,
+      );
     }
     case "history_json": {
       const input = fixture.input as {

@@ -286,6 +286,67 @@ export function parseHistoryJsonLd(
   return parseConfiguredHistoryItems(items, config, sourceUrl);
 }
 
+/**
+ * Parse WXYC's official daily-playlist JSON. The archive groups playcuts
+ * beneath shows, and each playcut's timestamp is the show's epoch-millisecond
+ * sign-on time plus its offset in seconds. Non-playcut entries are show
+ * markers/talksets and must not become synthetic spins.
+ */
+export function parseWxycDailyPlaylist(
+  body: unknown,
+  sourceUrl: string,
+  before?: string,
+): RawSpin[] {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return [];
+  const shows = (body as Record<string, unknown>).shows;
+  if (!Array.isArray(shows)) return [];
+  const beforeMs = before ? Date.parse(before) : Number.NaN;
+  const out: RawSpin[] = [];
+
+  for (const show of shows) {
+    if (!show || typeof show !== "object" || Array.isArray(show)) continue;
+    const showRecord = show as Record<string, unknown>;
+    const signonTime = Number(showRecord.signonTime);
+    const entries = showRecord.entries;
+    if (!Number.isFinite(signonTime) || !Array.isArray(entries)) continue;
+
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      if (record.entryType !== "playcut") continue;
+      const id = Number(record.id);
+      const offsetSeconds = Number(record.offsetSeconds);
+      const rawArtist = str(record.artistName);
+      const rawTitle = str(record.songTitle);
+      if (
+        !Number.isSafeInteger(id) ||
+        !Number.isFinite(offsetSeconds) ||
+        !rawArtist ||
+        !rawTitle
+      ) {
+        continue;
+      }
+      const playedAt = new Date(signonTime + offsetSeconds * 1000);
+      if (Number.isNaN(playedAt.getTime())) continue;
+      if (Number.isFinite(beforeMs) && playedAt.getTime() >= beforeMs) {
+        continue;
+      }
+
+      const spin: RawSpin = {
+        rawArtist,
+        rawTitle,
+        externalId: `wxyc:${id}`,
+        playedAt,
+        sourceUrl,
+        sourceFamily: "official_api",
+      };
+      const album = str(record.releaseTitle);
+      if (album) spin.album = album;
+      out.push(spin);
+    }
+  }
+  return out;
+}
 const stationHistoryJson: HistoryAdapter = async (config, opts) => {
   const url = str(config.url);
   if (!url) return [];
@@ -307,6 +368,49 @@ const stationHistoryJson: HistoryAdapter = async (config, opts) => {
   return parsed;
 };
 
+const wxycHistory: HistoryAdapter = async (config, opts) => {
+  const url = str(config.url);
+  if (!url) return [];
+  const cursor = opts?.before ? new Date(opts.before) : new Date();
+  if (Number.isNaN(cursor.getTime())) return [];
+  const date = new Date(
+    Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate()),
+  );
+  const dateParam = str(config.dateParam) ?? "date";
+  const fetchDay = async (day: Date) => {
+    const params = new URLSearchParams({
+      [dateParam]: day.toISOString().slice(0, 10),
+    });
+    const requestUrl = `${url}${url.includes("?") ? "&" : "?"}${params}`;
+    const body = await getJson(requestUrl);
+    const parsed = parseWxycDailyPlaylist(body, requestUrl, opts?.before);
+    const shows =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).shows
+        : undefined;
+    const seen = Array.isArray(shows)
+      ? shows.reduce((sum, show) => {
+          if (!show || typeof show !== "object" || Array.isArray(show)) {
+            return sum;
+          }
+          const entries = (show as Record<string, unknown>).entries;
+          return sum + (Array.isArray(entries) ? entries.length : 0);
+        }, 0)
+      : 0;
+    return { parsed, seen };
+  };
+
+  let result = await fetchDay(date);
+  // A cursor can land after the final play of its UTC day. Only then step back
+  // one day; otherwise, filtering the cursor day preserves late entries that
+  // happened before the cursor but were not in the previous slice.
+  if (opts?.before && result.parsed.length === 0) {
+    date.setUTCDate(date.getUTCDate() - 1);
+    result = await fetchDay(date);
+  }
+  reportReview(opts, result.seen, result.parsed.length);
+  return result.parsed;
+};
 const stationHistoryRss: HistoryAdapter = async (config, opts) => {
   const url = str(config.url);
   if (!url) return [];
@@ -1410,6 +1514,7 @@ const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {
   somafm: somaFm,
   kcrw,
   station_history_json: stationHistoryJson,
+  wxyc_history: wxycHistory,
   station_history_rss: stationHistoryRss,
   station_history_jsonld: stationHistoryJsonLd,
 };
@@ -1455,7 +1560,12 @@ export function supportsBackfill(
   source: string | null | undefined,
   config?: Record<string, unknown> | null,
 ): boolean {
-  if (source === "kexp_api" || source === "spinitron" || source === "somafm") {
+  if (
+    source === "kexp_api" ||
+    source === "spinitron" ||
+    source === "somafm" ||
+    source === "wxyc_history"
+  ) {
     return true;
   }
   if (source === "station_history_json") {
@@ -1542,6 +1652,19 @@ export function historySourceContract(
         supportedDepthDays: Number.isFinite(Number(config?.supportedDepthDays))
           ? Number(config?.supportedDepthDays)
           : null,
+        retryPolicy: "retryable",
+      };
+    case "wxyc_history":
+      return {
+        source,
+        family: "official_api",
+        surface: "WXYC official daily-playlist JSON",
+        cursorMode: "time_anchor",
+        supportsBackfill: true,
+        stableIdentity: "required",
+        reportedTimestamp: "required",
+        archiveCitation: "dated",
+        supportedDepthDays: null,
         retryPolicy: "retryable",
       };
     case "station_history_rss":
@@ -1638,6 +1761,7 @@ export function stationArchiveUrl(
       return `https://spinitron.com/${encodeURIComponent(handle)}/calendar/date/${year}-${month}-${dayOfMonth}`;
     }
     case "station_history_json":
+    case "wxyc_history":
     case "station_history_rss":
     case "station_history_jsonld": {
       const template = str(config?.archiveUrl);

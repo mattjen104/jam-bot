@@ -1506,6 +1506,21 @@ function spinitronCollegeStations(): InsertStation[] {
       // station (1994). Runs annual fundraising campaigns.
       donateUrl: "https://wxyc.org/support",
       ...spinSource("WXYC", "https://audio-mp3.ibiblio.org/wxyc.mp3"),
+      // WXYC's archive is independent from its live ICY stream. The official
+      // daily JSON has stable playcut ids and derives each track timestamp
+      // from its show's sign-on plus offset; the history adapter walks one
+      // UTC day at a time without touching the live cursor.
+      nowPlayingConfig: {
+        ...spinSource("WXYC", "https://audio-mp3.ibiblio.org/wxyc.mp3")
+          .nowPlayingConfig,
+        history: {
+          source: "wxyc_history",
+          sourceKey: "wxyc",
+          url: "https://archive.wxyc.org/api/daily-playlist",
+          dateParam: "date",
+          archiveUrl: "https://archive.wxyc.org/api/daily-playlist?date={date}",
+        },
+      },
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 410,
@@ -2425,6 +2440,7 @@ async function runSpinitronKeyUpgradePass(): Promise<number> {
       .set({
         nowPlayingSource: "spinitron",
         nowPlayingConfig: {
+          ...config,
           apiKey: envKey,
           callsign: normalizedCallsign,
           stationHandle: normalizedCallsign,

@@ -1,5 +1,60 @@
 [
   {
+    "id": "wxyc-daily-playlist-clean",
+    "source": "wxyc_history",
+    "surface": "official daily-playlist JSON",
+    "context": "WXYC's first-party archive groups track playcuts under shows and exposes stable ids plus deterministic offsets.",
+    "parser": "wxyc_history",
+    "input": {
+      "body": {
+        "shows": [
+          {
+            "signonTime": 1787220000000,
+            "entries": [
+              { "id": 9100, "entryType": "showStart", "offsetSeconds": 5 },
+              {
+                "id": 9101,
+                "entryType": "playcut",
+                "offsetSeconds": 120,
+                "artistName": "Radiohead",
+                "songTitle": "Weird Fishes/Arpeggi",
+                "releaseTitle": "In Rainbows"
+              }
+            ]
+          }
+        ]
+      },
+      "sourceUrl": "https://archive.wxyc.org/api/daily-playlist?date=2026-09-02"
+    },
+    "expected": { "status": "accepted", "artist": "Radiohead", "title": "Weird Fishes/Arpeggi", "quality": "usable_pair" }
+  },
+  {
+    "id": "wxyc-daily-playlist-station-label",
+    "source": "wxyc_history",
+    "surface": "official daily-playlist JSON",
+    "context": "A malformed playcut repeats the station label; the shared quality gate must reject it before resolution.",
+    "parser": "wxyc_history",
+    "input": {
+      "body": {
+        "shows": [
+          {
+            "signonTime": 1787220000000,
+            "entries": [
+              {
+                "id": 9102,
+                "entryType": "playcut",
+                "offsetSeconds": 180,
+                "artistName": "WXYC",
+                "songTitle": "WXYC"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "expected": { "status": "rejected", "artist": "WXYC", "title": "WXYC", "quality": "junk_metadata", "reason": "identical_station_label" }
+  },
+  {
     "id": "radio-paradise-clean",
     "source": "radio_paradise",
     "surface": "now_playing JSON",
