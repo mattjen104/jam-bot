@@ -1,5 +1,22 @@
 # Turntable capture helper
 
+## Lore Apple Music rooms
+
+Open a Lore room in **Follow a record** mode, choose **Pair helper**, and copy
+the short-lived `INGEST_URL` and `JAM_HELPER_TOKEN` shown there. The token is
+scoped to that one private room and expires after 30 minutes:
+
+```sh
+INGEST_URL=https://your-lore-host/api/jams/ingest \
+JAM_HELPER_TOKEN=the-room-token \
+SOURCE=device \
+npm start
+```
+
+Run `npm run devices` first and set `DEVICE` to a USB turntable, line-in, or
+microphone when the system default is not the intended input. Captured clips
+are sent only for identification and are never stored or redistributed.
+
 A tiny desktop helper for Jam Bot's **turntable sync**. It records short rolling
 audio clips from either:
 

@@ -28,6 +28,7 @@ import {
   StopCircle,
   Youtube,
   X,
+  Users,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -425,6 +426,14 @@ export function RideBar({
       <div className="border-b border-border/60 bg-background/40 px-5 py-2">
         <div className="flex flex-wrap items-center gap-2">
           {/* Settings icon to open Connection Centre */}
+          <Link
+            href="/jam"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 font-mono text-[13px] text-primary"
+            data-testid="ride-start-jam"
+          >
+            <Users className="h-3.5 w-3.5" />
+            Jam
+          </Link>
           <button
             type="button"
             onClick={ride.openConnectionCentre}

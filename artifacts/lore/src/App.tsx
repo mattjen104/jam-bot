@@ -36,6 +36,7 @@ import AdminSettings from "@/pages/AdminSettings";
 import DjPage from "@/pages/DjPage";
 import ScheduleCalendar from "@/pages/ScheduleCalendar";
 import WebPlayer from "./webplayer/WebPlayer";
+import Jam from "./pages/Jam";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
@@ -99,6 +100,8 @@ function Router() {
         <Route path="/archive/stations/:slug" component={StationArchive} />
         <Route path="/archive/station-runs/:runId" component={StationRun} />
         <Route path="/replay/:id" component={Replay} />
+        <Route path="/jam">{() => <Jam />}</Route>
+        <Route path="/jam/:code">{(params) => <Jam code={params.code} />}</Route>
         {/* Canonical selector routes */}
         <Route path="/selectors" component={Selectors} />
         <Route path="/archive/selectors/:handle" component={SelectorArchive} />

@@ -127,6 +127,7 @@ import { applyRssArticlesMigration } from "./lore/rss-articles-migration.js";
 import { startFingerprintScout } from "./lore/fingerprint-scout.js";
 import { startSourceCoverageProbeRun } from "./lore/source-probe.js";
 import { applyCriCandidatesMigration } from "./lore/cri-candidates-migration.js";
+import { applyAppleMusicJamsMigration } from "./lore/apple-music-jams-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -208,6 +209,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyGeniusFragmentPointerMigration", applyGeniusFragmentPointerMigration);
     await runMigration("applyReplayResolutionMigration", applyReplayResolutionMigration);
     await runMigration("applyImportedSetsMigration", applyImportedSetsMigration);
+    await runMigration("applyAppleMusicJamsMigration", applyAppleMusicJamsMigration);
     await runMigration("applySupportHoldsMigration", applySupportHoldsMigration);
     await runMigration("applySocialPresenceMigration", applySocialPresenceMigration);
     await runMigration("applyShowDjNamesMigration", applyShowDjNamesMigration);

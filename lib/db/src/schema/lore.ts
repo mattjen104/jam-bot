@@ -3469,3 +3469,124 @@ export type InsertStationSourceProbe =
 
 export type StationSourceProbe =
   typeof stationSourceProbesTable.$inferSelect;
+
+/**
+ * Private Apple Music listening rooms.  The snapshot is deliberately a
+ * server-owned read model: Apple user tokens never enter this table and the
+ * record helper only ever submits transient audio for identification.
+ */
+export interface AppleJamQueueEntry {
+  mbid?: string | null;
+  title: string;
+  artist: string;
+  artworkUrl?: string | null;
+  appleMusicId?: string | null;
+  isrc?: string | null;
+  durationMs?: number | null;
+}
+
+export interface AppleJamTransport {
+  state: "idle" | "playing" | "paused" | "ended";
+  index: number;
+  positionMs: number;
+  effectiveAt: string | null;
+  track: AppleJamQueueEntry | null;
+}
+
+export interface AppleJamSnapshot {
+  mode: "queue" | "record";
+  queue: AppleJamQueueEntry[];
+  transport: AppleJamTransport;
+  source: {
+    status: "idle" | "capturing" | "identifying" | "matched" | "offline" | "unavailable";
+    message: string | null;
+    matchedAt: string | null;
+    confidence: number | null;
+    track: AppleJamQueueEntry | null;
+  };
+}
+
+export const appleMusicJamsTable = pgTable(
+  "apple_music_jams",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull().unique(),
+    inviteToken: text("invite_token").notNull().unique(),
+    hostUserId: integer("host_user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("active"),
+    revision: integer("revision").notNull().default(0),
+    snapshot: jsonb("snapshot").$type<AppleJamSnapshot>().notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("apple_music_jams_host_idx").on(t.hostUserId),
+    index("apple_music_jams_expiry_idx").on(t.expiresAt),
+  ],
+);
+
+export type AppleMusicJam = typeof appleMusicJamsTable.$inferSelect;
+export type InsertAppleMusicJam = typeof appleMusicJamsTable.$inferInsert;
+
+export const appleMusicJamMembersTable = pgTable(
+  "apple_music_jam_members",
+  {
+    id: serial("id").primaryKey(),
+    jamId: integer("jam_id")
+      .notNull()
+      .references(() => appleMusicJamsTable.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("listener"),
+    joinedAt: timestamp("joined_at").defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("apple_music_jam_members_jam_user_idx").on(t.jamId, t.userId),
+    index("apple_music_jam_members_jam_idx").on(t.jamId),
+  ],
+);
+
+export type AppleMusicJamMember = typeof appleMusicJamMembersTable.$inferSelect;
+
+export const appleMusicJamEventsTable = pgTable(
+  "apple_music_jam_events",
+  {
+    id: serial("id").primaryKey(),
+    jamId: integer("jam_id")
+      .notNull()
+      .references(() => appleMusicJamsTable.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<AppleJamSnapshot>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("apple_music_jam_events_jam_revision_idx").on(t.jamId, t.revision),
+    index("apple_music_jam_events_jam_id_idx").on(t.jamId, t.id),
+  ],
+);
+
+export type AppleMusicJamEvent = typeof appleMusicJamEventsTable.$inferSelect;
+
+export const appleMusicJamHelpersTable = pgTable(
+  "apple_music_jam_helpers",
+  {
+    id: serial("id").primaryKey(),
+    jamId: integer("jam_id")
+      .notNull()
+      .references(() => appleMusicJamsTable.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    lastSeenAt: timestamp("last_seen_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("apple_music_jam_helpers_jam_idx").on(t.jamId)],
+);
+
+export type AppleMusicJamHelper = typeof appleMusicJamHelpersTable.$inferSelect;

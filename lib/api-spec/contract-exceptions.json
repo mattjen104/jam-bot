@@ -1,6 +1,18 @@
 {
   "$comment": "Shipped API routes that are intentionally NOT in openapi.yaml. Every entry needs a kind and a reason. Kinds: 'plain-json' (hand-written fetch hooks, no orval client), 'admin' (ops-only admin surface), 'redirect' (OAuth/browser navigation, not a JSON API), 'sse' (Server-Sent Events stream), 'media' (binary/HTML proxy, not JSON). The check-contract script fails if a shipped route is missing here AND from the spec, or if an entry here no longer matches a shipped route. Paths use OpenAPI form: {param}, with * for template-literal segments.",
   "exceptions": [
+    { "method": "POST", "path": "/jams", "kind": "plain-json", "reason": "Private Apple Music room creation consumed by the hand-written jam client." },
+    { "method": "POST", "path": "/jams/{code}/join", "kind": "plain-json", "reason": "Private room membership mutation consumed by the hand-written jam client." },
+    { "method": "GET", "path": "/jams/{code}", "kind": "plain-json", "reason": "Private room snapshot consumed by the hand-written jam client." },
+    { "method": "POST", "path": "/jams/{code}/leave", "kind": "plain-json", "reason": "Private room membership mutation consumed by the hand-written jam client." },
+    { "method": "POST", "path": "/jams/{code}/mode", "kind": "plain-json", "reason": "Host-only room mode mutation consumed by the hand-written jam client." },
+    { "method": "POST", "path": "/jams/{code}/transport", "kind": "plain-json", "reason": "Host-only room transport mutation consumed by the hand-written jam client." },
+    { "method": "POST", "path": "/jams/{code}/helper-token", "kind": "plain-json", "reason": "Host-only short-lived helper credential issuance consumed by the jam UI." },
+    { "method": "POST", "path": "/jams/{code}/record/resync", "kind": "plain-json", "reason": "Host-only record resync mutation consumed by the hand-written jam client." },
+    { "method": "POST", "path": "/jams/{code}/record/stop", "kind": "plain-json", "reason": "Host-only record-follow stop mutation consumed by the hand-written jam client." },
+    { "method": "GET", "path": "/jams/{code}/clock", "kind": "plain-json", "reason": "Four-timestamp room clock probe consumed by the hand-written jam client." },
+    { "method": "GET", "path": "/jams/{code}/events", "kind": "sse", "reason": "Private room event stream; browser EventSource receives a durable snapshot first." },
+    { "method": "POST", "path": "/jams/ingest", "kind": "plain-json", "reason": "Room-scoped helper audio identification endpoint; transient audio is discarded after fingerprinting." },
     { "method": "GET", "path": "/art", "kind": "media", "reason": "Artwork proxy — redirects/streams image bytes, not JSON." },
     { "method": "GET", "path": "/config", "kind": "plain-json", "reason": "Client boot config read by hand-written fetch." },
     { "method": "GET", "path": "/health", "kind": "plain-json", "reason": "Ops health detail; only /healthz is part of the public contract." },

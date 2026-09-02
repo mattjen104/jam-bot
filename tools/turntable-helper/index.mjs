@@ -51,12 +51,14 @@ import {
   resolveDeviceId as resolveDeviceIdPure,
   wavFromPcm,
 } from "./device-detection.mjs";
+import { helperAuthHeaders } from "./helper-auth.mjs";
 
 const LIST_DEVICES = process.argv.includes("--list-devices");
 
 // ---- Config (all via env, with sane defaults) -----------------------------
 const INGEST_URL = process.env.INGEST_URL ?? "";
 const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
+const JAM_HELPER_TOKEN = process.env.JAM_HELPER_TOKEN ?? "";
 // DEVICE may be a numeric portaudio device id OR a case-insensitive substring
 // of the device name. Empty -> the system default input device.
 const DEVICE = process.env.DEVICE ?? "";
@@ -187,7 +189,7 @@ async function postClip(wav, clipDurationMs, captureSource) {
       method: "POST",
       headers: {
         "content-type": "audio/wav",
-        "x-turntable-secret": INGEST_SECRET,
+        ...helperAuthHeaders(JAM_HELPER_TOKEN, INGEST_SECRET),
         // Lets the bot compensate for the clip window when seeking, since
         // ACRCloud's matched offset points at the START of this clip.
         "x-clip-duration-ms": String(Math.round(clipDurationMs)),
@@ -228,11 +230,11 @@ async function main() {
     return;
   }
 
-  if (!INGEST_URL || !INGEST_SECRET) {
+  if (!INGEST_URL || (!JAM_HELPER_TOKEN && !INGEST_SECRET)) {
     console.error(
-      "INGEST_URL and INGEST_SECRET are required. Example:\n" +
+      "INGEST_URL and JAM_HELPER_TOKEN (or legacy INGEST_SECRET) are required. Example:\n" +
         "  INGEST_URL=https://<bot-host>/turntable/identify \\\n" +
-        "  INGEST_SECRET=<TURNTABLE_INGEST_SECRET> \\\n" +
+        "  JAM_HELPER_TOKEN=<ROOM_TOKEN> \\\n" +
         '  DEVICE="USB Audio" npm start',
     );
     process.exitCode = 1;
