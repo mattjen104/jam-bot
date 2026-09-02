@@ -85,9 +85,10 @@ logical_id = "542af2ba-52ee-42b2-87e5-09480d27165a"
 [[outputs]]
 id = "WOsKN9c1QEXrCGFPAC_I6"
 uri = "file://attached_assets/lore-dial-v2.html"
-type = "unspecified"
+type = "text"
 title = "Timeline Dial v2 — tap to open"
 logical_id = "b9b61813-5f48-461d-8b96-b23099d4a7c3"
+content_type = "text/html"
 
 [[outputs]]
 id = "5BIqpB5PgbjXZZHbNXfpC"
@@ -110,3 +111,17 @@ mtime_ms = 1787590909792
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/725c47dd-0521-4ceb-86c3-d466b75aecb8/701e6728-514f-45a5-b924-fcb71b15383b"
 storage_version_token = "1787590916116781"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "2l-mv7HMRR00DGxc5FnoU"
+uri = "file://reports/lore-station-identity-audit.md"
+type = "text"
+title = "Lore Station Identity Audit"
+description = "Editorial review of 43 front-door stations: 16 ready sentences, 4 provisional drafts, evidence ledgers, exclusions, and a grounded data plan. No app integration included."
+logical_id = "ae4d8a6a-4206-4c66-acdd-83867dbf1791"
+content_hash = "sha256:31d3db72ba1b21dafe408ffb81066ca2c84bee9108116d4bbe77cb24986687dc"
+size = 16511
+mtime_ms = 1788362661344
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/ae4d8a6a-4206-4c66-acdd-83867dbf1791/f23772e2-82e0-4f92-a672-544739032acd"
+storage_version_token = "1788362711197317"
+content_type = "text/markdown"
