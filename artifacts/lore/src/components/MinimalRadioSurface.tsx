@@ -26,8 +26,9 @@ const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
 const REMOTE_PAGE_SIZE = 2;
 
 interface MinimalRadioSurfaceProps {
+  /** Selected station pool for the overview and sentence-card views. */
   rows: DialLaneRow[];
-  /** Full station pool for the compact remote; cards use the live/playable rows. */
+  /** Full station pool for the compact remote. */
   remoteRows?: DialLaneRow[];
   categoryByStationSlug?: ReadonlyMap<string, StationCategory>;
   preset: RadioPreset;

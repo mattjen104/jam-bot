@@ -128,10 +128,6 @@ export default function SplitHome() {
       }),
     [stations],
   );
-  const rows = useMemo(
-    () => allRows.filter((row) => row.ds.isLive),
-    [allRows],
-  );
   const categoryByStationSlug = useMemo(
     () => new Map(
       stations.flatMap((station) => {
@@ -226,13 +222,13 @@ export default function SplitHome() {
             />
             {activeLens === "radio" ? (
               <MinimalRadioSurface
-                rows={rows}
-                 remoteRows={allRows}
+                rows={allRows}
+                remoteRows={allRows}
                 categoryByStationSlug={categoryByStationSlug}
                 preset="now"
                 activeCategories={activeCategories}
                 onToggleCategory={handleToggleCategory}
-                 onSetCategories={handleSetCategories}
+                onSetCategories={handleSetCategories}
                 loading={isCoreLoading || liveLoading}
                 error={stationsError}
                 onRetry={refetchStations}

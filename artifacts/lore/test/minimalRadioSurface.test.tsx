@@ -364,7 +364,7 @@ describe("MinimalRadioSurface", () => {
           });
       return (
         <MinimalRadioSurface
-          rows={[alpha, beta]}
+          rows={allRows}
           remoteRows={visibleRemoteRows}
           preset="now"
           activeCategories={activeCategories}
@@ -423,6 +423,11 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
     expect(screen.queryByTestId("minimal-radio-remote-view")).toBeNull();
     expect(screen.getByTestId("minimal-radio-overview")).toBeTruthy();
+    expect(screen.getAllByLabelText(/Tune in to .* playing/)).toHaveLength(8);
+
+    fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
+    expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(8);
+    expect(screen.getByText("Not broadcasting")).toBeTruthy();
   });
 
   it("keeps playable core stations in cards even when they have no crossing", () => {
