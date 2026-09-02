@@ -3,6 +3,7 @@ import { useAdminToken } from "../hooks/useAdminToken";
 import { AdminNav } from "@/components/AdminNav";
 import {
   AlertTriangle,
+  Archive,
   CheckCircle2,
   Clock,
   Info,
@@ -121,6 +122,60 @@ interface GenreEnrichmentHealth {
   oldestPendingAt: string | null;
   lastAttemptAt: string | null;
   stationCoverage: GenreStationCoverage[];
+}
+
+interface HistoryAuditResult {
+  audited: number;
+  usable: number;
+  unsupported: number;
+  transientFailures: number;
+}
+
+interface HistoryAuditStatus {
+  running: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  result: HistoryAuditResult | null;
+}
+
+interface StationHistoryLedgerSource {
+  family: string;
+  surface: string;
+  sourceUrl: string | null;
+  status: string;
+  cursorMode: string;
+  supportsBackfill: boolean;
+  stableIdentity: string;
+  reportedTimestamp: string;
+  archiveCitation: string;
+  supportedDepthDays: number | null;
+  oldestPublishedAt: string | null;
+  lastSuccessfulPage: number | null;
+  acceptedCount: number;
+  rejectedCount: number;
+  duplicateCount: number;
+  importedCount: number;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastFailureReason: string | null;
+}
+
+interface StationHistoryLedgerStation {
+  stationId: number;
+  slug: string;
+  name: string;
+  configuredSource: string | null;
+  historySource: string | null;
+  liveCursor: string | null;
+  backfillCursor: string | null;
+  backfillDone: boolean;
+  source: StationHistoryLedgerSource | null;
+}
+
+interface StationHistoryResponse {
+  audit: HistoryAuditStatus;
+  stations: StationHistoryLedgerStation[];
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -593,6 +648,8 @@ function HealthPanel({
             data-testid="genre-error-banner"
           />
         )}
+
+        {!loading && <StationHistorySection token={token} />}
 
         {/* Radio Browser bulk re-probe + fingerprint scout — admin tools */}
         {!loading && <BulkReprobeSection token={token} />}
@@ -1970,5 +2027,349 @@ function SourceCoverageSection({ token }: { token: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+// ─── Station history archive recovery ───────────────────────────────────────
+
+const HISTORY_STATUS_LABEL: Record<string, string> = {
+  usable: "Usable",
+  empty: "No rows",
+  unsupported: "Unsupported",
+  transient_failure: "Transient failure",
+  parser_drift: "Parser drift",
+  running: "Recovering",
+  complete: "Complete",
+  unverified: "Not audited",
+};
+
+const HISTORY_STATUS_CLASS: Record<string, string> = {
+  usable: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  complete: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  running: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  empty: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
+  unverified: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
+  unsupported: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
+  parser_drift: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  transient_failure: "bg-red-500/15 text-red-700 dark:text-red-400",
+};
+
+function historyStatusLabel(status: string | null): string {
+  return HISTORY_STATUS_LABEL[status ?? "unverified"] ?? status ?? "Unknown";
+}
+
+function historyStatusClass(status: string | null): string {
+  return (
+    HISTORY_STATUS_CLASS[status ?? "unverified"] ??
+    "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400"
+  );
+}
+
+function formatRecoveredDepth(oldestPublishedAt: string | null): string {
+  if (!oldestPublishedAt) return "Not recovered yet";
+  const timestamp = Date.parse(oldestPublishedAt);
+  if (Number.isNaN(timestamp)) return "Unknown";
+  const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
+  const depth = days === 0 ? "<1 day" : `${days.toLocaleString()} days`;
+  return `${depth} · ${formatTimestamp(oldestPublishedAt)}`;
+}
+
+function StationHistorySection({ token }: { token: string }) {
+  const [ledger, setLedger] = useState<StationHistoryResponse | null>(null);
+  const [status, setStatus] = useState<HistoryAuditStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchLedger = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/station-history", {
+        headers: { "x-admin-token": token },
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setLoadError(body.error ?? `HTTP ${response.status}`);
+        return;
+      }
+      const data = (await response.json()) as StationHistoryResponse;
+      setLedger(data);
+      setStatus((current) => current ?? data.audit);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Network error");
+    }
+  }, [token]);
+
+  const fetchAuditStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/station-history/audit/status", {
+        headers: { "x-admin-token": token },
+      });
+      if (!response.ok) return;
+      const data = (await response.json()) as HistoryAuditStatus;
+      setStatus(data);
+      if (!data.running) {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        // An audit writes fresh ledger evidence; show it as soon as it ends.
+        void fetchLedger();
+      }
+    } catch {
+      // Keep the last status during a transient polling failure.
+    }
+  }, [token, fetchLedger]);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      void fetchLedger();
+      void fetchAuditStatus();
+    });
+    const refreshTimer = setInterval(() => void fetchLedger(), REFRESH_INTERVAL_MS);
+    return () => {
+      clearInterval(refreshTimer);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [fetchLedger, fetchAuditStatus]);
+
+  useEffect(() => {
+    if (!status?.running) return;
+    if (!pollRef.current) {
+      pollRef.current = setInterval(() => void fetchAuditStatus(), 5_000);
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [status?.running, fetchAuditStatus]);
+
+  const startAuditPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => void fetchAuditStatus(), 5_000);
+  }, [fetchAuditStatus]);
+
+  const handleStartAudit = useCallback(async () => {
+    setStarting(true);
+    setActionError(null);
+    try {
+      const response = await fetch("/api/admin/station-history/audit", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        status?: HistoryAuditStatus;
+      };
+      if (!response.ok && response.status !== 409) {
+        setActionError(body.error ?? `HTTP ${response.status}`);
+        return;
+      }
+      if (body.status) {
+        setStatus(body.status);
+      } else {
+        void fetchAuditStatus();
+      }
+      startAuditPolling();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Request failed");
+    } finally {
+      setStarting(false);
+    }
+  }, [token, fetchAuditStatus, startAuditPolling]);
+
+  const audit = status ?? ledger?.audit ?? null;
+  const auditResult = audit?.result;
+
+  return (
+    <section className="mt-10" data-testid="station-history-section">
+      <SectionHeading
+        icon={<Archive className="h-4 w-4" />}
+        title="Archive recovery"
+        badge={ledger?.stations.length ?? 0}
+        description="Curated stations with a deterministic history source, recovered depth, and backfill evidence. Audit runs are bounded and import-free."
+      />
+
+      {loadError && (
+        <div
+          className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4"
+          role="alert"
+          data-testid="station-history-error"
+        >
+          <p className="text-base font-normal text-destructive">
+            Could not load archive recovery
+          </p>
+          <p className="mt-1 text-sm text-destructive/80">{loadError}</p>
+        </div>
+      )}
+
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {audit?.running ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
+            ) : auditResult ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
+            ) : (
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <p className="text-sm text-muted-foreground" data-testid="station-history-audit-status">
+              {audit?.running
+                ? `Audit running${audit.startedAt ? ` since ${formatTimestamp(audit.startedAt)}` : "…"}`
+                : auditResult
+                  ? `Last audit: ${auditResult.usable} usable · ${auditResult.unsupported} unsupported · ${auditResult.transientFailures} transient failures`
+                  : "No archive audit has run yet."}
+            </p>
+          </div>
+          <button
+            onClick={() => void handleStartAudit()}
+            disabled={starting || audit?.running === true}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+            data-testid="station-history-audit-start"
+          >
+            <RefreshCw
+              className={`h-3 w-3 ${starting || audit?.running ? "animate-spin" : ""}`}
+            />
+            {audit?.running ? "Auditing…" : "Run archive audit"}
+          </button>
+        </div>
+        {audit?.running && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Checking the curated roster one station at a time. This pass records source evidence only; it does not import spins.
+          </p>
+        )}
+        {auditResult && !audit?.running && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Audited {auditResult.audited} station{auditResult.audited === 1 ? "" : "s"}
+            {audit.finishedAt ? ` · finished ${formatTimestamp(audit.finishedAt)}` : ""}.
+          </p>
+        )}
+        {actionError && (
+          <p className="mt-2 text-sm text-destructive" role="alert">
+            {actionError}
+          </p>
+        )}
+      </div>
+
+      {ledger && ledger.stations.length === 0 && (
+        <div className="mt-4 rounded-xl border border-border bg-card/60 px-5 py-4 text-sm text-muted-foreground">
+          No curated flagship stations are configured for archive recovery.
+        </div>
+      )}
+
+      {ledger && ledger.stations.length > 0 && (
+        <div className="mt-4 flex flex-col gap-3">
+          {ledger.stations.map((station) => (
+            <StationHistoryCard key={station.stationId} station={station} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StationHistoryCard({
+  station,
+}: {
+  station: StationHistoryLedgerStation;
+}) {
+  const source = station.source;
+  const sourceStatus = source?.status ?? null;
+  const sourceName = station.historySource ?? station.configuredSource;
+  const rejected = source?.rejectedCount ?? 0;
+  const imported = source?.importedCount ?? 0;
+
+  return (
+    <div
+      className="rounded-xl border border-card-border bg-card px-5 py-4"
+      data-testid={`station-history-row-${station.stationId}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-base font-normal text-foreground">
+              {station.name}
+            </span>
+            <span className="font-mono text-sm text-muted-foreground">
+              {station.slug}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[13px] font-normal ${historyStatusClass(sourceStatus)}`}
+              data-testid={`station-history-status-${station.stationId}`}
+            >
+              {historyStatusLabel(sourceStatus)}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            History source:{" "}
+            <span className="font-mono text-foreground">{sourceName ?? "not configured"}</span>
+            {source?.family ? ` · ${source.family.replaceAll("_", " ")}` : ""}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+            Recovered depth
+          </dt>
+          <dd className="font-mono text-sm text-foreground">
+            {formatRecoveredDepth(source?.oldestPublishedAt ?? null)}
+          </dd>
+        </div>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-base sm:grid-cols-4">
+        <DataRow label="Accepted" value={(source?.acceptedCount ?? 0).toLocaleString()} />
+        <DataRow label="Imported" value={imported.toLocaleString()} />
+        <DataRow
+          label="Rejected"
+          value={`${rejected.toLocaleString()} · ${source?.duplicateCount ?? 0} duplicate`}
+        />
+        <DataRow
+          label="Backfill"
+          value={
+            station.backfillDone
+              ? "complete"
+              : source?.supportsBackfill
+                ? "in progress"
+                : "not supported"
+          }
+        />
+      </dl>
+
+      {source?.supportedDepthDays != null && (
+        <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
+          Source advertises up to{" "}
+          <span className="font-mono text-foreground">{source.supportedDepthDays} days</span>
+          {" "}of history · cursor {source.cursorMode.replaceAll("_", " ")}.
+        </p>
+      )}
+
+      {sourceStatus === "unsupported" && (
+        <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
+          No deterministic history adapter is configured for this station.
+        </p>
+      )}
+      {sourceStatus === "parser_drift" && (
+        <p className="mt-3 flex items-start gap-2 border-t border-amber-500/20 pt-3 text-sm text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          Parser drift: the source responded, but its rows no longer include usable timestamps or stable identities.
+          {source?.lastFailureReason ? ` ${source.lastFailureReason}` : ""}
+        </p>
+      )}
+      {sourceStatus === "transient_failure" && (
+        <p className="mt-3 flex items-start gap-2 border-t border-red-500/20 pt-3 text-sm text-red-700 dark:text-red-400">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          Transient provider or network failure; the cursor is retained for a later retry.
+          {source?.lastFailureReason ? ` ${source.lastFailureReason}` : ""}
+        </p>
+      )}
+      {source?.lastAttemptAt && sourceStatus !== "parser_drift" && sourceStatus !== "transient_failure" && (
+        <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
+          Last checked {formatTimestamp(source.lastAttemptAt)}
+        </p>
+      )}
+    </div>
   );
 }
