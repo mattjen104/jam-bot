@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
 import { AdminNav } from "@/components/AdminNav";
+import type { StoreAuditResponse } from "@workspace/api-client-react";
 import {
   AlertTriangle,
   Archive,
@@ -11,6 +12,7 @@ import {
   Loader2,
   Radio,
   RefreshCw,
+  ShoppingBag,
   Tag,
   Wifi,
 } from "lucide-react";
@@ -650,6 +652,7 @@ function HealthPanel({
         )}
 
         {!loading && <StationHistorySection token={token} />}
+        {!loading && <StationStoreAuditSection token={token} />}
 
         {/* Radio Browser bulk re-probe + fingerprint scout — admin tools */}
         {!loading && <BulkReprobeSection token={token} />}
@@ -2096,6 +2099,169 @@ function formatRecoveredDepth(oldestPublishedAt: string | null): string {
   const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
   const depth = days === 0 ? "<1 day" : `${days.toLocaleString()} days`;
   return `${depth} · ${formatTimestamp(oldestPublishedAt)}`;
+}
+
+function StationStoreAuditSection({ token }: { token: string }) {
+  const [report, setReport] = useState<StoreAuditResponse | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [queued, setQueued] = useState(false);
+
+  const fetchReport = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/stations/store-audit", {
+        headers: { "x-admin-token": token },
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setLoadError(body.error ?? `HTTP ${response.status}`);
+        return;
+      }
+      setReport((await response.json()) as StoreAuditResponse);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Network error");
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => fetchReport());
+    const timer = setInterval(() => void fetchReport(), REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [fetchReport]);
+
+  const handleScan = useCallback(async () => {
+    setScanning(true);
+    setQueued(false);
+    try {
+      const response = await fetch("/api/admin/stations/store-audit/run", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setLoadError(body.error ?? `HTTP ${response.status}`);
+        return;
+      }
+      setQueued(true);
+      window.setTimeout(() => void fetchReport(), 5_000);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Request failed");
+    } finally {
+      setScanning(false);
+    }
+  }, [token, fetchReport]);
+
+  const foundStations =
+    report?.stations.filter((station) => station.storeStatus === "found") ?? [];
+  const reviewStations =
+    report?.stations.filter(
+      (station) =>
+        station.storeStatus === "pending" ||
+        station.storeStatus === "unavailable" ||
+        station.storeStatus === "blocked",
+    ) ?? [];
+
+  return (
+    <section className="mt-10" data-testid="station-store-audit-section">
+      <SectionHeading
+        icon={<ShoppingBag className="h-4 w-4" />}
+        title="Station store audit"
+        badge={report?.summary.found ?? 0}
+        description="Homepage-derived shop, merch, record, and ticket links for operator review. Nothing here is exposed to listeners."
+      />
+
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-muted-foreground">
+            {report
+              ? `${report.summary.found} found · ${report.summary.notFound} no link · ${report.summary.pending} pending · ${report.summary.unavailable + report.summary.blocked} unavailable`
+              : "Loading store evidence…"}
+          </div>
+          <button
+            onClick={() => void handleScan()}
+            disabled={scanning}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+            data-testid="station-store-audit-run"
+          >
+            <RefreshCw className={`h-3 w-3 ${scanning ? "animate-spin" : ""}`} />
+            {scanning ? "Starting…" : "Scan next 25"}
+          </button>
+        </div>
+        {queued && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Batch accepted. The report refreshes automatically as checks finish.
+          </p>
+        )}
+        {loadError && (
+          <p className="mt-2 text-sm text-destructive" role="alert">
+            Could not load store audit: {loadError}
+          </p>
+        )}
+      </div>
+
+      {foundStations.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2">
+          {foundStations.map((station) => (
+            <div
+              key={station.stationId}
+              className="rounded-xl border border-card-border bg-card px-5 py-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-normal text-foreground">{station.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {station.storeLabel || "Store link"} · {station.storeSignal ?? "unknown"} evidence
+                  </p>
+                </div>
+                {station.storeUrl && (
+                  <a
+                    href={station.storeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="max-w-full truncate text-sm text-primary underline underline-offset-2"
+                  >
+                    Open detected link
+                  </a>
+                )}
+              </div>
+              <p className="mt-2 break-all font-mono text-[12px] text-muted-foreground">
+                {station.storeUrl}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {report && foundStations.length === 0 && (
+        <div className="mt-4 rounded-xl border border-border bg-card/60 px-5 py-4 text-sm text-muted-foreground">
+          No purchase links have been detected yet.
+        </div>
+      )}
+
+      {reviewStations.length > 0 && (
+        <details className="mt-4 rounded-xl border border-border bg-card/60 px-5 py-4">
+          <summary className="cursor-pointer text-sm text-foreground">
+            Review {reviewStations.length} unchecked or unavailable station
+            {reviewStations.length === 1 ? "" : "s"}
+          </summary>
+          <div className="mt-3 flex flex-col gap-2">
+            {reviewStations.map((station) => (
+              <div
+                key={station.stationId}
+                className="flex items-center justify-between gap-4 border-t border-border/60 pt-2 text-sm"
+              >
+                <span className="min-w-0 truncate text-foreground">{station.name}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {station.storeStatus.replace("_", " ")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </section>
+  );
 }
 
 function StationHistorySection({ token }: { token: string }) {

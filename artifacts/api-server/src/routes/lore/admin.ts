@@ -53,6 +53,7 @@ import {
   PostEmbedResolutionRequeueResponse,
   IngestBookKnowledgeResponse,
   ListBookDraftsResponse,
+  GetAdminStationStoreAuditResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -117,6 +118,7 @@ import { getScoutReport } from "../../lore/fingerprint-scout.js";
 import { probeCriStream } from "../../lore/cri-probe.js";
 import { auddAvailable } from "../../lore/audd.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
+import { runHomepageScraperBatch } from "../../lore/homepage-scraper.js";
 import {
   upsertPicker,
   getPickerByHandle,
@@ -2337,6 +2339,76 @@ router.get("/admin/stations", h(async (_req, res) => {
       })),
     }),
   );
+}));
+
+// GET /api/admin/stations/store-audit — homepage-derived purchase evidence.
+// This remains admin-only until operators have reviewed the signals.
+router.get("/admin/stations/store-audit", h(async (_req, res) => {
+  const rows = await db
+    .select({
+      stationId: stationsTable.id,
+      slug: stationsTable.slug,
+      name: stationsTable.name,
+      homepageUrl: stationsTable.homepageUrl,
+      storeUrl: stationsTable.storeUrl,
+      storeLabel: stationsTable.storeLabel,
+      storeSignal: stationsTable.storeSignal,
+      storeStatus: stationsTable.storeStatus,
+      storeCheckedAt: stationsTable.storeCheckedAt,
+      homepageScrapedAt: stationsTable.homepageScrapedAt,
+    })
+    .from(stationsTable)
+    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
+    .orderBy(asc(stationsTable.name));
+
+  const stations = rows.map((row) => ({
+    stationId: row.stationId,
+    slug: row.slug,
+    name: row.name,
+    homepageUrl: row.homepageUrl ?? null,
+    storeUrl: row.storeUrl ?? null,
+    storeLabel: row.storeLabel ?? null,
+    storeSignal:
+      row.storeSignal === "path" || row.storeSignal === "text"
+        ? row.storeSignal
+        : null,
+    storeStatus:
+      row.storeStatus === "found" ||
+      row.storeStatus === "not_found" ||
+      row.storeStatus === "unavailable" ||
+      row.storeStatus === "blocked"
+        ? row.storeStatus
+        : "pending",
+    storeCheckedAt: row.storeCheckedAt?.toISOString() ?? null,
+    homepageScrapedAt: row.homepageScrapedAt?.toISOString() ?? null,
+  }));
+
+  const summary = {
+    total: stations.length,
+    found: stations.filter((station) => station.storeStatus === "found").length,
+    notFound: stations.filter((station) => station.storeStatus === "not_found").length,
+    pending: stations.filter((station) => station.storeStatus === "pending").length,
+    unavailable: stations.filter((station) => station.storeStatus === "unavailable").length,
+    blocked: stations.filter((station) => station.storeStatus === "blocked").length,
+  };
+
+  return res.json(
+    GetAdminStationStoreAuditResponse.parse({
+      generatedAt: new Date().toISOString(),
+      summary,
+      stations,
+    }),
+  );
+}));
+
+// POST /api/admin/stations/store-audit/run — scan the next bounded batch using
+// the existing homepage scraper and its robots/public-host safety guards.
+router.post("/admin/stations/store-audit/run", h(async (_req, res) => {
+  const batchSize = 25;
+  void runHomepageScraperBatch(batchSize).catch((error) => {
+    console.error("[admin] store audit batch failed", error);
+  });
+  return res.status(202).json({ accepted: true, batchSize });
 }));
 
 // GET /api/admin/stations/flags — every station (incl. inactive/hidden) with

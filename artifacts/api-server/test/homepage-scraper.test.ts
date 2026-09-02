@@ -4,6 +4,7 @@ import {
   discoverStationLogo,
   extractManifestLogoCandidates,
   extractDonateLink,
+  extractStoreLink,
   extractStationLogoCandidates,
   scrapeStationHomepage,
 } from "../src/lore/homepage-scraper.js";
@@ -28,6 +29,11 @@ vi.mock("@workspace/db", async (importOriginal) => {
     logoWidth: "logoWidth",
     logoHeight: "logoHeight",
     donateUrl: "donateUrl",
+    storeUrl: "storeUrl",
+    storeLabel: "storeLabel",
+    storeSignal: "storeSignal",
+    storeStatus: "storeStatus",
+    storeCheckedAt: "storeCheckedAt",
     active: "active",
     hidden: "hidden",
   };
@@ -253,6 +259,68 @@ describe("extractDonateLink — non-http hrefs rejected", () => {
   });
 });
 
+describe("extractStoreLink", () => {
+  it("finds a relative shop path and retains its label as evidence", () => {
+    expect(
+      extractStoreLink(
+        `<a href="/shop">Visit the station shop</a>`,
+        "https://radio.example",
+      ),
+    ).toEqual({
+      url: "https://radio.example/shop",
+      label: "Visit the station shop",
+      signal: "path",
+    });
+  });
+
+  it("accepts a trusted external commerce link from the official homepage", () => {
+    expect(
+      extractStoreLink(
+        `<a href="https://station.myshopify.com/collections/all">Merchandise</a>`,
+        "https://radio.example",
+      ),
+    ).toEqual({
+      url: "https://station.myshopify.com/collections/all",
+      label: "Merchandise",
+      signal: "text",
+    });
+  });
+
+  it("recognizes records and ticket purchase signals", () => {
+    expect(
+      extractStoreLink(
+        `<a href="/records">Records</a><a href="/tickets">Tickets</a>`,
+        "https://radio.example",
+      )?.url,
+    ).toBe("https://radio.example/records");
+  });
+
+  it("rejects unrelated store-locator and app-store copy", () => {
+    const html = [
+      `<a href="/locations">Store locator</a>`,
+      `<a href="/apps">Download in the App Store</a>`,
+    ].join("");
+    expect(extractStoreLink(html, "https://radio.example")).toBeNull();
+  });
+
+  it("rejects an unrelated external site even when its text says store", () => {
+    expect(
+      extractStoreLink(
+        `<a href="https://unrelated.example/catalog">Support store</a>`,
+        "https://radio.example",
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects anchors and non-http purchase links", () => {
+    const html = [
+      `<a href="#shop">Shop</a>`,
+      `<a href="javascript:void(0)">Buy</a>`,
+    ].join("");
+    expect(extractStoreLink(html, "https://radio.example")).toBeNull();
+  });
+});
+
 describe("station logo discovery", () => {
   it("extracts only explicitly logo-like page assets and resolves relative URLs", () => {
     const candidates = extractStationLogoCandidates(
@@ -432,6 +500,27 @@ const safeScrapeOpts = {
 
     // Only the blurb/timestamp update — no donate_url update at all.
     expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists store evidence from the same successful homepage fetch", async () => {
+    const { db } = await import("@workspace/db");
+    const chain = makeDbUpdateChain();
+    (db.update as ReturnType<typeof vi.fn>).mockReturnValueOnce(chain.chain);
+
+    await scrapeStationHomepage(baseTarget, {
+      fetchFn: makeHtmlFetch(`<a href="/merch">Station merch</a>`),
+      ...safeScrapeOpts,
+    });
+
+    expect(chain.setCalls[0]).toEqual(
+      expect.objectContaining({
+        storeUrl: "https://station.example.com/merch",
+        storeLabel: "Station merch",
+        storeSignal: "path",
+        storeStatus: "found",
+        storeCheckedAt: expect.any(Date),
+      }),
+    );
   });
 
   it("marks homepageScrapedAt even when fetch returns a non-ok response", async () => {

@@ -81,6 +81,8 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
           lt(stationsTable.homepageScrapedAt, cutoff),
           isNull(stationsTable.logoCheckedAt),
           lt(stationsTable.logoCheckedAt, cutoff),
+          isNull(stationsTable.storeCheckedAt),
+          lt(stationsTable.storeCheckedAt, cutoff),
         ),
       ),
     )
@@ -601,6 +603,102 @@ export function extractDonateLink(
   return hrefFallback;
 }
 
+export interface StationStoreLink {
+  url: string;
+  label: string;
+  signal: "path" | "text";
+}
+
+/**
+ * Scan the official homepage for a likely purchase destination.
+ *
+ * This is intentionally narrower than a generic commerce crawler: only
+ * explicit anchor links count, and the link itself must be HTTP(S). The
+ * homepage is the provenance, so external checkout hosts are allowed when the
+ * station has linked to them.
+ */
+export function extractStoreLink(
+  html: string,
+  baseUrl: string,
+): StationStoreLink | null {
+  const hrefPathKeywords =
+    /\/(shop|store|merch|merchandise|vinyl|records|products|catalog|tickets?)(\/|$|\?|#)/i;
+  const textKeywords =
+    /\b(shop|store|merch(?:andise)?|vinyl|records?|buy|purchase|tickets?)\b/i;
+  const anchorRe = /<a[^>]+href=["']([^"'#][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const misleadingText =
+    /\b(app store|play store|store locator|find (?:a )?store|support store)\b/i;
+  const trustedCommerceHosts = [
+    "bandcamp.com",
+    "bigcartel.com",
+    "bonfire.com",
+    "etsy.com",
+    "eventbrite.com",
+    "fourthwall.com",
+    "hellomerch.com",
+    "merchbar.com",
+    "myshopify.com",
+    "shop.app",
+    "shopify.com",
+    "spring.com",
+    "square.site",
+    "ticketmaster.com",
+  ];
+  const baseHostname = (() => {
+    try {
+      return new URL(baseUrl).hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+  })();
+  if (!baseHostname) return null;
+  let textFallback: StationStoreLink | null = null;
+
+  let match: RegExpExecArray | null;
+  while ((match = anchorRe.exec(html)) !== null) {
+    const rawHref = match[1].trim();
+    if (rawHref.startsWith("#")) continue;
+
+    let resolved: string;
+    try {
+      resolved = new URL(rawHref, baseUrl).href;
+    } catch {
+      continue;
+    }
+    if (!/^https?:\/\//i.test(resolved)) continue;
+
+    const label = decodeEntities(match[2].replace(/<[^>]*>/g, " "))
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160);
+    let parsed: URL;
+    try {
+      parsed = new URL(resolved);
+    } catch {
+      continue;
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    const isSameSite =
+      hostname === baseHostname ||
+      hostname.endsWith(`.${baseHostname}`) ||
+      baseHostname.endsWith(`.${hostname}`);
+    const isTrustedCommerceHost = trustedCommerceHosts.some(
+      (host) => hostname === host || hostname.endsWith(`.${host}`),
+    );
+    if (!isSameSite && !isTrustedCommerceHost) continue;
+    if (misleadingText.test(label)) continue;
+
+    if (hrefPathKeywords.test(parsed.pathname)) {
+      return { url: resolved, label, signal: "path" };
+    }
+    if (textFallback === null && textKeywords.test(label)) {
+      textFallback = { url: resolved, label, signal: "text" };
+    }
+  }
+
+  return textFallback;
+}
+
 /** Pull a title/meta-description-sized excerpt out of raw HTML. Pure, no I/O. */
 export function extractBlurb(html: string): string | null {
   // Prefer an explicit meta description — it's the site's own summary.
@@ -668,7 +766,12 @@ export async function scrapeStationHomepage(
     // Malformed homepage URL — mark attempted so it isn't retried every tick.
     await db
       .update(stationsTable)
-      .set({ homepageScrapedAt: new Date(), logoCheckedAt: new Date() })
+      .set({
+        homepageScrapedAt: new Date(),
+        logoCheckedAt: new Date(),
+        storeStatus: "unavailable",
+        storeCheckedAt: new Date(),
+      })
       .where(eq(stationsTable.id, target.id));
     return { scraped: false, blocked: false };
   }
@@ -680,7 +783,12 @@ export async function scrapeStationHomepage(
     );
     await db
       .update(stationsTable)
-      .set({ homepageScrapedAt: new Date(), logoCheckedAt: new Date() })
+      .set({
+        homepageScrapedAt: new Date(),
+        logoCheckedAt: new Date(),
+        storeStatus: "blocked",
+        storeCheckedAt: new Date(),
+      })
       .where(eq(stationsTable.id, target.id));
     return { scraped: false, blocked: true };
   }
@@ -695,7 +803,12 @@ export async function scrapeStationHomepage(
     if (!fetched) {
       await db
         .update(stationsTable)
-        .set({ homepageScrapedAt: new Date(), logoCheckedAt: new Date() })
+        .set({
+          homepageScrapedAt: new Date(),
+          logoCheckedAt: new Date(),
+          storeStatus: "unavailable",
+          storeCheckedAt: new Date(),
+        })
         .where(eq(stationsTable.id, target.id));
       return { scraped: false, blocked: false };
     }
@@ -706,7 +819,12 @@ export async function scrapeStationHomepage(
     ) {
       await db
         .update(stationsTable)
-        .set({ homepageScrapedAt: new Date(), logoCheckedAt: new Date() })
+        .set({
+          homepageScrapedAt: new Date(),
+          logoCheckedAt: new Date(),
+          storeStatus: "blocked",
+          storeCheckedAt: new Date(),
+        })
         .where(eq(stationsTable.id, target.id));
       return { scraped: false, blocked: true };
     }
@@ -717,13 +835,19 @@ export async function scrapeStationHomepage(
     if (!pageData) {
       await db
         .update(stationsTable)
-        .set({ homepageScrapedAt: new Date(), logoCheckedAt: new Date() })
+        .set({
+          homepageScrapedAt: new Date(),
+          logoCheckedAt: new Date(),
+          storeStatus: "unavailable",
+          storeCheckedAt: new Date(),
+        })
         .where(eq(stationsTable.id, target.id));
       return { scraped: false, blocked: false };
     }
     const html = pageData.toString("utf8");
     const blurb = extractBlurb(html);
     const donateLink = extractDonateLink(html, fetched.finalUrl);
+    const storeLink = extractStoreLink(html, fetched.finalUrl);
     // A curated logo is operator-owned. All other sources may be upgraded by
     // an asset declared on the official station homepage.
     const discoveredLogo =
@@ -741,6 +865,11 @@ export async function scrapeStationHomepage(
       .update(stationsTable)
       .set({
         ...(blurb ? { homepageBlurb: blurb } : {}),
+        storeUrl: storeLink?.url ?? null,
+        storeLabel: storeLink?.label || null,
+        storeSignal: storeLink?.signal ?? null,
+        storeStatus: storeLink ? "found" : "not_found",
+        storeCheckedAt: new Date(),
         homepageScrapedAt: new Date(),
         logoCheckedAt: new Date(),
       })
@@ -792,7 +921,12 @@ export async function scrapeStationHomepage(
     console.warn(`[homepage-scraper] fetch failed for ${target.slug}`, err);
     await db
       .update(stationsTable)
-      .set({ homepageScrapedAt: new Date(), logoCheckedAt: new Date() })
+      .set({
+        homepageScrapedAt: new Date(),
+        logoCheckedAt: new Date(),
+        storeStatus: "unavailable",
+        storeCheckedAt: new Date(),
+      })
       .where(eq(stationsTable.id, target.id));
     return { scraped: false, blocked: false };
   }
@@ -800,6 +934,7 @@ export async function scrapeStationHomepage(
 
 let started = false;
 let timer: NodeJS.Timeout | null = null;
+let batchRunning = false;
 
 /**
  * OPERATOR NOTE — force an immediate donate-link back-fill pass:
@@ -825,11 +960,17 @@ let timer: NodeJS.Timeout | null = null;
 export async function runHomepageScraperBatch(
   limit = BATCH_SIZE,
 ): Promise<number> {
-  const targets = await loadStaleTargets(limit);
-  for (const target of targets) {
-    await scrapeStationHomepage(target);
+  if (batchRunning) return 0;
+  batchRunning = true;
+  try {
+    const targets = await loadStaleTargets(limit);
+    for (const target of targets) {
+      await scrapeStationHomepage(target);
+    }
+    return targets.length;
+  } finally {
+    batchRunning = false;
   }
-  return targets.length;
 }
 
 /** Start the homepage-scraper loop. Idempotent — safe to call once at boot. */

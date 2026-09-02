@@ -174,6 +174,15 @@ export const stationsTable = pgTable("stations", {
    */
   scheduleUrl: text("schedule_url"),
   donateUrl: text("donate_url"),
+  /**
+   * Operator-only evidence from the homepage scraper. These fields deliberately
+   * distinguish "no store found" from a page that could not be checked.
+   */
+  storeUrl: text("store_url"),
+  storeLabel: text("store_label"),
+  storeSignal: text("store_signal"),
+  storeStatus: text("store_status"),
+  storeCheckedAt: timestamp("store_checked_at"),
   logoUrl: text("logo_url"),
   /**
    * Provenance of logoUrl. "curated" is operator/seed-owned and must never be

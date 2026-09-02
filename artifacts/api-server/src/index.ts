@@ -138,6 +138,7 @@ import { startSourceCoverageProbeRun } from "./lore/source-probe.js";
 import { applyCriCandidatesMigration } from "./lore/cri-candidates-migration.js";
 import { applyAppleMusicJamsMigration } from "./lore/apple-music-jams-migration.js";
 import { applyStationSourceQualityMigration } from "./lore/source-quality-migration.js";
+import { applyStoreAuditMigration } from "./lore/store-audit-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -185,6 +186,7 @@ async function bootLore(): Promise<void> {
      await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
+     await runMigration("applyStoreAuditMigration", applyStoreAuditMigration);
     await runMigration("applyStationCullMetadataMigration", applyStationCullMetadataMigration);
     await runMigration("applyStationLogoMigration", applyStationLogoMigration);
     await runMigration("applyStationExclusionsMigration", applyStationExclusionsMigration);

@@ -3488,6 +3488,71 @@ export interface AdminStationListResponse {
 }
 
 /**
+ * @nullable
+ */
+export type StoreAuditStationStoreSignal =
+  | (typeof StoreAuditStationStoreSignal)[keyof typeof StoreAuditStationStoreSignal]
+  | null;
+
+export const StoreAuditStationStoreSignal = {
+  path: "path",
+  text: "text",
+} as const;
+
+export type StoreAuditStationStoreStatus =
+  (typeof StoreAuditStationStoreStatus)[keyof typeof StoreAuditStationStoreStatus];
+
+export const StoreAuditStationStoreStatus = {
+  found: "found",
+  not_found: "not_found",
+  pending: "pending",
+  unavailable: "unavailable",
+  blocked: "blocked",
+} as const;
+
+/**
+ * Homepage-derived store or purchase evidence for one station.
+ */
+export interface StoreAuditStation {
+  stationId: number;
+  slug: string;
+  name: string;
+  /** @nullable */
+  homepageUrl: string | null;
+  /** @nullable */
+  storeUrl: string | null;
+  /** @nullable */
+  storeLabel: string | null;
+  /** @nullable */
+  storeSignal: StoreAuditStationStoreSignal;
+  storeStatus: StoreAuditStationStoreStatus;
+  /** @nullable */
+  storeCheckedAt: string | null;
+  /** @nullable */
+  homepageScrapedAt: string | null;
+}
+
+export interface StoreAuditSummary {
+  total: number;
+  found: number;
+  notFound: number;
+  pending: number;
+  unavailable: number;
+  blocked: number;
+}
+
+export interface StoreAuditResponse {
+  generatedAt: string;
+  summary: StoreAuditSummary;
+  stations: StoreAuditStation[];
+}
+
+export interface StoreAuditRunResponse {
+  accepted: boolean;
+  batchSize: number;
+}
+
+/**
  * Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.
  */
 export interface RecomputeQualityResponse {

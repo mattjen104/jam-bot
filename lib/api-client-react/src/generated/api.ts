@@ -197,6 +197,8 @@ import type {
   StationsRecentSpinsResult,
   StationsRollingGenresResult,
   StationsScheduleResult,
+  StoreAuditResponse,
+  StoreAuditRunResponse,
   SupportHoldResponse,
   TracklistRequest,
   TracklistResult,
@@ -7413,6 +7415,167 @@ export function useListAdminStations<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns conservative store or purchase-link evidence extracted from visible active station homepages. This report is operator-only until false positives have been reviewed.
+
+ * @summary Admin-only homepage store evidence report
+ */
+export const getGetAdminStationStoreAuditUrl = () => {
+  return `/api/admin/stations/store-audit`;
+};
+
+export const getAdminStationStoreAudit = async (
+  options?: RequestInit,
+): Promise<StoreAuditResponse> => {
+  return customFetch<StoreAuditResponse>(getGetAdminStationStoreAuditUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminStationStoreAuditQueryKey = () => {
+  return [`/api/admin/stations/store-audit`] as const;
+};
+
+export const getGetAdminStationStoreAuditQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminStationStoreAudit>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminStationStoreAudit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdminStationStoreAuditQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminStationStoreAudit>>
+  > = ({ signal }) => getAdminStationStoreAudit({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminStationStoreAudit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminStationStoreAuditQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminStationStoreAudit>>
+>;
+export type GetAdminStationStoreAuditQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only homepage store evidence report
+ */
+
+export function useGetAdminStationStoreAudit<
+  TData = Awaited<ReturnType<typeof getAdminStationStoreAudit>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminStationStoreAudit>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminStationStoreAuditQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Starts a small asynchronous homepage scrape batch using the same robots.txt and public-host safety guards as the normal scraper.
+
+ * @summary Scan the next bounded batch of station homepages
+ */
+export const getRunAdminStationStoreAuditUrl = () => {
+  return `/api/admin/stations/store-audit/run`;
+};
+
+export const runAdminStationStoreAudit = async (
+  options?: RequestInit,
+): Promise<StoreAuditRunResponse> => {
+  return customFetch<StoreAuditRunResponse>(getRunAdminStationStoreAuditUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunAdminStationStoreAuditMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAdminStationStoreAudit>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runAdminStationStoreAudit>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["runAdminStationStoreAudit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runAdminStationStoreAudit>>,
+    void
+  > = () => {
+    return runAdminStationStoreAudit(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunAdminStationStoreAuditMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runAdminStationStoreAudit>>
+>;
+
+export type RunAdminStationStoreAuditMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Scan the next bounded batch of station homepages
+ */
+export const useRunAdminStationStoreAudit = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAdminStationStoreAudit>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runAdminStationStoreAudit>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRunAdminStationStoreAuditMutationOptions(options));
+};
 
 /**
  * Records an administrative withdrawal for one scraped schedule block. The source evidence is retained with voidedAt and voidReason, but the block is excluded from schedule-derived show and spin attribution. Guarded by the x-admin-token header.

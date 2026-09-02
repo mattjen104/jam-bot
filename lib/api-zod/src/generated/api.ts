@@ -4751,6 +4751,60 @@ export const ListAdminStationsResponse = zod.object({
 });
 
 /**
+ * Returns conservative store or purchase-link evidence extracted from visible active station homepages. This report is operator-only until false positives have been reviewed.
+
+ * @summary Admin-only homepage store evidence report
+ */
+export const GetAdminStationStoreAuditHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const GetAdminStationStoreAuditResponse = zod.object({
+  generatedAt: zod.string().datetime({}),
+  summary: zod.object({
+    total: zod.number(),
+    found: zod.number(),
+    notFound: zod.number(),
+    pending: zod.number(),
+    unavailable: zod.number(),
+    blocked: zod.number(),
+  }),
+  stations: zod.array(
+    zod
+      .object({
+        stationId: zod.number(),
+        slug: zod.string(),
+        name: zod.string(),
+        homepageUrl: zod.string().url().nullable(),
+        storeUrl: zod.string().url().nullable(),
+        storeLabel: zod.string().nullable(),
+        storeSignal: zod
+          .union([zod.literal("path"), zod.literal("text"), zod.literal(null)])
+          .nullable(),
+        storeStatus: zod.enum([
+          "found",
+          "not_found",
+          "pending",
+          "unavailable",
+          "blocked",
+        ]),
+        storeCheckedAt: zod.string().datetime({}).nullable(),
+        homepageScrapedAt: zod.string().datetime({}).nullable(),
+      })
+      .describe("Homepage-derived store or purchase evidence for one station."),
+  ),
+});
+
+/**
+ * Starts a small asynchronous homepage scrape batch using the same robots.txt and public-host safety guards as the normal scraper.
+
+ * @summary Scan the next bounded batch of station homepages
+ */
+export const RunAdminStationStoreAuditHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+/**
  * Records an administrative withdrawal for one scraped schedule block. The source evidence is retained with voidedAt and voidReason, but the block is excluded from schedule-derived show and spin attribution. Guarded by the x-admin-token header.
 
  * @summary Withdraw one scraped schedule block
