@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays } from "lucide-react";
+import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays, Disc3 } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
@@ -456,6 +456,7 @@ export function OnAirRow({
 }) {
   const { radio, scan } = usePlayer();
   const { enabled: socialEnabled } = useSocialMode();
+  const [failedArtworkUrl, setFailedArtworkUrl] = useState<string | null>(null);
   const isPlaying = radio.station?.slug === item.station.slug && radio.status !== "idle";
   const title = item.show?.name ?? item.station.name;
   // When a show name is the title, keep the station as context; otherwise the
@@ -470,6 +471,8 @@ export function OnAirRow({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   };
+  const artworkUrl = item.now.artworkUrl ? proxyArtUrl(item.now.artworkUrl) : null;
+  const showArtwork = artworkUrl != null && artworkUrl !== failedArtworkUrl;
 
   return (
     <div
@@ -519,6 +522,42 @@ export function OnAirRow({
         </a>
       ) : (
         <span className="wp-play wp-play-sm" aria-hidden="true" style={{ visibility: "hidden" }} />
+      )}
+      {showArtwork ? (
+        <img
+          src={artworkUrl}
+          alt=""
+          width={36}
+          height={36}
+          loading="lazy"
+          onError={() => setFailedArtworkUrl(artworkUrl)}
+          data-testid={`wp-onair-artwork-${item.station.slug}`}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 5,
+            objectFit: "cover",
+            flexShrink: 0,
+          }}
+        />
+      ) : (
+        <div
+          aria-label="Album artwork unavailable"
+          data-testid={`wp-onair-artwork-fallback-${item.station.slug}`}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 5,
+            background: "var(--wp-surface-2)",
+            color: "var(--wp-text-muted)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Disc3 size={16} aria-hidden="true" />
+        </div>
       )}
       <button
         type="button"

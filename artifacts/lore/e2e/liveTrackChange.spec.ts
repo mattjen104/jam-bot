@@ -27,6 +27,7 @@ import { test, expect } from "@playwright/test";
 // ---------------------------------------------------------------------------
 
 const SLUG = "nts-1";
+const ALBUM_ART = "https://images.example.test/album-art.svg";
 
 const STATION = {
   id: 1,
@@ -287,6 +288,72 @@ test.describe("WebPlayer live track change via SSE", () => {
 
     // Resolving cue must be gone.
     await expect(cue).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  test("resolved spin-changed artwork appears without polling and null artwork restores the fallback", async ({
+    page,
+  }) => {
+    await injectFakeEventSource(page);
+    await installCommonRoutes(page, makeOnAirResponse());
+    await page.route("**/api/art**", (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#ff0080"/></svg>',
+      }),
+    );
+
+    let onAirRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().includes("/api/player/onair")) onAirRequests++;
+    });
+
+    await page.goto("/lore/player");
+
+    const row = page.locator(`[data-testid="wp-onair-${SLUG}"]`);
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.locator(`[data-testid="wp-onair-artwork-fallback-${SLUG}"]`),
+    ).toBeVisible();
+    expect(onAirRequests).toBe(1);
+
+    await dispatchSseFrame(page, {
+      stationSlug: SLUG,
+      rawArtist: "Art Artist",
+      rawTitle: "Art Track",
+      mbid: "cccccccc-0000-0000-0000-000000000003",
+      artworkUrl: ALBUM_ART,
+      provisional: false,
+      observedAt: new Date().toISOString(),
+    });
+
+    const artwork = page.locator(`[data-testid="wp-onair-artwork-${SLUG}"]`);
+    await expect(artwork).toBeVisible({ timeout: 5_000 });
+    await expect(artwork).toHaveAttribute(
+      "src",
+      `/api/art?src=${encodeURIComponent(ALBUM_ART)}`,
+    );
+    await expect
+      .poll(async () => artwork.evaluate((image) => (image as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0);
+    await expect(row).toContainText("Art Artist");
+    expect(onAirRequests).toBe(1);
+
+    await dispatchSseFrame(page, {
+      stationSlug: SLUG,
+      rawArtist: "No Art Artist",
+      rawTitle: "No Art Track",
+      mbid: "dddddddd-0000-0000-0000-000000000004",
+      artworkUrl: null,
+      provisional: false,
+      observedAt: new Date().toISOString(),
+    });
+
+    await expect(
+      page.locator(`[data-testid="wp-onair-artwork-fallback-${SLUG}"]`),
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(artwork).not.toBeVisible();
+    await expect(row).toContainText("No Art Artist");
+    expect(onAirRequests).toBe(1);
   });
 
   test("spin-raw-failed frame reverts the row to the pre-provisional track", async ({
