@@ -132,6 +132,10 @@ export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
   // "#1 Splash <MOOD>" is an algorithmic background-channel brand (Spa, Jazz,
   // Coffee, …); only the Coffee variant was caught by the "coffee" entry.
   "#1 splash",
+  // Syndicated brand subchannels with generic mood/format programming rather
+  // than a distinct human selector identity.
+  "drgnu -",
+  "antenne niedersachsen relax",
 ] as const);
 
 /**

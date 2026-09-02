@@ -110,6 +110,7 @@ import { applyAppleLibraryItemsMigration } from "./lore/apple-library-items-migr
 import { startLifetimeCrossingsJob } from "./lore/lifetime-crossings-job.js";
 import { startBlendedCrossingsWarmJob } from "./lore/blended-crossings-job.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
+import { applyStationDuplicateHideMigration } from "./lore/station-duplicate-hide-migration.js";
 import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js";
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
 import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
@@ -253,6 +254,7 @@ async function bootLore(): Promise<void> {
     // Hide confirmed dead-end stations before any pollers or lease scheduling
     // starts, so existing rows cannot briefly consume watcher slots at boot.
     await runMigration("applyStationBlocklistHideMigration", applyStationBlocklistHideMigration);
+    await runMigration("applyStationDuplicateHideMigration", applyStationDuplicateHideMigration);
     // Tag radio_browser stations whose name matches a university/college pattern
     // as "college". Runs unconditionally at boot to backfill stations that were
     // discovered before ingest-time detection was added. Idempotent (jsonb

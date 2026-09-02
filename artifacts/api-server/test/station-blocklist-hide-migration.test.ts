@@ -55,6 +55,8 @@ describe("applyStationBlocklistHideMigration", () => {
       "chill beats",
       "relaxing music",
       "background music",
+      "drgnu -",
+      "antenne niedersachsen relax",
     ]) {
       expect(rendered, pattern).toContain(pattern);
     }

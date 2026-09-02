@@ -90,6 +90,8 @@ export async function applyStationBlocklistHideMigration(): Promise<void> {
         OR LOWER(name) LIKE '%mbc loud%'
         OR LOWER(name) LIKE '%galaxy fm ksa%'
         OR LOWER(name) LIKE '%#1 splash%'
+        OR LOWER(name) LIKE '%drgnu -%'
+        OR LOWER(name) LIKE '%antenne niedersachsen relax%'
         -- Only hide CHMR/CISM while they still lack a now-playing source.
         -- Once an operator has configured one (via PATCH .../now-playing-source)
         -- and unhidden the station, this predicate becomes false and the
