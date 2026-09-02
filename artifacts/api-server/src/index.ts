@@ -5,7 +5,11 @@ import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezone
 import { startLorePoller } from "./lore/poller.js";
 import { startLeaseScheduler } from "./lore/socket-leases.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
-import { startBackfillJob } from "./lore/backfill.js";
+import {
+  startBackfillJob,
+  startStationHistoryAudit,
+} from "./lore/backfill.js";
+import { applyHistoryBackfillMigration } from "./lore/history-backfill-migration.js";
 import { startReconcileJob } from "./lore/reconcile.js";
 import { startNtsPoller } from "./lore/nts.js";
 import {
@@ -261,6 +265,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyFingerprintScoutMigration", applyFingerprintScoutMigration);
     await runMigration("applyStationSourceProbeMigration", applyStationSourceProbeMigration);
     await runMigration("applyStationSourceQualityMigration", applyStationSourceQualityMigration);
+    await runMigration("applyHistoryBackfillMigration", applyHistoryBackfillMigration);
     await runMigration("applyWikipediaPublishMigration", applyWikipediaPublishMigration);
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     await runMigration("applyBeatoMissSentinelMigration", applyBeatoMissSentinelMigration);
@@ -365,6 +370,7 @@ async function bootLore(): Promise<void> {
     }
     startBandcampDailyPoller();
     await startBackfillJob();
+    startStationHistoryAudit();
     await startReconcileJob();
     startSegueJob();
     startWikipediaJob();

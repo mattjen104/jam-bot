@@ -4,8 +4,12 @@ import type {
   HistoryAdapter,
   RawSpin,
   ShowAttribution,
+  HistorySourceContract,
+  HistorySourceFamily,
+  FetchRecentOptions,
 } from "./types.js";
 import { usableShowAttribution } from "@workspace/lore-attribution";
+import { XMLParser } from "fast-xml-parser";
 
 /**
  * Per-source adapter registry. Two families, both reading a station's OWN
@@ -47,6 +51,20 @@ function toDate(v: unknown): Date | undefined {
   if (!s) return undefined;
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+function reportReview(
+  opts: FetchRecentOptions | undefined,
+  seen: number,
+  parsed: number,
+): void {
+  const rejected = Math.max(0, seen - parsed);
+  opts?.onReview?.({
+    seen,
+    parsed,
+    rejected,
+    ...(rejected ? { rejectionCounts: { invalid_row: rejected } } : {}),
+  });
 }
 
 // ---- Radio Paradise (now-playing, change-detection) --------------------
@@ -140,6 +158,183 @@ const stationPage: NowPlayingAdapter = async (config) => {
   return parseStationPage(body, config);
 };
 
+// ---- Configured first-party history surfaces -----------------------------
+
+/**
+ * Read a configured history item without inferring missing identity. These
+ * adapters are intentionally schema-driven: an operator supplies paths for
+ * every field that the station actually publishes.
+ */
+function parseConfiguredHistoryItems(
+  items: unknown[],
+  config: Record<string, unknown>,
+  sourceUrl: string,
+): RawSpin[] {
+  const itemPath = (name: string) => str(config[name]);
+  const out: RawSpin[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const rawArtist = str(pickPath(item, itemPath("artistPath") ?? ""));
+    const rawTitle = str(pickPath(item, itemPath("titlePath") ?? ""));
+    if (!rawArtist || !rawTitle) continue;
+    const spin: RawSpin = {
+      rawArtist,
+      rawTitle,
+      sourceUrl,
+      sourceFamily:
+        (str(config.sourceFamily) as HistorySourceFamily | undefined) ??
+        "official_api",
+    };
+    const id = str(pickPath(item, itemPath("idPath") ?? ""));
+    if (id) spin.externalId = `${str(config.sourceKey) ?? "station"}:${id}`;
+    const playedAt = toDate(pickPath(item, itemPath("playedAtPath") ?? ""));
+    if (playedAt) spin.playedAt = playedAt;
+    const album = str(pickPath(item, itemPath("albumPath") ?? ""));
+    if (album) spin.album = album;
+    const isrc = str(pickPath(item, itemPath("isrcPath") ?? ""));
+    if (isrc) spin.isrc = isrc;
+    const recordingId = str(
+      pickPath(item, itemPath("recordingIdPath") ?? ""),
+    );
+    if (recordingId) spin.recordingId = recordingId;
+    const duration = Number(
+      pickPath(item, itemPath("durationMsPath") ?? ""),
+    );
+    if (Number.isFinite(duration) && duration > 0) spin.durationMs = duration;
+    const showName = str(pickPath(item, itemPath("showPath") ?? ""));
+    const djName = str(pickPath(item, itemPath("djPath") ?? ""));
+    if (showName) {
+      const usable = usableShowAttribution(
+        { name: showName, ...(djName ? { djName } : {}) },
+        { artist: rawArtist, title: rawTitle },
+      );
+      if (usable) spin.show = usable;
+    }
+    const archiveTemplate = str(config.archiveUrl);
+    if (archiveTemplate && spin.playedAt) {
+      spin.citationUrl = archiveTemplate.replace(
+        "{date}",
+        spin.playedAt.toISOString().slice(0, 10),
+      );
+    }
+    out.push(spin);
+  }
+  return out;
+}
+
+export function parseHistoryJson(
+  body: unknown,
+  config: Record<string, unknown>,
+  sourceUrl: string,
+): RawSpin[] {
+  const path = str(config.itemsPath);
+  const value = path ? pickPath(body, path) : body;
+  const items = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? [value]
+      : [];
+  return parseConfiguredHistoryItems(items, config, sourceUrl);
+}
+
+export function parseHistoryRss(
+  xml: string,
+  config: Record<string, unknown>,
+  sourceUrl: string,
+): RawSpin[] {
+  if (!xml.trim()) return [];
+  let parsed: unknown;
+  try {
+    parsed = new XMLParser({ ignoreAttributes: false }).parse(xml);
+  } catch {
+    return [];
+  }
+  const path = str(config.itemsPath) ?? "rss.channel.item";
+  const value = pickPath(parsed, path);
+  const items = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? [value]
+      : [];
+  return parseConfiguredHistoryItems(items, config, sourceUrl);
+}
+
+/**
+ * Parse JSON-LD ItemList/arrays embedded in a station-published page. This
+ * accepts only valid application/ld+json blocks and configured field paths;
+ * it never scrapes visible prose or tries to invent a track from page text.
+ */
+export function parseHistoryJsonLd(
+  html: string,
+  config: Record<string, unknown>,
+  sourceUrl: string,
+): RawSpin[] {
+  const items: unknown[] = [];
+  const re =
+    /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  for (const match of html.matchAll(re)) {
+    try {
+      const value = JSON.parse(match[1]!.trim()) as unknown;
+      const path = str(config.itemsPath);
+      const selected = path ? pickPath(value, path) : value;
+      if (Array.isArray(selected)) items.push(...selected);
+      else if (selected && typeof selected === "object") items.push(selected);
+    } catch {
+      // One malformed block must not make other structured blocks unusable.
+    }
+  }
+  return parseConfiguredHistoryItems(items, config, sourceUrl);
+}
+
+const stationHistoryJson: HistoryAdapter = async (config, opts) => {
+  const url = str(config.url);
+  if (!url) return [];
+  const page = Math.max(opts?.page ?? 0, 0);
+  const params = new URLSearchParams();
+  const pageParam = str(config.pageParam);
+  const limitParam = str(config.limitParam);
+  const beforeParam = str(config.beforeParam);
+  if (pageParam) params.set(pageParam, String(page));
+  if (limitParam) params.set(limitParam, String(Math.min(opts?.limit ?? 50, 200)));
+  if (beforeParam && opts?.before) params.set(beforeParam, opts.before);
+  const requestUrl = params.size ? `${url}${url.includes("?") ? "&" : "?"}${params}` : url;
+  const body = await getJson(requestUrl);
+  const parsed = parseHistoryJson(body, config, requestUrl);
+  const itemsPath = str(config.itemsPath);
+  const rawItems = itemsPath ? pickPath(body, itemsPath) : body;
+  const seen = Array.isArray(rawItems) ? rawItems.length : rawItems ? 1 : 0;
+  reportReview(opts, seen, parsed.length);
+  return parsed;
+};
+
+const stationHistoryRss: HistoryAdapter = async (config, opts) => {
+  const url = str(config.url);
+  if (!url) return [];
+  if ((opts?.page ?? 0) > 0) return [];
+  const res = await fetch(url, {
+    headers: { Accept: "application/rss+xml, application/xml, text/xml" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  const parsed = parseHistoryRss(await res.text(), config, url);
+  reportReview(opts, parsed.length, parsed.length);
+  return parsed;
+};
+
+const stationHistoryJsonLd: HistoryAdapter = async (config, opts) => {
+  const url = str(config.url);
+  if (!url) return [];
+  if ((opts?.page ?? 0) > 0) return [];
+  const res = await fetch(url, {
+    headers: { Accept: "text/html" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  const parsed = parseHistoryJsonLd(await res.text(), config, url);
+  reportReview(opts, parsed.length, parsed.length);
+  return parsed;
+};
+
 // ---- KEXP (history, backfill-capable) ----------------------------------
 
 /**
@@ -229,7 +424,9 @@ const kexpApi: HistoryAdapter = async (_config, opts) => {
     const info = await kexpShowInfo(id);
     if (info) showMap.set(id, info);
   }
-  return parseKexpPlays(body, showMap);
+  const parsed = parseKexpPlays(body, showMap);
+  reportReview(opts, body.results?.length ?? 0, parsed.length);
+  return parsed;
 };
 
 // ---- Spinitron (history, per-station key, show + DJ) --------------------
@@ -322,7 +519,12 @@ const spinitron: HistoryAdapter = async (config, opts) => {
   const spinsBody = await getJson(
     `https://spinitron.com/api/spins?${auth}&count=${count}&page=${page}${endDate}`,
   );
-  return parseSpinitronSpins(spinsBody, playlistMap);
+  const parsed = parseSpinitronSpins(spinsBody, playlistMap);
+  const seen = Array.isArray((spinsBody as { items?: unknown }).items)
+    ? (spinsBody as { items: unknown[] }).items.length
+    : 0;
+  reportReview(opts, seen, parsed.length);
+  return parsed;
 };
 
 // ---- BBC (history/live via segments/latest) ----------------------------
@@ -369,7 +571,9 @@ const bbcApi: HistoryAdapter = async (config, opts) => {
       sid,
     )}/segments/latest?experience=domestic&offset=0`,
   );
-  return parseBbcSegments(body);
+  const parsed = parseBbcSegments(body);
+  reportReview(opts, Array.isArray((body as { data?: unknown }).data) ? (body as { data: unknown[] }).data.length : 0, parsed.length);
+  return parsed;
 };
 
 // ---- SomaFM (history via recent-songs feed) -----------------------------
@@ -414,7 +618,9 @@ const somaFm: HistoryAdapter = async (config, opts) => {
   const body = await getJson(
     `https://somafm.com/songs/${encodeURIComponent(channel)}.json`,
   );
-  return parseSomaFmSongs(body, channel);
+  const parsed = parseSomaFmSongs(body, channel);
+  reportReview(opts, Array.isArray((body as { songs?: unknown }).songs) ? (body as { songs: unknown[] }).songs.length : 0, parsed.length);
+  return parsed;
 };
 
 // ---- KCRW (history via tracklist API, one current track) ----------------
@@ -456,7 +662,9 @@ const kcrw: HistoryAdapter = async (config, opts) => {
   const body = await getJson(
     `https://tracklist-api.kcrw.com/${encodeURIComponent(feed)}`,
   );
-  return parseKcrwTrack(body, feed);
+  const parsed = parseKcrwTrack(body, feed);
+  reportReview(opts, body && typeof body === "object" ? 1 : 0, parsed.length);
+  return parsed;
 };
 
 // ---- NTS Radio (live show attribution fallback) --------------------------
@@ -1189,6 +1397,9 @@ const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {
   bbc_api: bbcApi,
   somafm: somaFm,
   kcrw,
+  station_history_json: stationHistoryJson,
+  station_history_rss: stationHistoryRss,
+  station_history_jsonld: stationHistoryJsonLd,
 };
 
 /** Look up a now-playing (change-detection) adapter, or null. */
@@ -1217,11 +1428,131 @@ export function isPollable(source: string | null | undefined): boolean {
  * deep paging). Only these can be enrolled for the deep-history backfill job —
  * offset-only sources would skip/duplicate plays as new ones land.
  */
-const BACKFILL_SOURCES = new Set(["kexp_api", "spinitron"]);
-
 /** Whether this source supports resumable deep-history backfill. */
-export function supportsBackfill(source: string | null | undefined): boolean {
-  return !!source && BACKFILL_SOURCES.has(source);
+export function supportsBackfill(
+  source: string | null | undefined,
+  config?: Record<string, unknown> | null,
+): boolean {
+  if (source === "kexp_api" || source === "spinitron") return true;
+  if (source === "station_history_json") {
+    return config?.cursorMode === "time_anchor" && !!str(config.beforeParam);
+  }
+  return false;
+}
+
+/** Describe a configured history surface for the audit and admin ledger. */
+export function historySourceContract(
+  source: string | null | undefined,
+  config: Record<string, unknown> | null | undefined = null,
+): HistorySourceContract | null {
+  if (!source) return null;
+  const configuredFamily = str(config?.sourceFamily) as
+    | HistorySourceFamily
+    | undefined;
+  const generic = configuredFamily ?? "official_api";
+  switch (source) {
+    case "kexp_api":
+      return {
+        source,
+        family: "platform_archive",
+        surface: "KEXP public playlist API",
+        cursorMode: "time_anchor",
+        supportsBackfill: true,
+        stableIdentity: "required",
+        reportedTimestamp: "required",
+        archiveCitation: "dated",
+        supportedDepthDays: null,
+        retryPolicy: "retryable",
+      };
+    case "spinitron":
+      return {
+        source,
+        family: "platform_archive",
+        surface: "Spinitron public playlist API",
+        cursorMode: "time_anchor",
+        supportsBackfill: true,
+        stableIdentity: "required",
+        reportedTimestamp: "required",
+        archiveCitation: "dated",
+        supportedDepthDays: null,
+        retryPolicy: "retryable",
+      };
+    case "bbc_api":
+      return {
+        source,
+        family: "official_api",
+        surface: "BBC latest segments API",
+        cursorMode: "fixed_feed",
+        supportsBackfill: false,
+        stableIdentity: "required",
+        reportedTimestamp: "optional",
+        archiveCitation: "endpoint",
+        supportedDepthDays: 1,
+        retryPolicy: "retryable",
+      };
+    case "somafm":
+      return {
+        source,
+        family: "official_api",
+        surface: "SomaFM recent-songs JSON",
+        cursorMode: "fixed_feed",
+        supportsBackfill: false,
+        stableIdentity: "derived",
+        reportedTimestamp: "required",
+        archiveCitation: "endpoint",
+        supportedDepthDays: 1,
+        retryPolicy: "retryable",
+      };
+    case "station_history_json":
+      return {
+        source,
+        family: generic,
+        surface: "Configured station-published JSON history",
+        cursorMode:
+          (str(config?.cursorMode) as HistorySourceContract["cursorMode"] | undefined) ??
+          "page",
+        supportsBackfill: supportsBackfill(source, config),
+        stableIdentity: "required",
+        reportedTimestamp: "required",
+        archiveCitation: config?.archiveUrl ? "dated" : "endpoint",
+        supportedDepthDays: Number.isFinite(Number(config?.supportedDepthDays))
+          ? Number(config?.supportedDepthDays)
+          : null,
+        retryPolicy: "retryable",
+      };
+    case "station_history_rss":
+      return {
+        source,
+        family: "rss",
+        surface: "Configured station-published RSS history",
+        cursorMode: "fixed_feed",
+        supportsBackfill: false,
+        stableIdentity: "required",
+        reportedTimestamp: "required",
+        archiveCitation: config?.archiveUrl ? "dated" : "endpoint",
+        supportedDepthDays: Number.isFinite(Number(config?.supportedDepthDays))
+          ? Number(config?.supportedDepthDays)
+          : null,
+        retryPolicy: "retryable",
+      };
+    case "station_history_jsonld":
+      return {
+        source,
+        family: "structured_data",
+        surface: "Configured station-published JSON-LD history",
+        cursorMode: "fixed_feed",
+        supportsBackfill: false,
+        stableIdentity: "required",
+        reportedTimestamp: "required",
+        archiveCitation: config?.archiveUrl ? "dated" : "endpoint",
+        supportedDepthDays: Number.isFinite(Number(config?.supportedDepthDays))
+          ? Number(config?.supportedDepthDays)
+          : null,
+        retryPolicy: "retryable",
+      };
+    default:
+      return null;
+  }
 }
 
 /**
@@ -1281,6 +1612,13 @@ export function stationArchiveUrl(
           : null;
       if (!handle) return null;
       return `https://spinitron.com/${encodeURIComponent(handle)}/calendar/date/${year}-${month}-${dayOfMonth}`;
+    }
+    case "station_history_json":
+    case "station_history_rss":
+    case "station_history_jsonld": {
+      const template = str(config?.archiveUrl);
+      if (!template || !/^https:\/\//i.test(template)) return null;
+      return template.replace("{date}", `${year}-${month}-${dayOfMonth}`);
     }
     default:
       return null;

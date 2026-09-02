@@ -6,6 +6,7 @@ import {
   stationsTable,
   resolutionCacheTable,
   recordingReleaseGroupsTable,
+  spinSourceProvenanceTable,
   type Station,
 } from "@workspace/db";
 import { eq, and, desc, inArray, sql, gte } from "drizzle-orm";
@@ -371,7 +372,9 @@ export async function upsertRecording(
   r: MbidResolution,
   artworkUrl?: string,
   enrichLinks = true,
+  opts?: { preserveExistingMetadata?: boolean },
 ): Promise<string | null> {
+  const preserveExistingMetadata = opts?.preserveExistingMetadata ?? false;
   const [existing] = await db
     .select({
       mbid: recordingsTable.mbid,
@@ -465,7 +468,10 @@ export async function upsertRecording(
       r.title,
     );
   }
-  const newArtwork = artworkUrl ?? (artworkMissing ? fallbackArtwork : null);
+  const newArtwork =
+    preserveExistingMetadata && existing?.artworkUrl
+      ? null
+      : artworkUrl ?? (artworkMissing ? fallbackArtwork : null);
 
   // Evict the old cached blob when the artwork URL changes so the next
   // /api/art request re-fetches and re-caches the new cover. The immutable
@@ -503,9 +509,15 @@ export async function upsertRecording(
     .onConflictDoUpdate({
       target: recordingsTable.mbid,
       set: {
-        title: r.title,
-        artist: r.artist,
-        artistMbid: r.artistMbid ?? null,
+        title: preserveExistingMetadata
+          ? sql`${recordingsTable.title}`
+          : r.title,
+        artist: preserveExistingMetadata
+          ? sql`${recordingsTable.artist}`
+          : r.artist,
+        artistMbid: preserveExistingMetadata
+          ? sql`coalesce(${recordingsTable.artistMbid}, ${r.artistMbid ?? null})`
+          : r.artistMbid ?? null,
         ...(genres ? { genres } : {}),
         ...(releaseYear != null ? { releaseYear } : {}),
         ...(releaseDate != null ? { releaseDate } : {}),
@@ -513,7 +525,13 @@ export async function upsertRecording(
         genreEnrichmentStatus,
         genreEnrichmentAttemptedAt,
         genreEnrichmentError,
-        ...(r.isrc ? { isrc: r.isrc } : {}),
+        ...(r.isrc
+          ? {
+              isrc: preserveExistingMetadata
+                ? sql`coalesce(${recordingsTable.isrc}, ${r.isrc})`
+                : r.isrc,
+            }
+          : {}),
         ...(newArtwork ? { artworkUrl: newArtwork } : {}),
         ...(links ? { links } : {}),
         updatedAt: sql`now()`,
@@ -580,12 +598,18 @@ async function persistSpin(args: {
   source: string;
   citation?: string;
   enrichLinks?: boolean;
+  preserveExistingMetadata?: boolean;
 }): Promise<{ inserted: boolean; artworkUrl: string | null }> {
   const { station, resolution: r, raw, showId, source, citation } = args;
   let artworkUrl: string | null = null;
 
   if (r.mbid) {
-    artworkUrl = await upsertRecording(r, raw.artworkUrl, args.enrichLinks ?? true);
+    artworkUrl = await upsertRecording(
+      r,
+      raw.artworkUrl,
+      args.enrichLinks ?? true,
+      { preserveExistingMetadata: args.preserveExistingMetadata },
+    );
     // Off-request only: provider resolution must never delay ingest.
     void enqueueRecordingEmbeds(r.mbid, {
       stationId: station.id,
@@ -604,7 +628,7 @@ async function persistSpin(args: {
       durationMs: raw.durationMs ?? null,
       source,
       externalId: raw.externalId ?? null,
-      citation: citation ?? null,
+      citation: citation ?? raw.citationUrl ?? null,
       confidence: r.confidence,
       ...(raw.playedAt ? { playedAt: raw.playedAt } : {}),
       // Fingerprint position signal — only ACR-derived spins carry it.
@@ -619,6 +643,23 @@ async function persistSpin(args: {
       target: [spinsTable.stationId, spinsTable.externalId],
     })
     .returning({ id: spinsTable.id });
+
+  const spinId = inserted[0]?.id;
+  if (spinId && raw.sourceUrl && raw.sourceFamily) {
+    await db
+      .insert(spinSourceProvenanceTable)
+      .values({
+        spinId,
+        stationId: station.id,
+        source,
+        family: raw.sourceFamily,
+        sourceUrl: raw.sourceUrl,
+        archiveUrl: raw.citationUrl ?? null,
+        externalId: raw.externalId ?? null,
+        reportedPlayedAt: raw.playedAt ?? null,
+      })
+      .onConflictDoNothing();
+  }
 
   return { inserted: inserted.length > 0, artworkUrl };
 }
@@ -1153,6 +1194,7 @@ export async function ingestRawSpins(
         showId,
         source,
         enrichLinks: !backfill,
+        preserveExistingMetadata: backfill,
       });
       if (persisted.inserted) logged++;
       if (cursorValue) newestCursor = cursorValue;

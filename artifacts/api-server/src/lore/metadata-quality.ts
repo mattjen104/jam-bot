@@ -10,6 +10,10 @@ export const METADATA_QUALITY_OUTCOMES = [
   "usable_pair",
   "written_spin",
   "unsupported",
+  "invalid_row",
+  "future_dated",
+  "duplicate",
+  "ambiguous_row",
 ] as const;
 
 export type MetadataQualityOutcome =
@@ -28,7 +32,13 @@ export type MetadataOutcomeCounts = Record<MetadataQualityOutcome, number>;
 export interface MetadataQualityResult {
   outcome: Exclude<
     MetadataQualityOutcome,
-    "response_error" | "written_spin" | "unsupported"
+    | "response_error"
+    | "written_spin"
+    | "unsupported"
+    | "invalid_row"
+    | "future_dated"
+    | "duplicate"
+    | "ambiguous_row"
   >;
   artist: string | null;
   title: string | null;
@@ -46,6 +56,10 @@ export function emptyMetadataOutcomeCounts(): MetadataOutcomeCounts {
     usable_pair: 0,
     written_spin: 0,
     unsupported: 0,
+    invalid_row: 0,
+    future_dated: 0,
+    duplicate: 0,
+    ambiguous_row: 0,
   };
 }
 
@@ -115,6 +129,9 @@ const COMPLETE_HISTORY_SOURCES = new Set([
   "kexp_api",
   "bbc_api",
   "somafm",
+  "station_history_json",
+  "station_history_rss",
+  "station_history_jsonld",
 ]);
 
 export function sourceCapabilityFor(
@@ -246,7 +263,8 @@ export async function recordMetadataQuality(
             )
             FROM unnest(ARRAY[
               'response_error', 'empty_metadata', 'junk_metadata',
-              'incomplete_pair', 'usable_pair', 'written_spin', 'unsupported'
+              'incomplete_pair', 'usable_pair', 'written_spin', 'unsupported',
+              'invalid_row', 'future_dated', 'duplicate', 'ambiguous_row'
             ]::text[]) AS outcome
           )
         END,

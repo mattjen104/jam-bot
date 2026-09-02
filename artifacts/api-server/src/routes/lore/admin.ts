@@ -104,6 +104,11 @@ import { clearIcyErrorBackoff, isPollable } from "../../lore/adapters.js";
 import { startBulkReprobe, getBulkReprobeStatus } from "../../lore/bulk-reprobe.js";
 import { getSourceCoverageLedger } from "../../lore/source-coverage.js";
 import {
+  getStationHistoryAuditStatus,
+  getStationHistoryBackfillLedger,
+  startStationHistoryAudit,
+} from "../../lore/backfill.js";
+import {
   startSourceCoverageProbeRun,
   getSourceCoverageProbeStatus,
 } from "../../lore/source-probe.js";
@@ -1273,6 +1278,33 @@ router.post("/admin/source-coverage/probe", h(async (_req, res) => {
 // current (or last) probe run. Plain JSON, outside OpenAPI.
 router.get("/admin/source-coverage/probe/status", h(async (_req, res) => {
   return res.json(getSourceCoverageProbeStatus());
+}));
+
+// GET /api/admin/station-history — curated front-door history-source audit,
+// progress, source reach, rejection counts, and independent cursor state.
+router.get("/admin/station-history", h(async (_req, res) => {
+  return res.json({
+    audit: getStationHistoryAuditStatus(),
+    stations: await getStationHistoryBackfillLedger(),
+  });
+}));
+
+// POST /api/admin/station-history/audit — import-free, bounded discovery pass.
+router.post("/admin/station-history/audit", h(async (_req, res) => {
+  if (!startStationHistoryAudit()) {
+    return res.status(409).json({
+      error: "A station-history audit is already in progress",
+      status: getStationHistoryAuditStatus(),
+    });
+  }
+  return res.status(202).json({
+    started: true,
+    status: getStationHistoryAuditStatus(),
+  });
+}));
+
+router.get("/admin/station-history/audit/status", h(async (_req, res) => {
+  return res.json(getStationHistoryAuditStatus());
 }));
 
 // GET /api/admin/fingerprint-scout/report — the rotating fingerprint scout's

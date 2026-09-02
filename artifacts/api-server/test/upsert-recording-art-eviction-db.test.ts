@@ -143,4 +143,37 @@ describe("upsertRecording art-cache eviction", () => {
 
     expect(vi.mocked(artStorageMod.artDelete)).not.toHaveBeenCalled();
   });
+
+  it("preserves stronger existing metadata for historical imports", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const mbid = mkMbid("historical-preserve");
+    await seedRecording(mbid, OLD_URL);
+
+    await upsertRecording(
+      {
+        ...baseResolution(mbid),
+        title: "Weaker Archive Title",
+        artist: "Weaker Archive Artist",
+      },
+      NEW_URL,
+      false,
+      { preserveExistingMetadata: true },
+    );
+
+    const [row] = await db
+      .select({
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artworkUrl: recordingsTable.artworkUrl,
+      })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, mbid));
+    expect(row).toEqual({
+      title: "Eviction Seed",
+      artist: "Seed Artist",
+      artworkUrl: OLD_URL,
+    });
+    expect(vi.mocked(artStorageMod.artDelete)).not.toHaveBeenCalled();
+  });
 });

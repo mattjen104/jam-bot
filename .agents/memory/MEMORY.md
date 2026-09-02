@@ -12,8 +12,6 @@
 - [Codegen → project-ref staleness](codegen-project-reference-staleness.md) — after OpenAPI codegen, run `typecheck:libs` to rebuild lib .d.ts; project-ref consumers read stale dist/, so only NEW schema members fail to resolve.
 - [Playhead "One Spine" model](playhead-one-spine-model.md) — unified interface direction (on/off-spine, liquid→crystal, Peek→Card→Dive, Lens, enqueue-never-cut); canonical demo = Fleetwood Mac "Go Your Own Way".
 - [Lore Feed/Stack migration](lore-feed-stack-migration.md) — nav labels Feed/Heard/Stack; Library lenses stay above the single fanned crate; row grammar remains `primary · secondary [meta]`.
-- [Mockup screenshot verification](mockup-screenshot-verification.md) — external_url screenshot shows heavy-CSS mockups as blank (paints early); verify with app_preview, which uses the real browser + returns console logs.
-- [Mockup graduation visibility](mockup-graduation-visibility.md) — sandbox mockups, canvas frames, and production are separate; present the frame and graduate its visual system, not just one control.
 - [Lore now-playing contract](lore-nowplaying-contract.md) — confidence tiers (recording_id>isrc>text>unresolved); artwork+exact links are best-effort/often absent, so UI must degrade and tests must not assert their presence.
 - [Postgres NUL in text columns](postgres-nul-in-text.md) — NUL (U+0000) is illegal in Postgres text (err 22021); never use it as a DB key separator, use U+001F. Silently-empty table + try/catch = swallowed DB error.
 - [Lore resolution ordering & cursor ingestion](lore-resolution-ordering.md) — try recording_id>isrc>text strongest-first with per-identifier cache namespaces (weak cached miss must not block a stronger id); history pollers must page back to lastSeenCursor, not fetch-latest-N-and-dedup.
@@ -21,7 +19,6 @@
 - [drizzle push post-merge failures](drizzle-push-post-merge-failures.md) — 3 modes: view-blocked type drift (declare withTimezone), boot-only tables get DROP'd (mirror in schema), FK re-add hits orphans (prune loop).
 - [Orval params name collision](orval-params-name-collision.md) — an op with BOTH path + query params emits a duplicate `<Op>Params` that breaks the api-zod barrel; resolve the query value server-side.
 - [Pickers/picks generalization](lore-pickers-picks-model.md) — generalize DJ spins to any taste source; ladder stops at artist (never algorithmic), ordered picks are rideable segues, unresolved always logged.
-- [api-server test location](api-server-test-location.md) — vitest only runs `test/**`; colocated src/*.test.ts files are silently skipped, so verify the suite count grows after adding tests.
 - [Lore archive runs model](lore-archive-runs-model.md) — runs are derived groupings (runId=min(id) anchor, null-safe showId), replay is a player mode with fixed queue + honest gaps, backfill 1s-nudge loop-guard.
 - [Ride player state machine](lore-ride-player-state-machine.md) — key effects off current-item identity not whole queue; patch async results by MBID never captured index; remote (Spotify) playback: live snapshot is authority.
 - [Fast Refresh mixed exports](fast-refresh-mixed-exports.md) — component files must export only components; mixed exports split HMR module instances → phantom "must be used within Provider" crashes despite correct tree.
@@ -45,11 +42,8 @@
 - [Poller overlapping-tick races](lore-poller-overlap-race.md) — a tight-interval nowPlaying source (e.g. 30s) can overlap ticks on a slow fetch; both read the same "last spin" and both insert — guard with a per-station in-flight Set, not just content dedup.
 - [Station removal FK order](lore-station-deletion-fk-order.md) — deleting a stations row needs spins, shows, AND radio_browser_stations cleared first (no cascade); discovery needs a name blocklist too or whitelisted tags let it reappear.
 - [Cheap ad detection via metadata](lore-ad-detection-metadata.md) — detect ad breaks from already-polled ICY/now-playing text (regex + same-field-filler heuristic) instead of audio analysis; run before dedup so repeats still count.
-- [Lore picker/selector page consolidation](lore-picker-page-routing.md) — SelectorArchive.tsx is the ONLY live route for both DJ + curated pickers; a standalone sibling page can typecheck fine yet be unroutable dead code.
-- [Stale tsx dev server after new routes](api-server-stale-dev-server.md) — a long-running api-server workflow can serve pre-fix routes as 503 "Admin entry not configured" (falls through to admin catch-all); restart workflow before trusting a new-route 503 as a real bug.
 - [Structured LLM extraction from scraped pages](schedule-scraper-llm-pattern.md) — injectable extractor seam (like askLLM), strip fences + field-validate every entry, distinguish null (failed) from [] (no data).
 - [Import job polling invalidation](import-job-poll-invalidation.md) — latest-import-job query stops polling on terminal status; every postStartImport call site must invalidate it in finally (incl. 409).
-- [Lore consolidated mockup style](lore-consolidated-mockup-style.md) — approved warm-dark violet/green token design; scope tokens under group class, verbatim HTML via trusted-static innerHTML only.
 - [Schedule live-first overnight carryover](schedule-overnight-carryover.md) — per-day schedule grids hide post-midnight tails: live detection needs a yesterday-slot carryover check, not just same-day isSlotLive.
 - [MB chain starvation & isolated resolver](mb-chain-starvation.md) — mbChain in song-enrichment is process-wide; enrichment pipeline starves import worker. Fix: createMbResolver() factory + AbortSignal ghost-exit + Phase 3 wall-clock budget.
 - [Lore webplayer parallel surface](lore-webplayer-surface.md) — /player routes bare (no AppLayout/PlayerDock), plain-JSON /api/player/* read-models (no orval), .wp-scoped theme; new sub-routes must live under /player/.
@@ -89,7 +83,6 @@
 - [Weekly recap read model](weekly-recap-read-model.md) — weekly reflections use UTC Sunday-to-Saturday windows and confirmed attendance only; never surface incomplete weeks.
 - [Album-cover listener identity](album-avatar-identity.md) — anonymous cover identity preserves bottle emojis; covers are privacy-thresholded station tokens.
 - [Support ladder identity grounding](support-ladder-identity-grounding.md) — never infer a release MBID from a recording→release-group bridge; provider facts must carry release identity explicitly.
-- [Art fallback local asset](art-fallback-local-asset.md) — RUMOURS placeholder must be a bundled local file (old CAA URL 404s); compare img.src by suffix, every art <img> needs onArtError.
 - [FirstRunSidebar provenance rung design](frb-provenance-rung-design.md) — automation always rung 4 first; isPickerShow (not djName) gates rung 1; artistMbid (not recording mbid) gates interaction; unresolved = plain span, no role/tabIndex.
 - [Crossings empty-taste fast path](crossings-empty-taste-fastpath.md) — fast path must check EVERY taste source (library_items, taste_seeds, unresolved spotify_library_items) or soft-only users cache []; every library-creating path must bustCrossingsCache.
 - [Crossings query performance](crossings-query-performance.md) — single 180-day bounded query only; unbounded/two-query approach causes 10–16s hangs; cache TTL = 30 min.
@@ -124,13 +117,11 @@
 - [Dial filter menus](dial-filter-menus.md) — age tiers additive (unknown year passes); categories = 7 exclusive editorial labels, single-select, EMPTY default (never default a category or the front door empties).
 - [Background recompute pool saturation](crossings-recompute-pool-saturation.md) — per-user heavy computes need a global execution concurrency cap; healthz-ok + health-hang = pg Pool exhausted, not server down.
 - [Listener read-pool isolation](listener-read-pool-isolation.md) — public radio reads need reserved, bounded DB capacity and must treat identity/personalization as optional.
-- [Matt's starter library config](matt-starter-library-config.md) — needs MATT_LIBRARY_SOURCE_USER_ID env var or it silently reports unavailable (fails closed, no error anywhere).
 - [Book-backed knowledge conventions](book-knowledge-conventions.md) — "book" claims: "Title — Author" em-dash label split in 3 places, paraphrase-only guard, no-link ⇒ draft demotion, deterministic book:{slug}:{i} ids.
 - [Lore device-identity fork](lore-device-identity-fork.md) — "empty Stack/library" usually = forked lore_sid cookie session, not a query bug; diagnose via last_seen_at vs row ownership, fix by device_key swap.
 - [Seed upsert field propagation](seed-upsert-field-propagation.md) — new seed-declared fields must join seedStations' onConflictDoUpdate set (merge, don't overwrite jsonb like tags) or existing deployments never get them.
 - [Split homepage vs full Dial routing](split-home-layout.md) — `/` is the three-band split view, full Dial is `/feed`; full-Dial specs must target /feed, and split-home CLI commands must be wired into its own render path.
 - [Dial lenses (Radio/Press)](dial-lenses-pattern.md) — exclusive views, lens state local-first; Press busts with the same bustCrossingsCache as Radio; lens-specific filters stay inside their branch.
-- [Shows lens Bandsintown config](shows-lens-bandsintown.md) — fetcher fails closed/silent without BANDSINTOWN_APP_ID; always-empty Shows = check the secret first.
 - [Now-playing freshness contract](nowplaying-freshness.md) — unchanged-track dedup paths must refresh observed_at (live only, never backfill) or healthy stations go falsely stale; local vitest hangs = merge-gate flock held.
 - [Positional body.click() in e2e helpers](e2e-positional-body-click.md) — Playwright clicks body center; strip reorders silently retarget the click onto chips; blur via evaluate instead.
 - [Track expiry advisory signal](track-expiry-advisory.md) — likely-expiring estimate never swaps the displayed track, only schedules one boundary re-check; lives on the plain-JSON fast lane, not orval payloads.
@@ -157,3 +148,4 @@
 - [Minimal radio first-play previews](minimal-radio-first-play-previews.md) — station cards use the existing station-filtered history read model for first-play art; keep aggregate lifetime counts separate.
 - [Apple jam room protocol](apple-jam-room-protocol.md) — snapshots and ordered events commit atomically; short room codes are private capabilities, while Apple authorization always stays browser-local.
 - [Resolver cache versions](resolver-cache-versions.md) — text resolver changes need a new key namespace; keep old rows for audit and share one bounded variant policy across live and replay.
+- [Station history source separation](station-history-source-separation.md) — published archives may differ from live metadata; configure history independently and never share their cursors.

@@ -158,6 +158,9 @@
 
     { "method": "GET", "path": "/admin/source-coverage", "kind": "admin", "reason": "Admin-only metadata source-coverage report; operator surface, not a client contract." },
     { "method": "POST", "path": "/admin/source-coverage/probe", "kind": "admin", "reason": "Admin-only source-coverage probe trigger; operator surface, not a client contract." },
-    { "method": "GET", "path": "/admin/source-coverage/probe/status", "kind": "admin", "reason": "Admin-only probe status read model; operator surface, not a client contract." }
+    { "method": "GET", "path": "/admin/source-coverage/probe/status", "kind": "admin", "reason": "Admin-only probe status read model; operator surface, not a client contract." },
+    { "method": "GET", "path": "/admin/station-history", "kind": "admin", "reason": "Admin-only station-history source audit and backfill ledger; operator surface, not a client contract." },
+    { "method": "POST", "path": "/admin/station-history/audit", "kind": "admin", "reason": "Admin-only bounded station-history audit trigger; operator surface, not a client contract." },
+    { "method": "GET", "path": "/admin/station-history/audit/status", "kind": "admin", "reason": "Admin-only station-history audit status; operator surface, not a client contract." }
   ]
 }

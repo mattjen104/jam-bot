@@ -3566,6 +3566,86 @@ export const stationSourceQualityTable = pgTable(
     index("station_source_quality_attempt_idx").on(t.lastAttemptAt),
   ],
 );
+
+/**
+ * Durable audit and progress ledger for station-published play-history
+ * surfaces. This is separate from station_source_quality because a history
+ * backfill is an operator job, not a live now-playing health signal.
+ */
+export const stationHistoryBackfillTable = pgTable(
+  "station_history_backfill",
+  {
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    family: text("family").notNull(),
+    surface: text("surface").notNull(),
+    cursorMode: text("cursor_mode").notNull(),
+    supportsBackfill: boolean("supports_backfill").notNull().default(false),
+    stableIdentity: text("stable_identity").notNull(),
+    reportedTimestamp: text("reported_timestamp").notNull(),
+    archiveCitation: text("archive_citation").notNull(),
+    sourceUrl: text("source_url"),
+    status: text("status").notNull().default("unverified"),
+    supportedDepthDays: integer("supported_depth_days"),
+    oldestPublishedAt: timestamp("oldest_published_at"),
+    lastSuccessfulPage: integer("last_successful_page"),
+    acceptedCount: integer("accepted_count").notNull().default(0),
+    rejectedCount: integer("rejected_count").notNull().default(0),
+    duplicateCount: integer("duplicate_count").notNull().default(0),
+    importedCount: integer("imported_count").notNull().default(0),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastFailureAt: timestamp("last_failure_at"),
+    lastFailureReason: text("last_failure_reason"),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.stationId, t.source],
+      name: "station_history_backfill_pkey",
+    }),
+    index("station_history_backfill_status_idx").on(t.status),
+  ],
+);
+
+export type StationHistoryBackfill =
+  typeof stationHistoryBackfillTable.$inferSelect;
+export type InsertStationHistoryBackfill =
+  typeof stationHistoryBackfillTable.$inferInsert;
+
+/**
+ * Per-spin evidence linking a recovered row back to the station's published
+ * history surface. It is separate from `spins.citation`, which is retained for
+ * the older admin manual-entry contract.
+ */
+export const spinSourceProvenanceTable = pgTable(
+  "spin_source_provenance",
+  {
+    spinId: integer("spin_id")
+      .primaryKey()
+      .references(() => spinsTable.id, { onDelete: "cascade" }),
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    family: text("family").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    archiveUrl: text("archive_url"),
+    externalId: text("external_id"),
+    reportedPlayedAt: timestamp("reported_played_at"),
+    ingestedAt: timestamp("ingested_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("spin_source_provenance_station_idx").on(t.stationId, t.reportedPlayedAt),
+    index("spin_source_provenance_source_idx").on(t.source, t.externalId),
+  ],
+);
+
+export type SpinSourceProvenance = typeof spinSourceProvenanceTable.$inferSelect;
+export type InsertSpinSourceProvenance =
+  typeof spinSourceProvenanceTable.$inferInsert;
 /**
  * Private Apple Music listening rooms.  The snapshot is deliberately a
  * server-owned read model: Apple user tokens never enter this table and the

@@ -51,6 +51,44 @@ export interface RawSpin extends NowPlayingRaw {
   playedAt?: Date;
   /** Show/DJ attribution, when the source exposes program metadata. */
   show?: ShowAttribution;
+  /** The exact first-party endpoint or archive page that supplied this row. */
+  sourceUrl?: string;
+  /** Stable source family used for operator-facing provenance. */
+  sourceFamily?: HistorySourceFamily;
+  /** A dated first-party archive citation, when the source publishes one. */
+  citationUrl?: string;
+}
+
+export type HistorySourceFamily =
+  | "official_api"
+  | "rss"
+  | "structured_data"
+  | "platform_archive";
+
+export type HistorySourceCursorMode =
+  | "page"
+  | "offset"
+  | "time_anchor"
+  | "fixed_feed";
+
+export type HistorySourceRetryPolicy = "retryable" | "terminal" | "unsupported";
+
+/**
+ * A station-owned history surface. This is deliberately descriptive rather
+ * than executable: the backfill worker uses it to explain what it will fetch,
+ * how it can resume, and where an operator can verify a recovered play.
+ */
+export interface HistorySourceContract {
+  source: string;
+  family: HistorySourceFamily;
+  surface: string;
+  cursorMode: HistorySourceCursorMode;
+  supportsBackfill: boolean;
+  stableIdentity: "required" | "derived";
+  reportedTimestamp: "required" | "optional";
+  archiveCitation: "dated" | "endpoint" | "none";
+  supportedDepthDays: number | null;
+  retryPolicy: HistorySourceRetryPolicy;
 }
 
 /**
@@ -85,6 +123,27 @@ export interface FetchRecentOptions {
    * and must not be enrolled for backfill (see `supportsBackfill`).
    */
   before?: string;
+  /**
+   * Parser-side evidence for rows that never become RawSpin objects. Used by
+   * the audit/backfill ledger; live polling can ignore it.
+   */
+  onReview?: (review: HistoryFetchReview) => void;
+}
+
+export interface HistoryFetchReview {
+  seen: number;
+  parsed: number;
+  rejected: number;
+  rejectionCounts?: Partial<
+    Record<
+      | "invalid_row"
+      | "junk_metadata"
+      | "future_dated"
+      | "duplicate"
+      | "ambiguous_row",
+      number
+    >
+  >;
 }
 
 /**
