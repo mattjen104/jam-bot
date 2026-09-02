@@ -13199,6 +13199,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
+  touch-action: pan-x;
   scrollbar-width: thin;
 }
 .minimal-radio__remote-view--fixture {

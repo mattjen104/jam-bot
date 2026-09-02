@@ -27,7 +27,9 @@ const STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
 );
 const MAX_CROSSING_ALBUMS = 5;
 const REMOTE_FIXTURE_STATION_COUNT = 6;
-const REMOTE_PAGE_SIZE = 6;
+// Keep the existing two-column pairing, but make each pair a horizontal panel
+// so the compact six-station fixture is actually scrollable.
+const REMOTE_PAGE_SIZE = 2;
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];

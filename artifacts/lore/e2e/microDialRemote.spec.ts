@@ -335,6 +335,11 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.getByTestId("minimal-radio-remote-view"))
       .toHaveAttribute("aria-label", "Compact station preview");
     await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(6);
+    const compactScroll = await page.getByTestId("minimal-radio-remote-view").evaluate((node) => ({
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    }));
+    expect(compactScroll.scrollWidth).toBeGreaterThan(compactScroll.clientWidth);
     await expect(page.getByTestId("minimal-radio-remote-category-all")).toBeVisible();
     await expect(page.getByTestId("minimal-radio-remote-category-campus")).toBeVisible();
 
