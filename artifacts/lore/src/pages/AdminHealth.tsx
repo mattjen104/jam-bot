@@ -94,6 +94,35 @@ interface ReleaseYearHealth {
   unmatchedLastAttemptAt: string | null;
 }
 
+interface GenreStationCoverage {
+  stationId: number;
+  slug: string;
+  eligible: number;
+  attempted: number;
+  enriched: number;
+  attemptedCoverage: number | null;
+  genreCoverage: number | null;
+}
+
+interface GenreEnrichmentHealth {
+  total: number;
+  pending: number;
+  transientFailure: number;
+  noResult: number;
+  enriched: number;
+  ineligible: number;
+  recentWindowDays: number;
+  recentEligible: number;
+  recentAttempted: number;
+  recentEnriched: number;
+  recentAttemptedCoverage: number | null;
+  recentGenreCoverage: number | null;
+  attemptsLast24h: number;
+  oldestPendingAt: string | null;
+  lastAttemptAt: string | null;
+  stationCoverage: GenreStationCoverage[];
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function formatDuration(ms: number): string {
@@ -187,6 +216,8 @@ function HealthPanel({
   const [swError, setSwError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
   const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [genreHealth, setGenreHealth] = useState<GenreEnrichmentHealth | null>(null);
+  const [genreError, setGenreError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -316,12 +347,44 @@ function HealthPanel({
         }
       })();
 
+      const genrePromise = (async () => {
+        let response: Response;
+        try {
+          response = await fetch("/api/admin/genre-enrichment-health", { headers });
+        } catch (err) {
+          setGenreError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setGenreHealth(null);
+          return false;
+        }
+        if (response.ok) {
+          setGenreHealth((await response.json()) as GenreEnrichmentHealth);
+          setGenreError(null);
+          return true;
+        }
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setGenreError({
+          kind: response.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${response.status}`,
+        });
+        setGenreHealth(null);
+        return false;
+      })();
+
       try {
-        const [ffOk, rlOk, swOk, ryOk] = await Promise.all([ffPromise, rlPromise, swPromise, ryPromise]);
+        const [ffOk, rlOk, swOk, ryOk, genreOk] = await Promise.all([
+          ffPromise,
+          rlPromise,
+          swPromise,
+          ryPromise,
+          genrePromise,
+        ]);
         // Only show the top-level error when every endpoint fails at once.
         // Each section already renders its own per-section banner; the shared
         // top-level banner is a last-resort "nothing works at all" indicator.
-        if (!ffOk && !rlOk && !swOk && !ryOk) {
+        if (!ffOk && !rlOk && !swOk && !ryOk && !genreOk) {
           setLoadError("All health endpoints failed — check server logs");
         }
         setLastRefreshed(new Date());
@@ -346,7 +409,13 @@ function HealthPanel({
   const totalStale = (feedFreshness?.staleCount ?? 0) + (spiWeb?.staleCount ?? 0);
   // "All healthy" only when both feed sections loaded without error and report no stale stations.
   const allHealthy =
-    !loading && !loadError && !ffError && !swError && !ryError && totalStale === 0;
+    !loading &&
+    !loadError &&
+    !ffError &&
+    !swError &&
+    !ryError &&
+    !genreError &&
+    totalStale === 0;
 
   return (
     <div className="min-h-screen">
@@ -510,6 +579,19 @@ function HealthPanel({
         )}
         {!loading && ryError !== null && (
           <ReleaseYearErrorBanner kind={ryError.kind} message={ryError.message} />
+        )}
+
+        {!loading && genreHealth !== null && (
+          <GenreEnrichmentHealthSection health={genreHealth} />
+        )}
+        {!loading && genreError !== null && (
+          <SectionErrorBanner
+            icon={<Tag className="h-4 w-4" />}
+            title="Genre enrichment"
+            kind={genreError.kind}
+            message={genreError.message}
+            data-testid="genre-error-banner"
+          />
         )}
 
         {/* Radio Browser bulk re-probe + fingerprint scout — admin tools */}
@@ -704,6 +786,109 @@ function DataRow({ label, value }: { label: string; value: string }) {
       <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="font-mono text-sm text-foreground">{value}</dd>
     </div>
+  );
+}
+
+function formatCoverage(value: number | null): string {
+  return value == null ? "—" : `${Math.round(value * 100)}%`;
+}
+
+function GenreEnrichmentHealthSection({
+  health,
+}: {
+  health: GenreEnrichmentHealth;
+}) {
+  const laggingStations = health.stationCoverage.filter(
+    (station) =>
+      station.eligible > 0 &&
+      (station.attemptedCoverage ?? 0) < 0.95,
+  );
+
+  return (
+    <section className="mt-10">
+      <SectionHeading
+        icon={<Tag className="h-4 w-4" />}
+        title="Genre enrichment"
+        badge={health.pending + health.transientFailure}
+        description={`Durable provider outcomes and ${health.recentWindowDays}-day coverage for active front-door stations.`}
+      />
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-base sm:grid-cols-5">
+          {[
+            ["Pending", health.pending, "never attempted"],
+            ["Transient", health.transientFailure, "will retry"],
+            ["No result", health.noResult, "definitive empty"],
+            ["Enriched", health.enriched, "genre found"],
+            ["Ineligible", health.ineligible, "provider-only ID"],
+          ].map(([label, value, detail]) => (
+            <div key={String(label)}>
+              <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                {label}
+              </dt>
+              <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+                {Number(value).toLocaleString()}
+              </dd>
+              <dd className="text-sm text-muted-foreground">{detail}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="mt-5 grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
+          <DataRow
+            label="Recent attempted"
+            value={`${formatCoverage(health.recentAttemptedCoverage)} · ${health.recentAttempted}/${health.recentEligible}`}
+          />
+          <DataRow
+            label="Recent genre coverage"
+            value={`${formatCoverage(health.recentGenreCoverage)} · ${health.recentEnriched}/${health.recentEligible}`}
+          />
+          <DataRow
+            label="Attempts in 24h"
+            value={health.attemptsLast24h.toLocaleString()}
+          />
+          <DataRow
+            label="Oldest pending evidence"
+            value={formatTimestamp(health.oldestPendingAt)}
+          />
+          <DataRow
+            label="Last attempt"
+            value={formatTimestamp(health.lastAttemptAt)}
+          />
+        </div>
+
+        <div className="mt-5 border-t border-border pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-foreground">
+              Station attempted coverage
+            </p>
+            <span className="text-sm text-muted-foreground">
+              {laggingStations.length === 0
+                ? "All eligible stations ≥95%"
+                : `${laggingStations.length} below 95%`}
+            </span>
+          </div>
+          {laggingStations.length > 0 && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {laggingStations.map((station) => (
+                <div
+                  key={station.stationId}
+                  className="flex items-center justify-between rounded-lg border border-border bg-secondary/20 px-3 py-2"
+                >
+                  <span className="font-mono text-sm text-foreground">
+                    {station.slug}
+                  </span>
+                  <span className="font-mono text-sm text-muted-foreground">
+                    {formatCoverage(station.attemptedCoverage)}
+                    {" · "}
+                    {station.attempted}/{station.eligible}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -902,18 +902,49 @@ export function parseRecordingGenreYear(body: unknown): {
 export async function fetchRecordingGenreYear(
   recordingId: string,
 ): Promise<{ genres: string[]; year: number | null; releaseDate: string | null }> {
+  const result = await fetchRecordingGenreYearWithStatus(recordingId);
+  return {
+    genres: result.genres,
+    year: result.year,
+    releaseDate: result.releaseDate,
+  };
+}
+
+/**
+ * Status-bearing variant for callers that need to distinguish a definitive
+ * empty MusicBrainz answer from a provider/network failure. The established
+ * fetchRecordingGenreYear wrapper above intentionally keeps its old shape.
+ */
+export async function fetchRecordingGenreYearWithStatus(
+  recordingId: string,
+): Promise<{
+  genres: string[];
+  year: number | null;
+  releaseDate: string | null;
+  transientFailure: boolean;
+}> {
   if (!musicbrainzEnabled() || !recordingId.trim()) {
-    return { genres: [], year: null, releaseDate: null };
+    return {
+      genres: [],
+      year: null,
+      releaseDate: null,
+      transientFailure: false,
+    };
   }
   try {
     const body = await mbFetch(`/recording/${recordingId}?inc=genres&fmt=json`);
-    return parseRecordingGenreYear(body);
+    return { ...parseRecordingGenreYear(body), transientFailure: false };
   } catch (err) {
     logger.warn("MusicBrainz genre lookup failed", {
       recordingId,
       error: String(err),
     });
-    return { genres: [], year: null, releaseDate: null };
+    return {
+      genres: [],
+      year: null,
+      releaseDate: null,
+      transientFailure: true,
+    };
   }
 }
 

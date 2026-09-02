@@ -132,6 +132,10 @@ import { clearPlayerScheduleCache } from "../player.js";
 import { toPicker } from "./shared.js";
 import { backfillReleaseYearBatch } from "../../lore/release-year-backfill.js";
 import {
+  backfillGenreBatch,
+  GENRE_RECENT_WINDOW_DAYS,
+} from "../../lore/genre-backfill.js";
+import {
   backfillUnmatchedSpinsBatch,
   getUnmatchedSpinHealth,
 } from "../../lore/unmatched-spin-backfill.js";
@@ -1888,6 +1892,161 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
     unmatchedUnavailable: unmatched.unavailable,
     unmatchedLastAttemptAt: unmatched.lastAttemptAt,
   });
+}));
+
+// GET /api/admin/genre-enrichment-health — durable funnel and per-station
+// recent coverage for active stations on the normal front door.
+router.get("/admin/genre-enrichment-health", h(async (_req, res) => {
+  const recentEligible = sql`
+    ${recordingsTable.mbid} NOT LIKE 'sp:%'
+    AND EXISTS (
+      SELECT 1
+      FROM ${spinsTable} recent_spin
+      INNER JOIN ${stationsTable} recent_station
+        ON recent_station.id = recent_spin.station_id
+      WHERE recent_spin.mbid = ${recordingsTable.mbid}
+        AND recent_spin.played_at >= now() - (${GENRE_RECENT_WINDOW_DAYS} * interval '1 day')
+        AND recent_station.active = true
+        AND recent_station.hidden = false
+        AND recent_station.crossing_eligible = true
+    )
+  `;
+
+  const [totals] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      pending: sql<number>`count(*) filter (
+        where ${recordingsTable.genreEnrichmentStatus} = 'pending'
+      )::int`,
+      transientFailure: sql<number>`count(*) filter (
+        where ${recordingsTable.genreEnrichmentStatus} = 'transient_failure'
+      )::int`,
+      noResult: sql<number>`count(*) filter (
+        where ${recordingsTable.genreEnrichmentStatus} = 'no_result'
+      )::int`,
+      enriched: sql<number>`count(*) filter (
+        where ${recordingsTable.genreEnrichmentStatus} = 'found'
+      )::int`,
+      ineligible: sql<number>`count(*) filter (
+        where ${recordingsTable.genreEnrichmentStatus} = 'ineligible'
+      )::int`,
+      recentEligible: sql<number>`count(*) filter (where ${recentEligible})::int`,
+      recentAttempted: sql<number>`count(*) filter (
+        where ${recentEligible}
+          and ${recordingsTable.genreEnrichmentStatus}
+            in ('transient_failure', 'no_result', 'found')
+      )::int`,
+      recentEnriched: sql<number>`count(*) filter (
+        where ${recentEligible}
+          and ${recordingsTable.genreEnrichmentStatus} = 'found'
+      )::int`,
+      attemptsLast24h: sql<number>`count(*) filter (
+        where ${recordingsTable.genreEnrichmentAttemptedAt} >= now() - interval '24 hours'
+      )::int`,
+      oldestPendingAt: sql<string | null>`min((
+        SELECT max(oldest_spin.played_at)
+        FROM ${spinsTable} oldest_spin
+        WHERE oldest_spin.mbid = ${recordingsTable.mbid}
+      )) filter (
+        where ${recentEligible}
+          and ${recordingsTable.genreEnrichmentStatus}
+            in ('pending', 'transient_failure')
+      )::text`,
+      lastAttemptAt: sql<string | null>`max(
+        ${recordingsTable.genreEnrichmentAttemptedAt}
+      )::text`,
+    })
+    .from(recordingsTable);
+
+  const stationResult = await db.execute(sql`
+    SELECT
+      station.id AS "stationId",
+      station.slug AS "slug",
+      count(DISTINCT recording.mbid) FILTER (
+        WHERE recording.mbid NOT LIKE 'sp:%'
+      )::int AS "eligible",
+      count(DISTINCT recording.mbid) FILTER (
+        WHERE recording.mbid NOT LIKE 'sp:%'
+          AND recording.genre_enrichment_status
+            IN ('transient_failure', 'no_result', 'found')
+      )::int AS "attempted",
+      count(DISTINCT recording.mbid) FILTER (
+        WHERE recording.mbid NOT LIKE 'sp:%'
+          AND recording.genre_enrichment_status = 'found'
+      )::int AS "enriched"
+    FROM stations station
+    LEFT JOIN spins spin
+      ON spin.station_id = station.id
+      AND spin.played_at >= now() - (${GENRE_RECENT_WINDOW_DAYS} * interval '1 day')
+    LEFT JOIN recordings recording ON recording.mbid = spin.mbid
+    WHERE station.active = true
+      AND station.hidden = false
+      AND station.crossing_eligible = true
+    GROUP BY station.id, station.slug
+    ORDER BY station.slug
+  `);
+
+  const stationCoverage = (stationResult?.rows ?? []).map((row) => {
+    const station = row as {
+      stationId: number;
+      slug: string;
+      eligible: number;
+      attempted: number;
+      enriched: number;
+    };
+    const eligible = Number(station.eligible ?? 0);
+    const attempted = Number(station.attempted ?? 0);
+    const enriched = Number(station.enriched ?? 0);
+    return {
+      stationId: Number(station.stationId),
+      slug: String(station.slug),
+      eligible,
+      attempted,
+      enriched,
+      attemptedCoverage:
+        eligible === 0 ? null : Math.round((attempted / eligible) * 10_000) / 10_000,
+      genreCoverage:
+        eligible === 0 ? null : Math.round((enriched / eligible) * 10_000) / 10_000,
+    };
+  });
+
+  const recentEligibleCount = totals?.recentEligible ?? 0;
+  const recentAttemptedCount = totals?.recentAttempted ?? 0;
+  const recentEnrichedCount = totals?.recentEnriched ?? 0;
+  return res.json({
+    total: totals?.total ?? 0,
+    pending: totals?.pending ?? 0,
+    transientFailure: totals?.transientFailure ?? 0,
+    noResult: totals?.noResult ?? 0,
+    enriched: totals?.enriched ?? 0,
+    ineligible: totals?.ineligible ?? 0,
+    recentWindowDays: GENRE_RECENT_WINDOW_DAYS,
+    recentEligible: recentEligibleCount,
+    recentAttempted: recentAttemptedCount,
+    recentEnriched: recentEnrichedCount,
+    recentAttemptedCoverage:
+      recentEligibleCount === 0
+        ? null
+        : Math.round((recentAttemptedCount / recentEligibleCount) * 10_000) / 10_000,
+    recentGenreCoverage:
+      recentEligibleCount === 0
+        ? null
+        : Math.round((recentEnrichedCount / recentEligibleCount) * 10_000) / 10_000,
+    attemptsLast24h: totals?.attemptsLast24h ?? 0,
+    oldestPendingAt: totals?.oldestPendingAt ?? null,
+    lastAttemptAt: totals?.lastAttemptAt ?? null,
+    stationCoverage,
+  });
+}));
+
+router.post("/admin/genre-enrichment-backfill/run", h(async (_req, res) => {
+  const result = await backfillGenreBatch().catch((err) => {
+    throw new HttpError(
+      500,
+      err instanceof Error ? err.message : "Genre-enrichment batch failed",
+    );
+  });
+  return res.json(result);
 }));
 
 // POST /api/admin/release-year-backfill/run — trigger one backfill batch

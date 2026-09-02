@@ -91,6 +91,24 @@ export const recordingsTable = pgTable("recordings", {
    */
   genreEnrichedAt: timestamp("genre_enriched_at"),
   /**
+   * Current genre-enrichment funnel state:
+   *   pending          — never attempted
+   *   transient_failure — provider/network failure; retryable
+   *   no_result        — providers answered but supplied no genre
+   *   found            — at least one genre was supplied
+   *   ineligible       — synthetic/provider-only identity; never call MB
+   *
+   * Kept as text (rather than a PostgreSQL enum) so boot migrations can add
+   * states without coupling deploy order to a database enum migration.
+   */
+  genreEnrichmentStatus: text("genre_enrichment_status")
+    .notNull()
+    .default("pending"),
+  /** When the most recent genre-enrichment attempt started/completed. */
+  genreEnrichmentAttemptedAt: timestamp("genre_enrichment_attempted_at"),
+  /** Short provider error context for the admin funnel; null after success. */
+  genreEnrichmentError: text("genre_enrichment_error"),
+  /**
    * When an ISRC lookup (MusicBrainz `inc=isrcs`) was last attempted for this
    * recording. Set regardless of whether an ISRC was found, so misses aren't
    * re-fetched forever. Null means never attempted.

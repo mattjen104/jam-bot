@@ -36,6 +36,7 @@ const { mockFetchReleaseDateInfo } = vi.hoisted(() => ({
 
 const mockDbSelect = vi.fn();
 const mockDbUpdate = vi.fn();
+const mockDbExecute = vi.fn();
 
 vi.mock("@workspace/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@workspace/db")>();
@@ -46,7 +47,7 @@ vi.mock("@workspace/db", async (importOriginal) => {
       update: mockDbUpdate,
       insert: vi.fn(),
       delete: vi.fn(),
-      execute: vi.fn(),
+      execute: mockDbExecute,
     },
   };
 });
@@ -310,6 +311,66 @@ describe("GET /admin/release-year-health — date-backfill coverage", () => {
     expect((body.dateInQueue as number) + (body.datePermMiss as number)).toBe(
       body.datePending,
     );
+  });
+});
+
+describe("GET /admin/genre-enrichment-health", () => {
+  it("separates every outcome and reports recent station coverage", async () => {
+    mockHealthSelect([
+      {
+        total: 25,
+        pending: 2,
+        transientFailure: 1,
+        noResult: 4,
+        enriched: 17,
+        ineligible: 1,
+        recentEligible: 20,
+        recentAttempted: 19,
+        recentEnriched: 16,
+        attemptsLast24h: 7,
+        oldestPendingAt: "2026-08-30T12:00:00.000Z",
+        lastAttemptAt: "2026-09-02T08:00:00.000Z",
+      },
+    ]);
+    mockDbExecute.mockResolvedValueOnce({
+      rows: [
+        {
+          stationId: 12,
+          slug: "fair-fm",
+          eligible: 10,
+          attempted: 9,
+          enriched: 8,
+        },
+      ],
+    });
+
+    const res = await fetch(`${serverUrl}/admin/genre-enrichment-health`, {
+      headers: { "x-admin-token": ADMIN_TOKEN },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(body).toMatchObject({
+      pending: 2,
+      transientFailure: 1,
+      noResult: 4,
+      enriched: 17,
+      ineligible: 1,
+      recentAttemptedCoverage: 0.95,
+      recentGenreCoverage: 0.8,
+      attemptsLast24h: 7,
+    });
+    expect(body.stationCoverage).toEqual([
+      {
+        stationId: 12,
+        slug: "fair-fm",
+        eligible: 10,
+        attempted: 9,
+        enriched: 8,
+        attemptedCoverage: 0.9,
+        genreCoverage: 0.8,
+      },
+    ]);
   });
 });
 

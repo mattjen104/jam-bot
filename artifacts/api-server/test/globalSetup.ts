@@ -101,6 +101,10 @@ export async function setup(): Promise<void> {
       "../src/lore/release-year-migration.js"
     );
     await applyReleaseYearMigration();
+    const { applyGenreEnrichmentMigration } = await import(
+      "../src/lore/genre-enrichment-migration.js"
+    );
+    await applyGenreEnrichmentMigration();
 
     // Ensures release_date / release_date_checked_at columns exist — required
     // by any test that reads recordings.releaseDate after the schema added

@@ -38,103 +38,138 @@ Aggregate spin volume must never substitute for per-station funnel coverage.
 
 ### Work
 
-- Preserve transient MusicBrainz failures as retryable rather than permanently caching them as clear misses.
-- Give historical unmatched spins the same single bounded artist/title reversal used by live ingestion.
-- Select the highest-scoring MusicBrainz recording explicitly rather than trusting response ordering.
-- Keep the raw source fields unchanged and preserve conservative duration rejection.
-- Version resolver behavior before introducing broader normalization so old permanent misses cannot silently block a corrected algorithm.
+- Add one admin data-funnel view covering source capture, resolution, enrichment, and sentence readiness.
+- Show both counts and percentages; station-level rows must be inspectable.
+- Persist last success and attempt timestamps rather than relying only on in-memory health state.
+- Alert on source silence, usable-pair collapse, resolver queue stagnation, enrichment queue age, and sudden coverage regressions.
+- Snapshot the readiness report daily so improvements and regressions can be measured.
 
 ### Measures
 
-- Clear misses remain cached and do not hammer MusicBrainz.
-- Network, rate-limit, and provider failures enter the deferred queue.
-- Reversed historical metadata can converge without unbounded extra requests.
-- Direct high-confidence matches still use one MusicBrainz query; only clear misses use the second bounded query.
+- Operators can explain every excluded front-door station from one report.
+- Restarts do not erase the last known source or enrichment state.
+- The ready-station count is reproducible from stored facts.
+
+
+### Operational contract
+
+- The backfill reserves a bounded recent slot per active, visible,
+  crossing-eligible station before filling the rest of the batch from the
+  global recent-first queue.
+- Provider calls remain sequential. Retryable failures cool down before
+  re-entering the queue; definitive empty results do not retry.
+- Synthetic Spotify recording identities are classified as ineligible and
+  never sent to MusicBrainz genre lookup.
+- `/api/admin/genre-enrichment-health` reports the five-state recording funnel,
+  30-day attempted/genre coverage, oldest pending evidence, 24-hour throughput,
+  and per-station coverage for the front-door roster.
 
 ### Current status
 
-Started in the first implementation slice:
-
-- Status-aware live text resolution now preserves transient failures for retry.
-- Historical unmatched-spin recovery now performs one bounded swap.
-- Recording search now selects the highest-scoring result with a deterministic tie-break.
-- Focused resolver and backfill tests cover these behaviors.
+- The insights worker now stores a separate rolling 90-day fact packet for every active station while preserving the cumulative archive profile.
+- A separate rolling 30-day freshness signal records whether any clean, usable artist/title evidence remains current.
+- Sample size, resolved count, unique track and artist breadth, resolution rate, genre and release-date coverage, exclusions, supported genres, and update timestamps are persisted.
+- The ready/provisional/insufficient tier is computed only from those stored facts. Station IDs, show/DJ labels, placeholders, URLs, and unsupported genre values are excluded before aggregation.
 
 ## Phase 2 — Measure and repair source capture
 
 ### Work
 
-- Reuse one pure metadata-quality classifier across probes and normal polling.
-- Record distinct outcomes: response error, empty metadata, junk/placeholder, incomplete pair, usable pair, and written spin.
-- Persist per-station/source last attempt, last response, last usable pair, and rolling outcome counts so restarts do not erase operational truth.
-- Keep source capability separate from runtime health:
-  - complete history
-  - current-track API
-  - persistent ICY watcher
-  - interval-only stream
-  - unsupported/no source
-- Prioritize the 43 front-door stations for source-specific repair.
-- Add official now-playing/history adapters when a stream does not carry usable ICY metadata.
-- Do not attempt identity resolution for station IDs, show names, ads, backup labels, or placeholders.
+- Add one admin data-funnel view covering source capture, resolution, enrichment, and sentence readiness.
+- Show both counts and percentages; station-level rows must be inspectable.
+- Persist last success and attempt timestamps rather than relying only on in-memory health state.
+- Alert on source silence, usable-pair collapse, resolver queue stagnation, enrichment queue age, and sudden coverage regressions.
+- Snapshot the readiness report daily so improvements and regressions can be measured.
 
 ### Measures
 
-- 95% of the front-door roster is `healthy` or `recoverable`.
-- Zero unexplained `never seen` stations after 24 hours.
-- At least 90% usable-pair rate for sources expected to emit track metadata.
-- Source failures are attributable to a station, adapter, and outcome rather than appearing only as absent spins.
+- Operators can explain every excluded front-door station from one report.
+- Restarts do not erase the last known source or enrichment state.
+- The ready-station count is reproducible from stored facts.
+
+
+### Operational contract
+
+- The backfill reserves a bounded recent slot per active, visible,
+  crossing-eligible station before filling the rest of the batch from the
+  global recent-first queue.
+- Provider calls remain sequential. Retryable failures cool down before
+  re-entering the queue; definitive empty results do not retry.
+- Synthetic Spotify recording identities are classified as ineligible and
+  never sent to MusicBrainz genre lookup.
+- `/api/admin/genre-enrichment-health` reports the five-state recording funnel,
+  30-day attempted/genre coverage, oldest pending evidence, 24-hour throughput,
+  and per-station coverage for the front-door roster.
 
 ## Phase 3 — Improve deterministic metadata normalization
 
 ### Work
 
-- Build a small, versioned set of conservative query variants for clean raw metadata.
-- Support known source-specific field ordering and presentation suffixes.
-- Strip only clearly presentational suffixes such as official-video markers; do not broadly remove parentheses or punctuation that distinguish recordings.
-- Cache by source/raw input plus resolver algorithm version.
-- Preserve every raw field for audit and parser regression testing.
-- Assemble a manually reviewed fixture set from real ICY, Spinitron, station-page, talk, ad, and placeholder examples.
+- Add one admin data-funnel view covering source capture, resolution, enrichment, and sentence readiness.
+- Show both counts and percentages; station-level rows must be inspectable.
+- Persist last success and attempt timestamps rather than relying only on in-memory health state.
+- Alert on source silence, usable-pair collapse, resolver queue stagnation, enrichment queue age, and sudden coverage regressions.
+- Snapshot the readiness report daily so improvements and regressions can be measured.
 
 ### Measures
 
-- At least 95% precision when admitting a value as a music track.
-- Fewer than 2% of show, ad, station-ID, and placeholder values reach MusicBrainz.
-- At least 90% exact artist/title ordering on the reviewed fixture set.
+- Operators can explain every excluded front-door station from one report.
+- Restarts do not erase the last known source or enrichment state.
+- The ready-station count is reproducible from stored facts.
+
+
+### Operational contract
+
+- The backfill reserves a bounded recent slot per active, visible,
+  crossing-eligible station before filling the rest of the batch from the
+  global recent-first queue.
+- Provider calls remain sequential. Retryable failures cool down before
+  re-entering the queue; definitive empty results do not retry.
+- Synthetic Spotify recording identities are classified as ineligible and
+  never sent to MusicBrainz genre lookup.
+- `/api/admin/genre-enrichment-health` reports the five-state recording funnel,
+  30-day attempted/genre coverage, oldest pending evidence, 24-hour throughput,
+  and per-station coverage for the front-door roster.
 
 ## Phase 4 — Prioritize recent enrichment fairly
 
 ### Work
 
-- Expose a genre-enrichment health funnel equivalent to the existing release-year health report.
-- Separate:
-  - never attempted
-  - transient failure
-  - definitive no-result
-  - genre data found
-  - ineligible synthetic/provider-only identity
-- Prioritize recordings heard recently on active front-door stations.
-- Add per-station fairness so one high-volume station cannot consume each enrichment batch.
-- Preserve sequential provider pacing and existing rate-limit protection.
-- Keep definitive empty results from retrying forever, but never mark transient provider failures as completed.
-- Enrich recent evidence first; do not wait for the full historical recording table to converge.
+- Add one admin data-funnel view covering source capture, resolution, enrichment, and sentence readiness.
+- Show both counts and percentages; station-level rows must be inspectable.
+- Persist last success and attempt timestamps rather than relying only on in-memory health state.
+- Alert on source silence, usable-pair collapse, resolver queue stagnation, enrichment queue age, and sudden coverage regressions.
+- Snapshot the readiness report daily so improvements and regressions can be measured.
 
 ### Measures
 
-- 95% of eligible recent recordings attempted.
-- At least 80% of recent resolved recordings with nonempty genre evidence.
-- Visible oldest-pending age and recent throughput.
-- No starvation of lower-volume front-door stations.
+- Operators can explain every excluded front-door station from one report.
+- Restarts do not erase the last known source or enrichment state.
+- The ready-station count is reproducible from stored facts.
+
+
+### Operational contract
+
+- The backfill reserves a bounded recent slot per active, visible,
+  crossing-eligible station before filling the rest of the batch from the
+  global recent-first queue.
+- Provider calls remain sequential. Retryable failures cool down before
+  re-entering the queue; definitive empty results do not retry.
+- Synthetic Spotify recording identities are classified as ineligible and
+  never sent to MusicBrainz genre lookup.
+- `/api/admin/genre-enrichment-health` reports the five-state recording funnel,
+  30-day attempted/genre coverage, oldest pending evidence, 24-hour throughput,
+  and per-station coverage for the front-door roster.
 
 ## Phase 5 — Compute recent station profiles
 
 ### Work
 
-- Create a listener-facing 90-day profile separate from cumulative all-time insights.
-- Add a 30-day freshness signal.
-- Store the profile window, sample size, unique tracks, unique artists, resolution rate, genre coverage, dated-track coverage, top supported genres, and update timestamp.
-- Reject polluted artist values and unsupported genres before aggregation.
-- Recompute when enough new evidence arrives rather than on every spin.
-- Keep existing cumulative profiles where they serve archive or discovery uses.
+- Add one admin data-funnel view covering source capture, resolution, enrichment, and sentence readiness.
+- Show both counts and percentages; station-level rows must be inspectable.
+- Persist last success and attempt timestamps rather than relying only on in-memory health state.
+- Alert on source silence, usable-pair collapse, resolver queue stagnation, enrichment queue age, and sudden coverage regressions.
+- Snapshot the readiness report daily so improvements and regressions can be measured.
 
 ### Current status
 
@@ -171,6 +206,20 @@ Music-only provisional copy may use a stricter wording template, but must still 
 - Operators can explain every excluded front-door station from one report.
 - Restarts do not erase the last known source or enrichment state.
 - The ready-station count is reproducible from stored facts.
+
+
+### Operational contract
+
+- The backfill reserves a bounded recent slot per active, visible,
+  crossing-eligible station before filling the rest of the batch from the
+  global recent-first queue.
+- Provider calls remain sequential. Retryable failures cool down before
+  re-entering the queue; definitive empty results do not retry.
+- Synthetic Spotify recording identities are classified as ineligible and
+  never sent to MusicBrainz genre lookup.
+- `/api/admin/genre-enrichment-health` reports the five-state recording funnel,
+  30-day attempted/genre coverage, oldest pending evidence, 24-hour throughput,
+  and per-station coverage for the front-door roster.
 
 ## Deferred LLM layer
 

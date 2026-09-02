@@ -123,9 +123,19 @@ export async function fetchArtistTags(
   artist: string,
   mbid?: string,
 ): Promise<string[]> {
-  if (!lastfmEnabled()) return [];
+  const result = await fetchArtistTagsWithStatus(artist, mbid);
+  return result.tags;
+}
+
+/** Status-bearing variant used by the genre funnel; the public wrapper keeps
+ * the historical array-only return shape for other enrichment consumers. */
+export async function fetchArtistTagsWithStatus(
+  artist: string,
+  mbid?: string,
+): Promise<{ tags: string[]; transientFailure: boolean }> {
+  if (!lastfmEnabled()) return { tags: [], transientFailure: false };
   const a = artist.trim();
-  if (!a && !mbid) return [];
+  if (!a && !mbid) return { tags: [], transientFailure: false };
   try {
     const params: Record<string, string> = {
       method: "artist.gettoptags",
@@ -134,10 +144,10 @@ export async function fetchArtistTags(
     if (mbid) params.mbid = mbid;
     else params.artist = a;
     const body = await lastfmFetch(params);
-    return parseArtistTags(body);
+    return { tags: parseArtistTags(body), transientFailure: false };
   } catch (err) {
     logger.warn("Last.fm tags lookup failed", { artist, error: String(err) });
-    return [];
+    return { tags: [], transientFailure: true };
   }
 }
 

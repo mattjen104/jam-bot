@@ -1,6 +1,11 @@
-import { fetchRecordingGenreYear } from "./musicbrainz.js";
-import { fetchArtistTags } from "./lastfm.js";
+import { fetchRecordingGenreYearWithStatus } from "./musicbrainz.js";
+import { fetchArtistTagsWithStatus } from "./lastfm.js";
 import { logger } from "./logger.js";
+
+export type GenreEnrichmentOutcome =
+  | "found"
+  | "no_result"
+  | "transient_failure";
 
 export interface GenreYear {
   /** Ranked genre tags, most-relevant first. [] means unknown — never fabricated. */
@@ -13,6 +18,8 @@ export interface GenreYear {
    * MB's native granularity for premiere (First-tier) detection.
    */
   releaseDate: string | null;
+  /** Provider outcome, used by durable backfill health reporting. */
+  status: GenreEnrichmentOutcome;
 }
 
 /**
@@ -46,28 +53,46 @@ export async function fetchGenreAndYear(
   let genres: string[] = [];
   let year: number | null = null;
   let releaseDate: string | null = null;
+  let transientFailure = false;
 
   if (isMbId) {
     try {
-      const mb = await fetchRecordingGenreYear(recordingId);
+      const mb = await fetchRecordingGenreYearWithStatus(recordingId);
       genres = mb.genres;
       year = mb.year;
       releaseDate = mb.releaseDate;
+      transientFailure = mb.transientFailure;
     } catch (err) {
       logger.warn("MusicBrainz genre/year enrichment failed", {
         recordingId,
         error: String(err),
       });
+      transientFailure = true;
     }
   }
 
   if (genres.length === 0 && artist.trim()) {
     try {
-      genres = await fetchArtistTags(artist, artistMbid ?? undefined);
+      const tags = await fetchArtistTagsWithStatus(
+        artist,
+        artistMbid ?? undefined,
+      );
+      genres = tags.tags;
+      transientFailure ||= tags.transientFailure;
     } catch (err) {
       logger.warn("Last.fm genre fallback failed", { artist, error: String(err) });
+      transientFailure = true;
     }
   }
 
-  return { genres, year, releaseDate };
+  return {
+    genres,
+    year,
+    releaseDate,
+    status: genres.length
+      ? "found"
+      : transientFailure
+        ? "transient_failure"
+        : "no_result",
+  };
 }

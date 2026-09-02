@@ -447,6 +447,9 @@ export async function upsertRecording(
       releaseYear: recordingsTable.releaseYear,
       releaseDate: recordingsTable.releaseDate,
       genreEnrichedAt: recordingsTable.genreEnrichedAt,
+      genreEnrichmentStatus: recordingsTable.genreEnrichmentStatus,
+      genreEnrichmentAttemptedAt: recordingsTable.genreEnrichmentAttemptedAt,
+      genreEnrichmentError: recordingsTable.genreEnrichmentError,
     })
     .from(recordingsTable)
     .where(eq(recordingsTable.mbid, r.mbid as string))
@@ -464,15 +467,50 @@ export async function upsertRecording(
   let releaseYear = existing?.releaseYear ?? null;
   let releaseDate = existing?.releaseDate ?? null;
   let genreEnrichedAt = existing?.genreEnrichedAt ?? null;
-  if (enrichLinks && genreEnrichedAt == null) {
+  const syntheticProviderIdentity = (r.mbid as string).startsWith("sp:");
+  let genreEnrichmentStatus =
+    existing?.genreEnrichmentStatus ??
+    (genreEnrichedAt != null
+      ? genres?.length
+        ? "found"
+        : "no_result"
+      : "pending");
+  let genreEnrichmentAttemptedAt =
+    existing?.genreEnrichmentAttemptedAt ?? null;
+  let genreEnrichmentError = existing?.genreEnrichmentError ?? null;
+
+  // Spotify-only synthetic identities are useful for playback/library display,
+  // but have no MusicBrainz recording to enrich. Mark them explicitly instead
+  // of allowing the live path to spend a Last.fm/MB lookup on every new row.
+  if (syntheticProviderIdentity) {
+    genreEnrichmentStatus = "ineligible";
+    genreEnrichmentError = null;
+  } else if (
+    enrichLinks &&
+    (genreEnrichmentStatus === "pending" ||
+      genreEnrichmentStatus === "transient_failure")
+  ) {
+    genreEnrichmentAttemptedAt = new Date();
     try {
       const g = await fetchGenreAndYear(r.mbid as string, r.artist, r.artistMbid);
+      const outcome =
+        g.status ?? (g.genres.length > 0 ? "found" : "no_result");
       if (genres == null && g.genres.length) genres = g.genres;
       if (releaseYear == null && g.year != null) releaseYear = g.year;
       if (releaseDate == null && g.releaseDate != null) releaseDate = g.releaseDate;
-      genreEnrichedAt = new Date();
+      genreEnrichmentStatus = outcome;
+      genreEnrichmentError =
+        outcome === "transient_failure"
+          ? "Music metadata provider did not respond"
+          : null;
+      if (outcome !== "transient_failure") {
+        genreEnrichedAt = genreEnrichmentAttemptedAt;
+      }
     } catch (err) {
       console.error("[lore] genre/year enrichment failed", r.mbid, err);
+      genreEnrichmentStatus = "transient_failure";
+      genreEnrichmentError =
+        err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
     }
   }
 
@@ -524,6 +562,9 @@ export async function upsertRecording(
       releaseYear,
       releaseDate,
       genreEnrichedAt,
+      genreEnrichmentStatus,
+      genreEnrichmentAttemptedAt,
+      genreEnrichmentError,
     })
     .onConflictDoUpdate({
       target: recordingsTable.mbid,
@@ -535,6 +576,9 @@ export async function upsertRecording(
         ...(releaseYear != null ? { releaseYear } : {}),
         ...(releaseDate != null ? { releaseDate } : {}),
         ...(genreEnrichedAt ? { genreEnrichedAt } : {}),
+        genreEnrichmentStatus,
+        genreEnrichmentAttemptedAt,
+        genreEnrichmentError,
         ...(r.isrc ? { isrc: r.isrc } : {}),
         ...(newArtwork ? { artworkUrl: newArtwork } : {}),
         ...(links ? { links } : {}),
