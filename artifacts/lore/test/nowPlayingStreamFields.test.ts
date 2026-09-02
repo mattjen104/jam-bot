@@ -76,6 +76,7 @@ describe("nowPlayingStream — openStream parser field pass-through", () => {
       rawArtist: "Wet Leg",
       rawTitle: "Chaise Longue",
       mbid: "aaaaaaaa-0000-0000-0000-000000000001",
+      artworkUrl: "https://img.example/wet-leg.jpg",
       artistMbid: "bbbbbbbb-0000-0000-0000-000000000002",
       releaseYear: 2021,
       releaseDate: "2021-06-25",
@@ -87,6 +88,7 @@ describe("nowPlayingStream — openStream parser field pass-through", () => {
     expect(received).toHaveLength(1);
     const ev = received[0]!;
     expect(ev.artistMbid).toBe("bbbbbbbb-0000-0000-0000-000000000002");
+    expect(ev.artworkUrl).toBe("https://img.example/wet-leg.jpg");
     expect(ev.releaseYear).toBe(2021);
     expect(ev.releaseDate).toBe("2021-06-25");
     expect(ev.isFirstSpin).toBe(true);
@@ -141,6 +143,23 @@ describe("nowPlayingStream — openStream parser field pass-through", () => {
     expect("releaseYear" in ev).toBe(false);
     expect("releaseDate" in ev).toBe(false);
     expect("isFirstSpin" in ev).toBe(false);
+  });
+
+  it("preserves an explicit null artwork URL from a resolved frame", () => {
+    const received: SpinStreamEvent[] = [];
+    subscribeSpinStream((ev) => received.push(ev));
+    FakeEventSource.last().onopen?.();
+
+    pushRaw({
+      stationSlug: "kcrw",
+      rawArtist: "Unknown Artist",
+      rawTitle: "Unknown Track",
+      mbid: null,
+      artworkUrl: null,
+    });
+
+    expect(received).toHaveLength(1);
+    expect(received[0]!.artworkUrl).toBeNull();
   });
 
   it("passes artistMbid and releaseYear for a spin-raw-failed terminal frame", () => {

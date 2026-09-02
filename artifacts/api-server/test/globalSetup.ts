@@ -101,6 +101,10 @@ export async function setup(): Promise<void> {
       "../src/lore/release-year-migration.js"
     );
     await applyReleaseYearMigration();
+    const { applyStationRecentProfileMigration } = await import(
+      "../src/lore/station-recent-profile-migration.js"
+    );
+    await applyStationRecentProfileMigration();
     const { applyGenreEnrichmentMigration } = await import(
       "../src/lore/genre-enrichment-migration.js"
     );

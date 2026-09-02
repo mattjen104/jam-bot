@@ -117,6 +117,7 @@ describe("logSpinIfChanged — spin-changed push event", () => {
       expect(ev.rawArtist).toBe(ARTIST);
       expect(ev.rawTitle).toBe(TITLE);
       expect(ev.mbid).toBe(MBID);
+       expect(ev.artworkUrl).toBe("http://example.invalid/art.jpg");
       expect(ev.confidence).toBe("text");
       // observedAt is a parseable ISO timestamp from around the write moment.
       const observed = Date.parse(ev.observedAt);

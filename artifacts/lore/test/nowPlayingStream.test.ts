@@ -52,6 +52,7 @@ const resolvedFrame: SpinStreamEvent = {
   rawArtist: "New Artist",
   rawTitle: "New Song",
   mbid: "mbid-new",
+  artworkUrl: "http://img/new.jpg",
   observedAt: "2026-08-17T10:04:01.000Z",
   confidence: "text",
 };
@@ -82,6 +83,7 @@ describe("mergeSpinIntoOnAir — provisional spin-raw frames", () => {
     expect(now.resolving).toBe(false);
     expect(now.artist).toBe("New Artist");
     expect(now.title).toBe("New Song");
+    expect(now.artworkUrl).toBe("http://img/new.jpg");
     // Same artist/title as the provisional row — no second earlier promotion.
     expect(next.items[0]!.earlier).toEqual(["Old Artist"]);
   });

@@ -24,6 +24,8 @@ export interface SpinStreamEvent {
   rawArtist: string;
   rawTitle: string;
   mbid: string | null;
+  /** Artwork URL stored on the recording, null when unknown. */
+  artworkUrl?: string | null;
   /**
    * Frame discriminator. "spin-raw" is the provisional fast path — emitted
    * before MusicBrainz/Spotify resolution completes. "spin-raw-failed" is the
@@ -109,6 +111,7 @@ function openStream(): void {
           ...(data.provisional === true ? { provisional: true } : {}),
           ...(data.observedAt ? { observedAt: data.observedAt } : {}),
           ...(data.confidence ? { confidence: data.confidence } : {}),
+           ...(data.artworkUrl !== undefined ? { artworkUrl: data.artworkUrl } : {}),
           ...(data.isLibraryHit != null ? { isLibraryHit: data.isLibraryHit } : {}),
           ...(data.isArtistHit != null ? { isArtistHit: data.isArtistHit } : {}),
           ...(data.artistMbid != null ? { artistMbid: data.artistMbid } : {}),
@@ -298,9 +301,9 @@ export function mergeSpinIntoOnAir(
       mbid: ev.mbid ?? null,
       title: ev.rawTitle,
       artist: ev.rawArtist,
-      // Artwork for the new track is unknown until the next poll — the UI
-      // already degrades gracefully on missing art.
-      artworkUrl: null,
+      // Resolved push events carry the recording's stored artwork. Provisional
+      // frames do not have it yet and continue to degrade gracefully.
+      artworkUrl: ev.artworkUrl ?? null,
       playedAt: observedAt,
       observedAt,
       freshness: "fresh",

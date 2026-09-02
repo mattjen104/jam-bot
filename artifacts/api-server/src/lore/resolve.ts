@@ -431,13 +431,15 @@ async function lookupSpotifyArtwork(
  * fetch entirely — the spine node still lands, and links converge later when
  * the track is viewed or spun live.
  *
- * Exported for unit testing only — internal callers use it directly.
+ * Returns the artwork URL that is now stored on the recording so callers that
+ * already have the upsert result can include it in a push event without a
+ * second database lookup.
  */
 export async function upsertRecording(
   r: MbidResolution,
   artworkUrl?: string,
   enrichLinks = true,
-): Promise<void> {
+): Promise<string | null> {
   const [existing] = await db
     .select({
       mbid: recordingsTable.mbid,
@@ -585,6 +587,8 @@ export async function upsertRecording(
         updatedAt: sql`now()`,
       },
     });
+
+  return newArtwork ?? existing?.artworkUrl ?? null;
 }
 
 /**
@@ -644,11 +648,12 @@ async function persistSpin(args: {
   source: string;
   citation?: string;
   enrichLinks?: boolean;
-}): Promise<boolean> {
+}): Promise<{ inserted: boolean; artworkUrl: string | null }> {
   const { station, resolution: r, raw, showId, source, citation } = args;
+  let artworkUrl: string | null = null;
 
   if (r.mbid) {
-    await upsertRecording(r, raw.artworkUrl, args.enrichLinks ?? true);
+    artworkUrl = await upsertRecording(r, raw.artworkUrl, args.enrichLinks ?? true);
     // Off-request only: provider resolution must never delay ingest.
     void enqueueRecordingEmbeds(r.mbid, {
       stationId: station.id,
@@ -682,7 +687,7 @@ async function persistSpin(args: {
     })
     .returning({ id: spinsTable.id });
 
-  return inserted.length > 0;
+  return { inserted: inserted.length > 0, artworkUrl };
 }
 
 // ---- Spin change pub-sub --------------------------------------------------
@@ -695,6 +700,8 @@ export interface SpinChangedEvent {
   rawTitle: string;
   /** Resolved MBID (or synthetic sp: id), null when unresolved. */
   mbid: string | null;
+  /** Artwork URL stored on the recording, null when unknown. */
+  artworkUrl: string | null;
   /** MusicBrainz Artist ID, null when not resolved. Powers artist-page navigation on live chips. */
   artistMbid: string | null;
   /** Primary release-group MBID for the recording, used for album-level library crossing detection in SSE handlers. */
@@ -1003,13 +1010,14 @@ async function logSpinIfChangedInner(
         ? await lookupScrapedShowId(station.id, station.ianaTimezone, new Date())
         : null;
 
-    wrote = await persistSpin({
+    const persisted = await persistSpin({
       station,
       resolution: r,
       raw: np,
       showId,
       source: opts?.source ?? station.nowPlayingSource ?? "unknown",
     });
+    wrote = persisted.inserted;
     // persistSpin declined the write (e.g. the (station, externalId) unique
     // index matched a pre-existing row): no spin-changed is coming, so close
     // out the provisional display explicitly.
@@ -1073,6 +1081,7 @@ async function logSpinIfChangedInner(
         rawArtist: np.rawArtist,
         rawTitle: np.rawTitle,
         mbid: r.mbid,
+        artworkUrl: persisted.artworkUrl,
         artistMbid: r.artistMbid ?? null,
         releaseGroupMbid,
         releaseYear,
@@ -1204,7 +1213,7 @@ export async function ingestRawSpins(
       const showId = raw.show
         ? await upsertShow(station.id, raw.show, { artist: raw.rawArtist, title: raw.rawTitle })
         : null;
-      const wrote = await persistSpin({
+      const persisted = await persistSpin({
         station,
         resolution: r,
         raw,
@@ -1212,7 +1221,7 @@ export async function ingestRawSpins(
         source,
         enrichLinks: !backfill,
       });
-      if (wrote) logged++;
+      if (persisted.inserted) logged++;
       if (cursorValue) newestCursor = cursorValue;
     }
 
@@ -1253,7 +1262,7 @@ export async function ingestManualSpin(args: {
 
   const resolution = await resolveToMbid(artist, title, args.durationMs);
   const showId = args.show ? await upsertShow(args.station.id, args.show) : null;
-  const logged = await persistSpin({
+  const persisted = await persistSpin({
     station: args.station,
     resolution,
     raw: {
@@ -1266,5 +1275,5 @@ export async function ingestManualSpin(args: {
     source: "manual",
     citation,
   });
-  return { logged, resolution };
+  return { logged: persisted.inserted, resolution };
 }
