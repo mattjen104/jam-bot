@@ -1042,7 +1042,7 @@ export function MinimalRadioSurface({
           </div>
         </>
       ) : null}
-      {onSetCategories ? (
+      {onSetCategories && remoteExpanded ? (
         <div
           className={`minimal-radio__remote-view minimal-radio__remote-view--fixture${remoteExpanded ? " is-expanded" : ""}`}
           data-testid="minimal-radio-remote-view"

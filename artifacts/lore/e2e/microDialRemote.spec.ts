@@ -311,12 +311,15 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     )).toBeLessThanOrEqual(1);
     expect(toggleBox!.x).toBeLessThan(filterBox!.x);
 
-    await expect(page.getByTestId("minimal-radio-remote-view")).toBeVisible();
-    await expect(page.getByTestId("minimal-radio-remote-view"))
-      .toHaveAttribute("aria-label", "Compact station preview");
-    await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
+    await expect(page.getByTestId("minimal-radio-remote-view")).toHaveCount(0);
     await expect(page.getByTestId("minimal-radio-remote-count"))
       .toHaveText("16 stations selected");
+
+    await toggle.click();
+
+    await expect(page.getByTestId("minimal-radio-remote-view"))
+      .toHaveAttribute("aria-label", "Expanded compact station remote");
+    await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
     const compactScroll = await page.getByTestId("minimal-radio-remote-view").evaluate((node) => ({
       scrollWidth: node.scrollWidth,
       clientWidth: node.clientWidth,
@@ -338,12 +341,6 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(stationBox!.height).toBeLessThan(60);
     expect(Math.abs(stationBox!.height - markBox!.height)).toBeLessThanOrEqual(2);
 
-    await toggle.click();
-
-    await expect(page.getByTestId("minimal-radio-remote-view")).toBeVisible();
-    await expect(page.getByTestId("minimal-radio-remote-view"))
-      .toHaveAttribute("aria-label", "Expanded compact station remote");
-    await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
     const remoteColumns = await page.getByTestId("minimal-radio-remote-page").first().evaluate((node) =>
       getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length
     );

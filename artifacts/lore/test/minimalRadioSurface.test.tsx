@@ -414,10 +414,7 @@ describe("MinimalRadioSurface", () => {
 
     render(<RemoteHarness />);
 
-    expect(screen.getByTestId("minimal-radio-remote-view")).toBeTruthy();
-    expect(screen.getByTestId("minimal-radio-remote-view").getAttribute("aria-label"))
-      .toBe("Compact station preview");
-    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(8);
+    expect(screen.queryByTestId("minimal-radio-remote-view")).toBeNull();
     expect(screen.getByTestId("minimal-radio-remote-count").textContent)
       .toContain("8 stations selected");
     expect(screen.getByTestId("minimal-radio-remote-toggle").getAttribute("aria-pressed"))
@@ -455,7 +452,7 @@ describe("MinimalRadioSurface", () => {
       .toBe("true");
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
-    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(8);
+    expect(screen.queryByTestId("minimal-radio-remote-view")).toBeNull();
     expect(screen.getByTestId("minimal-radio-overview")).toBeTruthy();
   });
 
