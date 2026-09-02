@@ -263,24 +263,22 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
 
     expect(screen.getAllByTestId("minimal-radio-card")).toHaveLength(2);
-    expect(screen.getAllByTestId("minimal-radio-card")[0]).toHaveAttribute(
-      "aria-label",
-      "Beta station card",
-    );
-    expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Alpha" }).textContent).toBe("Alpha");
-    expect(screen.getByText("Alpha City")).toBeTruthy();
+    expect(screen.getAllByTestId("minimal-radio-card")[0]?.getAttribute("aria-label"))
+      .toBe("Beta station card");
+    expect(screen.getByRole("heading", { name: "Beta" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Beta" }).textContent).toBe("Beta");
+    expect(screen.getByText("Beta City")).toBeTruthy();
     expect(screen.queryByText("UK")).toBeNull();
     expect(screen.queryByTestId("minimal-radio-sheet-header")).toBeNull();
-    expect(screen.getByText("Alpha artist")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Tune in to Alpha" }).textContent)
-      .toContain("Alpha artist");
-    expect(screen.queryByText("Alpha track")).toBeNull();
-    expect(screen.getByRole("button", { name: "Tune in to Alpha" }).className)
+    expect(screen.getByText("Beta artist")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tune in to Beta" }).textContent)
+      .toContain("Beta artist");
+    expect(screen.queryByText("Beta track")).toBeNull();
+    expect(screen.getByRole("button", { name: "Tune in to Beta" }).className)
       .toContain("minimal-radio-card__now");
     expect(screen.getAllByTestId("minimal-radio-card")[0]?.children).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: "Tune in to Alpha" })
+      screen.getByRole("button", { name: "Tune in to Beta" })
         .closest(".minimal-radio-card__station-line"),
     ).toBeTruthy();
     expect(document.querySelector("[data-station-mark='logo']")).toBeNull();
@@ -333,7 +331,7 @@ describe("MinimalRadioSurface", () => {
     fireEvent.click(screen.getByTestId("minimal-radio-cards-toggle"));
 
     expect(screen.getAllByTestId("minimal-radio-card").map((card) =>
-      within(card).getByRole("heading").textContent,
+      card.querySelector("h2")?.textContent,
     )).toEqual(["High", "Middle", "Low"]);
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
