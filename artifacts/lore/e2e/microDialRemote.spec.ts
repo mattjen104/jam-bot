@@ -315,6 +315,12 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
 
     await expect(page.getByTestId("minimal-radio-remote-view")).toBeVisible();
     await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
+    await expect(page.getByTestId("minimal-radio-remote-category-all")).toBeVisible();
+    await expect(page.getByTestId("minimal-radio-remote-category-campus")).toBeVisible();
+    const remoteColumns = await page.getByTestId("minimal-radio-remote-view").evaluate((node) =>
+      getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length
+    );
+    expect(remoteColumns).toBe(2);
     await expect(page.getByTestId("minimal-radio-remote-station").first())
       .toContainText("Station 01");
     await expect(page.getByTestId("minimal-radio-remote-station").first())
@@ -323,6 +329,16 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
 
     await page.getByTestId("minimal-radio-remote-station").first().click();
     await expect(page.getByTestId("minimal-radio-remote-station").first())
+      .toHaveAttribute("aria-pressed", "true");
+
+    await page.getByTestId("minimal-radio-remote-category-campus").click();
+    await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT / 2);
+    await expect(page.getByTestId("minimal-radio-remote-station").first())
+      .toContainText("Station 01");
+
+    await page.getByTestId("minimal-radio-remote-category-all").click();
+    await expect(page.getByTestId("minimal-radio-remote-station")).toHaveCount(STATION_COUNT);
+    await expect(page.getByTestId("minimal-radio-remote-category-all"))
       .toHaveAttribute("aria-pressed", "true");
   });
 

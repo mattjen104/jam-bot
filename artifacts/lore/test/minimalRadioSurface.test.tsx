@@ -343,26 +343,68 @@ describe("MinimalRadioSurface", () => {
     expect(screen.queryByText("Quiet track")).toBeNull();
   });
 
-  it("switches to a compact station remote and tunes from its tiles", () => {
-    render(
-      <MinimalRadioSurface
-        rows={[row("alpha", "Alpha", true, 1), row("beta", "Beta", true, 2)]}
-        libraryItems={[]}
-        preset="now"
-      />,
-    );
+  it("shows all remote rows, scopes them by category, and tunes from its tiles", () => {
+    const alpha = row("alpha", "Alpha", true, 1, "campus");
+    const beta = row("beta", "Beta", true, 2, "anchor");
+    const quiet = row("quiet", "Quiet", false, 0, "public");
+    quiet.ds.isLive = false;
+    quiet.ds.liveTrack = null;
+
+    function RemoteHarness() {
+      const [activeCategories, setActiveCategories] = React.useState<Set<StationCategory>>(
+        new Set(["campus", "anchor", "public"]),
+      );
+      const allRows = [alpha, beta, quiet];
+      const visibleRemoteRows = activeCategories.size === 0
+        ? allRows
+        : allRows.filter((candidate) => {
+            const category = candidate.ds.station.stationCategories?.[0] as StationCategory | undefined;
+            return category ? activeCategories.has(category) : false;
+          });
+      return (
+        <MinimalRadioSurface
+          rows={[alpha, beta]}
+          remoteRows={visibleRemoteRows}
+          libraryItems={[]}
+          preset="now"
+          activeCategories={activeCategories}
+          onToggleCategory={(category) => {
+            setActiveCategories((previous) => {
+              const next = new Set(previous);
+              if (next.has(category)) next.delete(category);
+              else next.add(category);
+              return next;
+            });
+          }}
+          onSetCategories={(categories) => setActiveCategories(new Set(categories))}
+        />
+      );
+    }
+
+    render(<RemoteHarness />);
 
     fireEvent.click(screen.getByTestId("minimal-radio-remote-toggle"));
 
     expect(screen.getByTestId("minimal-radio-remote-view")).toBeTruthy();
     expect(screen.queryByTestId("minimal-radio-sheet-header")).toBeNull();
-    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(2);
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(3);
+    expect(screen.getByTestId("minimal-radio-remote-category-all")).toBeTruthy();
+    expect(screen.getByTestId("minimal-radio-remote-category-campus")).toBeTruthy();
+    expect(screen.getByText("Not broadcasting")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-category-campus"));
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(1);
     expect(screen.getByLabelText("Alpha: Alpha artist").textContent)
       .toContain("Alpha artist");
 
     fireEvent.click(screen.getByLabelText("Alpha: Alpha artist"));
     expect(toggle).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText("Alpha: Alpha artist").getAttribute("aria-pressed"))
+      .toBe("true");
+
+    fireEvent.click(screen.getByTestId("minimal-radio-remote-category-all"));
+    expect(screen.getAllByTestId("minimal-radio-remote-station")).toHaveLength(3);
+    expect(screen.getByTestId("minimal-radio-remote-category-all").getAttribute("aria-pressed"))
       .toBe("true");
   });
 

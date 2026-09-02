@@ -29,12 +29,15 @@ const MAX_CROSSING_ALBUMS = 5;
 
 interface MinimalRadioSurfaceProps {
   rows: DialLaneRow[];
+  /** Full station pool for the compact remote; cards remain crossing/live-only. */
+  remoteRows?: DialLaneRow[];
   libraryItems: LibraryItem[];
   recentSpinsBySlug?: ReadonlyMap<string, readonly CrossingSpin[]>;
   categoryByStationSlug?: ReadonlyMap<string, StationCategory>;
   preset: RadioPreset;
   activeCategories?: ReadonlySet<StationCategory>;
   onToggleCategory?: (category: StationCategory) => void;
+  onSetCategories?: (categories: ReadonlySet<StationCategory>) => void;
   loading?: boolean;
   error?: boolean;
   onRetry?: () => void;
@@ -844,12 +847,14 @@ function MinimalRadioOverview({
 
 export function MinimalRadioSurface({
   rows,
+  remoteRows = rows,
   libraryItems,
   recentSpinsBySlug = new Map(),
   categoryByStationSlug = new Map(),
   preset: _preset,
   activeCategories = new Set<StationCategory>(),
   onToggleCategory,
+  onSetCategories,
   loading = false,
   error = false,
   onRetry,
@@ -893,6 +898,7 @@ export function MinimalRadioSurface({
       return key === drillDownCategory;
     });
   }, [candidates, viewMode, drillDownCategory]);
+  const remoteDisplayRows = remoteRows;
 
   const selectedIndex = Math.max(
     0,
@@ -959,7 +965,7 @@ export function MinimalRadioSurface({
     if (next && next.ds.station.slug !== selectedSlug) setSelectedSlug(next.ds.station.slug);
   }, [displayCandidates, selectedIndex, selectedSlug]);
 
-  if (loading && rows.length === 0) {
+  if (loading && rows.length === 0 && remoteRows.length === 0) {
     return (
       <section className="minimal-radio-state" data-testid="minimal-radio-loading" aria-live="polite">
         <Radio size={24} aria-hidden="true" />
@@ -968,7 +974,7 @@ export function MinimalRadioSurface({
       </section>
     );
   }
-  if (error && rows.length === 0) {
+  if (error && rows.length === 0 && remoteRows.length === 0) {
     return (
       <section className="minimal-radio-state" data-testid="minimal-radio-error" role="alert">
         <Radio size={24} aria-hidden="true" />
@@ -977,7 +983,7 @@ export function MinimalRadioSurface({
       </section>
     );
   }
-  if (rows.length === 0) {
+  if (rows.length === 0 && remoteRows.length === 0) {
     return (
       <section className="minimal-radio-state" data-testid="minimal-radio-empty">
         <Radio size={24} aria-hidden="true" />
@@ -1057,7 +1063,7 @@ export function MinimalRadioSurface({
         </button>
       </div>
 
-      {viewMode !== "overview" && candidates.length === 0 ? (
+      {viewMode === "cards" && candidates.length === 0 ? (
         <section className="minimal-radio-state" data-testid="minimal-radio-no-candidates">
           <Radio size={24} aria-hidden="true" />
           <h2>Nothing crossed your library in this window.</h2>
@@ -1076,21 +1082,51 @@ export function MinimalRadioSurface({
       ) : (
         <div className="minimal-radio__hero-frame">
           {viewMode === "remote" ? (
-            <div
-              className="minimal-radio__remote-view"
-              data-testid="minimal-radio-remote-view"
-              role="list"
-              aria-label="Compact station remote"
-            >
-              {displayCandidates.map((row) => (
-                <MinimalRadioRemoteTile
-                  key={row.ds.station.slug}
-                  row={row}
-                  selected={row.ds.station.slug === selectedSlug}
-                  onSelect={setSelectedSlug}
-                />
-              ))}
-            </div>
+              <>
+                {onToggleCategory && onSetCategories ? (
+                  <nav
+                    className="minimal-radio__remote-categories"
+                    aria-label="Filter remote by station type"
+                  >
+                    <button
+                      type="button"
+                      className={activeCategories.size === 0 ? "is-active" : ""}
+                      aria-pressed={activeCategories.size === 0}
+                      onClick={() => onSetCategories(new Set())}
+                      data-testid="minimal-radio-remote-category-all"
+                    >
+                      All
+                    </button>
+                    {STATION_CATEGORY_DEFINITIONS.map((definition) => (
+                      <button
+                        type="button"
+                        key={definition.cat}
+                        className={activeCategories.has(definition.cat) ? "is-active" : ""}
+                        aria-pressed={activeCategories.has(definition.cat)}
+                        onClick={() => onSetCategories(new Set([definition.cat]))}
+                        data-testid={`minimal-radio-remote-category-${definition.cat}`}
+                      >
+                        {definition.shortLabel}
+                      </button>
+                    ))}
+                  </nav>
+                ) : null}
+                <div
+                  className="minimal-radio__remote-view"
+                  data-testid="minimal-radio-remote-view"
+                  role="list"
+                  aria-label="Compact station remote"
+                >
+                  {remoteDisplayRows.map((row) => (
+                    <MinimalRadioRemoteTile
+                      key={row.ds.station.slug}
+                      row={row}
+                      selected={row.ds.station.slug === selectedSlug}
+                      onSelect={setSelectedSlug}
+                    />
+                  ))}
+                </div>
+              </>
           ) : (
             <>
               <div

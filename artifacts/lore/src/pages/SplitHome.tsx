@@ -73,6 +73,9 @@ export default function SplitHome() {
   const handleToggleCategory = useCallback((category: StationCategory) => {
     setActiveCategories((previous) => toggleStationCategory(previous, category));
   }, []);
+  const handleSetCategories = useCallback((categories: ReadonlySet<StationCategory>) => {
+    setActiveCategories(new Set(categories));
+  }, []);
 
   const handleAddArtists = useCallback((names: string[]) => {
     const unique = [...new Map(names.map((name) => [name.trim().toLowerCase(), name.trim()])).values()]
@@ -95,7 +98,7 @@ export default function SplitHome() {
     refetchStations,
   } = useDialData("personal", {
     categories: activeCategories,
-    includeAllStations: false,
+    includeAllStations: true,
     crossingsEnabled: true,
     deferEnrichment: false,
   });
@@ -106,7 +109,7 @@ export default function SplitHome() {
     () => libraryQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [libraryQuery.data],
   );
-  const rows = useMemo<DialLaneRow[]>(
+  const allRows = useMemo<DialLaneRow[]>(
     () => stations
       .map((ds) => {
         const show = ds.shows.find((candidate) => candidate.state === "live") ?? null;
@@ -130,9 +133,12 @@ export default function SplitHome() {
             : show,
           effectiveDjName: names.length === 1 ? names[0] : null,
         };
-      })
-      .filter((row) => row.ds.isLive),
+      }),
     [stations],
+  );
+  const rows = useMemo(
+    () => allRows.filter((row) => row.ds.isLive),
+    [allRows],
   );
   const categoryByStationSlug = useMemo(
     () => new Map(
@@ -229,12 +235,14 @@ export default function SplitHome() {
             {activeLens === "radio" ? (
               <MinimalRadioSurface
                 rows={rows}
+                 remoteRows={allRows}
                 libraryItems={libraryItems}
                 recentSpinsBySlug={spinsBySlug}
                 categoryByStationSlug={categoryByStationSlug}
                 preset="now"
                 activeCategories={activeCategories}
                 onToggleCategory={handleToggleCategory}
+                 onSetCategories={handleSetCategories}
                 loading={isCoreLoading || liveLoading}
                 error={stationsError}
                 onRetry={refetchStations}

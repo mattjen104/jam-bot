@@ -1020,13 +1020,21 @@ export function useDialData(
   //  - anchor/campus/public/indie/discovery → normal Lore list + client-side
   //    filter on the server-supplied single-value `stationCategories` array.
   // All checked categories' stations are unioned and deduplicated by id.
-  const wantAmbient = categories ? categories.has("ambient") : sleepMode;
-  const wantSpecialist = categories ? categories.has("specialist") : eraGenreMode;
+  // An empty category set means All, including the two separate mode pools.
+  const wantAmbient = categories
+    ? categories.size === 0 || categories.has("ambient")
+    : sleepMode;
+  const wantSpecialist = categories
+    ? categories.size === 0 || categories.has("specialist")
+    : eraGenreMode;
   // Metadata categories filter the fetched Lore list client-side; no extra
   // server fetch is needed for them.
-  const metaCategories: readonly DialStationCategory[] = categories
-    ? [...categories].filter((c) => c !== "ambient" && c !== "specialist")
-    : [];
+  const metaCategories = useMemo<readonly DialStationCategory[]>(
+    () => categories
+      ? [...categories].filter((c) => c !== "ambient" && c !== "specialist")
+      : [],
+    [categories],
+  );
 
   // Hidden browse modes swap the station source. Sleep takes precedence if both
   // flags somehow arrive true (the modes are mutually exclusive upstream).
@@ -1758,7 +1766,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, metaCategories, personalStations, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
+  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, wantNormalList, metaCategories, personalStations, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading
     || (categories != null && wantAmbient && ambientLoading)
