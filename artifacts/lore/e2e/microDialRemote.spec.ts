@@ -342,6 +342,14 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     expect(compactScroll.scrollWidth).toBeGreaterThan(compactScroll.clientWidth);
     await expect(page.getByTestId("minimal-radio-remote-category-all")).toBeVisible();
     await expect(page.getByTestId("minimal-radio-remote-category-campus")).toBeVisible();
+    const stationButton = page.getByTestId("minimal-radio-remote-station").first();
+    const stationMark = stationButton.locator(".minimal-radio__remote-mark");
+    const stationBox = await stationButton.boundingBox();
+    const markBox = await stationMark.boundingBox();
+    expect(stationBox).not.toBeNull();
+    expect(markBox).not.toBeNull();
+    expect(stationBox!.height).toBeLessThan(60);
+    expect(Math.abs(stationBox!.height - markBox!.height)).toBeLessThanOrEqual(2);
 
     await toggle.click();
 
