@@ -1,6 +1,10 @@
 import * as net from "node:net";
 import * as tls from "node:tls";
 import { lookup as dnsLookup } from "node:dns/promises";
+import {
+  observeStationOriginResponse,
+  withStationOriginPolicy,
+} from "./network-policy.js";
 
 /**
  * ICY / Shoutcast stream metadata fetcher.
@@ -434,7 +438,13 @@ export function parseUrl(rawUrl: string): {
 export type IcyParserEvent =
   | { type: "headers"; icyMetaint: number }
   | { type: "metadata"; streamTitle: string | null }
-  | { type: "error"; kind: "icy_unsupported"; message: string };
+  | {
+      type: "error";
+      kind: "icy_unsupported";
+      message: string;
+      status?: number;
+      retryAfter?: string;
+    };
 
 /** Cap on accumulated HTTP header bytes before we give up on the response. */
 const MAX_HEADER_BYTES = 64 * 1024;
@@ -492,6 +502,9 @@ export class IcyStreamParser {
           type: "error",
           kind: "icy_unsupported",
           message: `HTTP ${statusCode}`,
+          status: statusCode,
+          retryAfter:
+            /^retry-after:\s*(.+)$/im.exec(headerStr)?.[1]?.trim() ?? undefined,
         });
         return events;
       }
@@ -726,7 +739,10 @@ async function resolveStreamUrlResult(
   const visited = new Set([url]);
   for (let hop = 0; hop < MAX_STREAM_REDIRECT_HOPS; hop += 1) {
     try {
-      const response = await redirectProbe(resolvedUrl, address);
+      const pinnedAddress = address;
+      const response = await withStationOriginPolicy(resolvedUrl, () =>
+        redirectProbe(resolvedUrl, pinnedAddress),
+      );
       if (response.status < 300 || response.status >= 400) {
         return { url: resolvedUrl, address };
       }
@@ -789,7 +805,7 @@ export async function fetchIcyMetadata(streamUrl: string): Promise<IcyFetchResul
     return { ok: false, kind: "icy_unsupported", message: "unparseable URL" };
   }
 
-  return new Promise<IcyFetchResult>((resolve) => {
+  return withStationOriginPolicy(resolution.url, () => new Promise<IcyFetchResult>((resolve) => {
     let settled = false;
 
     function done(result: IcyFetchResult) {
@@ -867,6 +883,9 @@ export async function fetchIcyMetadata(streamUrl: string): Promise<IcyFetchResul
           // we don't follow audio redirects.
           const statusLine = headerStr.split("\r\n")[0] ?? "";
           const statusCode = parseInt(statusLine.split(" ")[1] ?? "0", 10);
+          const retryAfter =
+            /^retry-after:\s*(.+)$/im.exec(headerStr)?.[1]?.trim() ?? null;
+          observeStationOriginResponse(resolution.url, statusCode, retryAfter);
           if (statusCode < 200 || statusCode >= 300) {
             done({ ok: false, kind: "icy_unsupported", message: `HTTP ${statusCode}` });
             return;
@@ -911,5 +930,5 @@ export async function fetchIcyMetadata(streamUrl: string): Promise<IcyFetchResul
         done({ ok: true, streamTitle: parseIcyStreamTitle(metaBlock), icyMetaint });
       });
     });
-  });
+  }));
 }

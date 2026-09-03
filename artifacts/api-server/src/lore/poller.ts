@@ -156,6 +156,11 @@ export function isLeasedStation(stationId: number): boolean {
   return leasedIds.has(stationId);
 }
 
+/** A live watcher already supplies both stream liveness and metadata evidence. */
+export function hasHealthyStationWatcher(stationId: number): boolean {
+  return stationWatchers.get(stationId)?.isHealthy() ?? false;
+}
+
 /**
  * Pick the stream URL for a *persistent* connection. When the station's
  * nowPlayingConfig advertises multiple mounts (`mounts: [{url, bitrate?}]`),

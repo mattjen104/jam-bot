@@ -363,7 +363,10 @@ async function defaultSafeUrl(url: string): Promise<boolean> {
   return isSafeArtworkUrl(url);
 }
 
-import { STATION_NETWORK_USER_AGENT } from "./network-policy.js";
+import {
+  STATION_NETWORK_USER_AGENT,
+  withStationOriginPolicy,
+} from "./network-policy.js";
 
 async function fetchSafe(
   url: string,
@@ -376,11 +379,11 @@ async function fetchSafe(
     if (!(await safeUrl(current))) return null;
     let response: Awaited<ReturnType<typeof fetch>>;
     try {
-      response = await fetchFn(current, {
+      response = await withStationOriginPolicy(current, () => fetchFn(current, {
         headers: { Accept: accept, "User-Agent": STATION_NETWORK_USER_AGENT },
         redirect: "manual",
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
+      }));
     } catch {
       return null;
     }

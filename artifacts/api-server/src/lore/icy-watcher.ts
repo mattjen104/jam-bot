@@ -10,7 +10,9 @@ import {
   type ParsedStreamTitle,
 } from "./icy.js";
 import {
+  observeStationOriginResponse,
   STATION_NETWORK_USER_AGENT,
+  withStationOriginPolicy,
   withPoliteJitter,
 } from "./network-policy.js";
 
@@ -72,10 +74,12 @@ export class IcyWatcher extends EventEmitter {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private watchdogTimer: NodeJS.Timeout | null = null;
   private connectTimer: NodeJS.Timeout | null = null;
+  private releaseOriginSlot: (() => void) | null = null;
   private backoffMs = BACKOFF_FLOOR_MS;
   private failureTimestamps: number[] = [];
   private lastStreamTitle: string | null | undefined = undefined;
   private lastObservation: IcyMetadataObservation | null = null;
+  private responseConfirmed = false;
   private stopped = false;
   /**
    * The stream URL after one-hop redirect resolution (see resolveStreamUrl).
@@ -102,7 +106,20 @@ export class IcyWatcher extends EventEmitter {
     this.teardown();
   }
 
+  /** True only while the persistent socket is connected and receiving duty. */
+  isHealthy(): boolean {
+    return (
+      !this.stopped &&
+      this.socket !== null &&
+      !this.socket.destroyed &&
+      this.connectTimer === null
+      && this.responseConfirmed
+    );
+  }
+
   private teardown(): void {
+    this.releaseOriginSlot?.();
+    this.releaseOriginSlot = null;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
     if (this.connectTimer) clearTimeout(this.connectTimer);
@@ -117,6 +134,7 @@ export class IcyWatcher extends EventEmitter {
       this.socket = null;
     }
     this.parser = null;
+    this.responseConfirmed = false;
   }
 
   private armWatchdog(): void {
@@ -144,6 +162,23 @@ export class IcyWatcher extends EventEmitter {
       return;
     }
 
+    void withStationOriginPolicy(this.resolvedStreamUrl, () =>
+      this.openSocket(parsed),
+    ).catch((err: unknown) => {
+      this.onFailure(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  private openSocket(parsed: NonNullable<ReturnType<typeof parseUrl>>): Promise<void> {
+    return new Promise((releaseOrigin) => {
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      if (this.releaseOriginSlot === release) this.releaseOriginSlot = null;
+      releaseOrigin();
+    };
+    this.releaseOriginSlot = release;
     this.parser = new IcyStreamParser();
     const socketOpts = { host: parsed.host, port: parsed.port };
     const socket =
@@ -153,13 +188,18 @@ export class IcyWatcher extends EventEmitter {
     this.socket = socket;
 
     this.connectTimer = setTimeout(() => {
+      release();
       this.onFailure("connect timeout");
     }, CONNECT_TIMEOUT_MS);
 
-    socket.once("error", (err) => this.onFailure(err.message));
+    socket.once("error", (err) => {
+      release();
+      this.onFailure(err.message);
+    });
     socket.once("close", () => {
       // Server closed the connection — treat as a failure so we reconnect.
       if (!this.stopped && this.socket === socket) {
+        release();
         this.onFailure("connection closed by server");
       }
     });
@@ -183,7 +223,21 @@ export class IcyWatcher extends EventEmitter {
       this.armWatchdog();
       if (!this.parser) return;
       for (const ev of this.parser.feed(chunk)) {
+        if (ev.type === "headers") {
+          this.responseConfirmed = true;
+          observeStationOriginResponse(this.resolvedStreamUrl!, 200);
+          release();
+          continue;
+        }
         if (ev.type === "error") {
+          if (ev.status != null) {
+            observeStationOriginResponse(
+              this.resolvedStreamUrl!,
+              ev.status,
+              ev.retryAfter ?? null,
+            );
+          }
+          release();
           // Permanent characteristic (no metaint, redirect, etc) — do not
           // keep reconnecting into the same wall.
           this.emitPersistentFailed(ev.message);
@@ -196,6 +250,7 @@ export class IcyWatcher extends EventEmitter {
           this.handleStreamTitle(ev.streamTitle);
         }
       }
+    });
     });
   }
 

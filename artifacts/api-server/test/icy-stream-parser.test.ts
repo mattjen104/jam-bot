@@ -87,7 +87,23 @@ describe("IcyStreamParser", () => {
       Buffer.from("HTTP/1.0 302 Found\r\nLocation: elsewhere\r\n\r\n"),
     );
     expect(events).toEqual([
-      { type: "error", kind: "icy_unsupported", message: "HTTP 302" },
+      { type: "error", kind: "icy_unsupported", message: "HTTP 302", status: 302 },
+    ]);
+  });
+
+  it("reports Retry-After on a rate-limited response", () => {
+    const p = new IcyStreamParser();
+    const events = p.feed(
+      Buffer.from("HTTP/1.0 429 Too Many Requests\r\nRetry-After: 120\r\n\r\n"),
+    );
+    expect(events).toEqual([
+      {
+        type: "error",
+        kind: "icy_unsupported",
+        message: "HTTP 429",
+        status: 429,
+        retryAfter: "120",
+      },
     ]);
   });
 

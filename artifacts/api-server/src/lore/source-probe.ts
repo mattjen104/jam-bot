@@ -13,7 +13,7 @@ import {
   type IcyFetchResult,
 } from "./icy.js";
 import { clearIcyErrorBackoff } from "./adapters.js";
-import { enrollStationPoller } from "./poller.js";
+import { enrollStationPoller, hasHealthyStationWatcher } from "./poller.js";
 import {
   getSourceCoverageLedger,
   type SourceProbeOutcome,
@@ -162,6 +162,7 @@ export async function probeStationPublicMetadata(
   station: ProbeStation,
   deps: ProbeDeps = defaultDeps,
 ): Promise<ProbeResult | null> {
+  if (hasHealthyStationWatcher(station.id)) return null;
   const budgetMs = deps.budgetMs ?? PROBE_BUDGET_MS;
   let timer: NodeJS.Timeout | undefined;
   const overBudget = new Promise<ProbeResult>((resolve) => {

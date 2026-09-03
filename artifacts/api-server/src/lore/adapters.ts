@@ -10,6 +10,7 @@ import type {
 } from "./types.js";
 import { usableShowAttribution } from "@workspace/lore-attribution";
 import { XMLParser } from "fast-xml-parser";
+import { withStationOriginPolicy } from "./network-policy.js";
 
 /**
  * Per-source adapter registry. Two families, both reading a station's OWN
@@ -39,6 +40,17 @@ async function getJson(
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
   return res.json();
+}
+
+async function getStationJson(url: string): Promise<unknown> {
+  return withStationOriginPolicy(url, () => getJson(url));
+}
+
+async function fetchStation(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  return withStationOriginPolicy(url, () => fetch(url, init));
 }
 
 function str(v: unknown): string | undefined {
@@ -201,7 +213,7 @@ export function parseStationPage(
 const stationPage: NowPlayingAdapter = async (config) => {
   const url = str(config.url);
   if (!url) return null;
-  const body = await getJson(url);
+  const body = await getStationJson(url);
   return parseStationPage(body, config);
 };
 
@@ -445,7 +457,7 @@ const stationHistoryJson: HistoryAdapter = async (config, opts) => {
   if (limitParam) params.set(limitParam, String(Math.min(opts?.limit ?? 50, 200)));
   if (beforeParam && opts?.before) params.set(beforeParam, opts.before);
   const requestUrl = params.size ? `${url}${url.includes("?") ? "&" : "?"}${params}` : url;
-  const body = await getJson(requestUrl);
+  const body = await getStationJson(requestUrl);
   const parsed = parseHistoryJson(body, config, requestUrl);
   const itemsPath = str(config.itemsPath);
   const rawItems = itemsPath ? pickPath(body, itemsPath) : body;
@@ -460,7 +472,7 @@ const wicbHistory: HistoryAdapter = async (config, opts) => {
   if ((opts?.page ?? 0) > 0) return [];
   const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 92);
   const requestUrl = `${url}${url.includes("?") ? "&" : "?"}limit=${limit}`;
-  const body = await getJson(requestUrl);
+  const body = await getStationJson(requestUrl);
   const parsed = parseWicbHistory(body, requestUrl);
   reportReview(opts, Array.isArray(body) ? body.length : 0, parsed.length);
   return parsed;
@@ -480,7 +492,7 @@ const wxycHistory: HistoryAdapter = async (config, opts) => {
       [dateParam]: day.toISOString().slice(0, 10),
     });
     const requestUrl = `${url}${url.includes("?") ? "&" : "?"}${params}`;
-    const body = await getJson(requestUrl);
+    const body = await getStationJson(requestUrl);
     const parsed = parseWxycDailyPlaylist(body, requestUrl, opts?.before);
     const shows =
       body && typeof body === "object" && !Array.isArray(body)
@@ -513,7 +525,7 @@ const stationHistoryRss: HistoryAdapter = async (config, opts) => {
   const url = str(config.url);
   if (!url) return [];
   if ((opts?.page ?? 0) > 0) return [];
-  const res = await fetch(url, {
+  const res = await fetchStation(url, {
     headers: { Accept: "application/rss+xml, application/xml, text/xml" },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
@@ -527,7 +539,7 @@ const stationHistoryJsonLd: HistoryAdapter = async (config, opts) => {
   const url = str(config.url);
   if (!url) return [];
   if ((opts?.page ?? 0) > 0) return [];
-  const res = await fetch(url, {
+  const res = await fetchStation(url, {
     headers: { Accept: "text/html" },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });

@@ -3,8 +3,10 @@ import { eq, or, and } from "drizzle-orm";
 import { MIN_BITRATE_KBPS } from "./radio-browser.js";
 import {
   STATION_NETWORK_USER_AGENT,
+  withStationOriginPolicy,
   withPoliteJitter,
 } from "./network-policy.js";
+import { hasHealthyStationWatcher } from "./poller.js";
 
 /**
  * Stream health worker.
@@ -67,14 +69,14 @@ export async function probeStream(
   // eslint-disable-next-line no-useless-assignment
   let headFailed = false; // true when HEAD should be followed up with GET
   try {
-    const res = await fetchFn(url, {
+    const res = await withStationOriginPolicy(url, () => fetchFn(url, {
       method: "HEAD",
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "Icy-MetaData": "0",
         "User-Agent": STATION_NETWORK_USER_AGENT,
       },
-    });
+    }));
     if (res.ok) {
       return {
         alive: true,
@@ -109,7 +111,7 @@ export async function probeStream(
   const controller = new AbortController();
   let gotResponse = false;
   try {
-    const res = await fetchFn(url, {
+    const res = await withStationOriginPolicy(url, () => fetchFn(url, {
       method: "GET",
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
       headers: {
@@ -117,7 +119,7 @@ export async function probeStream(
         Range: "bytes=0-4095",
         "User-Agent": STATION_NETWORK_USER_AGENT,
       },
-    });
+    }));
     // Headers received — record this before aborting the body download.
     gotResponse = true;
     controller.abort();
@@ -268,6 +270,7 @@ export async function runHealthSweep(
 
   for (let i = 0; i < stations.length; i++) {
     const station = stations[i]!;
+    if (hasHealthyStationWatcher(station.id)) continue;
     const result = await probeStream(station.streamUrl, opts);
     await applyHealthResult(station, result);
     if (i < stations.length - 1) {
