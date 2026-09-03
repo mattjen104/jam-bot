@@ -17,6 +17,18 @@ export interface LiveNow extends WpNow {
   timingConfidence?: "trusted" | "estimated" | "unknown";
 }
 
+export type NextChangeSource = Pick<
+  LiveNow,
+  | "freshness"
+  | "estimatedRemainingMs"
+  | "serverTime"
+  | "timestampKind"
+  | "timingReason"
+  | "timingUncertaintyMs"
+  | "clockUncertaintyMs"
+  | "timingConfidence"
+>;
+
 export const PRECISE_COUNTDOWN_MAX_UNCERTAINTY_MS = 8_000;
 export interface NextChangeView {
   state: NextChangeState;
@@ -76,7 +88,7 @@ export function commitLiveHandoff(
   if (target.slug !== currentSlug) tune(target);
 }
 
-function localBoundaryAt(now: LiveNow): number | null {
+function localBoundaryAt(now: NextChangeSource): number | null {
   if (now.estimatedRemainingMs == null || now.estimatedRemainingMs < 0) return null;
   const serverMs = now.serverTime ? Date.parse(now.serverTime) : NaN;
   if (!Number.isFinite(serverMs)) return null;
@@ -100,7 +112,7 @@ export function formatApproximateRemaining(ms: number): string {
  * "watching" rather than pretending the browser's clock is authoritative.
  */
 export function deriveNextChange(
-  now: LiveNow | null | undefined,
+  now: NextChangeSource | null | undefined,
   atMs: number | null = Date.now(),
 ): NextChangeView {
   if (!now) {

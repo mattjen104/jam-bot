@@ -160,10 +160,18 @@
 }
 
 .frb__btn-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border-color: hsl(var(--foreground));
   background: hsl(var(--foreground));
   color: hsl(var(--background));
   font-weight: 650;
+}
+
+.frb__countdown {
+  padding-left: 8px;
+  border-left: 1px solid currentColor;
 }
 
 .frb__btn-play:focus-visible,

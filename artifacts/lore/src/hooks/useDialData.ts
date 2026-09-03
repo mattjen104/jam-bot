@@ -101,6 +101,19 @@ export interface DialSpin {
   /** Process-local event cursor/version used only for REST/SSE ordering. */
   eventId?: number;
   stationVersion?: number;
+  /** Server timing evidence preserved for front-door countdowns. */
+  freshness?: "fresh" | "aging" | "stale";
+  estimatedRemainingMs?: number | null;
+  timingConfidence?: "trusted" | "estimated" | "unknown";
+  serverTime?: string;
+  timestampKind?: "source" | "fingerprint" | "inferred" | "receipt";
+  timingReason?:
+    | "station_declared_start"
+    | "fingerprint_play_offset"
+    | "inferred_start"
+    | "receipt_only";
+  timingUncertaintyMs?: number | null;
+  clockUncertaintyMs?: number | null;
 }
 
 export interface DialShow {
@@ -1388,6 +1401,14 @@ export function useDialData(
         ageTier: spinAgeTier(isFirstSpin, releaseYear, releaseDate),
         eventId: (np as { eventId?: number }).eventId,
         stationVersion: (np as { stationVersion?: number }).stationVersion,
+        freshness: (np as { freshness?: DialSpin["freshness"] }).freshness,
+        estimatedRemainingMs: (np as { estimatedRemainingMs?: number | null }).estimatedRemainingMs,
+        timingConfidence: (np as { timingConfidence?: DialSpin["timingConfidence"] }).timingConfidence,
+        serverTime: (np as { serverTime?: string }).serverTime,
+        timestampKind: (np as { timestampKind?: DialSpin["timestampKind"] }).timestampKind,
+        timingReason: (np as { timingReason?: DialSpin["timingReason"] }).timingReason,
+        timingUncertaintyMs: (np as { timingUncertaintyMs?: number | null }).timingUncertaintyMs,
+        clockUncertaintyMs: (np as { clockUncertaintyMs?: number | null }).clockUncertaintyMs,
       });
     }
     return m;

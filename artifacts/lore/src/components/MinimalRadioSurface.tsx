@@ -11,6 +11,7 @@ import type { DialLaneRow } from "./dial/DialFeedLane";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
+import { StationChangeCountdown } from "./StationChangeCountdown";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
 import { safeHttpUrl } from "../lib/utils";
@@ -190,6 +191,7 @@ function MinimalRadioCard({ row }: { row: DialLaneRow }) {
             <span className="minimal-radio-card__now-copy">
               {nowPlayingLabel}
             </span>
+            {!isPlaying ? <StationChangeCountdown track={track} /> : null}
           </button>
         </div>
         <div className="minimal-radio-card__station-blurb" data-testid="minimal-radio-card-blurb">
@@ -392,6 +394,7 @@ function OverviewStationRow({ row }: { row: DialLaneRow }) {
         <span className="overview-row__name">{row.ds.station.name}</span>
       </span>
       <span className="overview-row__artist">{artist}</span>
+      {!isPlaying ? <StationChangeCountdown track={track} className="overview-row__countdown" /> : null}
     </button>
   );
 }

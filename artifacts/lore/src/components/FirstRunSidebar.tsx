@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 
 import { liveIdentityKey, type DialSpin, type DialStation } from "../hooks/useDialData";
+import { StationChangeCountdown } from "./StationChangeCountdown";
 import "./FirstRunSidebar.css";
 
 export interface OnboardingArtist {
@@ -179,7 +180,8 @@ function StationBlock({
       </p>
       <div className="frb__actions-bar">
         <button type="button" className="frb__btn-play" onClick={() => onPlay(block.station)} aria-label={`Play ${block.name} now`}>
-          Play now
+          <span>Play now</span>
+          <StationChangeCountdown track={current} className="frb__countdown" />
         </button>
         {current && (
           <button

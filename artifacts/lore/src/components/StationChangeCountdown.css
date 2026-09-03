@@ -1,0 +1,9 @@
+.station-change-countdown {
+  flex: 0 0 auto;
+  font-family: var(--app-font-mono);
+  font-size: 0.72em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+  white-space: nowrap;
+}

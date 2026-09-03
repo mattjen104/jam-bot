@@ -18,6 +18,11 @@ function station(slug: string, name: string, options: {
   artistMbid?: string | null;
   playedAt?: string;
   spins?: string[];
+  timing?: {
+    serverTime: string;
+    estimatedRemainingMs: number;
+    timingConfidence: "trusted" | "estimated";
+  };
 } = {}): DialStation {
   const playedAt = options.playedAt ?? new Date().toISOString();
   const spin = (artist: string, index: number) => ({
@@ -35,6 +40,10 @@ function station(slug: string, name: string, options: {
   const liveTrack = options.artist ? {
     ...spin(options.artist, 0),
     title: options.title ?? "Live Track",
+    freshness: options.timing ? "fresh" as const : undefined,
+    timestampKind: options.timing ? "source" as const : undefined,
+    timingUncertaintyMs: options.timing ? 2_000 : undefined,
+    ...options.timing,
   } : null;
   const spins = (options.spins ?? []).map(spin);
   return {
@@ -162,6 +171,23 @@ describe("FirstRunSidebar", () => {
     expect(onPlay).not.toHaveBeenCalled();
     fireEvent.click(within(container).getByRole("button", { name: "Play KEXP 90.3 FM now" }));
     expect(onPlay).toHaveBeenCalledWith(roster[0]);
+  });
+
+  it("puts trustworthy timing directly in the Play now button", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-09-03T12:00:00Z");
+    const timed = station("kexp", "KEXP 90.3 FM", {
+      artist: "Broadcast artist",
+      timing: {
+        serverTime: "2026-09-03T12:00:00Z",
+        estimatedRemainingMs: 154_000,
+        timingConfidence: "trusted",
+      },
+    });
+    render(<FirstRunSidebar stations={[timed]} {...props} />);
+    expect(screen.getByRole("button", { name: "Play KEXP 90.3 FM now" }).textContent)
+      .toContain("Play now2:34");
+    vi.useRealTimers();
   });
 
   it("runs Catch the next song and reports its result", async () => {

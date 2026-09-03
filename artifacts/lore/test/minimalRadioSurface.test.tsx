@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { StationCategory } from "../src/lib/dialCategories";
 import { MinimalRadioSurface } from "../src/components/MinimalRadioSurface";
+import { stationChangeCountdownLabel } from "../src/components/stationChangeCountdownLabel";
 
 const { toggle, warmup, releaseWarmup, cancelWarmup, startReplay } = vi.hoisted(() => ({
   toggle: vi.fn(),
@@ -97,6 +98,33 @@ afterEach(() => {
 });
 
 describe("MinimalRadioSurface", () => {
+  it("shows trusted and estimated station countdowns, but hides unavailable timing", () => {
+    const now = Date.parse("2026-09-03T12:00:00Z");
+    const base = row("alpha", "Alpha", true, 2).ds.liveTrack!;
+
+    expect(stationChangeCountdownLabel({
+      ...base,
+      freshness: "fresh",
+      serverTime: "2026-09-03T12:00:00Z",
+      estimatedRemainingMs: 154_000,
+      timingConfidence: "trusted",
+      timestampKind: "source",
+      timingUncertaintyMs: 2_000,
+    }, now)).toBe("2:34");
+
+    expect(stationChangeCountdownLabel({
+      ...base,
+      freshness: "fresh",
+      serverTime: "2026-09-03T12:00:00Z",
+      estimatedRemainingMs: 154_000,
+      timingConfidence: "estimated",
+      timestampKind: "inferred",
+      timingUncertaintyMs: 12_000,
+    }, now)).toBe("~2:34");
+
+    expect(stationChangeCountdownLabel(base, now)).toBeNull();
+  });
+
   it("groups live stations and switches global history into a category view", async () => {
     const historyItems = [
       {
