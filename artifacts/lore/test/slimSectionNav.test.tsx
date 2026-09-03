@@ -18,23 +18,19 @@ vi.mock("wouter", () => ({
 import { SlimSectionNav, sectionFor } from "../src/components/SlimSectionNav";
 
 describe("sectionFor — primary section model", () => {
-  it("classifies library-family pages as library", () => {
+  it("classifies library-family pages as Stack", () => {
     for (const path of ["/library", "/library/albums", "/journal", "/journal/2026-08", "/following"]) {
-      expect(sectionFor(path)).toBe("library");
+      expect(sectionFor(path)).toBe("stack");
     }
   });
 
-  it("classifies the Heard page separately", () => {
-    expect(sectionFor("/heard")).toBe("heard");
-    expect(sectionFor("/heard/today")).toBe("heard");
+  it("groups Feed, Heard, Index, and station exploration under Explore", () => {
+    for (const path of ["/feed", "/heard", "/heard/today", "/index", "/index?section=stations", "/stations/kexp"]) {
+      expect(sectionFor(path)).toBe("feed");
+    }
   });
 
-  it("classifies Index pages separately", () => {
-    expect(sectionFor("/index")).toBe("index");
-    expect(sectionFor("/index?section=stations&artistMbid=abc")).toBe("index");
-  });
-
-  it("classifies selector, DJ, and archive pages as part of Lore", () => {
+  it("returns archival dives to the Now job", () => {
     for (const path of [
       "/",
       "/selectors",
@@ -46,7 +42,7 @@ describe("sectionFor — primary section model", () => {
       "/archive/stations/kexp",
       "/song/abc",
     ]) {
-      expect(sectionFor(path)).toBe("lore");
+      expect(sectionFor(path)).toBe("now");
     }
   });
 });
@@ -58,74 +54,69 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
     mockLocation.value = "/";
   });
 
-  it("renders exactly four hyperlinks — Feed, Heard, Stack, and Index", () => {
+  it("renders exactly three listening jobs — Now, Explore, and Stack", () => {
     render(<SlimSectionNav />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const links = Array.from(nav.querySelectorAll("a"));
-    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack", "Index"]);
+    expect(links.map((a) => a.textContent)).toEqual(["Now", "Explore", "Stack"]);
     // No button-styled nav items remain.
     expect(nav.querySelectorAll("button").length).toBe(0);
   });
 
-  it("hides Heard and Index when the listener archive reveal is disabled", () => {
+  it("keeps the three jobs stable when archive reveal is disabled", () => {
     render(<SlimSectionNav showArchiveNav={false} />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(Array.from(nav.querySelectorAll("a")).map((a) => a.textContent)).toEqual(["Feed", "Stack"]);
+    expect(Array.from(nav.querySelectorAll("a")).map((a) => a.textContent)).toEqual(["Now", "Explore", "Stack"]);
     expect(screen.queryByRole("link", { name: "Heard" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Index" })).toBeNull();
   });
 
-  it("links Feed to the full Dial (/feed) from the split homepage", () => {
+  it("links each job to its stable route from Now", () => {
     mockLocation.value = "/";
     render(<SlimSectionNav />);
-    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/feed");
-    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("href")).toBe("/heard");
+    expect(screen.getByRole("link", { name: "Now" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Explore" }).getAttribute("href")).toBe("/feed");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
-    expect(screen.getByRole("link", { name: "Index" }).getAttribute("href")).toBe("/index");
   });
 
-  it("links Feed back to the front door from any other page", () => {
+  it("keeps the same stable routes from Stack", () => {
     mockLocation.value = "/library";
     render(<SlimSectionNav />);
-    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("href")).toBe("/");
-    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("href")).toBe("/heard");
+    expect(screen.getByRole("link", { name: "Now" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Explore" }).getAttribute("href")).toBe("/feed");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("href")).toBe("/library");
-    expect(screen.getByRole("link", { name: "Index" }).getAttribute("href")).toBe("/index");
   });
 
-  it("pins Feed to the left corner and the other sections to the right side", () => {
+  it("pins Now to the left corner and Explore and Stack to the right side", () => {
     render(<SlimSectionNav />);
-    expect(screen.getByRole("link", { name: "Feed" }).className).toContain("corner-nav__link--left");
+    expect(screen.getByRole("link", { name: "Now" }).className).toContain("corner-nav__link--left");
     expect(screen.getByRole("link", { name: "Stack" }).className).toContain("corner-nav__link--right");
-    expect(screen.getByRole("link", { name: "Heard" }).className).toContain("corner-nav__link--right");
-    expect(screen.getByRole("link", { name: "Index" }).className).toContain("corner-nav__link--right");
+    expect(screen.getByRole("link", { name: "Explore" }).className).toContain("corner-nav__link--right");
   });
 
-  it("marks Feed active on the front door", () => {
+  it("marks Now active on the front door", () => {
     mockLocation.value = "/";
     render(<SlimSectionNav />);
-    const lore = screen.getByRole("link", { name: "Feed" });
+    const lore = screen.getByRole("link", { name: "Now" });
     expect(lore.getAttribute("aria-current")).toBe("page");
     expect(lore.className).toContain("corner-nav__link--active");
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("aria-current")).toBeNull();
-    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("aria-current")).toBeNull();
-    expect(screen.getByRole("link", { name: "Index" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Explore" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("marks Heard active only on the Heard route", () => {
+  it("marks Explore active on a deeper Feed lens", () => {
     mockLocation.value = "/heard";
     render(<SlimSectionNav />);
-    expect(screen.getByRole("link", { name: "Heard" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Explore" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Now" }).getAttribute("aria-current")).toBeNull();
     expect(screen.getByRole("link", { name: "Stack" }).getAttribute("aria-current")).toBeNull();
-    expect(screen.getByRole("link", { name: "Index" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("marks Index active across filtered Index routes", () => {
+  it("marks Explore active across filtered Index routes", () => {
     mockLocation.value = "/index?section=artists&artistMbid=abc";
     render(<SlimSectionNav />);
-    expect(screen.getByRole("link", { name: "Index" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Explore" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Now" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("marks Stack active across the library family of routes", () => {
@@ -133,15 +124,15 @@ describe("SlimSectionNav — bottom-corner hyperlinks", () => {
       mockLocation.value = path;
       render(<SlimSectionNav />);
       expect(screen.getByRole("link", { name: "Stack" }).getAttribute("aria-current")).toBe("page");
-      expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBeNull();
+      expect(screen.getByRole("link", { name: "Now" }).getAttribute("aria-current")).toBeNull();
       cleanup();
     }
   });
 
-  it("keeps Feed active while on a selector archive page", () => {
+  it("keeps Now active while on a selector archive page", () => {
     mockLocation.value = "/archive/selectors/night-shift";
     render(<SlimSectionNav />);
-    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Now" }).getAttribute("aria-current")).toBe("page");
   });
 });
 
@@ -152,26 +143,25 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
     mockLocation.value = "/";
   });
 
-  it("renders the same four links inside a .bottom-nav row", () => {
-    // On the split homepage the Feed label targets the full Dial at /feed.
+  it("renders the same three jobs inside a .bottom-nav row", () => {
     mockLocation.value = "/";
     render(<SlimSectionNav variant="bottom" />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(nav.className).toContain("bottom-nav");
     expect(nav.className).not.toContain("corner-nav");
     const links = Array.from(nav.querySelectorAll("a"));
-    expect(links.map((a) => a.textContent)).toEqual(["Feed", "Heard", "Stack", "Index"]);
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/feed", "/heard", "/library", "/index"]);
+    expect(links.map((a) => a.textContent)).toEqual(["Now", "Explore", "Stack"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/", "/feed", "/library"]);
   });
 
   it("uses bottom-nav link classes with the same data-section hooks", () => {
     render(<SlimSectionNav variant="bottom" />);
-    const lore = screen.getByRole("link", { name: "Feed" });
+    const lore = screen.getByRole("link", { name: "Now" });
     const library = screen.getByRole("link", { name: "Stack" });
     expect(lore.className).toContain("bottom-nav__link");
     expect(library.className).toContain("bottom-nav__link");
-    expect(lore.getAttribute("data-section")).toBe("lore");
-    expect(library.getAttribute("data-section")).toBe("library");
+    expect(lore.getAttribute("data-section")).toBe("now");
+    expect(library.getAttribute("data-section")).toBe("stack");
   });
 
   it("marks the active section with aria-current and the active class", () => {
@@ -180,6 +170,6 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
     const library = screen.getByRole("link", { name: "Stack" });
     expect(library.getAttribute("aria-current")).toBe("page");
     expect(library.className).toContain("bottom-nav__link--active");
-    expect(screen.getByRole("link", { name: "Feed" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Now" }).getAttribute("aria-current")).toBeNull();
   });
 });

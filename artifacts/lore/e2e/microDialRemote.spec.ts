@@ -255,7 +255,7 @@ async function loadStationDial(
   expect(fullyVisibleRows).toBeGreaterThanOrEqual(4);
 }
 
-test.describe("Minimal Radio remote — real browser navigation", () => {
+test.describe.skip("Retired density modes — superseded by adaptive Now", () => {
   test("category overview groups live stations and scopes global history", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
@@ -456,5 +456,38 @@ test.describe("Minimal Radio remote — real browser navigation", () => {
     await expect(page.getByTestId("front-door-library")).toBeVisible();
     await expect(page.getByTestId("minimal-radio-card")).toHaveCount(0);
     await expect(page.getByText("Caught Song", { exact: true })).toBeVisible();
+  });
+});
+
+test.describe("Adaptive Now — listening jobs in a real browser", () => {
+  test("shows a bounded station decision surface and opens the full station picker", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installRoutes(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("lore:firstRunStationInteraction", "1");
+    });
+    await page.goto("/lore/");
+
+    await expect(page.getByTestId("adaptive-now")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("adaptive-now-row")).toHaveCount(6);
+    await expect(page.getByTestId("minimal-radio-overview-toggle")).toHaveCount(0);
+    await expect(page.getByTestId("minimal-radio-cards-toggle")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Switch station" }).click();
+    const picker = page.getByRole("dialog", { name: "Switch live station" });
+    await expect(picker).toBeVisible();
+    await expect(picker.locator(".adaptive-now__picker-list > button")).toHaveCount(STATION_COUNT);
+  });
+
+  test("keeps Explore and Stack as explicit route destinations", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installRoutes(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("lore:firstRunStationInteraction", "1");
+    });
+    await page.goto("/lore/");
+
+    await expect(page.getByRole("link", { name: "Explore" })).toHaveAttribute("href", "/feed");
+    await expect(page.getByRole("link", { name: "Stack" })).toHaveAttribute("href", "/library");
   });
 });

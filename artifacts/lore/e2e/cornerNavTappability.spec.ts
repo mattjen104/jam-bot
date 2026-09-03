@@ -290,8 +290,8 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       await installRoutes(page);
       await loadWithDock(page);
 
-      const loreLink = page.locator(".bottom-nav__link[data-section='lore']");
-      const libraryLink = page.locator(".bottom-nav__link[data-section='library']");
+      const loreLink = page.locator(".bottom-nav__link[data-section='now']");
+      const libraryLink = page.locator(".bottom-nav__link[data-section='stack']");
 
       // 1. Both bottom-nav links are visible in the viewport.
       await expect(loreLink).toBeVisible();
@@ -300,9 +300,9 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       // 2. Both links accept clicks — Playwright throws when a click target is
       //    covered by another element (e.g. the mini player intercepting).
       await loreLink.click();
-      // After clicking Feed we land back on the dial; tune back in for the
+      // After clicking Now we land back on the decision surface; tune back in for the
       // library link check.
-      const tuneIn = page.getByRole("button", { name: /^Tune in to / });
+      const tuneIn = page.getByRole("button", { name: /^(Play now|Tune in to|Tune live)/ }).first();
       await expect(tuneIn).toBeVisible({ timeout: 10_000 });
       await tuneIn.click();
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });

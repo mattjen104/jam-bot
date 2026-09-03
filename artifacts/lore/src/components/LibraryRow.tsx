@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { LibraryItem } from "../lib/meHooks";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
-import { getRecordingAlbumTracks, spotifyPlay } from "@workspace/api-client-react";
+import { spotifyPlay } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
 import { useMyAlbumAvatar, useSetAlbumAvatar, useSetLibraryRemoved } from "../lib/meHooks";
 import { AlbumShelf } from "./AlbumShelf";
@@ -117,30 +116,13 @@ function Byline({
   return null;
 }
 
-/** Three play doors — expands inline below the row. */
+/** Explicit playback doors — exact service playback and radio discovery stay distinct. */
 function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }) {
   // DoorStrip is only rendered for resolved rows (item.mbid is non-null).
   const mbid = item.mbid!;
 
   const { ride, spotify } = usePlayer();
   const [, navigate] = useLocation();
-  const [albumBusy, setAlbumBusy] = useState(false);
-  const [albumPreview, setAlbumPreview] = useState<{ rgTitle: string; trackCount: number } | null>(null);
-
-  // Pre-fetch album info as soon as the strip opens so the label is informative
-  // before the listener commits to tapping.
-  useEffect(() => {
-    let cancelled = false;
-    getRecordingAlbumTracks(mbid)
-      .then((data) => {
-        if (!cancelled) {
-          setAlbumPreview({ rgTitle: data.rgTitle ?? "", trackCount: data.tracks.length });
-        }
-      })
-      .catch(() => { /* 404 = no album data yet — label stays generic */ });
-    return () => { cancelled = true; };
-  }, [mbid]);
-
   const rec = item.recording;
   const title = rec?.title ?? mbid.slice(0, 8);
   const artist = rec?.artist ?? "";
@@ -180,28 +162,11 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
     onClose();
   }
 
-  async function handleAlbum() {
-    setAlbumBusy(true);
-    try {
-      const data = await getRecordingAlbumTracks(mbid);
-      const seeds: RideSeed[] = data.tracks.map((t) => ({
-        mbid: t.mbid,
-        title: t.title,
-        artist: t.artist,
-        artworkUrl: null,
-        links: t.appleMusicId
-          ? [{ kind: "exact", name: "apple_music", url: `https://music.apple.com/song/i=${t.appleMusicId}` }]
-          : [],
-      }));
-      if (seeds.length > 0) {
-        ride.startReplay(seeds, data.rgTitle ?? title, { timeOrientation: "curated", context: "library" });
-        onClose();
-      }
-    } catch {
-      /* 404 = no album data yet */
-    } finally {
-      setAlbumBusy(false);
-    }
+  function handleAppleExact() {
+    if (!appleMusicId) return;
+    ride.setPreferredService("apple-music");
+    ride.startReplay([seed], title, { timeOrientation: "curated", context: "library" });
+    onClose();
   }
 
   const prov = item.provenance;
@@ -214,34 +179,40 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
 
   return (
     <div className="lrow__doors" onClick={(e) => e.stopPropagation()}>
-      <button type="button" className="lrow__door" onClick={handleTrack} title="Play this track">
-        ▶ Track
+      <button
+        type="button"
+        className="lrow__door"
+        onClick={handleAppleExact}
+        disabled={!appleMusicId}
+        title={appleMusicId ? "Play this exact track in Apple Music in this browser" : "No exact Apple Music match"}
+      >
+        Play exact in Apple Music
       </button>
       <button
         type="button"
         className="lrow__door"
-        onClick={() => void handleAlbum()}
-        disabled={albumBusy}
-        title="Play full album from track 1"
+        onClick={handleTrack}
+        title={spotifyEligible ? "Play this exact track on your Spotify device" : "Play the best available preview"}
       >
-        {albumBusy
-          ? "…"
-          : albumPreview
-          ? `💿 ${albumPreview.rgTitle} · ${albumPreview.trackCount} track${albumPreview.trackCount === 1 ? "" : "s"}`
-          : "💿 Album"}
+        {spotifyEligible ? "Play on Spotify device" : "Preview track"}
       </button>
       {broadcastHref ? (
         <button
           type="button"
           className="lrow__door"
           onClick={() => { navigate(broadcastHref); onClose(); }}
-          title="Go to broadcast context"
+          title="Find this record in its radio context"
         >
-          📻 Broadcast
+          Find this on radio
         </button>
       ) : (
-        <button type="button" className="lrow__door lrow__door--off" disabled title="No broadcast history">
-          📻 Broadcast
+        <button
+          type="button"
+          className="lrow__door"
+          onClick={() => { navigate("/feed"); onClose(); }}
+          title="Look for this record in the live Feed"
+        >
+          Find this on radio
         </button>
       )}
     </div>
