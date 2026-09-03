@@ -40,6 +40,7 @@ import { applyStationExclusionsMigration } from "./lore/station-exclusions-migra
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { applyShowDjNamesMigration } from "./lore/show-djnames-migration.js";
 import { applyCollegeTagMigration } from "./lore/college-tag-migration.js";
+import { applyLocalRosterRepair } from "./lore/local-roster-repair.js";
 import { runMigration } from "./lore/boot-migrations.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startIsrcEnrichmentJob } from "./lore/isrc-enrichment.js";
@@ -267,6 +268,7 @@ async function bootLore(): Promise<void> {
     });
     await ensurePicksUnifiedView();
     await seedStations();
+    await runMigration("applyLocalRosterRepair", applyLocalRosterRepair);
     // Sleep classification must run BEFORE the blocklist hide so its
     // sleep_mode=true marks exempt those rows from the permanent blocklist
     // predicates. Runs unconditionally (not ledger-once) because its UPDATE

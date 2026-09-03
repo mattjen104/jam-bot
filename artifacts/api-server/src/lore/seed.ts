@@ -41,6 +41,9 @@ export const SPINITRON_CALLSIGNS: ReadonlySet<string> = new Set([
   "WBRS",
   "WZBC",
   "WTBU",
+  "KSJS",
+  "KXLU",
+  "WLUW",
 ]);
 
 export function spinitronWebSourceForCallsign(
@@ -70,6 +73,7 @@ export const SEED_STATIONS: InsertStation[] = [
     name: "KEXP 90.3 FM",
     org: "KEXP",
     country: "US",
+    city: "Seattle",
     streamUrl: "https://kexp.streamguys1.com/kexp160.aac",
     streamQuality: "160kbps AAC",
     streamFormat: "aac",
@@ -132,6 +136,7 @@ export const SEED_STATIONS: InsertStation[] = [
     name: "KCRW — Eclectic 24",
     org: "KCRW",
     country: "US",
+    city: "Los Angeles",
     streamUrl: "https://streams.kcrw.com/e24_mp3",
     streamQuality: "128kbps MP3",
     streamFormat: "mp3",
@@ -232,6 +237,7 @@ function indieInternetStations(): InsertStation[] {
       name: "Dublab",
       org: "Dublab",
       country: "US",
+      city: "Los Angeles",
       streamUrl: "https://dublab.out.airtime.pro:8000/dublab_a",
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
@@ -1805,6 +1811,7 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "KXLU 88.9 FM",
       org: "Loyola Marymount University",
       country: "US",
+      city: "Los Angeles",
       // StreamGuys CDN stream — same CDN as WPRB and WKCR; /kxlu-hi is the
       // standard high-quality mount naming for StreamGuys-hosted stations.
       streamUrl: "https://kxlu.streamguys1.com/kxlu-hi",
@@ -2134,6 +2141,10 @@ export interface SpinitronDirectoryStation {
   org?: string;
   /** ISO 3166-1 alpha-2 country code, if known. */
   country?: string;
+  /** Broadcast city when the embedded curated roster knows it. */
+  city?: string;
+  /** Editorial tags that must survive first insert from the fallback roster. */
+  tags?: string[];
   /** Station homepage URL from the Spinitron directory. */
   homepageUrl?: string;
 }
@@ -2337,7 +2348,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "WLUR", name: "WLUR 91.5 FM", org: "Washington and Lee University", country: "US" },
 
   // ── Midwest ─────────────────────────────────────────────────────────────
-  { callsign: "WLUW", name: "WLUW 88.7 FM", org: "Loyola University Chicago", country: "US" },
+  { callsign: "WLUW", name: "WLUW 88.7 FM", org: "Loyola University Chicago", country: "US", city: "Chicago", tags: ["college"] },
   { callsign: "WHPK", name: "WHPK 88.5 FM", org: "University of Chicago", country: "US" },
   { callsign: "WEFT", name: "WEFT 90.1 FM", org: "WEFT Community Radio", country: "US" },
   { callsign: "WMHW", name: "WMHW 91.5 FM", org: "Central Michigan University", country: "US" },
@@ -2359,13 +2370,13 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
 
   // ── West Coast ──────────────────────────────────────────────────────────
   { callsign: "KCSB", name: "KCSB 91.9 FM", org: "UC Santa Barbara", country: "US" },
-  { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US" },
+  { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US", city: "Riverside", tags: ["college"] },
   { callsign: "KZSC", name: "KZSC 88.1 FM", org: "UC Santa Cruz", country: "US" },
   { callsign: "KUCI", name: "KUCI 88.9 FM", org: "UC Irvine", country: "US" },
-  { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US" },
+  { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US", city: "Los Angeles", tags: ["college"] },
   { callsign: "KSDT", name: "KSDT 95.7 FM", org: "UC San Diego", country: "US" },
   { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US" },
-  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US" },
+  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", tags: ["college"] },
   { callsign: "KCRH", name: "KCRH 89.9 FM", org: "Chabot College", country: "US" },
   { callsign: "KTUH", name: "KTUH 90.3 FM", org: "University of Hawaii", country: "US" },
   { callsign: "KASC", name: "KASC 1260 AM", org: "Arizona State University", country: "US" },
@@ -2583,11 +2594,13 @@ export async function seedSpinitronRoster(): Promise<void> {
       name: station.name,
       org: station.org ?? null,
       country: station.country ?? "US",
+      city: station.city ?? null,
       streamUrl: "",
       nowPlayingSource: spinitronWebSourceForCallsign(station.callsign),
       nowPlayingConfig: { callsign: station.callsign },
       source: "curated",
       stationClass: "community",
+      tags: station.tags ?? null,
       active: true,
       homepageUrl:
         station.homepageUrl ??
