@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaybackCandidate } from "./playbackCandidate";
 import type { StationAutomationClass } from "./stationAutomationClass";
 import type { StationQualityTier } from "./stationQualityTier";
 
@@ -83,6 +84,11 @@ export interface Station {
    * @nullable
    */
   relayUrl?: string | null;
+  /**
+   * Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.
+   * @maxItems 4
+   */
+  playbackCandidates?: PlaybackCandidate[];
   /** Safe, non-secret category labels derived from the station's metadata. Possible values: "spinitron" (now-playing comes from Spinitron or the Spinitron web adapter), "college" (confirmed campus/college station), "longtail" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values. */
   stationCategories: string[];
 }

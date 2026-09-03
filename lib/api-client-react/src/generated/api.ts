@@ -132,6 +132,9 @@ import type {
   PickerRunInsights,
   PickerStationOverlaps,
   PickersDialResult,
+  PlaybackEventInput,
+  PlaybackEventReceipt,
+  PlaybackHealthResponse,
   PostEmbedResolutionRequeueResponse,
   PressBookmarkResult,
   PressPage,
@@ -1381,6 +1384,175 @@ export const useReportStationNowPlaying = <
 > => {
   return useMutation(getReportStationNowPlayingMutationOptions(options));
 };
+
+/**
+ * Unauthenticated, rate-limited telemetry for aggregate playback health. The request accepts no user, session, device, IP, or client identifiers; samples are retained only in bounded process memory.
+ * @summary Submit one privacy-safe sampled playback event
+ */
+export const getReportStationPlaybackEventUrl = (slug: string) => {
+  return `/api/stations/${slug}/playback-events`;
+};
+
+export const reportStationPlaybackEvent = async (
+  slug: string,
+  playbackEventInput: PlaybackEventInput,
+  options?: RequestInit,
+): Promise<PlaybackEventReceipt> => {
+  return customFetch<PlaybackEventReceipt>(
+    getReportStationPlaybackEventUrl(slug),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(playbackEventInput),
+    },
+  );
+};
+
+export const getReportStationPlaybackEventMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reportStationPlaybackEvent>>,
+    TError,
+    { slug: string; data: BodyType<PlaybackEventInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reportStationPlaybackEvent>>,
+  TError,
+  { slug: string; data: BodyType<PlaybackEventInput> },
+  TContext
+> => {
+  const mutationKey = ["reportStationPlaybackEvent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reportStationPlaybackEvent>>,
+    { slug: string; data: BodyType<PlaybackEventInput> }
+  > = (props) => {
+    const { slug, data } = props ?? {};
+
+    return reportStationPlaybackEvent(slug, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReportStationPlaybackEventMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reportStationPlaybackEvent>>
+>;
+export type ReportStationPlaybackEventMutationBody =
+  BodyType<PlaybackEventInput>;
+export type ReportStationPlaybackEventMutationError = ErrorType<void>;
+
+/**
+ * @summary Submit one privacy-safe sampled playback event
+ */
+export const useReportStationPlaybackEvent = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reportStationPlaybackEvent>>,
+    TError,
+    { slug: string; data: BodyType<PlaybackEventInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reportStationPlaybackEvent>>,
+  TError,
+  { slug: string; data: BodyType<PlaybackEventInput> },
+  TContext
+> => {
+  return useMutation(getReportStationPlaybackEventMutationOptions(options));
+};
+
+/**
+ * Admin-only percentile summaries of non-identifying, bounded in-memory playback samples, grouped by station and source transport/format.
+ * @summary Aggregated sampled playback health
+ */
+export const getGetAdminPlaybackHealthUrl = () => {
+  return `/api/admin/playback-health`;
+};
+
+export const getAdminPlaybackHealth = async (
+  options?: RequestInit,
+): Promise<PlaybackHealthResponse> => {
+  return customFetch<PlaybackHealthResponse>(getGetAdminPlaybackHealthUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminPlaybackHealthQueryKey = () => {
+  return [`/api/admin/playback-health`] as const;
+};
+
+export const getGetAdminPlaybackHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminPlaybackHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPlaybackHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdminPlaybackHealthQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminPlaybackHealth>>
+  > = ({ signal }) => getAdminPlaybackHealth({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPlaybackHealth>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminPlaybackHealthQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminPlaybackHealth>>
+>;
+export type GetAdminPlaybackHealthQueryError = ErrorType<void>;
+
+/**
+ * @summary Aggregated sampled playback health
+ */
+
+export function useGetAdminPlaybackHealth<
+  TData = Awaited<ReturnType<typeof getAdminPlaybackHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPlaybackHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminPlaybackHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.

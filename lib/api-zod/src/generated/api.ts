@@ -260,6 +260,8 @@ export const ListStationsQueryParams = zod.object({
     ),
 });
 
+export const listStationsResponseStationsItemPlaybackCandidatesMax = 4;
+
 export const ListStationsResponse = zod.object({
   stations: zod.array(
     zod
@@ -362,6 +364,21 @@ export const ListStationsResponse = zod.object({
           .nullish()
           .describe(
             'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
+          ),
+        playbackCandidates: zod
+          .array(
+            zod.object({
+              url: zod.string(),
+              role: zod.enum(["primary", "relay", "alternate"]),
+              transport: zod.enum(["https", "http", "relay"]),
+              format: zod.enum(["aac", "mp3", "hls", "flac", "unknown"]),
+              healthHint: zod.enum(["healthy", "degraded", "unknown"]),
+            }),
+          )
+          .max(listStationsResponseStationsItemPlaybackCandidatesMax)
+          .optional()
+          .describe(
+            "Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.",
           ),
         stationCategories: zod
           .array(zod.string())
@@ -797,6 +814,8 @@ export const GetStationNowPlayingParams = zod.object({
   slug: zod.coerce.string().min(1),
 });
 
+export const getStationNowPlayingResponseStationPlaybackCandidatesMax = 4;
+
 export const GetStationNowPlayingResponse = zod.object({
   station: zod
     .object({
@@ -898,6 +917,21 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
+        ),
+      playbackCandidates: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            role: zod.enum(["primary", "relay", "alternate"]),
+            transport: zod.enum(["https", "http", "relay"]),
+            format: zod.enum(["aac", "mp3", "hls", "flac", "unknown"]),
+            healthHint: zod.enum(["healthy", "degraded", "unknown"]),
+          }),
+        )
+        .max(getStationNowPlayingResponseStationPlaybackCandidatesMax)
+        .optional()
+        .describe(
+          "Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.",
         ),
       stationCategories: zod
         .array(zod.string())
@@ -1069,6 +1103,79 @@ export const ReportStationNowPlayingResponse = zod.object({
   confidence: zod
     .enum(["recording_id", "isrc", "text", "unresolved", "spotify"])
     .optional(),
+});
+
+/**
+ * Unauthenticated, rate-limited telemetry for aggregate playback health. The request accepts no user, session, device, IP, or client identifiers; samples are retained only in bounded process memory.
+ * @summary Submit one privacy-safe sampled playback event
+ */
+
+export const ReportStationPlaybackEventParams = zod.object({
+  slug: zod.coerce.string().min(1),
+});
+
+export const reportStationPlaybackEventBodyStartupMsMin = 0;
+export const reportStationPlaybackEventBodyStartupMsMax = 120000;
+
+export const reportStationPlaybackEventBodyStallMsMin = 0;
+export const reportStationPlaybackEventBodyStallMsMax = 120000;
+
+export const ReportStationPlaybackEventBody = zod.object({
+  transport: zod.enum(["https", "http", "relay"]),
+  format: zod.enum(["aac", "mp3", "hls", "flac", "unknown"]),
+  event: zod.enum([
+    "playing",
+    "startup_failure",
+    "stall",
+    "recovered",
+    "terminal_failure",
+  ]),
+  startupMs: zod
+    .number()
+    .min(reportStationPlaybackEventBodyStartupMsMin)
+    .max(reportStationPlaybackEventBodyStartupMsMax)
+    .optional(),
+  stallMs: zod
+    .number()
+    .min(reportStationPlaybackEventBodyStallMsMin)
+    .max(reportStationPlaybackEventBodyStallMsMax)
+    .optional(),
+});
+
+/**
+ * Admin-only percentile summaries of non-identifying, bounded in-memory playback samples, grouped by station and source transport/format.
+ * @summary Aggregated sampled playback health
+ */
+export const GetAdminPlaybackHealthHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const GetAdminPlaybackHealthResponse = zod.object({
+  monitoringSince: zod.string().datetime({}),
+  thresholds: zod.object({
+    startupP95DegradedMs: zod.number(),
+    failureRateDegraded: zod.number(),
+    sampleLimit: zod.number(),
+  }),
+  summaries: zod.array(
+    zod.object({
+      stationSlug: zod.string(),
+      transport: zod.enum(["https", "http", "relay"]),
+      format: zod.enum(["aac", "mp3", "hls", "flac", "unknown"]),
+      sampleCount: zod.number(),
+      startupP50Ms: zod.number().nullable(),
+      startupP95Ms: zod.number().nullable(),
+      stallP50Ms: zod.number().nullable(),
+      stallP95Ms: zod.number().nullable(),
+      playingCount: zod.number(),
+      startupFailureCount: zod.number(),
+      stallCount: zod.number(),
+      recoveryCount: zod.number(),
+      terminalFailureCount: zod.number(),
+      failureRate: zod.number(),
+      health: zod.enum(["healthy", "degraded"]),
+    }),
+  ),
 });
 
 /**
@@ -1741,6 +1848,8 @@ export const GetStationArchiveQueryParams = zod.object({
     .describe("Page size for sidebar archive pagination."),
 });
 
+export const getStationArchiveResponseStationPlaybackCandidatesMax = 4;
+
 export const GetStationArchiveResponse = zod.object({
   station: zod
     .object({
@@ -1842,6 +1951,21 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           'Server-side HTTPS relay path (e.g. \"\/api\/stations\/wmfo\/relay\") for allowlisted stations whose only audio stream is plain HTTP — browsers on HTTPS block those as mixed content, so the player uses this relay endpoint instead. Null\/absent for stations that stream over HTTPS directly or have no stream at all.',
+        ),
+      playbackCandidates: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            role: zod.enum(["primary", "relay", "alternate"]),
+            transport: zod.enum(["https", "http", "relay"]),
+            format: zod.enum(["aac", "mp3", "hls", "flac", "unknown"]),
+            healthHint: zod.enum(["healthy", "degraded", "unknown"]),
+          }),
+        )
+        .max(getStationArchiveResponseStationPlaybackCandidatesMax)
+        .optional()
+        .describe(
+          "Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.",
         ),
       stationCategories: zod
         .array(zod.string())

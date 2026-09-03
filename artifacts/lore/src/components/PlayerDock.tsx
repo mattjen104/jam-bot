@@ -217,6 +217,7 @@ export function PlayerDock() {
           castFallbackReason={radio.castFallbackReason}
           castPaused={radio.castPaused}
           onCastRetry={radio.castRetry}
+          onRetry={radio.retry}
           onToggle={radio.toggle}
           onStop={radio.stop}
           onVolume={radio.setVolume}
@@ -244,6 +245,7 @@ export function PlayerDock() {
             onToggle={radio.toggle}
             onStop={radio.stop}
             onVolume={radio.setVolume}
+            onRetry={radio.retry}
             scanActive={scan.active}
             onScanToggle={scan.toggle}
             onCollapse={() => setExpanded(false)}

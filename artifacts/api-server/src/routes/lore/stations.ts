@@ -24,6 +24,8 @@ import {
   GetStationsArtistFrequencyResponse,
   GetStationsPopularArtistsResponse,
   GetStationsRecentArtistsResponse,
+  ReportStationPlaybackEventParams,
+  ReportStationPlaybackEventBody,
 } from "@workspace/api-zod";
 import {
   db,
@@ -73,6 +75,7 @@ import {
 } from "../../lore/genre-insights.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
+import { recordPlaybackEvent } from "../../lore/playback-health.js";
 
 const router: IRouter = Router();
 
@@ -667,6 +670,16 @@ const fingerprintLimiter = rateLimit({
   skip: () => !!process.env["VITEST"],
 });
 
+// Anonymous playback telemetry contains only a station slug, coarse source
+// properties, and bounded duration measurements. Keep its abuse budget
+// independent from the now-playing write path.
+const playbackEventLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
+
 // GET /api/stations
 // Default (no mode): active=true, non-hidden, crossing-eligible stations only.
 // ?mode=sleep: active=true, sleep_mode=true stations (hidden=true intentional).
@@ -1135,6 +1148,26 @@ router.get("/stations/:slug/relay", h(async (req, res) => {
     case "upstream_unavailable":
       return res.status(503).json({ error: "Upstream stream unavailable" });
   }
+}));
+
+// POST /api/stations/:slug/playback-events — sampled, non-identifying RUM.
+router.post("/stations/:slug/playback-events", playbackEventLimiter, h(async (req, res) => {
+  const params = ReportStationPlaybackEventParams.safeParse(req.params);
+  const body = ReportStationPlaybackEventBody.safeParse(req.body);
+  const allowedFields = new Set(["transport", "format", "event", "startupMs", "stallMs"]);
+  const hasIdentifierOrUnknownField = !req.body || typeof req.body !== "object" ||
+    Object.keys(req.body).some((key) => !allowedFields.has(key));
+  if (!params.success || !body.success || hasIdentifierOrUnknownField) {
+    return res.status(400).json({ error: "Invalid playback event" });
+  }
+  const [station] = await db
+    .select({ id: stationsTable.id })
+    .from(stationsTable)
+    .where(and(eq(stationsTable.slug, params.data.slug), eq(stationsTable.hidden, false)))
+    .limit(1);
+  if (!station) return res.status(404).json({ error: "Station not found" });
+  recordPlaybackEvent({ stationSlug: params.data.slug, ...body.data });
+  return res.status(202).json({ accepted: true });
 }));
 
 // POST /api/stations/:slug/report-now-playing

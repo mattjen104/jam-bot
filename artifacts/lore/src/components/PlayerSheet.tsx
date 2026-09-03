@@ -13,6 +13,7 @@ import {
   Loader2,
   Pause,
   Play,
+  RotateCw,
   ScanLine,
   Volume2,
   VolumeX,
@@ -27,6 +28,7 @@ interface PlayerSheetProps {
   onToggle: (station: Station) => void;
   onStop: () => void;
   onVolume: (v: number) => void;
+  onRetry?: () => void;
   scanActive?: boolean;
   onScanToggle?: () => void;
   onCollapse: () => void;
@@ -49,6 +51,7 @@ export function PlayerSheet({
   onToggle,
   onStop,
   onVolume,
+  onRetry,
   scanActive = false,
   onScanToggle,
   onCollapse,
@@ -56,7 +59,10 @@ export function PlayerSheet({
   landingConfirmation = null,
 }: PlayerSheetProps) {
   const isPlaying = status === "playing";
-  const isLoading = status === "loading";
+  const isLoading =
+    status === "loading" ||
+    status === "reconnecting" ||
+    status === "recovering";
   const homepageUrl = safeHttpUrl(station.homepageUrl);
 
   // Escape collapses, matching the sheet convention elsewhere in the app.
@@ -90,6 +96,25 @@ export function PlayerSheet({
       </div>
 
       <div className="player-sheet__body">
+        {(status === "loading" ||
+          status === "reconnecting" ||
+          status === "recovering" ||
+          status === "error") && (
+          <div
+            className="player-bar-status mb-3"
+            role="status"
+            aria-live="polite"
+            data-testid="player-sheet-recovery-status"
+          >
+            {status === "recovering"
+              ? "Trying alternate stream…"
+              : status === "reconnecting"
+                ? "Reconnecting…"
+                : status === "loading"
+                  ? "Buffering…"
+                  : "Stream unavailable"}
+          </div>
+        )}
         <NowPlaying
           data={nowPlayingData}
           isLoading={!nowPlayingData}
@@ -145,6 +170,30 @@ export function PlayerSheet({
             <ExternalLink aria-hidden="true" size={16} strokeWidth={1.8} />
           </a>
         ) : null}
+        {status === "error" && onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            aria-label="Retry live stream"
+            data-testid="player-sheet-retry"
+            className="player-bar-btn player-sheet__btn"
+          >
+            <RotateCw className="h-4 w-4" />
+          </button>
+        )}
+        {status === "error" && homepageUrl && resolvePlaybackSource(station) != null && (
+          <a
+            href={homepageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="player-bar-btn station-site-link player-bar-site-link player-sheet__btn"
+            title={`Listen on ${station.name} site`}
+            aria-label={`Listen on ${station.name} site`}
+            data-testid="player-sheet-error-site-link"
+          >
+            <ExternalLink aria-hidden="true" size={16} strokeWidth={1.8} />
+          </a>
+        )}
         {onScanToggle && (
           <button
             type="button"

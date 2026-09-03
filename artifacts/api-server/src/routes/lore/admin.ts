@@ -54,6 +54,7 @@ import {
   IngestBookKnowledgeResponse,
   ListBookDraftsResponse,
   GetAdminStationStoreAuditResponse,
+  GetAdminPlaybackHealthResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -148,6 +149,7 @@ import {
   getUnmatchedSpinHealth,
 } from "../../lore/unmatched-spin-backfill.js";
 import { triggerBeatoReset } from "../../lore/beato.js";
+import { getPlaybackHealth } from "../../lore/playback-health.js";
 
 const router: IRouter = Router();
 const automaticCullCanonicalStation = alias(
@@ -2163,6 +2165,11 @@ router.get("/admin/resolution-latency-health", h(async (_req, res) => {
       maxMs: s.maxMs,
     })),
   });
+}));
+
+// GET /api/admin/playback-health — ephemeral aggregated client playback RUM.
+router.get("/admin/playback-health", h(async (_req, res) => {
+  return res.json(GetAdminPlaybackHealthResponse.parse(getPlaybackHealth()));
 }));
 
 // GET /api/admin/lore/blog-health — per-picker feed health for all blog

@@ -35,6 +35,7 @@ interface PlayerBarProps {
   castFallbackReason?: RadioCastFallbackReason | null;
   castPaused?: boolean;
   onCastRetry?: () => void;
+  onRetry?: () => void;
   onToggle: (station: Station) => void;
   onStop: () => void;
   onVolume: (v: number) => void;
@@ -68,6 +69,7 @@ export function PlayerBar({
   castFallbackReason = null,
   castPaused = false,
   onCastRetry,
+  onRetry,
   onToggle,
   onStop,
   onVolume,
@@ -85,7 +87,11 @@ export function PlayerBar({
 }: PlayerBarProps) {
   const isCasting = casting === "casting";
   const isPlaying = isCasting ? !castPaused : status === "playing";
-  const isLoading = !isCasting && status === "loading";
+  const isLoading =
+    !isCasting &&
+    (status === "loading" ||
+      status === "reconnecting" ||
+      status === "recovering");
   const showDevicePicker = !!(spotify?.connected && spotify.premium);
   const showConnectPrompt = !!(spotify?.configured && !spotify.connected);
   const castDeviceName = spotify?.pinnedDevice?.name ?? "your Spotify";
@@ -106,9 +112,7 @@ export function PlayerBar({
   const metaResolving = provisionalNowPlaying?.resolving === true;
 
   // Status text for the secondary line
-  const statusText = error
-    ? error
-    : scanActive
+  const statusText = scanActive
       ? `Preview scan · ${scanCurrent?.category ?? "new music"} · ${scanCurrent?.stationName ?? "loading"}`
       : isCasting
         ? (castPaused ? `Paused on ${castDeviceName}` : `Live · casting to ${castDeviceName}`)
@@ -120,9 +124,13 @@ export function PlayerBar({
                 : castFallbackReason === "spotify_error"
                   ? "Spotify unavailable · playing broadcast"
                   : "Not on Spotify · playing broadcast")
-            : isLoading
-              ? "Buffering…"
-              : null;
+            : status === "recovering"
+              ? "Trying alternate stream…"
+              : status === "reconnecting"
+                ? "Reconnecting…"
+                : status === "loading"
+                  ? "Buffering…"
+                  : error;
 
   return (
     <div className="player-bar-block" data-testid="player-bar">
@@ -177,7 +185,18 @@ export function PlayerBar({
             </span>
           )}
           {statusText && (
-            <span className="player-bar-status">{statusText}</span>
+            <span
+              className="player-bar-status"
+              role="status"
+              aria-live="polite"
+              data-testid={
+                status === "reconnecting" || status === "recovering"
+                  ? "player-recovery-status"
+                  : undefined
+              }
+            >
+              {statusText}
+            </span>
           )}
         </div>
 
@@ -227,6 +246,33 @@ export function PlayerBar({
             >
               <RotateCw className="h-3.5 w-3.5" />
             </button>
+          )}
+
+          {status === "error" && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="player-bar-btn"
+              title="Retry live stream"
+              aria-label="Retry live stream"
+              data-testid="player-retry"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {status === "error" && homepageUrl && (
+            <a
+              href={homepageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="player-bar-btn station-site-link player-bar-site-link"
+              title={`Listen on ${station.name} site`}
+              aria-label={`Listen on ${station.name} site`}
+              data-testid="player-error-site-link"
+            >
+              <ExternalLink aria-hidden="true" size={14} strokeWidth={1.8} />
+            </a>
           )}
 
           {/* Scan direction flip (desktop) */}

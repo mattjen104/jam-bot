@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
 import { AdminNav } from "@/components/AdminNav";
-import type { StoreAuditResponse } from "@workspace/api-client-react";
+import type {
+  PlaybackHealthResponse,
+  StoreAuditResponse,
+} from "@workspace/api-client-react";
 import {
   AlertTriangle,
   Archive,
@@ -269,6 +272,8 @@ function HealthPanel({
   const [ffError, setFfError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [resolutionLatency, setResolutionLatency] = useState<ResolutionLatencyResponse | null>(null);
   const [rlError, setRlError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [playbackHealth, setPlaybackHealth] = useState<PlaybackHealthResponse | null>(null);
+  const [phError, setPhError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [spiWeb, setSpiWeb] = useState<SpinitronWebResponse | null>(null);
   const [swError, setSwError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
@@ -339,6 +344,32 @@ function HealthPanel({
           message: body.error ?? `HTTP ${rlRes.status}`,
         });
         setResolutionLatency(null);
+        return false;
+      })();
+
+      const phPromise = (async () => {
+        let response: Response;
+        try {
+          response = await fetch("/api/admin/playback-health", { headers });
+        } catch (err) {
+          setPhError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setPlaybackHealth(null);
+          return false;
+        }
+        if (response.ok) {
+          setPlaybackHealth((await response.json()) as PlaybackHealthResponse);
+          setPhError(null);
+          return true;
+        }
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setPhError({
+          kind: response.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${response.status}`,
+        });
+        setPlaybackHealth(null);
         return false;
       })();
 
@@ -431,9 +462,10 @@ function HealthPanel({
       })();
 
       try {
-        const [ffOk, rlOk, swOk, ryOk, genreOk] = await Promise.all([
+        const [ffOk, rlOk, phOk, swOk, ryOk, genreOk] = await Promise.all([
           ffPromise,
           rlPromise,
+          phPromise,
           swPromise,
           ryPromise,
           genrePromise,
@@ -441,7 +473,7 @@ function HealthPanel({
         // Only show the top-level error when every endpoint fails at once.
         // Each section already renders its own per-section banner; the shared
         // top-level banner is a last-resort "nothing works at all" indicator.
-        if (!ffOk && !rlOk && !swOk && !ryOk && !genreOk) {
+        if (!ffOk && !rlOk && !phOk && !swOk && !ryOk && !genreOk) {
           setLoadError("All health endpoints failed — check server logs");
         }
         setLastRefreshed(new Date());
@@ -464,14 +496,14 @@ function HealthPanel({
   }, [fetchAll]);
 
   const totalStale = (feedFreshness?.staleCount ?? 0) + (spiWeb?.staleCount ?? 0);
+  const playbackDegradedCount =
+    playbackHealth?.summaries.filter((summary) => summary.health === "degraded").length ?? 0;
   // "All healthy" only when both feed sections loaded without error and report no stale stations.
   const allHealthy =
     !loading &&
     !loadError &&
     !ffError &&
     !swError &&
-    !ryError &&
-    !genreError &&
     totalStale === 0;
 
   return (
@@ -599,6 +631,94 @@ function HealthPanel({
                 {resolutionLatency.stations.map((s) => (
                   <ResolutionLatencyCard key={s.stationId} station={s} />
                 ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {!loading && phError && (
+          <SectionErrorBanner
+            icon={<Radio className="h-4 w-4" />}
+            title="Listener playback"
+            kind={phError.kind}
+            message={phError.message}
+            data-testid="playback-health-error"
+          />
+        )}
+        {!loading && !phError && playbackHealth && (
+          <section className="mt-10" data-testid="playback-health-section">
+            <SectionHeading
+              icon={<Radio className="h-4 w-4" />}
+              title="Listener playback"
+              badge={playbackDegradedCount}
+              description={`Sampled tap-to-audio and recovery health. Degraded above ${formatDuration(playbackHealth.thresholds.startupP95DegradedMs)} p95 or ${(playbackHealth.thresholds.failureRateDegraded * 100).toFixed(0)}% failures.`}
+            />
+            {playbackHealth.summaries.length === 0 ? (
+              <div className="mt-4">
+                <HealthyRow
+                  label="Playback measurements"
+                  detail="Waiting for sampled listener sessions."
+                />
+              </div>
+            ) : (
+              <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-card/60">
+                <table className="w-full min-w-[680px] text-left text-sm">
+                  <thead className="border-b border-border text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-normal">Station</th>
+                      <th className="px-3 py-3 font-normal">Source</th>
+                      <th className="px-3 py-3 font-normal">Tap → audio</th>
+                      <th className="px-3 py-3 font-normal">Stalls</th>
+                      <th className="px-3 py-3 font-normal">Recovered</th>
+                      <th className="px-3 py-3 font-normal">Failures</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...playbackHealth.summaries]
+                      .sort((a, b) =>
+                        Number(b.health === "degraded") -
+                        Number(a.health === "degraded"))
+                      .map((summary) => (
+                        <tr
+                          key={`${summary.stationSlug}:${summary.transport}:${summary.format}`}
+                          className="border-b border-border/60 last:border-0"
+                        >
+                          <td className="px-4 py-3 font-mono text-foreground">
+                            {summary.stationSlug}
+                          </td>
+                          <td className="px-3 py-3 text-muted-foreground">
+                            {summary.transport} · {summary.format}
+                          </td>
+                          <td className="px-3 py-3 text-foreground">
+                            {summary.startupP50Ms === null
+                              ? "—"
+                              : `${formatDuration(summary.startupP50Ms)} p50`}
+                            {summary.startupP95Ms === null
+                              ? ""
+                              : ` · ${formatDuration(summary.startupP95Ms)} p95`}
+                          </td>
+                          <td className="px-3 py-3 text-muted-foreground">
+                            {summary.stallCount}
+                            {summary.stallP95Ms === null
+                              ? ""
+                              : ` · ${formatDuration(summary.stallP95Ms)} p95`}
+                          </td>
+                          <td className="px-3 py-3 text-muted-foreground">
+                            {summary.recoveryCount}
+                          </td>
+                          <td
+                            className={`px-3 py-3 ${
+                              summary.health === "degraded"
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {(summary.failureRate * 100).toFixed(0)}%
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>

@@ -404,6 +404,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/{slug}/playback-events:
+    post:
+      operationId: reportStationPlaybackEvent
+      tags: [stations]
+      summary: Submit one privacy-safe sampled playback event
+      description: >-
+        Unauthenticated, rate-limited telemetry for aggregate playback health.
+        The request accepts no user, session, device, IP, or client identifiers;
+        samples are retained only in bounded process memory.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaybackEventInput"
+      responses:
+        "202":
+          description: Event accepted for ephemeral aggregation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackEventReceipt"
+        "400":
+          description: Invalid event
+        "404":
+          description: Station not found
+  /admin/playback-health:
+    get:
+      operationId: getAdminPlaybackHealth
+      tags: [admin]
+      summary: Aggregated sampled playback health
+      description: >-
+        Admin-only percentile summaries of non-identifying, bounded in-memory
+        playback samples, grouped by station and source transport/format.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Playback-health summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackHealthResponse"
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
   /recordings/{mbid}:
     get:
       operationId: getRecording
@@ -5083,6 +5138,16 @@ components:
             browsers on HTTPS block those as mixed content, so the player uses
             this relay endpoint instead. Null/absent for stations that stream
             over HTTPS directly or have no stream at all.
+        playbackCandidates:
+          type: array
+          maxItems: 4
+          description: >-
+            Ordered, server-sanctioned playback sources. Derived only from the
+            station row and approved mounts; URLs with credentials, fragments,
+            or query strings are omitted. Older clients may continue using
+            streamUrl, streamFormat, and relayUrl.
+          items:
+            $ref: "#/components/schemas/PlaybackCandidate"
         stationCategories:
           type: array
           items:
@@ -5108,6 +5173,65 @@ components:
         - clickcount
         - upcomingShowCount
         - stationCategories
+    PlaybackCandidate:
+      type: object
+      properties:
+        url: { type: string }
+        role: { type: string, enum: [primary, relay, alternate] }
+        transport: { type: string, enum: [https, http, relay] }
+        format: { type: string, enum: [aac, mp3, hls, flac, unknown] }
+        healthHint: { type: string, enum: [healthy, degraded, unknown] }
+      required: [url, role, transport, format, healthHint]
+    PlaybackEventInput:
+      type: object
+      additionalProperties: false
+      required: [transport, format, event]
+      properties:
+        transport: { type: string, enum: [https, http, relay] }
+        format: { type: string, enum: [aac, mp3, hls, flac, unknown] }
+        event: { type: string, enum: [playing, startup_failure, stall, recovered, terminal_failure] }
+        startupMs: { type: integer, minimum: 0, maximum: 120000 }
+        stallMs: { type: integer, minimum: 0, maximum: 120000 }
+    PlaybackEventReceipt:
+      type: object
+      properties:
+        accepted: { type: boolean }
+      required: [accepted]
+    PlaybackHealthSummary:
+      type: object
+      properties:
+        stationSlug: { type: string }
+        transport: { type: string, enum: [https, http, relay] }
+        format: { type: string, enum: [aac, mp3, hls, flac, unknown] }
+        sampleCount: { type: integer }
+        startupP50Ms: { type: [integer, "null"] }
+        startupP95Ms: { type: [integer, "null"] }
+        stallP50Ms: { type: [integer, "null"] }
+        stallP95Ms: { type: [integer, "null"] }
+        playingCount: { type: integer }
+        startupFailureCount: { type: integer }
+        stallCount: { type: integer }
+        recoveryCount: { type: integer }
+        terminalFailureCount: { type: integer }
+        failureRate: { type: number }
+        health: { type: string, enum: [healthy, degraded] }
+      required: [stationSlug, transport, format, sampleCount, startupP50Ms, startupP95Ms, stallP50Ms, stallP95Ms, playingCount, startupFailureCount, stallCount, recoveryCount, terminalFailureCount, failureRate, health]
+    PlaybackHealthThresholds:
+      type: object
+      properties:
+        startupP95DegradedMs: { type: integer }
+        failureRateDegraded: { type: number }
+        sampleLimit: { type: integer }
+      required: [startupP95DegradedMs, failureRateDegraded, sampleLimit]
+    PlaybackHealthResponse:
+      type: object
+      properties:
+        monitoringSince: { type: string, format: date-time }
+        thresholds: { $ref: "#/components/schemas/PlaybackHealthThresholds" }
+        summaries:
+          type: array
+          items: { $ref: "#/components/schemas/PlaybackHealthSummary" }
+      required: [monitoringSince, thresholds, summaries]
     StationList:
       type: object
       properties:

@@ -8,6 +8,7 @@ import {
 import { eq, and, sql, type SQLWrapper } from "drizzle-orm";
 import { eligibleDjName } from "@workspace/lore-attribution";
 import { isRelayAllowed, relayUrlPath } from "../../lore/stream-relay.js";
+import { playbackCandidatesForStation } from "../../lore/playback-candidates.js";
 import { classifyFreshness } from "../../lore/freshness.js";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
@@ -303,6 +304,7 @@ export function toStation(
       isRelayAllowed(s.slug) && s.streamUrl?.startsWith("http://")
         ? relayUrlPath(s.slug)
         : null,
+    playbackCandidates: playbackCandidatesForStation(s),
     stationCategories: deriveStationCategories(s, qualityTier),
   };
 }

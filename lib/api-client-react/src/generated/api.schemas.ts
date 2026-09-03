@@ -508,6 +508,52 @@ export const StationAutomationClass = {
   human: "human",
 } as const;
 
+export type PlaybackCandidateRole =
+  (typeof PlaybackCandidateRole)[keyof typeof PlaybackCandidateRole];
+
+export const PlaybackCandidateRole = {
+  primary: "primary",
+  relay: "relay",
+  alternate: "alternate",
+} as const;
+
+export type PlaybackCandidateTransport =
+  (typeof PlaybackCandidateTransport)[keyof typeof PlaybackCandidateTransport];
+
+export const PlaybackCandidateTransport = {
+  https: "https",
+  http: "http",
+  relay: "relay",
+} as const;
+
+export type PlaybackCandidateFormat =
+  (typeof PlaybackCandidateFormat)[keyof typeof PlaybackCandidateFormat];
+
+export const PlaybackCandidateFormat = {
+  aac: "aac",
+  mp3: "mp3",
+  hls: "hls",
+  flac: "flac",
+  unknown: "unknown",
+} as const;
+
+export type PlaybackCandidateHealthHint =
+  (typeof PlaybackCandidateHealthHint)[keyof typeof PlaybackCandidateHealthHint];
+
+export const PlaybackCandidateHealthHint = {
+  healthy: "healthy",
+  degraded: "degraded",
+  unknown: "unknown",
+} as const;
+
+export interface PlaybackCandidate {
+  url: string;
+  role: PlaybackCandidateRole;
+  transport: PlaybackCandidateTransport;
+  format: PlaybackCandidateFormat;
+  healthHint: PlaybackCandidateHealthHint;
+}
+
 /**
  * A curated radio station in the public directory.
  */
@@ -583,8 +629,126 @@ export interface Station {
    * @nullable
    */
   relayUrl?: string | null;
+  /**
+   * Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.
+   * @maxItems 4
+   */
+  playbackCandidates?: PlaybackCandidate[];
   /** Safe, non-secret category labels derived from the station's metadata. Possible values: "spinitron" (now-playing comes from Spinitron or the Spinitron web adapter), "college" (confirmed campus/college station), "longtail" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values. */
   stationCategories: string[];
+}
+
+export type PlaybackEventInputTransport =
+  (typeof PlaybackEventInputTransport)[keyof typeof PlaybackEventInputTransport];
+
+export const PlaybackEventInputTransport = {
+  https: "https",
+  http: "http",
+  relay: "relay",
+} as const;
+
+export type PlaybackEventInputFormat =
+  (typeof PlaybackEventInputFormat)[keyof typeof PlaybackEventInputFormat];
+
+export const PlaybackEventInputFormat = {
+  aac: "aac",
+  mp3: "mp3",
+  hls: "hls",
+  flac: "flac",
+  unknown: "unknown",
+} as const;
+
+export type PlaybackEventInputEvent =
+  (typeof PlaybackEventInputEvent)[keyof typeof PlaybackEventInputEvent];
+
+export const PlaybackEventInputEvent = {
+  playing: "playing",
+  startup_failure: "startup_failure",
+  stall: "stall",
+  recovered: "recovered",
+  terminal_failure: "terminal_failure",
+} as const;
+
+export interface PlaybackEventInput {
+  transport: PlaybackEventInputTransport;
+  format: PlaybackEventInputFormat;
+  event: PlaybackEventInputEvent;
+  /**
+   * @minimum 0
+   * @maximum 120000
+   */
+  startupMs?: number;
+  /**
+   * @minimum 0
+   * @maximum 120000
+   */
+  stallMs?: number;
+}
+
+export interface PlaybackEventReceipt {
+  accepted: boolean;
+}
+
+export type PlaybackHealthSummaryTransport =
+  (typeof PlaybackHealthSummaryTransport)[keyof typeof PlaybackHealthSummaryTransport];
+
+export const PlaybackHealthSummaryTransport = {
+  https: "https",
+  http: "http",
+  relay: "relay",
+} as const;
+
+export type PlaybackHealthSummaryFormat =
+  (typeof PlaybackHealthSummaryFormat)[keyof typeof PlaybackHealthSummaryFormat];
+
+export const PlaybackHealthSummaryFormat = {
+  aac: "aac",
+  mp3: "mp3",
+  hls: "hls",
+  flac: "flac",
+  unknown: "unknown",
+} as const;
+
+export type PlaybackHealthSummaryHealth =
+  (typeof PlaybackHealthSummaryHealth)[keyof typeof PlaybackHealthSummaryHealth];
+
+export const PlaybackHealthSummaryHealth = {
+  healthy: "healthy",
+  degraded: "degraded",
+} as const;
+
+export interface PlaybackHealthSummary {
+  stationSlug: string;
+  transport: PlaybackHealthSummaryTransport;
+  format: PlaybackHealthSummaryFormat;
+  sampleCount: number;
+  /** @nullable */
+  startupP50Ms: number | null;
+  /** @nullable */
+  startupP95Ms: number | null;
+  /** @nullable */
+  stallP50Ms: number | null;
+  /** @nullable */
+  stallP95Ms: number | null;
+  playingCount: number;
+  startupFailureCount: number;
+  stallCount: number;
+  recoveryCount: number;
+  terminalFailureCount: number;
+  failureRate: number;
+  health: PlaybackHealthSummaryHealth;
+}
+
+export interface PlaybackHealthThresholds {
+  startupP95DegradedMs: number;
+  failureRateDegraded: number;
+  sampleLimit: number;
+}
+
+export interface PlaybackHealthResponse {
+  monitoringSince: string;
+  thresholds: PlaybackHealthThresholds;
+  summaries: PlaybackHealthSummary[];
 }
 
 export interface StationList {

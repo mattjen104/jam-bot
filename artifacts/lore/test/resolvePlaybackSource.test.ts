@@ -49,11 +49,9 @@ describe("resolvePlaybackSource", () => {
     expect(resolvePlaybackSource(s)).toBe("/api/stations/test/relay");
   });
 
-  it("falls back to the raw HTTP stream when no relay exists", () => {
-    // Non-allowlisted HTTP station: the browser may block it as mixed
-    // content, but there is nothing better to try.
+  it("does not expose a raw HTTP stream when no relay exists", () => {
     const s = station({ streamUrl: "http://icecast.example.org:8000/stream" });
-    expect(resolvePlaybackSource(s)).toBe("http://icecast.example.org:8000/stream");
+    expect(resolvePlaybackSource(s)).toBeNull();
   });
 
   it("uses the relay when there is no direct stream at all", () => {

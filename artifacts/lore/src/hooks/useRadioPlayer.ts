@@ -1,277 +1,754 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Station } from "@workspace/api-client-react";
+import {
+  resolvePlaybackCandidates,
+  type PlaybackCandidate,
+} from "./radioPlaybackSources";
 
-export type PlayerStatus = "idle" | "loading" | "playing" | "paused" | "error";
+export {
+  resolvePlaybackCandidates,
+  resolvePlaybackSource,
+  type PlaybackCandidate,
+} from "./radioPlaybackSources";
+
+export type PlayerStatus =
+  | "idle"
+  | "loading"
+  | "playing"
+  | "paused"
+  | "reconnecting"
+  | "recovering"
+  | "error";
 
 interface PlayerState {
   status: PlayerStatus;
   station: Station | null;
   volume: number;
   error: string | null;
+  candidateIndex: number;
+  retryAttempt: number;
 }
 
-/**
- * Resolve the audio source for a station. Direct HTTPS streams play as-is.
- * Plain-HTTP streams are blocked as mixed content when Lore is served over
- * HTTPS, so allowlisted stations carry a server-side `relayUrl` — a same-origin
- * path that relays the upstream bytes (audio unchanged, ICY headers passed
- * through). Returns null when the station has no playable source at all.
- */
-export function resolvePlaybackSource(station: Station): string | null {
-  const direct = station.streamUrl;
-  const relay = station.relayUrl ?? null;
-  if (direct) {
-    // A plain-HTTP stream can't be fetched from an HTTPS page; use the relay
-    // when one exists. (When Lore itself runs over plain HTTP — local dev —
-    // the relay still works, so preferring it for http:// sources is safe.)
-    if (direct.startsWith("http://") && relay) return relay;
-    return direct;
-  }
-  return relay;
+type PlaybackMetricEvent =
+  | "playing"
+  | "startup_failure"
+  | "stall"
+  | "recovered"
+  | "terminal_failure";
+
+type FailureReason =
+  | "media_error"
+  | "ended"
+  | "startup_timeout"
+  | "stall_timeout"
+  | "play_rejected"
+  | "hls_network"
+  | "hls_media"
+  | "hls_fatal";
+
+type AttemptReason =
+  | "initial"
+  | "retry"
+  | "alternate"
+  | "lifecycle"
+  | "resume";
+
+interface HlsController {
+  destroy(): void;
+  loadSource(source: string): void;
+  attachMedia(el: HTMLMediaElement): void;
+  startLoad?: () => void;
+  recoverMediaError?: () => void;
+  on?: (
+    event: string,
+    callback: (event: string, data: {
+      fatal?: boolean;
+      type?: string;
+    }) => void,
+  ) => void;
 }
 
+const STARTUP_TIMEOUT_MS = 8_000;
+const STALL_TIMEOUT_MS = 10_000;
+const LIFECYCLE_RECOVERY_COOLDOWN_MS = 5_000;
+const MAX_SAME_SOURCE_RETRIES = 1;
+const MAX_CANDIDATES = 2;
+const METRIC_SAMPLE_RATE = 0.25;
+const DUCK_VOLUME = 0.15;
+
 /**
- * Plays a station's sanctioned live stream URL, unmodified. Audio is never
- * re-encoded — the browser fetches the origin stream directly, except for
- * allowlisted HTTP-only stations, which route through the same-origin HTTPS
- * relay (see resolvePlaybackSource). Falls back to hls.js only for `.m3u8`
- * streams on browsers without native HLS.
+ * Bounded live-radio player. A listener gesture starts one primary source,
+ * allows one same-source retry, then at most one sanctioned alternate.
  */
 export function useRadioPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const hlsRef = useRef<unknown>(null);
-  // Non-null while the live stream is ducked (see duck()/restoreDuck()); holds
-  // the volume to restore. setVolume during a duck retargets this instead of
-  // the live element, so the user's change survives the restore.
+  const hlsRef = useRef<HlsController | null>(null);
   const savedVolumeRef = useRef<number | null>(null);
-  const [state, setState] = useState<PlayerState>({
+  const generationRef = useRef(0);
+  const intentRef = useRef<"playing" | "paused" | "stopped">("stopped");
+  const stationRef = useRef<Station | null>(null);
+  const candidatesRef = useRef<PlaybackCandidate[]>([]);
+  const candidateIndexRef = useRef(0);
+  const retryCountRef = useRef(0);
+  const hasPlayedRef = useRef(false);
+  const sampledRef = useRef(false);
+  const intentStartedAtRef = useRef<number | null>(null);
+  const startupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLifecycleRecoveryRef = useRef(0);
+  const stallStartedAtRef = useRef<number | null>(null);
+  const failureHandlingRef = useRef(false);
+  const stateRef = useRef<PlayerState>({
     status: "idle",
     station: null,
     volume: 0.85,
     error: null,
+    candidateIndex: 0,
+    retryAttempt: 0,
   });
+  const attemptRef = useRef<
+    (station: Station, candidateIndex: number, reason: AttemptReason) => void
+  >(() => {});
+  const failureRef = useRef<(reason: FailureReason) => void>(() => {});
 
-  // Lazily create the HTMLAudioElement outside render (effects and event
-  // handlers only) so ref writes stay out of the render phase. Every playback
-  // entry point calls this instead of reading audioRef directly, so a user
-  // gesture that fires before the mount effect still gets a live element.
-  const ensureAudio = useCallback((): HTMLAudioElement | null => {
-    if (audioRef.current === null && typeof Audio !== "undefined") {
-      const el = new Audio();
-      el.preload = "none";
-      audioRef.current = el;
-    }
-    return audioRef.current;
+  const [state, setStateRaw] = useState<PlayerState>(() => ({
+    status: "idle",
+    station: null,
+    volume: 0.85,
+    error: null,
+    candidateIndex: 0,
+    retryAttempt: 0,
+  }));
+  const setState = useCallback(
+    (updater: (current: PlayerState) => PlayerState) => {
+      setStateRaw((current) => {
+        const next = updater(current);
+        stateRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
+
+  const clearTimers = useCallback(() => {
+    if (startupTimerRef.current) clearTimeout(startupTimerRef.current);
+    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    startupTimerRef.current = null;
+    stallTimerRef.current = null;
+    retryTimerRef.current = null;
   }, []);
 
-  useEffect(() => {
-    const el = ensureAudio();
-    if (!el) return;
-    // While ducked, the element stays at DUCK_VOLUME — state.volume is the
-    // user's preferred (restore) level, applied by restoreDuck() instead.
-    if (savedVolumeRef.current === null) el.volume = state.volume;
-    const onPlaying = () =>
-      setState((s) => ({ ...s, status: "playing", error: null }));
-    const onWaiting = () => setState((s) => ({ ...s, status: "loading" }));
-    const onPause = () =>
-      setState((s) =>
-        s.status === "idle" ? s : { ...s, status: "paused" },
-      );
-    const onError = () =>
-      setState((s) => ({
-        ...s,
-        status: "error",
-        error: "This stream could not be reached. Try again shortly.",
-      }));
-    el.addEventListener("playing", onPlaying);
-    el.addEventListener("waiting", onWaiting);
-    el.addEventListener("pause", onPause);
-    el.addEventListener("error", onError);
-    return () => {
-      el.removeEventListener("playing", onPlaying);
-      el.removeEventListener("waiting", onWaiting);
-      el.removeEventListener("pause", onPause);
-      el.removeEventListener("error", onError);
-    };
-  }, [state.volume, ensureAudio]);
-
   const teardownHls = useCallback(() => {
-    const hls = hlsRef.current as { destroy?: () => void } | null;
-    if (hls && typeof hls.destroy === "function") hls.destroy();
+    hlsRef.current?.destroy();
     hlsRef.current = null;
   }, []);
 
+  const emitMetric = useCallback(
+    (
+      event: PlaybackMetricEvent,
+      candidate: PlaybackCandidate | undefined,
+      startupMs?: number,
+      stallMs?: number,
+    ) => {
+      const station = stationRef.current;
+      if (
+        !sampledRef.current ||
+        !station ||
+        !candidate ||
+        typeof fetch !== "function"
+      ) {
+        return;
+      }
+      const body = {
+        event,
+        transport: candidate.transport,
+        format: candidate.format,
+        ...(typeof startupMs === "number"
+          ? { startupMs: Math.max(0, Math.round(startupMs)) }
+          : {}),
+        ...(typeof stallMs === "number"
+          ? { stallMs: Math.max(0, Math.round(stallMs)) }
+          : {}),
+      };
+      void fetch(
+        `/api/stations/${encodeURIComponent(station.slug)}/playback-events`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+          keepalive: true,
+        },
+      ).catch(() => undefined);
+    },
+    [],
+  );
+
+  const removeCurrentSource = useCallback(
+    (el: HTMLAudioElement) => {
+      teardownHls();
+      if (!el.paused) el.pause();
+      el.removeAttribute("src");
+      el.load();
+    },
+    [teardownHls],
+  );
+
+  const armStartupDeadline = useCallback(
+    (generation: number) => {
+      if (startupTimerRef.current) clearTimeout(startupTimerRef.current);
+      startupTimerRef.current = setTimeout(() => {
+        if (generationRef.current !== generation || intentRef.current !== "playing") {
+          return;
+        }
+        failureRef.current("startup_timeout");
+      }, STARTUP_TIMEOUT_MS);
+    },
+    [],
+  );
+
+  const markStall = useCallback(
+    (candidate: PlaybackCandidate, generation: number) => {
+      if (stallStartedAtRef.current === null) {
+        stallStartedAtRef.current = performance.now();
+        emitMetric("stall", candidate);
+      }
+      setState((current) => ({
+        ...current,
+        status: "reconnecting",
+        error: null,
+      }));
+      if (stallTimerRef.current) return;
+      stallTimerRef.current = setTimeout(() => {
+        stallTimerRef.current = null;
+        if (
+          generationRef.current === generation &&
+          intentRef.current === "playing"
+        ) {
+          failureRef.current("stall_timeout");
+        }
+      }, STALL_TIMEOUT_MS);
+    },
+    [emitMetric, setState],
+  );
+
   const attachSource = useCallback(
-    async (el: HTMLAudioElement, station: Station, source: string) => {
+    async (
+      el: HTMLAudioElement,
+      candidate: PlaybackCandidate,
+      generation: number,
+    ) => {
       teardownHls();
       const isHls =
-        station.streamFormat === "hls" ||
-        source.toLowerCase().includes(".m3u8");
+        candidate.format === "hls" ||
+        candidate.url.toLowerCase().includes(".m3u8");
       const canNativeHls =
         el.canPlayType("application/vnd.apple.mpegurl") !== "";
 
       if (isHls && !canNativeHls) {
         const Hls = (await import("hls.js")).default;
+        if (generationRef.current !== generation) return;
         if (Hls.isSupported()) {
           const hls = new Hls({
             enableWorker: true,
-            maxBufferLength: 8,  // live edge reachable faster (default: 30s)
-            backBufferLength: 0, // no back-buffer needed for live radio
+            lowLatencyMode: true,
+            liveSyncDurationCount: 2,
+            liveMaxLatencyDurationCount: 5,
+            maxBufferLength: 6,
+            maxMaxBufferLength: 10,
+            backBufferLength: 0,
+            maxBufferHole: 0.5,
+          }) as HlsController;
+          let networkRecoveries = 0;
+          let mediaRecoveries = 0;
+          const errorEvent = Hls.Events?.ERROR ?? "hlsError";
+          hls.on?.(errorEvent, (_event, data) => {
+            if (
+              !data.fatal ||
+              generationRef.current !== generation ||
+              intentRef.current !== "playing"
+            ) {
+              return;
+            }
+            const type = String(data.type ?? "");
+            if (/network/i.test(type) && networkRecoveries < 1 && hls.startLoad) {
+              networkRecoveries++;
+              if (hasPlayedRef.current) {
+                markStall(candidate, generation);
+              } else {
+                setState((current) => ({
+                  ...current,
+                  status: "reconnecting",
+                  error: null,
+                }));
+              }
+              hls.startLoad();
+              if (!hasPlayedRef.current) armStartupDeadline(generation);
+              return;
+            }
+            if (/media/i.test(type) && mediaRecoveries < 1 && hls.recoverMediaError) {
+              mediaRecoveries++;
+              if (hasPlayedRef.current) {
+                markStall(candidate, generation);
+              } else {
+                setState((current) => ({
+                  ...current,
+                  status: "reconnecting",
+                  error: null,
+                }));
+              }
+              hls.recoverMediaError();
+              if (!hasPlayedRef.current) armStartupDeadline(generation);
+              return;
+            }
+            failureRef.current("hls_fatal");
           });
-          hls.loadSource(source);
+          hls.loadSource(candidate.url);
           hls.attachMedia(el);
           hlsRef.current = hls;
           return;
         }
       }
-      el.src = source;
+      el.src = candidate.url;
     },
-    [teardownHls],
+    [armStartupDeadline, markStall, setState, teardownHls],
   );
+
+  const beginAttempt = useCallback(
+    (
+      station: Station,
+      candidateIndex: number,
+      reason: AttemptReason,
+    ) => {
+      const candidate = candidatesRef.current[candidateIndex];
+      if (
+        typeof Audio === "undefined" ||
+        !candidate ||
+        intentRef.current !== "playing"
+      ) {
+        return;
+      }
+
+      const generation = ++generationRef.current;
+      failureHandlingRef.current = false;
+      clearTimers();
+      const previous = audioRef.current;
+      if (previous) removeCurrentSource(previous);
+      const el = new Audio();
+      el.preload = "none";
+      el.volume =
+        savedVolumeRef.current === null ? stateRef.current.volume : DUCK_VOLUME;
+      audioRef.current = el;
+      candidateIndexRef.current = candidateIndex;
+      const status: PlayerStatus =
+        reason === "initial"
+          ? "loading"
+          : reason === "alternate"
+            ? "recovering"
+            : "reconnecting";
+      setState((current) => ({
+        ...current,
+        status,
+        station,
+        error: null,
+        candidateIndex,
+        retryAttempt: retryCountRef.current,
+      }));
+
+      const isCurrentAttempt = () =>
+        generationRef.current === generation &&
+        audioRef.current === el &&
+        intentRef.current === "playing";
+      const onPlaying = () => {
+        if (!isCurrentAttempt()) return;
+        clearTimers();
+        failureHandlingRef.current = false;
+        const wasRecovering =
+          stateRef.current.status === "reconnecting" ||
+          stateRef.current.status === "recovering";
+        const hadPlayed = hasPlayedRef.current;
+        hasPlayedRef.current = true;
+        setState((current) => ({
+          ...current,
+          status: "playing",
+          error: null,
+          retryAttempt: 0,
+        }));
+        const startedAt = intentStartedAtRef.current;
+        if (!hadPlayed) {
+          emitMetric(
+            "playing",
+            candidate,
+            startedAt === null ? undefined : performance.now() - startedAt,
+          );
+        } else if (wasRecovering && reason !== "resume") {
+          const stalledAt = stallStartedAtRef.current;
+          emitMetric(
+            "recovered",
+            candidate,
+            undefined,
+            stalledAt === null ? undefined : performance.now() - stalledAt,
+          );
+        }
+        stallStartedAtRef.current = null;
+        intentStartedAtRef.current = null;
+      };
+      const onWaiting = () => {
+        if (!isCurrentAttempt() || !hasPlayedRef.current) return;
+        markStall(candidate, generation);
+      };
+      const onError = () => {
+        if (isCurrentAttempt()) failureRef.current("media_error");
+      };
+      const onEnded = () => {
+        if (isCurrentAttempt()) failureRef.current("ended");
+      };
+      el.addEventListener("playing", onPlaying);
+      el.addEventListener("waiting", onWaiting);
+      el.addEventListener("stalled", onWaiting);
+      el.addEventListener("error", onError);
+      el.addEventListener("ended", onEnded);
+
+      armStartupDeadline(generation);
+      void attachSource(el, candidate, generation)
+        .then(() => {
+          if (
+            generationRef.current !== generation ||
+            intentRef.current !== "playing"
+          ) {
+            return;
+          }
+          el.load();
+          return el.play();
+        })
+        .catch(() => {
+          if (generationRef.current === generation) {
+            failureRef.current("play_rejected");
+          }
+        });
+    },
+    [
+      armStartupDeadline,
+      attachSource,
+      clearTimers,
+      emitMetric,
+      markStall,
+      removeCurrentSource,
+      setState,
+    ],
+  );
+  useEffect(() => {
+    attemptRef.current = beginAttempt;
+  }, [beginAttempt]);
+
+  const handleFailure = useCallback(
+    (_reason: FailureReason) => {
+      if (
+        intentRef.current !== "playing" ||
+        failureHandlingRef.current
+      ) {
+        return;
+      }
+      const station = stationRef.current;
+      const candidate = candidatesRef.current[candidateIndexRef.current];
+      if (!station || !candidate) return;
+      failureHandlingRef.current = true;
+
+      ++generationRef.current;
+      clearTimers();
+      const el = audioRef.current;
+      if (el) removeCurrentSource(el);
+      if (!hasPlayedRef.current) {
+        emitMetric("startup_failure", candidate);
+      } else if (stallStartedAtRef.current === null) {
+        stallStartedAtRef.current = performance.now();
+        emitMetric("stall", candidate);
+      }
+
+      if (retryCountRef.current < MAX_SAME_SOURCE_RETRIES) {
+        retryCountRef.current++;
+        setState((current) => ({
+          ...current,
+          status: "reconnecting",
+          error: null,
+          retryAttempt: retryCountRef.current,
+        }));
+        const delay = 250 + Math.floor(Math.random() * 500);
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          attemptRef.current(station, candidateIndexRef.current, "retry");
+        }, delay);
+        return;
+      }
+
+      const nextIndex = candidateIndexRef.current + 1;
+      if (
+        nextIndex < candidatesRef.current.length &&
+        nextIndex < MAX_CANDIDATES
+      ) {
+        retryCountRef.current = 0;
+        setState((current) => ({
+          ...current,
+          status: "recovering",
+          error: null,
+          candidateIndex: nextIndex,
+          retryAttempt: 0,
+        }));
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          attemptRef.current(station, nextIndex, "alternate");
+        }, 150);
+        return;
+      }
+
+      setState((current) => ({
+        ...current,
+        status: "error",
+        error:
+          "This stream is unavailable. Retry here or listen on the station site.",
+      }));
+      emitMetric("terminal_failure", candidate);
+    },
+    [clearTimers, emitMetric, removeCurrentSource, setState],
+  );
+  useEffect(() => {
+    failureRef.current = handleFailure;
+  }, [handleFailure]);
 
   const play = useCallback(
     async (station: Station) => {
-      const el = ensureAudio();
-      if (!el) return;
-      const source = resolvePlaybackSource(station);
-      if (!source) {
-        setState((s) => ({
-          ...s,
+      ++generationRef.current;
+      clearTimers();
+      const previous = audioRef.current;
+      if (previous) removeCurrentSource(previous);
+      audioRef.current = null;
+      const candidates = resolvePlaybackCandidates(station);
+      stationRef.current = station;
+      candidatesRef.current = candidates;
+      candidateIndexRef.current = 0;
+      retryCountRef.current = 0;
+      hasPlayedRef.current = false;
+      stallStartedAtRef.current = null;
+      sampledRef.current = Math.random() < METRIC_SAMPLE_RATE;
+      intentStartedAtRef.current = performance.now();
+      intentRef.current = "playing";
+
+      if (candidates.length === 0) {
+        setState((current) => ({
+          ...current,
           status: "error",
           station,
           error: "This station has no live stream configured.",
         }));
         return;
       }
-      setState((s) => ({ ...s, status: "loading", station, error: null }));
-      try {
-        await attachSource(el, station, source);
-        el.load();
-        await el.play();
-      } catch {
-        setState((s) => ({
-          ...s,
-          status: "error",
-          error: "Playback was blocked or the stream is offline.",
-        }));
-      }
+      attemptRef.current(station, 0, "initial");
     },
-    [attachSource, ensureAudio],
+    [clearTimers, removeCurrentSource, setState],
   );
+
+  const pause = useCallback(() => {
+    intentRef.current = "paused";
+    ++generationRef.current;
+    clearTimers();
+    const el = audioRef.current;
+    if (el && !el.paused) el.pause();
+    stallStartedAtRef.current = null;
+    setState((current) =>
+      current.status === "idle"
+        ? current
+        : { ...current, status: "paused", error: null },
+    );
+  }, [clearTimers, setState]);
+
+  const retry = useCallback(() => {
+    const station = stationRef.current;
+    if (!station) return;
+    intentRef.current = "playing";
+    sampledRef.current = Math.random() < METRIC_SAMPLE_RATE;
+    intentStartedAtRef.current = performance.now();
+    hasPlayedRef.current = false;
+    stallStartedAtRef.current = null;
+    retryCountRef.current = 0;
+    candidateIndexRef.current = 0;
+    attemptRef.current(station, 0, "initial");
+  }, []);
+
+  const resume = useCallback(() => {
+    const station = stationRef.current;
+    if (!station) return;
+    intentRef.current = "playing";
+    intentStartedAtRef.current = null;
+    retryCountRef.current = 0;
+    attemptRef.current(station, candidateIndexRef.current, "resume");
+  }, []);
 
   const toggle = useCallback(
     async (station: Station) => {
-      const el = ensureAudio();
-      if (!el) return;
-      const isCurrent = state.station?.slug === station.slug;
-      if (isCurrent && state.status === "playing") {
-        el.pause();
+      const isCurrent = stationRef.current?.slug === station.slug;
+      const status = stateRef.current.status;
+      if (
+        isCurrent &&
+        (status === "playing" ||
+          status === "loading" ||
+          status === "reconnecting" ||
+          status === "recovering")
+      ) {
+        pause();
         return;
       }
-      if (isCurrent && (state.status === "paused" || state.status === "error")) {
-        try {
-          await el.play();
-        } catch {
-          await play(station);
-        }
+      if (isCurrent && status === "paused") {
+        resume();
+        return;
+      }
+      if (isCurrent && status === "error") {
+        retry();
         return;
       }
       await play(station);
     },
-    [play, ensureAudio, state.station?.slug, state.status],
+    [pause, play, resume, retry],
   );
 
   const stop = useCallback(() => {
+    intentRef.current = "stopped";
+    stationRef.current = null;
+    candidatesRef.current = [];
+    ++generationRef.current;
+    clearTimers();
     const el = audioRef.current;
-    if (el) {
-      el.pause();
-      el.removeAttribute("src");
-      el.load();
-    }
-    teardownHls();
-    setState((s) => ({ ...s, status: "idle", station: null }));
-  }, [teardownHls]);
+    if (el) removeCurrentSource(el);
+    setState((current) => ({
+      ...current,
+      status: "idle",
+      station: null,
+      error: null,
+      candidateIndex: 0,
+      retryAttempt: 0,
+    }));
+  }, [clearTimers, removeCurrentSource, setState]);
 
-  /**
-   * Pause the live stream without tearing it down — used when the ride takes
-   * over audio so the listener can resume the same station afterwards.
-   */
-  const pause = useCallback(() => {
-    const el = audioRef.current;
-    if (el && !el.paused) el.pause();
-  }, []);
-
-  /**
-   * Resume a previously paused stream without changing the source. Used when
-   * a service-ride falls back to the broadcast for one track.
-   */
-  const resume = useCallback(() => {
-    const el = audioRef.current;
-    if (el && el.paused && el.src) {
-      void el.play().catch(() => {});
-    }
-  }, []);
-
-  /**
-   * Temporarily lower the live-stream volume to a background level so an
-   * iTunes preview can play over it without stopping the stream.
-   *
-   * Stores the current `state.volume` in a ref so `setVolume` calls during a
-   * duck still update the saved restore target (user-visible volume is
-   * preserved).  The audio element itself is set to DUCK_VOLUME; `state.volume`
-   * is NOT changed, so the UI volume knob shows the real value throughout.
-   */
-  const DUCK_VOLUME = 0.15;
+  useEffect(() => {
+    const recoverIfNeeded = () => {
+      if (
+        intentRef.current !== "playing" ||
+        !stationRef.current ||
+        !hasPlayedRef.current
+      ) {
+        return;
+      }
+      const now = Date.now();
+      if (
+        now - lastLifecycleRecoveryRef.current <
+        LIFECYCLE_RECOVERY_COOLDOWN_MS
+      ) {
+        return;
+      }
+      const el = audioRef.current;
+      if (
+        stateRef.current.status === "playing" &&
+        el &&
+        !el.paused &&
+        !el.error
+      ) {
+        return;
+      }
+      lastLifecycleRecoveryRef.current = now;
+      retryCountRef.current = 0;
+      attemptRef.current(
+        stationRef.current,
+        candidateIndexRef.current,
+        "lifecycle",
+      );
+    };
+    const onOnline = () => recoverIfNeeded();
+    const onPageShow = () => recoverIfNeeded();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") recoverIfNeeded();
+    };
+    const onOffline = () => {
+      if (intentRef.current !== "playing") return;
+      ++generationRef.current;
+      clearTimers();
+      const candidate = candidatesRef.current[candidateIndexRef.current];
+      if (
+        candidate &&
+        hasPlayedRef.current &&
+        stallStartedAtRef.current === null
+      ) {
+        stallStartedAtRef.current = performance.now();
+        emitMetric("stall", candidate);
+      }
+      setState((current) => ({
+        ...current,
+        status: "reconnecting",
+        error: null,
+      }));
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [clearTimers, emitMetric, setState]);
 
   const duck = useCallback(() => {
     const el = audioRef.current;
-    if (!el) return;
-    // Only duck once; a second call while already ducked is a no-op.
-    if (savedVolumeRef.current !== null) return;
+    if (!el || savedVolumeRef.current !== null) return;
     savedVolumeRef.current = el.volume;
     el.volume = DUCK_VOLUME;
   }, []);
 
-  /**
-   * Restore the stream volume that was in effect before `duck()` was called.
-   * Uses the saved ref value so intermediate `setVolume` calls during the duck
-   * are honoured on restore.  No-op if duck was never called.
-   */
   const restoreDuck = useCallback(() => {
     const el = audioRef.current;
     if (savedVolumeRef.current === null) return;
-    // savedVolumeRef holds the restore target: the pre-duck volume, or the
-    // user's newer preference if setVolume was called during the duck
-    // (setVolumeWithDuck retargets the ref while ducked).
     const target = savedVolumeRef.current;
     savedVolumeRef.current = null;
     if (el) el.volume = target;
   }, []);
 
-  // Override setVolume: when ducked, update the saved-volume target too so
-  // the user's new preference is the value restored on restoreDuck.
-  const setVolumeWithDuck = useCallback((v: number) => {
-    const el = audioRef.current;
-    if (el) {
-      if (savedVolumeRef.current !== null) {
-        // Currently ducked — update saved target and keep element ducked.
-        savedVolumeRef.current = v;
-      } else {
-        el.volume = v;
+  const setVolumeWithDuck = useCallback(
+    (volume: number) => {
+      const el = audioRef.current;
+      if (el) {
+        if (savedVolumeRef.current !== null) {
+          savedVolumeRef.current = volume;
+        } else {
+          el.volume = volume;
+        }
       }
-    }
-    setState((s) => ({ ...s, volume: v }));
-  }, []);
+      setState((current) => ({ ...current, volume }));
+    },
+    [setState],
+  );
 
-  useEffect(() => () => teardownHls(), [teardownHls]);
+  useEffect(
+    () => () => {
+      intentRef.current = "stopped";
+      ++generationRef.current;
+      clearTimers();
+      const el = audioRef.current;
+      if (el) removeCurrentSource(el);
+    },
+    [clearTimers, removeCurrentSource],
+  );
 
   return {
     status: state.status,
     station: state.station,
     volume: state.volume,
     error: state.error,
+    candidateIndex: state.candidateIndex,
+    retryAttempt: state.retryAttempt,
     play,
     toggle,
+    retry,
     stop,
     pause,
     resume,

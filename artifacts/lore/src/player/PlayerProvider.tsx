@@ -206,6 +206,8 @@ interface RadioApi {
   station: Station | null;
   volume: number;
   error: string | null;
+  /** Retry the live broadcast from its primary sanctioned source. */
+  retry: () => void;
   /** Live casting state — non-"off" only when a Spotify device is pinned. */
   casting: RadioCastStatus;
   /** Why the cast fell back — null unless casting === "fallback". */
@@ -3436,6 +3438,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         station: radio.station,
         volume: radio.volume,
         error: radio.error,
+        retry: radio.retry,
         casting: castStatus,
         castFallbackReason,
         castPaused,
@@ -3524,6 +3527,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.station,
       radio.volume,
       radio.error,
+      radio.retry,
       radio.setVolume,
       radio.duck,
       radio.restoreDuck,
