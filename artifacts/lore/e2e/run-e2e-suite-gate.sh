@@ -21,8 +21,8 @@
 #   - liveTrackChange.spec.ts          (SSE fast path: spin-raw provisional cue appears
 #   - adminHealthRecovery.spec.ts      (authenticated admin recovery controls)
 #                                       immediately; spin-changed/spin-raw-failed clear it
-#                                       on WebPlayer ON AIR row; PlayerDock test skipped
-#                                       pending fdrow infrastructure recovery)
+#                                       on WebPlayer and Dial rows; rapid station switches
+#                                       cannot let an old landing confirm PlayerDock)
 # Homepage-only specs for the retired multi-row Dial/compact-Stack shell are
 # intentionally not in this gate. Their relevant advanced-Dial behavior lives
 # on /feed and stays covered by the dedicated /feed specs below.

@@ -335,7 +335,6 @@ test.describe("WebPlayer live track change via SSE", () => {
     });
 
     await page.goto("/lore/player");
-
     const row = page.locator(`[data-testid="wp-onair-${SLUG}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(
@@ -556,8 +555,6 @@ test.describe("WebPlayer live track change via SSE", () => {
       },
       { lastEventId: "3" },
     );
-    // A delayed failure has a newer global event id but an older station
-    // version, so it must never revert the resolved display.
     await dispatchSseFrame(
       page,
       {
@@ -579,9 +576,7 @@ test.describe("WebPlayer live track change via SSE", () => {
       window.dispatchEvent(new PageTransitionEvent("pageshow"));
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    await expect
-      .poll(() => onAirRequests, { timeout: 5_000 })
-      .toBe(beforeResume + 1);
+    await expect.poll(() => onAirRequests, { timeout: 5_000 }).toBe(beforeResume + 1);
     await expect(row).toContainText("Recovered Artist");
     const urls = await page.evaluate(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -654,6 +649,10 @@ async function installDialFeedRoutes(
 ): Promise<void> {
   await page.route("https://stream.example.test/**", (route) => route.abort());
 
+  // Playwright checks routes in reverse registration order.
+  await page.route("**/api/me/**", (route) =>
+    route.fulfill({ status: 404, json: { error: "Not found" } }),
+  );
   await page.route("**/api/me/connections", (route) =>
     route.fulfill({ json: { connections: [] } }),
   );
@@ -669,14 +668,11 @@ async function installDialFeedRoutes(
   await page.route("**/api/me/album-avatar**", (route) =>
     route.fulfill({ json: { candidates: [], needsChoice: false } }),
   );
-  await page.route("**/api/me/**", (route) =>
-    route.fulfill({ status: 404, json: { error: "Not found" } }),
-  );
 
-  await page.route("**/api/stations", (route) =>
+  await page.route(/\/api\/stations(?:\?.*)?$/, (route) =>
     route.fulfill({ json: { stations: [DIAL_STATION] } }),
   );
-  await page.route("**/api/stations/now-playing", (route) =>
+  await page.route(/\/api\/stations\/now-playing(?:\?.*)?$/, (route) =>
     route.fulfill({
       json: { items: [{ slug: DIAL_SLUG, nowPlaying: DIAL_NOW_PLAYING }] },
     }),
@@ -817,29 +813,12 @@ test.describe("Dial feed live track change via SSE", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Suite — PlayerDock bar (secondary coverage)
+// Suite — PlayerDock station-landing confirmation
 // ---------------------------------------------------------------------------
 //
-// Status: SKIPPED — pre-existing blocker
-//
-// The PlayerDock test depends on .fdrow elements from the SplitHome dial.
-// Those require mobileFrontDoor.spec.ts's route infrastructure to produce live
-// station rows, but that spec is currently red on master independently of this
-// task (pre-existing regression in the dial rendering path). The three
-// WebPlayer tests above are the primary coverage required by task 288.
-//
-// The full implementation is preserved below inside test.skip so it can be
-// unflagged once the fdrow infrastructure is restored. When enabling:
-//   1. Remove the test.skip wrapper (keep the inner function as-is).
-//   2. Add e2e/liveTrackChange.spec.ts to the lore-e2e-suite-gate RUN_SPECS.
-//   3. Verify mobileFrontDoor.spec.ts also passes (shared dependency).
-//
-// Implementation strategy (for future reference):
-//   - injectFakeEventSource replaces window.EventSource with a multi-instance
-//     variant that broadcasts to all instances via window.__dispatchToAll(data).
-//   - installDockRoutes mirrors mobileFrontDoor.spec.ts's 8-station fixture.
-//   - navigate to /lore/ at 390×844 (mobile), click the first .fdrow, wait
-//     for player-bar, then drive spin-raw/spin-changed SSE frames.
+// This uses the real home Explore → global PlayerDock wiring rather than the
+// isolated hook tests. The fast-lane responses are held by the test so the
+// first station's confirmation can arrive after the listener has switched.
 //
 
 // ---------------------------------------------------------------------------
@@ -877,6 +856,7 @@ const DOCK_STATIONS = DOCK_SLUGS.map((slug, idx) => ({
   votes: 0,
   clickcount: 0,
   upcomingShowCount: 0,
+  stationCategories: ["anchor"],
 }));
 
 function makeDockNowPlaying(slug: string, idx: number) {
@@ -937,8 +917,8 @@ function makeDockCrossings() {
 }
 
 /**
- * Install routes that mirror mobileFrontDoor.spec.ts — the exact infrastructure
- * known to produce live .fdrow elements at /lore/.
+ * Install deterministic home Explore routes used to exercise the global dock
+ * without making a live API or radio-stream request.
  */
 async function installDockRoutes(
   page: import("@playwright/test").Page,
@@ -946,7 +926,11 @@ async function installDockRoutes(
   // Block every fake stream URL so no real audio connection is attempted.
   await page.route("https://stream.example.test/**", (route) => route.abort());
 
-  // Specific /api/me/* routes before the catch-all (LIFO: last = first matched).
+  // Playwright evaluates matching routes in reverse registration order, so
+  // install the catch-all first and the specific fixtures afterward.
+  await page.route("**/api/me/**", (route) =>
+    route.fulfill({ status: 404, json: { error: "Not found" } }),
+  );
   await page.route("**/api/me/connections", (route) =>
     route.fulfill({ json: { connections: [] } }),
   );
@@ -968,16 +952,13 @@ async function installDockRoutes(
   await page.route("**/api/me/album-avatar**", (route) =>
     route.fulfill({ json: { candidates: [], needsChoice: false } }),
   );
-  await page.route("**/api/me/**", (route) =>
-    route.fulfill({ status: 404, json: { error: "Not found" } }),
-  );
 
   // Station directory — all 8 stations.
-  await page.route("**/api/stations", (route) =>
+  await page.route(/\/api\/stations(?:\?.*)?$/, (route) =>
     route.fulfill({ json: { stations: DOCK_STATIONS } }),
   );
   // Aggregate live-pulse list (drives liveBySlug in useDialData).
-  await page.route("**/api/stations/now-playing", (route) =>
+  await page.route(/\/api\/stations\/now-playing(?:\?.*)?$/, (route) =>
     route.fulfill({
       json: {
         items: DOCK_SLUGS.map((slug, idx) => ({
@@ -1020,133 +1001,219 @@ async function installDockRoutes(
   );
 }
 
-test.describe("PlayerDock live track change via SSE", () => {
-  test.skip(
-    "spin-raw shows player-bar-resolving; spin-changed clears it",
-    async ({ page }) => {
-      // ── setup ─────────────────────────────────────────────────────────────
-      await page.addInitScript(() => {
-        try {
-          sessionStorage.setItem("lore:first-run-prompted", "1");
-        } catch {
-          /* ignore */
+test.describe("PlayerDock station-landing confirmation", () => {
+  test("ignores a late first landing while audio and metadata move to the second station", async ({
+    page,
+  }) => {
+    // Adaptive Now shows the six highest-ranked rows. These two fixture
+    // stations are both inside that visible set without opening the picker.
+    const firstSlug = DOCK_SLUGS[3];
+    const secondSlug = DOCK_SLUGS[4];
+    const firstStation = DOCK_STATIONS[3];
+    const secondStation = DOCK_STATIONS[4];
+    if (!firstSlug || !secondSlug || !firstStation || !secondStation) {
+      throw new Error("PlayerDock fixture is missing the two stations under test");
+    }
+
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("lore:first-run-prompted", "1");
+      } catch {
+        /* ignore */
+      }
+
+      // Keep playback entirely local while preserving the real PlayerProvider
+      // state transitions. Each source assignment is exposed so the test can
+      // verify that the second tune owns the singleton audio element.
+      const audios: any[] = [];
+      class FakeAudio {
+        src = "";
+        volume = 1;
+        muted = false;
+        paused = true;
+        preload = "none";
+        private listeners = new Map<string, Set<EventListener>>();
+
+        constructor() {
+          audios.push(this);
         }
-        // Stub Audio so the player never makes real network requests.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).Audio = class {
-          src = "";
-          volume = 1;
-          muted = false;
-          paused = true;
-          play() {
-            return Promise.resolve();
-          }
-          pause() {}
-          load() {}
-          addEventListener() {}
-          removeEventListener() {}
-          dispatchEvent() {
-            return true;
-          }
-        };
-        // Multi-instance fake EventSource; dispatches to all subscribers.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const all: any[] = [];
-        class FakeEventSource {
-          static readonly OPEN = 1;
-          static readonly CLOSED = 2;
-          readonly url: string;
-          readyState = FakeEventSource.OPEN;
-          onopen: ((ev: Event) => void) | null = null;
-          onerror: ((ev: Event) => void) | null = null;
-          onmessage: ((ev: MessageEvent) => void) | null = null;
-          constructor(url: string) {
-            this.url = url;
-            all.push(this);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (window as any).__fakeEsAll = all;
-            Promise.resolve().then(() => {
-              if (this.onopen) this.onopen(new Event("open"));
-            });
-          }
-          close() {
-            this.readyState = FakeEventSource.CLOSED;
-          }
-          _dispatch(d: string) {
-            if (this.onmessage)
-              this.onmessage(new MessageEvent("message", { data: d }));
+
+        play() {
+          this.paused = false;
+          queueMicrotask(() => {
+            for (const listener of this.listeners.get("playing") ?? []) {
+              listener(new Event("playing"));
+            }
+          });
+          return Promise.resolve();
+        }
+        pause() {
+          this.paused = true;
+          for (const listener of this.listeners.get("pause") ?? []) {
+            listener(new Event("pause"));
           }
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).EventSource = FakeEventSource;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).__dispatchToAll = (d: string) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          for (const es of all) (es as any)._dispatch(d);
-        };
-      });
+        load() {}
+        canPlayType() {
+          return "";
+        }
+        removeAttribute() {
+          this.src = "";
+        }
+        addEventListener(type: string, listener: EventListener) {
+          const set = this.listeners.get(type) ?? new Set<EventListener>();
+          set.add(listener);
+          this.listeners.set(type, set);
+        }
+        removeEventListener(type: string, listener: EventListener) {
+          this.listeners.get(type)?.delete(listener);
+        }
+      }
 
-      await installDockRoutes(page);
-      await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto("/lore/");
+      (window as any).__loreTestAudios = audios;
+      Object.defineProperty(window, "Audio", { configurable: true, value: FakeAudio });
+    });
+    await installDockRoutes(page);
 
-      // ── wait for live station row, tune in ────────────────────────────────
-      await expect(page.locator(".fdrow").first()).toBeVisible({
-        timeout: 20_000,
-      });
-      const firstRow = page.locator(".fdrow").first();
-      await firstRow.click();
-      await page.waitForTimeout(400);
-      await firstRow.click();
+    let secondNowPlaying = makeDockNowPlaying(secondSlug, 1);
+    await page.route(`**/api/stations/${secondSlug}/now-playing`, (route) =>
+      route.fulfill({
+        json: { station: secondStation, nowPlaying: secondNowPlaying },
+      }),
+    );
 
-      const playerBar = page.locator("[data-testid='player-bar']").first();
-      await expect(playerBar).toBeVisible({ timeout: 10_000 });
+    const pendingFastLane = new Map<
+      string,
+      import("@playwright/test").Route[]
+    >();
+    await page.route("**/api/player/station/*/now", (route) => {
+      const path = new URL(route.request().url()).pathname.split("/");
+      const slug = path.at(-2);
+      if (slug !== firstSlug && slug !== secondSlug) {
+        return route.continue();
+      }
+      const pending = pendingFastLane.get(slug) ?? [];
+      pending.push(route);
+      pendingFastLane.set(slug, pending);
+    });
 
-      const tunedSlug = await page.evaluate(() => {
-        const bar = document.querySelector("[data-testid='player-bar']");
-        return bar?.getAttribute("data-station-slug") ?? "nts-1";
-      });
+    const fastLaneResponse = (
+      slug: string,
+      artist: string,
+      title: string,
+      mbid: string,
+    ) => ({
+      serverTime: new Date().toISOString(),
+      station: { slug, name: slug === firstSlug ? firstStation.name : secondStation.name },
+      now: {
+        mbid,
+        artistMbid: null,
+        title,
+        artist,
+        artworkUrl: null,
+        releaseYear: null,
+        playedAt: new Date().toISOString(),
+        observedAt: new Date().toISOString(),
+        freshness: "fresh" as const,
+        resolved: true,
+        estimatedRemainingMs: null,
+        likelyExpiring: false,
+        timingConfidence: "unknown" as const,
+      },
+      refreshTriggered: false,
+      confirmed: true,
+    });
 
-      // ── spin-raw → resolving cue ──────────────────────────────────────────
-      await page.evaluate(
-        (d: string) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (window as any).__dispatchToAll(d);
-        },
-        JSON.stringify({
-          stationSlug: tunedSlug,
-          rawArtist: "New Artist",
-          rawTitle: "New Track",
-          mbid: null,
-          provisional: true,
-          type: "spin-raw",
-          observedAt: new Date().toISOString(),
+    const release = async (slug: string, body: ReturnType<typeof fastLaneResponse>) => {
+      const routes = pendingFastLane.get(slug) ?? [];
+      pendingFastLane.set(slug, []);
+      await Promise.all(routes.map((route) => route.fulfill({ json: body })));
+    };
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/lore/");
+
+    const firstTune = page.getByRole("button", {
+      name: `Tune in to ${firstStation.name}`,
+      exact: true,
+    });
+    const secondTune = page.getByRole("button", {
+      name: `Tune in to ${secondStation.name}`,
+      exact: true,
+    });
+    await expect(firstTune).toBeVisible({ timeout: 20_000 });
+    await expect(secondTune).toBeVisible({ timeout: 20_000 });
+
+    // The first fast-lane response stays pending, so its station is visibly
+    // checking while audio starts independently.
+    await firstTune.click();
+    const playerBar = page.getByTestId("player-bar");
+    await expect(playerBar).toBeVisible({ timeout: 10_000 });
+    await expect(playerBar).toContainText(firstStation.name);
+    await expect(page.getByTestId("dial-landing-note")).toHaveAttribute(
+      "data-phase",
+      "confirming",
+    );
+    await expect.poll(() => pendingFastLane.get(firstSlug)?.length ?? 0).toBeGreaterThan(0);
+
+    // Switch before station one has reconciled. This is the trust boundary:
+    // the old request is still in flight while the new audio source starts.
+    await secondTune.click();
+    await expect(playerBar).toContainText(secondStation.name);
+    await expect(page.getByTestId("dial-landing-note")).toHaveAttribute(
+      "data-phase",
+      "confirming",
+    );
+    await expect.poll(() => pendingFastLane.get(secondSlug)?.length ?? 0).toBeGreaterThan(0);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const audios = (window as any).__loreTestAudios as { src: string }[];
+          return audios.at(-1)?.src ?? "";
         }),
-      );
-      await expect(
-        page.locator("[data-testid='player-bar-resolving']"),
-      ).toBeVisible({ timeout: 5_000 });
+      )
+      .toContain(`lore-e2e-${secondSlug}`);
 
-      // ── spin-changed → cue clears ─────────────────────────────────────────
-      await page.evaluate(
-        (d: string) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (window as any).__dispatchToAll(d);
-        },
-        JSON.stringify({
-          stationSlug: tunedSlug,
-          rawArtist: "New Artist",
-          rawTitle: "New Track",
-          mbid: "cccccccc-0000-0000-0000-000000000003",
-          provisional: false,
-          observedAt: new Date().toISOString(),
-        }),
-      );
-      await expect(
-        page.locator("[data-testid='player-bar-resolving']"),
-      ).not.toBeVisible({ timeout: 5_000 });
-    },
-  );
+    // A valid response for the old landing must not confirm the current dock
+    // or move audio/metadata back to station one.
+    await release(
+      firstSlug,
+      fastLaneResponse(
+        firstSlug,
+        "Late First Artist",
+        "Late First Track",
+        "aaaaaaaa-0000-0000-0000-000000000001",
+      ),
+    );
+    await expect(playerBar).toContainText(secondStation.name);
+    await expect(page.getByTestId("dial-landing-note")).toHaveAttribute(
+      "data-phase",
+      "confirming",
+    );
+    await expect(playerBar).not.toContainText("Late First Artist");
+
+    // The current landing resolves to a different track. PlayerDock should
+    // invalidate its raw station query, reconcile in place, and clear only the
+    // current station's confirmation note.
+    secondNowPlaying = {
+      ...secondNowPlaying,
+      rawArtist: "Fresh Second Artist",
+      rawTitle: "Fresh Second Track",
+    };
+    await release(
+      secondSlug,
+      fastLaneResponse(
+        secondSlug,
+        "Fresh Second Artist",
+        "Fresh Second Track",
+        "bbbbbbbb-0000-0000-0000-000000000002",
+      ),
+    );
+    await expect(playerBar).toContainText(secondStation.name);
+    await expect(playerBar).toContainText("Fresh Second Artist", { timeout: 5_000 });
+    await expect(playerBar).toContainText("Fresh Second Track");
+    await expect(page.getByTestId("dial-landing-note")).toHaveCount(0);
+  });
 });
 
 test.describe("PlayerDock Catch Next handoff", () => {
@@ -1209,6 +1276,9 @@ test.describe("PlayerDock Catch Next handoff", () => {
           }
         }
         load() {}
+        canPlayType() {
+          return "";
+        }
         removeAttribute() {}
         addEventListener(type: string, listener: EventListener) {
           const set = this.listeners.get(type) ?? new Set<EventListener>();

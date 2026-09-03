@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -42,6 +42,10 @@ export function PlayerDock() {
 
   const stationSlug = radio.station?.slug ?? "";
   const { data: onAirData } = useWpOnAir();
+  // useLiveHandoff snapshots candidate order during render. Keep its empty
+  // input referentially stable while the on-air query is loading so that
+  // snapshot adjustment cannot trigger a render loop in the global dock.
+  const onAirItems = useMemo(() => onAirData?.items ?? [], [onAirData?.items]);
   const radioStationSlug = radio.station?.slug;
   const toggleRadio = radio.toggle;
   const scanActive = scan.active;
@@ -51,7 +55,7 @@ export function PlayerDock() {
   }, [radioStationSlug, scanActive, toggleRadio, toggleScan]);
   const handoffState = useLiveHandoff(
     ride.active ? null : radio.station,
-    onAirData?.items ?? [],
+    onAirItems,
     switchHandoffStation,
   );
   const stopScanBefore = (action: () => void) => {

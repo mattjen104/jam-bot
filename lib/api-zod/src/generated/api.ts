@@ -919,10 +919,8 @@ export const ListStationsNowPlayingResponse = zod.object({
 export const GetStationNowPlayingParams = zod.object({
   slug: zod.coerce.string().min(1),
 });
-
 export const getStationNowPlayingResponseNowPlayingOneTimingUncertaintyMsMin = 0;
 export const getStationNowPlayingResponseStationPlaybackCandidatesMax = 4;
-
 export const GetStationNowPlayingResponse = zod.object({
   station: zod
     .object({

@@ -4778,14 +4778,12 @@ export type GetRecordingSongExploder200 = {
   episode: GetRecordingSongExploder200Episode;
   anchors: GetRecordingSongExploder200AnchorsItem[];
 };
-
 export const NowPlayingTimingReason = {
   station_declared_start: "station_declared_start",
   fingerprint_play_offset: "fingerprint_play_offset",
   inferred_start: "inferred_start",
   receipt_only: "receipt_only",
 } as const;
-
 export const RecordingLyricsStatus = {
   lyrics_found: "lyrics_found",
   instrumental: "instrumental",
@@ -4793,7 +4791,6 @@ export const RecordingLyricsStatus = {
   transient_failure: "transient_failure",
   not_checked: "not_checked",
 } as const;
-
 export const NowPlayingTimestampKind = {
   source: "source",
   fingerprint: "fingerprint",

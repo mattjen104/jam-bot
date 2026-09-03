@@ -154,13 +154,25 @@ export function useLiveHandoff(
     [onAirItems, currentStation, now, clockMs],
   );
   const currentIdentity = now ? trackIdentity(now) : "";
+  const candidateInputKey = JSON.stringify(
+    rankedCandidates.map((candidate) => ({
+      slug: candidate.station.slug,
+      track: trackIdentity(candidate.now),
+      changingSoon: candidate.changingSoon,
+      score: candidate.score,
+      reasons: candidate.reasons,
+    })),
+  );
   const [candidateSnapshot, setCandidateSnapshot] = useState(() => ({
-    input: rankedCandidates,
+    inputKey: candidateInputKey,
     currentIdentity,
     candidates: rankedCandidates,
   }));
   let stableCandidates = candidateSnapshot.candidates;
-  if (candidateSnapshot.input !== rankedCandidates) {
+  if (
+    candidateSnapshot.inputKey !== candidateInputKey ||
+    candidateSnapshot.currentIdentity !== currentIdentity
+  ) {
     const previousBySlug = new Map(
       candidateSnapshot.candidates.map((candidate) => [
         candidate.station.slug,
@@ -185,7 +197,7 @@ export function useLiveHandoff(
             rankedCandidates,
           );
     setCandidateSnapshot({
-      input: rankedCandidates,
+      inputKey: candidateInputKey,
       currentIdentity,
       candidates: stableCandidates,
     });
