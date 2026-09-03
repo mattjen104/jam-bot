@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,7 +7,7 @@ import {
   type Station,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { useWpOnAir } from "../webplayer/hooks";
+import { useWpOnAir, type WpOnAirItem } from "../webplayer/hooks";
 import { subscribeSpinStream } from "../webplayer/nowPlayingStream";
 import { PlayerBar } from "./PlayerBar";
 import { PlayerSheet } from "./PlayerSheet";
@@ -26,6 +26,7 @@ const MOBILE_SHELL_QUERY = "(orientation: portrait), (max-width: 720px)";
  * mid-pipeline, in which case the dock falls back to the 30s REST poll.
  */
 const PROVISIONAL_EXPIRY_MS = 120_000;
+const EMPTY_ON_AIR_ITEMS: WpOnAirItem[] = [];
 
 /**
  * The single bottom dock. A ride takes over audio while active (so it wins the
@@ -45,7 +46,7 @@ export function PlayerDock() {
   // useLiveHandoff snapshots candidate order during render. Keep its empty
   // input referentially stable while the on-air query is loading so that
   // snapshot adjustment cannot trigger a render loop in the global dock.
-  const onAirItems = useMemo(() => onAirData?.items ?? [], [onAirData?.items]);
+  const onAirItems = onAirData?.items ?? EMPTY_ON_AIR_ITEMS;
   const radioStationSlug = radio.station?.slug;
   const toggleRadio = radio.toggle;
   const scanActive = scan.active;

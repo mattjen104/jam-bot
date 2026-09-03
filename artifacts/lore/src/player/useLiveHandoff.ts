@@ -63,6 +63,21 @@ async function fetchFastLane(
     : body;
 }
 
+function candidateSnapshotKey(candidates: readonly HandoffCandidate[]): string {
+  return JSON.stringify(
+    candidates.map((candidate) => ({
+      slug: candidate.station.slug,
+      stationName: candidate.station.name,
+      track: trackIdentity(candidate.now),
+      title: candidate.now.title,
+      artist: candidate.now.artist,
+      changingSoon: candidate.changingSoon,
+      score: candidate.score,
+      reasons: candidate.reasons,
+    })),
+  );
+}
+
 export function useLiveHandoff(
   currentStation: Station | null,
   onAirItems: WpOnAirItem[],
@@ -154,15 +169,7 @@ export function useLiveHandoff(
     [onAirItems, currentStation, now, clockMs],
   );
   const currentIdentity = now ? trackIdentity(now) : "";
-  const candidateInputKey = JSON.stringify(
-    rankedCandidates.map((candidate) => ({
-      slug: candidate.station.slug,
-      track: trackIdentity(candidate.now),
-      changingSoon: candidate.changingSoon,
-      score: candidate.score,
-      reasons: candidate.reasons,
-    })),
-  );
+  const candidateInputKey = candidateSnapshotKey(rankedCandidates);
   const [candidateSnapshot, setCandidateSnapshot] = useState(() => ({
     inputKey: candidateInputKey,
     currentIdentity,
@@ -202,7 +209,10 @@ export function useLiveHandoff(
       candidates: stableCandidates,
     });
   }
-  const candidates = stableCandidates.slice(0, 3);
+  const candidates = useMemo(
+    () => stableCandidates.slice(0, 3),
+    [stableCandidates],
+  );
 
   const cancel = useCallback(() => {
     generationRef.current += 1;
