@@ -2600,7 +2600,7 @@ export function DialView() {
                 are Lore-wide discovery. */}
             {!inContext && (
               <>
-                {!crossingsLoading && crossingSourceMode !== "blended" && (
+                {!crossingsLoading && (
                   <LiveCrossingCoverRail rows={sortedRows} onTuneIn={tuneZoneRow} />
                 )}
                 <FirstPlayCoverRail

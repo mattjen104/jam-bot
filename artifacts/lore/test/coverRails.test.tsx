@@ -113,12 +113,29 @@ describe("crossingCoverItems", () => {
     ]);
   });
 
-  it("excludes provisional (resolving) tracks", () => {
+  it("fills the rail with exact album crossings when none is on air now", () => {
+    const row = makeRow({
+      track: makeDialSpin({ isLibraryHit: false, isArtistHit: false }),
+      albumCrossings: [ALBUM_CROSSING],
+    });
+    expect(crossingCoverItems([row])).toEqual([
+      expect.objectContaining({
+        timing: "history",
+        title: "Crossed Album",
+        artworkUrl: ALBUM_CROSSING.artworkUrl,
+        detailHref: "/album/rg-1",
+      }),
+    ]);
+  });
+
+  it("does not promote provisional tracks as live but may show exact history", () => {
     const row = makeRow({
       track: makeDialSpin({ isLibraryHit: true, releaseGroupMbid: "rg-1", resolving: true }),
       albumCrossings: [ALBUM_CROSSING],
     });
-    expect(crossingCoverItems([row])).toHaveLength(0);
+    expect(crossingCoverItems([row])).toEqual([
+      expect.objectContaining({ timing: "history", title: "Crossed Album" }),
+    ]);
   });
 
   it("excludes crossings without any release-exact art instead of guessing", () => {

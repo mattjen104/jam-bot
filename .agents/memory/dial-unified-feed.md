@@ -11,9 +11,9 @@ Explore is a decision surface, not a station directory:
   objects being browsed.
 - Live broadcast traversal is reached through Scan rather than an inline
   station grid or now-playing feed on Explore.
-- Crossings appear automatically when the currently playing release has
-  trustworthy release-exact artwork; artist crossings qualify only when that
-  release identity is known.
+- Crossings lead with current matches that have trustworthy release-exact art,
+  then fill from exact albums previously crossed on currently live stations;
+  history must say "played earlier," never imply it is on air.
 
 **Why:** the old infinite live feed visually overwhelmed the cover-led
 discovery rails and made Explore feel like a legacy station directory. Scan is

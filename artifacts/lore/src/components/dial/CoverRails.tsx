@@ -67,6 +67,7 @@ export interface CrossingCoverItem {
   releaseGroupMbid: string | null;
   artworkUrl: string;
   matchKind: "record" | "artist";
+  timing: "live" | "history";
   /** Record action destination — album when release identity exists, else song. */
   detailHref: string;
 }
@@ -140,11 +141,49 @@ export function crossingCoverItems(
       releaseGroupMbid: art.releaseGroupMbid,
       artworkUrl: art.artworkUrl,
       matchKind: track.isLibraryHit ? "record" : "artist",
+      timing: "live",
       detailHref,
     });
   }
-  // Most recent play first; one card per station is inherent (a station airs
-  // one track at a time), so the slice is the only bound needed.
+
+  // Fill the rail with exact album crossings from the listener's Stack when
+  // fewer than the limit are on air now. The server orders these by most
+  // recent play; they remain attached to a live station but are labelled as
+  // history, never as the current broadcast.
+  for (const row of rows) {
+    if (items.length >= limit) break;
+    if (!row.ds.isLive) continue;
+    for (const crossing of row.ds.albumCrossings ?? []) {
+      if (items.length >= limit) break;
+      const identity = crossing.releaseGroupMbid ?? crossing.recordingMbid;
+      if (items.some((item) =>
+        item.stationSlug === row.ds.station.slug &&
+        (item.releaseGroupMbid ?? item.row.ds.liveTrack?.mbid) === identity
+      )) continue;
+      const artworkUrl = crossing.artworkUrl ??
+        (crossing.releaseGroupMbid
+          ? `https://coverartarchive.org/release-group/${crossing.releaseGroupMbid}/front-500`
+          : null);
+      if (!artworkUrl) continue;
+      items.push({
+        key: `${row.ds.station.slug}:${identity}`,
+        row,
+        stationSlug: row.ds.station.slug,
+        stationName: row.ds.station.name,
+        artist: crossing.artist,
+        title: crossing.title,
+        releaseGroupMbid: crossing.releaseGroupMbid,
+        artworkUrl,
+        matchKind: "record",
+        timing: "history",
+        detailHref: crossing.releaseGroupMbid
+          ? `/album/${crossing.releaseGroupMbid}`
+          : `/song/${crossing.recordingMbid}`,
+      });
+    }
+  }
+
+  // Live matches lead; server-ordered album history fills the remaining cards.
   return items.slice(0, limit);
 }
 
@@ -157,6 +196,7 @@ export function LiveCrossingCoverRail({
 }) {
   const items = useMemo(() => crossingCoverItems(rows), [rows]);
   if (items.length === 0) return null;
+  const hasLiveMatch = items.some((item) => item.timing === "live");
   return (
     <section
       className="cover-rail"
@@ -164,8 +204,10 @@ export function LiveCrossingCoverRail({
       data-testid="crossing-cover-rail"
     >
       <header className="cover-rail__header">
-        <h2 className="cover-rail__title">Crossings on air</h2>
-        <span className="cover-rail__context">on air now</span>
+        <h2 className="cover-rail__title">Crossings</h2>
+        <span className="cover-rail__context">
+          {hasLiveMatch ? "on air first" : "from your Stack"}
+        </span>
       </header>
       <div className="cover-rail__scroll">
         {items.map((item) => (
@@ -193,7 +235,11 @@ export function LiveCrossingCoverRail({
               <span className="cover-card__title">{item.title}</span>
             </Link>
             <span className="cover-card__provenance">
-              {item.stationName} · {item.matchKind === "record" ? "record crossing" : "artist crossing"}
+              {item.stationName} · {item.timing === "history"
+                ? "played earlier"
+                : item.matchKind === "record"
+                  ? "record crossing"
+                  : "artist crossing"}
             </span>
             <div className="cover-card__actions">
               <button
