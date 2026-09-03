@@ -6,6 +6,7 @@ import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { readPins, togglePin } from "../hooks/useDialData";
 import { usePlayer } from "../player/PlayerProvider";
+import { StationChangeCountdown } from "./StationChangeCountdown";
 import {
   adaptiveListeningCopy,
   importProgressLabel,
@@ -83,7 +84,8 @@ function Row({
         onClick={() => { if (playable) void radio.toggle(row.ds.station); }}
         aria-label={playing ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
       >
-        {playing ? "Pause" : "Tune live"}
+        <span>{playing ? "Pause" : "Tune live"}</span>
+        {!playing ? <StationChangeCountdown track={track} /> : null}
       </button>
       <button
         type="button"
@@ -147,7 +149,8 @@ function StationDetail({
           }}
           onClick={() => { if (playable) void radio.toggle(row.ds.station); }}
         >
-          {isCurrent && radio.status === "playing" ? "Pause broadcast" : "Tune live"}
+          <span>{isCurrent && radio.status === "playing" ? "Pause broadcast" : "Tune live"}</span>
+          {!(isCurrent && radio.status === "playing") ? <StationChangeCountdown track={track} /> : null}
         </button>
         <button type="button" onClick={onToggleFollow}>
           {followed ? "Following station" : "Follow station"}
