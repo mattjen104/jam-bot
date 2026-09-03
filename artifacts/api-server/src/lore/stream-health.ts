@@ -1,6 +1,10 @@
 import { db, stationsTable, type Station } from "@workspace/db";
 import { eq, or, and } from "drizzle-orm";
 import { MIN_BITRATE_KBPS } from "./radio-browser.js";
+import {
+  STATION_NETWORK_USER_AGENT,
+  withPoliteJitter,
+} from "./network-policy.js";
 
 /**
  * Stream health worker.
@@ -21,7 +25,7 @@ import { MIN_BITRATE_KBPS } from "./radio-browser.js";
 
 const HEAD_TIMEOUT_MS = 8_000;
 const MAX_FAILURES = 3;
-const STAGGER_MS = 200; // between individual probes
+const STAGGER_MS = 1_500; // between individual probes; jittered below
 
 const DEFAULT_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4h
 const WARMUP_MS = 15 * 60 * 1000; // 15min after boot
@@ -66,7 +70,10 @@ export async function probeStream(
     const res = await fetchFn(url, {
       method: "HEAD",
       signal: AbortSignal.timeout(timeoutMs),
-      headers: { "Icy-MetaData": "0" },
+      headers: {
+        "Icy-MetaData": "0",
+        "User-Agent": STATION_NETWORK_USER_AGENT,
+      },
     });
     if (res.ok) {
       return {
@@ -75,8 +82,8 @@ export async function probeStream(
         codec: extractCodec(res.headers),
       };
     }
-    // 405 = server doesn't support HEAD → try GET fallback
-    if (res.status === 405) {
+    // Icecast commonly rejects otherwise healthy HEAD probes with 400/405.
+    if (res.status === 400 || res.status === 405) {
       headFailed = true;
     } else {
       // Any other error (404, 503…) → stream is genuinely down
@@ -105,7 +112,11 @@ export async function probeStream(
     const res = await fetchFn(url, {
       method: "GET",
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
-      headers: { "Icy-MetaData": "0", Range: "bytes=0-4095" },
+      headers: {
+        "Icy-MetaData": "0",
+        Range: "bytes=0-4095",
+        "User-Agent": STATION_NETWORK_USER_AGENT,
+      },
     });
     // Headers received — record this before aborting the body download.
     gotResponse = true;
@@ -260,7 +271,7 @@ export async function runHealthSweep(
     const result = await probeStream(station.streamUrl, opts);
     await applyHealthResult(station, result);
     if (i < stations.length - 1) {
-      await new Promise((r) => setTimeout(r, STAGGER_MS));
+      await new Promise((r) => setTimeout(r, withPoliteJitter(STAGGER_MS)));
     }
   }
 

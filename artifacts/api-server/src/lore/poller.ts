@@ -425,7 +425,7 @@ function scheduleBoundaryPolls(): void {
       // boundaryStations on unenroll before its next fire.
       [...boundaryStations.values()].forEach((station, i) => {
         boundaryFanoutTimers.push(
-          setTimeout(() => void pollStation(station), i * 500),
+          setTimeout(() => void pollStation(station), i * 2_000),
         );
       });
       arm();
@@ -743,7 +743,7 @@ export async function startLorePoller(): Promise<void> {
   // the same tick saturates the dialer and produces a boot-time storm of
   // connect timeouts. 250ms apart spreads a few hundred dials over ~1 min
   // while interval pollers keep their own (coarser) stagger.
-  const WATCHER_STAGGER_MS = 250;
+  const WATCHER_STAGGER_MS = 1_000;
   let watcherIndex = 0;
   pollable.forEach((station, i) => {
     scheduleNestedHistoryPolling(station, i * STAGGER_MS);

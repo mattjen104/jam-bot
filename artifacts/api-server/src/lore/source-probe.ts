@@ -24,6 +24,7 @@ import {
   sourceCapabilityFor,
   type MetadataQualityOutcome,
 } from "./metadata-quality.js";
+import { STATION_NETWORK_USER_AGENT } from "./network-policy.js";
 
 /**
  * Bounded, redirect-aware probes of a station's FREE public metadata
@@ -48,7 +49,7 @@ import {
  *    honest unresolved states when MusicBrainz/Spotify can't place a track.
  */
 
-const PROBE_GAP_MS = 2_000;
+const PROBE_GAP_MS = 5_000;
 /** Hard cap on stations probed in one run — bounds total run time. */
 const MAX_PROBES_PER_RUN = 150;
 const FETCH_TIMEOUT_MS = 8_000;
@@ -89,7 +90,10 @@ export interface ProbeDeps {
 
 async function defaultFetchJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      "User-Agent": STATION_NETWORK_USER_AGENT,
+    },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);

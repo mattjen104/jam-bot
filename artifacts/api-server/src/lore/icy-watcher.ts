@@ -9,6 +9,10 @@ import {
   resolveStreamUrl,
   type ParsedStreamTitle,
 } from "./icy.js";
+import {
+  STATION_NETWORK_USER_AGENT,
+  withPoliteJitter,
+} from "./network-policy.js";
 
 /**
  * IcyWatcher — one persistent ICY connection per station for instant
@@ -167,7 +171,7 @@ export class IcyWatcher extends EventEmitter {
         `GET ${parsed.path} HTTP/1.0`,
         `Host: ${parsed.host}`,
         "Icy-MetaData: 1",
-        "User-Agent: Lore-ICY-watcher/1.0",
+        `User-Agent: ${STATION_NETWORK_USER_AGENT}`,
         "",
         "",
       ].join("\r\n");
@@ -244,10 +248,11 @@ export class IcyWatcher extends EventEmitter {
       return;
     }
 
+    const reconnectDelayMs = withPoliteJitter(this.backoffMs);
     console.warn(
-      `[lore] icy-watcher ${this.stationSlug}: ${message}; reconnecting in ${Math.round(this.backoffMs / 1000)}s`,
+      `[lore] icy-watcher ${this.stationSlug}: ${message}; reconnecting in ${Math.round(reconnectDelayMs / 1000)}s`,
     );
-    this.reconnectTimer = setTimeout(() => this.connect(), this.backoffMs);
+    this.reconnectTimer = setTimeout(() => this.connect(), reconnectDelayMs);
     this.backoffMs = Math.min(this.backoffMs * 2, BACKOFF_CAP_MS);
   }
 

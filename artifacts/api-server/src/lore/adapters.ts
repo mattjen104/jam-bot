@@ -1487,7 +1487,7 @@ const spinitronWeb: NowPlayingAdapter = async (config) => {
           // Spinitron currently returns HTML regardless of Accept, so we fall
           // through to HTML parsing below.
           Accept: "application/json, text/html;q=0.9, application/xhtml+xml;q=0.8",
-          "User-Agent": "Lore Radio/1.0 (+https://spinitron.com)",
+          "User-Agent": "Lore-Radio/1.0 (public now-playing client)",
         },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },

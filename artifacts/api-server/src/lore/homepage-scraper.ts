@@ -363,6 +363,8 @@ async function defaultSafeUrl(url: string): Promise<boolean> {
   return isSafeArtworkUrl(url);
 }
 
+import { STATION_NETWORK_USER_AGENT } from "./network-policy.js";
+
 async function fetchSafe(
   url: string,
   fetchFn: typeof fetch,
@@ -375,7 +377,7 @@ async function fetchSafe(
     let response: Awaited<ReturnType<typeof fetch>>;
     try {
       response = await fetchFn(current, {
-        headers: { Accept: accept, "User-Agent": "Lore-Discovery-Bot/1.0" },
+        headers: { Accept: accept, "User-Agent": STATION_NETWORK_USER_AGENT },
         redirect: "manual",
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
@@ -446,9 +448,10 @@ async function safeRobotsBlocked(
     safeUrl,
     "text/plain,*/*;q=0.5",
   );
-  if (!fetched) return false;
+  // If a site does not let us retrieve its policy, do not assume permission.
+  if (!fetched) return true;
   const data = await readBoundedResponse(fetched.response, MAX_ROBOTS_BYTES);
-  return data ? isBlockedByRobots(data.toString("utf8")) : false;
+  return data ? isBlockedByRobots(data.toString("utf8")) : true;
 }
 
 async function probeLogo(
