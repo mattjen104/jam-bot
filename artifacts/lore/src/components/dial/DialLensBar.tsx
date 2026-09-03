@@ -1,5 +1,5 @@
 /**
- * DialLensBar — Explore's view toggle: Rooms | Press | Shows | Scan.
+ * DialLensBar — Explore's view toggle: Stations | Scan.
  *
  * Lenses are exclusive views over the same feed surface. Same pipe-separated
  * button style as the filter bar, same aria-pressed semantics. Unlike the
@@ -20,16 +20,14 @@ export interface DialLensBarProps {
   /**
    * The /radio blank-radio sub-state of the Radio lens (crossings
    * suppressed). No new button — when active, the Radio label carries a
-   * dimmed "· pure" suffix so the mode is visible where the lens is.
+   * dimmed "· all" suffix so the mode is visible where the lens is.
    */
   radioMode?: boolean;
   onOpenScan?: () => void;
 }
 
 const LENS_LABELS: { lens: DialLens; label: string; title: string }[] = [
-  { lens: "radio", label: "Rooms", title: "Live stations worth entering now" },
-  { lens: "press", label: "Press", title: "Blog picks, best-of lists, and liner claims mentioning your Stack" },
-  { lens: "shows", label: "Shows", title: "Upcoming concerts for artists in your Stack" },
+  { lens: "radio", label: "Stations", title: "Live stations worth tuning now" },
   { lens: "scan", label: "Scan", title: "Browse every category at a glance" },
 ];
 

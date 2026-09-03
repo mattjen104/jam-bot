@@ -103,12 +103,14 @@ describe("crossingCoverItems", () => {
     );
   });
 
-  it("excludes artist-only crossings — no trustworthy release identity, no cover", () => {
+  it("includes artist crossings when the playing release has exact identity", () => {
     const row = makeRow({
       track: makeDialSpin({ isLibraryHit: false, isArtistHit: true, releaseGroupMbid: "rg-1" }),
       albumCrossings: [ALBUM_CROSSING],
     });
-    expect(crossingCoverItems([row])).toHaveLength(0);
+    expect(crossingCoverItems([row])).toEqual([
+      expect.objectContaining({ matchKind: "artist", artworkUrl: ALBUM_CROSSING.artworkUrl }),
+    ]);
   });
 
   it("excludes provisional (resolving) tracks", () => {
@@ -146,7 +148,7 @@ describe("LiveCrossingCoverRail", () => {
     render(<LiveCrossingCoverRail rows={[row]} onTuneIn={onTuneIn} />);
 
     const rail = screen.getByTestId("crossing-cover-rail");
-    expect(within(rail).getByText("KEXP played")).toBeTruthy();
+    expect(within(rail).getByText("KEXP · record crossing")).toBeTruthy();
     expect(within(rail).getByText("Crossed Artist")).toBeTruthy();
     expect(within(rail).getByText("Crossed Song")).toBeTruthy();
 

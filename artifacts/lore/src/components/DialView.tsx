@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Download, Play, X } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyPopularCrossings, useMyPressInfinite, useMyShows, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { useStationFastLane, type FastLaneNow, type FastLaneCandidate } from "../hooks/useStationFastLane";
@@ -18,22 +18,15 @@ import { StationScanPanel } from "./StationScanPanel";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
-import { ExploreHeader, ExploreSectionHeader } from "./ExploreHeader";
+import { ExploreHeader } from "./ExploreHeader";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { useSocialMode } from "../lib/social";
 import { useSleepMode } from "../lib/sleepMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
-import { DialFilterBar, type StationCategory } from "./dial/DialFilterBar";
+import type { StationCategory } from "../lib/dialCategories";
 import { DialCliBar, type MattCliStatus } from "./dial/DialCliBar";
-import { DialLensBar } from "./dial/DialLensBar";
-import { PressFeedLane } from "./dial/PressFeedLane";
-import { ShowsFeedLane } from "./dial/ShowsFeedLane";
-import { CategoryScanLane } from "./dial/CategoryScanLane";
-import { HistoryScanner } from "./dial/HistoryScanner";
 import { ScanSession, type ScanFilter, type ScanSource } from "./ScanSession";
-import { buildCategoryPreviewQueue } from "../player/categoryPreviewScan";
 import { type AgeTier } from "../lib/dialAgeFilter";
-import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import {
   DEFAULT_ACTIVE_AGE_TIERS,
   DEFAULT_ACTIVE_STATION_CATEGORIES,
@@ -41,13 +34,10 @@ import {
   toggleStationCategory,
   useDialSkipped,
 } from "../lib/dialFilterState";
-import { readDialLens, writeDialLens, readShowsCity, writeShowsCity, type DialLens } from "../lib/dialLensState";
+import { readDialLens, writeDialLens, type DialLens } from "../lib/dialLensState";
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import {
-  hasAnyCrossing,
-  nextCrossingScope,
   readCrossingScope,
-  writeCrossingScope,
   stationSortCount,
   type CrossingScope,
   type StationSortMetric,
@@ -93,7 +83,6 @@ import {
 } from "./dial/FrontDoorRow";
 import { type DialLaneRow } from "./dial/DialFeedLane";
 import { LiveCrossingCoverRail, FirstPlayCoverRail } from "./dial/CoverRails";
-import { ExploreRoomGrid } from "./dial/ExploreRoomGrid";
 import { FirstRunSidebar } from "./FirstRunSidebar";
 import { Zone2Lane } from "./dial/Zone2Lane";
 import {
@@ -1493,13 +1482,15 @@ export function DialView() {
   }, []);
   const hiddenModeActive = sleepEnabled;
 
-  // ── Explore views — live radio remains the primary surface. Press and
-  // Shows stay available for the moment as legacy views while their durable
-  // library destination is shaped.
+  // ── Explore views — live stations remain the primary surface. Press and
+  // Shows are durable Stack/Library material, not Explore destinations.
   // Local-first: persisted in localStorage like pins/journal, never on the
   // server. Radio is the default and renders the feed exactly as today; the
   // Radio filter menus stay Radio-only (they render inside the radio branch).
-  const [dialLens, setDialLensState] = useState<DialLens>(() => readDialLens());
+  const [dialLens, setDialLensState] = useState<DialLens>(() => {
+    const savedLens = readDialLens();
+    return savedLens === "press" || savedLens === "shows" ? "radio" : savedLens;
+  });
   const [scanSessionOpen, setScanSessionOpen] = useState(false);
   // Keep choices while this page remains mounted; Scan itself is a closable
   // sheet, so its local choices must outlive the sheet without being persisted.
@@ -1509,7 +1500,6 @@ export function DialView() {
     setDialLensState(lens);
     writeDialLens(lens);
   }, []);
-
   // ── Radio mode — the /radio CLI command's "blank radio" sub-state of the
   // Radio lens: crossings suppressed, every row leads with the live
   // now-playing sentence, and the crossing skeleton/nudges stay hidden.
@@ -1527,21 +1517,11 @@ export function DialView() {
   // Crossing scope (persisted, shared with SplitHome via localStorage): what
   // a ⬤ dot means and which window the crossing-positive filter uses. Only
   // meaningful while crossings are on (i.e. not radio mode).
-  const [crossingScope, setCrossingScope] = useState<CrossingScope>(() => readCrossingScope());
-  const [stationSortMetric, setStationSortMetric] = useState<StationSortMetric>("crossings");
-  const cycleCrossingScope = useCallback(() => {
-    setCrossingScope((prev) => {
-      const next = nextCrossingScope(prev);
-      writeCrossingScope(next);
-      return next;
-    });
-  }, []);
+  const [crossingScope] = useState<CrossingScope>(() => readCrossingScope());
+  const [stationSortMetric] = useState<StationSortMetric>("crossings");
 
   const {
     stations,
-    scanStations: scanStationsOpt,
-    scanNowPlaying: scanNowPlayingOpt,
-    spinsBySlug: spinsBySlugOpt,
     isLoading,
     isCoreLoading,
     liveLoading,
@@ -1564,26 +1544,8 @@ export function DialView() {
     // Category-driven fetching only pauses for Sleep Radio. Specialist Radio
     // is now a normal visible category rather than a hidden gesture mode.
     categories: hiddenModeActive ? undefined : activeCategories,
-    // Scan lens needs the full curated list regardless of the category
-    // filter; only fetch it while the lens is actually selected.
-    scanActive: dialLens === "scan",
+    scanActive: false,
   });
-  // Defensive defaults: older test mocks of useDialData don't provide the
-  // Scan fields.
-  const scanStations = useMemo(() => scanStationsOpt ?? [], [scanStationsOpt]);
-  // Freshness-gated by useDialData: stale/off-air last spins never appear.
-  const scanNowPlaying = useMemo(
-    () => scanNowPlayingOpt ?? new Map<string, DialSpin>(),
-    [scanNowPlayingOpt],
-  );
-  const scanSpinsBySlug = useMemo(() => spinsBySlugOpt ?? new Map(), [spinsBySlugOpt]);
-  const scanCategoryQueues = useMemo(() => {
-    const map = new Map<StationCategory, ReturnType<typeof buildCategoryPreviewQueue>>();
-    for (const def of STATION_CATEGORY_DEFINITIONS) {
-      map.set(def.cat, buildCategoryPreviewQueue(def.cat, scanStations, scanSpinsBySlug));
-    }
-    return map;
-  }, [scanStations, scanSpinsBySlug]);
   // Defensive default keeps older mocks (which don't provide the phase) on the
   // legacy behavior; the real hook always supplies it.
   const cxPhase = crossingsPhase ?? "settled";
@@ -1694,75 +1656,10 @@ export function DialView() {
     void seedWriteRef.current.catch(() => undefined);
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
 
-  // ── Shows lens — city state (localStorage) and event data. ─────────────
-  const [showsCity, setShowsCityState] = useState<string | null>(() => readShowsCity());
-  const setShowsCity = useCallback((city: string | null) => {
-    setShowsCityState(city);
-    writeShowsCity(city);
-  }, []);
-  const showsQuery = useMyShows(showsCity, dialLens === "shows");
-  const showsData = showsQuery.data;
-  const showsEvents = showsData?.events ?? [];
-  const showsComputing = showsData?.computing === true || showsQuery.isLoading;
-  const showsHasTaste = showsData?.hasTaste ?? true;
-
-  // ── Press lens data — only fetched while the Press lens is active. ──────
-  const pressQuery = useMyPressInfinite();
-  const pressPages = pressQuery.data?.pages;
-  const pressItems = useMemo(() => (pressPages ?? []).flatMap((p) => p.items), [pressPages]);
-  const pressFailed = pressQuery.isError;
-  const pressLoading = pressQuery.isLoading || (pressQuery.isFetching && !pressQuery.isFetchingNextPage);
-
-  // Popular crossings — Also-On-Air sentences + sort order.
-  const { data: popCrossings = [] } = useMyPopularCrossings();
-  const popMap = useMemo(
-    () => new Map(popCrossings.map((i) => [i.stationSlug, i.artists])),
-    [popCrossings],
-  );
   const seedsLower = useMemo(
     () => new Set(visibleSeeds.map((s) => s.trim().toLowerCase())),
     [visibleSeeds],
   );
-  /** Station sort weight: Lore-wide spins of its popular crossing artists. */
-  const popScore = useCallback((slug: string) => {
-    const artists = popMap.get(slug);
-    if (!artists) return 0;
-    // Library artists are excluded from the sentence, so they don't weigh
-    // into the sort either — they already drive the ON AIR section.
-    return artists.reduce((n, a) => n + (a.popular && !a.inLibrary ? a.spins : 0), 0);
-  }, [popMap]);
-  /**
-   * Deep-cuts vector: the station's non-library spin counts sorted ascending.
-   * The flipped sort reads each setlist from its rarest artist up — compare
-   * lowest spin count first, then next-lowest, and so on. A set carrying a
-   * one-spin-ever artist always surfaces, and between two such sets the one
-   * with more rare depth wins. This is a transparent ledger stat (Lore-wide
-   * spins), never a taste profile — nothing is hidden, only reordered.
-   */
-  const rareVector = useCallback((slug: string): number[] => {
-    const artists = popMap.get(slug);
-    if (!artists) return [];
-    return artists
-      .filter((a) => !a.inLibrary)
-      .map((a) => a.spins)
-      .sort((x, y) => x - y);
-  }, [popMap]);
-  // Triangle toggle: up (true) = popular-heavy sets first; down = deep-cuts
-  // (rarest-artist-first) ordering. Pure client-side re-sort.
-  const [popSortDesc, _setPopSortDesc] = useState(true);
-  /** Signed comparison for the active sort mode; 0 when tied (fallbacks apply). */
-  const popCompare = useCallback((aSlug: string, bSlug: string) => {
-    if (popSortDesc) return popScore(bSlug) - popScore(aSlug);
-    // Lexicographic rarest-first: stations without setlist data sort last.
-    const av = rareVector(aSlug);
-    const bv = rareVector(bSlug);
-    if (av.length === 0 || bv.length === 0) return bv.length - av.length;
-    const n = Math.min(av.length, bv.length);
-    for (let i = 0; i < n; i++) {
-      if (av[i] !== bv[i]) return av[i] - bv[i]; // rarer artist wins
-    }
-    return bv.length - av.length; // equal prefix: deeper rare set wins
-  }, [popSortDesc, popScore, rareVector]);
   // Bridge: player-ticker artist clicks → addSeed (ticker lives in PlayerBar)
   useEffect(() => {
     const handler = (e: Event) => addSeed((e as CustomEvent<string>).detail);
@@ -1782,7 +1679,7 @@ export function DialView() {
   // crossings compute never blanks the whole front door.
   const zone1Settled = !isCoreLoading;
   const isSpotifyConnected = useSpotifyLibraryConnected();
-  const { radio, ride, scan: playerScan } = usePlayer();
+  const { radio, ride } = usePlayer();
   const { data: weeklyRecapData } = useMyWeeklyRecap();
   // Artwork for the now-playing row indicator
   const activeSlug = radio.station?.slug ?? "";
@@ -1887,75 +1784,11 @@ export function DialView() {
       });
   }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric, skipped]);
 
-  // Unified live feed — the zones are collapsed into ONE flat station list.
-  // Ranking segments (internal only, no visual zones):
-  //   withReason — r=1..4 (show-level evidence) + r=6/r=7 (24h station-level
-  //                crossings): stations with a crossing reason lead the feed.
-  //   djBand     — r=5 (attributed show on air, no crossing yet).
-  //   restBand   — r=0 (no crossing, no attribution) — pinned float first.
-  // With no taste data every live station simply lands in djBand/restBand and
-  // the feed still shows all of them with their current plays.
-  // The currently-playing station stays in its lane (highlighted via isActive).
+  // Crossing evidence drives Explore's cover rail and header status.
   const withReason = useMemo(
     () => sortedRows.filter((row) => (row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7),
     [sortedRows],
   );
-  const alsoOnAir = useMemo(
-    () => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r === 5),
-    [sortedRows],
-  );
-  // Display order for the crossing rows: default (▲) keeps the attribution-
-  // ladder order; flipped (▼) is its exact inverse, so the least-crossed
-  // stations lead and the strongest crossings sink to the bottom.
-  const zone1Display = useMemo(
-    () => {
-      const ordered = popSortDesc ? [...withReason] : [...withReason].reverse();
-      // Reversing the ranking must not promote skipped stations back into the
-      // scan-visible portion of the feed.
-      return ordered.sort((a, b) => {
-        const aSkip = skipped.has(a.ds.station.slug) ? 1 : 0;
-        const bSkip = skipped.has(b.ds.station.slug) ? 1 : 0;
-        return aSkip - bSkip;
-      });
-    },
-    [withReason, popSortDesc, skipped],
-  );
-
-  // Ranking bands within the unified feed (internal ordering only — the feed
-  // renders as one uninterrupted list):
-  //   djBand  — r=5 rows (attributed show on air, no crossing yet).
-  //             Sorted by picker overlap desc.
-  //   restBand — r=0 rows (unattributed / dark).
-  //             Pinned stations float above non-pinned within restBand.
-  const djBand = useMemo(() =>
-    alsoOnAir
-      .filter((row) => row.rz.r === 5)
-      .sort((a, b) => {
-        // Popular-crossing weight first (triangle up: popular-heavy first;
-        // down: deep-cuts first), then picker overlap as the fallback.
-        const cmp = popCompare(a.ds.station.slug, b.ds.station.slug);
-        if (cmp !== 0) return cmp;
-        const aOv = pickerOv(a.show?.pickerId ?? null, a.effectiveDjName);
-        const bOv = pickerOv(b.show?.pickerId ?? null, b.effectiveDjName);
-        return bOv - aOv;
-      }),
-  // pickerOv closure reads overlapByPickerId/pickerNameToId from outer scope
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [alsoOnAir, overlapByPickerId, pickerNameToId, popCompare]);
-
-  const restBand = useMemo(() =>
-    alsoOnAir
-      .filter((row) => row.rz.r !== 5)
-      .sort((a, b) => {
-        // Pinned stations float above non-pinned regardless of crossing count.
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        // Popular-crossing weight (triangle up/down) …
-        const cmp = popCompare(a.ds.station.slug, b.ds.station.slug);
-        if (cmp !== 0) return cmp;
-        // … then lifetime station crossings as the fallback.
-        return b.ds.lifetimeCrossings - a.ds.lifetimeCrossings;
-      }),
-  [alsoOnAir, popCompare]);
 
   // Ghost zone: stations that played library artists but user hasn't tuned into
   const { data: ghostStations = [] } = useMyGhostMissed();
@@ -2663,47 +2496,13 @@ export function DialView() {
       fastLane.landOnStation(row.ds.station.slug, fastLaneCandidate(row.ds.liveTrack));
     }
   }, [scan, radio, fastLane, fastLaneCandidate]);
-  // Scan lens: tune to the station whose now-playing line is shown on the
-  // category button. Same tune path as a direct feed-row click.
-  const tuneScanStation = useCallback((slug: string) => {
-    const station =
-      scanStations.find((s) => s.slug === slug)
-      ?? stations.find((ds) => ds.station.slug === slug)?.station;
-    if (!station) return;
-    scan.stop();
-    if (resolvePlaybackSource(station) == null) return;
-    if (radio.station?.slug !== slug || radio.status !== "playing") {
-      void radio.toggle(station);
-      fastLane.landOnStation(slug, fastLaneCandidate(scanNowPlaying.get(slug) ?? null));
-    }
-  }, [scanStations, stations, scan, radio, fastLane, fastLaneCandidate, scanNowPlaying]);
-  // While crossing scores are pending the reason rows are withheld (the
-  // skeleton takes their place) but the rest of the feed renders immediately,
-  // so a slow crossings compute never blanks live stations.
-  // Crossing-positive filter: with crossings on, only stations with ≥1
-  // crossing at the active scope stay in the feed (hidden, like the category
-  // filter). Radio mode (/radio) = crossings off = no filter. While crossing
-  // scores are still in-flight the filter is suspended — filtering on
-  // unsettled (zero) scores would blank the whole feed on every load.
-  const scopeFilter = useCallback(
-    (rows: DialLaneRow[]) => radioMode || crossingsLoading
-      ? rows
-      : rows.filter((row) => hasAnyCrossing(row.ds, crossingScope)),
-    [radioMode, crossingsLoading, crossingScope],
-  );
-  const explorePrimaryCount = radioMode
-    ? sortedRows.length
-    : scopeFilter(zone1Display).length;
-  const exploreTitle = radioMode
-    ? "Good rooms are live now."
-    : explorePrimaryCount > 0
-      ? "Your music is on air."
-      : "Explore the dial.";
-  const exploreDescription = radioMode
-    ? "Choose a station by what is playing now. Scan when you want to move through the dial."
-    : explorePrimaryCount > 0
-      ? "Start with a confirmed crossing, then stay with the broadcast that feels right."
-      : "Your crossings will lead when they appear. Until then, find a good room and listen.";
+  const explorePrimaryCount = withReason.length;
+  const exploreTitle = explorePrimaryCount > 0
+    ? "Your music is on air."
+    : "Explore the dial.";
+  const exploreDescription = explorePrimaryCount > 0
+    ? "Start with a confirmed crossing, then scan when you want another signal."
+    : "First plays are below. Scan live radio when you want to move through the dial.";
 
   // On-air slug set — gates the per-card "Tune in" action on the first-play
   // rail so it only appears while the source station is actually live.
@@ -2718,39 +2517,6 @@ export function DialView() {
       if (row) tuneZoneRow(row);
     },
     [sortedRows, tuneZoneRow],
-  );
-
-  const exploreRoomRows = useMemo(() => {
-    const reasonRows = crossingsLoading && !radioMode ? [] : scopeFilter(zone1Display);
-    return popSortDesc
-      ? [...reasonRows, ...scopeFilter(djBand), ...scopeFilter(restBand)]
-      : [...scopeFilter(restBand), ...scopeFilter(djBand), ...reasonRows];
-  }, [
-    crossingsLoading,
-    radioMode,
-    scopeFilter,
-    zone1Display,
-    popSortDesc,
-    djBand,
-    restBand,
-  ]);
-
-  const feedSection = exploreRoomRows.length > 0 && (
-    <section className="explore-section" aria-labelledby="explore-live-title">
-      <ExploreSectionHeader
-        title={radioMode ? "Live rooms" : "Rooms carrying your music"}
-        description={radioMode
-          ? "A small set of stations worth entering now. Scan to hear the full dial."
-          : "Station identity leads here; the covers above represent the records."}
-        count={exploreRoomRows.length}
-      />
-      <ExploreRoomGrid
-        rows={exploreRoomRows}
-        activeSlug={radio.station?.slug ?? null}
-        onTuneIn={tuneZoneRow}
-        onOpenScan={() => setScanSessionOpen(true)}
-      />
-    </section>
   );
 
   return (
@@ -2823,20 +2589,18 @@ export function DialView() {
                 description={exploreDescription}
                 liveCount={sortedRows.length}
                 crossingCount={withReason.length}
-                radioMode={radioMode}
                 onOpenScan={() => setScanSessionOpen(true)}
-                onToggleCrossings={() => setRadioMode(!radioMode)}
               />
             )}
             {/* Cover-led music rails — the music-object grammar: cover leads,
                 station is provenance. The station feed below stays
                 station-first (see CoverRails.tsx for the two grammars).
-                Crossings rail is personal evidence, so it stays out of
-                blank-radio and blended modes; first plays are Lore-wide
-                discovery and render in both. */}
+                Crossings rail is personal evidence and stays visible whenever
+                a confirmed current match has release-exact art. First plays
+                are Lore-wide discovery. */}
             {!inContext && (
               <>
-                {!radioMode && !crossingsLoading && crossingSourceMode !== "blended" && (
+                {!crossingsLoading && crossingSourceMode !== "blended" && (
                   <LiveCrossingCoverRail rows={sortedRows} onTuneIn={tuneZoneRow} />
                 )}
                 <FirstPlayCoverRail
@@ -2968,87 +2732,8 @@ export function DialView() {
                 {/* ── Live mode: the unified live feed ────────────────────── */}
                 {effectiveTtMode === "live" && (
                   <>
-                    {/* Lens toggle — Radio | Press. Exclusive views over the
-                        same feed surface. Hidden in context mode and while a
-                        gesture mode owns the station list. */}
-                    {!inContext && !hiddenModeActive && (
-                      <DialLensBar
-                        lens={dialLens}
-                        onSetLens={setDialLens}
-                        radioMode={radioMode}
-                        onOpenScan={() => setScanSessionOpen(true)}
-                      />
-                    )}
-
-                    {/* ── Press lens: taste × scraped-metadata mentions ──── */}
-                    {!inContext && dialLens === "press" && (
-                      <>
-                        <PressFeedLane
-                          items={pressItems}
-                          isLoading={pressLoading}
-                          isFailed={pressFailed}
-                          hasTaste
-                          hasNextPage={pressQuery.hasNextPage === true}
-                          isFetchingNextPage={pressQuery.isFetchingNextPage}
-                          onLoadMore={() => { void pressQuery.fetchNextPage(); }}
-                          onArtistClick={(name) => openArtistTab(name, null)}
-                        />
-                      </>
-                    )}
-
-                    {/* ── Shows lens: upcoming concerts for taste artists ── */}
-                    {!inContext && dialLens === "shows" && (
-                      <>
-                        <ShowsFeedLane
-                          events={showsEvents}
-                          isLoading={showsComputing}
-                          hasTaste={showsHasTaste}
-                          city={showsCity}
-                          onSetCity={setShowsCity}
-                          onArtistClick={(name) => openArtistTab(name, null)}
-                        />
-                        {/* Empty-taste nudge — same onboarding surface as Radio
-                            and Press, so seeding taste fixes all lenses at once. */}
-                        {!showsHasTaste && !showsComputing && (
-                          <Zone1Placeholder
-                            isSpotifyConnected={isSpotifyConnected}
-                            hasLibrary={hasLibrary}
-                            hasSeeds={hasSeeds || visibleSeeds.length > 0}
-                            seeds={visibleSeeds}
-                            liveLoading={liveLoading}
-                            onAddSeed={addSeed}
-                            onRemoveSeed={removeSeed}
-                            liveSuggestions={liveArtistSuggestions}
-                            stations={stations}
-                          />
-                        )}
-                      </>
-                    )}
-
-                    {/* ── Scan lens: one now-playing button per category ──
-                        Parallel discovery surface — always shows every
-                        category, ignoring the category filter, and stays
-                        available while radioMode is active. */}
-                    {!inContext && dialLens === "scan" && (
-                      <>
-                        <HistoryScanner scope={crossingScope} categories={[...activeCategories]} />
-                        <CategoryScanLane
-                        stations={scanStations}
-                        nowPlayingBySlug={scanNowPlaying}
-                        activeSlug={radio.station?.slug ?? null}
-                        onTuneIn={tuneScanStation}
-                        categoryCounts={Object.fromEntries(
-                          [...scanCategoryQueues.entries()].map(([category, queue]) => [category, queue.length]),
-                        )}
-                        onScanCategory={(category) => {
-                          const queue = scanCategoryQueues.get(category) ?? [];
-                          if (queue.length > 0) playerScan.startCategory(category, queue);
-                        }}
-                        />
-                      </>
-                    )}
-
-                    {/* ── Rooms lens: bounded station-first destinations ── */}
+                    {/* Live crossing status and empty states sit below the
+                        cover rails; station traversal belongs to Scan. */}
                     {dialLens === "radio" && (
                   <>
                     {/* While crossing scores are pending, the crossing rows'
@@ -3070,29 +2755,9 @@ export function DialView() {
                       />
                     )}
 
-                    {/* Filter menus — song-age tiers (left) and station
-                        categories (right). Live mode only; hidden while a
-                        gesture mode (sleep / era-genre) owns the station list. */}
-                    {!inContext && !hiddenModeActive && (
-                      <DialFilterBar
-                        activeTiers={activeTiers}
-                        activeCategories={activeCategories}
-                        crossingsActive={!radioMode}
-                        onToggleTier={toggleTier}
-                        onToggleCategory={toggleCategory}
-                        onToggleCrossings={() => setRadioMode(!radioMode)}
-                        crossingScope={crossingScope}
-                        onCycleCrossingScope={cycleCrossingScope}
-                        sortMetric={stationSortMetric}
-                        onSortMetric={setStationSortMetric}
-                      />
-                    )}
-
                     {/* Landing handoff status — quiet, non-blocking; shown in
                         and out of context mode for the tuned station only. */}
                     {landingNote}
-
-                    {!inContext && feedSection}
 
                     {/* Skeleton deadline expired but the server is still computing —
                         honest in-progress copy; live rows keep rendering below.
@@ -3147,17 +2812,6 @@ export function DialView() {
                           }}
                         />
                       </>
-                    )}
-
-                    {/* Ghost stations — "Missed while you were away" subsection.
-                        Offline/missed playback, so it stays separate from the
-                        live feed. Hidden in context mode. */}
-                    {!inContext && ghost.length > 0 && (
-                      <Zone2Lane
-                        ghost={ghost}
-                        activeSlug={radio.station?.slug ?? null}
-                        onTuneGhost={tuneGhost}
-                      />
                     )}
 
                     {/* Live-feed skeleton — shown while the first live pulse is

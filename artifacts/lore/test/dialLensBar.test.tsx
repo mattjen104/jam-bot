@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * DialLensBar — the Rooms | Press lens toggle.
+ * DialLensBar — the Stations | Scan lens toggle.
  *
  * Covers:
  *  1. Renders both lens buttons in a pipe-separated group.
@@ -26,37 +26,37 @@ function renderBar(lens: DialLens = "radio") {
 }
 
 describe("DialLensBar", () => {
-  it("renders Rooms and Press buttons in the Explore view group", () => {
+  it("renders Stations and Scan buttons in the Explore view group", () => {
     renderBar();
     expect(screen.getByRole("group", { name: "Explore view" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Rooms" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Press" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stations" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Scan" })).toBeTruthy();
   });
 
   it("marks the active lens with aria-pressed and the --on class", () => {
     renderBar("radio");
-    expect(screen.getByRole("button", { name: "Rooms" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Press" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("button", { name: "Rooms" }).className).toContain("dial-filter-bar__btn--on");
+    expect(screen.getByRole("button", { name: "Stations" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Scan" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Stations" }).className).toContain("dial-filter-bar__btn--on");
 
     cleanup();
-    renderBar("press");
-    expect(screen.getByRole("button", { name: "Press" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Rooms" }).getAttribute("aria-pressed")).toBe("false");
+    renderBar("scan");
+    expect(screen.getByRole("button", { name: "Scan" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Stations" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("clicking a lens fires onSetLens with that lens", () => {
     const { onSetLens } = renderBar("radio");
-    fireEvent.click(screen.getByRole("button", { name: "Press" }));
-    expect(onSetLens).toHaveBeenCalledWith("press");
-    fireEvent.click(screen.getByRole("button", { name: "Rooms" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan" }));
+    expect(onSetLens).toHaveBeenCalledWith("scan");
+    fireEvent.click(screen.getByRole("button", { name: "Stations" }));
     expect(onSetLens).toHaveBeenCalledWith("radio");
   });
 
   it("uses the filter bar's button anatomy (same pipe-separated style)", () => {
     const { container } = renderBar();
     expect(container.querySelector(".dial-filter-bar")).toBeTruthy();
-    expect(container.querySelectorAll(".dial-filter-bar__btn")).toHaveLength(4);
+    expect(container.querySelectorAll(".dial-filter-bar__btn")).toHaveLength(2);
     expect(container.querySelector(".dial-topbar__sep")?.textContent).toBe("|");
   });
 });

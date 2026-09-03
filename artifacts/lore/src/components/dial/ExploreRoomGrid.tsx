@@ -29,7 +29,7 @@ export function ExploreRoomGrid({
 
   return (
     <>
-      <div className="explore-room-grid" data-testid="explore-room-grid">
+      <div className="explore-station-grid" data-testid="explore-station-grid">
         {visibleRows.map((row) => {
           const { station, liveTrack } = row.ds;
           const track = liveTrack ?? row.show?.currentTrack ?? null;
@@ -40,33 +40,33 @@ export function ExploreRoomGrid({
           return (
             <article
               key={station.slug}
-              className={`explore-room-card${isActive ? " explore-room-card--active" : ""}`}
+              className={`explore-station-card${isActive ? " explore-station-card--active" : ""}`}
             >
-              <div className="explore-room-card__identity">
+              <div className="explore-station-card__identity">
                 <StationMark
                   name={station.name}
                   logoUrl={station.logoUrl}
                   variant="cube"
-                  className="explore-room-card__mark"
+                  className="explore-station-card__mark"
                 />
-                <div className="explore-room-card__station-copy">
-                  <span className="explore-room-card__kicker">
-                    {isActive ? "Listening now" : hasPersonalMatch ? "Your music is here" : "Live room"}
+                <div className="explore-station-card__station-copy">
+                  <span className="explore-station-card__kicker">
+                    {isActive ? "Listening now" : hasPersonalMatch ? "Your music is here" : "Live station"}
                   </span>
-                  <h3 className="explore-room-card__station">{station.name}</h3>
+                  <h3 className="explore-station-card__station">{station.name}</h3>
                 </div>
               </div>
 
-              <div className="explore-room-card__now">
+              <div className="explore-station-card__now">
                 <strong>{track?.artist?.trim() || showName || "Live broadcast"}</strong>
                 <span>{track?.title?.trim() || (showName && track?.artist?.trim() ? showName : "On air now")}</span>
               </div>
 
-              <div className="explore-room-card__footer">
+              <div className="explore-station-card__footer">
                 <span>{showName || (hasPersonalMatch ? "Crossing now" : "Broadcasting live")}</span>
                 <button
                   type="button"
-                  className="explore-room-card__tune"
+                  className="explore-station-card__tune"
                   aria-pressed={isActive}
                   aria-label={isActive ? `${station.name} is playing` : `Tune in to ${station.name}`}
                   disabled={isActive}
@@ -84,10 +84,10 @@ export function ExploreRoomGrid({
       {rows.length > visibleRows.length && (
         <button
           type="button"
-          className="explore-room-grid__all"
+          className="explore-station-grid__all"
           onClick={onOpenScan}
         >
-          Scan all {rows.length} live rooms
+          Scan all {rows.length} live stations
         </button>
       )}
     </>

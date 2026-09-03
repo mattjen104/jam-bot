@@ -3,28 +3,23 @@ interface ExploreHeaderProps {
   description: string;
   liveCount: number;
   crossingCount: number;
-  radioMode: boolean;
   onOpenScan: () => void;
-  onToggleCrossings: () => void;
 }
 
 /**
  * Explore's front door: a short orientation layer above the live station
  * surface. The actions deliberately map to existing, reliable behaviors:
- * Scan opens the guided scanner and the second action changes the station
- * scope without creating a new playback path.
+ * Scan opens the guided scanner without rebuilding station traversal inline.
  */
 export function ExploreHeader({
   title,
   description,
   liveCount,
   crossingCount,
-  radioMode,
   onOpenScan,
-  onToggleCrossings,
 }: ExploreHeaderProps) {
   const crossingLabel = `${crossingCount} crossing${crossingCount === 1 ? "" : "s"}`;
-  const liveLabel = `${liveCount} room${liveCount === 1 ? "" : "s"} live`;
+  const liveLabel = `${liveCount} station${liveCount === 1 ? "" : "s"} live`;
 
   return (
     <header className="explore-header" data-testid="explore-header">
@@ -41,14 +36,6 @@ export function ExploreHeader({
           onClick={onOpenScan}
         >
           Scan live
-        </button>
-        <button
-          type="button"
-          className="explore-header__action"
-          aria-pressed={!radioMode}
-          onClick={onToggleCrossings}
-        >
-          {radioMode ? "Show crossings" : "Show all rooms"}
         </button>
       </div>
 

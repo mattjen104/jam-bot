@@ -66,6 +66,7 @@ export interface CrossingCoverItem {
   title: string;
   releaseGroupMbid: string | null;
   artworkUrl: string;
+  matchKind: "record" | "artist";
   /** Record action destination — album when release identity exists, else song. */
   detailHref: string;
 }
@@ -104,9 +105,10 @@ export function crossingArtworkFor(
 
 /**
  * Derive the bounded cover-card set from the live feed rows. A row qualifies
- * only when its current track is a CONFIRMED exact crossing (recording or
- * release-group library hit — artist-only hits never qualify) with
- * release-exact artwork available.
+ * only when its current track is a confirmed record or artist crossing with
+ * release-exact artwork available. Artist crossings qualify only when the
+ * playing release itself is identified, so the cover never comes from a
+ * fuzzy artist search.
  */
 export function crossingCoverItems(
   rows: DialLaneRow[],
@@ -117,9 +119,9 @@ export function crossingCoverItems(
     const { ds, show } = row;
     if (!ds.isLive) continue;
     const track = ds.liveTrack ?? show?.currentTrack ?? null;
-    // Provisional entries are never promoted; artist-only hits have no
-    // trustworthy release identity and keep the text treatment.
-    if (!track || track.resolving || !track.isLibraryHit) continue;
+    // Provisional entries are never promoted. Both record and artist
+    // crossings still require release-exact art below.
+    if (!track || track.resolving || (!track.isLibraryHit && !track.isArtistHit)) continue;
     const art = crossingArtworkFor(ds, track);
     if (!art) continue;
     const detailHref = art.releaseGroupMbid
@@ -137,6 +139,7 @@ export function crossingCoverItems(
       title: track.title,
       releaseGroupMbid: art.releaseGroupMbid,
       artworkUrl: art.artworkUrl,
+      matchKind: track.isLibraryHit ? "record" : "artist",
       detailHref,
     });
   }
@@ -161,7 +164,7 @@ export function LiveCrossingCoverRail({
       data-testid="crossing-cover-rail"
     >
       <header className="cover-rail__header">
-        <h2 className="cover-rail__title">Playing your records</h2>
+        <h2 className="cover-rail__title">Crossings on air</h2>
         <span className="cover-rail__context">on air now</span>
       </header>
       <div className="cover-rail__scroll">
@@ -189,7 +192,9 @@ export function LiveCrossingCoverRail({
               <span className="cover-card__artist">{item.artist}</span>
               <span className="cover-card__title">{item.title}</span>
             </Link>
-            <span className="cover-card__provenance">{item.stationName} played</span>
+            <span className="cover-card__provenance">
+              {item.stationName} · {item.matchKind === "record" ? "record crossing" : "artist crossing"}
+            </span>
             <div className="cover-card__actions">
               <button
                 type="button"
