@@ -1,6 +1,6 @@
 # Specialist Radio roster
 
-Reviewed **2026-09-02**. This is the final 20-station cohort. “Shallow” means
+Reviewed **2026-09-03**. This is the current 21-station cohort. “Shallow” means
 Lore may import only the broadcaster’s current rolling window; it does not
 claim an older archive. Programme archives are cited for identity and listening
 only and are never converted into invented track rows.
@@ -15,6 +15,7 @@ only and are never converted into invented track rows.
 | 8Ball Radio | New York, US | [Official browser player](https://8ballradio.nyc/) | Programme only | Official Mixcloud-linked show archive; no track extraction | Programme only | Mandatory artist-led community station |
 | Boxout FM | New Delhi, IN | [Official browser player](https://boxout.fm/radio) | None verified | Official recordings archive; no automated track extraction | Programme only | Mandatory South Asian independent-music platform |
 | Cashmere Radio | Berlin, DE | [Official](https://cashmereradio.com/), 192k MP3 | Programme only | Official episode pages; archive labels are not tracks | Programme only | Mandatory experimental community station |
+| **Nightride FM — Chillsynth** | US | [Official](https://nightride.fm/), [320k MP3](https://stream.nightride.fm/chillsynth.mp3) | Track (ICY) | Station-owned Icecast status/metadata; no deep archive claim | Live only | Officially labeled instrumental chillsynth/chillwave; admitted with explicit evidence, while final instrumental classification waits for the bounded lyric audit |
 | **SomaFM CliqHop IDM** | US | [Official](https://somafm.com/cliqhop/), 128k MP3 | Track | `songs/cliqhop.json`, public JSON, timestamp cursor + stable source id | **~20 recent tracks, shallow** | Focused IDM and experimental electronics |
 | **SomaFM Lush** | US | [Official](https://somafm.com/lush/), 128k MP3 | Track | `songs/lush.json`, public JSON, timestamp cursor + stable source id | **~20 recent tracks, shallow** | Dream-pop and vocal electronic specialist |
 | **SomaFM Sonic Universe** | US | [Official](https://somafm.com/sonicuniverse/), 128k MP3 | Track | `songs/sonicuniverse.json`, public JSON, timestamp cursor + stable source id | **~20 recent tracks, shallow** | Modern and avant-garde jazz |

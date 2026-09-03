@@ -27,7 +27,7 @@ describe("applyEraGenreStationsMigration", () => {
 
     const { db } = await import("@workspace/db");
     const execute = db.execute as ReturnType<typeof vi.fn>;
-    expect(execute).toHaveBeenCalledTimes(4);
+    expect(execute).toHaveBeenCalledTimes(5);
 
     // Step 1 — idempotent DDL.
     const ddl: string = JSON.stringify(execute.mock.calls[0]?.[0]);
@@ -67,11 +67,17 @@ describe("applyEraGenreStationsMigration", () => {
       expect(repair).toContain(blocked);
     }
 
+    // Step 2c — restore valid Specialist rows hidden by the retired mode.
+    const restore: string = JSON.stringify(execute.mock.calls[3]?.[0]);
+    expect(restore).toContain("SET hidden = false");
+    expect(restore).toContain("era_genre_mode = true");
+    expect(restore).toContain("NOT LIKE ALL");
+
     // Step 3 — FIP sub-channels get the mode flag but stay UN-hidden so their
     // pollers keep running (hidden = soft-hide + poll stop) and spin ingestion
     // for crossing history continues. Gated on era_genre_mode = false so an
     // admin's later deliberate hide is not reverted on restart.
-    const fipUpdate: string = JSON.stringify(execute.mock.calls[3]?.[0]);
+    const fipUpdate: string = JSON.stringify(execute.mock.calls[4]?.[0]);
     for (const slug of ERA_GENRE_FIP_SLUGS) {
       expect(fipUpdate).toContain(slug);
     }
@@ -86,9 +92,9 @@ describe("applyEraGenreStationsMigration", () => {
 
     const { db } = await import("@workspace/db");
     const execute = db.execute as ReturnType<typeof vi.fn>;
-    expect(execute).toHaveBeenCalledTimes(8);
+    expect(execute).toHaveBeenCalledTimes(10);
     const firstUpdate = JSON.stringify(execute.mock.calls[1]?.[0]);
-    const secondUpdate = JSON.stringify(execute.mock.calls[5]?.[0]);
+    const secondUpdate = JSON.stringify(execute.mock.calls[6]?.[0]);
     expect(secondUpdate).toBe(firstUpdate);
   });
 

@@ -4275,7 +4275,7 @@ export const LookupPickedMbidsResponse = zod.object({
 });
 
 /**
- * Returns time-indexed lyric lines from LRCLIB. Each line carries an offset_ms so the UI can highlight the active cue during playback. Returns an empty lines array when LRCLIB has no synced version. Fetched and cached on first request — subsequent calls are instant.
+ * Returns time-indexed lyric lines from LRCLIB. Each line carries an offset_ms so the UI can highlight the active cue during playback. Returns an empty lines array for instrumental, no-result, transient, and not-checked states; status keeps those outcomes distinguishable. Fetched and cached on first request — subsequent calls are instant.
 
  * @summary Synced lyric lines for a recording (LRCLIB)
  */
@@ -4287,6 +4287,13 @@ export const GetRecordingLyricsParams = zod.object({
 export const GetRecordingLyricsResponse = zod
   .object({
     synced: zod.boolean(),
+    status: zod.enum([
+      "lyrics_found",
+      "instrumental",
+      "no_result",
+      "transient_failure",
+      "not_checked",
+    ]),
     lines: zod.array(
       zod
         .object({
@@ -4301,7 +4308,7 @@ export const GetRecordingLyricsResponse = zod
     ),
   })
   .describe(
-    "Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics. lines is empty when LRCLIB has no lyrics at all.\n",
+    "Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics or no lines. status preserves explicit instrumental, genuine no-result, transient failure, and not-checked outcomes independently.\n",
   );
 
 /**

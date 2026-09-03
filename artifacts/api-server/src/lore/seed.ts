@@ -542,6 +542,7 @@ export const SPECIALIST_RADIO_SLUGS = [
   "8ball-radio", "boxout-fm", "cashmere-radio",
   "somafm-cliqhop", "somafm-lush", "somafm-sonicuniverse",
   "somafm-suburbsofgoa", "kexp",
+  "nightride-chillsynth",
   "dublab", "rinse-fm", "worldwide-fm", "refuge-worldwide",
   "the-lot-radio", "radio-nopal", "nts-1", "nts-2",
 ] as const;
@@ -588,6 +589,35 @@ function specialistAdditions(): InsertStation[] {
       automationClass: "human", tags: ["specialist", "experimental", "avant-garde"],
       favorite: true, sortOrder: 596,
     },
+    {
+      // Official Nightride navigation labels Chillsynth "Chillsynth /
+      // Chillwave / Instrumental". The station-owned Icecast status surface
+      // publishes a 320kbps MP3 mount plus a real artist-title pair. Verified
+      // 2026-09-03; the audit still requires track-level LRCLIB corroboration.
+      slug: "nightride-chillsynth",
+      name: "Nightride FM — Chillsynth",
+      org: "Nightride FM",
+      country: "US",
+      streamUrl: "https://stream.nightride.fm/chillsynth.mp3",
+      streamQuality: "320kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://nightride.fm/",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://stream.nightride.fm/chillsynth.mp3",
+        instrumentalClaim: true,
+        evidenceUrl: "https://nightride.fm/",
+        evidenceNote: "Official channel label: Chillsynth / Chillwave / Instrumental",
+      },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "curated",
+      automationClass: "automated",
+      tags: ["specialist", "instrumental", "electronic", "chillsynth"],
+      favorite: true,
+      hidden: false,
+      sortOrder: 597,
+    },
     ...soma.map(([slug, name, channel, streamUrl, tags], index): InsertStation => ({
       slug, name, org: "SomaFM", country: "US", streamUrl,
       streamQuality: "128kbps MP3", streamFormat: "mp3",
@@ -597,7 +627,7 @@ function specialistAdditions(): InsertStation[] {
       nowPlayingSource: "somafm", nowPlayingConfig: { channel },
       source: "curated", tier: "longtail", stationClass: "curated",
       automationClass: "automated", tags: ["specialist", ...tags],
-      favorite: true, hidden: false, sortOrder: 597 + index,
+      favorite: true, hidden: false, sortOrder: 598 + index,
     })),
   ];
 }
@@ -885,6 +915,10 @@ const ICY_HEALTH_SEEDS: Array<{
   {
     stationSlug: "refuge-worldwide",
     radioBrowserUuid: "manual-refuge-worldwide",
+  },
+  {
+    stationSlug: "nightride-chillsynth",
+    radioBrowserUuid: "manual-nightride-chillsynth",
   },
   // Community Radio Index shortlist — genuine Radio Browser UUIDs were used
   // only to resolve and cross-check these hand-reviewed direct HTTPS streams.

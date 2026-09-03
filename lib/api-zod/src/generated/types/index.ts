@@ -284,6 +284,7 @@ export * from "./recordingLink";
 export * from "./recordingLinkKind";
 export * from "./recordingListProvenanceResponse";
 export * from "./recordingLyrics";
+export * from "./recordingLyricsStatus";
 export * from "./recordingNode";
 export * from "./recordingPick";
 export * from "./recordingPickConfidence";

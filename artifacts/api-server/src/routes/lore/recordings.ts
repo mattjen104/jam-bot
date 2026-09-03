@@ -41,7 +41,7 @@ import { eq, and, asc, desc, sql, inArray, gte, isNotNull } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { resolvePreview } from "../../lore/preview.js";
 import { resolveEntry } from "../../lore/entry.js";
-import { getLyrics } from "../../lore/lrclib.js";
+import { getLyricsEvidence } from "../../lore/lrclib.js";
 import { enrichRecording, peekEnrichedKnowledge } from "@workspace/song-enrichment";
 import { wireSongEnrichment } from "../../song/wire.js";
 import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
@@ -552,8 +552,8 @@ router.get("/recordings/:mbid/lyrics", h(async (req, res) => {
     .limit(1);
   if (!rec) return res.status(404).json({ error: "Recording not found" });
 
-  const { lines, synced } = await getLyrics(rec.mbid);
-  return res.json(GetRecordingLyricsResponse.parse({ lines, synced }));
+  const { lines, synced, status } = await getLyricsEvidence(rec.mbid);
+  return res.json(GetRecordingLyricsResponse.parse({ lines, synced, status }));
 }));
 
 // GET /api/recordings/:mbid/spins

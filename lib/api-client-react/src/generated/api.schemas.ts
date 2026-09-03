@@ -1083,12 +1083,12 @@ export interface LyricLine {
   text: string;
 }
 
-/**
- * Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics. lines is empty when LRCLIB has no lyrics at all.
-
+export type RecordingLyricsStatus =
+  (typeof RecordingLyricsStatus)[keyof typeof RecordingLyricsStatus];
  */
 export interface RecordingLyrics {
   synced: boolean;
+  status: RecordingLyricsStatus;
   lines: LyricLine[];
 }
 
@@ -4753,3 +4753,11 @@ export type GetRecordingSongExploder200 = {
   episode: GetRecordingSongExploder200Episode;
   anchors: GetRecordingSongExploder200AnchorsItem[];
 };
+
+export const RecordingLyricsStatus = {
+  lyrics_found: "lyrics_found",
+  instrumental: "instrumental",
+  no_result: "no_result",
+  transient_failure: "transient_failure",
+  not_checked: "not_checked",
+} as const;

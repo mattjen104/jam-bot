@@ -114,6 +114,12 @@ export async function setup(): Promise<void> {
       "../src/lore/genre-enrichment-migration.js"
     );
     await applyGenreEnrichmentMigration();
+    // Ensures the lyric evidence columns and durable station-audit table exist
+    // before any worker inserts recordings using the current Drizzle schema.
+    const { applyInstrumentalAuditMigration } = await import(
+      "../src/lore/instrumental-audit-migration.js"
+    );
+    await applyInstrumentalAuditMigration();
 
     // Ensures release_date / release_date_checked_at columns exist — required
     // by any test that reads recordings.releaseDate after the schema added

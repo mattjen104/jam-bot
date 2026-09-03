@@ -161,6 +161,11 @@
     { "method": "GET", "path": "/admin/source-coverage/probe/status", "kind": "admin", "reason": "Admin-only probe status read model; operator surface, not a client contract." },
     { "method": "GET", "path": "/admin/station-history", "kind": "admin", "reason": "Admin-only station-history source audit and backfill ledger; operator surface, not a client contract." },
     { "method": "POST", "path": "/admin/station-history/audit", "kind": "admin", "reason": "Admin-only bounded station-history audit trigger; operator surface, not a client contract." },
-    { "method": "GET", "path": "/admin/station-history/audit/status", "kind": "admin", "reason": "Admin-only station-history audit status; operator surface, not a client contract." }
+    { "method": "GET", "path": "/admin/station-history/audit/status", "kind": "admin", "reason": "Admin-only station-history audit status; operator surface, not a client contract." },
+    { "method": "GET", "path": "/admin/instrumental-audit", "kind": "admin", "reason": "Admin-only evidence-backed instrumental roster report; operator surface, not a generated client contract." },
+    { "method": "POST", "path": "/admin/instrumental-audit/run", "kind": "admin", "reason": "Admin-only bounded instrumental audit trigger; operator surface, not a generated client contract." },
+    { "method": "GET", "path": "/admin/instrumental-audit/status", "kind": "admin", "reason": "Admin-only instrumental audit status; operator surface, not a generated client contract." },
+    { "method": "GET", "path": "/admin/genre-enrichment-health", "kind": "admin", "reason": "Admin-only genre enrichment health read model; operator surface, not a generated client contract." },
+    { "method": "POST", "path": "/admin/genre-enrichment-backfill/run", "kind": "admin", "reason": "Admin-only bounded genre enrichment backfill trigger; operator surface, not a generated client contract." }
   ]
 }

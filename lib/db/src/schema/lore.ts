@@ -115,6 +115,16 @@ export const recordingsTable = pgTable("recordings", {
    */
   isrcCheckedAt: timestamp("isrc_checked_at"),
   /**
+   * LRCLIB evidence state. This is deliberately separate from lyric_lines:
+   * an explicit instrumental answer has no lines, while a provider failure
+   * must remain retryable and an unattempted recording must remain unknown.
+   */
+  lyricStatus: text("lyric_status").notNull().default("not_checked"),
+  /** Last definitive or transient LRCLIB attempt. Null means not checked. */
+  lyricCheckedAt: timestamp("lyric_checked_at"),
+  /** Short transient-provider error context; cleared after a non-error answer. */
+  lyricError: text("lyric_error"),
+  /**
    * When a release-year lookup was last attempted for this recording. Set on
    * every attempt that received a definitive answer from MusicBrainz — whether
    * a year was found or MusicBrainz genuinely had none. NOT set on 5xx/network
@@ -1124,6 +1134,37 @@ export const lyricLinesTable = pgTable(
 
 export type LyricLineRow = typeof lyricLinesTable.$inferSelect;
 export type InsertLyricLineRow = typeof lyricLinesTable.$inferInsert;
+
+/**
+ * Latest evidence packet for a station's instrumental-programming audit.
+ * The detailed JSON keeps the report auditable without adding a new table for
+ * every sampled track; stationId is stable across reruns and seed updates.
+ */
+export const instrumentalStationAuditsTable = pgTable(
+  "instrumental_station_audits",
+  {
+    stationId: integer("station_id")
+      .primaryKey()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    classification: text("classification").notNull(),
+    auditedAt: timestamp("audited_at").notNull(),
+    sampleSize: integer("sample_size").notNull().default(0),
+    checkedCount: integer("checked_count").notNull().default(0),
+    instrumentalCount: integer("instrumental_count").notNull().default(0),
+    lyricHitCount: integer("lyric_hit_count").notNull().default(0),
+    report: jsonb("report").$type<Record<string, unknown>>().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("instrumental_station_audits_classification_idx").on(t.classification),
+    index("instrumental_station_audits_audited_at_idx").on(t.auditedAt),
+  ],
+);
+
+export type InstrumentalStationAudit =
+  typeof instrumentalStationAuditsTable.$inferSelect;
+export type InsertInstrumentalStationAudit =
+  typeof instrumentalStationAuditsTable.$inferInsert;
 
 /**
  * Song Exploder episode records. Each episode deconstructs a single song; the

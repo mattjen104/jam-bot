@@ -6,12 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LyricLine } from "./lyricLine";
+import type { RecordingLyricsStatus } from "./recordingLyricsStatus";
 
 /**
- * Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics. lines is empty when LRCLIB has no lyrics at all.
+ * Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics or no lines. status preserves explicit instrumental, genuine no-result, transient failure, and not-checked outcomes independently.
 
  */
 export interface RecordingLyrics {
   synced: boolean;
+  status: RecordingLyricsStatus;
   lines: LyricLine[];
 }

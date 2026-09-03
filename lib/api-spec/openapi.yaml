@@ -1875,7 +1875,8 @@ paths:
       description: >
         Returns time-indexed lyric lines from LRCLIB. Each line carries an
         offset_ms so the UI can highlight the active cue during playback.
-        Returns an empty lines array when LRCLIB has no synced version.
+        Returns an empty lines array for instrumental, no-result, transient,
+        and not-checked states; status keeps those outcomes distinguishable.
         Fetched and cached on first request — subsequent calls are instant.
       parameters:
         - name: mbid
@@ -5613,17 +5614,27 @@ components:
       type: object
       description: >
         Lyric lines for a recording. synced=true means time-coded (LRC);
-        synced=false means static plain lyrics. lines is empty when LRCLIB
-        has no lyrics at all.
+        synced=false means static plain lyrics or no lines. status preserves
+        explicit instrumental, genuine no-result, transient failure, and
+        not-checked outcomes independently.
       properties:
         synced:
           type: boolean
+        status:
+          type: string
+          enum:
+            - lyrics_found
+            - instrumental
+            - no_result
+            - transient_failure
+            - not_checked
         lines:
           type: array
           items:
             $ref: "#/components/schemas/LyricLine"
       required:
         - synced
+        - status
         - lines
     GeniusDraft:
       type: object

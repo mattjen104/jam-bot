@@ -5995,7 +5995,7 @@ export function useLookupPickedMbids<
 }
 
 /**
- * Returns time-indexed lyric lines from LRCLIB. Each line carries an offset_ms so the UI can highlight the active cue during playback. Returns an empty lines array when LRCLIB has no synced version. Fetched and cached on first request — subsequent calls are instant.
+ * Returns time-indexed lyric lines from LRCLIB. Each line carries an offset_ms so the UI can highlight the active cue during playback. Returns an empty lines array for instrumental, no-result, transient, and not-checked states; status keeps those outcomes distinguishable. Fetched and cached on first request — subsequent calls are instant.
 
  * @summary Synced lyric lines for a recording (LRCLIB)
  */

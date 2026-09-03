@@ -63,6 +63,23 @@ describe("probeStationPublicMetadata — ICY", () => {
     expect(out?.resolvedUrl).toBe(direct);
   });
 
+  it("accepts the verified Chillsynth artist-title metadata shape", async () => {
+    const out = await probeStationPublicMetadata(
+      {
+        ...STATION,
+        slug: "nightride-chillsynth",
+        streamUrl: "https://stream.nightride.fm/chillsynth.mp3",
+      },
+      deps({ fetchIcy: async () => icyOk("Forhill - Wave") }),
+    );
+    expect(out).toMatchObject({
+      kind: "icy",
+      outcome: "usable_pair",
+      sampleArtist: "Forhill",
+      sampleTitle: "Wave",
+    });
+  });
+
   it("falls back to the probed URL when redirect resolution fails", async () => {
     const out = await probeStationPublicMetadata(
       STATION,

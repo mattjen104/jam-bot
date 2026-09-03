@@ -116,6 +116,11 @@ import {
   getSourceCoverageProbeStatus,
 } from "../../lore/source-probe.js";
 import { getScoutReport } from "../../lore/fingerprint-scout.js";
+import {
+  getInstrumentalAuditReport,
+  getInstrumentalAuditStatus,
+  startInstrumentalAudit,
+} from "../../lore/instrumental-audit.js";
 import { probeCriStream } from "../../lore/cri-probe.js";
 import { auddAvailable } from "../../lore/audd.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
@@ -1314,6 +1319,32 @@ router.post("/admin/station-history/audit", h(async (_req, res) => {
 
 router.get("/admin/station-history/audit/status", h(async (_req, res) => {
   return res.json(getStationHistoryAuditStatus());
+}));
+
+// GET /api/admin/instrumental-audit — latest durable evidence-backed roster.
+router.get("/admin/instrumental-audit", h(async (_req, res) => {
+  return res.json({
+    status: getInstrumentalAuditStatus(),
+    report: await getInstrumentalAuditReport(),
+  });
+}));
+
+// POST /api/admin/instrumental-audit/run — bounded, sequential LRCLIB audit.
+router.post("/admin/instrumental-audit/run", h(async (_req, res) => {
+  if (!startInstrumentalAudit()) {
+    return res.status(409).json({
+      error: "An instrumental station audit is already in progress",
+      status: getInstrumentalAuditStatus(),
+    });
+  }
+  return res.status(202).json({
+    started: true,
+    status: getInstrumentalAuditStatus(),
+  });
+}));
+
+router.get("/admin/instrumental-audit/status", h(async (_req, res) => {
+  return res.json(getInstrumentalAuditStatus());
 }));
 
 // GET /api/admin/fingerprint-scout/report — the rotating fingerprint scout's

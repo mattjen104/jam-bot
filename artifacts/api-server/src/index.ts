@@ -139,6 +139,7 @@ import { applyCriCandidatesMigration } from "./lore/cri-candidates-migration.js"
 import { applyAppleMusicJamsMigration } from "./lore/apple-music-jams-migration.js";
 import { applyStationSourceQualityMigration } from "./lore/source-quality-migration.js";
 import { applyStoreAuditMigration } from "./lore/store-audit-migration.js";
+import { applyInstrumentalAuditMigration } from "./lore/instrumental-audit-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -227,6 +228,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applySupportHoldsMigration", applySupportHoldsMigration);
     await runMigration("applySocialPresenceMigration", applySocialPresenceMigration);
     await runMigration("applyShowDjNamesMigration", applyShowDjNamesMigration);
+    await runMigration("applyInstrumentalAuditMigration", applyInstrumentalAuditMigration);
     await runMigration("applyArtistMetadataCleanup", async () => {
       await applyArtistMetadataCleanup();
     });

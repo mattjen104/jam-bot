@@ -6,12 +6,13 @@ import {
 import { supportsBackfill } from "../src/lore/adapters.js";
 
 describe("Specialist Radio roster", () => {
-  it("contains exactly 20 unique stations including every required entry", () => {
-    expect(SPECIALIST_RADIO_SLUGS).toHaveLength(20);
-    expect(new Set(SPECIALIST_RADIO_SLUGS).size).toBe(20);
+  it("contains exactly 21 unique stations including the instrumental addition", () => {
+    expect(SPECIALIST_RADIO_SLUGS).toHaveLength(21);
+    expect(new Set(SPECIALIST_RADIO_SLUGS).size).toBe(21);
     expect(SPECIALIST_RADIO_SLUGS).toEqual(expect.arrayContaining([
       "kiosk-radio", "lahmacun-radio", "oroko-radio", "lyl-radio",
       "8ball-radio", "boxout-fm", "cashmere-radio",
+      "nightride-chillsynth",
     ]));
   });
 
@@ -40,5 +41,26 @@ describe("Specialist Radio roster", () => {
       expect(station?.streamUrl, slug).toBeTruthy();
       expect(station?.nowPlayingSource, slug).toBeNull();
     }
+  });
+
+  it("seeds the verified instrumental channel with official evidence and honest ICY metadata", () => {
+    const station = SEED_STATIONS.find(
+      (candidate) => candidate.slug === "nightride-chillsynth",
+    );
+    expect(station).toMatchObject({
+      streamUrl: "https://stream.nightride.fm/chillsynth.mp3",
+      streamQuality: "320kbps MP3",
+      nowPlayingSource: "radio_browser_icy",
+      automationClass: "automated",
+      source: "curated",
+    });
+    expect(station?.tags).toEqual(expect.arrayContaining([
+      "specialist",
+      "instrumental",
+    ]));
+    expect(station?.nowPlayingConfig).toMatchObject({
+      instrumentalClaim: true,
+      evidenceUrl: "https://nightride.fm/",
+    });
   });
 });

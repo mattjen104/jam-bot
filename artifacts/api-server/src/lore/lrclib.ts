@@ -1,5 +1,5 @@
 import { db, recordingsTable, lyricLinesTable } from "@workspace/db";
-import { eq, count } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { ingestGeniusAnnotations } from "./genius-annotations.js";
 
 /**
@@ -37,7 +37,19 @@ export interface LyricsResult {
   synced: boolean;
 }
 
-/** Sentinel offset_ms for a "no lyrics found" cache entry. */
+export type LyricsEvidenceStatus =
+  | "lyrics_found"
+  | "instrumental"
+  | "no_result"
+  | "transient_failure"
+  | "not_checked";
+
+export interface LyricsEvidence extends LyricsResult {
+  status: LyricsEvidenceStatus;
+  error?: string;
+}
+
+/** Sentinel offset_ms for a definitive "no lyrics found" cache entry. */
 const MISS_SENTINEL = -1;
 
 /**
@@ -82,6 +94,24 @@ export async function fetchFromLrclib(
   album: string | null,
   durationMs: number | null,
 ): Promise<LyricsResult | null> {
+  const outcome = await fetchLrclibEvidence(title, artist, album, durationMs);
+  if (outcome.status === "lyrics_found" || outcome.status === "instrumental") {
+    return { lines: outcome.lines, synced: outcome.synced };
+  }
+  return null;
+}
+
+/**
+ * Fetch LRCLIB and preserve the provider outcome. The legacy
+ * `fetchFromLrclib` wrapper intentionally keeps its nullable return shape,
+ * while this result is used by persistence and the station audit.
+ */
+export async function fetchLrclibEvidence(
+  title: string,
+  artist: string,
+  album: string | null,
+  durationMs: number | null,
+): Promise<LyricsEvidence> {
   try {
     const params = new URLSearchParams({ track_name: title, artist_name: artist });
     if (album) params.set("album_name", album);
@@ -90,20 +120,29 @@ export async function fetchFromLrclib(
     const r = await fetch(`${LRCLIB_BASE}/get?${params.toString()}`, {
       headers: { "User-Agent": LRCLIB_UA },
     });
-    if (r.status === 404) return null;
+    if (r.status === 404) {
+      return { status: "no_result", lines: [], synced: false };
+    }
     if (!r.ok) {
       console.warn("[lore] lrclib fetch failed", r.status, title, artist);
-      return null;
+      return {
+        status: "transient_failure",
+        lines: [],
+        synced: false,
+        error: `HTTP ${r.status}`,
+      };
     }
     const j = (await r.json()) as {
       syncedLyrics?: string | null;
       plainLyrics?: string | null;
       instrumental?: boolean;
     };
-    if (j.instrumental) return { lines: [], synced: false }; // no words — cache as miss
+    if (j.instrumental) {
+      return { status: "instrumental", lines: [], synced: false };
+    }
     if (j.syncedLyrics) {
       const lines = parseLrc(j.syncedLyrics);
-      return { lines, synced: true };
+      if (lines.length > 0) return { status: "lyrics_found", lines, synced: true };
     }
     if (j.plainLyrics) {
       const lines = j.plainLyrics
@@ -111,25 +150,119 @@ export async function fetchFromLrclib(
         .map((t) => t.trim())
         .filter((t) => t.length > 0)
         .map((text, i) => ({ offsetMs: PLAIN_OFFSET_BASE + i, text }));
-      return { lines, synced: false };
+      if (lines.length > 0) {
+        return { status: "lyrics_found", lines, synced: false };
+      }
     }
-    return null;
+    return { status: "no_result", lines: [], synced: false };
   } catch (err) {
     console.warn("[lore] lrclib fetch error", title, artist, err);
-    return null;
+    return {
+      status: "transient_failure",
+      lines: [],
+      synced: false,
+      error: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300),
+    };
   }
 }
 
-/**
- * True when we've already attempted (and stored or cached-missed) lyrics
- * for this mbid. Checks for any row — including the miss sentinel.
- */
-async function lyricsAttempted(mbid: string): Promise<boolean> {
-  const [row] = await db
-    .select({ n: count() })
+const TRANSIENT_RETRY_COOLDOWN_MS = 15 * 60_000;
+const evidenceInFlight = new Map<string, Promise<LyricsEvidence>>();
+
+export function shouldRetryLyricsEvidence(
+  status: LyricsEvidenceStatus,
+  checkedAt: Date | null,
+  nowMs = Date.now(),
+): boolean {
+  if (status === "not_checked") return true;
+  if (status !== "transient_failure") return false;
+  return !checkedAt ||
+    nowMs - checkedAt.getTime() >= TRANSIENT_RETRY_COOLDOWN_MS;
+}
+
+async function updateEvidence(
+  mbid: string,
+  status: LyricsEvidenceStatus,
+  error: string | null = null,
+): Promise<void> {
+  await db
+    .update(recordingsTable)
+    .set({
+      lyricStatus: status,
+      lyricCheckedAt: new Date(),
+      lyricError: error,
+      updatedAt: new Date(),
+    })
+    .where(eq(recordingsTable.mbid, mbid));
+}
+
+async function cachedEvidence(
+  mbid: string,
+  status: LyricsEvidenceStatus,
+  checkedAt: Date | null,
+): Promise<LyricsEvidence | null> {
+  const rows = await db
+    .select({ offsetMs: lyricLinesTable.offsetMs, text: lyricLinesTable.text })
+    .from(lyricLinesTable)
+    .where(eq(lyricLinesTable.mbid, mbid))
+    .orderBy(lyricLinesTable.offsetMs);
+  const lines = rows.filter((row) => row.offsetMs !== MISS_SENTINEL);
+  if (lines.length > 0) {
+    return {
+      status: "lyrics_found",
+      lines,
+      synced: lines[0]!.offsetMs < PLAIN_OFFSET_BASE,
+    };
+  }
+  if (status === "instrumental" || status === "no_result") {
+    return { status, lines: [], synced: false };
+  }
+  if (
+    status === "transient_failure" &&
+    !shouldRetryLyricsEvidence(status, checkedAt)
+  ) {
+    return { status, lines: [], synced: false };
+  }
+  return null;
+}
+
+async function loadCachedEvidence(mbid: string): Promise<LyricsEvidence | null> {
+  const [recording] = await db
+    .select({
+      status: recordingsTable.lyricStatus,
+      checkedAt: recordingsTable.lyricCheckedAt,
+    })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, mbid))
+    .limit(1);
+  if (!recording) return null;
+
+  const status = (recording.status || "not_checked") as LyricsEvidenceStatus;
+  const cached = await cachedEvidence(
+    mbid,
+    status,
+    recording.checkedAt,
+  );
+  if (cached) return cached;
+
+  // Rows written before lyric_status existed remain readable and are upgraded
+  // from their actual shape. A miss sentinel is no_result, never instrumental.
+  const rows = await db
+    .select({ offsetMs: lyricLinesTable.offsetMs, text: lyricLinesTable.text })
     .from(lyricLinesTable)
     .where(eq(lyricLinesTable.mbid, mbid));
-  return (row?.n ?? 0) > 0;
+  if (rows.length === 0) return null;
+  const hasLines = rows.some((row) => row.offsetMs !== MISS_SENTINEL);
+  const inferred: Exclude<LyricsEvidenceStatus, "not_checked" | "transient_failure"> =
+    hasLines ? "lyrics_found" : "no_result";
+  await updateEvidence(mbid, inferred);
+  return {
+    status: inferred,
+    lines: rows
+      .filter((row) => row.offsetMs !== MISS_SENTINEL)
+      .sort((a, b) => a.offsetMs - b.offsetMs),
+    synced: hasLines && rows.find((row) => row.offsetMs !== MISS_SENTINEL)!.offsetMs < PLAIN_OFFSET_BASE,
+  };
 }
 
 /**
@@ -141,59 +274,59 @@ async function lyricsAttempted(mbid: string): Promise<boolean> {
  * - Filters out the sentinel before returning to callers.
  * - Returns { lines, synced } so callers know whether timestamps are real.
  */
+export async function getLyricsEvidence(mbid: string): Promise<LyricsEvidence> {
+  const cached = await loadCachedEvidence(mbid);
+  if (cached) return cached;
+  const existing = evidenceInFlight.get(mbid);
+  if (existing) return existing;
+
+  const work = (async (): Promise<LyricsEvidence> => {
+    const [rec] = await db
+      .select({
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        durationMs: recordingsTable.durationMs,
+      })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, mbid))
+      .limit(1);
+
+    if (!rec) return { status: "not_checked", lines: [], synced: false };
+
+    const result = await fetchLrclibEvidence(rec.title, rec.artist, null, rec.durationMs);
+    await updateEvidence(mbid, result.status, result.error ?? null);
+
+    if (result.status === "no_result") {
+      await db
+        .insert(lyricLinesTable)
+        .values({ mbid, offsetMs: MISS_SENTINEL, text: "" })
+        .onConflictDoNothing();
+    } else if (result.status === "lyrics_found") {
+      await db
+        .insert(lyricLinesTable)
+        .values(result.lines.map((line) => ({ mbid, offsetMs: line.offsetMs, text: line.text })))
+        .onConflictDoNothing();
+      console.info(
+        `[lore] lrclib ${rec.artist} – ${rec.title}: ${result.lines.length} ` +
+        `${result.synced ? "synced" : "plain"} line(s)`,
+      );
+      if (result.synced) {
+        ingestGeniusAnnotations(mbid).catch((err) =>
+          console.warn("[lore] genius annotation trigger failed", mbid, err),
+        );
+      }
+    }
+    return result;
+  })();
+  evidenceInFlight.set(mbid, work);
+  try {
+    return await work;
+  } finally {
+    evidenceInFlight.delete(mbid);
+  }
+}
+
 export async function getLyrics(mbid: string): Promise<LyricsResult> {
-  // Fast path — already fetched
-  if (await lyricsAttempted(mbid)) {
-    const rows = await db
-      .select({ offsetMs: lyricLinesTable.offsetMs, text: lyricLinesTable.text })
-      .from(lyricLinesTable)
-      .where(eq(lyricLinesTable.mbid, mbid))
-      .orderBy(lyricLinesTable.offsetMs);
-    const lines = rows.filter((r) => r.offsetMs !== MISS_SENTINEL);
-    const synced = lines.length > 0 && lines[0]!.offsetMs < PLAIN_OFFSET_BASE;
-    return { lines, synced };
-  }
-
-  // Slow path — look up recording metadata and call LRCLIB
-  const [rec] = await db
-    .select({
-      title: recordingsTable.title,
-      artist: recordingsTable.artist,
-      durationMs: recordingsTable.durationMs,
-    })
-    .from(recordingsTable)
-    .where(eq(recordingsTable.mbid, mbid))
-    .limit(1);
-
-  if (!rec) return { lines: [], synced: false };
-
-  const result = await fetchFromLrclib(rec.title, rec.artist, null, rec.durationMs);
-
-  if (result === null || result.lines.length === 0) {
-    // Cache the miss so this mbid doesn't re-hit the network
-    await db
-      .insert(lyricLinesTable)
-      .values({ mbid, offsetMs: MISS_SENTINEL, text: "" })
-      .onConflictDoNothing();
-    return { lines: [], synced: false };
-  }
-
-  // Store the lines (synced or plain)
-  await db
-    .insert(lyricLinesTable)
-    .values(result.lines.map((l) => ({ mbid, offsetMs: l.offsetMs, text: l.text })))
-    .onConflictDoNothing();
-
-  const kind = result.synced ? "synced" : "plain";
-  console.info(`[lore] lrclib ${rec.artist} – ${rec.title}: ${result.lines.length} ${kind} line(s)`);
-
-  // Off hot path: trigger Genius annotation ingestion now that we have lyric
-  // lines to project against. Only useful for synced lyrics. Fire-and-forget.
-  if (result.synced) {
-    ingestGeniusAnnotations(mbid).catch((err) =>
-      console.warn("[lore] genius annotation trigger failed", mbid, err),
-    );
-  }
-
-  return result;
+  const { lines, synced } = await getLyricsEvidence(mbid);
+  return { lines, synced };
 }
