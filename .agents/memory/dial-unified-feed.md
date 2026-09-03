@@ -1,38 +1,30 @@
 ---
-name: Dial unified live feed
-description: The Dial front door is one flat live-station feed (no Zone 1/2/3 split); ranking bands + infinite scroll replace zone labels and See-all toggles.
+name: Explore live-room boundary
+description: Explore uses cover-first music rails and a bounded station-first room grid; full station traversal belongs to Scan.
 ---
 
-# Dial unified live feed
+# Explore live-room boundary
 
-The former Zone 1 (crossing rows) / Zone 3 (also-on-air, DJ band + rest band)
-split collapsed into ONE flat feed rendered by a single lane component. Ranking
-— not zoning — expresses taste relevance:
+Explore is a decision surface, not a station directory:
 
-- Bands: `reason` (crossing rungs 1–4, 6, 7) → `dj` (attributed r=5) → `rest`
-  (unattributed r=0, pinned first). ▲ sort leads with reason; ▼ inverts band
-  order. Rows carry `data-feed-band` on their wrapper; container is
-  `#dial-feed-rows`.
-- Every live station always renders with its current play. There is no "empty
-  taste" wall as long as anything is on air.
-- The "None of your artists have played today" nudge may render ONLY when zero
-  live stations exist (settled crossings phase). Never next to visible rows —
-  in a unified feed that message next to stations is a lie.
-- Ghost/missed stations stay a separate subsection (offline playback, not live).
+- Crossings and first plays use cover-first rails because they represent music
+  objects being browsed.
+- Live broadcast choices use a bounded station-first room grid because the
+  destination is the station, not the current album.
+- The complete station population is reached through Scan rather than an
+  infinite row feed on Explore.
+- Ranking still leads with exact personal crossings before attributed and
+  editorial live choices.
 
-**Why:** zone caps + See-all/See-less toggles hid stations and produced a
-misleading empty warning while live stations were visible.
+**Why:** the old infinite live feed visually overwhelmed the cover-led
+discovery rails and made Explore feel like a legacy station directory. Scan is
+the sound-guided traversal job; Explore should present only worthwhile next
+destinations.
 
 **How to apply:**
-- Long lists paginate via IntersectionObserver sentinel (infinite scroll).
-  Progressive enhancement: when IntersectionObserver is absent (jsdom, old
-  browsers) render the FULL list — jsdom component tests therefore always see
-  every row and no sentinel; test pagination by stubbing IntersectionObserver.
-- Zone sub-labels (`ZoneLabel`, "DJs on air", `.fdzone-lbl*`) and
-  See-all/See-less (`.dial-show-more*`) are deleted — don't reintroduce them;
-  the DJ credit inside the row is the attribution surface.
-- Pagination reset on membership change uses render-phase state adjustment
-  (`if (prev !== key) { setPrev(key); setVisible(INITIAL); }`), NOT a
-  sync-setState effect — the react-compiler lint rule errors on the latter.
-- Membership key must be order-insensitive (sorted slugs) so a live re-sort of
-  the same stations doesn't collapse pagination.
+- Do not restore an album/avatar hero above Explore.
+- Do not reuse the old infinite station-row feed as the default Rooms view.
+- Keep the room cards station-first and tuneable; current music is supporting
+  context.
+- Preserve full-dial access through Scan and keep countdown/handoff behavior
+  in that listening flow rather than rebuilding it in the room grid.

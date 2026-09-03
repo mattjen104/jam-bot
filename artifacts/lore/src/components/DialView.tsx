@@ -20,7 +20,6 @@ import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
 import { ExploreHeader, ExploreSectionHeader } from "./ExploreHeader";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
-import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSocialMode } from "../lib/social";
 import { useSleepMode } from "../lib/sleepMode";
 import { eligibleDjNames } from "@workspace/lore-attribution";
@@ -54,7 +53,6 @@ import {
   type StationSortMetric,
 } from "../lib/crossingScope";
 import {
-  cleanLiveValue,
   nameNodes,
   reason,
   usableShowName,
@@ -86,7 +84,6 @@ import {
   type OnboardingArtistSuggestion,
   type DialDisplayMode,
 } from "../hooks/useDialData";
-import { useStationPresence } from "../hooks/useStationPresence";
 import {
   FrontDoorRow,
   PopCrossingLine,
@@ -94,8 +91,9 @@ import {
   agoLabel,
   type QueueArtist,
 } from "./dial/FrontDoorRow";
-import { DialFeedLane, type DialLaneRow } from "./dial/DialFeedLane";
+import { type DialLaneRow } from "./dial/DialFeedLane";
 import { LiveCrossingCoverRail, FirstPlayCoverRail } from "./dial/CoverRails";
+import { ExploreRoomGrid } from "./dial/ExploreRoomGrid";
 import { FirstRunSidebar } from "./FirstRunSidebar";
 import { Zone2Lane } from "./dial/Zone2Lane";
 import {
@@ -675,107 +673,6 @@ export function TabbedSetPanel({
         </div>
       )}
     </>
-  );
-}
-interface ScrubItem {
-  slug: string;
-  name: string;
-  /** Popular-crossing weight (same stat as the triangle sort). */
-  score: number;
-  /** Set carries at least one new-to-Lore / new-to-you artist. */
-  hasNew: boolean;
-}
-
-/**
- * Right-edge scrubber for the Also-On-Air list. One tick per station in the
- * current sort order — tick length tracks the station's popular-crossing
- * weight (so the lime gradient IS the sort, in either triangle direction),
- * canary ticks mark sets carrying new artists. Dragging scrubs the full
- * list; a bubble names the station under the finger.
- */
-function PopScrubber({ items, onScrub }: {
-  items: ScrubItem[];
-  onScrub: (item: ScrubItem, index: number) => void;
-}) {
-  const railRef = useRef<HTMLDivElement | null>(null);
-  // Active selection is tracked by slug so a live-data reorder mid-drag can't
-  // silently retarget the bubble/ARIA state at a different station.
-  const [activeSlug, setActiveSlug] = useState<string | null>(null);
-  const pointerId = useRef<number | null>(null);
-  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (clearTimer.current) clearTimeout(clearTimer.current); }, []);
-  const maxScore = Math.max(1, ...items.map((i) => i.score));
-  const active = activeSlug != null ? items.findIndex((i) => i.slug === activeSlug) : -1;
-
-  const select = (idx: number) => {
-    const it = items[idx];
-    if (!it) return;
-    if (clearTimer.current) { clearTimeout(clearTimer.current); clearTimer.current = null; }
-    setActiveSlug(it.slug);
-    onScrub(it, idx);
-  };
-  const pick = (clientY: number) => {
-    const el = railRef.current;
-    if (!el || items.length === 0) return;
-    const r = el.getBoundingClientRect();
-    const f = Math.min(1, Math.max(0, (clientY - r.top) / r.height));
-    select(Math.min(items.length - 1, Math.floor(f * items.length)));
-  };
-  const release = () => {
-    pointerId.current = null;
-    if (clearTimer.current) clearTimeout(clearTimer.current);
-    clearTimer.current = setTimeout(() => { setActiveSlug(null); clearTimer.current = null; }, 700);
-  };
-
-  return (
-    <div
-      ref={railRef}
-      className="popscrub"
-      role="slider"
-      tabIndex={0}
-      aria-label="Scrub the station list"
-      aria-orientation="vertical"
-      aria-valuemin={0}
-      aria-valuemax={items.length - 1}
-      aria-valuenow={active >= 0 ? active : 0}
-      aria-valuetext={active >= 0 ? items[active]?.name : undefined}
-      onPointerDown={(e) => {
-        pointerId.current = e.pointerId;
-        e.currentTarget.setPointerCapture(e.pointerId);
-        pick(e.clientY);
-      }}
-      onPointerMove={(e) => { if (pointerId.current === e.pointerId) pick(e.clientY); }}
-      onPointerUp={(e) => { if (pointerId.current === e.pointerId) release(); }}
-      onPointerCancel={(e) => { if (pointerId.current === e.pointerId) release(); }}
-      onKeyDown={(e) => {
-        const cur = active >= 0 ? active : -1;
-        if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); select(Math.min(items.length - 1, cur + 1)); }
-        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); select(Math.max(0, cur - 1)); }
-        else if (e.key === "Home") { e.preventDefault(); select(0); }
-        else if (e.key === "End") { e.preventDefault(); select(items.length - 1); }
-      }}
-      onBlur={release}
-    >
-      {items.map((it, i) => (
-        <div
-          key={it.slug}
-          className={[
-            "popscrub__tick",
-            it.hasNew ? "popscrub__tick--new" : "",
-            i === active ? "popscrub__tick--active" : "",
-          ].filter(Boolean).join(" ")}
-          style={{ width: 4 + Math.round((it.score / maxScore) * 10) }}
-        />
-      ))}
-      {active != null && items[active] && (
-        <div
-          className="popscrub__bubble"
-          style={{ top: `${((active + 0.5) / items.length) * 100}%` }}
-        >
-          {items[active].name}
-        </div>
-      )}
-    </div>
   );
 }
 /**
@@ -1866,13 +1763,6 @@ export function DialView() {
     }
     return bv.length - av.length; // equal prefix: deeper rare set wins
   }, [popSortDesc, popScore, rareVector]);
-  /** Whether the setlist line would actually render content for this station. */
-  const popHasContent = useCallback((slug: string) => {
-    const artists = popMap.get(slug);
-    if (!artists) return false;
-    return artists.some((a) => !a.inLibrary);
-  }, [popMap]);
-
   // Bridge: player-ticker artist clicks → addSeed (ticker lives in PlayerBar)
   useEffect(() => {
     const handler = (e: Event) => addSeed((e as CustomEvent<string>).detail);
@@ -2031,15 +1921,6 @@ export function DialView() {
     [withReason, popSortDesc, skipped],
   );
 
-  // Community presence — poll all live station IDs every 60 s.
-  // Only needed when Listening Party is active; still safe to call in personal
-  // mode since the hook respects staleTime and the UI gates rendering on count.
-  const liveStationIds = useMemo(
-    () => sortedRows.map((row) => row.ds.station.id),
-    [sortedRows],
-  );
-  const presenceMap = useStationPresence(liveStationIds);
-
   // Ranking bands within the unified feed (internal ordering only — the feed
   // renders as one uninterrupted list):
   //   djBand  — r=5 rows (attributed show on air, no crossing yet).
@@ -2076,31 +1957,6 @@ export function DialView() {
       }),
   [alsoOnAir, popCompare]);
 
-  // ── Merged-list scrubber ─────────────────────────────────────────────
-  // One entry per on-air station in the current display order. Tick weight is
-  // normalized per band (crossings for ON AIR rows, popScore for the rest) so
-  // both gradients read at full width; hasNew mirrors the canary highlight.
-  const scrubItems = useMemo<ScrubItem[]>(() => {
-    const hasNew = (slug: string) =>
-      (popMap.get(slug) ?? []).some((a) => !a.popular && !a.inLibrary && (a.debut || !a.heard));
-    const zone1Max = Math.max(1, ...withReason.map((r) => r.ds.crossings + r.ds.artistCrossings));
-    const alsoRows = popSortDesc ? [...djBand, ...restBand] : [...restBand, ...djBand];
-    const popMax = Math.max(1, ...alsoRows.map((r) => popScore(r.ds.station.slug)));
-    const z1 = zone1Display.map((row) => ({
-      slug: row.ds.station.slug,
-      name: cleanLiveValue(row.ds.station.name) ?? row.ds.station.name,
-      score: Math.round(((row.ds.crossings + row.ds.artistCrossings) / zone1Max) * 100),
-      hasNew: hasNew(row.ds.station.slug),
-    }));
-    const also = alsoRows.map((row) => ({
-      slug: row.ds.station.slug,
-      name: cleanLiveValue(row.ds.station.name) ?? row.ds.station.name,
-      score: Math.round((popScore(row.ds.station.slug) / popMax) * 100),
-      hasNew: hasNew(row.ds.station.slug),
-    }));
-    return popSortDesc ? [...z1, ...also] : [...also, ...z1];
-  }, [withReason, zone1Display, djBand, restBand, popMap, popScore, popSortDesc]);
-  const [scrubTarget, setScrubTarget] = useState<string | null>(null);
   // Ghost zone: stations that played library artists but user hasn't tuned into
   const { data: ghostStations = [] } = useMyGhostMissed();
   // Exclude any ghost station already appearing in Zone 1 or Zone 3 (live sets)
@@ -2142,12 +1998,6 @@ export function DialView() {
     );
   }, [offlineStations]);
   const _visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
-
-  /** Scrub → the feed lane reveals the row (pagination) and scrolls to it. */
-  const handleScrub = useCallback((item: ScrubItem) => {
-    setScrubTarget(item.slug);
-  }, []);
-
 
   // ── Time-travel mode (top sets toggle) ─────────────────────────────────────
   const [ttMode, setTtMode] = useState<TtMode>("live");
@@ -2827,11 +2677,6 @@ export function DialView() {
       fastLane.landOnStation(slug, fastLaneCandidate(scanNowPlaying.get(slug) ?? null));
     }
   }, [scanStations, stations, scan, radio, fastLane, fastLaneCandidate, scanNowPlaying]);
-  const popLineFor = useCallback((slug: string) =>
-    popHasContent(slug)
-      ? <PopCrossingLine artists={popMap.get(slug)!} seedsLower={seedsLower} onAdd={addSeed} />
-      : null,
-  [popHasContent, popMap, seedsLower, addSeed]);
   // While crossing scores are pending the reason rows are withheld (the
   // skeleton takes their place) but the rest of the feed renders immediately,
   // so a slow crossings compute never blanks live stations.
@@ -2875,43 +2720,35 @@ export function DialView() {
     [sortedRows, tuneZoneRow],
   );
 
-  const feedSection = sortedRows.length > 0 && (
+  const exploreRoomRows = useMemo(() => {
+    const reasonRows = crossingsLoading && !radioMode ? [] : scopeFilter(zone1Display);
+    return popSortDesc
+      ? [...reasonRows, ...scopeFilter(djBand), ...scopeFilter(restBand)]
+      : [...scopeFilter(restBand), ...scopeFilter(djBand), ...reasonRows];
+  }, [
+    crossingsLoading,
+    radioMode,
+    scopeFilter,
+    zone1Display,
+    popSortDesc,
+    djBand,
+    restBand,
+  ]);
+
+  const feedSection = exploreRoomRows.length > 0 && (
     <section className="explore-section" aria-labelledby="explore-live-title">
       <ExploreSectionHeader
-        title={radioMode ? "Good rooms right now" : "Live crossings"}
+        title={radioMode ? "Live rooms" : "Rooms carrying your music"}
         description={radioMode
-          ? "Stations worth entering, ranked by the current broadcast."
-          : "Saved artists and records are playing on these stations."}
-        count={explorePrimaryCount}
+          ? "A small set of stations worth entering now. Scan to hear the full dial."
+          : "Station identity leads here; the covers above represent the records."}
+        count={exploreRoomRows.length}
       />
-      <DialFeedLane
-        reasonRows={crossingsLoading && !radioMode ? [] : scopeFilter(zone1Display)}
-        djRows={scopeFilter(djBand)}
-        restRows={scopeFilter(restBand)}
-        popSortDesc={popSortDesc}
+      <ExploreRoomGrid
+        rows={exploreRoomRows}
         activeSlug={radio.station?.slug ?? null}
-        samplingSlug={scan.samplingIdx != null ? scanRows[scan.samplingIdx]?.ds.station.slug ?? null : null}
-        scrubTarget={scrubTarget}
-        displayMode={crossingSourceMode}
-        presenceMap={presenceMap}
-        popMap={popMap}
-        seedsLower={seedsLower}
-        artworkUrl={activeArtworkUrl}
-        popLineFor={popLineFor}
-        ovFor={(row, band) => band === "reason"
-          ? (row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings)
-          : band === "dj"
-            ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
-            : row.ds.lifetimeCrossings}
-        onAddArtist={addSeed}
         onTuneIn={tuneZoneRow}
-        onSetExpand={(_row) => undefined}
-        activeAgeTiers={activeTiers}
-        suppressCrossings={radioMode}
-        crossingScope={crossingScope}
-        onPlay={(row) => { void radio.toggle(row.ds.station); }}
-        playerStatus={radio.status}
-        onStationRemoved={() => { void refetchStations(); }}
+        onOpenScan={() => setScanSessionOpen(true)}
       />
     </section>
   );
@@ -2974,8 +2811,7 @@ export function DialView() {
 
       {/* Main scroll body */}
       <div className="dial-body">
-        <AlbumAvatarPicker compact />
-        {/* DIAL view — three-zone front door (spec §6) */}
+        {/* Explore front door */}
         {level === "all" && (
           <>
             {/* ── Primary tab: "On the Air × Your Music Library" ─────────────────
@@ -3018,11 +2854,6 @@ export function DialView() {
                 {/* Context mode: the former list space belongs to the context
                     region. Zone 2/3 discovery bands are hidden below. */}
                 {contextRegionJsx}
-
-                {/* PopScrubber only in live mode (day/top have no live sort). */}
-                {!inContext && effectiveTtMode === "live" && scrubItems.length > 6 && (
-                  <PopScrubber items={scrubItems} onScrub={handleScrub} />
-                )}
 
                 {/* ── Past mode: landed crossing run + fine crossing moments ── */}
                 
@@ -3217,7 +3048,7 @@ export function DialView() {
                       </>
                     )}
 
-                    {/* ── Radio lens: the live feed exactly as today ─────── */}
+                    {/* ── Rooms lens: bounded station-first destinations ── */}
                     {dialLens === "radio" && (
                   <>
                     {/* While crossing scores are pending, the crossing rows'
@@ -3257,8 +3088,6 @@ export function DialView() {
                       />
                     )}
 
-                    {/* The unified feed: every live station, crossing matches
-                        ranked first (▲) or last (▼). Grows via infinite scroll. */}
                     {/* Landing handoff status — quiet, non-blocking; shown in
                         and out of context mode for the tuned station only. */}
                     {landingNote}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * DialLensBar — the Radio | Press lens toggle.
+ * DialLensBar — the Rooms | Press lens toggle.
  *
  * Covers:
  *  1. Renders both lens buttons in a pipe-separated group.
@@ -26,30 +26,30 @@ function renderBar(lens: DialLens = "radio") {
 }
 
 describe("DialLensBar", () => {
-  it("renders Radio and Press buttons in an a11y group", () => {
+  it("renders Rooms and Press buttons in the Explore view group", () => {
     renderBar();
-    expect(screen.getByRole("group", { name: "Dial lens" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Radio" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Explore view" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rooms" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Press" })).toBeTruthy();
   });
 
   it("marks the active lens with aria-pressed and the --on class", () => {
     renderBar("radio");
-    expect(screen.getByRole("button", { name: "Radio" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Rooms" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Press" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("button", { name: "Radio" }).className).toContain("dial-filter-bar__btn--on");
+    expect(screen.getByRole("button", { name: "Rooms" }).className).toContain("dial-filter-bar__btn--on");
 
     cleanup();
     renderBar("press");
     expect(screen.getByRole("button", { name: "Press" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Radio" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Rooms" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("clicking a lens fires onSetLens with that lens", () => {
     const { onSetLens } = renderBar("radio");
     fireEvent.click(screen.getByRole("button", { name: "Press" }));
     expect(onSetLens).toHaveBeenCalledWith("press");
-    fireEvent.click(screen.getByRole("button", { name: "Radio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rooms" }));
     expect(onSetLens).toHaveBeenCalledWith("radio");
   });
 
