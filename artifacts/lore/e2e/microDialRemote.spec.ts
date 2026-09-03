@@ -89,6 +89,96 @@ const CROSSINGS = STATIONS.map((station) => ({
   })),
 }));
 
+interface AudioProbeEvent {
+  kind: "construct" | "src" | "load" | "play" | "pause" | "clear";
+  id: number;
+  value: string;
+}
+
+async function installAudioProbe(page: Page) {
+  await page.addInitScript(() => {
+    const win = window as typeof window & {
+      __radioAudioEvents?: AudioProbeEvent[];
+    };
+    const events: AudioProbeEvent[] = [];
+    let nextId = 0;
+    const OriginalAudio = win.Audio;
+
+    win.__radioAudioEvents = events;
+    win.Audio = function ProbedAudio(...args: ConstructorParameters<typeof Audio>) {
+      const target = new OriginalAudio(...args);
+      const id = nextId++;
+      let source = args[0] ?? "";
+      const record = (kind: AudioProbeEvent["kind"], value = source) => {
+        events.push({ kind, id, value });
+      };
+      record("construct");
+      return new Proxy(target, {
+        get(current, property) {
+          if (property === "src") return source;
+          if (property === "load") {
+            return () => {
+              record("load");
+            };
+          }
+          if (property === "play") {
+            return () => {
+              record("play");
+              // Keep this test focused on gesture ordering. The stream itself
+              // is intentionally not played or decoded in the browser check.
+              return Promise.resolve();
+            };
+          }
+          if (property === "pause") {
+            return () => {
+              record("pause");
+              current.pause();
+            };
+          }
+          if (property === "removeAttribute") {
+            return (name: string) => {
+              if (name === "src") {
+                source = "";
+                record("clear", "");
+                return;
+              }
+              current.removeAttribute(name);
+            };
+          }
+          const value = Reflect.get(current, property, current);
+          return typeof value === "function" ? value.bind(current) : value;
+        },
+        set(current, property, value) {
+          if (property === "src") {
+            source = String(value);
+            record("src");
+            return true;
+          }
+          return Reflect.set(current, property, value);
+        },
+      });
+    } as typeof Audio;
+  });
+}
+
+async function readAudioProbe(page: Page): Promise<AudioProbeEvent[]> {
+  return page.evaluate(() => {
+    const win = window as typeof window & {
+      __radioAudioEvents?: AudioProbeEvent[];
+    };
+    return [...(win.__radioAudioEvents ?? [])];
+  });
+}
+
+async function clearAudioProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const win = window as typeof window & {
+      __radioAudioEvents?: AudioProbeEvent[];
+    };
+    win.__radioAudioEvents?.splice(0);
+  });
+}
+
 async function installRoutes(
   page: Page,
   listenerArchiveNavEnabled = false,
@@ -489,5 +579,109 @@ test.describe("Adaptive Now — listening jobs in a real browser", () => {
 
     await expect(page.getByRole("link", { name: "Explore" })).toHaveAttribute("href", "/feed");
     await expect(page.getByRole("link", { name: "Stack" })).toHaveAttribute("href", "/library");
+  });
+});
+
+test.describe("touch press-to-play warmup", () => {
+  test("keeps a touch warm source through click, but cancels abandoned gestures", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installRoutes(page);
+    await installAudioProbe(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("lore:firstRunStationInteraction", "1");
+    });
+    await page.goto("/lore/");
+
+    await expect(page.getByTestId("adaptive-now")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("adaptive-now-row")).toHaveCount(6);
+
+    const firstTune = page.getByRole("button", {
+      name: "Tune in to Station 01",
+    });
+    await clearAudioProbe(page);
+    await firstTune.dispatchEvent("pointerdown", {
+      bubbles: true,
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await firstTune.dispatchEvent("pointerleave", {
+      bubbles: true,
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await firstTune.dispatchEvent("pointerup", {
+      bubbles: true,
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+
+    // Touch pointerleave must not throw away the prepared source, and no
+    // audio playback is allowed until the click has been committed.
+    await expect
+      .poll(async () => (await readAudioProbe(page)).filter((event) => event.kind === "load").length)
+      .toBeGreaterThanOrEqual(1);
+    expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
+
+    await firstTune.dispatchEvent("click", { bubbles: true });
+    await expect
+      .poll(async () => (await readAudioProbe(page)).filter((event) => event.kind === "play"))
+      .toHaveLength(1);
+    const committedEvents = await readAudioProbe(page);
+    const preparedId = committedEvents.find((event) => event.kind === "construct")?.id;
+    const playId = committedEvents.find((event) => event.kind === "play")?.id;
+    expect(preparedId).toBeDefined();
+    expect(playId).toBe(preparedId);
+
+    const cancelledTune = page.getByRole("button", {
+      name: "Tune in to Station 02",
+    });
+    await clearAudioProbe(page);
+    await cancelledTune.dispatchEvent("pointerdown", {
+      bubbles: true,
+      pointerId: 2,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await cancelledTune.dispatchEvent("pointercancel", {
+      bubbles: true,
+      pointerId: 2,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await expect
+      .poll(async () => (await readAudioProbe(page)).filter((event) => event.kind === "clear").length)
+      .toBe(1);
+    expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
+
+    const releasedTune = page.getByRole("button", {
+      name: "Tune in to Station 03",
+    });
+    await clearAudioProbe(page);
+    await releasedTune.dispatchEvent("pointerdown", {
+      bubbles: true,
+      pointerId: 3,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await releasedTune.dispatchEvent("pointerup", {
+      bubbles: true,
+      pointerId: 3,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await expect
+      .poll(
+        async () => (await readAudioProbe(page)).filter((event) => event.kind === "clear").length,
+        { timeout: 1_500 },
+      )
+      .toBe(1);
+    expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
   });
 });
