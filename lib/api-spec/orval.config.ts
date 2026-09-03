@@ -1,6 +1,17 @@
 import { defineConfig, InputTransformerFn } from "orval";
 import path from "path";
 
+const isIsolatedRun = process.env.API_CODEGEN_ISOLATED === "1";
+const isCoordinatedRun = process.env.API_CODEGEN_COORDINATED === "1";
+
+if (!isIsolatedRun && !isCoordinatedRun) {
+  throw new Error(
+    "[api-codegen-coordination] Refusing to run Orval without coordination. " +
+      "Use `pnpm --filter @workspace/api-spec run codegen`, or use the " +
+      "isolated reproducibility checker.",
+  );
+}
+
 const root = path.resolve(__dirname, "..", "..");
 const apiClientReactSrc = path.resolve(root, "lib", "api-client-react", "src");
 const apiZodSrc = path.resolve(root, "lib", "api-zod", "src");

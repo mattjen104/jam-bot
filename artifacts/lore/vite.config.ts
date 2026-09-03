@@ -3,6 +3,12 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { acquireCodegenLock } from "../../lib/api-spec/scripts/codegen-lock.mjs";
+
+acquireCodegenLock({
+  role: "Lore preview",
+  repoRoot: path.resolve(import.meta.dirname, "..", ".."),
+});
 
 const rawPort = process.env.PORT;
 

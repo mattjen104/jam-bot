@@ -16,7 +16,7 @@ it from there once the endpoint lands in the spec — the checker enforces this)
 
 | command | what it does |
 | --- | --- |
-| `pnpm --filter @workspace/api-spec run codegen` | Regenerate both clients from `openapi.yaml` and typecheck them. |
+| `pnpm --filter @workspace/api-spec run codegen` | Regenerate both clients from `openapi.yaml` and typecheck them. It coordinates with the Lore Vite process and fails clearly instead of deleting modules out from under a live preview. |
 | `pnpm --filter @workspace/api-spec run check` | Contract check + regression fixtures. Fails on any drift. |
 | `pnpm --filter @workspace/api-spec run check:generated` | Reproducibility gate: runs codegen once in an isolated temp mirror of the repo and fails unless its output is byte-identical to the checked-in generated clients. Never writes to the live workspace, so it is safe to run in parallel with other checks. |
 
