@@ -1,264 +1,237 @@
-/* ─── FirstRunSidebar — provenance-ordered station sentences ─────────────────
-   Sits inside .reading-context so --lore-font-editorial resolves to Signifier
-   (the only downloaded face; Newsreader is not loaded).
-   All text sizes come from the three tokens in tokens/typography.css:
-     --lore-size-signature  (23px) — not used here
-     --lore-size-interface  (16px) — sentence rows (the readable voice surface)
-     --lore-size-small      (12px) — all labels, citations, chips, metadata
-   Citation and label lines use --app-font-mono which now resolves to the
-   native system sans (same as all interface-layer elements).
-   ──────────────────────────────────────────────────────────────────────────── */
-
 .frb {
-  padding: 0;
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border) / .36);
+  background: hsl(var(--card) / .42);
 }
 
-/* ── Eyebrow ── */
+.frb__intro {
+  padding: 22px 18px 18px;
+  border-bottom: 1px solid hsl(var(--border) / .3);
+}
+
+.frb__intro h2 {
+  margin: 7px 0 4px;
+  font-family: var(--lore-font-editorial, var(--lore-font-signature));
+  font-size: clamp(24px, 4vw, 42px);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.frb__intro > p:last-child,
+.frb__band-heading p,
+.frb__identity,
+.frb__now,
+.frb__catch-status {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+}
+
 .frb__eyebrow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 13px 15px 8px;
+  gap: 7px;
+  margin: 0;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  text-transform: uppercase;
+  letter-spacing: .12em;
 }
 
 .frb__eyebrow-pip {
-  display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  flex: 0 0 auto;
   background: hsl(var(--live));
-  box-shadow: 0 0 0 3px hsl(var(--live) / 0.15);
+  box-shadow: 0 0 0 3px hsl(var(--live) / .15);
 }
 
-.frb__eyebrow-label {
-  font-family: var(--app-font-mono);
-  font-size: var(--lore-size-small);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: hsl(var(--foreground) / 0.85);
+.frb__bands {
+  display: grid;
+  gap: 28px;
+  padding: 22px 0 8px;
 }
 
-.frb__eyebrow-sep {
-  font-size: var(--lore-size-small);
-  color: hsl(var(--border) / 0.6);
-}
-
-.frb__eyebrow-hint {
-  font-family: var(--app-font-mono);
-  font-size: var(--lore-size-small);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: hsl(var(--muted-foreground) / 0.5);
-}
-
-/* ── Block list ── */
-.frb__list {
+.frb__band-heading {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  padding: 0 18px 9px;
+}
+
+.frb__band-heading h2 {
+  margin: 0;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  text-transform: uppercase;
+  letter-spacing: .11em;
+  color: hsl(var(--live));
+}
+
+.frb__band-heading p {
+  font-size: var(--lore-size-small);
+}
+
+.frb__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid hsl(var(--border) / .25);
 }
 
 .frb__block {
-  position: relative;
+  min-width: 0;
+  padding: 16px 18px;
+  border-right: 1px solid hsl(var(--border) / .25);
+  border-bottom: 1px solid hsl(var(--border) / .25);
+}
+
+.frb__block:nth-child(even) { border-right: 0; }
+
+.frb__station-line {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 15px 11px;
-  border-top: 1px solid hsl(var(--border) / 0.3);
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
 }
 
-.frb__tune-target {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.frb__tune-target:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: 2px;
-}
-
-.frb__block:first-child {
-  border-top: none;
-}
-
-/* ── Sentence line — voice surface, Signifier via .reading-context ── */
-.frb__sentence {
-  position: relative;
-  z-index: 1;
-  pointer-events: none;
+.frb__station-name {
   margin: 0;
   font-family: var(--lore-font-editorial, var(--lore-font-signature));
   font-size: var(--lore-size-interface);
-  line-height: 1.5;
-  color: hsl(var(--foreground));
-  font-weight: 300;
+  font-weight: 600;
 }
 
-.frb__sentence button,
-.frb__sentence [role="button"] {
-  pointer-events: auto;
-}
-
-.frb__index-handoff {
-  display: inline-block;
-  position: relative;
-  z-index: 2;
-  margin-top: 3px;
-  color: hsl(var(--muted-foreground) / 0.7);
+.frb__live-phrase {
+  flex: 0 0 auto;
   font-family: var(--app-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: hsl(var(--live));
+}
+
+.frb__identity {
+  min-height: 2.8em;
+  padding-top: 5px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.frb__now {
+  min-height: 1.45em;
+  padding-top: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--lore-size-small);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  pointer-events: auto;
 }
 
-.frb__index-handoff:hover,
-.frb__index-handoff:focus-visible {
-  color: hsl(var(--foreground));
-}
-
-.frb__index-handoff:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: 2px;
-}
-
-/* ── Picker (named selector) ── */
-.frb__picker {
-  color: hsl(var(--foreground));
-  font-weight: 400;
-  cursor: default;
-}
-
-/* ── Station name — inert text, no underline or pointer since workspace retired ── */
-.frb__station-name {
-  color: inherit;
-}
-
-.frb__station-name--dim {
-  color: hsl(var(--muted-foreground) / 0.55);
-}
-
-/* ── Dagger (rung 2: live shift, host not named) ── */
-.frb__dagger {
-  display: inline;
-  font-size: 0.85em;
-  color: hsl(var(--muted-foreground) / 0.4);
-  vertical-align: super;
-  cursor: default;
-}
-
-/* ── Artist spans ── */
 .frb__artist {
-  color: hsl(var(--foreground) / 0.75);
-  border-bottom: 1px dotted hsl(var(--border) / 0.7);
+  color: hsl(var(--foreground) / .82);
+  border-bottom: 1px dotted hsl(var(--border));
   cursor: pointer;
-  transition: color 0.1s, border-bottom-color 0.1s;
 }
 
-.frb__artist:hover,
-.frb__artist:focus-visible {
-  color: hsl(var(--foreground));
-  border-bottom-color: hsl(var(--foreground) / 0.4);
-  outline: none;
-}
-
-/* Kept state: bright white, underline removed */
-.frb__artist.frb__artist--kept {
-  color: #fff;
+.frb__artist--unresolved,
+.frb__artist--kept {
   border-bottom-color: transparent;
   cursor: default;
 }
 
-/* Unresolved MBID: no special dimming — provenance is in the sentence */
-.frb__artist.frb__artist--unresolved {
-  color: hsl(var(--foreground) / 0.65);
-  border-bottom: none;
-  cursor: default;
-}
-
-.frb__artist.frb__artist--unresolved::before {
-  content: none;
-}
-
-/* .frb__cite removed — provenance is fully expressed in the sentence */
-
-/* ── Compact identity — mirrors fdrow__compact-* from index.css but scoped
-   to .frb__sentence so the styles reach FirstRunSidebar rows, which render
-   outside #dial-feed-rows. Token names use --foreground / --muted-foreground
-   (the app palette) instead of --dial-fg (which is dial-local). ── */
-.frb__sentence .fdrow__compact-identity {
+.frb__actions-bar {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  column-gap: 10px;
-  width: 100%;
-  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
 }
 
-.frb__sentence .fdrow__compact-lead {
-  display: inline;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.frb__sentence .fdrow__compact-separator {
-  color: hsl(var(--muted-foreground) / 0.55);
-  padding: 0 0.4em;
-}
-
-/* Crossing artists / current artist — full foreground weight, bold. */
-.frb__sentence .fdrow__compact-crossing-artist {
-  color: hsl(var(--foreground));
-  font-weight: 600;
-}
-
-/* Station is the secondary entity — lighter weight. */
-.frb__sentence .fdrow__compact-station {
-  color: hsl(var(--muted-foreground) / 0.75);
-}
-
-/* ── More-stations reveal button ── */
+.frb__btn-play,
+.frb__btn-catch,
 .frb__more-stations {
-  display: block;
-  width: 100%;
-  padding: 9px 15px;
-  border: none;
-  border-top: 1px solid hsl(var(--border) / 0.3);
+  min-height: 34px;
+  border: 1px solid hsl(var(--border) / .55);
+  border-radius: 999px;
+  padding: 7px 13px;
   background: transparent;
+  color: hsl(var(--foreground));
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  text-align: left;
-  color: hsl(var(--muted-foreground) / 0.5);
   cursor: pointer;
-  transition: color 0.1s;
 }
 
-.frb__more-stations:hover {
+.frb__btn-play {
+  border-color: hsl(var(--foreground));
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font-weight: 650;
+}
+
+.frb__btn-play:focus-visible,
+.frb__btn-catch:focus-visible,
+.frb__more-stations:focus-visible,
+.frb__recent-toggle:focus-visible,
+.frb__shelves a:focus-visible {
+  outline: 2px solid hsl(var(--live));
+  outline-offset: 2px;
+}
+
+.frb__catch-status {
+  padding-top: 8px;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+}
+
+.frb__recent-context { padding-top: 10px; }
+.frb__recent-toggle {
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: var(--lore-size-small);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.frb__recent-list {
+  padding-top: 7px;
+  white-space: normal;
+  line-height: 1.5;
 }
 
-/* ── Empty state ── */
-.frb--empty {
-  padding: 18px 15px;
+.frb__expansion {
+  padding: 16px 18px 20px;
 }
 
-.frb__empty-inner {
-  /* intentionally plain — no affordance, no recommendation language */
+.frb__more-stations {
+  width: 100%;
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: .1em;
 }
 
-.frb__empty-text {
-  margin: 0;
+.frb__shelves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.frb__shelves a {
+  padding: 11px 12px;
+  border: 1px solid hsl(var(--border) / .35);
+  color: hsl(var(--foreground) / .8);
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: hsl(var(--muted-foreground) / 0.4);
+  text-decoration: none;
+}
+
+.frb__empty-text { padding: 24px 18px; }
+
+@media (max-width: 720px) {
+  .frb__list,
+  .frb__shelves { grid-template-columns: 1fr; }
+  .frb__block { border-right: 0; }
+  .frb__band-heading { display: block; }
+  .frb__band-heading p { padding-top: 4px; }
 }

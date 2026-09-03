@@ -11,6 +11,9 @@ import { useAppConfig } from "../lib/meHooks";
 import { DialCliBar } from "../components/dial/DialCliBar";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { MinimalRadioSurface } from "../components/MinimalRadioSurface";
+import { FirstRunSidebar } from "../components/FirstRunSidebar";
+import { usePlayer } from "../player/PlayerProvider";
+import type { DialStation } from "../hooks/useDialData";
 import { HomeLensNav } from "../components/HomeLensNav";
 import { FirstPlayFeed } from "../components/CompactDial";
 import { HomePress } from "../components/HomePress";
@@ -21,8 +24,26 @@ import {
   toggleStationCategory,
 } from "../lib/dialFilterState";
 import type { StationCategory } from "../lib/dialCategories";
+import { catchNextSong } from "../lib/firstRunCatch";
 
 type FrontDoorMode = "radio" | "library";
+const FIRST_RUN_INTERACTION_KEY = "lore:firstRunStationInteraction";
+
+function hasFirstRunInteraction(): boolean {
+  try {
+    return localStorage.getItem(FIRST_RUN_INTERACTION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberFirstRunInteraction(): void {
+  try {
+    localStorage.setItem(FIRST_RUN_INTERACTION_KEY, "1");
+  } catch {
+    // Playback must still work when storage is unavailable.
+  }
+}
 
 function readFrontDoorMode(): FrontDoorMode {
   try {
@@ -41,6 +62,7 @@ function writeFrontDoorMode(mode: FrontDoorMode): void {
 }
 
 export default function SplitHome() {
+  const { radio } = usePlayer();
   const { visibleSeeds, addSeed, replaceSeeds } = useSeedManager();
   const { data: appConfig } = useAppConfig();
   const showArchiveNav = appConfig?.listenerArchiveNavEnabled === true;
@@ -52,6 +74,7 @@ export default function SplitHome() {
   const [supportOnly, setSupportOnly] = useState(false);
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
   const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
+  const [firstRunCandidate] = useState(() => !hasFirstRunInteraction());
 
   useEffect(() => {
     if (!showArchiveNav && lens !== "radio") {
@@ -94,14 +117,34 @@ export default function SplitHome() {
     stations,
     isCoreLoading,
     liveLoading,
+    hasLibrary,
+    hasSeeds,
     stationsError,
     refetchStations,
   } = useDialData("personal", {
-    categories: activeCategories,
+    // Home already applies its category selection inside MinimalRadioSurface.
+    // Keep the source pool unfiltered so first-run can always select its exact
+    // editorial roster before any listener filter exists.
+    categories: undefined,
     includeAllStations: true,
     crossingsEnabled: true,
     deferEnrichment: false,
   });
+  // Picker-name state is the server's settled source of truth for pre-existing
+  // libraries/seeds. Do not include the optimistic seed list here: a first Keep
+  // should leave this orientation surface mounted for the rest of the visit.
+  const coldStartSession = firstRunCandidate && !isCoreLoading && !hasLibrary && !hasSeeds;
+  const playFirstRunStation = useCallback((station: DialStation) => {
+    rememberFirstRunInteraction();
+    radio.toggle(station.station);
+  }, [radio]);
+  const catchFirstRunStation = useCallback(
+    (station: DialStation) => {
+      rememberFirstRunInteraction();
+      return catchNextSong(station, playFirstRunStation);
+    },
+    [playFirstRunStation],
+  );
   const allRows = useMemo<DialLaneRow[]>(
     () => stations
       .map((ds) => {
@@ -143,9 +186,9 @@ export default function SplitHome() {
       <div className="split-home__front-door-shell">
         <header className="front-door-header">
           <div className="front-door-header__intro">
-            <h1>Your records are on the radio right now.</h1>
+            <h1>{coldStartSession ? "Twelve ways into live radio." : "Your records are on the radio right now."}</h1>
             <p className="front-door-subtitle">
-              <button
+              {!coldStartSession && <button
                 type="button"
                 className="front-door-subtitle__button"
                 onClick={() => setArtistDocumentOpen((open) => !open)}
@@ -154,8 +197,8 @@ export default function SplitHome() {
                 data-testid="front-door-add-artists"
               >
                 Add albums
-              </button>{" "}
-              to see which stations cross your library.
+              </button>}{" "}
+              {coldStartSession ? "Choose by the music sounding now." : "to see which stations cross your library."}
             </p>
           </div>
           <nav className="front-door-modes" aria-label="Front door mode">
@@ -222,7 +265,18 @@ export default function SplitHome() {
               showArchiveLenses={showArchiveNav}
             />
             {activeLens === "radio" ? (
-              <MinimalRadioSurface
+              coldStartSession ? (
+                <FirstRunSidebar
+                  stations={stations}
+                  seeds={visibleSeeds}
+                  onAddSeed={(artist) => {
+                    rememberFirstRunInteraction();
+                    void addSeed(artist);
+                  }}
+                  onPlay={playFirstRunStation}
+                  onCatchNext={catchFirstRunStation}
+                />
+              ) : <MinimalRadioSurface
                 rows={allRows}
                 remoteRows={allRows}
                 categoryByStationSlug={categoryByStationSlug}
