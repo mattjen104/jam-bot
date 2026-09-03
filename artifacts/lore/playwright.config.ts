@@ -77,5 +77,16 @@ export default defineConfig({
         },
       },
     },
+    {
+      // Mobile Safari has a distinct pointerup → synthetic click sequence.
+      // Keep this project focused on the touch warmup regression so the
+      // rest of the suite remains covered by the desktop Chromium project.
+      name: "webkit",
+      grep: /touch press-to-play warmup/,
+      use: {
+        ...devices["iPhone 13"],
+        browserName: "webkit",
+      },
+    },
   ],
 });

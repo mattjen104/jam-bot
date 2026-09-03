@@ -1,4 +1,3 @@
-// hint: Logic changed on both sides. Requires understanding intent of each change.
 - [NTS ICY redirect routing](nts-icy-redirect-routing.md) — NTS relay reaches metadata through two redirects; a valid instant can still have an empty title between tracks.
 - [jam-bot knowledge/insights clock](jam-bot-knowledge-insights-clock.md) — knowledge+timed insights fire in normal Jam too, off Spotify ISRC+progress_ms (no mic/fingerprint); anchor must re-anchor on track change, clear on pause, arm([]) to disarm.
 - [jam-bot live track insights](jam-bot-track-insights.md) — baseline firing INCLUSIVE so 0:00 notes fire (never backfill mid-join); arm off ISRC not recordingId; off-hot-path scheduler reads status() only, hand-curated seed never fabricated.
@@ -91,7 +90,6 @@
 - [Test-suite migration DDL deadlocks](test-migration-deadlocks.md) — migrations run once in globalSetup only; mid-suite constraint-swap DDL deadlocks parallel workers; advisory-lock the migration for concurrent boots.
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
-- [Explore station boundary](dial-unified-feed.md) — Explore is cover-led; live-station traversal and now-playing rows belong to Scan, not the default page.
 - [Crossings merge-splice failures](crossings-route-merge-splice.md) — merges can duplicate handlers/tests or truncate handler tails; grep duplicate titles and brace-check the route.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
 - [Lore test provider drift](lore-test-provider-drift.md) — new react-query hooks in shared components break provider-less tests; fix via meHooks/api-client barrel mocks, not QueryClientProvider wrapping.
