@@ -40,6 +40,8 @@ export interface SpinStreamEvent {
   observedAt?: string;
   /** Resolution confidence tier ("recording_id" | "isrc" | "text" | "spotify" | "unresolved"). */
   confidence?: string;
+  /** Safe duration evidence used for an approximate fresh-track timer. */
+  durationMs?: number;
   isLibraryHit?: boolean;
   isArtistHit?: boolean;
   /** MusicBrainz artist MBID when the spin has been resolved. */
@@ -111,6 +113,7 @@ function openStream(): void {
           ...(data.provisional === true ? { provisional: true } : {}),
           ...(data.observedAt ? { observedAt: data.observedAt } : {}),
           ...(data.confidence ? { confidence: data.confidence } : {}),
+          ...(data.durationMs != null ? { durationMs: data.durationMs } : {}),
            ...(data.artworkUrl !== undefined ? { artworkUrl: data.artworkUrl } : {}),
           ...(data.isLibraryHit != null ? { isLibraryHit: data.isLibraryHit } : {}),
           ...(data.isArtistHit != null ? { isArtistHit: data.isArtistHit } : {}),
@@ -266,6 +269,14 @@ export function mergeSpinIntoOnAir(
           revertTo: undefined,
           observedAt: ev.observedAt ?? item.now.observedAt,
           freshness: "fresh",
+          serverTime: ev.observedAt ?? item.now.serverTime,
+          ...(ev.durationMs != null
+            ? {
+                estimatedRemainingMs: ev.durationMs,
+                likelyExpiring: false,
+                timingConfidence: "estimated" as const,
+              }
+            : {}),
         },
       };
       return { ...prev, items };
@@ -308,6 +319,10 @@ export function mergeSpinIntoOnAir(
       observedAt,
       freshness: "fresh",
       resolved: ev.mbid != null,
+      serverTime: observedAt,
+      estimatedRemainingMs: ev.durationMs ?? null,
+      likelyExpiring: false,
+      timingConfidence: ev.durationMs != null ? "estimated" : "unknown",
       // Provisional frames flag the row as still resolving; the matching
       // resolved spin-changed frame replaces it and clears the flag.
       resolving: provisional,

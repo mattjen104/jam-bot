@@ -5,6 +5,8 @@ import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
 import { NowPlaying } from "./NowPlaying";
 import { LiveHandoffPanel, type LiveHandoffControls } from "./LiveHandoffPanel";
+import { LandingConfirmationNote } from "./dial/LandingConfirmationNote";
+import type { LandingConfirmation } from "../hooks/useStationFastLane";
 import {
   ChevronDown,
   ExternalLink,
@@ -29,6 +31,7 @@ interface PlayerSheetProps {
   onScanToggle?: () => void;
   onCollapse: () => void;
   handoff?: LiveHandoffControls;
+  landingConfirmation?: LandingConfirmation | null;
 }
 
 /**
@@ -50,6 +53,7 @@ export function PlayerSheet({
   onScanToggle,
   onCollapse,
   handoff,
+  landingConfirmation = null,
 }: PlayerSheetProps) {
   const isPlaying = status === "playing";
   const isLoading = status === "loading";
@@ -90,6 +94,10 @@ export function PlayerSheet({
           data={nowPlayingData}
           isLoading={!nowPlayingData}
           fallbackStation={station}
+        />
+        <LandingConfirmationNote
+          confirmation={landingConfirmation}
+          activeSlug={station.slug}
         />
         {handoff && <LiveHandoffPanel {...handoff} />}
       </div>

@@ -108,19 +108,36 @@ export function LiveHandoffPanel(props: LiveHandoffControls) {
           )}
           {candidates.length > 0 && (
             <div className="live-handoff__candidates">
-              <span className="live-handoff__eyebrow">Other fresh live sounds</span>
-              {candidates.map((candidate) => (
+              <span className="live-handoff__eyebrow">Best right now</span>
+              {candidates.slice(0, 1).map((candidate) => (
                 <button
                   type="button"
                   key={candidate.station.slug}
-                  className="live-handoff__candidate"
+                  className="live-handoff__candidate live-handoff__candidate--primary"
                   onClick={() => onCatchCandidate(candidate)}
                   data-testid={`catch-candidate-${candidate.station.slug}`}
                 >
                   <span><strong>{candidate.station.name}</strong><small>{candidate.now.title} · {candidate.now.artist}</small></span>
-                  <small>{candidate.reasons.join(" · ")}</small>
+                  <small>{candidate.changingSoon ? "Changing soon · Catch Next" : candidate.reasons.join(" · ")}</small>
                 </button>
               ))}
+              {candidates.length > 1 && (
+                <>
+                  <span className="live-handoff__eyebrow">Alternatives</span>
+                  {candidates.slice(1, 3).map((candidate) => (
+                    <button
+                      type="button"
+                      key={candidate.station.slug}
+                      className="live-handoff__candidate"
+                      onClick={() => onCatchCandidate(candidate)}
+                      data-testid={`catch-candidate-${candidate.station.slug}`}
+                    >
+                      <span><strong>{candidate.station.name}</strong><small>{candidate.now.title} · {candidate.now.artist}</small></span>
+                      <small>{candidate.changingSoon ? "Changing soon · Catch Next" : candidate.reasons.join(" · ")}</small>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>

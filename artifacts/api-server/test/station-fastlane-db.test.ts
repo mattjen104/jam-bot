@@ -245,4 +245,72 @@ describe("GET /api/player/station/:slug/now", () => {
     const res = await fetch(`${baseUrl}/api/player/station/test-fl-missing-${run}/now`);
     expect(res.status).toBe(404);
   });
+
+  it("does not let a second landing reuse the first landing's confirmation", async () => {
+    if (!dbAvailable) return;
+    const restore = _testOnly_setFastLaneRefresh(async (station) => {
+      await db
+        .update(spinsTable)
+        .set({ observedAt: new Date() })
+        .where(sql`${spinsTable.stationId} = ${station.id}`);
+    });
+    _testOnly_resetFastLaneDebounce();
+    try {
+      const firstLandedAt = Date.now();
+      await fetch(`${baseUrl}/api/player/station/${freshSlug}/now`, {
+        headers: {
+          "X-Lore-Landed-At": String(firstLandedAt),
+          "X-Lore-Landing-Id": `first-${run}`,
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await db
+        .update(spinsTable)
+        .set({ observedAt: new Date(Date.now() - 1) })
+        .where(sql`${spinsTable.stationId} = ${stationIds[0]}`);
+
+      const second = await fetch(
+        `${baseUrl}/api/player/station/${freshSlug}/now`,
+        {
+          headers: {
+            "X-Lore-Landed-At": String(Date.now()),
+            "X-Lore-Landing-Id": `second-${run}`,
+          },
+        },
+      ).then((response) => response.json()) as {
+        refreshTriggered: boolean;
+        confirmed: boolean;
+      };
+      expect(second.refreshTriggered).toBe(true);
+      expect(second.confirmed).toBe(false);
+    } finally {
+      restore();
+      _testOnly_resetFastLaneDebounce();
+    }
+  });
+
+  it("scopes the same client landing ID to its station", async () => {
+    if (!dbAvailable) return;
+    _testOnly_resetFastLaneDebounce();
+    const sharedHeaders = {
+      "X-Lore-Landed-At": String(Date.now()),
+      "X-Lore-Landing-Id": `shared-${run}`,
+    };
+    const [fresh, stale] = await Promise.all([
+      fetch(`${baseUrl}/api/player/station/${freshSlug}/now`, {
+        headers: sharedHeaders,
+      }).then((response) => response.json()) as Promise<{
+        refreshTriggered: boolean;
+        confirmed: boolean;
+      }>,
+      fetch(`${baseUrl}/api/player/station/${staleSlug}/now`, {
+        headers: sharedHeaders,
+      }).then((response) => response.json()) as Promise<{
+        refreshTriggered: boolean;
+        confirmed: boolean;
+      }>,
+    ]);
+    expect(fresh).toMatchObject({ refreshTriggered: true, confirmed: false });
+    expect(stale).toMatchObject({ refreshTriggered: true, confirmed: false });
+  });
 });

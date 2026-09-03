@@ -172,6 +172,35 @@ describe("useStationFastLane", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1 + FAST_LANE_RECHECK_DELAYS_MS.length);
   });
 
+  it("keeps a fresh aggregate row in checking state until a station-specific observation confirms it", async () => {
+    const fetchMock = fetchResponding([
+      { ...resp(NOW_BASE, true), confirmed: false },
+      { ...resp(NOW_BASE, false), confirmed: true },
+      { ...resp(NOW_BASE, false), confirmed: true },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useStationFastLane(vi.fn()));
+
+    act(() => {
+      result.current.landOnStation("kfoo", null);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.confirmation).toEqual({
+      slug: "kfoo",
+      phase: "confirming",
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FAST_LANE_RECHECK_DELAYS_MS[0]! + 100);
+    });
+    expect(result.current.confirmation).toEqual({
+      slug: "kfoo",
+      phase: "confirmed",
+    });
+  });
+
   it("schedules ONE boundary re-check for a likely-expiring landing and reconciles only on real change", async () => {
     const expiring: FastLaneNow = {
       ...NOW_BASE,

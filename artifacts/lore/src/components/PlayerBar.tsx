@@ -11,6 +11,8 @@ import { DevicePicker } from "./DevicePicker";
 import { KeepButton } from "./KeepButton";
 import type { ScanHop } from "../player/PlayerProvider";
 import { LiveHandoffPanel, type LiveHandoffControls } from "./LiveHandoffPanel";
+import { LandingConfirmationNote } from "./dial/LandingConfirmationNote";
+import type { LandingConfirmation } from "../hooks/useStationFastLane";
 import {
   Cast,
   ExternalLink,
@@ -54,6 +56,7 @@ interface PlayerBarProps {
   /** Tap-to-expand: fired when the bar surface (not a control) is tapped. */
   onExpand?: () => void;
   handoff?: LiveHandoffControls;
+  landingConfirmation?: LandingConfirmation | null;
 }
 
 export function PlayerBar({
@@ -78,6 +81,7 @@ export function PlayerBar({
   onScanDirToggle,
   onExpand,
   handoff,
+  landingConfirmation = null,
 }: PlayerBarProps) {
   const isCasting = casting === "casting";
   const isPlaying = isCasting ? !castPaused : status === "playing";
@@ -330,6 +334,10 @@ export function PlayerBar({
           </div>
         ) : null}
       </div>
+      <LandingConfirmationNote
+        confirmation={landingConfirmation}
+        activeSlug={station.slug}
+      />
       {handoff && <LiveHandoffPanel {...handoff} />}
     </div>
   );

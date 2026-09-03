@@ -55,6 +55,7 @@ import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../.
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged, spinEvents, type SpinChangedEvent, type SpinRawEvent, type SpinRawFailedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
+import { normalizeTimingEvidence } from "../../lore/timing-evidence.js";
 import {
   evaluateFingerprintPolicy,
   markFingerprintRun,
@@ -1345,6 +1346,14 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
     // Honest "couldn't identify" — never presented as "nothing playing".
     return res.json(IcecastReportResultBody.parse({ logged: false, mbid: null }));
   }
+  const fingerprintTiming = normalizeTimingEvidence({
+    fingerprintOffsetMs: match.playOffsetMs,
+    captureStartedAt: result.clipStartedAt,
+    captureEndedAt: result.clipEndedAt,
+    captureMidpointAt: result.clipMidpointAt,
+  });
+  const offsetCapturedAt =
+    fingerprintTiming.captureMidpointAt ?? clipEndedAt;
 
   const logged = await logSpinIfChanged(
     station,
@@ -1352,14 +1361,15 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
       rawArtist: match.artist,
       rawTitle: match.title,
       ...(match.isrc ? { isrc: match.isrc } : {}),
-      // Preserve the provider's position signal. play_offset_ms is the
-      // position in the matched ORIGINAL track at the END of the recognized
-      // clip, so it's paired with the clip-end timestamp — not the capture
-      // start (which would overstate elapsed time by the clip duration).
+      // Preserve the provider's position signal against the original capture
+      // clock. The midpoint avoids pretending the recognizer's network return
+      // time (or one arbitrary edge of the sample) is the audible instant.
       playOffsetMs: match.playOffsetMs,
-      offsetCapturedAt: clipEndedAt,
+      offsetCapturedAt,
       // Play offset places the spin where the song actually started.
-      playedAt: new Date(clipEndedAt.getTime() - match.playOffsetMs),
+      ...(fingerprintTiming.estimatedAudibleStartedAt
+        ? { playedAt: fingerprintTiming.estimatedAudibleStartedAt }
+        : {}),
     },
     { source: "acr_fingerprint" },
   );

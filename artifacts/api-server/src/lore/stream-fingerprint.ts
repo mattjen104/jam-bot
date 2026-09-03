@@ -26,6 +26,8 @@ export function fingerprintAvailable(): boolean {
 
 export interface FingerprintResult {
   match: AcrMatch | null;
+  /** Wall-clock capture start, recorded before ffmpeg is spawned. */
+  clipStartedAt?: Date;
   /**
    * When the captured clip ENDED. ACRCloud's play_offset_ms is the position
    * in the matched original track at the end of the recognized portion, so
@@ -34,6 +36,26 @@ export interface FingerprintResult {
    * the whole clip duration (+ latency) and fire expiry re-checks early.
    */
   clipEndedAt: Date;
+  /** Midpoint of the original capture window, not the recognition response. */
+  clipMidpointAt?: Date;
+  /** Monotonic capture clock for diagnostics immune to wall-clock changes. */
+  captureMonotonic?: {
+    startedMs: number;
+    endedMs: number;
+    midpointMs: number;
+  };
+}
+
+interface CapturedClip {
+  bytes: Buffer;
+  startedAt: Date;
+  endedAt: Date;
+  midpointAt: Date;
+  monotonic: {
+    startedMs: number;
+    endedMs: number;
+    midpointMs: number;
+  };
 }
 
 export async function fingerprintStream(streamUrl: string): Promise<FingerprintResult> {
@@ -46,13 +68,20 @@ export async function fingerprintStream(streamUrl: string): Promise<FingerprintR
   // -f mp3           — output as MP3 (compact, ACRCloud accepts it)
   // pipe:1           — write to stdout
   const clip = await captureClip(streamUrl);
-  const clipEndedAt = new Date();
-  const match = await identifyAudio(clip, creds);
-  return { match, clipEndedAt };
+  const match = await identifyAudio(clip.bytes, creds);
+  return {
+    match,
+    clipStartedAt: clip.startedAt,
+    clipEndedAt: clip.endedAt,
+    clipMidpointAt: clip.midpointAt,
+    captureMonotonic: clip.monotonic,
+  };
 }
 
-function captureClip(streamUrl: string): Promise<Buffer> {
+function captureClip(streamUrl: string): Promise<CapturedClip> {
   return new Promise((resolve, reject) => {
+    const startedAt = new Date();
+    const startedMs = performance.now();
     const chunks: Buffer[] = [];
     let total = 0;
     let settled = false;
@@ -97,7 +126,22 @@ function captureClip(streamUrl: string): Promise<Buffer> {
       if (buf.length === 0) {
         reject(new Error(`ffmpeg produced no output (exit ${code ?? "?"})`));
       } else {
-        resolve(buf);
+        const endedAt = new Date();
+        const endedMs = performance.now();
+        const midpointAt = new Date(
+          startedAt.getTime() + (endedAt.getTime() - startedAt.getTime()) / 2,
+        );
+        resolve({
+          bytes: buf,
+          startedAt,
+          endedAt,
+          midpointAt,
+          monotonic: {
+            startedMs,
+            endedMs,
+            midpointMs: startedMs + (endedMs - startedMs) / 2,
+          },
+        });
       }
     });
 

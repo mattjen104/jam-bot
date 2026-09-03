@@ -32,6 +32,22 @@ export interface AuddRecognition {
   isrc?: string;
   /** MusicBrainz recording id, when AudD's musicbrainz enrichment has one. */
   recordingId?: string;
+  /**
+   * Capture clock only. AudD's identity response does not include a track
+   * position, so these timestamps must never be converted into an offset.
+   */
+  capture?: CaptureWindow;
+}
+
+export interface CaptureWindow {
+  startedAt: Date;
+  endedAt: Date;
+  midpointAt: Date;
+  monotonic: {
+    startedMs: number;
+    endedMs: number;
+    midpointMs: number;
+  };
 }
 
 export type AuddRecognitionOutcome =
@@ -84,7 +100,7 @@ export async function recognizeStream(
   const apiKey = process.env.AUDD_API_KEY?.trim();
   if (!apiKey) return { kind: "failed", reason: "AUDD_API_KEY not configured" };
 
-  let clip: Buffer;
+  let clip: { bytes: Buffer; window: CaptureWindow };
   try {
     clip = await captureClip(streamUrl);
   } catch (err) {
@@ -100,7 +116,7 @@ export async function recognizeStream(
     form.append("return", "musicbrainz");
     form.append(
       "file",
-      new Blob([new Uint8Array(clip)], { type: "audio/mpeg" }),
+      new Blob([new Uint8Array(clip.bytes)], { type: "audio/mpeg" }),
       "clip.mp3",
     );
 
@@ -122,6 +138,7 @@ export async function recognizeStream(
       clearTimeout(timer);
     }
     const recognition = parseAuddResponse(body);
+    if (recognition) recognition.capture = clip.window;
     return recognition ? { kind: "recognized", recognition } : { kind: "no_match" };
   } catch (err) {
     console.warn(`[lore] audd scout: recognize failed: ${String(err)}`);
@@ -134,8 +151,12 @@ export async function recognizeStream(
  * Rejects on timeout (>20s wall clock), size overrun (>200KB), spawn error,
  * or empty output — callers convert rejection to a null recognition.
  */
-function captureClip(streamUrl: string): Promise<Buffer> {
+function captureClip(
+  streamUrl: string,
+): Promise<{ bytes: Buffer; window: CaptureWindow }> {
   return new Promise((resolve, reject) => {
+    const startedAt = new Date();
+    const startedMs = performance.now();
     const chunks: Buffer[] = [];
     let total = 0;
     let settled = false;
@@ -166,7 +187,12 @@ function captureClip(streamUrl: string): Promise<Buffer> {
           clearTimeout(timer);
           proc.kill("SIGKILL");
           chunks.push(chunk);
-          resolve(Buffer.concat(chunks).subarray(0, MAX_CLIP_BYTES));
+          const endedAt = new Date();
+          const endedMs = performance.now();
+          resolve({
+            bytes: Buffer.concat(chunks).subarray(0, MAX_CLIP_BYTES),
+            window: captureWindow(startedAt, startedMs, endedAt, endedMs),
+          });
         }
         return;
       }
@@ -181,7 +207,12 @@ function captureClip(streamUrl: string): Promise<Buffer> {
       if (buf.length === 0) {
         reject(new Error(`ffmpeg produced no output (exit ${code ?? "?"})`));
       } else {
-        resolve(buf);
+        const endedAt = new Date();
+        const endedMs = performance.now();
+        resolve({
+          bytes: buf,
+          window: captureWindow(startedAt, startedMs, endedAt, endedMs),
+        });
       }
     });
 
@@ -193,4 +224,24 @@ function captureClip(streamUrl: string): Promise<Buffer> {
       }
     });
   });
+}
+
+export function captureWindow(
+  startedAt: Date,
+  startedMs: number,
+  endedAt: Date,
+  endedMs: number,
+): CaptureWindow {
+  return {
+    startedAt,
+    endedAt,
+    midpointAt: new Date(
+      startedAt.getTime() + (endedAt.getTime() - startedAt.getTime()) / 2,
+    ),
+    monotonic: {
+      startedMs,
+      endedMs,
+      midpointMs: startedMs + (endedMs - startedMs) / 2,
+    },
+  };
 }

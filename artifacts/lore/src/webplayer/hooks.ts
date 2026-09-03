@@ -66,6 +66,7 @@ export interface WpOnAirItem {
 export interface WpOnAirResponse {
   items: WpOnAirItem[];
   authenticated: boolean;
+  serverTime?: string;
 }
 
 export interface WpRunSpin {

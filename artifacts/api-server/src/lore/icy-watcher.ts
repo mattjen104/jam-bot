@@ -45,6 +45,23 @@ const FAILURE_LIMIT = 12;
 // during the startup burst; curl connects in <8 s under normal load.
 const CONNECT_TIMEOUT_MS = 15_000;
 
+export interface IcyMetadataObservation {
+  streamTitle: string | null;
+  observedAt: Date;
+  monotonicMs: number;
+}
+
+export interface IcyTransitionBracket {
+  previousTitle: string | null;
+  nextTitle: string | null;
+  /** Final metadata block observed with the old title. */
+  oldObservedAt: Date;
+  /** First metadata block observed with the new title. */
+  newObservedAt: Date;
+  oldMonotonicMs: number;
+  newMonotonicMs: number;
+}
+
 export class IcyWatcher extends EventEmitter {
   private socket: net.Socket | null = null;
   private parser: IcyStreamParser | null = null;
@@ -54,6 +71,7 @@ export class IcyWatcher extends EventEmitter {
   private backoffMs = BACKOFF_FLOOR_MS;
   private failureTimestamps: number[] = [];
   private lastStreamTitle: string | null | undefined = undefined;
+  private lastObservation: IcyMetadataObservation | null = null;
   private stopped = false;
   /**
    * The stream URL after one-hop redirect resolution (see resolveStreamUrl).
@@ -178,9 +196,29 @@ export class IcyWatcher extends EventEmitter {
   }
 
   private handleStreamTitle(streamTitle: string | null): void {
+    const observation: IcyMetadataObservation = {
+      streamTitle,
+      observedAt: new Date(),
+      monotonicMs: performance.now(),
+    };
+    const previous = this.lastObservation;
+    this.lastObservation = observation;
+    // Repeated metadata blocks matter for transition bracketing even though
+    // downstream track ingestion remains change-only.
     if (streamTitle === this.lastStreamTitle) return;
     this.lastStreamTitle = streamTitle;
     this.emit("metadata-observed", streamTitle);
+    this.emit("metadata-observation", observation);
+    if (previous) {
+      this.emit("metadata-transition", {
+        previousTitle: previous.streamTitle,
+        nextTitle: streamTitle,
+        oldObservedAt: previous.observedAt,
+        newObservedAt: observation.observedAt,
+        oldMonotonicMs: previous.monotonicMs,
+        newMonotonicMs: observation.monotonicMs,
+      } satisfies IcyTransitionBracket);
+    }
     if (!streamTitle) return;
 
     const parsed: ParsedStreamTitle | null = parseStreamTitle(streamTitle);

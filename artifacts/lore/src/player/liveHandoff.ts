@@ -5,6 +5,7 @@ import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 export type NextChangeState =
   | "trusted"
   | "estimated"
+  | "changing-soon"
   | "unknown"
   | "stale"
   | "just-changed";
@@ -29,6 +30,7 @@ export interface HandoffCandidate {
   now: LiveNow;
   score: number;
   reasons: string[];
+  changingSoon: boolean;
 }
 
 export function trackIdentity(now: Pick<LiveNow, "mbid" | "artist" | "title">): string {
@@ -86,6 +88,11 @@ export function formatRemaining(ms: number): string {
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+export function formatApproximateRemaining(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  return minutes === 1 ? "about a minute" : `about ${minutes} minutes`;
+}
+
 /**
  * Translate the server's advisory expiry into honest display language.
  * No server timestamp means no exact countdown: this is intentionally
@@ -109,7 +116,20 @@ export function deriveNextChange(now: LiveNow | null | undefined, atMs = Date.no
   if (now.timingConfidence === "trusted") {
     return { state: "trusted", remainingMs, label: `Next change in ${formatRemaining(remainingMs)}`, boundaryAt };
   }
-  return { state: "estimated", remainingMs, label: `About ${formatRemaining(remainingMs)} left`, boundaryAt };
+  if (remainingMs <= 30_000) {
+    return {
+      state: "changing-soon",
+      remainingMs,
+      label: "Changing soon · Lore is watching",
+      boundaryAt,
+    };
+  }
+  return {
+    state: "estimated",
+    remainingMs,
+    label: `${formatApproximateRemaining(remainingMs)} left`,
+    boundaryAt,
+  };
 }
 
 /**
@@ -121,6 +141,7 @@ export function rankHandoffCandidates(
   items: WpOnAirItem[],
   currentStation: Station | null,
   currentNow: LiveNow | null,
+  atMs = Date.now(),
 ): HandoffCandidate[] {
   const currentArtist = currentNow?.artist.trim().toLowerCase() ?? "";
   const currentCategories = new Set(currentStation?.stationCategories ?? []);
@@ -136,6 +157,9 @@ export function rankHandoffCandidates(
       const now = item.now as LiveNow;
       const reasons: string[] = [];
       let score = 0;
+      const timing = deriveNextChange(now, atMs);
+      const changingSoon =
+        timing.remainingMs != null && timing.remainingMs <= 30_000;
       if (item.matchCount != null && item.matchCount > 0) {
         score += Math.min(item.matchCount, 12) * 4;
         reasons.push(`${item.matchCount} library matches`);
@@ -161,10 +185,53 @@ export function rankHandoffCandidates(
         score += 10;
         reasons.push("fresh live signal");
       }
+      if (changingSoon) {
+        score -= 35;
+        reasons.unshift("changing soon");
+      } else if (timing.remainingMs != null && timing.remainingMs >= 60_000) {
+        score += timing.state === "trusted" ? 10 : 5;
+        reasons.push("enough time to listen");
+      } else if (timing.state === "trusted") {
+        score += 4;
+      }
       if (item.station.discoveryScore != null) score += Math.min(item.station.discoveryScore, 100) / 20;
       if (reasons.length === 0) reasons.push("a fresh live signal");
-      return { station: item.station, now, score, reasons: reasons.slice(0, 2) };
+      return {
+        station: item.station,
+        now,
+        score,
+        reasons: reasons.slice(0, 2),
+        changingSoon,
+      };
     })
-    .sort((a, b) => b.score - a.score || a.station.name.localeCompare(b.station.name))
-    .slice(0, 5);
+    .sort((a, b) =>
+      Number(a.changingSoon) - Number(b.changingSoon) ||
+      b.score - a.score ||
+      a.station.name.localeCompare(b.station.name),
+    );
+}
+
+/**
+ * Preserve card positions while replacing their live metadata in place.
+ * Ineligible stations disappear immediately; newly eligible stations fill
+ * vacancies in ranked order. Callers reset `previousSlugs` only for a
+ * confirmed track boundary or an explicit refresh.
+ */
+export function stabilizeCandidateOrder(
+  previousSlugs: readonly string[],
+  ranked: readonly HandoffCandidate[],
+): HandoffCandidate[] {
+  const bySlug = new Map(ranked.map((candidate) => [candidate.station.slug, candidate]));
+  const stable = previousSlugs
+    .map((slug) => bySlug.get(slug))
+    .filter((candidate): candidate is HandoffCandidate => candidate != null);
+  const seen = new Set(stable.map((candidate) => candidate.station.slug));
+  for (const candidate of ranked) {
+    if (stable.length >= 3) break;
+    if (!seen.has(candidate.station.slug)) {
+      stable.push(candidate);
+      seen.add(candidate.station.slug);
+    }
+  }
+  return stable;
 }

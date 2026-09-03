@@ -5,6 +5,8 @@ import {
   deriveNextChange,
   isConfirmedHandoffBoundary,
   rankHandoffCandidates,
+  stabilizeCandidateOrder,
+  trackIdentity,
   tracksDiffer,
   type HandoffCandidate,
   type LiveNow,
@@ -119,10 +121,48 @@ export function useLiveHandoff(
     void refresh(slug);
   }, [slug, now, nextChange.state, refresh]);
 
-  const candidates = useMemo(
-    () => rankHandoffCandidates(onAirItems, currentStation, now),
-    [onAirItems, currentStation, now],
+  const rankedCandidates = useMemo(
+    () => rankHandoffCandidates(onAirItems, currentStation, now, clockMs),
+    [onAirItems, currentStation, now, clockMs],
   );
+  const currentIdentity = now ? trackIdentity(now) : "";
+  const [candidateSnapshot, setCandidateSnapshot] = useState(() => ({
+    input: rankedCandidates,
+    currentIdentity,
+    candidates: rankedCandidates,
+  }));
+  let stableCandidates = candidateSnapshot.candidates;
+  if (candidateSnapshot.input !== rankedCandidates) {
+    const previousBySlug = new Map(
+      candidateSnapshot.candidates.map((candidate) => [
+        candidate.station.slug,
+        candidate,
+      ]),
+    );
+    const candidateBoundary = rankedCandidates.some((candidate) => {
+      const previous = previousBySlug.get(candidate.station.slug);
+      return Boolean(
+        previous &&
+        (
+          trackIdentity(previous.now) !== trackIdentity(candidate.now) ||
+          previous.changingSoon !== candidate.changingSoon
+        ),
+      );
+    });
+    stableCandidates =
+      candidateSnapshot.currentIdentity !== currentIdentity || candidateBoundary
+        ? rankedCandidates
+        : stabilizeCandidateOrder(
+            candidateSnapshot.candidates.map((candidate) => candidate.station.slug),
+            rankedCandidates,
+          );
+    setCandidateSnapshot({
+      input: rankedCandidates,
+      currentIdentity,
+      candidates: stableCandidates,
+    });
+  }
+  const candidates = stableCandidates.slice(0, 3);
 
   const cancel = useCallback(() => {
     generationRef.current += 1;

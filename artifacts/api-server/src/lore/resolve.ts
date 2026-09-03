@@ -32,6 +32,11 @@ import {
   normalizeMetadataPair,
   resolveTextWithVariants,
 } from "./resolution-query.js";
+import {
+  durationEvidenceCache,
+  isUsableDuration,
+} from "./duration-evidence.js";
+import { recordBoundaryTiming } from "./live-timing-health.js";
 
 export {
   RESOLUTION_CACHE_VERSION,
@@ -172,6 +177,29 @@ export async function resolveToMbid(
   opts?: { recordingId?: string; isrc?: string },
 ): Promise<MbidResolution> {
   const base = { title: rawTitle, artist: rawArtist };
+  const strongKeys = [
+    ...(opts?.recordingId
+      ? [{ key: opts.recordingId, kind: "recording_id" as const }]
+      : []),
+    ...(opts?.isrc ? [{ key: opts.isrc, kind: "isrc" as const }] : []),
+  ];
+  const learned = durationEvidenceCache.estimate(rawArtist, rawTitle, strongKeys);
+  const effectiveDurationMs = durationMs ?? learned?.durationMs;
+  if (isUsableDuration(durationMs)) {
+    durationEvidenceCache.observeText(
+      rawArtist,
+      rawTitle,
+      durationMs,
+      "source",
+    );
+    for (const strongKey of strongKeys) {
+      durationEvidenceCache.observeStrong(
+        strongKey.key,
+        durationMs,
+        strongKey.kind,
+      );
+    }
+  }
 
   // Track whether any external network call (MB ISRC/text or Spotify) was
   // made during this resolution. fromCache: true means pure DB/memory path —
@@ -180,7 +208,13 @@ export async function resolveToMbid(
 
   // 1. Source handed us the canonical id — strongest, free, nothing to cache.
   if (opts?.recordingId) {
-    return { mbid: opts.recordingId, confidence: "recording_id", fromCache: true, ...base };
+    return {
+      mbid: opts.recordingId,
+      confidence: "recording_id",
+      fromCache: true,
+      ...(effectiveDurationMs != null ? { durationMs: effectiveDurationMs } : {}),
+      ...base,
+    };
   }
 
   // 2. ISRC — a strong identifier, tried BEFORE the text cache and under its
@@ -200,9 +234,25 @@ export async function resolveToMbid(
         console.error("[lore] isrc resolution failed", opts.isrc, err);
       }
       await writeResolutionCacheSafe(ik, mbid, mbid ? "isrc" : "unresolved");
-      if (mbid) return { mbid, confidence: "isrc", isrc: opts.isrc, fromCache: false, ...base };
+      if (mbid) {
+        return {
+          mbid,
+          confidence: "isrc",
+          isrc: opts.isrc,
+          fromCache: false,
+          ...(effectiveDurationMs != null ? { durationMs: effectiveDurationMs } : {}),
+          ...base,
+        };
+      }
     } else if (cached.mbid) {
-      return { mbid: cached.mbid, confidence: "isrc", isrc: opts.isrc, fromCache: true, ...base };
+      return {
+        mbid: cached.mbid,
+        confidence: "isrc",
+        isrc: opts.isrc,
+        fromCache: true,
+        ...(effectiveDurationMs != null ? { durationMs: effectiveDurationMs } : {}),
+        ...base,
+      };
     }
     // Cached miss OR live miss — fall through to a text search.
   }
@@ -222,13 +272,19 @@ export async function resolveToMbid(
         : (cached.confidence as MbidResolution["confidence"]) || "unresolved";
     // fromCache is false when a live ISRC call preceded this (madeNetworkCall=true)
     // but we then hit the text cache — still counts as a network call overall.
-    return { mbid: cached.mbid, confidence, fromCache: !madeNetworkCall, ...base };
+    return {
+      mbid: cached.mbid,
+      confidence,
+      fromCache: !madeNetworkCall,
+      ...(effectiveDurationMs != null ? { durationMs: effectiveDurationMs } : {}),
+      ...base,
+    };
   }
 
   const textResolution = await resolveTextWithVariants(
     rawArtist,
     rawTitle,
-    [durationMs],
+    [effectiveDurationMs],
     resolveRecordingByTextStatus,
   );
   if (textResolution.status === "matched") {
@@ -241,7 +297,11 @@ export async function resolveToMbid(
       artist: match.artist || rawArtist,
       ...(match.artistMbid ? { artistMbid: match.artistMbid } : {}),
       ...(match.isrc ? { isrc: match.isrc } : {}),
-      ...(match.durationMs != null ? { durationMs: match.durationMs } : {}),
+      ...(match.durationMs != null
+        ? { durationMs: match.durationMs }
+        : effectiveDurationMs != null
+          ? { durationMs: effectiveDurationMs }
+          : {}),
     };
     await writeResolutionCacheSafe(key, result.mbid, "text");
     return result;
@@ -264,7 +324,11 @@ export async function resolveToMbid(
         fromCache: false,
         title: hit.name ?? rawTitle,
         artist: rawArtist,
-        ...(hit.durationMs != null ? { durationMs: hit.durationMs } : {}),
+        ...(hit.durationMs != null
+          ? { durationMs: hit.durationMs }
+          : effectiveDurationMs != null
+            ? { durationMs: effectiveDurationMs }
+            : {}),
       };
     }
   } catch {
@@ -625,7 +689,7 @@ async function persistSpin(args: {
       mbid: r.mbid,
       rawArtist: raw.rawArtist,
       rawTitle: raw.rawTitle,
-      durationMs: raw.durationMs ?? null,
+      durationMs: raw.durationMs ?? r.durationMs ?? null,
       source,
       externalId: raw.externalId ?? null,
       citation: citation ?? raw.citationUrl ?? null,
@@ -690,6 +754,8 @@ export interface SpinChangedEvent {
   observedAt: string;
   /** Resolution confidence tier for the spin — same values as spins.confidence. */
   confidence: MbidResolution["confidence"];
+  /** Safe early duration evidence, when available. */
+  durationMs?: number;
   /**
    * Always false (or absent) on this resolved path — the flag exists so SSE
    * frames share one shape; provisional observations travel as `spin-raw`
@@ -713,6 +779,8 @@ export interface SpinRawEvent {
   observedAt: string;
   confidence: "unresolved";
   provisional: true;
+  /** Direct/strong or low-variance learned duration; absent when ambiguous. */
+  durationMs?: number;
 }
 
 /**
@@ -895,6 +963,10 @@ async function logSpinIfChangedInner(
         rawArtist: spinsTable.rawArtist,
         rawTitle: spinsTable.rawTitle,
         playedAt: spinsTable.playedAt,
+        durationMs: spinsTable.durationMs,
+        playOffsetMs: spinsTable.playOffsetMs,
+        offsetCapturedAt: spinsTable.offsetCapturedAt,
+        source: spinsTable.source,
       })
       .from(spinsTable)
       .where(eq(spinsTable.stationId, station.id))
@@ -951,10 +1023,38 @@ async function logSpinIfChangedInner(
       return false;
     }
 
+    if (last?.durationMs && last.durationMs > 0) {
+      const expectedBoundaryMs =
+        last.playOffsetMs != null && last.offsetCapturedAt
+          ? last.offsetCapturedAt.getTime() - last.playOffsetMs + last.durationMs
+          : last.playedAt.getTime() + last.durationMs;
+      const countdownErrorMs = arrivedAtMs - expectedBoundaryMs;
+      // Wildly stale rows are not calibration samples. Keep a generous bound
+      // so real radio buffering and polling delay are still measurable.
+      if (Math.abs(countdownErrorMs) <= 10 * 60_000) {
+        recordBoundaryTiming({
+          stationId: station.id,
+          stationSlug: station.slug,
+          source: last.source ?? opts?.source ?? station.nowPlayingSource ?? "unknown",
+          countdownErrorMs,
+        });
+      }
+    }
+
     // Provisional fast path: the track genuinely changed — tell subscribers
     // immediately, before MusicBrainz/Spotify resolution and persistence add
     // seconds of latency. The resolved `spin-changed` event follows on this
     // same per-station chain, so it can never arrive out of order.
+    const earlyDuration = np.durationMs ?? durationEvidenceCache.estimate(
+      np.rawArtist,
+      np.rawTitle,
+      [
+        ...(np.recordingId
+          ? [{ key: np.recordingId, kind: "recording_id" as const }]
+          : []),
+        ...(np.isrc ? [{ key: np.isrc, kind: "isrc" as const }] : []),
+      ],
+    )?.durationMs;
     const rawEventPayload: SpinRawEvent = {
       stationId: station.id,
       stationSlug: station.slug,
@@ -963,6 +1063,7 @@ async function logSpinIfChangedInner(
       observedAt: new Date().toISOString(),
       confidence: "unresolved",
       provisional: true,
+      ...(earlyDuration != null ? { durationMs: earlyDuration } : {}),
     };
     spinEvents.emit("spin-raw", rawEventPayload);
     rawEvent = rawEventPayload;
@@ -1063,6 +1164,7 @@ async function logSpinIfChangedInner(
         isFirstSpin,
         observedAt: new Date().toISOString(),
         confidence: r.confidence,
+        ...(r.durationMs != null ? { durationMs: r.durationMs } : {}),
       } satisfies SpinChangedEvent);
       const source_to_resolved_ms = Date.now() - arrivedAtMs;
       console.debug("[lore] resolved now-playing emitted", {

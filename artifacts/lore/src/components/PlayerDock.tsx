@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
@@ -13,6 +14,7 @@ import { PlayerSheet } from "./PlayerSheet";
 import { RideBar } from "./RideBar";
 import { useLiveHandoff } from "../player/useLiveHandoff";
 import { commitLiveHandoff } from "../player/liveHandoff";
+import { useStationFastLane } from "../hooks/useStationFastLane";
 
 /** Matches the shell's phone-width CSS convention (one-line dock breakpoint). */
 const MOBILE_SHELL_QUERY = "(orientation: portrait), (max-width: 720px)";
@@ -36,6 +38,7 @@ export function PlayerDock() {
   const { radio, ride, spotify, scan } = usePlayer();
   const [expandedRaw, setExpanded] = useState(false);
   const [location] = useLocation();
+  const queryClient = useQueryClient();
 
   const stationSlug = radio.station?.slug ?? "";
   const { data: onAirData } = useWpOnAir();
@@ -74,6 +77,22 @@ export function PlayerDock() {
       staleTime: 15_000,
     },
   });
+  const {
+    landOnStation,
+    confirmation: landingConfirmation,
+  } = useStationFastLane((slug) => {
+    void queryClient.invalidateQueries({
+      queryKey: getGetStationNowPlayingQueryKey(slug),
+    });
+  });
+
+  // Audio startup remains owned by the radio player. In parallel, every new
+  // station selection gets its own targeted live check; the hook's generation
+  // guard prevents a slow response from a superseded click updating the dock.
+  useEffect(() => {
+    if (!stationSlug || ride.active) return;
+    landOnStation(stationSlug, null);
+  }, [landOnStation, ride.active, stationSlug]);
 
   // Provisional fast path: the SSE stream's spin-raw frame carries the new
   // track's raw artist/title seconds before resolution + persistence complete
@@ -214,6 +233,7 @@ export function PlayerDock() {
             if (window.matchMedia(MOBILE_SHELL_QUERY).matches) setExpanded(true);
           }}
           handoff={handoff}
+          landingConfirmation={landingConfirmation}
         />
         {expanded && (
           <PlayerSheet
@@ -228,6 +248,7 @@ export function PlayerDock() {
             onScanToggle={scan.toggle}
             onCollapse={() => setExpanded(false)}
             handoff={handoff}
+            landingConfirmation={landingConfirmation}
           />
         )}
       </>

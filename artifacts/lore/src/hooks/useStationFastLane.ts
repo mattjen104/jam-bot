@@ -57,6 +57,8 @@ export interface FastLaneResponse {
   station: { slug: string; name: string };
   now: FastLaneNow | null;
   refreshTriggered: boolean;
+  /** Server confirmed an observation newer than the targeted refresh. */
+  confirmed?: boolean;
 }
 
 /** The track the listener believes is playing at landing time. */
@@ -158,6 +160,14 @@ export function useStationFastLane(
       // Open the bounded confirmation window for this landing. Audio startup
       // runs in parallel at the call site — never gated on this.
       const gen = ++landingGenRef.current;
+      const landedAtMs = Date.now();
+      const landingId =
+        globalThis.crypto?.randomUUID?.() ?? `${landedAtMs}-${gen}`;
+      const candidateKey = candidate?.mbid
+        ? `mbid:${candidate.mbid}`
+        : candidate
+          ? `text:${candidate.artist.trim().toLowerCase()}|${candidate.title.trim().toLowerCase()}`
+          : "";
       const isCurrent = () => landingGenRef.current === gen;
       clearWindowTimer();
       setConfirmation({ slug, phase: "confirming" });
@@ -176,7 +186,14 @@ export function useStationFastLane(
       const check = async (): Promise<FastLaneResponse | null> => {
         const res = await fetch(
           `/api/player/station/${encodeURIComponent(slug)}/now`,
-          { headers: { "Content-Type": "application/json" } },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "X-Lore-Landed-At": String(landedAtMs),
+              "X-Lore-Landing-Id": landingId,
+              ...(candidateKey ? { "X-Lore-Landing-Track": candidateKey } : {}),
+            },
+          },
         );
         // Superseded while in flight: a newer landing owns the handoff now —
         // discard the response completely (no reconciliation callback, no
@@ -192,7 +209,10 @@ export function useStationFastLane(
         // is now current/exact. Stale responses keep the window open — the
         // triggered one-shot refresh (re-checks below) usually resolves it.
         // Late responses (after the window) upgrade unconfirmed → confirmed.
-        if (body.now && body.now.freshness !== "stale") {
+        const stationSpecificConfirmed =
+          body.confirmed ??
+          (body.now?.freshness !== "stale" && !body.refreshTriggered);
+        if (body.now && stationSpecificConfirmed) {
           clearWindowTimer();
           setConfirmation((c) =>
             c && c.slug === slug ? { slug, phase: "confirmed" } : c,

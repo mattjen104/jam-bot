@@ -5,6 +5,7 @@ import {
   commitLiveHandoff,
   isConfirmedHandoffBoundary,
   rankHandoffCandidates,
+  stabilizeCandidateOrder,
   tracksDiffer,
   type LiveNow,
 } from "../src/player/liveHandoff";
@@ -67,14 +68,24 @@ describe("deriveNextChange", () => {
     });
   });
 
-  it("labels played-at timing as advisory instead of exact", () => {
+  it("labels a near estimated boundary as changing soon", () => {
     const view = deriveNextChange(now({
       serverTime: "2026-09-03T12:00:00.000Z",
       estimatedRemainingMs: 30_000,
       timingConfidence: "estimated",
     }), Date.parse("2026-09-03T12:00:10.000Z"));
+    expect(view.state).toBe("changing-soon");
+    expect(view.label).toBe("Changing soon · Lore is watching");
+  });
+
+  it("uses minute-granularity language for approximate timing", () => {
+    const view = deriveNextChange(now({
+      serverTime: "2026-09-03T12:00:00.000Z",
+      estimatedRemainingMs: 130_000,
+      timingConfidence: "estimated",
+    }), Date.parse("2026-09-03T12:00:10.000Z"));
     expect(view.state).toBe("estimated");
-    expect(view.label).toBe("About 0:20 left");
+    expect(view.label).toBe("about 2 minutes left");
   });
 
   it("does not fabricate a countdown without server time", () => {
@@ -124,6 +135,78 @@ describe("rankHandoffCandidates", () => {
       onAirItem("fresh"),
     ], station("current"), now());
     expect(ranked.map((candidate) => candidate.station.slug)).toEqual(["fresh"]);
+  });
+
+  it("demotes an approximate track when it crosses the changing-soon threshold", () => {
+    const serverTime = "2026-09-03T12:00:00.000Z";
+    const ranked = rankHandoffCandidates([
+      onAirItem("affinity", {
+        matchCount: 10,
+        now: now({
+          mbid: "affinity",
+          serverTime,
+          estimatedRemainingMs: 50_000,
+          timingConfidence: "estimated",
+        }),
+      }),
+      onAirItem("steady", {
+        now: now({
+          mbid: "steady",
+          serverTime,
+          estimatedRemainingMs: 180_000,
+          timingConfidence: "estimated",
+        }),
+      }),
+    ], station("current"), now(), Date.parse("2026-09-03T12:00:25.000Z"));
+    expect(ranked.map((candidate) => candidate.station.slug)).toEqual([
+      "steady",
+      "affinity",
+    ]);
+    expect(ranked[1]?.changingSoon).toBe(true);
+  });
+});
+
+describe("stabilizeCandidateOrder", () => {
+  it("updates metadata without moving still-eligible stations", () => {
+    const ranked = rankHandoffCandidates([
+      onAirItem("a", { matchCount: 1 }),
+      onAirItem("b", { matchCount: 8 }),
+      onAirItem("c", { matchCount: 3 }),
+    ], station("current"), now());
+    const stable = stabilizeCandidateOrder(["a", "b"], ranked);
+    expect(stable.map((candidate) => candidate.station.slug)).toEqual(["a", "b", "c"]);
+  });
+
+  it("drops an ineligible station and fills its vacancy", () => {
+    const ranked = rankHandoffCandidates([
+      onAirItem("b"),
+      onAirItem("c"),
+    ], station("current"), now());
+    expect(
+      stabilizeCandidateOrder(["a", "b"], ranked)
+        .map((candidate) => candidate.station.slug),
+    ).toEqual(["b", "c"]);
+  });
+
+  it("keeps the visible three stable when clock-only scoring moves another station ahead", () => {
+    const initial = rankHandoffCandidates([
+      onAirItem("a", { matchCount: 4 }),
+      onAirItem("b", { matchCount: 3 }),
+      onAirItem("c", { matchCount: 2 }),
+      onAirItem("d", { matchCount: 1 }),
+    ], station("current"), now());
+    const rescored = rankHandoffCandidates([
+      onAirItem("a", { matchCount: 4 }),
+      onAirItem("b", { matchCount: 3 }),
+      onAirItem("c", { matchCount: 0 }),
+      onAirItem("d", { matchCount: 2 }),
+    ], station("current"), now());
+    expect(
+      stabilizeCandidateOrder(
+        initial.map((candidate) => candidate.station.slug),
+        rescored,
+      ).slice(0, 3).map((candidate) => candidate.station.slug),
+    ).toEqual(["a", "b", "c"]);
   });
 });
 

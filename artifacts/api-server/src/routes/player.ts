@@ -20,6 +20,7 @@ import { getUserForListenerRead, getUserFromSession } from "../lore/userSession.
 import { toStation, isPickerOptedOut, validScheduleShowAttribution, deriveStationCategories } from "./lore/shared.js";
 import { classifyFreshness } from "../lore/freshness.js";
 import { estimateExpiry } from "../lore/expiry.js";
+import { recordLandingTiming } from "../lore/live-timing-health.js";
 import { pollStation } from "../lore/poller.js";
 import { spinDayExpr } from "../lore/runs.js";
 import { h } from "../middlewares/asyncHandler.js";
@@ -287,6 +288,9 @@ router.get("/player/onair", h(async (req, res) => {
       title: recordingsTable.title,
       artist: recordingsTable.artist,
       artworkUrl: recordingsTable.artworkUrl,
+      durationMs: recordingsTable.durationMs,
+      playOffsetMs: spinsTable.playOffsetMs,
+      offsetCapturedAt: spinsTable.offsetCapturedAt,
       showName: showsTable.name,
       showDj: showsTable.djName,
     })
@@ -354,6 +358,13 @@ router.get("/player/onair", h(async (req, res) => {
   const itemsRaw = stations.map((s) => {
       const spin = latestByStation.get(s.id);
       if (!spin || spin.playedAt.getTime() < cutoff) return null;
+       const expiry = estimateExpiry({
+         durationMs: spin.durationMs,
+         playedAt: spin.playedAt,
+         playOffsetMs: spin.playOffsetMs,
+         offsetCapturedAt: spin.offsetCapturedAt,
+         now,
+       });
       const earlier = (earlierByStation.get(s.id) ?? []).slice(1);
       return {
         station: toStation(
@@ -374,6 +385,15 @@ router.get("/player/onair", h(async (req, res) => {
           observedAt: spin.observedAt.toISOString(),
           freshness: classifyFreshness(spin.source, spin.observedAt, now),
           resolved: spin.mbid != null,
+           serverTime: now.toISOString(),
+           estimatedRemainingMs: expiry?.remainingMs ?? null,
+           likelyExpiring: expiry?.likelyExpiring ?? false,
+           timingConfidence:
+             expiry?.positionSource === "fingerprint"
+               ? "trusted"
+               : expiry
+                 ? "estimated"
+                 : "unknown",
         },
         earlier,
         matchCount: user ? matchByStation.get(s.id) ?? 0 : null,
@@ -386,7 +406,11 @@ router.get("/player/onair", h(async (req, res) => {
         new Date(b.now.playedAt).getTime() - new Date(a.now.playedAt).getTime(),
     );
 
-  return res.json({ items, authenticated: user != null });
+  return res.json({
+    serverTime: now.toISOString(),
+    items,
+    authenticated: user != null,
+  });
 }));
 
 // ---------------------------------------------------------------------------
@@ -406,6 +430,16 @@ router.get("/player/onair", h(async (req, res) => {
 const FAST_LANE_DEBOUNCE_MS = 30_000;
 /** stationId → last time the fast lane triggered a refresh (ms epoch). */
 const fastLaneLastTrigger = new Map<number, number>();
+interface FastLaneLandingRefresh {
+  stationId: number;
+  startedAt: number;
+  completedAt: number | null;
+  failed: boolean;
+}
+const fastLaneLandingRefreshes = new Map<string, FastLaneLandingRefresh>();
+const fastLaneRefreshInFlight = new Map<number, Promise<void>>();
+const FAST_LANE_LANDING_TTL_MS = 2 * 60_000;
+const FAST_LANE_LANDING_MAX = 2_048;
 
 type FastLaneRefreshFn = (station: Station) => Promise<void>;
 let fastLaneRefresh: FastLaneRefreshFn = (station) => pollStation(station);
@@ -420,6 +454,8 @@ export function _testOnly_setFastLaneRefresh(fn: FastLaneRefreshFn): () => void 
 /** Tests only: clear the per-station refresh debounce. */
 export function _testOnly_resetFastLaneDebounce(): void {
   fastLaneLastTrigger.clear();
+  fastLaneLandingRefreshes.clear();
+  fastLaneRefreshInFlight.clear();
 }
 
 router.get("/player/station/:slug/now", h(async (req, res) => {
@@ -458,6 +494,9 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
 
   const now = new Date();
   const freshness = spin ? classifyFreshness(spin.source, spin.observedAt, now) : null;
+  const explicitLanding = Number.isFinite(Number(req.get("X-Lore-Landed-At")));
+  const landingId = req.get("X-Lore-Landing-Id")?.trim() || null;
+  const landingRefreshKey = landingId ? `${station.id}:${landingId}` : null;
 
   // Advisory expiry estimate: when the recording's duration is known, how
   // much of the song is likely left. Null when duration (or a position
@@ -474,10 +513,52 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
       })
     : null;
 
+  const candidateKey = req.get("X-Lore-Landing-Track") ?? null;
+  const landedAtHeader = Number(req.get("X-Lore-Landed-At"));
+  const currentKey = spin
+    ? spin.mbid
+      ? `mbid:${spin.mbid}`
+      : `text:${(spin.rawArtist ?? "").trim().toLowerCase()}|${(spin.rawTitle ?? "").trim().toLowerCase()}`
+    : null;
   // "Fresh" means within the source's freshness budget — anything past it
   // (aging/stale, or no stored spin at all) warrants a one-shot re-poll.
   let refreshTriggered = false;
-  if (freshness !== "fresh") {
+  let landingRefresh = landingRefreshKey
+    ? fastLaneLandingRefreshes.get(landingRefreshKey) ?? null
+    : null;
+  if (explicitLanding && landingRefreshKey && !landingRefresh) {
+    landingRefresh = {
+      stationId: station.id,
+      startedAt: now.getTime(),
+      completedAt: null,
+      failed: false,
+    };
+    fastLaneLandingRefreshes.set(landingRefreshKey, landingRefresh);
+    if (fastLaneLandingRefreshes.size > FAST_LANE_LANDING_MAX) {
+      const oldest = fastLaneLandingRefreshes.keys().next().value;
+      if (oldest) fastLaneLandingRefreshes.delete(oldest);
+    }
+    refreshTriggered = true;
+
+    let refresh = fastLaneRefreshInFlight.get(station.id);
+    if (!refresh) {
+      refresh = Promise.resolve().then(() => fastLaneRefresh(station));
+      fastLaneRefreshInFlight.set(station.id, refresh);
+      void refresh.finally(() => {
+        if (fastLaneRefreshInFlight.get(station.id) === refresh) {
+          fastLaneRefreshInFlight.delete(station.id);
+        }
+      });
+    }
+    const state = landingRefresh;
+    void refresh.then(
+      () => { state.completedAt = Date.now(); },
+      (err) => {
+        state.failed = true;
+        console.error("[lore] fast-lane refresh failed", station.slug, err);
+      },
+    );
+  } else if (freshness !== "fresh" || (explicitLanding && !landingId)) {
     const last = fastLaneLastTrigger.get(station.id) ?? 0;
     if (now.getTime() - last >= FAST_LANE_DEBOUNCE_MS) {
       fastLaneLastTrigger.set(station.id, now.getTime());
@@ -485,6 +566,42 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
       void fastLaneRefresh(station).catch((err) => {
         console.error("[lore] fast-lane refresh failed", station.slug, err);
       });
+    }
+  }
+
+  const stationSpecificConfirmed = Boolean(
+    spin &&
+    freshness !== "stale" &&
+    landingRefresh &&
+    !landingRefresh.failed &&
+    landingRefresh.completedAt != null &&
+    spin.observedAt.getTime() >= landingRefresh.startedAt,
+  );
+
+  recordLandingTiming({
+    stationId: station.id,
+    stationSlug: station.slug,
+    source: spin?.source ?? station.nowPlayingSource ?? "unknown",
+    observationAgeMs: spin
+      ? Math.max(0, now.getTime() - spin.observedAt.getTime())
+      : null,
+    mismatch: candidateKey && currentKey ? candidateKey !== currentKey : null,
+    confirmationLatencyMs:
+      stationSpecificConfirmed &&
+      Number.isFinite(landedAtHeader) &&
+      landedAtHeader > 0
+        ? Math.max(0, now.getTime() - landedAtHeader)
+        : null,
+    landingId: landingId ?? (
+      Number.isFinite(landedAtHeader) && landedAtHeader > 0
+        ? `${station.id}:${landedAtHeader}`
+        : null
+    ),
+  });
+
+  for (const [id, state] of fastLaneLandingRefreshes) {
+    if (now.getTime() - state.startedAt > FAST_LANE_LANDING_TTL_MS) {
+      fastLaneLandingRefreshes.delete(id);
     }
   }
 
@@ -517,6 +634,11 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
         }
       : null,
     refreshTriggered,
+    /**
+     * True only after a station-specific poll has observed this row. A merely
+     * fresh aggregate row is not enough to confirm an explicit landing.
+     */
+    confirmed: stationSpecificConfirmed,
   });
 }));
 

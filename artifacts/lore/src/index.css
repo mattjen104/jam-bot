@@ -9382,6 +9382,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 }
 .live-handoff__next--trusted { color: hsl(var(--foreground)); }
 .live-handoff__next--estimated { color: hsl(var(--muted-foreground)); }
+.live-handoff__next--changing-soon { color: hsl(var(--muted-foreground)); }
 .live-handoff__next--stale,
 .live-handoff__next--unknown,
 .live-handoff__next--just-changed { color: hsl(var(--muted-foreground)); }
@@ -9456,6 +9457,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   width: 100%;
   border-radius: 8px !important;
   text-align: left;
+}
+.live-handoff__candidate--primary {
+  border-color: hsl(var(--foreground) / .35) !important;
+  background: hsl(var(--foreground) / .04) !important;
 }
 .live-handoff__candidate span {
   display: grid;

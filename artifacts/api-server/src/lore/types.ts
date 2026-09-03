@@ -14,12 +14,17 @@ export interface NowPlayingRaw {
   /** ISRC, when the source provides one. */
   isrc?: string;
   durationMs?: number;
+  /** Source-native track boundary timestamps, when explicitly published. */
+  sourceStartedAt?: Date;
+  sourceEndedAt?: Date;
+  /** Precise metadata arrival time; not itself an audible-track boundary. */
+  metadataObservedAt?: Date;
   /**
    * ACR fingerprint play offset — how far into the song (ms) the captured
    * clip was, per the provider. Only fingerprint-derived reports carry it.
    */
   playOffsetMs?: number;
-  /** When the fingerprint clip was captured (pairs with playOffsetMs). */
+  /** Capture midpoint for the fingerprint offset (pairs with playOffsetMs). */
   offsetCapturedAt?: Date;
   /** Show/DJ attribution, when the source exposes program metadata (e.g. NTS). */
   show?: ShowAttribution;
