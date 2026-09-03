@@ -73,6 +73,43 @@ export interface CrossingCoverItem {
 }
 
 /**
+ * A rail owns the failure state for each card's source.  Imperatively changing
+ * img.src in an error handler is not enough: the next parent render can put
+ * the failed proxy URL back and cause another 404.  Keeping the failed source
+ * in React state makes the local fallback durable without retrying a known
+ * failed cover while the rail is visible.
+ */
+function RailArtwork({
+  artworkUrl,
+  alt = "",
+  testId,
+}: {
+  artworkUrl: string | null | undefined;
+  alt?: string;
+  testId?: string;
+}) {
+  const source = proxyArtUrl(artworkUrl) ?? RUMOURS;
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const showingFallback = source === RUMOURS || failedSource === source;
+
+  return (
+    <img
+      className="cover-card__art"
+      src={showingFallback ? RUMOURS : source}
+      alt={alt}
+      aria-hidden={alt === "" ? "true" : undefined}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      onError={(event) => {
+        setFailedSource(source);
+        onArtError(event, { retryProxy: false });
+      }}
+      {...(testId ? { "data-testid": testId } : {})}
+    />
+  );
+}
+/**
  * Resolve release-exact artwork for a confirmed crossing track.
  *
  * Order of trust:
@@ -221,16 +258,7 @@ export function LiveCrossingCoverRail({
               className="cover-card__record"
               aria-label={`Open ${item.title} by ${item.artist}`}
             >
-              <img
-                className="cover-card__art"
-                src={proxyArtUrl(item.artworkUrl) ?? RUMOURS}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-                draggable={false}
-                onError={onArtError}
-              />
+              <RailArtwork artworkUrl={item.artworkUrl} />
               <span className="cover-card__artist">{item.artist}</span>
               <span className="cover-card__title">{item.title}</span>
             </Link>
@@ -353,17 +381,7 @@ export function FirstPlayCoverRail({
               className="cover-card__record"
               aria-label={`Open ${item.title} by ${item.artist}`}
             >
-              <img
-                className="cover-card__art"
-                src={item.artworkUrl ? proxyArtUrl(item.artworkUrl) ?? RUMOURS : RUMOURS}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-                draggable={false}
-                onError={onArtError}
-                data-testid="first-play-cover-art"
-              />
+              <RailArtwork artworkUrl={item.artworkUrl} testId="first-play-cover-art" />
               <span className="cover-card__artist">{item.artist}</span>
               <span className="cover-card__title">{item.title}</span>
             </Link>

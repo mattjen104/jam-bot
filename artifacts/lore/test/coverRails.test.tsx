@@ -19,6 +19,7 @@ import {
   CROSSING_COVER_LIMIT,
   FIRST_PLAY_LIMIT,
 } from "../src/components/dial/CoverRails";
+import { RUMOURS } from "../src/lib/rumours";
 import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import { makeDialSpin, makeDialStation } from "./helpers/dialDataMock";
 
@@ -62,6 +63,7 @@ const ALBUM_CROSSING = {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -185,6 +187,23 @@ describe("LiveCrossingCoverRail", () => {
     expect(startReplay).not.toHaveBeenCalled();
   });
 
+  it("keeps a failed proxy cover on the RUMOURS fallback instead of retrying the rail", () => {
+    vi.useFakeTimers();
+    const row = makeRow({ albumCrossings: [ALBUM_CROSSING] });
+    const view = render(<LiveCrossingCoverRail rows={[row]} onTuneIn={vi.fn()} />);
+    const img = screen.getByTestId("crossing-cover-rail").querySelector("img")!;
+
+    fireEvent.error(img);
+    expect(img.getAttribute("src")).toContain("rumours.jpg");
+
+    vi.advanceTimersByTime(2_000);
+    expect(img.getAttribute("src")).toContain("rumours.jpg");
+
+    // A parent refresh must not restore the failed proxy URL.
+    view.rerender(<LiveCrossingCoverRail rows={[row]} onTuneIn={vi.fn()} />);
+    expect(img.getAttribute("src")).toContain("rumours.jpg");
+  });
+
   it("renders nothing when no live crossing has trustworthy art", () => {
     const row = makeRow({
       track: makeDialSpin({ isLibraryHit: false, isArtistHit: true }),
@@ -262,6 +281,28 @@ describe("FirstPlayCoverRail", () => {
     render(<FirstPlayCoverRail liveSlugs={new Set()} onTuneStation={vi.fn()} />);
     const img = await screen.findByTestId("first-play-cover-art");
     expect(img.getAttribute("src")).toContain("rumours.jpg");
+  });
+
+  it("keeps a failed proxy cover on the RUMOURS fallback instead of retrying the rail", async () => {
+    stubFetch([firstPlay]);
+    const view = render(
+      <FirstPlayCoverRail liveSlugs={new Set()} onTuneStation={vi.fn()} />,
+    );
+    const img = await screen.findByTestId("first-play-cover-art");
+    vi.useFakeTimers();
+
+    fireEvent.error(img);
+    expect(img.getAttribute("src")).toContain("rumours.jpg");
+
+    vi.advanceTimersByTime(2_000);
+    expect(img.getAttribute("src")).toContain("rumours.jpg");
+
+    // A parent refresh must not restore the failed proxy URL.
+    view.rerender(
+      <FirstPlayCoverRail liveSlugs={new Set()} onTuneStation={vi.fn()} />,
+    );
+    expect(img.getAttribute("src")).toContain("rumours.jpg");
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("renders nothing when the archive read fails", async () => {

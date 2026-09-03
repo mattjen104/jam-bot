@@ -56,12 +56,17 @@ function stripRetryParam(src: string): string {
  *    gets its own independent retry window.
  * 4. Retries are skipped entirely for non-proxy sources (direct CDN, data:,
  *    local paths) — they receive immediate RUMOURS and no further attempts.
+ *    Callers that own durable failure state can also pass retryProxy: false
+ *    to keep a known failed proxy source on RUMOURS without another request.
  * 5. Once all retries are exhausted, or if RUMOURS itself fails, the handler
  *    is a no-op so there is no infinite error loop.
  *
  * Back-off delays: 2 s → 4 s (jitter-free; suitable for proxy hiccups).
  */
-export function onArtError(e: React.SyntheticEvent<HTMLImageElement>) {
+export function onArtError(
+  e: React.SyntheticEvent<HTMLImageElement>,
+  options: { retryProxy?: boolean } = {},
+) {
   const img = e.currentTarget;
 
   // Guard: if we're already showing RUMOURS, bail — retrying would risk an
@@ -84,6 +89,7 @@ export function onArtError(e: React.SyntheticEvent<HTMLImageElement>) {
 
   // Only schedule retries for art-proxy URLs.  Direct CDN links, data URIs,
   // and local paths get immediate RUMOURS without further attempts.
+  if (options.retryProxy === false) return;
   if (!canonicalSrc.includes(PROXY_MARKER)) return;
 
   const retries = Number(img.dataset.artRetries ?? 0);
