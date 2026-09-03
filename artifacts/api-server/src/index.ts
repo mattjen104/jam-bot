@@ -58,6 +58,7 @@ import { applySpinsPlayedAtIndexMigration } from "./lore/spins-played-at-index-m
 import { applySpinObservedAtMigration } from "./lore/spin-observed-at-migration.js";
 import { applySpinPlayOffsetMigration } from "./lore/spin-play-offset-migration.js";
 import { applySpinDurationMigration } from "./lore/spin-duration-migration.js";
+import { applyDurationBackfillMigration } from "./lore/duration-backfill-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
 import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
 import { applyImportBufferMigration } from "./lore/import-buffer-migration.js";
@@ -120,6 +121,7 @@ import { applyReleaseDateMigration } from "./lore/release-date-migration.js";
 import { applyStationRecentProfileMigration } from "./lore/station-recent-profile-migration.js";
 import { applyGenreEnrichmentMigration } from "./lore/genre-enrichment-migration.js";
 import { startReleaseYearBackfillJob } from "./lore/release-year-backfill.js";
+import { startDurationBackfillJob } from "./lore/duration-backfill.js";
 import { startUnmatchedSpinBackfillJob } from "./lore/unmatched-spin-backfill.js";
 import { startPitchforkJob } from "./lore/pitchfork-job.js";
 import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
@@ -222,6 +224,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applySpinPlayOffsetMigration", applySpinPlayOffsetMigration);
     await runMigration("applySpinTimingMigration", applySpinTimingMigration);
     await runMigration("applySpinDurationMigration", applySpinDurationMigration);
+    await runMigration("applyDurationBackfillMigration", applyDurationBackfillMigration);
     await runMigration("applyLibraryProvenanceBackfill", async () => {
       await applyLibraryProvenanceBackfill();
     });
@@ -409,6 +412,7 @@ async function bootLore(): Promise<void> {
     startGenreBackfillJob();
     startIsrcEnrichmentJob();
     startReleaseYearBackfillJob();
+    startDurationBackfillJob();
     startUnmatchedSpinBackfillJob();
     startPitchforkJob();
     // All BEATO_EPISODES video IDs verified 2026-08-13 against the official

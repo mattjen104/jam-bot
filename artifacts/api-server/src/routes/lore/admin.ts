@@ -145,6 +145,7 @@ import { clearAutomationClassCache } from "../../lore/scraped-shows-sync.js";
 import { clearPlayerScheduleCache } from "../player.js";
 import { toPicker } from "./shared.js";
 import { backfillReleaseYearBatch } from "../../lore/release-year-backfill.js";
+import { backfillDurationBatch } from "../../lore/duration-backfill.js";
 import {
   backfillGenreBatch,
   GENRE_RECENT_WINDOW_DAYS,
@@ -1967,6 +1968,54 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
   });
 }));
 
+// GET /api/admin/duration-health — live coverage for the bounded duration
+// backfill. A checked null is a definitive provider miss; transient failures
+// remain in the queue so operators can distinguish progress from retries.
+router.get("/admin/duration-health", h(async (_req, res) => {
+  const [totals] = await db
+    .select({
+      totalNull: sql<number>`count(*) filter (
+        where ${recordingsTable.durationMs} is null
+      )::int`,
+      inQueue: sql<number>`count(*) filter (
+        where ${recordingsTable.durationMs} is null
+          and ${recordingsTable.durationCheckedAt} is null
+          and ${recordingsTable.mbid} not like 'sp:%'
+          and exists (
+            select 1 from ${spinsTable}
+            where ${spinsTable.mbid} = ${recordingsTable.mbid}
+          )
+      )::int`,
+      permMiss: sql<number>`count(*) filter (
+        where ${recordingsTable.durationMs} is null
+          and ${recordingsTable.durationCheckedAt} is not null
+      )::int`,
+      ineligible: sql<number>`count(*) filter (
+        where ${recordingsTable.durationMs} is null
+          and ${recordingsTable.durationCheckedAt} is null
+          and (
+            ${recordingsTable.mbid} like 'sp:%'
+            or not exists (
+              select 1 from ${spinsTable}
+              where ${spinsTable.mbid} = ${recordingsTable.mbid}
+            )
+          )
+      )::int`,
+      lastCheckedAt: sql<string | null>`max(
+        ${recordingsTable.durationCheckedAt}
+      )::text`,
+    })
+    .from(recordingsTable);
+
+  return res.json({
+    totalNull: totals?.totalNull ?? 0,
+    inQueue: totals?.inQueue ?? 0,
+    permMiss: totals?.permMiss ?? 0,
+    ineligible: totals?.ineligible ?? 0,
+    lastCheckedAt: totals?.lastCheckedAt ?? null,
+  });
+}));
+
 // GET /api/admin/genre-enrichment-health — durable funnel and per-station
 // recent coverage for active stations on the normal front door.
 router.get("/admin/genre-enrichment-health", h(async (_req, res) => {
@@ -2129,6 +2178,17 @@ router.post("/admin/genre-enrichment-backfill/run", h(async (_req, res) => {
 router.post("/admin/release-year-backfill/run", h(async (_req, res) => {
   const result = await backfillReleaseYearBatch().catch((err) => {
     throw new HttpError(500, err instanceof Error ? err.message : "Backfill batch failed");
+  });
+  return res.json(result);
+}));
+
+// POST /api/admin/duration-backfill/run — trigger one bounded duration batch.
+router.post("/admin/duration-backfill/run", h(async (_req, res) => {
+  const result = await backfillDurationBatch().catch((err) => {
+    throw new HttpError(
+      500,
+      err instanceof Error ? err.message : "Duration backfill failed",
+    );
   });
   return res.json(result);
 }));

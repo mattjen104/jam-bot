@@ -257,6 +257,12 @@ export interface IsolatedMbResolver {
    */
   fetchIsrcByMbid(mbid: string, signal?: AbortSignal): Promise<string | null>;
   /**
+   * Fetch the source-reported duration for a known recording id. Permanent
+   * client errors return null; transient provider failures are re-thrown so a
+   * caller can retry rather than permanently marking the recording checked.
+   */
+  fetchDuration(mbid: string, signal?: AbortSignal): Promise<number | null>;
+  /**
    * Fetch the first-release year for a real MusicBrainz recording id via
    * `/recording/{mbid}?inc=genres`. Returns the year as a number, or null
    * when MusicBrainz has no dated release for this recording.
@@ -383,6 +389,22 @@ export function createMbResolver(): IsolatedMbResolver {
         return parseRecordingIsrcs(body);
       } catch {
         return null;
+      }
+    },
+
+    async fetchDuration(mbid: string, signal?: AbortSignal): Promise<number | null> {
+      if (!musicbrainzEnabled() || !mbid.trim()) return null;
+      try {
+        const body = await isolatedFetch(
+          `/recording/${encodeURIComponent(mbid.trim())}?fmt=json`,
+          signal,
+        );
+        return parseRecordingDuration(body);
+      } catch (err) {
+        const statusMatch = String(err).match(/MusicBrainz (\d{3})/);
+        const status = statusMatch ? Number(statusMatch[1]) : 0;
+        if (status === 400 || status === 404 || status === 410) return null;
+        throw err;
       }
     },
 
@@ -526,6 +548,14 @@ export function parseRecordingEmbedRelationships(
     releases,
     urls,
   };
+}
+
+/** Pure parser for the source-reported length on a MusicBrainz recording. */
+export function parseRecordingDuration(body: unknown): number | null {
+  const length = (body as { length?: unknown } | null)?.length;
+  return typeof length === "number" && Number.isFinite(length) && length > 0
+    ? length
+    : null;
 }
 
 /** Fetch relationship/release facts for embed resolution. Never throws. */

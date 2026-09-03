@@ -51,6 +51,11 @@ export const recordingsTable = pgTable("recordings", {
   artistMbid: text("artist_mbid"),
   isrc: text("isrc"),
   durationMs: integer("duration_ms"),
+  /**
+   * Last definitive MusicBrainz/Spotify duration lookup. Null means the
+   * duration backfill has not answered yet, or its last attempt was transient.
+   */
+  durationCheckedAt: timestamp("duration_checked_at"),
   /** Cross-service deep links (Odesli exact + universal search fallback). */
   links: jsonb("links").$type<RecordingLink[]>(),
   /** Album cover / artwork URL from the now-playing source, when available. */

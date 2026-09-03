@@ -104,6 +104,14 @@ interface ReleaseYearHealth {
   unmatchedLastAttemptAt: string | null;
 }
 
+interface DurationHealth {
+  totalNull: number;
+  inQueue: number;
+  permMiss: number;
+  ineligible: number;
+  lastCheckedAt: string | null;
+}
+
 interface GenreStationCoverage {
   stationId: number;
   slug: string;
@@ -282,6 +290,8 @@ function HealthPanel({
   const [swError, setSwError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
   const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [durationHealth, setDurationHealth] = useState<DurationHealth | null>(null);
+  const [durationError, setDurationError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [genreHealth, setGenreHealth] = useState<GenreEnrichmentHealth | null>(null);
   const [genreError, setGenreError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -439,6 +449,33 @@ function HealthPanel({
         }
       })();
 
+      // ── Duration health (independent: never poisons the core sections) ──
+      const durationPromise = (async () => {
+        let durationRes: Response;
+        try {
+          durationRes = await fetch("/api/admin/duration-health", { headers });
+        } catch (err) {
+          setDurationError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setDurationHealth(null);
+          return false;
+        }
+        if (durationRes.ok) {
+          setDurationHealth((await durationRes.json()) as DurationHealth);
+          setDurationError(null);
+          return true;
+        }
+        const body = (await durationRes.json().catch(() => ({}))) as { error?: string };
+        setDurationError({
+          kind: durationRes.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${durationRes.status}`,
+        });
+        setDurationHealth(null);
+        return false;
+      })();
+
       const genrePromise = (async () => {
         let response: Response;
         try {
@@ -466,18 +503,19 @@ function HealthPanel({
       })();
 
       try {
-        const [ffOk, rlOk, phOk, swOk, ryOk, genreOk] = await Promise.all([
+        const [ffOk, rlOk, phOk, swOk, ryOk, durationOk, genreOk] = await Promise.all([
           ffPromise,
           rlPromise,
           phPromise,
           swPromise,
           ryPromise,
+          durationPromise,
           genrePromise,
         ]);
         // Only show the top-level error when every endpoint fails at once.
         // Each section already renders its own per-section banner; the shared
         // top-level banner is a last-resort "nothing works at all" indicator.
-        if (!ffOk && !rlOk && !phOk && !swOk && !ryOk && !genreOk) {
+        if (!ffOk && !rlOk && !phOk && !swOk && !ryOk && !durationOk && !genreOk) {
           setLoadError("All health endpoints failed — check server logs");
         }
         setLastRefreshed(new Date());
@@ -764,6 +802,23 @@ function HealthPanel({
         )}
         {!loading && ryError !== null && (
           <ReleaseYearErrorBanner kind={ryError.kind} message={ryError.message} />
+        )}
+
+        {!loading && durationHealth !== null && (
+          <DurationHealthSection
+            health={durationHealth}
+            token={token}
+            onRunComplete={() => void fetchAll({ silent: true })}
+          />
+        )}
+        {!loading && durationError !== null && (
+          <SectionErrorBanner
+            icon={<Clock className="h-4 w-4" />}
+            title="Duration enrichment"
+            kind={durationError.kind}
+            message={durationError.message}
+            data-testid="duration-error-banner"
+          />
         )}
 
         {!loading && genreHealth !== null && (
@@ -1164,6 +1219,14 @@ interface RunBatchResult {
   remaining: number;
 }
 
+interface DurationRunBatchResult {
+  scanned: number;
+  updated: number;
+  noResult: number;
+  failed: number;
+  remaining: number;
+}
+
 interface UnmatchedRunBatchResult {
   candidates?: number;
   scanned?: number;
@@ -1174,6 +1237,140 @@ interface UnmatchedRunBatchResult {
   definitiveMiss?: number;
   remaining?: number;
   skipped?: boolean;
+}
+
+function DurationHealthSection({
+  health,
+  token,
+  onRunComplete,
+}: {
+  health: DurationHealth;
+  token: string;
+  onRunComplete: () => void;
+}) {
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<DurationRunBatchResult | string | null>(null);
+  const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queueDone = health.inQueue === 0;
+
+  const handleRunBatch = useCallback(async () => {
+    setRunning(true);
+    setRunResult(null);
+    try {
+      const response = await fetch("/api/admin/duration-backfill/run", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setRunResult(body.error ?? `HTTP ${response.status}`);
+      } else {
+        setRunResult((await response.json()) as DurationRunBatchResult);
+        onRunComplete();
+      }
+    } catch (err) {
+      setRunResult(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setRunning(false);
+      if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = setTimeout(() => setRunResult(null), 8_000);
+    }
+  }, [onRunComplete, token]);
+
+  return (
+    <section className="mt-10" data-testid="duration-health-section">
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-500">
+          <Clock className="h-4 w-4" />
+        </span>
+        <h2 className="font-normal text-foreground">Duration enrichment</h2>
+        {health.totalNull > 0 && (
+          <span className="rounded-full bg-zinc-500/15 px-2 py-0.5 text-sm font-normal text-zinc-600 dark:text-zinc-400">
+            {health.totalNull.toLocaleString()} missing
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-base text-muted-foreground">
+        Missing track lengths prevent expiry hints. A paced background job checks
+        aired recordings against MusicBrainz, then verifies an existing Spotify
+        match when MusicBrainz has no length.
+      </p>
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-base sm:grid-cols-4">
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Total missing
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {health.totalNull.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">duration_ms IS NULL</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              In backfill queue
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {health.inQueue.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">aired, eligible, not checked</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Provider miss
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {health.permMiss.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">no trusted length found</dd>
+          </div>
+          <div>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              Ineligible
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {health.ineligible.toLocaleString()}
+            </dd>
+            <dd className="text-sm text-muted-foreground">synthetic or never aired</dd>
+          </div>
+        </dl>
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+          <button
+            onClick={() => void handleRunBatch()}
+            disabled={running || queueDone}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+          >
+            <RefreshCw className={`h-3 w-3 ${running ? "animate-spin" : ""}`} />
+            {running ? "Running…" : "Run batch now"}
+          </button>
+          <span className="text-sm text-muted-foreground">
+            {queueDone
+              ? "Queue is clear."
+              : `Last checked ${formatTimestamp(health.lastCheckedAt)}`}
+          </span>
+          {runResult !== null && (
+            <span className="text-sm text-muted-foreground" data-testid="duration-run-receipt">
+              {typeof runResult === "string" ? (
+                <span className="text-destructive">{runResult}</span>
+              ) : (
+                <>
+                  scanned <span className="font-mono text-foreground">{runResult.scanned}</span>
+                  {" · updated "}
+                  <span className="font-mono text-foreground">{runResult.updated}</span>
+                  {" · no result "}
+                  <span className="font-mono text-foreground">{runResult.noResult}</span>
+                  {" · failed "}
+                  <span className="font-mono text-amber-600 dark:text-amber-400">
+                    {runResult.failed}
+                  </span>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ReleaseYearHealthSection({
