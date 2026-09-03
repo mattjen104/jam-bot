@@ -1299,6 +1299,12 @@ export const ReportStationPlaybackEventBody = zod.object({
     .min(reportStationPlaybackEventBodyStallMsMin)
     .max(reportStationPlaybackEventBodyStallMsMax)
     .optional(),
+  warmed: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when pointer intent opened candidate 0 before the committed play gesture.",
+    ),
 });
 
 /**
@@ -1321,6 +1327,7 @@ export const GetAdminPlaybackHealthResponse = zod.object({
       stationSlug: zod.string(),
       transport: zod.enum(["https", "http", "relay"]),
       format: zod.enum(["aac", "mp3", "hls", "flac", "unknown"]),
+      warmed: zod.boolean(),
       sampleCount: zod.number(),
       startupP50Ms: zod.number().nullable(),
       startupP95Ms: zod.number().nullable(),

@@ -6,14 +6,24 @@ import type { DialLaneRow } from "../src/components/dial/DialFeedLane";
 import type { StationCategory } from "../src/lib/dialCategories";
 import { MinimalRadioSurface } from "../src/components/MinimalRadioSurface";
 
-const { toggle, startReplay } = vi.hoisted(() => ({
+const { toggle, warmup, releaseWarmup, cancelWarmup, startReplay } = vi.hoisted(() => ({
   toggle: vi.fn(),
+  warmup: vi.fn(),
+  releaseWarmup: vi.fn(),
+  cancelWarmup: vi.fn(),
   startReplay: vi.fn(),
 }));
 
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: () => ({
-    radio: { station: null, status: "idle", toggle },
+    radio: {
+      station: null,
+      status: "idle",
+      toggle,
+      warmup,
+      releaseWarmup,
+      cancelWarmup,
+    },
     ride: { startReplay },
   }),
 }));
@@ -290,7 +300,12 @@ describe("MinimalRadioSurface", () => {
     const hero = screen.getByTestId("minimal-radio-hero");
     fireEvent.keyDown(hero, { key: "ArrowDown" });
     expect(screen.getByRole("heading", { name: "Alpha" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Tune in to Alpha" }));
+    const tuneButton = screen.getByRole("button", { name: "Tune in to Alpha" });
+    fireEvent.pointerDown(tuneButton);
+    expect(warmup).toHaveBeenCalledWith(expect.objectContaining({ slug: "alpha" }));
+    fireEvent.pointerUp(tuneButton);
+    expect(releaseWarmup).toHaveBeenCalledTimes(1);
+    fireEvent.click(tuneButton);
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 

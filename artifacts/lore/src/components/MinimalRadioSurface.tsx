@@ -110,6 +110,12 @@ function MinimalRadioRemoteTile({
       aria-label={`${station.name}: ${artist}`}
       aria-pressed={selected}
       disabled={!playable}
+      onPointerDown={() => radio.warmup(station)}
+      onPointerUp={radio.releaseWarmup}
+      onPointerCancel={radio.cancelWarmup}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") radio.cancelWarmup();
+      }}
       onClick={tune}
     >
       <span className="minimal-radio__remote-mark" aria-hidden="true">
@@ -171,6 +177,12 @@ function MinimalRadioCard({ row }: { row: DialLaneRow }) {
             type="button"
             className={`minimal-radio-card__now${!track ? " is-empty" : ""}`}
             disabled={!playable}
+            onPointerDown={() => radio.warmup(row.ds.station)}
+            onPointerUp={radio.releaseWarmup}
+            onPointerCancel={radio.cancelWarmup}
+            onPointerLeave={(event) => {
+              if (event.pointerType === "mouse") radio.cancelWarmup();
+            }}
             onClick={play}
             aria-label={isPlaying ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
           >
@@ -353,6 +365,12 @@ function OverviewStationRow({ row }: { row: DialLaneRow }) {
     <button
       type="button"
       className={`overview-row ${isPlaying ? "is-playing" : ""}`}
+      onPointerDown={() => radio.warmup(row.ds.station)}
+      onPointerUp={radio.releaseWarmup}
+      onPointerCancel={radio.cancelWarmup}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") radio.cancelWarmup();
+      }}
       onClick={() => playable && void radio.toggle(row.ds.station)}
       disabled={!playable}
       aria-label={`Tune in to ${row.ds.station.name}, playing ${artist}`}

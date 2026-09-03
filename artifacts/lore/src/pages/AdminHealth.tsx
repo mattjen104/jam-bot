@@ -680,14 +680,15 @@ function HealthPanel({
                         Number(a.health === "degraded"))
                       .map((summary) => (
                         <tr
-                          key={`${summary.stationSlug}:${summary.transport}:${summary.format}`}
+                          key={`${summary.stationSlug}:${summary.transport}:${summary.format}:${summary.warmed === true ? "warmed" : "ordinary"}`}
                           className="border-b border-border/60 last:border-0"
                         >
                           <td className="px-4 py-3 font-mono text-foreground">
                             {summary.stationSlug}
                           </td>
                           <td className="px-3 py-3 text-muted-foreground">
-                            {summary.transport} · {summary.format}
+                            {summary.transport} · {summary.format} ·{" "}
+                            {summary.warmed === true ? "warmed" : "ordinary"}
                           </td>
                           <td className="px-3 py-3 text-foreground">
                             {summary.startupP50Ms === null

@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Station } from "@workspace/api-client-react";
 import {
   resolvePlaybackCandidates,
+  resolvePrimaryPlaybackCandidate,
   type PlaybackCandidate,
 } from "./radioPlaybackSources";
 
 export {
   resolvePlaybackCandidates,
+  resolvePrimaryPlaybackCandidate,
   resolvePlaybackSource,
   type PlaybackCandidate,
 } from "./radioPlaybackSources";
@@ -75,6 +77,13 @@ const MAX_SAME_SOURCE_RETRIES = 1;
 const MAX_CANDIDATES = 2;
 const METRIC_SAMPLE_RATE = 0.25;
 const DUCK_VOLUME = 0.15;
+const WARMUP_RELEASE_GRACE_MS = 250;
+
+interface WarmAudio {
+  el: HTMLAudioElement;
+  stationSlug: string;
+  candidate: PlaybackCandidate;
+}
 
 /**
  * Bounded live-radio player. A listener gesture starts one primary source,
@@ -91,11 +100,15 @@ export function useRadioPlayer() {
   const candidateIndexRef = useRef(0);
   const retryCountRef = useRef(0);
   const hasPlayedRef = useRef(false);
+  const warmupUsedRef = useRef(false);
   const sampledRef = useRef(false);
   const intentStartedAtRef = useRef<number | null>(null);
   const startupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmupReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmAudioRef = useRef<WarmAudio | null>(null);
+  const preparedWarmAudioRef = useRef<WarmAudio | null>(null);
   const lastLifecycleRecoveryRef = useRef(0);
   const stallStartedAtRef = useRef<number | null>(null);
   const failureHandlingRef = useRef(false);
@@ -145,6 +158,73 @@ export function useRadioPlayer() {
     hlsRef.current = null;
   }, []);
 
+  const closeWarmAudio = useCallback(() => {
+    if (warmupReleaseTimerRef.current) {
+      clearTimeout(warmupReleaseTimerRef.current);
+      warmupReleaseTimerRef.current = null;
+    }
+    const warm = warmAudioRef.current;
+    warmAudioRef.current = null;
+    if (!warm) return;
+    if (!warm.el.paused) warm.el.pause();
+    warm.el.removeAttribute("src");
+    warm.el.load();
+  }, []);
+
+  /**
+   * Open only the selected station's first sanctioned source. This intentionally
+   * has no event listeners and never calls play(), so it cannot bypass a user
+   * gesture or affect the active player element.
+   */
+  const warmup = useCallback(
+    (station: Station) => {
+      const candidate = resolvePrimaryPlaybackCandidate(station);
+      if (
+        !candidate ||
+        typeof Audio === "undefined" ||
+        stationRef.current?.slug === station.slug
+      ) {
+        closeWarmAudio();
+        return;
+      }
+
+      const existing = warmAudioRef.current;
+      if (
+        existing?.stationSlug === station.slug &&
+        existing.candidate.url === candidate.url
+      ) {
+        if (warmupReleaseTimerRef.current) {
+          clearTimeout(warmupReleaseTimerRef.current);
+          warmupReleaseTimerRef.current = null;
+        }
+        return;
+      }
+
+      closeWarmAudio();
+      const el = new Audio();
+      el.preload = "auto";
+      warmAudioRef.current = { el, stationSlug: station.slug, candidate };
+      el.src = candidate.url;
+      el.load();
+    },
+    [closeWarmAudio],
+  );
+
+  /** Release after the pointer sequence has had a chance to dispatch click. */
+  const releaseWarmup = useCallback(() => {
+    if (!warmAudioRef.current) return;
+    if (warmupReleaseTimerRef.current) clearTimeout(warmupReleaseTimerRef.current);
+    warmupReleaseTimerRef.current = setTimeout(() => {
+      warmupReleaseTimerRef.current = null;
+      closeWarmAudio();
+    }, WARMUP_RELEASE_GRACE_MS);
+  }, [closeWarmAudio]);
+
+  /** Cancel immediately when the pointer sequence is abandoned. */
+  const cancelWarmup = useCallback(() => {
+    closeWarmAudio();
+  }, [closeWarmAudio]);
+
   const emitMetric = useCallback(
     (
       event: PlaybackMetricEvent,
@@ -171,6 +251,7 @@ export function useRadioPlayer() {
         ...(typeof stallMs === "number"
           ? { stallMs: Math.max(0, Math.round(stallMs)) }
           : {}),
+        warmed: warmupUsedRef.current,
       };
       void fetch(
         `/api/stations/${encodeURIComponent(station.slug)}/playback-events`,
@@ -334,9 +415,18 @@ export function useRadioPlayer() {
       failureHandlingRef.current = false;
       clearTimers();
       const previous = audioRef.current;
-      if (previous) removeCurrentSource(previous);
-      const el = new Audio();
-      el.preload = "none";
+      const prepared = preparedWarmAudioRef.current;
+      preparedWarmAudioRef.current = null;
+      const preparedMatches = prepared?.candidate.url === candidate.url;
+      const preparedElement = preparedMatches ? prepared.el : null;
+      if (previous && previous !== preparedElement) removeCurrentSource(previous);
+      if (prepared && !preparedMatches) {
+        if (!prepared.el.paused) prepared.el.pause();
+        prepared.el.removeAttribute("src");
+        prepared.el.load();
+      }
+      const el = preparedElement ?? new Audio();
+      if (!preparedElement) el.preload = "none";
       el.volume =
         savedVolumeRef.current === null ? stateRef.current.volume : DUCK_VOLUME;
       audioRef.current = el;
@@ -530,6 +620,24 @@ export function useRadioPlayer() {
       retryCountRef.current = 0;
       hasPlayedRef.current = false;
       stallStartedAtRef.current = null;
+      const warm = warmAudioRef.current;
+      if (
+        warm &&
+        warm.stationSlug === station.slug &&
+        warm.candidate.url === candidates[0]?.url
+      ) {
+        if (warmupReleaseTimerRef.current) {
+          clearTimeout(warmupReleaseTimerRef.current);
+          warmupReleaseTimerRef.current = null;
+        }
+        warmAudioRef.current = null;
+        preparedWarmAudioRef.current = warm;
+        warmupUsedRef.current = true;
+      } else {
+        closeWarmAudio();
+        preparedWarmAudioRef.current = null;
+        warmupUsedRef.current = false;
+      }
       sampledRef.current = Math.random() < METRIC_SAMPLE_RATE;
       intentStartedAtRef.current = performance.now();
       intentRef.current = "playing";
@@ -545,7 +653,7 @@ export function useRadioPlayer() {
       }
       attemptRef.current(station, 0, "initial");
     },
-    [clearTimers, removeCurrentSource, setState],
+    [clearTimers, closeWarmAudio, removeCurrentSource, setState],
   );
 
   const pause = useCallback(() => {
@@ -572,6 +680,7 @@ export function useRadioPlayer() {
     stallStartedAtRef.current = null;
     retryCountRef.current = 0;
     candidateIndexRef.current = 0;
+    warmupUsedRef.current = false;
     attemptRef.current(station, 0, "initial");
   }, []);
 
@@ -733,10 +842,18 @@ export function useRadioPlayer() {
       intentRef.current = "stopped";
       ++generationRef.current;
       clearTimers();
+      closeWarmAudio();
+      const prepared = preparedWarmAudioRef.current;
+      preparedWarmAudioRef.current = null;
+      if (prepared) {
+        if (!prepared.el.paused) prepared.el.pause();
+        prepared.el.removeAttribute("src");
+        prepared.el.load();
+      }
       const el = audioRef.current;
       if (el) removeCurrentSource(el);
     },
-    [clearTimers, removeCurrentSource],
+    [clearTimers, closeWarmAudio, removeCurrentSource],
   );
 
   return {
@@ -755,5 +872,8 @@ export function useRadioPlayer() {
     setVolume: setVolumeWithDuck,
     duck,
     restoreDuck,
+    warmup,
+    releaseWarmup,
+    cancelWarmup,
   };
 }

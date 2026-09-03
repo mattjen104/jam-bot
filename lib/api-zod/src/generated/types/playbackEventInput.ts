@@ -23,4 +23,6 @@ export interface PlaybackEventInput {
    * @maximum 120000
    */
   stallMs?: number;
+  /** True when pointer intent opened candidate 0 before the committed play gesture. */
+  warmed?: boolean;
 }

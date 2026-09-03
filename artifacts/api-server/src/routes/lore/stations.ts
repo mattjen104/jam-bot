@@ -1284,7 +1284,7 @@ router.get("/stations/:slug/relay", h(async (req, res) => {
 router.post("/stations/:slug/playback-events", playbackEventLimiter, h(async (req, res) => {
   const params = ReportStationPlaybackEventParams.safeParse(req.params);
   const body = ReportStationPlaybackEventBody.safeParse(req.body);
-  const allowedFields = new Set(["transport", "format", "event", "startupMs", "stallMs"]);
+  const allowedFields = new Set(["transport", "format", "event", "startupMs", "stallMs", "warmed"]);
   const hasIdentifierOrUnknownField = !req.body || typeof req.body !== "object" ||
     Object.keys(req.body).some((key) => !allowedFields.has(key));
   if (!params.success || !body.success || hasIdentifierOrUnknownField) {

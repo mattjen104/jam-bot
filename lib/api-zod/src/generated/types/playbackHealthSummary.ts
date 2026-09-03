@@ -13,6 +13,7 @@ export interface PlaybackHealthSummary {
   stationSlug: string;
   transport: PlaybackHealthSummaryTransport;
   format: PlaybackHealthSummaryFormat;
+  warmed: boolean;
   sampleCount: number;
   /** @nullable */
   startupP50Ms: number | null;

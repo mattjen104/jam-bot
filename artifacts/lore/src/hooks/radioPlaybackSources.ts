@@ -103,7 +103,14 @@ export function resolvePlaybackCandidates(
   return candidates.slice(0, MAX_CANDIDATES);
 }
 
+/** Return only the first server-sanctioned source for gesture-intent warmup. */
+export function resolvePrimaryPlaybackCandidate(
+  station: Station,
+): PlaybackCandidate | null {
+  return resolvePlaybackCandidates(station)[0] ?? null;
+}
+
 /** Backward-compatible single-source helper used by player surfaces. */
 export function resolvePlaybackSource(station: Station): string | null {
-  return resolvePlaybackCandidates(station)[0]?.url ?? null;
+  return resolvePrimaryPlaybackCandidate(station)?.url ?? null;
 }

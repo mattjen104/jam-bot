@@ -683,6 +683,8 @@ export interface PlaybackEventInput {
    * @maximum 120000
    */
   stallMs?: number;
+  /** True when pointer intent opened candidate 0 before the committed play gesture. */
+  warmed?: boolean;
 }
 
 export interface PlaybackEventReceipt {
@@ -721,6 +723,7 @@ export interface PlaybackHealthSummary {
   stationSlug: string;
   transport: PlaybackHealthSummaryTransport;
   format: PlaybackHealthSummaryFormat;
+  warmed: boolean;
   sampleCount: number;
   /** @nullable */
   startupP50Ms: number | null;

@@ -222,6 +222,12 @@ interface RadioApi {
    */
   castRetry: () => void;
   toggle: (station: Station) => void;
+  /** Begin opening candidate 0 for the station under the listener's pointer. */
+  warmup: (station: Station) => void;
+  /** Keep the warm source briefly so a following click can adopt it. */
+  releaseWarmup: () => void;
+  /** Close an abandoned warm source immediately. */
+  cancelWarmup: () => void;
   /** Resume a persisted station without restoring historical track position. */
   resume: (station: StoredStation) => void;
   /**
@@ -3444,6 +3450,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         castPaused,
         castRetry,
         toggle: toggleRadio,
+        warmup: radio.warmup,
+        releaseWarmup: radio.releaseWarmup,
+        cancelWarmup: radio.cancelWarmup,
         resume: resumeRadio,
         preview: previewRadio,
         scanning: isScanPreview,
@@ -3528,6 +3537,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.volume,
       radio.error,
       radio.retry,
+      radio.warmup,
+      radio.releaseWarmup,
+      radio.cancelWarmup,
       radio.setVolume,
       radio.duck,
       radio.restoreDuck,

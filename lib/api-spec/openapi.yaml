@@ -5193,6 +5193,9 @@ components:
         event: { type: string, enum: [playing, startup_failure, stall, recovered, terminal_failure] }
         startupMs: { type: integer, minimum: 0, maximum: 120000 }
         stallMs: { type: integer, minimum: 0, maximum: 120000 }
+        warmed:
+          type: boolean
+          description: True when pointer intent opened candidate 0 before the committed play gesture.
     PlaybackEventReceipt:
       type: object
       properties:
@@ -5204,6 +5207,7 @@ components:
         stationSlug: { type: string }
         transport: { type: string, enum: [https, http, relay] }
         format: { type: string, enum: [aac, mp3, hls, flac, unknown] }
+        warmed: { type: boolean }
         sampleCount: { type: integer }
         startupP50Ms: { type: [integer, "null"] }
         startupP95Ms: { type: [integer, "null"] }
@@ -5216,7 +5220,7 @@ components:
         terminalFailureCount: { type: integer }
         failureRate: { type: number }
         health: { type: string, enum: [healthy, degraded] }
-      required: [stationSlug, transport, format, sampleCount, startupP50Ms, startupP95Ms, stallP50Ms, stallP95Ms, playingCount, startupFailureCount, stallCount, recoveryCount, terminalFailureCount, failureRate, health]
+      required: [stationSlug, transport, format, warmed, sampleCount, startupP50Ms, startupP95Ms, stallP50Ms, stallP95Ms, playingCount, startupFailureCount, stallCount, recoveryCount, terminalFailureCount, failureRate, health]
     PlaybackHealthThresholds:
       type: object
       properties:

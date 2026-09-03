@@ -36,4 +36,29 @@ describe("playback health aggregation", () => {
       terminalFailureCount: 1,
     });
   });
+
+  it("keeps warmed and ordinary startup samples comparable without listener data", () => {
+    recordPlaybackEvent({
+      stationSlug: "kexp",
+      transport: "https",
+      format: "aac",
+      event: "playing",
+      startupMs: 120,
+      warmed: true,
+    });
+    recordPlaybackEvent({
+      stationSlug: "kexp",
+      transport: "https",
+      format: "aac",
+      event: "playing",
+      startupMs: 320,
+      warmed: false,
+    });
+    expect(getPlaybackHealth().summaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ warmed: true, startupP50Ms: 120 }),
+        expect.objectContaining({ warmed: false, startupP50Ms: 320 }),
+      ]),
+    );
+  });
 });

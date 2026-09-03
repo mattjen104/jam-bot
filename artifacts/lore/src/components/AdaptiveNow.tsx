@@ -74,6 +74,12 @@ function Row({
         type="button"
         className="adaptive-now__play"
         disabled={!playable}
+        onPointerDown={() => radio.warmup(row.ds.station)}
+        onPointerUp={radio.releaseWarmup}
+        onPointerCancel={radio.cancelWarmup}
+        onPointerLeave={(event) => {
+          if (event.pointerType === "mouse") radio.cancelWarmup();
+        }}
         onClick={() => { if (playable) void radio.toggle(row.ds.station); }}
         aria-label={playing ? `Pause ${row.ds.station.name}` : `Tune in to ${row.ds.station.name}`}
       >
@@ -133,6 +139,12 @@ function StationDetail({
         <button
           type="button"
           disabled={!playable}
+          onPointerDown={() => radio.warmup(row.ds.station)}
+          onPointerUp={radio.releaseWarmup}
+          onPointerCancel={radio.cancelWarmup}
+          onPointerLeave={(event) => {
+            if (event.pointerType === "mouse") radio.cancelWarmup();
+          }}
           onClick={() => { if (playable) void radio.toggle(row.ds.station); }}
         >
           {isCurrent && radio.status === "playing" ? "Pause broadcast" : "Tune live"}
@@ -302,6 +314,12 @@ function StationPicker({ rows, onClose }: { rows: DialLaneRow[]; onClose: () => 
               key={row.ds.station.slug}
               type="button"
               className={current ? "is-current" : ""}
+              onPointerDown={() => radio.warmup(row.ds.station)}
+              onPointerUp={radio.releaseWarmup}
+              onPointerCancel={radio.cancelWarmup}
+              onPointerLeave={(event) => {
+                if (event.pointerType === "mouse") radio.cancelWarmup();
+              }}
               onClick={() => {
                 if (resolvePlaybackSource(row.ds.station)) void radio.toggle(row.ds.station);
                 onClose();

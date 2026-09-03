@@ -13,6 +13,7 @@ export type PlaybackEvent = {
   event: "playing" | "startup_failure" | "stall" | "recovered" | "terminal_failure";
   startupMs?: number;
   stallMs?: number;
+  warmed?: boolean;
 };
 
 type Bucket = {
@@ -25,7 +26,7 @@ const buckets = new Map<string, Bucket>();
 export const playbackMonitoringSince = new Date();
 
 function keyOf(event: PlaybackEvent): string {
-  return `${event.stationSlug}\u0000${event.transport}\u0000${event.format}`;
+  return `${event.stationSlug}\u0000${event.transport}\u0000${event.format}\u0000${event.warmed === true ? "warmed" : "ordinary"}`;
 }
 
 function pushBounded(values: number[], value: number): void {
@@ -57,7 +58,7 @@ export function recordPlaybackEvent(event: PlaybackEvent): void {
 
 export function getPlaybackHealth() {
   const summaries = [...buckets.entries()].map(([key, bucket]) => {
-    const [stationSlug, transport, format] = key.split("\u0000");
+    const [stationSlug, transport, format, warmupKind] = key.split("\u0000");
     // terminal_failure is an extra exhaustion marker for an attempt already
     // counted as startup_failure; including it again would double-count.
     const attempts = bucket.events.playing + bucket.events.startup_failure;
@@ -68,6 +69,7 @@ export function getPlaybackHealth() {
       stationSlug: stationSlug!,
       transport: transport!,
       format: format!,
+      warmed: warmupKind === "warmed",
       sampleCount: bucket.startupMs.length,
       startupP50Ms: percentile(bucket.startupMs, 0.5),
       startupP95Ms,
