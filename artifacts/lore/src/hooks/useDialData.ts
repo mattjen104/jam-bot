@@ -33,7 +33,11 @@ import {
   type StationRecentSpin,
   type StationsArtistFrequencyItem,
 } from "@workspace/api-client-react";
-import { subscribeSpinStream } from "../webplayer/nowPlayingStream";
+import {
+  subscribeSpinStream,
+  subscribeStreamCatchUp,
+  subscribeStreamSnapshot,
+} from "../webplayer/nowPlayingStream";
 import { useMyPickerNames, useMyDialCrossings, useMyBlendedCrossings, useMyPickerOverlap, type DialCrossing } from "../lib/meHooks";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import { spinAgeTier, type AgeTier } from "../lib/dialAgeFilter";
@@ -94,6 +98,9 @@ export interface DialSpin {
    * always false for provisional entries.
    */
   resolving?: boolean;
+  /** Process-local event cursor/version used only for REST/SSE ordering. */
+  eventId?: number;
+  stationVersion?: number;
 }
 
 export interface DialShow {
@@ -623,6 +630,8 @@ interface SseSpinEntry {
    * not meaningful.
    */
   revertTo?: Omit<SseSpinEntry, "resolving" | "revertTo">;
+  eventId?: number;
+  stationVersion?: number;
 }
 
 /**
@@ -918,6 +927,8 @@ export function useDialData(
                   isFirstSpin: existing.isFirstSpin,
                   isLibraryHit: existing.isLibraryHit,
                   isArtistHit: existing.isArtistHit,
+                  eventId: existing.eventId,
+                  stationVersion: existing.stationVersion,
                 }
               : undefined);
           next.set(ev.stationSlug, {
@@ -935,6 +946,8 @@ export function useDialData(
             isArtistHit: false,
             resolving: true,
             revertTo,
+            eventId: ev.eventId,
+            stationVersion: ev.stationVersion,
           });
           return next;
         });
@@ -960,6 +973,8 @@ export function useDialData(
           isArtistHit: ev.isArtistHit ?? false,
           // Clear the resolving flag now that the spin is persisted.
           resolving: false,
+          eventId: ev.eventId,
+          stationVersion: ev.stationVersion,
         });
         return next;
       });
@@ -994,6 +1009,8 @@ export function useDialData(
         isFirstSpin: sameTrack ? existing.isFirstSpin : false,
         isLibraryHit: sameTrack ? existing.isLibraryHit : false,
         isArtistHit: sameTrack ? existing.isArtistHit : false,
+        eventId: sameTrack ? existing.eventId : undefined,
+        stationVersion: sameTrack ? existing.stationVersion : undefined,
       });
       return next;
     });
@@ -1074,7 +1091,11 @@ export function useDialData(
   const npParams = scanActive
     ? ({ includeModePools: true } as const)
     : undefined;
-  const { data: liveData, isLoading: liveLoading } = useListStationsNowPlaying(
+  const {
+    data: liveData,
+    isLoading: liveLoading,
+    refetch: refetchLiveData,
+  } = useListStationsNowPlaying(
     npParams,
     {
       query: {
@@ -1084,6 +1105,25 @@ export function useDialData(
       },
     },
   );
+
+  // Replay-window expiry and browser resume need the same immediate REST
+  // backstop as the webplayer read model. On a server epoch change, discard
+  // process-local versions before accepting the new process's snapshot.
+  useEffect(() => {
+    const refresh = async (resetVersions: boolean) => {
+      if (resetVersions) setSseOverrides(new Map());
+      const result = await refetchLiveData();
+      if (result.error) throw result.error;
+    };
+    const unsubscribeSnapshot = subscribeStreamSnapshot(({ resetVersions }) =>
+      refresh(resetVersions),
+    );
+    const unsubscribeCatchUp = subscribeStreamCatchUp(() => refresh(false));
+    return () => {
+      unsubscribeSnapshot();
+      unsubscribeCatchUp();
+    };
+  }, [refetchLiveData]);
 
   // ── schedule runs (today + yesterday for rolling 24h window) ────────────
   const { data: scheduleData, isLoading: schedLoading } = useGetStationsSchedule(
@@ -1346,6 +1386,8 @@ export function useDialData(
         releaseDate,
         // Live rows: playedAt is ~now, so spinAgeTier's default (now) applies.
         ageTier: spinAgeTier(isFirstSpin, releaseYear, releaseDate),
+        eventId: (np as { eventId?: number }).eventId,
+        stationVersion: (np as { stationVersion?: number }).stationVersion,
       });
     }
     return m;
@@ -1369,6 +1411,13 @@ export function useDialData(
     // Hit flags are included in the SSE payload (computed server-side at
     // spin-write time) and stored in the SseSpinEntry, so no recomputation needed.
     for (const [slug, entry] of sseOverrides) {
+      const rest = m.get(slug);
+      if (
+        rest &&
+        (rest.stationVersion ?? 0) > (entry.stationVersion ?? 0)
+      ) {
+        continue;
+      }
       m.set(slug, {
         mbid: entry.mbid,
         artistMbid: entry.artistMbid,
@@ -1384,6 +1433,8 @@ export function useDialData(
         ageTier: spinAgeTier(entry.isFirstSpin, entry.releaseYear, entry.releaseDate, entry.playedAt),
         // Propagate the resolving flag so FrontDoorRow can show the visual cue.
         ...(entry.resolving ? { resolving: true } : {}),
+        eventId: entry.eventId,
+        stationVersion: entry.stationVersion,
       });
     }
     return m;

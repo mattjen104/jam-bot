@@ -5514,6 +5514,18 @@ components:
             should not be presented as definitively playing right now, and are
             never counted as confirmed live crossings. Optional — absent means
             unknown; treat as non-stale.
+        eventId:
+          type: integer
+          minimum: 1
+          description: >-
+            Process-local SSE event cursor for this station's latest pushed
+            frame. Optional when no event has been emitted since server start.
+        stationVersion:
+          type: integer
+          minimum: 1
+          description: >-
+            Process-local monotonic version for this station. REST and SSE
+            consumers use it to reject older now-playing state.
         artworkUrl:
           type: ["string", "null"]
         recording:

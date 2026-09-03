@@ -544,6 +544,20 @@ export const ListStationsAtDateResponse = zod.object({
                   .describe(
                     "Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.",
                   ),
+                eventId: zod
+                  .number()
+                  .min(1)
+                  .optional()
+                  .describe(
+                    "Process-local SSE event cursor for this station's latest pushed frame. Optional when no event has been emitted since server start.",
+                  ),
+                stationVersion: zod
+                  .number()
+                  .min(1)
+                  .optional()
+                  .describe(
+                    "Process-local monotonic version for this station. REST and SSE consumers use it to reject older now-playing state.",
+                  ),
                 artworkUrl: zod.string().nullish(),
                 recording: zod
                   .union([
@@ -700,6 +714,20 @@ export const ListStationsNowPlayingResponse = zod.object({
                   .optional()
                   .describe(
                     "Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.",
+                  ),
+                eventId: zod
+                  .number()
+                  .min(1)
+                  .optional()
+                  .describe(
+                    "Process-local SSE event cursor for this station's latest pushed frame. Optional when no event has been emitted since server start.",
+                  ),
+                stationVersion: zod
+                  .number()
+                  .min(1)
+                  .optional()
+                  .describe(
+                    "Process-local monotonic version for this station. REST and SSE consumers use it to reject older now-playing state.",
                   ),
                 artworkUrl: zod.string().nullish(),
                 recording: zod
@@ -972,6 +1000,20 @@ export const GetStationNowPlayingResponse = zod.object({
             .optional()
             .describe(
               "Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.",
+            ),
+          eventId: zod
+            .number()
+            .min(1)
+            .optional()
+            .describe(
+              "Process-local SSE event cursor for this station's latest pushed frame. Optional when no event has been emitted since server start.",
+            ),
+          stationVersion: zod
+            .number()
+            .min(1)
+            .optional()
+            .describe(
+              "Process-local monotonic version for this station. REST and SSE consumers use it to reject older now-playing state.",
             ),
           artworkUrl: zod.string().nullish(),
           recording: zod

@@ -105,12 +105,15 @@ async function injectFakeEventSource(
       onopen: ((ev: Event) => void) | null = null;
       onerror: ((ev: Event) => void) | null = null;
       onmessage: ((ev: MessageEvent) => void) | null = null;
+      private listeners = new Map<string, Set<EventListener>>();
 
       constructor(url: string) {
         this.url = url;
         // Store globally so the test can drive events after page load.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).__fakeEs = this;
+        const urls = ((window as any).__fakeEsUrls ??= []);
+        urls.push(url);
         // Fire onopen asynchronously (1 tick) so subscribers have a chance
         // to attach their handlers before the callback fires.
         Promise.resolve().then(() => {
@@ -123,22 +126,20 @@ async function injectFakeEventSource(
       }
 
       addEventListener(type: string, listener: EventListener) {
-        if (type === "open") this.onopen = listener as (ev: Event) => void;
-        if (type === "error") this.onerror = listener as (ev: Event) => void;
-        if (type === "message") this.onmessage = listener as (ev: MessageEvent) => void;
+        const listeners = this.listeners.get(type) ?? new Set<EventListener>();
+        listeners.add(listener);
+        this.listeners.set(type, listeners);
       }
 
       removeEventListener(type: string, listener: EventListener) {
-        if (type === "open" && this.onopen === listener) this.onopen = null;
-        if (type === "error" && this.onerror === listener) this.onerror = null;
-        if (type === "message" && this.onmessage === listener) this.onmessage = null;
+        this.listeners.get(type)?.delete(listener);
       }
 
       /** Internal helper used by the test via page.evaluate. */
-      _dispatch(data: string) {
-        if (this.onmessage) {
-          this.onmessage(new MessageEvent("message", { data }));
-        }
+      _dispatch(data: string, type = "message", lastEventId = "") {
+        const event = new MessageEvent(type, { data, lastEventId });
+        if (type === "message") this.onmessage?.(event);
+        for (const listener of this.listeners.get(type) ?? []) listener(event);
       }
     }
 
@@ -219,14 +220,21 @@ async function installCommonRoutes(
 async function dispatchSseFrame(
   page: import("@playwright/test").Page,
   payload: Record<string, unknown>,
+  options?: { type?: string; lastEventId?: string },
 ): Promise<void> {
   const data = JSON.stringify(payload);
-  await page.evaluate((d: string) => {
+  await page.evaluate(({ d, type, lastEventId }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const es = (window as any).__fakeEs as { _dispatch: (d: string) => void } | undefined;
+    const es = (window as any).__fakeEs as {
+      _dispatch: (d: string, type?: string, lastEventId?: string) => void;
+    } | undefined;
     if (!es) throw new Error("Fake EventSource not found on window.__fakeEs");
-    es._dispatch(d);
-  }, data);
+    es._dispatch(d, type, lastEventId);
+  }, {
+    d: data,
+    type: options?.type ?? "message",
+    lastEventId: options?.lastEventId ?? "",
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -495,6 +503,91 @@ test.describe("WebPlayer live track change via SSE", () => {
 
     // Current display must remain "Second Provisional" (not reverted).
     await expect(row).toContainText("Second Provisional", { timeout: 5_000 });
+  });
+
+  test("resume performs one cursor catch-up and stale REST cannot replace newer SSE", async ({
+    page,
+  }) => {
+    await injectFakeEventSource(page);
+    const staleSnapshot = makeOnAirResponse();
+    staleSnapshot.items[0]!.now.eventId = 1;
+    staleSnapshot.items[0]!.now.stationVersion = 1;
+    await installCommonRoutes(page, staleSnapshot);
+    await page.unroute("**/api/player/onair");
+    let onAirRequests = 0;
+    await page.route("**/api/player/onair", (route) => {
+      onAirRequests++;
+      return route.fulfill({ json: staleSnapshot });
+    });
+
+    await page.goto("/lore/player");
+    const row = page.locator(`[data-testid="wp-onair-${SLUG}"]`);
+    await expect(row).toContainText("Old Artist", { timeout: 15_000 });
+
+    await dispatchSseFrame(
+      page,
+      { streamId: "epoch-a", cursor: 1, snapshotRequired: false },
+      { type: "stream-info" },
+    );
+    await dispatchSseFrame(
+      page,
+      {
+        stationSlug: SLUG,
+        rawArtist: "Recovered Artist",
+        rawTitle: "Recovered Track",
+        mbid: null,
+        provisional: true,
+        type: "spin-raw",
+        eventId: 2,
+        stationVersion: 2,
+      },
+      { lastEventId: "2" },
+    );
+    await dispatchSseFrame(
+      page,
+      {
+        stationSlug: SLUG,
+        rawArtist: "Recovered Artist",
+        rawTitle: "Recovered Track",
+        mbid: "aaaaaaaa-0000-0000-0000-000000000002",
+        type: "spin-changed",
+        eventId: 3,
+        stationVersion: 3,
+      },
+      { lastEventId: "3" },
+    );
+    // A delayed failure has a newer global event id but an older station
+    // version, so it must never revert the resolved display.
+    await dispatchSseFrame(
+      page,
+      {
+        stationSlug: SLUG,
+        rawArtist: "Recovered Artist",
+        rawTitle: "Recovered Track",
+        mbid: null,
+        type: "spin-raw-failed",
+        eventId: 4,
+        stationVersion: 2,
+      },
+      { lastEventId: "4" },
+    );
+    await expect(row).toContainText("Recovered Artist", { timeout: 5_000 });
+
+    const beforeResume = onAirRequests;
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("online"));
+      window.dispatchEvent(new PageTransitionEvent("pageshow"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect
+      .poll(() => onAirRequests, { timeout: 5_000 })
+      .toBe(beforeResume + 1);
+    await expect(row).toContainText("Recovered Artist");
+    const urls = await page.evaluate(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => (window as any).__fakeEsUrls as string[],
+    );
+    expect(urls.at(-1)).toContain("lastEventId=4");
   });
 });
 

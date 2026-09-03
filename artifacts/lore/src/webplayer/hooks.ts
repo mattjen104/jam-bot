@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import {
   ApiError,
   getGetRecordingSupportQueryKey,
@@ -11,9 +15,14 @@ import {
 } from "@workspace/api-client-react";
 import {
   getStreamHealthy,
+  mergeOnAirSnapshot,
   mergeSpinIntoOnAir,
+  resetOnAirStreamVersions,
   subscribeSpinStream,
+  subscribeStreamCatchUp,
   subscribeStreamHealth,
+  subscribeStreamSnapshot,
+  type SpinStreamEvent,
 } from "./nowPlayingStream";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +61,10 @@ export interface WpNow {
    * revert to the last persisted spin. Never present on server payloads.
    */
   revertTo?: { now: WpNow; earlier: string[] } | undefined;
+  /** Process-local SSE cursor for monotonic REST/SSE merging. */
+  eventId?: number;
+  /** Process-local monotonic version for this station. */
+  stationVersion?: number;
 }
 
 export interface WpOnAirItem {
@@ -174,6 +187,68 @@ export const WP_ONAIR_POLL_STREAM_HEALTHY_MS = 120_000;
 /** Poll cadence when the stream is degraded/absent — the original backstop. */
 export const WP_ONAIR_POLL_DEGRADED_MS = 30_000;
 
+/**
+ * useWpOnAir has multiple mounted consumers. Coalesce their shared lifecycle
+ * and snapshot callbacks so one browser resume produces one REST request for
+ * this cache, not one request per component.
+ */
+const wpCatchUps = new WeakMap<QueryClient, Promise<void>>();
+const wpPendingSpins = new WeakMap<QueryClient, SpinStreamEvent[]>();
+const WP_PENDING_SPIN_LIMIT = 256;
+
+function applyWpSpin(
+  queryClient: QueryClient,
+  event: SpinStreamEvent,
+): void {
+  let cacheReady = false;
+  queryClient.setQueryData<WpOnAirResponse>(["wp", "onair"], (previous) => {
+    if (!previous) return previous;
+    cacheReady = true;
+    return mergeSpinIntoOnAir(previous, event);
+  });
+  if (cacheReady) return;
+
+  const pending = wpPendingSpins.get(queryClient) ?? [];
+  if (
+    event.eventId != null &&
+    pending.some((queued) => queued.eventId === event.eventId)
+  ) {
+    return;
+  }
+  pending.push(event);
+  if (pending.length > WP_PENDING_SPIN_LIMIT) {
+    pending.splice(0, pending.length - WP_PENDING_SPIN_LIMIT);
+  }
+  wpPendingSpins.set(queryClient, pending);
+}
+
+function mergeWpOnAirFetch(
+  queryClient: QueryClient,
+  incoming: WpOnAirResponse,
+): WpOnAirResponse {
+  let merged = mergeOnAirSnapshot(
+    queryClient.getQueryData<WpOnAirResponse>(["wp", "onair"]),
+    incoming,
+  );
+  const pending = wpPendingSpins.get(queryClient);
+  if (!pending?.length) return merged;
+
+  const retained: SpinStreamEvent[] = [];
+  for (const event of pending) {
+    if (!merged.items.some((item) => item.station.slug === event.stationSlug)) {
+      retained.push(event);
+      continue;
+    }
+    merged = mergeSpinIntoOnAir(merged, event) ?? merged;
+  }
+  if (retained.length > 0) wpPendingSpins.set(queryClient, retained);
+  else wpPendingSpins.delete(queryClient);
+  return merged;
+}
+
+export const _testOnly_applyWpSpin = applyWpSpin;
+export const _testOnly_mergeWpOnAirFetch = mergeWpOnAirFetch;
+
 export function useWpOnAir() {
   const queryClient = useQueryClient();
 
@@ -185,11 +260,15 @@ export function useWpOnAir() {
   // so multiple mounted consumers applying the same event is harmless.
   const [streamHealthy, setStreamHealthy] = useState(getStreamHealthy);
   useEffect(() => {
-    const unsubSpins = subscribeSpinStream((ev) => {
-      queryClient.setQueryData<WpOnAirResponse>(["wp", "onair"], (prev) =>
-        mergeSpinIntoOnAir(prev, ev),
-      );
-    });
+    const unsubSnapshot = subscribeStreamSnapshot(({ resetVersions }) =>
+      _testOnly_refreshWpOnAir(queryClient, resetVersions),
+    );
+    const unsubCatchUp = subscribeStreamCatchUp(() =>
+      _testOnly_refreshWpOnAir(queryClient, false),
+    );
+    const unsubSpins = subscribeSpinStream((event) =>
+      applyWpSpin(queryClient, event),
+    );
     // Health transitions arrive via the subscription; a change that lands in
     // the tiny window between render and subscribe is at worst one poll cycle
     // stale — the 30s backstop covers it.
@@ -197,12 +276,18 @@ export function useWpOnAir() {
     return () => {
       unsubSpins();
       unsubHealth();
+      unsubSnapshot();
+      unsubCatchUp();
     };
   }, [queryClient]);
 
   return useQuery({
     queryKey: ["wp", "onair"],
-    queryFn: () => apiFetch<WpOnAirResponse>("/api/player/onair"),
+    queryFn: async () => {
+      const incoming =
+        await apiFetch<WpOnAirResponse>("/api/player/onair");
+      return mergeWpOnAirFetch(queryClient, incoming);
+    },
     // Polling is the correctness backstop. While the SSE stream is healthy it
     // stretches to a slow sweep (push carries track changes); when the stream
     // is degraded or unavailable it silently resumes the original 30s cadence.
@@ -444,4 +529,38 @@ export function useWpHoldSupport() {
 
 export function useWpUnholdSupport() {
   return useUnholdRecordingSupport();
+}
+
+export function _testOnly_refreshWpOnAir(
+  queryClient: QueryClient,
+  resetVersions: boolean,
+): Promise<void> {
+  if (resetVersions) {
+    queryClient.setQueryData<WpOnAirResponse>(
+      ["wp", "onair"],
+      resetOnAirStreamVersions,
+    );
+  }
+  const inFlight = wpCatchUps.get(queryClient);
+  if (inFlight) return inFlight;
+
+  const request = queryClient
+    .refetchQueries(
+      {
+        queryKey: ["wp", "onair"],
+        exact: true,
+        type: "active",
+      },
+      {
+        throwOnError: true,
+      },
+    )
+    .then(() => undefined)
+    .finally(() => {
+      if (wpCatchUps.get(queryClient) === request) {
+        wpCatchUps.delete(queryClient);
+      }
+    });
+  wpCatchUps.set(queryClient, request);
+  return request;
 }

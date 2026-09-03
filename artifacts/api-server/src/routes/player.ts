@@ -23,6 +23,7 @@ import { estimateExpiry } from "../lore/expiry.js";
 import { recordLandingTiming } from "../lore/live-timing-health.js";
 import { pollStation } from "../lore/poller.js";
 import { spinDayExpr } from "../lore/runs.js";
+import { getStationStreamState } from "../lore/resolve.js";
 import { h } from "../middlewares/asyncHandler.js";
 
 /**
@@ -277,6 +278,7 @@ router.get("/player/onair", h(async (req, res) => {
         `)).rows.map((row) => row.id);
   const latest = latestSpinIds.length === 0 ? [] : await listenerDb
     .selectDistinctOn([spinsTable.stationId], {
+      id: spinsTable.id,
       stationId: spinsTable.stationId,
       playedAt: spinsTable.playedAt,
       // Rows predating the observed_at column fall back to created_at.
@@ -358,6 +360,7 @@ router.get("/player/onair", h(async (req, res) => {
   const itemsRaw = stations.map((s) => {
       const spin = latestByStation.get(s.id);
       if (!spin || spin.playedAt.getTime() < cutoff) return null;
+      const streamState = getStationStreamState(s.id, spin.id);
        const expiry = estimateExpiry({
          durationMs: spin.durationMs,
          playedAt: spin.playedAt,
@@ -394,6 +397,7 @@ router.get("/player/onair", h(async (req, res) => {
                : expiry
                  ? "estimated"
                  : "unknown",
+           ...(streamState ?? {}),
         },
         earlier,
         matchCount: user ? matchByStation.get(s.id) ?? 0 : null,

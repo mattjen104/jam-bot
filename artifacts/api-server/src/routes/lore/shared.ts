@@ -352,6 +352,9 @@ export function toNowPlaying(row: {
   /** Server-computed library hit flags for the authenticated listener. */
   isLibraryHit?: boolean;
   isArtistHit?: boolean;
+  /** Process-local cursor/version metadata for monotonic REST/SSE merges. */
+  eventId?: number;
+  stationVersion?: number;
 }) {
   return {
     spinId: row.spinId ?? null,
@@ -394,6 +397,10 @@ export function toNowPlaying(row: {
     isFirstSpin: row.isFirstSpin ?? false,
     isLibraryHit: row.isLibraryHit ?? false,
     isArtistHit: row.isArtistHit ?? false,
+    ...(row.eventId != null ? { eventId: row.eventId } : {}),
+    ...(row.stationVersion != null
+      ? { stationVersion: row.stationVersion }
+      : {}),
   };
 }
 

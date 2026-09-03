@@ -1,11 +1,96 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import {
+  _testOnly_resetSpinReplay,
+  getSpinReplayAfter,
+  getStationStreamState,
+  NOW_PLAYING_REPLAY_LIMIT,
+  publishSpinEvent,
   RESOLUTION_CACHE_VERSION,
   durationMismatch,
   normalizeKey,
   normalizeMetadataPair,
   resolutionTextVariants,
 } from "../src/lore/resolve.js";
+
+describe("now-playing stream replay", () => {
+  beforeEach(() => {
+    _testOnly_resetSpinReplay();
+  });
+
+  it("assigns globally ordered event ids and per-station versions", () => {
+    const first = publishSpinEvent("spin-raw", {
+      stationId: 1,
+      stationSlug: "one",
+      rawArtist: "A",
+      rawTitle: "One",
+      observedAt: "2026-09-03T10:00:00.000Z",
+      confidence: "unresolved",
+      provisional: true,
+    });
+    const otherStation = publishSpinEvent("spin-raw", {
+      stationId: 2,
+      stationSlug: "two",
+      rawArtist: "B",
+      rawTitle: "Two",
+      observedAt: "2026-09-03T10:00:01.000Z",
+      confidence: "unresolved",
+      provisional: true,
+    });
+    const persisted = publishSpinEvent("spin-changed", {
+      stationId: 1,
+      stationSlug: "one",
+      rawArtist: "A",
+      rawTitle: "One",
+      mbid: "mbid-one",
+      artworkUrl: null,
+      artistMbid: null,
+      releaseGroupMbid: null,
+      releaseYear: null,
+      releaseDate: null,
+      isFirstSpin: true,
+      observedAt: "2026-09-03T10:00:02.000Z",
+      confidence: "text",
+      spinId: 99,
+    });
+
+    expect(first).toMatchObject({ eventId: 1, stationVersion: 1 });
+    expect(otherStation).toMatchObject({ eventId: 2, stationVersion: 1 });
+    expect(persisted).toMatchObject({ eventId: 3, stationVersion: 2 });
+    // Stream metadata is exposed only for the exact persisted REST row.
+    expect(getStationStreamState(1, 99)).toEqual({
+      eventId: 3,
+      stationVersion: 2,
+    });
+    expect(getStationStreamState(1, 100)).toBeNull();
+  });
+
+  it("replays retained events in order and requires a snapshot after expiry", () => {
+    for (let i = 0; i < NOW_PLAYING_REPLAY_LIMIT + 2; i++) {
+      publishSpinEvent("spin-raw", {
+        stationId: 1,
+        stationSlug: "one",
+        rawArtist: "A",
+        rawTitle: `Track ${i}`,
+        observedAt: "2026-09-03T10:00:00.000Z",
+        confidence: "unresolved",
+        provisional: true,
+      });
+    }
+
+    expect(getSpinReplayAfter(0)).toBeNull();
+    const replay = getSpinReplayAfter(2);
+    expect(replay).toHaveLength(NOW_PLAYING_REPLAY_LIMIT);
+    expect(replay?.[0]?.event.eventId).toBe(3);
+    expect(replay?.at(-1)?.event.eventId).toBe(
+      NOW_PLAYING_REPLAY_LIMIT + 2,
+    );
+    expect(getSpinReplayAfter(NOW_PLAYING_REPLAY_LIMIT + 2)).toEqual([]);
+    expect(getSpinReplayAfter(NOW_PLAYING_REPLAY_LIMIT + 3)).toBeNull();
+    expect(
+      getSpinReplayAfter(NOW_PLAYING_REPLAY_LIMIT + 2, "previous-process"),
+    ).toBeNull();
+  });
+});
 
 describe("normalizeKey", () => {
   it("is case- and punctuation-insensitive", () => {

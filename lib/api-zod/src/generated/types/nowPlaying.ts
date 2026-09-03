@@ -29,6 +29,16 @@ export interface NowPlaying {
   observedAt?: string;
   /** Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale. */
   freshness?: NowPlayingFreshness;
+  /**
+   * Process-local SSE event cursor for this station's latest pushed frame. Optional when no event has been emitted since server start.
+   * @minimum 1
+   */
+  eventId?: number;
+  /**
+   * Process-local monotonic version for this station. REST and SSE consumers use it to reject older now-playing state.
+   * @minimum 1
+   */
+  stationVersion?: number;
   /** @nullable */
   artworkUrl?: string | null;
   recording?: NowPlayingRecording | null;

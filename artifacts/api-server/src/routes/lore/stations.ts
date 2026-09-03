@@ -55,7 +55,21 @@ import { resolveAutomationClass } from "../../lore/scraped-shows-sync.js";
 import { getUserForListenerRead, getUserFromSession } from "../../lore/userSession.js";
 import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../../lore/library-hits.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
-import { logSpinIfChanged, spinEvents, type SpinChangedEvent, type SpinRawEvent, type SpinRawFailedEvent } from "../../lore/resolve.js";
+import {
+  ensureVersionedSpinEvent,
+  getLatestSpinEventId,
+  getSpinReplayAfter,
+  getStationStreamState,
+  logSpinIfChanged,
+  nowPlayingStreamId,
+  spinEvents,
+  type AnySpinEvent,
+  type SpinChangedEvent,
+  type SpinEventName,
+  type SpinRawEvent,
+  type SpinRawFailedEvent,
+  type VersionedSpinEvent,
+} from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
 import { normalizeTimingEvidence } from "../../lore/timing-evidence.js";
 import {
@@ -820,9 +834,15 @@ router.get("/stations/now-playing", h(async (req, res) => {
           artist: row.artist ?? row.rawArtist ?? "",
         })
       : { isLibraryHit: false as const, isArtistHit: false as const };
+    const streamState = getStationStreamState(s.id, row.spinId);
     return {
       slug: s.slug,
-      nowPlaying: toNowPlaying({ ...row, isFirstSpin, ...hitFlags }),
+      nowPlaying: toNowPlaying({
+        ...row,
+        isFirstSpin,
+        ...hitFlags,
+        ...(streamState ?? {}),
+      }),
     };
   });
 
@@ -886,6 +906,22 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
     ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
     : EMPTY_HIT_CONTEXT;
 
+  const rawLastEventId =
+    (typeof req.get("Last-Event-ID") === "string"
+      ? req.get("Last-Event-ID")
+      : undefined) ??
+    (typeof req.query.lastEventId === "string"
+      ? req.query.lastEventId
+      : undefined);
+  const lastEventId =
+    rawLastEventId != null && /^\d+$/.test(rawLastEventId)
+      ? Number(rawLastEventId)
+      : null;
+  const clientStreamId =
+    typeof req.query.streamId === "string" && req.query.streamId
+      ? req.query.streamId
+      : null;
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
@@ -894,18 +930,59 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
     // proxies (the Replit preview proxy included).
     "X-Accel-Buffering": "no",
   });
-  // Initial comment establishes the stream in the browser right away.
-  res.write(":connected\n\n");
+  const annotate = (
+    name: SpinEventName,
+    ev: VersionedSpinEvent,
+  ): Record<string, unknown> => {
+    if (name !== "spin-changed") {
+      return {
+        ...ev,
+        type: name,
+        mbid: null,
+        isLibraryHit: false,
+        isArtistHit: false,
+      };
+    }
+    const changed = ev as SpinChangedEvent & {
+      eventId: number;
+      stationVersion: number;
+    };
+    const { isLibraryHit, isArtistHit } = checkLibraryHit(hitCtx, {
+      mbid: changed.mbid,
+      releaseGroupMbid: changed.releaseGroupMbid,
+      artistMbid: changed.artistMbid,
+      artist: changed.rawArtist,
+    });
+    return {
+      ...ev,
+      type: "spin-changed",
+      isLibraryHit,
+      isArtistHit,
+    };
+  };
+  const writeControl = (event: string, data: Record<string, unknown>) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  const writeSpin = (name: SpinEventName, ev: VersionedSpinEvent) => {
+    if (res.writableEnded) return;
+    res.write(
+      `id: ${ev.eventId}\ndata: ${JSON.stringify(annotate(name, ev))}\n\n`,
+    );
+  };
+
+  // Buffer events emitted during replay/snapshot negotiation so no live frame
+  // can overtake catch-up initialization on this connection.
+  let initializing = true;
+  const pending: Array<{ name: SpinEventName; event: VersionedSpinEvent }> = [];
+  const forward = (name: SpinEventName, raw: AnySpinEvent) => {
+    const event = ensureVersionedSpinEvent(name, raw);
+    if (initializing) pending.push({ name, event });
+    else writeSpin(name, event);
+  };
 
   const onSpin = (ev: SpinChangedEvent) => {
-    if (res.writableEnded) return;
-    const { isLibraryHit, isArtistHit } = checkLibraryHit(hitCtx, {
-      mbid: ev.mbid,
-      releaseGroupMbid: ev.releaseGroupMbid,
-      artistMbid: ev.artistMbid,
-      artist: ev.rawArtist,
-    });
-    res.write(`data: ${JSON.stringify({ ...ev, isLibraryHit, isArtistHit })}\n\n`);
+    forward("spin-changed", ev);
   };
   spinEvents.on("spin-changed", onSpin);
 
@@ -913,22 +990,59 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
   // can show the new artist+title while resolution is still in flight. Hit
   // flags require a resolved MBID, so both are false on these frames.
   const onRaw = (ev: SpinRawEvent) => {
-    if (res.writableEnded) return;
-    res.write(
-      `data: ${JSON.stringify({ ...ev, type: "spin-raw", isLibraryHit: false, isArtistHit: false })}\n\n`,
-    );
+    forward("spin-raw", ev);
   };
   spinEvents.on("spin-raw", onRaw);
 
   // Terminal failure: the provisional track never persisted (resolver error,
   // declined write) — clients must revert to the last persisted spin.
   const onRawFailed = (ev: SpinRawFailedEvent) => {
-    if (res.writableEnded) return;
-    res.write(
-      `data: ${JSON.stringify({ ...ev, type: "spin-raw-failed", isLibraryHit: false, isArtistHit: false })}\n\n`,
-    );
+    forward("spin-raw-failed", ev);
   };
   spinEvents.on("spin-raw-failed", onRawFailed);
+
+  // Initial comment establishes the stream in the browser right away.
+  res.write(":connected\n\n");
+
+  const epochMismatch =
+    clientStreamId != null && clientStreamId !== nowPlayingStreamId;
+  const replay =
+    lastEventId == null || epochMismatch
+      ? epochMismatch
+        ? null
+        : []
+      : getSpinReplayAfter(lastEventId, clientStreamId ?? nowPlayingStreamId);
+  const snapshotRequired = epochMismatch || replay === null;
+  writeControl("stream-info", {
+    streamId: nowPlayingStreamId,
+    cursor: getLatestSpinEventId(),
+    snapshotRequired,
+  });
+  if (snapshotRequired) {
+    writeControl("snapshot-required", {
+      streamId: nowPlayingStreamId,
+      cursor: getLatestSpinEventId(),
+      reason: epochMismatch ? "server-restarted" : "cursor-unavailable",
+    });
+  } else {
+    for (const entry of replay ?? []) {
+      writeSpin(entry.name, entry.event);
+    }
+  }
+
+  initializing = false;
+  const sent = new Set((replay ?? []).map(({ event }) => event.eventId));
+  for (const entry of pending.sort(
+    (a, b) => a.event.eventId - b.event.eventId,
+  )) {
+    if (!sent.has(entry.event.eventId)) writeSpin(entry.name, entry.event);
+  }
+  writeControl("stream-ready", {
+    streamId: nowPlayingStreamId,
+    cursor: getLatestSpinEventId(),
+    snapshotRequired,
+    replayed: replay?.length ?? 0,
+  });
 
   // Keep-alive comment every 30s so idle proxies don't kill the connection.
   const ping = setInterval(() => res.write(":ping\n\n"), 30_000);
@@ -1107,7 +1221,13 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
   return res.json(
     GetStationNowPlayingResponse.parse({
       station: toStation(station, undefined, resolvedClass),
-      nowPlaying: row ? toNowPlaying({ ...row, isFirstSpin }) : null,
+      nowPlaying: row
+        ? toNowPlaying({
+            ...row,
+            isFirstSpin,
+            ...(getStationStreamState(station.id, row.spinId) ?? {}),
+          })
+        : null,
     }),
   );
 }));

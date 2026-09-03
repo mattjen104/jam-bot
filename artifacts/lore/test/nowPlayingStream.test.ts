@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  mergeOnAirSnapshot,
   mergeSpinIntoOnAir,
+  resetOnAirStreamVersions,
   type SpinStreamEvent,
 } from "../src/webplayer/nowPlayingStream";
 import type { WpOnAirItem, WpOnAirResponse } from "../src/webplayer/hooks";
@@ -212,5 +214,103 @@ describe("mergeSpinIntoOnAir — provisional spin-raw frames", () => {
     const prev: WpOnAirResponse = { items: [makeItem(), other], authenticated: false };
     const next = mergeSpinIntoOnAir(prev, rawFrame)!;
     expect(next.items[1]).toBe(other);
+  });
+
+  it("rejects delayed terminal frames from a superseded provisional track", () => {
+    const first = mergeSpinIntoOnAir(makeState(), {
+      ...rawFrame,
+      eventId: 10,
+      stationVersion: 4,
+    })!;
+    const second = mergeSpinIntoOnAir(first, {
+      ...rawFrame,
+      rawArtist: "Newer Artist",
+      rawTitle: "Newer Song",
+      eventId: 11,
+      stationVersion: 5,
+    })!;
+    const staleFailure: SpinStreamEvent = {
+      stationSlug: "kexp",
+      rawArtist: "New Artist",
+      rawTitle: "New Song",
+      mbid: null,
+      type: "spin-raw-failed",
+      eventId: 12,
+      stationVersion: 4,
+    };
+    expect(mergeSpinIntoOnAir(second, staleFailure)).toBe(second);
+    expect(second.items[0]!.now.artist).toBe("Newer Artist");
+  });
+});
+
+describe("mergeOnAirSnapshot — REST/SSE races", () => {
+  it("keeps newer SSE state when an older REST request finishes late", () => {
+    const current = makeState(
+      makeItem({
+        artist: "Pushed Artist",
+        title: "Pushed Track",
+        eventId: 8,
+        stationVersion: 5,
+      }),
+    );
+    const staleRest = makeState(
+      makeItem({
+        artist: "Old Artist",
+        title: "Old Song",
+        eventId: 6,
+        stationVersion: 4,
+      }),
+    );
+    const merged = mergeOnAirSnapshot(current, staleRest);
+    expect(merged.items[0]).toBe(current.items[0]);
+    expect(merged.items[0]!.now.artist).toBe("Pushed Artist");
+  });
+
+  it("accepts a newer REST backstop and can reset versions after restart", () => {
+    const current = makeState(
+      makeItem({ eventId: 8, stationVersion: 5 }),
+    );
+    const newerRest = makeState(
+      makeItem({
+        artist: "Recovered Artist",
+        eventId: 10,
+        stationVersion: 6,
+      }),
+    );
+    expect(mergeOnAirSnapshot(current, newerRest).items[0]!.now.artist).toBe(
+      "Recovered Artist",
+    );
+
+    const reset = resetOnAirStreamVersions(current)!;
+    expect(reset.items[0]!.now.eventId).toBeUndefined();
+    expect(reset.items[0]!.now.stationVersion).toBeUndefined();
+    const restartedSnapshot = makeState(
+      makeItem({ artist: "After Restart" }),
+    );
+    expect(
+      mergeOnAirSnapshot(reset, restartedSnapshot).items[0]!.now.artist,
+    ).toBe("After Restart");
+  });
+
+  it("lets an authoritative fallback clear a stranded provisional frame", () => {
+    const provisional = mergeSpinIntoOnAir(makeState(), {
+      ...rawFrame,
+      eventId: 20,
+      stationVersion: 8,
+    })!;
+    expect(provisional.items[0]!.now.resolving).toBe(true);
+
+    const reset = resetOnAirStreamVersions(provisional)!;
+    const snapshot = makeState(
+      makeItem({
+        artist: "Persisted Artist",
+        title: "Persisted Track",
+        eventId: 18,
+        stationVersion: 7,
+      }),
+    );
+    const recovered = mergeOnAirSnapshot(reset, snapshot);
+    expect(recovered.items[0]!.now.artist).toBe("Persisted Artist");
+    expect(recovered.items[0]!.now.resolving).toBeUndefined();
   });
 });

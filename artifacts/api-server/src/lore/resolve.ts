@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, inArray, sql, gte } from "drizzle-orm";
 import { EventEmitter } from "node:events";
+import { randomUUID } from "node:crypto";
 import {
   resolveRecordingId,
   resolveRecordingByTextStatus,
@@ -663,7 +664,7 @@ async function persistSpin(args: {
   citation?: string;
   enrichLinks?: boolean;
   preserveExistingMetadata?: boolean;
-}): Promise<{ inserted: boolean; artworkUrl: string | null }> {
+}): Promise<{ inserted: boolean; artworkUrl: string | null; spinId: number | null }> {
   const { station, resolution: r, raw, showId, source, citation } = args;
   let artworkUrl: string | null = null;
 
@@ -725,7 +726,11 @@ async function persistSpin(args: {
       .onConflictDoNothing();
   }
 
-  return { inserted: inserted.length > 0, artworkUrl };
+  return {
+    inserted: inserted.length > 0,
+    artworkUrl,
+    spinId: spinId ?? null,
+  };
 }
 
 // ---- Spin change pub-sub --------------------------------------------------
@@ -762,6 +767,12 @@ export interface SpinChangedEvent {
    * events with `provisional: true` instead.
    */
   provisional?: boolean;
+  /** Persisted spin identity represented by this terminal frame. */
+  spinId?: number;
+  /** Monotonic identifier within this server process. Added before transport. */
+  eventId?: number;
+  /** Monotonic version for this station within this server process. */
+  stationVersion?: number;
 }
 
 /**
@@ -781,6 +792,10 @@ export interface SpinRawEvent {
   provisional: true;
   /** Direct/strong or low-variance learned duration; absent when ambiguous. */
   durationMs?: number;
+  /** Monotonic identifier within this server process. Added before transport. */
+  eventId?: number;
+  /** Monotonic version for this station within this server process. */
+  stationVersion?: number;
 }
 
 /**
@@ -802,6 +817,29 @@ export interface SpinRawFailedEvent {
   provisional: true;
   /** Why the pipeline ended without persisting (observability only). */
   reason: "exception" | "persist-declined";
+  /** Monotonic identifier within this server process. Added before transport. */
+  eventId?: number;
+  /** Monotonic version for this station within this server process. */
+  stationVersion?: number;
+}
+
+export type SpinEventName = "spin-raw" | "spin-changed" | "spin-raw-failed";
+export interface SpinEventMap {
+  "spin-raw": SpinRawEvent;
+  "spin-changed": SpinChangedEvent;
+  "spin-raw-failed": SpinRawFailedEvent;
+}
+export type AnySpinEvent =
+  | SpinChangedEvent
+  | SpinRawEvent
+  | SpinRawFailedEvent;
+export type VersionedSpinEvent = AnySpinEvent & {
+  eventId: number;
+  stationVersion: number;
+};
+export interface ReplayedSpinEvent {
+  name: SpinEventName;
+  event: VersionedSpinEvent;
 }
 
 /**
@@ -814,6 +852,140 @@ export interface SpinRawFailedEvent {
  */
 export const spinEvents = new EventEmitter();
 spinEvents.setMaxListeners(1000);
+
+/** A process epoch lets reconnecting clients detect a server restart. */
+export const nowPlayingStreamId = randomUUID();
+
+/**
+ * Brief disconnects should replay immediately without a durable broker. Keep
+ * the buffer deliberately small and process-local: REST remains the durable
+ * authoritative fallback when this window expires or the process restarts.
+ */
+export const NOW_PLAYING_REPLAY_LIMIT = 256;
+const replayWindow: ReplayedSpinEvent[] = [];
+const stationStreamState = new Map<
+  number,
+  { eventId: number; stationVersion: number }
+>();
+const stationSnapshotState = new Map<
+  number,
+  { eventId: number; stationVersion: number; spinId: number }
+>();
+const stampedEvents = new WeakMap<object, VersionedSpinEvent>();
+let latestSpinEventId = 0;
+
+function stampSpinEvent(
+  name: SpinEventName,
+  event: AnySpinEvent,
+): VersionedSpinEvent {
+  const known = stampedEvents.get(event);
+  if (known) return known;
+
+  const previous = stationStreamState.get(event.stationId);
+  const previousSnapshot = stationSnapshotState.get(event.stationId);
+  const versioned = Object.assign(event, {
+    eventId: ++latestSpinEventId,
+    stationVersion: (previous?.stationVersion ?? 0) + 1,
+  }) as VersionedSpinEvent;
+  stationStreamState.set(event.stationId, {
+    eventId: versioned.eventId,
+    stationVersion: versioned.stationVersion,
+  });
+  // REST snapshots describe persisted truth. A provisional frame must not
+  // lend its newer version to the previous persisted row, or a racing REST
+  // response could overwrite the provisional display at the same version.
+  if (name === "spin-changed" && (event as SpinChangedEvent).spinId != null) {
+    stationSnapshotState.set(event.stationId, {
+      eventId: versioned.eventId,
+      stationVersion: versioned.stationVersion,
+      spinId: (event as SpinChangedEvent).spinId!,
+    });
+  } else if (name === "spin-raw-failed" && previousSnapshot) {
+    // Failure reasserts the previously persisted row at a newer station
+    // version, but only when this process knows that row's exact identity.
+    stationSnapshotState.set(event.stationId, {
+      eventId: versioned.eventId,
+      stationVersion: versioned.stationVersion,
+      spinId: previousSnapshot.spinId,
+    });
+  }
+  stampedEvents.set(event, versioned);
+  replayWindow.push({ name, event: versioned });
+  if (replayWindow.length > NOW_PLAYING_REPLAY_LIMIT) {
+    replayWindow.splice(0, replayWindow.length - NOW_PLAYING_REPLAY_LIMIT);
+  }
+  return versioned;
+}
+
+/**
+ * Production emit path. Stamping happens before EventEmitter dispatch so every
+ * subscriber sees the same event identifier and station version.
+ */
+export function publishSpinEvent<Name extends SpinEventName>(
+  name: Name,
+  event: SpinEventMap[Name],
+): SpinEventMap[Name] & { eventId: number; stationVersion: number } {
+  const versioned = stampSpinEvent(name, event);
+  spinEvents.emit(name, versioned);
+  return versioned as SpinEventMap[Name] & {
+    eventId: number;
+    stationVersion: number;
+  };
+}
+
+/**
+ * Compatibility path for tests and older internal emitters that still call
+ * spinEvents.emit directly. The first stream subscriber stamps the shared
+ * object once; WeakMap identity keeps multiple clients on the same metadata.
+ */
+export function ensureVersionedSpinEvent<Name extends SpinEventName>(
+  name: Name,
+  event: SpinEventMap[Name],
+): SpinEventMap[Name] & { eventId: number; stationVersion: number } {
+  return stampSpinEvent(name, event) as SpinEventMap[Name] & {
+    eventId: number;
+    stationVersion: number;
+  };
+}
+
+export function getLatestSpinEventId(): number {
+  return latestSpinEventId;
+}
+
+export function getStationStreamState(
+  stationId: number,
+  spinId: number,
+): { eventId: number; stationVersion: number } | null {
+  const state = stationSnapshotState.get(stationId);
+  if (!state || state.spinId !== spinId) return null;
+  return { eventId: state.eventId, stationVersion: state.stationVersion };
+}
+
+/**
+ * null means the requested cursor predates the retained window (or points into
+ * a previous process epoch) and the client must refresh from REST. An empty
+ * array means the cursor is current.
+ */
+export function getSpinReplayAfter(
+  cursor: number,
+  clientStreamId: string = nowPlayingStreamId,
+): ReplayedSpinEvent[] | null {
+  if (clientStreamId !== nowPlayingStreamId) return null;
+  if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > latestSpinEventId) {
+    return null;
+  }
+  const oldest = replayWindow[0]?.event.eventId;
+  if (oldest != null && cursor < oldest - 1) return null;
+  return replayWindow.filter(({ event }) => event.eventId > cursor);
+}
+
+/** Tests only: reset cursor/version state while preserving the process epoch. */
+export function _testOnly_resetSpinReplay(): void {
+  replayWindow.length = 0;
+  stationStreamState.clear();
+  stationSnapshotState.clear();
+  latestSpinEventId = 0;
+}
 
 // ---- Per-station serialisation -------------------------------------------
 
@@ -934,7 +1106,7 @@ async function logSpinIfChangedInner(
   const failProvisional = (reason: SpinRawFailedEvent["reason"]) => {
     const raw = rawEvent;
     if (!raw) return;
-    spinEvents.emit("spin-raw-failed", {
+    publishSpinEvent("spin-raw-failed", {
       ...raw,
       reason,
     } satisfies SpinRawFailedEvent);
@@ -1065,8 +1237,7 @@ async function logSpinIfChangedInner(
       provisional: true,
       ...(earlyDuration != null ? { durationMs: earlyDuration } : {}),
     };
-    spinEvents.emit("spin-raw", rawEventPayload);
-    rawEvent = rawEventPayload;
+    rawEvent = publishSpinEvent("spin-raw", rawEventPayload);
     console.debug("[lore] provisional now-playing emitted", {
       stationId: station.id,
       slug: station.slug,
@@ -1150,7 +1321,7 @@ async function logSpinIfChangedInner(
       }
       // MBID is fully resolved before persist, so subscribers (SSE clients)
       // get everything they need without a follow-up round-trip.
-      spinEvents.emit("spin-changed", {
+      publishSpinEvent("spin-changed", {
         stationId: station.id,
         stationSlug: station.slug,
         rawArtist: np.rawArtist,
@@ -1165,6 +1336,7 @@ async function logSpinIfChangedInner(
         observedAt: new Date().toISOString(),
         confidence: r.confidence,
         ...(r.durationMs != null ? { durationMs: r.durationMs } : {}),
+        spinId: persisted.spinId ?? undefined,
       } satisfies SpinChangedEvent);
       const source_to_resolved_ms = Date.now() - arrivedAtMs;
       console.debug("[lore] resolved now-playing emitted", {
