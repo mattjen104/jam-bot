@@ -284,7 +284,7 @@ function OverviewHistoryView({
           </div>
         ) : visibleItems.length === 0 ? (
           <p className="overview-history__empty">
-            No {filter === "crossings" ? "crossings" : "premieres"} in this view yet.
+            No {filter === "crossings" ? "crossings" : "first plays"} in this view yet.
           </p>
         ) : (
           visibleItems.map(item => {
@@ -456,7 +456,7 @@ function MinimalRadioOverview({
          />
          <OverviewHistoryView
            filter="firstPlays"
-           title="Premieres"
+           title="First plays"
            activeCategories={activeCategories}
            categoryByStationSlug={categoryByStationSlug}
          />

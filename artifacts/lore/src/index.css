@@ -11121,6 +11121,116 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .compact-first-plays__title,
 .compact-first-plays__station { color: hsl(var(--muted-foreground)); }
 
+/* ── Cover-led music rails (Explore music-object grammar) ─────────────────
+   The cover leads; the station appears only as provenance. Cards are fixed-
+   width and images lazy-load so a live re-sort never causes layout jumps,
+   and the bounded horizontal rail never becomes a wall of images. */
+.cover-rail {
+  margin: 14px 0 6px;
+  min-width: 0;
+}
+.cover-rail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0 2px 8px;
+}
+.cover-rail__title {
+  margin: 0;
+  font-family: var(--lore-font-home-heading);
+  font-size: var(--lore-size-signature);
+  font-weight: 400;
+  line-height: 1.15;
+  color: hsl(var(--foreground));
+}
+.cover-rail__context {
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+.cover-rail__scroll {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 0 0 6px;
+  scrollbar-width: thin;
+}
+.cover-card {
+  flex: 0 0 132px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cover-card__record {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  border-radius: 3px;
+  color: inherit;
+  text-decoration: none;
+}
+.cover-card__record:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.cover-card__art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  object-fit: cover;
+  background: hsl(var(--secondary) / 0.6);
+}
+.cover-card__artist,
+.cover-card__title,
+.cover-card__provenance {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.25;
+}
+.cover-card__artist { color: hsl(var(--foreground)); }
+.cover-card__title,
+.cover-card__provenance { color: hsl(var(--muted-foreground)); }
+.cover-card__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.cover-card__action {
+  appearance: none;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--lore-font-terminal);
+  font-size: var(--lore-size-small);
+  line-height: 1.25;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.cover-card__action:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+/* Exact-track preview stays visually distinct from the live-radio action. */
+.cover-card__action--preview {
+  color: hsl(var(--muted-foreground));
+  border-style: dotted;
+}
+@media (max-width: 560px) {
+  .cover-card { flex-basis: 118px; }
+}
+
 /* ── Expanded album: in-place header row + notes, remaining rows follow ── */
 .compact-stack--expanded {
   /* The band stops being a rigid 5-row grid and becomes one continuous

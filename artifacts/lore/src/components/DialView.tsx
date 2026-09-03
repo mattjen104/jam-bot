@@ -95,6 +95,7 @@ import {
   type QueueArtist,
 } from "./dial/FrontDoorRow";
 import { DialFeedLane, type DialLaneRow } from "./dial/DialFeedLane";
+import { LiveCrossingCoverRail, FirstPlayCoverRail } from "./dial/CoverRails";
 import { FirstRunSidebar } from "./FirstRunSidebar";
 import { Zone2Lane } from "./dial/Zone2Lane";
 import {
@@ -2859,6 +2860,21 @@ export function DialView() {
       ? "Start with a confirmed crossing, then stay with the broadcast that feels right."
       : "Your crossings will lead when they appear. Until then, find a good room and listen.";
 
+  // On-air slug set — gates the per-card "Tune in" action on the first-play
+  // rail so it only appears while the source station is actually live.
+  // (Distinct from liveSlugSet above, which includes every sorted row.)
+  const onAirSlugSet = useMemo(
+    () => new Set(sortedRows.filter((r) => r.ds.isLive).map((r) => r.ds.station.slug)),
+    [sortedRows],
+  );
+  const tuneStationBySlug = useCallback(
+    (slug: string) => {
+      const row = sortedRows.find((r) => r.ds.station.slug === slug);
+      if (row) tuneZoneRow(row);
+    },
+    [sortedRows, tuneZoneRow],
+  );
+
   const feedSection = sortedRows.length > 0 && (
     <section className="explore-section" aria-labelledby="explore-live-title">
       <ExploreSectionHeader
@@ -2975,6 +2991,23 @@ export function DialView() {
                 onOpenScan={() => setScanSessionOpen(true)}
                 onToggleCrossings={() => setRadioMode(!radioMode)}
               />
+            )}
+            {/* Cover-led music rails — the music-object grammar: cover leads,
+                station is provenance. The station feed below stays
+                station-first (see CoverRails.tsx for the two grammars).
+                Crossings rail is personal evidence, so it stays out of
+                blank-radio and blended modes; first plays are Lore-wide
+                discovery and render in both. */}
+            {!inContext && (
+              <>
+                {!radioMode && !crossingsLoading && crossingSourceMode !== "blended" && (
+                  <LiveCrossingCoverRail rows={sortedRows} onTuneIn={tuneZoneRow} />
+                )}
+                <FirstPlayCoverRail
+                  liveSlugs={onAirSlugSet}
+                  onTuneStation={tuneStationBySlug}
+                />
+              </>
             )}
             {/* Tuned context must never wait on the crossings query: the
                 summary sentence and rail render as soon as the context is
