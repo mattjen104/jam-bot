@@ -141,6 +141,11 @@ import { applyStationSourceQualityMigration } from "./lore/source-quality-migrat
 import { applyStoreAuditMigration } from "./lore/store-audit-migration.js";
 import { applyInstrumentalAuditMigration } from "./lore/instrumental-audit-migration.js";
 import { applySpinTimingMigration } from "./lore/spin-timing-migration.js";
+import { applyPlaybackHealthMigration } from "./lore/playback-health-migration.js";
+import {
+  prunePlaybackHealthRollups,
+  startPlaybackHealthRetentionJob,
+} from "./lore/playback-health.js";
 
 const rawPort = process.env["PORT"];
 
@@ -156,9 +161,23 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-});
+async function startServer(): Promise<void> {
+  try {
+    // Playback telemetry is accepted immediately after listen, so its durable
+    // store must exist before this process advertises readiness.
+    await applyPlaybackHealthMigration();
+    await prunePlaybackHealthRollups();
+    startPlaybackHealthRetentionJob();
+
+    app.listen(port, () => {
+      console.log(`Server listening on port ${port}`);
+    });
+    void bootLore();
+  } catch (error) {
+    console.error("[server] startup migration failed", error);
+    process.exitCode = 1;
+  }
+}
 
 /**
  * Boot the Lore radio pipeline: wire the enrichment lib, seed the curated
@@ -439,4 +458,4 @@ async function bootLore(): Promise<void> {
   }
 }
 
-void bootLore();
+void startServer();

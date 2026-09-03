@@ -1296,7 +1296,7 @@ router.post("/stations/:slug/playback-events", playbackEventLimiter, h(async (re
     .where(and(eq(stationsTable.slug, params.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) return res.status(404).json({ error: "Station not found" });
-  recordPlaybackEvent({ stationSlug: params.data.slug, ...body.data });
+  await recordPlaybackEvent({ stationSlug: params.data.slug, ...body.data });
   return res.status(202).json({ accepted: true });
 }));
 

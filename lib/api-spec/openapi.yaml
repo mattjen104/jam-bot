@@ -412,7 +412,7 @@ paths:
       description: >-
         Unauthenticated, rate-limited telemetry for aggregate playback health.
         The request accepts no user, session, device, IP, or client identifiers;
-        samples are retained only in bounded process memory.
+        samples are retained only in a bounded, rolling database rollup.
       parameters:
         - name: slug
           in: path
@@ -426,7 +426,7 @@ paths:
               $ref: "#/components/schemas/PlaybackEventInput"
       responses:
         "202":
-          description: Event accepted for ephemeral aggregation
+          description: Event accepted for durable aggregate rollup
           content:
             application/json:
               schema:
@@ -441,7 +441,7 @@ paths:
       tags: [admin]
       summary: Aggregated sampled playback health
       description: >-
-        Admin-only percentile summaries of non-identifying, bounded in-memory
+        Admin-only percentile summaries of non-identifying, bounded rolling
         playback samples, grouped by station and source transport/format.
       parameters:
         - name: x-admin-token
@@ -5232,11 +5232,14 @@ components:
       type: object
       properties:
         monitoringSince: { type: string, format: date-time }
+        windowStartedAt: { type: string, format: date-time }
+        lastSampleAt: { type: [string, "null"], format: date-time }
+        rollupWindowDays: { type: integer }
         thresholds: { $ref: "#/components/schemas/PlaybackHealthThresholds" }
         summaries:
           type: array
           items: { $ref: "#/components/schemas/PlaybackHealthSummary" }
-      required: [monitoringSince, thresholds, summaries]
+      required: [monitoringSince, windowStartedAt, lastSampleAt, rollupWindowDays, thresholds, summaries]
     StationList:
       type: object
       properties:

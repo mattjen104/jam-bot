@@ -2198,9 +2198,9 @@ router.get("/admin/resolution-latency-health", h(async (_req, res) => {
   });
 }));
 
-// GET /api/admin/playback-health — ephemeral aggregated client playback RUM.
+// GET /api/admin/playback-health — durable aggregated client playback RUM.
 router.get("/admin/playback-health", h(async (_req, res) => {
-  return res.json(GetAdminPlaybackHealthResponse.parse(getPlaybackHealth()));
+  return res.json(GetAdminPlaybackHealthResponse.parse(await getPlaybackHealth()));
 }));
 
 // GET /api/admin/lore/blog-health — per-picker feed health for all blog

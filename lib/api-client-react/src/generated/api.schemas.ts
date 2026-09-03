@@ -750,6 +750,10 @@ export interface PlaybackHealthThresholds {
 
 export interface PlaybackHealthResponse {
   monitoringSince: string;
+  windowStartedAt: string;
+  /** @nullable */
+  lastSampleAt: string | null;
+  rollupWindowDays: number;
   thresholds: PlaybackHealthThresholds;
   summaries: PlaybackHealthSummary[];
 }
@@ -986,6 +990,27 @@ export const NowPlayingConfidence = {
  */
 export type NowPlayingTimestampKind =
   (typeof NowPlayingTimestampKind)[keyof typeof NowPlayingTimestampKind];
+
+export const NowPlayingTimestampKind = {
+  source: "source",
+  fingerprint: "fingerprint",
+  inferred: "inferred",
+  receipt: "receipt",
+} as const;
+
+/**
+ * Human-readable-machine-stable reason for timestampKind.
+ */
+export type NowPlayingTimingReason =
+  (typeof NowPlayingTimingReason)[keyof typeof NowPlayingTimingReason];
+
+export const NowPlayingTimingReason = {
+  station_declared_start: "station_declared_start",
+  fingerprint_play_offset: "fingerprint_play_offset",
+  inferred_start: "inferred_start",
+  receipt_only: "receipt_only",
+} as const;
+
 /**
  * Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.
  */
@@ -1110,6 +1135,18 @@ export interface LyricLine {
 
 export type RecordingLyricsStatus =
   (typeof RecordingLyricsStatus)[keyof typeof RecordingLyricsStatus];
+
+export const RecordingLyricsStatus = {
+  lyrics_found: "lyrics_found",
+  instrumental: "instrumental",
+  no_result: "no_result",
+  transient_failure: "transient_failure",
+  not_checked: "not_checked",
+} as const;
+
+/**
+ * Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics or no lines. status preserves explicit instrumental, genuine no-result, transient failure, and not-checked outcomes independently.
+
  */
 export interface RecordingLyrics {
   synced: boolean;
@@ -4778,28 +4815,3 @@ export type GetRecordingSongExploder200 = {
   episode: GetRecordingSongExploder200Episode;
   anchors: GetRecordingSongExploder200AnchorsItem[];
 };
-export const NowPlayingTimingReason = {
-  station_declared_start: "station_declared_start",
-  fingerprint_play_offset: "fingerprint_play_offset",
-  inferred_start: "inferred_start",
-  receipt_only: "receipt_only",
-} as const;
-export const RecordingLyricsStatus = {
-  lyrics_found: "lyrics_found",
-  instrumental: "instrumental",
-  no_result: "no_result",
-  transient_failure: "transient_failure",
-  not_checked: "not_checked",
-} as const;
-export const NowPlayingTimestampKind = {
-  source: "source",
-  fingerprint: "fingerprint",
-  inferred: "inferred",
-  receipt: "receipt",
-} as const;
-
-/**
- * Human-readable-machine-stable reason for timestampKind.
- */
-export type NowPlayingTimingReason =
-  (typeof NowPlayingTimingReason)[keyof typeof NowPlayingTimingReason];

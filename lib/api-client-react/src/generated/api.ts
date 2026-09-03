@@ -1386,7 +1386,7 @@ export const useReportStationNowPlaying = <
 };
 
 /**
- * Unauthenticated, rate-limited telemetry for aggregate playback health. The request accepts no user, session, device, IP, or client identifiers; samples are retained only in bounded process memory.
+ * Unauthenticated, rate-limited telemetry for aggregate playback health. The request accepts no user, session, device, IP, or client identifiers; samples are retained only in a bounded, rolling database rollup.
  * @summary Submit one privacy-safe sampled playback event
  */
 export const getReportStationPlaybackEventUrl = (slug: string) => {
@@ -1478,7 +1478,7 @@ export const useReportStationPlaybackEvent = <
 };
 
 /**
- * Admin-only percentile summaries of non-identifying, bounded in-memory playback samples, grouped by station and source transport/format.
+ * Admin-only percentile summaries of non-identifying, bounded rolling playback samples, grouped by station and source transport/format.
  * @summary Aggregated sampled playback health
  */
 export const getGetAdminPlaybackHealthUrl = () => {

@@ -155,5 +155,6 @@
 - [Explore surface boundary](explore-surface-boundary.md) — Explore proposes the next live broadcast; durable Press, Shows, and full history belong in Stack/Library.
 - [Lore orphaned Explore surfaces](lore-orphaned-explore-surfaces.md) — some Explore-looking components have no host page; grep importers before editing "front door" components. Also: first-plays home fast lane needs an exact request shape.
 - [Now-playing replay epochs](nowplaying-replay-epochs.md) — SSE cursors are process-scoped; fallback REST is authoritative, and versions bind to the exact persisted spin.
+- [Playback rollup dimensions](playback-rollup-dimensions.md) — new privacy-safe telemetry dimensions must update durable row identity and migration upgrades, not only API types.
 - [Broadcast timing provenance](broadcast-timing-provenance.md) — receipt time is never a track start; legacy timing degrades to inferred, and expiry remains advisory until metadata changes.
 - [Render-phase ranked snapshots](render-phase-ranked-snapshots.md) — compare semantic rank inputs, not array identity, or timer/query rerenders can create an infinite update loop.

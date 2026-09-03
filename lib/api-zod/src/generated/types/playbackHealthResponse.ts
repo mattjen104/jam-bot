@@ -10,6 +10,10 @@ import type { PlaybackHealthThresholds } from "./playbackHealthThresholds";
 
 export interface PlaybackHealthResponse {
   monitoringSince: string;
+  windowStartedAt: string;
+  /** @nullable */
+  lastSampleAt: string | null;
+  rollupWindowDays: number;
   thresholds: PlaybackHealthThresholds;
   summaries: PlaybackHealthSummary[];
 }

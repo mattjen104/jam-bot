@@ -58,6 +58,10 @@ interface ResolutionLatencyResponse {
   stations: ResolutionLatencyStation[];
 }
 
+function formatHealthWindow(value: string | null): string {
+  if (!value) return "No samples yet";
+  return new Date(value).toLocaleString();
+}
 interface SpinitronWebStation {
   stationId: number;
   slug: string;
@@ -651,8 +655,11 @@ function HealthPanel({
               icon={<Radio className="h-4 w-4" />}
               title="Listener playback"
               badge={playbackDegradedCount}
-              description={`Sampled tap-to-audio and recovery health. Degraded above ${formatDuration(playbackHealth.thresholds.startupP95DegradedMs)} p95 or ${(playbackHealth.thresholds.failureRateDegraded * 100).toFixed(0)}% failures.`}
+                description={`Rolling ${playbackHealth.rollupWindowDays}-day rollup · last sample ${formatHealthWindow(playbackHealth.lastSampleAt)}. Degraded above ${formatDuration(playbackHealth.thresholds.startupP95DegradedMs)} p95 or ${(playbackHealth.thresholds.failureRateDegraded * 100).toFixed(0)}% failures.`}
             />
+            <p className="mt-2 text-sm text-muted-foreground">
+              Window began {formatHealthWindow(playbackHealth.windowStartedAt)}.
+            </p>
             {playbackHealth.summaries.length === 0 ? (
               <div className="mt-4">
                 <HealthyRow

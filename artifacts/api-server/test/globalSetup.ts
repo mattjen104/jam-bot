@@ -23,6 +23,12 @@ export async function setup(): Promise<void> {
       "../src/lore/rss-articles-migration.js"
     );
     await applyRssArticlesMigration();
+
+    const { applyPlaybackHealthMigration } = await import(
+      "../src/lore/playback-health-migration.js"
+    );
+    await applyPlaybackHealthMigration();
+
     // Ensures crossing_eligible column exists — required by any test that
     // inserts into stationsTable after the schema added this column.
     const { applyStationDiscoveryMigration } = await import(
@@ -155,6 +161,7 @@ export async function setup(): Promise<void> {
       "../src/lore/station-exclusions-migration.js"
     );
     await applyStationExclusionsMigration();
+
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

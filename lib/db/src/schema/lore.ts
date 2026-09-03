@@ -3518,6 +3518,51 @@ export const jobTimestampsTable = pgTable("job_timestamps", {
 });
 
 /**
+ * Durable, privacy-safe playback health rollups. Rows are daily buckets so
+ * the API can retain a fixed rolling window while counters and bounded latency
+ * samples remain mergeable across multiple server instances.
+ *
+ * Created by an idempotent boot migration in api-server; declared here so
+ * drizzle-kit push does not treat the operational table as unknown.
+ */
+export const playbackHealthRollupsTable = pgTable(
+  "playback_health_rollups",
+  {
+    stationSlug: text("station_slug").notNull(),
+    transport: text("transport").notNull(),
+    format: text("format").notNull(),
+    warmed: boolean("warmed").notNull().default(false),
+    bucketStartedAt: timestamp("bucket_started_at", { withTimezone: true }).notNull(),
+    playingCount: integer("playing_count").notNull().default(0),
+    startupFailureCount: integer("startup_failure_count").notNull().default(0),
+    stallCount: integer("stall_count").notNull().default(0),
+    recoveryCount: integer("recovery_count").notNull().default(0),
+    terminalFailureCount: integer("terminal_failure_count").notNull().default(0),
+    startupSamples: integer("startup_samples").array().notNull().default(sql`ARRAY[]::integer[]`),
+    stallSamples: integer("stall_samples").array().notNull().default(sql`ARRAY[]::integer[]`),
+    firstSampleAt: timestamp("first_sample_at", { withTimezone: true }).notNull(),
+    lastSampleAt: timestamp("last_sample_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.stationSlug, t.transport, t.format, t.warmed, t.bucketStartedAt],
+      name: "playback_health_rollups_pkey",
+    }),
+    index("playback_health_rollups_bucket_idx").on(t.bucketStartedAt),
+    check("playback_health_rollups_playing_count_check", sql`${t.playingCount} >= 0`),
+    check(
+      "playback_health_rollups_startup_failure_count_check",
+      sql`${t.startupFailureCount} >= 0`,
+    ),
+    check("playback_health_rollups_stall_count_check", sql`${t.stallCount} >= 0`),
+    check("playback_health_rollups_recovery_count_check", sql`${t.recoveryCount} >= 0`),
+    check(
+      "playback_health_rollups_terminal_failure_count_check",
+      sql`${t.terminalFailureCount} >= 0`,
+    ),
+  ],
+);
+/**
  * Per-station tallies for the rotating audio-fingerprint scout.
  *
  * The scout cycles through metadata-dark stations (all radio_browser rows
@@ -3837,3 +3882,5 @@ export type InsertStationSourceQuality =
 
 export type StationSourceQuality =
   typeof stationSourceQualityTable.$inferSelect;
+
+export type PlaybackHealthRollup = typeof playbackHealthRollupsTable.$inferSelect;

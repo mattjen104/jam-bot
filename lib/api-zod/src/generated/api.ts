@@ -507,6 +507,7 @@ export const ListStationsAtDateParams = zod.object({
 });
 
 export const listStationsAtDateResponseItemsItemNowPlayingOneTimingUncertaintyMsMin = 0;
+
 export const ListStationsAtDateResponse = zod.object({
   items: zod.array(
     zod
@@ -717,6 +718,7 @@ export const ListStationsNowPlayingQueryParams = zod.object({
 });
 
 export const listStationsNowPlayingResponseItemsItemNowPlayingOneTimingUncertaintyMsMin = 0;
+
 export const ListStationsNowPlayingResponse = zod.object({
   items: zod.array(
     zod
@@ -919,8 +921,11 @@ export const ListStationsNowPlayingResponse = zod.object({
 export const GetStationNowPlayingParams = zod.object({
   slug: zod.coerce.string().min(1),
 });
-export const getStationNowPlayingResponseNowPlayingOneTimingUncertaintyMsMin = 0;
+
 export const getStationNowPlayingResponseStationPlaybackCandidatesMax = 4;
+
+export const getStationNowPlayingResponseNowPlayingOneTimingUncertaintyMsMin = 0;
+
 export const GetStationNowPlayingResponse = zod.object({
   station: zod
     .object({
@@ -1263,7 +1268,7 @@ export const ReportStationNowPlayingResponse = zod.object({
 });
 
 /**
- * Unauthenticated, rate-limited telemetry for aggregate playback health. The request accepts no user, session, device, IP, or client identifiers; samples are retained only in bounded process memory.
+ * Unauthenticated, rate-limited telemetry for aggregate playback health. The request accepts no user, session, device, IP, or client identifiers; samples are retained only in a bounded, rolling database rollup.
  * @summary Submit one privacy-safe sampled playback event
  */
 
@@ -1306,7 +1311,7 @@ export const ReportStationPlaybackEventBody = zod.object({
 });
 
 /**
- * Admin-only percentile summaries of non-identifying, bounded in-memory playback samples, grouped by station and source transport/format.
+ * Admin-only percentile summaries of non-identifying, bounded rolling playback samples, grouped by station and source transport/format.
  * @summary Aggregated sampled playback health
  */
 export const GetAdminPlaybackHealthHeader = zod.object({
@@ -1315,6 +1320,9 @@ export const GetAdminPlaybackHealthHeader = zod.object({
 
 export const GetAdminPlaybackHealthResponse = zod.object({
   monitoringSince: zod.string().datetime({}),
+  windowStartedAt: zod.string().datetime({}),
+  lastSampleAt: zod.string().datetime({}).nullable(),
+  rollupWindowDays: zod.number(),
   thresholds: zod.object({
     startupP95DegradedMs: zod.number(),
     failureRateDegraded: zod.number(),
