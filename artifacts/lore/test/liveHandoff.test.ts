@@ -10,6 +10,8 @@ import {
   type LiveNow,
 } from "../src/player/liveHandoff";
 import type { WpOnAirItem } from "../src/webplayer/hooks";
+import { alignWpOnAirTiming } from "../src/webplayer/hooks";
+import { BroadcastClockEstimator } from "../src/lib/broadcastClock";
 
 function station(slug: string, overrides: Partial<Station> = {}): Station {
   return {
@@ -88,6 +90,40 @@ describe("deriveNextChange", () => {
     expect(view.label).toBe("about 2 minutes left");
   });
 
+  it("downgrades a trusted signal when bounded uncertainty is too wide", () => {
+    const view = deriveNextChange(now({
+      serverTime: "2026-09-03T12:00:00.000Z",
+      estimatedRemainingMs: 30_000,
+      timingConfidence: "trusted",
+      timingUncertaintyMs: 20_000,
+    }), Date.parse("2026-09-03T12:00:10.000Z"));
+    expect(view.state).toBe("estimated");
+    expect(view.label).toBe("About 0:20 left");
+  });
+
+  it("omits countdowns for receipt-only and unbounded timing", () => {
+    expect(deriveNextChange(now({
+      timestampKind: "receipt",
+      timingReason: "receipt_only",
+      serverTime: "2026-09-03T12:00:00.000Z",
+      estimatedRemainingMs: 30_000,
+    })).label).toBe("No station start time to count from");
+    expect(deriveNextChange(now({
+      serverTime: "2026-09-03T12:00:00.000Z",
+      estimatedRemainingMs: 30_000,
+      timingConfidence: "estimated",
+      timingUncertaintyMs: 60_000,
+    })).label).toBe("Timing is too uncertain to count down");
+  });
+
+  it("waits for clock alignment rather than using the device wall clock", () => {
+    expect(deriveNextChange(now({
+      serverTime: "2026-09-03T12:00:00.000Z",
+      estimatedRemainingMs: 30_000,
+      timingConfidence: "trusted",
+    }), null).label).toBe("Aligning with the broadcast clock");
+  });
+
   it("does not fabricate a countdown without server time", () => {
     expect(deriveNextChange(now({
       estimatedRemainingMs: 30_000,
@@ -114,6 +150,40 @@ describe("deriveNextChange", () => {
 });
 
 describe("rankHandoffCandidates", () => {
+  it("uses response-level clock timing for an imminent on-air candidate", () => {
+    let wall = 9_000_000;
+    let mono = 1_000;
+    const clock = new BroadcastClockEstimator(() => wall, () => mono);
+    const item = onAirItem("imminent", {
+      now: now({
+        serverTime: undefined,
+        estimatedRemainingMs: 25_000,
+        timingConfidence: "estimated",
+      }),
+    });
+    const response = alignWpOnAirTiming(
+      {
+        serverTime: "2026-09-03T12:00:00.000Z",
+        items: [item],
+        authenticated: false,
+      },
+      clock,
+      { wallMs: wall, monotonicMs: mono },
+      { wallMs: wall + 200, monotonicMs: mono + 200 },
+    );
+    wall += 10_200;
+    mono += 10_200;
+
+    const ranked = rankHandoffCandidates(
+      response.items,
+      station("current"),
+      now(),
+      clock.now() ?? undefined,
+    );
+    expect(ranked[0]?.changingSoon).toBe(true);
+    expect(response.items[0]?.now.clockUncertaintyMs).toBe(100);
+  });
+
   it("ranks fresh resolved affinity above a generic fresh station", () => {
     const current = station("current");
     const ranked = rankHandoffCandidates([

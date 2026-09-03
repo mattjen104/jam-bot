@@ -554,13 +554,13 @@ export function mergeSpinIntoOnAir(
           observedAt: ev.observedAt ?? item.now.observedAt,
           freshness: "fresh",
           serverTime: ev.observedAt ?? item.now.serverTime,
-          ...(ev.durationMs != null
-            ? {
-                estimatedRemainingMs: ev.durationMs,
-                likelyExpiring: false,
-                timingConfidence: "estimated" as const,
-              }
-            : {}),
+          timestampKind: "receipt",
+          timingReason: "receipt_only",
+          timingUncertaintyMs: null,
+          sourceStartedAt: null,
+          estimatedRemainingMs: null,
+          likelyExpiring: false,
+          timingConfidence: "unknown",
           ...(ev.eventId != null ? { eventId: ev.eventId } : {}),
           ...(ev.stationVersion != null
             ? { stationVersion: ev.stationVersion }
@@ -608,9 +608,16 @@ export function mergeSpinIntoOnAir(
       freshness: "fresh",
       resolved: ev.mbid != null,
       serverTime: observedAt,
-      estimatedRemainingMs: ev.durationMs ?? null,
+      // SSE reports when Lore observed the change, not when the broadcast
+      // started. Withhold expiry until a full read-model response supplies
+      // server-authoritative timing provenance.
+      timestampKind: "receipt",
+      timingReason: "receipt_only",
+      timingUncertaintyMs: null,
+      sourceStartedAt: null,
+      estimatedRemainingMs: null,
       likelyExpiring: false,
-      timingConfidence: ev.durationMs != null ? "estimated" : "unknown",
+      timingConfidence: "unknown",
       // Provisional frames flag the row as still resolving; the matching
       // resolved spin-changed frame replaces it and clears the flag.
       resolving: provisional,

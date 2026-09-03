@@ -21,6 +21,7 @@ import { toStation, isPickerOptedOut, validScheduleShowAttribution, deriveStatio
 import { classifyFreshness } from "../lore/freshness.js";
 import { estimateExpiry } from "../lore/expiry.js";
 import { recordLandingTiming } from "../lore/live-timing-health.js";
+import { timingConfidence, timingFromStoredRow } from "../lore/timing.js";
 import { pollStation } from "../lore/poller.js";
 import { spinDayExpr } from "../lore/runs.js";
 import { getStationStreamState } from "../lore/resolve.js";
@@ -283,6 +284,11 @@ router.get("/player/onair", h(async (req, res) => {
       playedAt: spinsTable.playedAt,
       // Rows predating the observed_at column fall back to created_at.
       observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
+      createdAt: spinsTable.createdAt,
+      timingKind: spinsTable.timingKind,
+      timingReason: spinsTable.timingReason,
+      timingUncertaintyMs: spinsTable.timingUncertaintyMs,
+      sourceStartedAt: spinsTable.sourceStartedAt,
       source: spinsTable.source,
       rawArtist: spinsTable.rawArtist,
       rawTitle: spinsTable.rawTitle,
@@ -361,11 +367,14 @@ router.get("/player/onair", h(async (req, res) => {
       const spin = latestByStation.get(s.id);
       if (!spin || spin.playedAt.getTime() < cutoff) return null;
       const streamState = getStationStreamState(s.id, spin.id);
+       const timing = timingFromStoredRow(spin);
        const expiry = estimateExpiry({
          durationMs: spin.durationMs,
          playedAt: spin.playedAt,
          playOffsetMs: spin.playOffsetMs,
          offsetCapturedAt: spin.offsetCapturedAt,
+         timestampKind: timing.timestampKind,
+         timingUncertaintyMs: timing.timingUncertaintyMs,
          now,
        });
       const earlier = (earlierByStation.get(s.id) ?? []).slice(1);
@@ -386,17 +395,17 @@ router.get("/player/onair", h(async (req, res) => {
           artworkUrl: spin.artworkUrl ?? null,
           playedAt: spin.playedAt.toISOString(),
           observedAt: spin.observedAt.toISOString(),
+          persistedAt: spin.createdAt.toISOString(),
+          timestampKind: timing.timestampKind,
+          timingReason: timing.timingReason,
+          timingUncertaintyMs: timing.timingUncertaintyMs,
+          sourceStartedAt: timing.sourceStartedAt?.toISOString() ?? null,
           freshness: classifyFreshness(spin.source, spin.observedAt, now),
           resolved: spin.mbid != null,
            serverTime: now.toISOString(),
            estimatedRemainingMs: expiry?.remainingMs ?? null,
            likelyExpiring: expiry?.likelyExpiring ?? false,
-           timingConfidence:
-             expiry?.positionSource === "fingerprint"
-               ? "trusted"
-               : expiry
-                 ? "estimated"
-                 : "unknown",
+           timingConfidence: timingConfidence(timing),
            ...(streamState ?? {}),
         },
         earlier,
@@ -489,6 +498,11 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
       durationMs: recordingsTable.durationMs,
       playOffsetMs: spinsTable.playOffsetMs,
       offsetCapturedAt: spinsTable.offsetCapturedAt,
+      createdAt: spinsTable.createdAt,
+      timingKind: spinsTable.timingKind,
+      timingReason: spinsTable.timingReason,
+      timingUncertaintyMs: spinsTable.timingUncertaintyMs,
+      sourceStartedAt: spinsTable.sourceStartedAt,
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
@@ -498,6 +512,7 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
 
   const now = new Date();
   const freshness = spin ? classifyFreshness(spin.source, spin.observedAt, now) : null;
+  const timing = spin ? timingFromStoredRow(spin) : null;
   const explicitLanding = Number.isFinite(Number(req.get("X-Lore-Landed-At")));
   const landingId = req.get("X-Lore-Landing-Id")?.trim() || null;
   const landingRefreshKey = landingId ? `${station.id}:${landingId}` : null;
@@ -513,6 +528,8 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
         playedAt: spin.playedAt,
         playOffsetMs: spin.playOffsetMs,
         offsetCapturedAt: spin.offsetCapturedAt,
+        timestampKind: timing?.timestampKind,
+        timingUncertaintyMs: timing?.timingUncertaintyMs,
         now,
       })
     : null;
@@ -623,18 +640,18 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
           releaseYear: spin.releaseYear ?? null,
           playedAt: spin.playedAt.toISOString(),
           observedAt: spin.observedAt.toISOString(),
+          persistedAt: spin.createdAt.toISOString(),
+          timestampKind: timing!.timestampKind,
+          timingReason: timing!.timingReason,
+          timingUncertaintyMs: timing!.timingUncertaintyMs,
+          sourceStartedAt: timing!.sourceStartedAt?.toISOString() ?? null,
           freshness,
           resolved: spin.mbid != null,
           estimatedRemainingMs: expiry?.remainingMs ?? null,
           likelyExpiring: expiry?.likelyExpiring ?? false,
           /** Fingerprint offsets are the strongest available timing signal;
            * played_at remains useful but is explicitly approximate. */
-          timingConfidence:
-            expiry?.positionSource === "fingerprint"
-              ? "trusted"
-              : expiry
-                ? "estimated"
-                : "unknown",
+          timingConfidence: timingConfidence(timing!),
         }
       : null,
     refreshTriggered,

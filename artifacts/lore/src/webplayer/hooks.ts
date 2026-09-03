@@ -24,6 +24,7 @@ import {
   subscribeStreamSnapshot,
   type SpinStreamEvent,
 } from "./nowPlayingStream";
+import { BroadcastClockEstimator, type ClockMark } from "../lib/broadcastClock";
 
 // ---------------------------------------------------------------------------
 // Types mirroring /api/player/* response shapes
@@ -37,6 +38,17 @@ export interface WpNow {
   playedAt: string;
   /** When Lore received the metadata (ingestion time). Best-effort field. */
   observedAt?: string;
+  /** When Lore committed the spin row. */
+  persistedAt?: string;
+  /** Station-declared start, null when another timing signal is used. */
+  sourceStartedAt?: string | null;
+  timestampKind?: "source" | "fingerprint" | "inferred" | "receipt";
+  timingReason?:
+    | "station_declared_start"
+    | "fingerprint_play_offset"
+    | "inferred_start"
+    | "receipt_only";
+  timingUncertaintyMs?: number | null;
   /**
    * Server-computed freshness class from the source's polling cadence.
    * "stale" ⇒ show the "may be delayed" hint; absent ⇒ unknown, treat as
@@ -48,6 +60,8 @@ export interface WpNow {
   likelyExpiring?: boolean;
   timingConfidence?: "trusted" | "estimated" | "unknown";
   serverTime?: string;
+  /** Client-only uncertainty from midpoint clock alignment. */
+  clockUncertaintyMs?: number | null;
   resolved: boolean;
   /**
    * True while a provisional spin-raw observation is awaiting its resolved
@@ -80,6 +94,30 @@ export interface WpOnAirResponse {
   items: WpOnAirItem[];
   authenticated: boolean;
   serverTime?: string;
+}
+
+const wpOnAirClock = new BroadcastClockEstimator();
+
+export function alignWpOnAirTiming(
+  body: WpOnAirResponse,
+  clock: BroadcastClockEstimator,
+  started: ClockMark,
+  received: ClockMark,
+): WpOnAirResponse {
+  if (!body.serverTime) return body;
+  clock.addSample(body.serverTime, started, received);
+  const clockUncertaintyMs = clock.uncertaintyMs();
+  return {
+    ...body,
+    items: body.items.map((item) => ({
+      ...item,
+      now: {
+        ...item.now,
+        serverTime: body.serverTime,
+        clockUncertaintyMs,
+      },
+    })),
+  };
 }
 
 export interface WpRunSpin {
@@ -284,9 +322,13 @@ export function useWpOnAir() {
   return useQuery({
     queryKey: ["wp", "onair"],
     queryFn: async () => {
-      const incoming =
-        await apiFetch<WpOnAirResponse>("/api/player/onair");
-      return mergeWpOnAirFetch(queryClient, incoming);
+      const started = wpOnAirClock.mark();
+      const incoming = await apiFetch<WpOnAirResponse>("/api/player/onair");
+      const received = wpOnAirClock.mark();
+      return mergeWpOnAirFetch(
+        queryClient,
+        alignWpOnAirTiming(incoming, wpOnAirClock, started, received),
+      );
     },
     // Polling is the correctness backstop. While the SSE stream is healthy it
     // stretches to a slow sweep (push carries track changes); when the stream

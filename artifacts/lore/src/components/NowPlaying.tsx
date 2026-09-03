@@ -122,6 +122,13 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
   const np = data?.nowPlaying ?? null;
   const rec = np?.recording ?? null;
   const artwork = rec?.artworkUrl ?? np?.artworkUrl ?? null;
+  const timingAge = np
+    ? np.timingReason === "receipt_only"
+      ? `observed ${timeAgo(np.observedAt ?? np.playedAt)}`
+      : np.timestampKind === "inferred"
+        ? `about ${timeAgo(np.playedAt)}`
+        : timeAgo(np.playedAt)
+    : "";
 
   const { ride } = usePlayer();
   const [, setLocation] = useLocation();
@@ -260,7 +267,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
             <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
               {CONFIDENCE_LABEL[np.confidence] ?? "Now playing"}
               {" · "}
-              {np.playedAt ? timeAgo(np.playedAt) : ""}
+               {timingAge}
             </p>
             {rec ? (
               <Link

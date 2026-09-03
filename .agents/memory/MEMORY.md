@@ -155,3 +155,4 @@
 - [Explore surface boundary](explore-surface-boundary.md) — Explore proposes the next live broadcast; durable Press, Shows, and full history belong in Stack/Library.
 - [Lore orphaned Explore surfaces](lore-orphaned-explore-surfaces.md) — some Explore-looking components have no host page; grep importers before editing "front door" components. Also: first-plays home fast lane needs an exact request shape.
 - [Now-playing replay epochs](nowplaying-replay-epochs.md) — SSE cursors are process-scoped; fallback REST is authoritative, and versions bind to the exact persisted spin.
+- [Broadcast timing provenance](broadcast-timing-provenance.md) — receipt time is never a track start; legacy timing degrades to inferred, and expiry remains advisory until metadata changes.

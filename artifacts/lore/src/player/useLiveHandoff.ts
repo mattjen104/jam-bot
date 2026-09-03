@@ -13,6 +13,7 @@ import {
   type NextChangeView,
 } from "./liveHandoff";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
+import { BroadcastClockEstimator } from "../lib/broadcastClock";
 
 export const HANDOFF_MAX_WAIT_MS = 45_000;
 export const HANDOFF_POLL_MS = 2_500;
@@ -38,13 +39,28 @@ interface FastLaneBody {
   refreshTriggered?: boolean;
 }
 
-async function fetchFastLane(slug: string): Promise<FastLaneBody | null> {
+async function fetchFastLane(
+  slug: string,
+  clock: BroadcastClockEstimator,
+): Promise<FastLaneBody | null> {
+  const started = clock.mark();
   const response = await fetch(`/api/player/station/${encodeURIComponent(slug)}/now`, {
     headers: { accept: "application/json" },
   });
+  const received = clock.mark();
   if (!response.ok) return null;
   const body = await response.json() as FastLaneBody;
-  return body.now ? { ...body, now: { ...body.now, serverTime: body.serverTime } } : body;
+  if (body.serverTime) clock.addSample(body.serverTime, started, received);
+  return body.now
+    ? {
+        ...body,
+        now: {
+          ...body.now,
+          serverTime: body.serverTime,
+          clockUncertaintyMs: clock.uncertaintyMs(),
+        },
+      }
+    : body;
 }
 
 export function useLiveHandoff(
@@ -53,9 +69,10 @@ export function useLiveHandoff(
   onSwitch: (station: Station) => void,
 ) {
   const slug = currentStation?.slug ?? null;
+  const [clock] = useState(() => new BroadcastClockEstimator());
   const [nowState, setNowState] = useState<{ slug: string; value: LiveNow } | null>(null);
   const now = nowState?.slug === slug ? nowState.value : null;
-  const [clockMs, setClockMs] = useState(() => Date.now());
+  const [clockMs, setClockMs] = useState<number | null>(null);
   const [pendingState, setPending] = useState<PendingHandoff | null>(null);
   const pending = pendingState?.sourceSlug === slug ? pendingState : null;
   const [noQualifiedSlug, setNoQualifiedSlug] = useState<string | null>(null);
@@ -71,11 +88,14 @@ export function useLiveHandoff(
   }, []);
 
   const refresh = useCallback(async (targetSlug: string, generation?: number) => {
-    const body = await fetchFastLane(targetSlug).catch(() => null);
+    const body = await fetchFastLane(targetSlug, clock).catch(() => null);
     if (generation != null && generationRef.current !== generation) return null;
-    if (targetSlug === slug && body?.now) setNowState({ slug: targetSlug, value: body.now });
+    if (targetSlug === slug && body?.now) {
+      setNowState({ slug: targetSlug, value: body.now });
+      setClockMs(clock.now());
+    }
     return body;
-  }, [slug]);
+  }, [clock, slug]);
 
   useEffect(() => {
     generationRef.current += 1;
@@ -90,21 +110,29 @@ export function useLiveHandoff(
     }
     let cancelled = false;
     const load = async () => {
-      const body = await fetchFastLane(slug).catch(() => null);
-      if (!cancelled && body?.now) setNowState({ slug, value: body.now });
+      const body = await fetchFastLane(slug, clock).catch(() => null);
+      if (!cancelled && body?.now) {
+        setNowState({ slug, value: body.now });
+        setClockMs(clock.now());
+      }
     };
     void load();
     const interval = window.setInterval(load, 30_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [slug, clearTimer]);
+  }, [slug, clearTimer, clock]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => setClockMs(Date.now()), 1_000);
+    const interval = window.setInterval(() => setClockMs(clock.now()), 1_000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [clock]);
 
   const nextChange = useMemo<NextChangeView>(
     () => deriveNextChange(now, clockMs),
@@ -122,7 +150,7 @@ export function useLiveHandoff(
   }, [slug, now, nextChange.state, refresh]);
 
   const rankedCandidates = useMemo(
-    () => rankHandoffCandidates(onAirItems, currentStation, now, clockMs),
+    () => rankHandoffCandidates(onAirItems, currentStation, now, clockMs ?? undefined),
     [onAirItems, currentStation, now, clockMs],
   );
   const currentIdentity = now ? trackIdentity(now) : "";
@@ -174,7 +202,7 @@ export function useLiveHandoff(
     generationRef.current += 1;
     const generation = generationRef.current;
     clearTimer();
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     const deadlineAt = startedAt + HANDOFF_MAX_WAIT_MS;
     let baseline: LiveNow | null = null;
     setNoQualifiedSlug(null);
@@ -191,10 +219,10 @@ export function useLiveHandoff(
 
     const check = async () => {
       if (generationRef.current !== generation) return;
-      const body = await fetchFastLane(target.slug).catch(() => null);
+      const body = await fetchFastLane(target.slug, clock).catch(() => null);
       if (generationRef.current !== generation) return;
       const current = body?.now ?? null;
-      const elapsed = Date.now() - startedAt;
+      const elapsed = performance.now() - startedAt;
       if (!current) {
         if (elapsed >= HANDOFF_MAX_WAIT_MS) {
           setPending((value) => value?.target.slug === target.slug
@@ -239,7 +267,7 @@ export function useLiveHandoff(
       timerRef.current = setTimeout(check, HANDOFF_POLL_MS);
     };
     void check();
-  }, [clearTimer, slug]);
+  }, [clearTimer, slug, clock]);
 
   const catchCurrent = useCallback(() => {
     if (currentStation) arm(currentStation, "Stay here and catch this station's next song.");

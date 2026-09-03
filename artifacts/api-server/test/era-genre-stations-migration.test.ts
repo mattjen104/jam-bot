@@ -67,10 +67,13 @@ describe("applyEraGenreStationsMigration", () => {
       expect(repair).toContain(blocked);
     }
 
-    // Step 2c — restore valid Specialist rows hidden by the retired mode.
+    // Step 2c — rows hidden by the retired listener pool are restored without
+    // reviving sleep, inactive, or permanently blocklisted rows.
     const restore: string = JSON.stringify(execute.mock.calls[3]?.[0]);
     expect(restore).toContain("SET hidden = false");
     expect(restore).toContain("era_genre_mode = true");
+    expect(restore).toContain("active = true");
+    expect(restore).toContain("sleep_mode");
     expect(restore).toContain("NOT LIKE ALL");
 
     // Step 3 — FIP sub-channels get the mode flag but stay UN-hidden so their

@@ -71,9 +71,10 @@ function usableLag(lag: MetadataAudioLag | null | undefined): number | null {
 
 /**
  * Normalize unlike source clocks without conflating metadata arrival with an
- * audible boundary. Fingerprint offsets are anchored to the original capture
- * midpoint. Identity-only recognition has no offset and therefore cannot
- * claim a position.
+ * audible boundary. ACR's play offset describes the position at the END of
+ * the recognized clip, so fingerprint offsets are anchored to capture end.
+ * The midpoint remains diagnostic evidence only. Identity-only recognition
+ * has no offset and therefore cannot claim a position.
  */
 export function normalizeTimingEvidence(
   input: TimingEvidenceInput,
@@ -113,13 +114,13 @@ export function normalizeTimingEvidence(
   }
 
   if (
-    captureMidpointAt &&
+    validDate(input.captureEndedAt) &&
     typeof input.fingerprintOffsetMs === "number" &&
     Number.isFinite(input.fingerprintOffsetMs) &&
     input.fingerprintOffsetMs >= 0
   ) {
     const startedAt = new Date(
-      captureMidpointAt.getTime() - input.fingerprintOffsetMs,
+      input.captureEndedAt.getTime() - input.fingerprintOffsetMs,
     );
     return {
       confidence: "trusted",

@@ -10,6 +10,7 @@ import { eligibleDjName } from "@workspace/lore-attribution";
 import { isRelayAllowed, relayUrlPath } from "../../lore/stream-relay.js";
 import { playbackCandidatesForStation } from "../../lore/playback-candidates.js";
 import { classifyFreshness } from "../../lore/freshness.js";
+import { timingFromStoredRow } from "../../lore/timing.js";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
 
@@ -345,6 +346,11 @@ export function toNowPlaying(row: {
   releaseYear?: number | null;
   /** MusicBrainz first-release date in partial-ISO form (YYYY / YYYY-MM / YYYY-MM-DD). */
   releaseDate?: string | null;
+  timingKind?: string | null;
+  timingReason?: string | null;
+  timingUncertaintyMs?: number | null;
+  sourceStartedAt?: Date | null;
+  createdAt?: Date | null;
   showName: string | null;
   showDj: string | null;
   stationName?: string | null;
@@ -356,6 +362,7 @@ export function toNowPlaying(row: {
   eventId?: number;
   stationVersion?: number;
 }) {
+  const timing = timingFromStoredRow(row);
   return {
     spinId: row.spinId ?? null,
     rawArtist: row.rawArtist ?? "",
@@ -363,6 +370,11 @@ export function toNowPlaying(row: {
     source: row.source,
     confidence: row.confidence,
     playedAt: row.playedAt.toISOString(),
+    ...(row.createdAt ? { persistedAt: row.createdAt.toISOString() } : {}),
+    timestampKind: timing.timestampKind,
+    timingReason: timing.timingReason,
+    timingUncertaintyMs: timing.timingUncertaintyMs,
+    sourceStartedAt: timing.sourceStartedAt?.toISOString() ?? null,
     ...(row.observedAt
       ? {
           observedAt: row.observedAt.toISOString(),

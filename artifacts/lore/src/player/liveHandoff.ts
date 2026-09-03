@@ -17,6 +17,7 @@ export interface LiveNow extends WpNow {
   timingConfidence?: "trusted" | "estimated" | "unknown";
 }
 
+export const PRECISE_COUNTDOWN_MAX_UNCERTAINTY_MS = 8_000;
 export interface NextChangeView {
   state: NextChangeState;
   remainingMs: number | null;
@@ -98,25 +99,75 @@ export function formatApproximateRemaining(ms: number): string {
  * No server timestamp means no exact countdown: this is intentionally
  * "watching" rather than pretending the browser's clock is authoritative.
  */
-export function deriveNextChange(now: LiveNow | null | undefined, atMs = Date.now()): NextChangeView {
+export function deriveNextChange(
+  now: LiveNow | null | undefined,
+  atMs: number | null = Date.now(),
+): NextChangeView {
   if (!now) {
     return { state: "unknown", remainingMs: null, label: "Watching for the next song", boundaryAt: null };
   }
   if (now.freshness === "stale") {
     return { state: "stale", remainingMs: null, label: "Waiting for a fresh signal", boundaryAt: null };
   }
+  if (now.timestampKind === "receipt" || now.timingReason === "receipt_only") {
+    return {
+      state: "unknown",
+      remainingMs: null,
+      label: "No station start time to count from",
+      boundaryAt: null,
+    };
+  }
+  if (atMs == null) {
+    return {
+      state: "unknown",
+      remainingMs: null,
+      label: "Aligning with the broadcast clock",
+      boundaryAt: null,
+    };
+  }
   const boundaryAt = localBoundaryAt(now);
   if (boundaryAt == null || now.estimatedRemainingMs == null) {
     return { state: "unknown", remainingMs: null, label: "Watching for the next song", boundaryAt: null };
+  }
+  const timingUncertaintyMs = now.timingUncertaintyMs;
+  const totalUncertaintyMs =
+    timingUncertaintyMs == null
+      ? null
+      : timingUncertaintyMs + Math.max(0, now.clockUncertaintyMs ?? 0);
+  if (
+    totalUncertaintyMs != null &&
+    totalUncertaintyMs > VISIBLE_COUNTDOWN_MAX_UNCERTAINTY_MS
+  ) {
+    return {
+      state: "unknown",
+      remainingMs: null,
+      label: "Timing is too uncertain to count down",
+      boundaryAt,
+    };
   }
   const remainingMs = Math.max(0, boundaryAt - atMs);
   if (remainingMs === 0) {
     return { state: "just-changed", remainingMs, label: "Checking for the next song", boundaryAt };
   }
-  if (now.timingConfidence === "trusted") {
+  if (
+    now.timingConfidence === "trusted" &&
+    (totalUncertaintyMs == null ||
+      totalUncertaintyMs <= PRECISE_COUNTDOWN_MAX_UNCERTAINTY_MS)
+  ) {
     return { state: "trusted", remainingMs, label: `Next change in ${formatRemaining(remainingMs)}`, boundaryAt };
   }
   if (remainingMs <= 30_000) {
+    if (
+      totalUncertaintyMs != null &&
+      totalUncertaintyMs > PRECISE_COUNTDOWN_MAX_UNCERTAINTY_MS
+    ) {
+      return {
+        state: "estimated",
+        remainingMs,
+        label: `About ${formatRemaining(remainingMs)} left`,
+        boundaryAt,
+      };
+    }
     return {
       state: "changing-soon",
       remainingMs,
@@ -235,3 +286,5 @@ export function stabilizeCandidateOrder(
   }
   return stable;
 }
+
+export const VISIBLE_COUNTDOWN_MAX_UNCERTAINTY_MS = 45_000;

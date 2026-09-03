@@ -5506,6 +5506,35 @@ components:
             When Lore actually received this metadata (ingestion time), as
             opposed to `playedAt` (station-reported start time). Optional —
             older cached payloads may omit it; clients must degrade.
+        persistedAt:
+          type: string
+          description: >-
+            When Lore committed the spin row. Distinct from the station's
+            declared start and Lore's observation time.
+        sourceStartedAt:
+          type: ["string", "null"]
+          description: >-
+            Track start declared by the station itself. Null for fingerprint,
+            inferred, receipt-only, and legacy timing.
+        timestampKind:
+          type: string
+          enum: [source, fingerprint, inferred, receipt]
+          description: >-
+            Semantics of the position timestamp used for live timing.
+        timingReason:
+          type: string
+          enum:
+            - station_declared_start
+            - fingerprint_play_offset
+            - inferred_start
+            - receipt_only
+          description: Human-readable-machine-stable reason for timestampKind.
+        timingUncertaintyMs:
+          type: ["integer", "null"]
+          minimum: 0
+          description: >-
+            Bounded start-time uncertainty. Null means Lore has no useful
+            position bound and clients must omit the countdown.
         freshness:
           type: string
           enum: [fresh, aging, stale]

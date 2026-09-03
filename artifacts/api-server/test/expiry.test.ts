@@ -26,6 +26,7 @@ describe("estimateExpiry", () => {
       remainingMs: 120_000,
       likelyExpiring: false,
       positionSource: "played_at",
+      uncertaintyMs: 0,
     });
   });
 
@@ -75,6 +76,7 @@ describe("estimateExpiry", () => {
       remainingMs: 5_000,
       likelyExpiring: true,
       positionSource: "fingerprint",
+      uncertaintyMs: 0,
     });
   });
 
@@ -106,5 +108,26 @@ describe("estimateExpiry", () => {
     });
     expect(est?.remainingMs).toBe(LIKELY_EXPIRING_THRESHOLD_MS);
     expect(est?.likelyExpiring).toBe(false);
+  });
+
+  it("carries the timing uncertainty bound into the estimate", () => {
+    const est = estimateExpiry({
+      durationMs: 180_000,
+      playedAt: secsAgo(60),
+      timestampKind: "inferred",
+      timingUncertaintyMs: 30_000,
+      now: T0,
+    });
+    expect(est?.uncertaintyMs).toBe(30_000);
+  });
+
+  it("never treats a receipt timestamp as a track start", () => {
+    expect(estimateExpiry({
+      durationMs: 180_000,
+      playedAt: secsAgo(5),
+      timestampKind: "receipt",
+      timingUncertaintyMs: null,
+      now: T0,
+    })).toBeNull();
   });
 });

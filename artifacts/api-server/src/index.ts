@@ -140,6 +140,7 @@ import { applyAppleMusicJamsMigration } from "./lore/apple-music-jams-migration.
 import { applyStationSourceQualityMigration } from "./lore/source-quality-migration.js";
 import { applyStoreAuditMigration } from "./lore/store-audit-migration.js";
 import { applyInstrumentalAuditMigration } from "./lore/instrumental-audit-migration.js";
+import { applySpinTimingMigration } from "./lore/spin-timing-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -200,6 +201,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applySpinsPlayedAtIndexMigration", applySpinsPlayedAtIndexMigration);
     await runMigration("applySpinObservedAtMigration", applySpinObservedAtMigration);
     await runMigration("applySpinPlayOffsetMigration", applySpinPlayOffsetMigration);
+    await runMigration("applySpinTimingMigration", applySpinTimingMigration);
     await runMigration("applySpinDurationMigration", applySpinDurationMigration);
     await runMigration("applyLibraryProvenanceBackfill", async () => {
       await applyLibraryProvenanceBackfill();

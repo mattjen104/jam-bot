@@ -37,6 +37,7 @@ import {
   type WpOnAirResponse,
   type WpOnAirItem,
 } from "../src/webplayer/hooks";
+import { deriveNextChange } from "../src/player/liveHandoff";
 
 // ---------------------------------------------------------------------------
 // Fake EventSource
@@ -49,12 +50,27 @@ class FakeEventSource {
   onmessage: ((msg: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   closed = false;
+  private listeners = new Map<string, Set<EventListener>>();
   constructor(url: string) {
     this.url = url;
     FakeEventSource.instances.push(this);
   }
   close() {
     this.closed = true;
+  }
+  addEventListener(type: string, listener: EventListener) {
+    const listeners = this.listeners.get(type) ?? new Set<EventListener>();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+  removeEventListener(type: string, listener: EventListener) {
+    this.listeners.get(type)?.delete(listener);
+  }
+  emit(type: string, data: Record<string, unknown> = {}) {
+    const event = { data: JSON.stringify(data) } as MessageEvent;
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
+    }
   }
   static last(): FakeEventSource {
     return FakeEventSource.instances[FakeEventSource.instances.length - 1]!;
@@ -143,6 +159,23 @@ describe("mergeSpinIntoOnAir", () => {
     expect(next.items[0]!.now.mbid).toBeNull();
   });
 
+  it("never counts down from a duration-bearing SSE receipt timestamp", () => {
+    const prev = onAir(item("kutx"));
+    const next = mergeSpinIntoOnAir(prev, pushEvent({ durationMs: 180_000 }))!;
+    const pushed = next.items[0]!.now;
+    expect(pushed).toMatchObject({
+      timestampKind: "receipt",
+      timingReason: "receipt_only",
+      timingUncertaintyMs: null,
+      estimatedRemainingMs: null,
+      timingConfidence: "unknown",
+    });
+    expect(deriveNextChange(pushed).state).toBe("unknown");
+    expect(deriveNextChange(pushed).label).toBe(
+      "No station start time to count from",
+    );
+  });
+
   it("returns the previous object untouched for a same-track event (idempotent)", () => {
     const prev = onAir(item("kutx"));
     const once = mergeSpinIntoOnAir(prev, pushEvent())!;
@@ -186,8 +219,10 @@ describe("now-playing stream manager", () => {
     const health: boolean[] = [];
     subscribeStreamHealth((h) => health.push(h));
 
-    // Open → healthy.
+    // Socket-open alone is not authoritative; replay must finish first.
     act(() => FakeEventSource.last().onopen?.());
+    expect(getStreamHealthy()).toBe(false);
+    act(() => FakeEventSource.last().emit("stream-ready", { cursor: 1 }));
     expect(getStreamHealthy()).toBe(true);
 
     // Repeated failures → degraded after the threshold, with backoff retries.
@@ -197,8 +232,9 @@ describe("now-playing stream manager", () => {
     }
     expect(getStreamHealthy()).toBe(false);
     expect(health).toEqual([true, false]);
-    // A later successful open restores health and resets the failure count.
+    // A later successful replay restores health and resets the failure count.
     FakeEventSource.last().onopen?.();
+    FakeEventSource.last().emit("stream-ready", { cursor: 2 });
     expect(getStreamHealthy()).toBe(true);
   });
 });

@@ -399,6 +399,11 @@ async function buildNpBase(dateFilter: string | null, includeModePools = false):
       playedAt: spinsTable.playedAt,
       // Rows predating the observed_at column fall back to created_at.
       observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
+      createdAt: spinsTable.createdAt,
+      timingKind: spinsTable.timingKind,
+      timingReason: spinsTable.timingReason,
+      timingUncertaintyMs: spinsTable.timingUncertaintyMs,
+      sourceStartedAt: spinsTable.sourceStartedAt,
       mbid: recordingsTable.mbid,
       title: recordingsTable.title,
       artist: recordingsTable.artist,
@@ -1179,6 +1184,11 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
       playedAt: spinsTable.playedAt,
       // Rows predating the observed_at column fall back to created_at.
       observedAt: sql<Date>`coalesce(${spinsTable.observedAt}, ${spinsTable.createdAt})`.mapWith(spinsTable.createdAt),
+      createdAt: spinsTable.createdAt,
+      timingKind: spinsTable.timingKind,
+      timingReason: spinsTable.timingReason,
+      timingUncertaintyMs: spinsTable.timingUncertaintyMs,
+      sourceStartedAt: spinsTable.sourceStartedAt,
       mbid: recordingsTable.mbid,
       title: recordingsTable.title,
       artist: recordingsTable.artist,
@@ -1505,8 +1515,7 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
     captureEndedAt: result.clipEndedAt,
     captureMidpointAt: result.clipMidpointAt,
   });
-  const offsetCapturedAt =
-    fingerprintTiming.captureMidpointAt ?? clipEndedAt;
+  const offsetCapturedAt = clipEndedAt;
 
   const logged = await logSpinIfChanged(
     station,
@@ -1514,9 +1523,8 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
       rawArtist: match.artist,
       rawTitle: match.title,
       ...(match.isrc ? { isrc: match.isrc } : {}),
-      // Preserve the provider's position signal against the original capture
-      // clock. The midpoint avoids pretending the recognizer's network return
-      // time (or one arbitrary edge of the sample) is the audible instant.
+      // ACR defines play_offset_ms at the end of the recognized clip. Anchor
+      // it to capture end, never the later recognizer response or midpoint.
       playOffsetMs: match.playOffsetMs,
       offsetCapturedAt,
       // Play offset places the spin where the song actually started.

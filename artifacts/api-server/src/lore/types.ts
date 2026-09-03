@@ -24,8 +24,13 @@ export interface NowPlayingRaw {
    * clip was, per the provider. Only fingerprint-derived reports carry it.
    */
   playOffsetMs?: number;
-  /** Capture midpoint for the fingerprint offset (pairs with playOffsetMs). */
+  /** Capture end for the fingerprint offset (pairs with playOffsetMs). */
   offsetCapturedAt?: Date;
+  /**
+   * Explicitly marks a caller-supplied start as inferred. Ordinary `playedAt`
+   * values are station-declared; receipt-only observations omit it.
+   */
+  timingKind?: "inferred";
   /** Show/DJ attribution, when the source exposes program metadata (e.g. NTS). */
   show?: ShowAttribution;
 }

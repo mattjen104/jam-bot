@@ -38,6 +38,7 @@ import {
   isUsableDuration,
 } from "./duration-evidence.js";
 import { recordBoundaryTiming } from "./live-timing-health.js";
+import { timingFromRaw } from "./timing.js";
 
 export {
   RESOLUTION_CACHE_VERSION,
@@ -666,6 +667,8 @@ async function persistSpin(args: {
   preserveExistingMetadata?: boolean;
 }): Promise<{ inserted: boolean; artworkUrl: string | null; spinId: number | null }> {
   const { station, resolution: r, raw, showId, source, citation } = args;
+  const observedAt = new Date();
+  const timing = timingFromRaw(raw);
   let artworkUrl: string | null = null;
 
   if (r.mbid) {
@@ -695,14 +698,18 @@ async function persistSpin(args: {
       externalId: raw.externalId ?? null,
       citation: citation ?? raw.citationUrl ?? null,
       confidence: r.confidence,
-      ...(raw.playedAt ? { playedAt: raw.playedAt } : {}),
+      playedAt: raw.playedAt ?? observedAt,
       // Fingerprint position signal — only ACR-derived spins carry it.
       ...(raw.playOffsetMs != null ? { playOffsetMs: raw.playOffsetMs } : {}),
       ...(raw.offsetCapturedAt ? { offsetCapturedAt: raw.offsetCapturedAt } : {}),
       // Observation time is ALWAYS "now" — when Lore received the metadata —
       // even for history-feed items whose playedAt is hours old. Freshness
       // classification keys off this, never off playedAt.
-      observedAt: new Date(),
+      observedAt,
+      timingKind: timing.timestampKind,
+      timingReason: timing.timingReason,
+      timingUncertaintyMs: timing.timingUncertaintyMs,
+      sourceStartedAt: timing.sourceStartedAt,
     })
     .onConflictDoNothing({
       target: [spinsTable.stationId, spinsTable.externalId],
@@ -1139,6 +1146,7 @@ async function logSpinIfChangedInner(
         playOffsetMs: spinsTable.playOffsetMs,
         offsetCapturedAt: spinsTable.offsetCapturedAt,
         source: spinsTable.source,
+        timingKind: spinsTable.timingKind,
       })
       .from(spinsTable)
       .where(eq(spinsTable.stationId, station.id))
@@ -1157,9 +1165,30 @@ async function logSpinIfChangedInner(
       last.rawTitle &&
       sig(last.rawArtist, last.rawTitle) === candidateSig
     ) {
+      const candidateTiming = timingFromRaw(np);
+      const timingRank = (kind: string | null | undefined) =>
+        kind === "fingerprint" ? 4
+          : kind === "source" ? 3
+            : kind === "inferred" || kind == null ? 2
+              : 1;
+      const refreshTiming =
+        timingRank(candidateTiming.timestampKind) >= timingRank(last.timingKind);
       await db
         .update(spinsTable)
-        .set({ observedAt: new Date() })
+        .set({
+          observedAt: new Date(),
+          ...(refreshTiming
+            ? {
+                timingKind: candidateTiming.timestampKind,
+                timingReason: candidateTiming.timingReason,
+                timingUncertaintyMs: candidateTiming.timingUncertaintyMs,
+                sourceStartedAt: candidateTiming.sourceStartedAt,
+                ...(np.playedAt ? { playedAt: np.playedAt } : {}),
+                ...(np.playOffsetMs != null ? { playOffsetMs: np.playOffsetMs } : {}),
+                ...(np.offsetCapturedAt ? { offsetCapturedAt: np.offsetCapturedAt } : {}),
+              }
+            : {}),
+        })
         .where(eq(spinsTable.id, last.id));
       return false;
     }

@@ -216,6 +216,8 @@ export * from "./nowPlaying";
 export * from "./nowPlayingConfidence";
 export * from "./nowPlayingFreshness";
 export * from "./nowPlayingRecording";
+export * from "./nowPlayingTimestampKind";
+export * from "./nowPlayingTimingReason";
 export * from "./oEmbed";
 export * from "./overlapRunItem";
 export * from "./overlapRunItemShow";

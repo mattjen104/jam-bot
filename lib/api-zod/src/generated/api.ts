@@ -506,6 +506,7 @@ export const ListStationsAtDateParams = zod.object({
     .describe("Calendar day in YYYY-MM-DD format (UTC)."),
 });
 
+export const listStationsAtDateResponseItemsItemNowPlayingOneTimingUncertaintyMsMin = 0;
 export const ListStationsAtDateResponse = zod.object({
   items: zod.array(
     zod
@@ -537,6 +538,44 @@ export const ListStationsAtDateResponse = zod.object({
                   .optional()
                   .describe(
                     "When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade.",
+                  ),
+                persistedAt: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "When Lore committed the spin row. Distinct from the station's declared start and Lore's observation time.",
+                  ),
+                sourceStartedAt: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Track start declared by the station itself. Null for fingerprint, inferred, receipt-only, and legacy timing.",
+                  ),
+                timestampKind: zod
+                  .enum(["source", "fingerprint", "inferred", "receipt"])
+                  .optional()
+                  .describe(
+                    "Semantics of the position timestamp used for live timing.",
+                  ),
+                timingReason: zod
+                  .enum([
+                    "station_declared_start",
+                    "fingerprint_play_offset",
+                    "inferred_start",
+                    "receipt_only",
+                  ])
+                  .optional()
+                  .describe(
+                    "Human-readable-machine-stable reason for timestampKind.",
+                  ),
+                timingUncertaintyMs: zod
+                  .number()
+                  .min(
+                    listStationsAtDateResponseItemsItemNowPlayingOneTimingUncertaintyMsMin,
+                  )
+                  .nullish()
+                  .describe(
+                    "Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.",
                   ),
                 freshness: zod
                   .enum(["fresh", "aging", "stale"])
@@ -677,6 +716,7 @@ export const ListStationsNowPlayingQueryParams = zod.object({
     ),
 });
 
+export const listStationsNowPlayingResponseItemsItemNowPlayingOneTimingUncertaintyMsMin = 0;
 export const ListStationsNowPlayingResponse = zod.object({
   items: zod.array(
     zod
@@ -708,6 +748,44 @@ export const ListStationsNowPlayingResponse = zod.object({
                   .optional()
                   .describe(
                     "When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade.",
+                  ),
+                persistedAt: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "When Lore committed the spin row. Distinct from the station's declared start and Lore's observation time.",
+                  ),
+                sourceStartedAt: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Track start declared by the station itself. Null for fingerprint, inferred, receipt-only, and legacy timing.",
+                  ),
+                timestampKind: zod
+                  .enum(["source", "fingerprint", "inferred", "receipt"])
+                  .optional()
+                  .describe(
+                    "Semantics of the position timestamp used for live timing.",
+                  ),
+                timingReason: zod
+                  .enum([
+                    "station_declared_start",
+                    "fingerprint_play_offset",
+                    "inferred_start",
+                    "receipt_only",
+                  ])
+                  .optional()
+                  .describe(
+                    "Human-readable-machine-stable reason for timestampKind.",
+                  ),
+                timingUncertaintyMs: zod
+                  .number()
+                  .min(
+                    listStationsNowPlayingResponseItemsItemNowPlayingOneTimingUncertaintyMsMin,
+                  )
+                  .nullish()
+                  .describe(
+                    "Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.",
                   ),
                 freshness: zod
                   .enum(["fresh", "aging", "stale"])
@@ -842,6 +920,7 @@ export const GetStationNowPlayingParams = zod.object({
   slug: zod.coerce.string().min(1),
 });
 
+export const getStationNowPlayingResponseNowPlayingOneTimingUncertaintyMsMin = 0;
 export const getStationNowPlayingResponseStationPlaybackCandidatesMax = 4;
 
 export const GetStationNowPlayingResponse = zod.object({
@@ -994,6 +1073,44 @@ export const GetStationNowPlayingResponse = zod.object({
             .optional()
             .describe(
               "When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade.",
+            ),
+          persistedAt: zod
+            .string()
+            .optional()
+            .describe(
+              "When Lore committed the spin row. Distinct from the station's declared start and Lore's observation time.",
+            ),
+          sourceStartedAt: zod
+            .string()
+            .nullish()
+            .describe(
+              "Track start declared by the station itself. Null for fingerprint, inferred, receipt-only, and legacy timing.",
+            ),
+          timestampKind: zod
+            .enum(["source", "fingerprint", "inferred", "receipt"])
+            .optional()
+            .describe(
+              "Semantics of the position timestamp used for live timing.",
+            ),
+          timingReason: zod
+            .enum([
+              "station_declared_start",
+              "fingerprint_play_offset",
+              "inferred_start",
+              "receipt_only",
+            ])
+            .optional()
+            .describe(
+              "Human-readable-machine-stable reason for timestampKind.",
+            ),
+          timingUncertaintyMs: zod
+            .number()
+            .min(
+              getStationNowPlayingResponseNowPlayingOneTimingUncertaintyMsMin,
+            )
+            .nullish()
+            .describe(
+              "Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.",
             ),
           freshness: zod
             .enum(["fresh", "aging", "stale"])

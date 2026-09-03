@@ -52,4 +52,23 @@ describe("catchNextSong", () => {
     expect(play).toHaveBeenCalledOnce();
     expect(message).toMatch(/uncertain/i);
   });
+
+  it("does not wait on a receipt-only timestamp", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      now: {
+        mbid: "one",
+        artist: "A",
+        title: "One",
+        likelyExpiring: true,
+        estimatedRemainingMs: 4_000,
+        timestampKind: "receipt",
+        timingConfidence: "unknown",
+      },
+    }))));
+    const play = vi.fn();
+    const wait = vi.fn(async () => undefined);
+    await catchNextSong(dialStation, play, wait);
+    expect(wait).not.toHaveBeenCalled();
+    expect(play).toHaveBeenCalledOnce();
+  });
 });

@@ -664,6 +664,12 @@ export const spinsTable = pgTable(
     playOffsetMs: integer("play_offset_ms"),
     /** When the fingerprint clip was captured (pairs with playOffsetMs). */
     offsetCapturedAt: timestamp("offset_captured_at"),
+    /** Explicit timing provenance for live countdowns. Nullable for legacy rows. */
+    timingKind: text("timing_kind"),
+    timingReason: text("timing_reason"),
+    timingUncertaintyMs: integer("timing_uncertainty_ms"),
+    /** Station-declared start; null for inferred/fingerprint/receipt timing. */
+    sourceStartedAt: timestamp("source_started_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [

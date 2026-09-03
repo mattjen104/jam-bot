@@ -91,6 +91,15 @@ describe("expiryRecheckDelayMs", () => {
       expiryRecheckDelayMs({ ...NOW_BASE, likelyExpiring: true, estimatedRemainingMs: 500_000 }),
     ).toBe(EXPIRY_RECHECK_MAX_MS);
   });
+
+  it("waits through the timing uncertainty before revalidating", () => {
+    expect(expiryRecheckDelayMs({
+      ...NOW_BASE,
+      likelyExpiring: true,
+      estimatedRemainingMs: 8_000,
+      timingUncertaintyMs: 5_000,
+    })).toBe(8_000 + 5_000 + EXPIRY_RECHECK_PAD_MS);
+  });
 });
 
 describe("useStationFastLane", () => {

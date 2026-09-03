@@ -40,6 +40,11 @@ export interface FastLaneNow {
   releaseYear: number | null;
   playedAt: string;
   observedAt: string;
+  persistedAt?: string;
+  sourceStartedAt?: string | null;
+  timestampKind?: "source" | "fingerprint" | "inferred" | "receipt";
+  timingReason?: "station_declared_start" | "fingerprint_play_offset" | "inferred_start" | "receipt_only";
+  timingUncertaintyMs?: number | null;
   freshness: "fresh" | "aging" | "stale";
   resolved: boolean;
   /**
@@ -51,6 +56,7 @@ export interface FastLaneNow {
   estimatedRemainingMs?: number | null;
   /** True when the track is inside the server's likely-expiring window. */
   likelyExpiring?: boolean;
+  timingConfidence?: "trusted" | "estimated" | "unknown";
 }
 
 export interface FastLaneResponse {
@@ -92,7 +98,11 @@ export function expiryRecheckDelayMs(now: FastLaneNow | null): number | null {
   if (!now?.likelyExpiring) return null;
   const remaining = now.estimatedRemainingMs;
   if (remaining == null || remaining < 0) return null;
-  return Math.min(remaining + EXPIRY_RECHECK_PAD_MS, EXPIRY_RECHECK_MAX_MS);
+  const uncertainty = Math.max(0, now.timingUncertaintyMs ?? 0);
+  return Math.min(
+    remaining + uncertainty + EXPIRY_RECHECK_PAD_MS,
+    EXPIRY_RECHECK_MAX_MS,
+  );
 }
 
 /**

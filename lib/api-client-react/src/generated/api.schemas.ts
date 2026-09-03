@@ -979,6 +979,11 @@ export const NowPlayingConfidence = {
 } as const;
 
 /**
+ * Semantics of the position timestamp used for live timing.
+ */
+export type NowPlayingTimestampKind =
+  (typeof NowPlayingTimestampKind)[keyof typeof NowPlayingTimestampKind];
+/**
  * Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.
  */
 export type NowPlayingFreshness =
@@ -1030,6 +1035,23 @@ export interface NowPlaying {
   playedAt: string;
   /** When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade. */
   observedAt?: string;
+  /** When Lore committed the spin row. Distinct from the station's declared start and Lore's observation time. */
+  persistedAt?: string;
+  /**
+   * Track start declared by the station itself. Null for fingerprint, inferred, receipt-only, and legacy timing.
+   * @nullable
+   */
+  sourceStartedAt?: string | null;
+  /** Semantics of the position timestamp used for live timing. */
+  timestampKind?: NowPlayingTimestampKind;
+  /** Human-readable-machine-stable reason for timestampKind. */
+  timingReason?: NowPlayingTimingReason;
+  /**
+   * Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.
+   * @minimum 0
+   * @nullable
+   */
+  timingUncertaintyMs?: number | null;
   /** Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale. */
   freshness?: NowPlayingFreshness;
   /**
@@ -4754,6 +4776,13 @@ export type GetRecordingSongExploder200 = {
   anchors: GetRecordingSongExploder200AnchorsItem[];
 };
 
+export const NowPlayingTimingReason = {
+  station_declared_start: "station_declared_start",
+  fingerprint_play_offset: "fingerprint_play_offset",
+  inferred_start: "inferred_start",
+  receipt_only: "receipt_only",
+} as const;
+
 export const RecordingLyricsStatus = {
   lyrics_found: "lyrics_found",
   instrumental: "instrumental",
@@ -4761,3 +4790,16 @@ export const RecordingLyricsStatus = {
   transient_failure: "transient_failure",
   not_checked: "not_checked",
 } as const;
+
+export const NowPlayingTimestampKind = {
+  source: "source",
+  fingerprint: "fingerprint",
+  inferred: "inferred",
+  receipt: "receipt",
+} as const;
+
+/**
+ * Human-readable-machine-stable reason for timestampKind.
+ */
+export type NowPlayingTimingReason =
+  (typeof NowPlayingTimingReason)[keyof typeof NowPlayingTimingReason];

@@ -32,6 +32,8 @@ export interface ExpiryEstimate {
   likelyExpiring: boolean;
   /** Which position signal produced the estimate. */
   positionSource: "fingerprint" | "played_at";
+  /** Bounded error inherited from the timing signal. */
+  uncertaintyMs: number;
 }
 
 export interface ExpiryInputs {
@@ -41,8 +43,12 @@ export interface ExpiryInputs {
   playedAt: Date | null | undefined;
   /** ACR fingerprint play offset (ms into the song at capture time). */
   playOffsetMs?: number | null;
-  /** When the fingerprint clip was captured. */
+  /** End of the fingerprint clip; ACR's offset applies at this instant. */
   offsetCapturedAt?: Date | null;
+  /** Explicit semantics for playedAt. Receipt-only timestamps are not starts. */
+  timestampKind?: "source" | "fingerprint" | "inferred" | "receipt";
+  /** Bounded start-time error. Null means no trustworthy estimate exists. */
+  timingUncertaintyMs?: number | null;
   /** Clock override for tests; defaults to the current time. */
   now?: Date;
 }
@@ -53,9 +59,17 @@ export interface ExpiryInputs {
  * wildly exceeding duration — the spin is simply old, not "expiring").
  */
 export function estimateExpiry(inputs: ExpiryInputs): ExpiryEstimate | null {
-  const { durationMs, playedAt, playOffsetMs, offsetCapturedAt } = inputs;
+  const {
+    durationMs,
+    playedAt,
+    playOffsetMs,
+    offsetCapturedAt,
+    timestampKind,
+    timingUncertaintyMs,
+  } = inputs;
   const now = inputs.now ?? new Date();
   if (durationMs == null || durationMs <= 0) return null;
+  if (timestampKind === "receipt" || timingUncertaintyMs === null) return null;
 
   let elapsedMs: number | null = null;
   let positionSource: ExpiryEstimate["positionSource"] | null = null;
@@ -75,6 +89,7 @@ export function estimateExpiry(inputs: ExpiryInputs): ExpiryEstimate | null {
   }
 
   if (elapsedMs == null) {
+    if (timestampKind === "fingerprint") return null;
     if (!(playedAt instanceof Date) || Number.isNaN(playedAt.getTime())) return null;
     const sinceStart = now.getTime() - playedAt.getTime();
     if (sinceStart < 0) return null;
@@ -94,5 +109,6 @@ export function estimateExpiry(inputs: ExpiryInputs): ExpiryEstimate | null {
     remainingMs,
     likelyExpiring: remainingMs < LIKELY_EXPIRING_THRESHOLD_MS,
     positionSource: positionSource!,
+    uncertaintyMs: Math.max(0, timingUncertaintyMs ?? 0),
   };
 }

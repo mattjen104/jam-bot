@@ -8,6 +8,8 @@
 import type { NowPlayingConfidence } from "./nowPlayingConfidence";
 import type { NowPlayingFreshness } from "./nowPlayingFreshness";
 import type { NowPlayingRecording } from "./nowPlayingRecording";
+import type { NowPlayingTimestampKind } from "./nowPlayingTimestampKind";
+import type { NowPlayingTimingReason } from "./nowPlayingTimingReason";
 import type { ShowRef } from "./showRef";
 
 /**
@@ -27,6 +29,23 @@ export interface NowPlaying {
   playedAt: string;
   /** When Lore actually received this metadata (ingestion time), as opposed to `playedAt` (station-reported start time). Optional — older cached payloads may omit it; clients must degrade. */
   observedAt?: string;
+  /** When Lore committed the spin row. Distinct from the station's declared start and Lore's observation time. */
+  persistedAt?: string;
+  /**
+   * Track start declared by the station itself. Null for fingerprint, inferred, receipt-only, and legacy timing.
+   * @nullable
+   */
+  sourceStartedAt?: string | null;
+  /** Semantics of the position timestamp used for live timing. */
+  timestampKind?: NowPlayingTimestampKind;
+  /** Human-readable-machine-stable reason for timestampKind. */
+  timingReason?: NowPlayingTimingReason;
+  /**
+   * Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.
+   * @minimum 0
+   * @nullable
+   */
+  timingUncertaintyMs?: number | null;
   /** Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale. */
   freshness?: NowPlayingFreshness;
   /**
