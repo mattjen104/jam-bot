@@ -5542,6 +5542,27 @@ components:
           description: >-
             Bounded start-time uncertainty. Null means Lore has no useful
             position bound and clients must omit the countdown.
+        serverTime:
+          type: string
+          description: >-
+            Server clock at response construction, used to align a ticking
+            countdown without trusting the browser clock as the source.
+        estimatedRemainingMs:
+          type: ["integer", "null"]
+          minimum: 0
+          description: >-
+            Advisory milliseconds until the current track likely changes.
+            Null when duration or trustworthy position evidence is unavailable.
+        likelyExpiring:
+          type: boolean
+          description: >-
+            True when the advisory estimate is inside the near-boundary window.
+        timingConfidence:
+          type: string
+          enum: [trusted, estimated, unknown]
+          description: >-
+            Confidence tier for timing presentation. Clients must still omit a
+            countdown when estimatedRemainingMs is null.
         freshness:
           type: string
           enum: [fresh, aging, stale]

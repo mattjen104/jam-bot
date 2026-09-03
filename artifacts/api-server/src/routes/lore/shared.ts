@@ -10,7 +10,8 @@ import { eligibleDjName } from "@workspace/lore-attribution";
 import { isRelayAllowed, relayUrlPath } from "../../lore/stream-relay.js";
 import { playbackCandidatesForStation } from "../../lore/playback-candidates.js";
 import { classifyFreshness } from "../../lore/freshness.js";
-import { timingFromStoredRow } from "../../lore/timing.js";
+import { estimateExpiry } from "../../lore/expiry.js";
+import { timingConfidence, timingFromStoredRow } from "../../lore/timing.js";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
 
@@ -350,6 +351,9 @@ export function toNowPlaying(row: {
   timingReason?: string | null;
   timingUncertaintyMs?: number | null;
   sourceStartedAt?: Date | null;
+  durationMs?: number | null;
+  playOffsetMs?: number | null;
+  offsetCapturedAt?: Date | null;
   createdAt?: Date | null;
   showName: string | null;
   showDj: string | null;
@@ -362,7 +366,17 @@ export function toNowPlaying(row: {
   eventId?: number;
   stationVersion?: number;
 }) {
+  const now = new Date();
   const timing = timingFromStoredRow(row);
+  const expiry = estimateExpiry({
+    durationMs: row.durationMs,
+    playedAt: row.playedAt,
+    playOffsetMs: row.playOffsetMs,
+    offsetCapturedAt: row.offsetCapturedAt,
+    timestampKind: timing.timestampKind,
+    timingUncertaintyMs: timing.timingUncertaintyMs,
+    now,
+  });
   return {
     spinId: row.spinId ?? null,
     rawArtist: row.rawArtist ?? "",
@@ -375,6 +389,10 @@ export function toNowPlaying(row: {
     timingReason: timing.timingReason,
     timingUncertaintyMs: timing.timingUncertaintyMs,
     sourceStartedAt: timing.sourceStartedAt?.toISOString() ?? null,
+    serverTime: now.toISOString(),
+    estimatedRemainingMs: expiry?.remainingMs ?? null,
+    likelyExpiring: expiry?.likelyExpiring ?? false,
+    timingConfidence: timingConfidence(timing),
     ...(row.observedAt
       ? {
           observedAt: row.observedAt.toISOString(),

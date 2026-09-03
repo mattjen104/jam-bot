@@ -33,6 +33,7 @@ import {
   type StationRecentSpin,
   type StationsArtistFrequencyItem,
 } from "@workspace/api-client-react";
+import { useWpOnAir, type WpNow } from "../webplayer/hooks";
 import {
   subscribeSpinStream,
   subscribeStreamCatchUp,
@@ -1118,6 +1119,10 @@ export function useDialData(
       },
     },
   );
+  // The compact home already shares this bounded current-row snapshot with the
+  // player. Use it as a metadata/timing fallback when the heavier dial pulse is
+  // still serving its stations-only cold-start partial under DB contention.
+  const { data: onAirData } = useWpOnAir();
 
   // Replay-window expiry and browser resume need the same immediate REST
   // backstop as the webplayer read model. On a server epoch change, discard
@@ -1339,8 +1344,18 @@ export function useDialData(
         now - new Date(playedAt).getTime() <= LIVE_PULSE_WINDOW_MS;
       m.set(item.slug, isRecent);
     }
+    for (const item of onAirData?.items ?? []) {
+      if (m.get(item.station.slug)) continue;
+      const playedAt = Date.parse(item.now.playedAt);
+      const isRecent =
+        item.now.freshness !== "stale" &&
+        Number.isFinite(playedAt) &&
+        now - playedAt >= 0 &&
+        now - playedAt <= LIVE_PULSE_WINDOW_MS;
+      if (isRecent) m.set(item.station.slug, true);
+    }
     return m;
-  }, [liveData]);
+  }, [liveData, onAirData]);
 
   // ── live now-playing track per station (for live block currentTrack) ───────
   // REST poll data is the baseline; SSE overrides (fired the moment a spin is
@@ -1411,8 +1426,41 @@ export function useDialData(
         clockUncertaintyMs: (np as { clockUncertaintyMs?: number | null }).clockUncertaintyMs,
       });
     }
+    for (const item of onAirData?.items ?? []) {
+      if (m.has(item.station.slug) || item.now.freshness === "stale") continue;
+      const np: WpNow = item.now;
+      if (!np.title.trim() && !np.artist.trim()) continue;
+      const sourcePlayedAt = np.playedAt;
+      if (Number.isNaN(Date.parse(sourcePlayedAt))) continue;
+      m.set(item.station.slug, {
+        mbid: np.mbid,
+        artistMbid: null,
+        releaseGroupMbid: null,
+        title: np.title,
+        artist: np.artist,
+        playedAt: sourcePlayedAt,
+        sourcePlayedAt,
+        isLibraryHit: false,
+        isArtistHit: false,
+        isFirstSpin: false,
+        releaseYear: null,
+        releaseDate: null,
+        ageTier: null,
+        resolving: np.resolving,
+        eventId: np.eventId,
+        stationVersion: np.stationVersion,
+        freshness: np.freshness,
+        estimatedRemainingMs: np.estimatedRemainingMs,
+        timingConfidence: np.timingConfidence,
+        serverTime: np.serverTime,
+        timestampKind: np.timestampKind,
+        timingReason: np.timingReason,
+        timingUncertaintyMs: np.timingUncertaintyMs,
+        clockUncertaintyMs: np.clockUncertaintyMs,
+      });
+    }
     return m;
-  }, [liveData]);
+  }, [liveData, onAirData]);
 
   const nowPlayingBySlug = useMemo((): Map<string, DialSpin> => {
     const m = new Map<string, DialSpin>();

@@ -508,6 +508,8 @@ export const ListStationsAtDateParams = zod.object({
 
 export const listStationsAtDateResponseItemsItemNowPlayingOneTimingUncertaintyMsMin = 0;
 
+export const listStationsAtDateResponseItemsItemNowPlayingOneEstimatedRemainingMsMin = 0;
+
 export const ListStationsAtDateResponse = zod.object({
   items: zod.array(
     zod
@@ -577,6 +579,33 @@ export const ListStationsAtDateResponse = zod.object({
                   .nullish()
                   .describe(
                     "Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.",
+                  ),
+                serverTime: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "Server clock at response construction, used to align a ticking countdown without trusting the browser clock as the source.",
+                  ),
+                estimatedRemainingMs: zod
+                  .number()
+                  .min(
+                    listStationsAtDateResponseItemsItemNowPlayingOneEstimatedRemainingMsMin,
+                  )
+                  .nullish()
+                  .describe(
+                    "Advisory milliseconds until the current track likely changes. Null when duration or trustworthy position evidence is unavailable.",
+                  ),
+                likelyExpiring: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    "True when the advisory estimate is inside the near-boundary window.",
+                  ),
+                timingConfidence: zod
+                  .enum(["trusted", "estimated", "unknown"])
+                  .optional()
+                  .describe(
+                    "Confidence tier for timing presentation. Clients must still omit a countdown when estimatedRemainingMs is null.",
                   ),
                 freshness: zod
                   .enum(["fresh", "aging", "stale"])
@@ -719,6 +748,8 @@ export const ListStationsNowPlayingQueryParams = zod.object({
 
 export const listStationsNowPlayingResponseItemsItemNowPlayingOneTimingUncertaintyMsMin = 0;
 
+export const listStationsNowPlayingResponseItemsItemNowPlayingOneEstimatedRemainingMsMin = 0;
+
 export const ListStationsNowPlayingResponse = zod.object({
   items: zod.array(
     zod
@@ -788,6 +819,33 @@ export const ListStationsNowPlayingResponse = zod.object({
                   .nullish()
                   .describe(
                     "Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.",
+                  ),
+                serverTime: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "Server clock at response construction, used to align a ticking countdown without trusting the browser clock as the source.",
+                  ),
+                estimatedRemainingMs: zod
+                  .number()
+                  .min(
+                    listStationsNowPlayingResponseItemsItemNowPlayingOneEstimatedRemainingMsMin,
+                  )
+                  .nullish()
+                  .describe(
+                    "Advisory milliseconds until the current track likely changes. Null when duration or trustworthy position evidence is unavailable.",
+                  ),
+                likelyExpiring: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    "True when the advisory estimate is inside the near-boundary window.",
+                  ),
+                timingConfidence: zod
+                  .enum(["trusted", "estimated", "unknown"])
+                  .optional()
+                  .describe(
+                    "Confidence tier for timing presentation. Clients must still omit a countdown when estimatedRemainingMs is null.",
                   ),
                 freshness: zod
                   .enum(["fresh", "aging", "stale"])
@@ -925,6 +983,8 @@ export const GetStationNowPlayingParams = zod.object({
 export const getStationNowPlayingResponseStationPlaybackCandidatesMax = 4;
 
 export const getStationNowPlayingResponseNowPlayingOneTimingUncertaintyMsMin = 0;
+
+export const getStationNowPlayingResponseNowPlayingOneEstimatedRemainingMsMin = 0;
 
 export const GetStationNowPlayingResponse = zod.object({
   station: zod
@@ -1114,6 +1174,33 @@ export const GetStationNowPlayingResponse = zod.object({
             .nullish()
             .describe(
               "Bounded start-time uncertainty. Null means Lore has no useful position bound and clients must omit the countdown.",
+            ),
+          serverTime: zod
+            .string()
+            .optional()
+            .describe(
+              "Server clock at response construction, used to align a ticking countdown without trusting the browser clock as the source.",
+            ),
+          estimatedRemainingMs: zod
+            .number()
+            .min(
+              getStationNowPlayingResponseNowPlayingOneEstimatedRemainingMsMin,
+            )
+            .nullish()
+            .describe(
+              "Advisory milliseconds until the current track likely changes. Null when duration or trustworthy position evidence is unavailable.",
+            ),
+          likelyExpiring: zod
+            .boolean()
+            .optional()
+            .describe(
+              "True when the advisory estimate is inside the near-boundary window.",
+            ),
+          timingConfidence: zod
+            .enum(["trusted", "estimated", "unknown"])
+            .optional()
+            .describe(
+              "Confidence tier for timing presentation. Clients must still omit a countdown when estimatedRemainingMs is null.",
             ),
           freshness: zod
             .enum(["fresh", "aging", "stale"])

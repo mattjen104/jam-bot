@@ -1012,6 +1012,18 @@ export const NowPlayingTimingReason = {
 } as const;
 
 /**
+ * Confidence tier for timing presentation. Clients must still omit a countdown when estimatedRemainingMs is null.
+ */
+export type NowPlayingTimingConfidence =
+  (typeof NowPlayingTimingConfidence)[keyof typeof NowPlayingTimingConfidence];
+
+export const NowPlayingTimingConfidence = {
+  trusted: "trusted",
+  estimated: "estimated",
+  unknown: "unknown",
+} as const;
+
+/**
  * Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale.
  */
 export type NowPlayingFreshness =
@@ -1080,6 +1092,18 @@ export interface NowPlaying {
    * @nullable
    */
   timingUncertaintyMs?: number | null;
+  /** Server clock at response construction, used to align a ticking countdown without trusting the browser clock as the source. */
+  serverTime?: string;
+  /**
+   * Advisory milliseconds until the current track likely changes. Null when duration or trustworthy position evidence is unavailable.
+   * @minimum 0
+   * @nullable
+   */
+  estimatedRemainingMs?: number | null;
+  /** True when the advisory estimate is inside the near-boundary window. */
+  likelyExpiring?: boolean;
+  /** Confidence tier for timing presentation. Clients must still omit a countdown when estimatedRemainingMs is null. */
+  timingConfidence?: NowPlayingTimingConfidence;
   /** Server-computed freshness class derived from the source's expected polling cadence and the age since `observedAt`. `stale` items should not be presented as definitively playing right now, and are never counted as confirmed live crossings. Optional — absent means unknown; treat as non-stale. */
   freshness?: NowPlayingFreshness;
   /**
