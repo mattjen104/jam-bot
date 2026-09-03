@@ -2575,6 +2575,133 @@
   color: hsl(var(--foreground));
   border-bottom-color: hsl(var(--foreground));
 }
+
+/* ── Explore orientation ──────────────────────────────────────────────────
+   Explore is a decision surface, not a chronological stream. Keep the
+   orientation layer quiet enough to preserve the Dial's density, but give
+   the listener a clear reason and two real next actions before the rows. */
+.explore-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 24px;
+  padding: 24px var(--dial-lane-pad) 18px;
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+}
+.explore-header__copy {
+  min-width: 0;
+}
+.explore-header__eyebrow,
+.explore-section__description,
+.explore-header__stats {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  line-height: 1.4;
+}
+.explore-header__eyebrow {
+  color: hsl(var(--accent));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.explore-header__title {
+  margin: 4px 0 5px;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-serif);
+  font-size: clamp(1.65rem, 3vw, 2.55rem);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+.explore-header__description {
+  max-width: 42rem;
+  color: hsl(var(--dim));
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-interface);
+  line-height: 1.45;
+}
+.explore-header__controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+.explore-header__action {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--dim));
+  cursor: pointer;
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-small);
+  white-space: nowrap;
+}
+.explore-header__action:hover,
+.explore-header__action[aria-pressed="true"] {
+  border-color: hsl(var(--foreground) / 0.6);
+  color: hsl(var(--foreground));
+}
+.explore-header__action--primary {
+  border-color: hsl(var(--accent) / 0.55);
+  color: hsl(var(--accent));
+}
+.explore-header__stats {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  grid-column: 1 / -1;
+  color: hsl(var(--faint));
+}
+.explore-section {
+  padding-bottom: 8px;
+}
+.explore-section__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 19px var(--dial-lane-pad) 7px;
+}
+.explore-section__title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-interface);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.explore-section__description {
+  margin-top: 3px;
+  color: hsl(var(--faint));
+}
+.explore-section__count {
+  flex: 0 0 auto;
+  color: hsl(var(--faint));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+@media (max-width: 640px) {
+  .explore-header {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 18px 12px 14px;
+  }
+  .explore-header__controls {
+    justify-content: flex-start;
+  }
+  .explore-header__stats {
+    grid-column: auto;
+  }
+  .explore-section__header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
 @media (max-width: 480px) {
   .dial-filter-bar { gap: 6px; padding: 6px 12px; }
   .dial-filter-bar__btn { padding: 2px 2px 1px; }

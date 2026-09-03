@@ -39,7 +39,7 @@ export function adaptiveListeningCopy(state: AdaptiveListeningState): AdaptiveLi
       return {
         eyebrow: "Start with live radio",
         title: "Choose a door into the dial.",
-        description: "A few strong stations are ready now. You can browse the full Feed whenever you want.",
+        description: "A few strong rooms are ready now. Explore the live dial whenever you want.",
       };
     case "importing":
       return {
@@ -63,7 +63,7 @@ export function adaptiveListeningCopy(state: AdaptiveListeningState): AdaptiveLi
       return {
         eyebrow: "Your listening surface",
         title: "Find the next good broadcast.",
-        description: "Recent matches and strong station overlap lead the way; the full Feed holds everything else.",
+        description: "Recent matches and strong station overlap lead the way through Explore.",
       };
   }
 }

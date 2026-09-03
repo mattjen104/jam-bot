@@ -18,6 +18,7 @@ import { StationScanPanel } from "./StationScanPanel";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
+import { ExploreHeader, ExploreSectionHeader } from "./ExploreHeader";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSocialMode } from "../lib/social";
@@ -1594,7 +1595,9 @@ export function DialView() {
   }, []);
   const hiddenModeActive = sleepEnabled;
 
-  // ── Dial lens — Radio | Press exclusive views over the feed surface.
+  // ── Explore views — live radio remains the primary surface. Press and
+  // Shows stay available for the moment as legacy views while their durable
+  // library destination is shaped.
   // Local-first: persisted in localStorage like pins/journal, never on the
   // server. Radio is the default and renders the feed exactly as today; the
   // Radio filter menus stay Radio-only (they render inside the radio branch).
@@ -2842,36 +2845,59 @@ export function DialView() {
       : rows.filter((row) => hasAnyCrossing(row.ds, crossingScope)),
     [radioMode, crossingsLoading, crossingScope],
   );
+  const explorePrimaryCount = radioMode
+    ? sortedRows.length
+    : scopeFilter(zone1Display).length;
+  const exploreTitle = radioMode
+    ? "Good rooms are live now."
+    : explorePrimaryCount > 0
+      ? "Your music is on air."
+      : "Explore the dial.";
+  const exploreDescription = radioMode
+    ? "Choose a station by what is playing now. Scan when you want to move through the dial."
+    : explorePrimaryCount > 0
+      ? "Start with a confirmed crossing, then stay with the broadcast that feels right."
+      : "Your crossings will lead when they appear. Until then, find a good room and listen.";
+
   const feedSection = sortedRows.length > 0 && (
-    <DialFeedLane
-      reasonRows={crossingsLoading && !radioMode ? [] : scopeFilter(zone1Display)}
-      djRows={scopeFilter(djBand)}
-      restRows={scopeFilter(restBand)}
-      popSortDesc={popSortDesc}
-      activeSlug={radio.station?.slug ?? null}
-      samplingSlug={scan.samplingIdx != null ? scanRows[scan.samplingIdx]?.ds.station.slug ?? null : null}
-      scrubTarget={scrubTarget}
-      displayMode={crossingSourceMode}
-      presenceMap={presenceMap}
-      popMap={popMap}
-      seedsLower={seedsLower}
-      artworkUrl={activeArtworkUrl}
-      popLineFor={popLineFor}
-      ovFor={(row, band) => band === "reason"
-        ? (row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings)
-        : band === "dj"
-          ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
-          : row.ds.lifetimeCrossings}
-      onAddArtist={addSeed}
-      onTuneIn={tuneZoneRow}
-      onSetExpand={(_row) => undefined}
-      activeAgeTiers={activeTiers}
-      suppressCrossings={radioMode}
-      crossingScope={crossingScope}
-      onPlay={(row) => { void radio.toggle(row.ds.station); }}
-      playerStatus={radio.status}
-      onStationRemoved={() => { void refetchStations(); }}
-    />
+    <section className="explore-section" aria-labelledby="explore-live-title">
+      <ExploreSectionHeader
+        title={radioMode ? "Good rooms right now" : "Live crossings"}
+        description={radioMode
+          ? "Stations worth entering, ranked by the current broadcast."
+          : "Saved artists and records are playing on these stations."}
+        count={explorePrimaryCount}
+      />
+      <DialFeedLane
+        reasonRows={crossingsLoading && !radioMode ? [] : scopeFilter(zone1Display)}
+        djRows={scopeFilter(djBand)}
+        restRows={scopeFilter(restBand)}
+        popSortDesc={popSortDesc}
+        activeSlug={radio.station?.slug ?? null}
+        samplingSlug={scan.samplingIdx != null ? scanRows[scan.samplingIdx]?.ds.station.slug ?? null : null}
+        scrubTarget={scrubTarget}
+        displayMode={crossingSourceMode}
+        presenceMap={presenceMap}
+        popMap={popMap}
+        seedsLower={seedsLower}
+        artworkUrl={activeArtworkUrl}
+        popLineFor={popLineFor}
+        ovFor={(row, band) => band === "reason"
+          ? (row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings)
+          : band === "dj"
+            ? pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)
+            : row.ds.lifetimeCrossings}
+        onAddArtist={addSeed}
+        onTuneIn={tuneZoneRow}
+        onSetExpand={(_row) => undefined}
+        activeAgeTiers={activeTiers}
+        suppressCrossings={radioMode}
+        crossingScope={crossingScope}
+        onPlay={(row) => { void radio.toggle(row.ds.station); }}
+        playerStatus={radio.status}
+        onStationRemoved={() => { void refetchStations(); }}
+      />
+    </section>
   );
 
   return (
@@ -2939,6 +2965,17 @@ export function DialView() {
             {/* ── Primary tab: "On the Air × Your Music Library" ─────────────────
                 Contains Zone 1 crossing rows + Zone 2 ghost stations as a
                 subsection below. */}
+            {!inContext && (
+              <ExploreHeader
+                title={exploreTitle}
+                description={exploreDescription}
+                liveCount={sortedRows.length}
+                crossingCount={withReason.length}
+                radioMode={radioMode}
+                onOpenScan={() => setScanSessionOpen(true)}
+                onToggleCrossings={() => setRadioMode(!radioMode)}
+              />
+            )}
             {/* Tuned context must never wait on the crossings query: the
                 summary sentence and rail render as soon as the context is
                 open (they degrade gracefully while data loads), so the gate

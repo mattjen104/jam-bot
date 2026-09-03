@@ -151,3 +151,4 @@
 - [Station history source separation](station-history-source-separation.md) — published archives may differ from live metadata; configure history independently and never share their cursors.
 - [Ambient is music-only](ambient-music-only.md) — Ambient means musical ambient/drone/atmospheric radio; sleep aids, nature sounds, and white noise stay soft-hidden and blocked from discovery.
 - [Lore station culling](lore-station-culling.md) — cull by editorial evidence: soft-hide algorithmic brands and redundant RB copies; never auto-cull human-curated categories for metadata gaps alone.
+- [Explore surface boundary](explore-surface-boundary.md) — Explore proposes the next live broadcast; durable Press, Shows, and full history belong in Stack/Library.

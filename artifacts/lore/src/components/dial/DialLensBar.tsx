@@ -1,5 +1,5 @@
 /**
- * DialLensBar — the Dial's lens toggle: Radio | Press | Shows | Scan.
+ * DialLensBar — Explore's view toggle: Radio | Press | Shows | Scan.
  *
  * Lenses are exclusive views over the same feed surface. Same pipe-separated
  * button style as the filter bar, same aria-pressed semantics. Unlike the
@@ -38,7 +38,7 @@ export function DialLensBar({ lens, onSetLens, className, radioMode = false, onO
     <div
       className={`dial-filter-bar dial-lens-bar${className ? ` ${className}` : ""}`}
       role="group"
-      aria-label="Dial lens"
+      aria-label="Explore view"
     >
       <div className="dial-filter-bar__group">
         {LENS_LABELS.map(({ lens: l, label, title }, i) => (

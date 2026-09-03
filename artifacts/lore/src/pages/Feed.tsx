@@ -1,6 +1,6 @@
 import { DialView } from "../components/DialView";
 
-/** /feed — the full scrollable Dial (the pre-split front door). */
+/** /feed — Explore: live crossings and rooms worth entering now. */
 export default function Feed() {
   return <DialView />;
 }
