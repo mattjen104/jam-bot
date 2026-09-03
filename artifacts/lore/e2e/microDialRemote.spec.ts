@@ -583,6 +583,100 @@ test.describe("Adaptive Now — listening jobs in a real browser", () => {
 });
 
 test.describe("touch press-to-play warmup", () => {
+  test("station picker stays silent until a touch commits a station", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installRoutes(page);
+    await installAudioProbe(page);
+    let liveStreamRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().includes("stream.example.test")) {
+        liveStreamRequests++;
+      }
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("lore:firstRunStationInteraction", "1");
+    });
+    await page.goto("/lore/");
+
+    await expect(page.getByTestId("adaptive-now")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("adaptive-now-row")).toHaveCount(6);
+    await clearAudioProbe(page);
+
+    await page.getByRole("button", { name: "Switch station" }).click();
+    const picker = page.getByRole("dialog", { name: "Switch live station" });
+    await expect(picker).toBeVisible();
+    const pickerStations = picker.locator(".adaptive-now__picker-list > button");
+    await expect(pickerStations).toHaveCount(STATION_COUNT);
+    expect(liveStreamRequests).toBe(0);
+    expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
+
+    const cancelledStation = pickerStations.nth(0);
+    await clearAudioProbe(page);
+    await cancelledStation.dispatchEvent("pointerdown", {
+      bubbles: true,
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await cancelledStation.dispatchEvent("pointercancel", {
+      bubbles: true,
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await expect
+      .poll(async () => (await readAudioProbe(page)).filter((event) => event.kind === "clear").length)
+      .toBe(1);
+    expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
+
+    const releasedStation = pickerStations.nth(1);
+    await clearAudioProbe(page);
+    await releasedStation.dispatchEvent("pointerdown", {
+      bubbles: true,
+      pointerId: 2,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await releasedStation.dispatchEvent("pointerup", {
+      bubbles: true,
+      pointerId: 2,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
+    await expect
+      .poll(
+        async () => (await readAudioProbe(page)).filter((event) => event.kind === "clear").length,
+        { timeout: 1_500 },
+      )
+      .toBe(1);
+
+    const committedStation = pickerStations.nth(0);
+    await clearAudioProbe(page);
+    await committedStation.dispatchEvent("pointerdown", {
+      bubbles: true,
+      pointerId: 3,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    await committedStation.dispatchEvent("pointerup", {
+      bubbles: true,
+      pointerId: 3,
+      pointerType: "touch",
+      isPrimary: true,
+    });
+    expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
+    await committedStation.dispatchEvent("click", { bubbles: true });
+    await expect
+      .poll(async () => (await readAudioProbe(page)).filter((event) => event.kind === "play"))
+      .toHaveLength(1);
+    await expect(picker).toHaveCount(0);
+  });
+
   test("keeps a touch warm source through click, but cancels abandoned gestures", async ({
     page,
   }) => {
