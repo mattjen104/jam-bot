@@ -489,6 +489,8 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
   }
 
   return res.json({
+    /** The client uses this to anchor advisory countdowns to server time. */
+    serverTime: now.toISOString(),
     station: { slug: station.slug, name: station.name },
     now: spin
       ? {
@@ -504,6 +506,14 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
           resolved: spin.mbid != null,
           estimatedRemainingMs: expiry?.remainingMs ?? null,
           likelyExpiring: expiry?.likelyExpiring ?? false,
+          /** Fingerprint offsets are the strongest available timing signal;
+           * played_at remains useful but is explicitly approximate. */
+          timingConfidence:
+            expiry?.positionSource === "fingerprint"
+              ? "trusted"
+              : expiry
+                ? "estimated"
+                : "unknown",
         }
       : null,
     refreshTriggered,

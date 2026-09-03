@@ -1,14 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
+  type Station,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
+import { useWpOnAir } from "../webplayer/hooks";
 import { subscribeSpinStream } from "../webplayer/nowPlayingStream";
 import { PlayerBar } from "./PlayerBar";
 import { PlayerSheet } from "./PlayerSheet";
 import { RideBar } from "./RideBar";
+import { useLiveHandoff } from "../player/useLiveHandoff";
+import { commitLiveHandoff } from "../player/liveHandoff";
 
 /** Matches the shell's phone-width CSS convention (one-line dock breakpoint). */
 const MOBILE_SHELL_QUERY = "(orientation: portrait), (max-width: 720px)";
@@ -34,6 +38,34 @@ export function PlayerDock() {
   const [location] = useLocation();
 
   const stationSlug = radio.station?.slug ?? "";
+  const { data: onAirData } = useWpOnAir();
+  const radioStationSlug = radio.station?.slug;
+  const toggleRadio = radio.toggle;
+  const scanActive = scan.active;
+  const toggleScan = scan.toggle;
+  const switchHandoffStation = useCallback((target: Station) => {
+    commitLiveHandoff(target, radioStationSlug, scanActive, toggleScan, toggleRadio);
+  }, [radioStationSlug, scanActive, toggleRadio, toggleScan]);
+  const handoffState = useLiveHandoff(
+    ride.active ? null : radio.station,
+    onAirData?.items ?? [],
+    switchHandoffStation,
+  );
+  const stopScanBefore = (action: () => void) => {
+    if (scan.active) scan.toggle();
+    action();
+  };
+  const handoff = {
+    ...handoffState,
+    scanning: scan.active,
+    onCatchCurrent: () => stopScanBefore(handoffState.catchCurrent),
+    onCatchBest: () => stopScanBefore(handoffState.catchBest),
+    onCatchCandidate: (candidate: Parameters<typeof handoffState.catchCandidate>[0]) =>
+      stopScanBefore(() => handoffState.catchCandidate(candidate)),
+    onCancel: handoffState.cancel,
+    onSwitchNow: handoffState.switchNow,
+    onKeepWatching: handoffState.keepWatching,
+  };
   const { data: npData } = useGetStationNowPlaying(stationSlug, {
     query: {
       queryKey: getGetStationNowPlayingQueryKey(stationSlug),
@@ -181,6 +213,7 @@ export function PlayerDock() {
             // Expand only at phone widths — desktop keeps the plain dock.
             if (window.matchMedia(MOBILE_SHELL_QUERY).matches) setExpanded(true);
           }}
+          handoff={handoff}
         />
         {expanded && (
           <PlayerSheet
@@ -194,6 +227,7 @@ export function PlayerDock() {
             scanActive={scan.active}
             onScanToggle={scan.toggle}
             onCollapse={() => setExpanded(false)}
+            handoff={handoff}
           />
         )}
       </>

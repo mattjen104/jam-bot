@@ -10,6 +10,7 @@ import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
 import { KeepButton } from "./KeepButton";
 import type { ScanHop } from "../player/PlayerProvider";
+import { LiveHandoffPanel, type LiveHandoffControls } from "./LiveHandoffPanel";
 import {
   Cast,
   ExternalLink,
@@ -52,6 +53,7 @@ interface PlayerBarProps {
   onScanDirToggle?: () => void;
   /** Tap-to-expand: fired when the bar surface (not a control) is tapped. */
   onExpand?: () => void;
+  handoff?: LiveHandoffControls;
 }
 
 export function PlayerBar({
@@ -75,6 +77,7 @@ export function PlayerBar({
   scanDir = 1,
   onScanDirToggle,
   onExpand,
+  handoff,
 }: PlayerBarProps) {
   const isCasting = casting === "casting";
   const isPlaying = isCasting ? !castPaused : status === "playing";
@@ -327,6 +330,7 @@ export function PlayerBar({
           </div>
         ) : null}
       </div>
+      {handoff && <LiveHandoffPanel {...handoff} />}
     </div>
   );
 }

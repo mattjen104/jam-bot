@@ -4,6 +4,7 @@ import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
 import { NowPlaying } from "./NowPlaying";
+import { LiveHandoffPanel, type LiveHandoffControls } from "./LiveHandoffPanel";
 import {
   ChevronDown,
   ExternalLink,
@@ -27,6 +28,7 @@ interface PlayerSheetProps {
   scanActive?: boolean;
   onScanToggle?: () => void;
   onCollapse: () => void;
+  handoff?: LiveHandoffControls;
 }
 
 /**
@@ -47,6 +49,7 @@ export function PlayerSheet({
   scanActive = false,
   onScanToggle,
   onCollapse,
+  handoff,
 }: PlayerSheetProps) {
   const isPlaying = status === "playing";
   const isLoading = status === "loading";
@@ -88,6 +91,7 @@ export function PlayerSheet({
           isLoading={!nowPlayingData}
           fallbackStation={station}
         />
+        {handoff && <LiveHandoffPanel {...handoff} />}
       </div>
 
       {/* Full player controls — same actions as the mini player. */}

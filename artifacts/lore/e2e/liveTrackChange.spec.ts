@@ -122,6 +122,18 @@ async function injectFakeEventSource(
         this.readyState = FakeEventSource.CLOSED;
       }
 
+      addEventListener(type: string, listener: EventListener) {
+        if (type === "open") this.onopen = listener as (ev: Event) => void;
+        if (type === "error") this.onerror = listener as (ev: Event) => void;
+        if (type === "message") this.onmessage = listener as (ev: MessageEvent) => void;
+      }
+
+      removeEventListener(type: string, listener: EventListener) {
+        if (type === "open" && this.onopen === listener) this.onopen = null;
+        if (type === "error" && this.onerror === listener) this.onerror = null;
+        if (type === "message" && this.onmessage === listener) this.onmessage = null;
+      }
+
       /** Internal helper used by the test via page.evaluate. */
       _dispatch(data: string) {
         if (this.onmessage) {
@@ -1042,4 +1054,131 @@ test.describe("PlayerDock live track change via SSE", () => {
       ).not.toBeVisible({ timeout: 5_000 });
     },
   );
+});
+
+test.describe("PlayerDock Catch Next handoff", () => {
+  test("keeps the current broadcast until a fresh destination song is confirmed", async ({ page }) => {
+    const destination = {
+      ...STATION,
+      id: 2,
+      slug: "kcrw",
+      name: "KCRW",
+      streamUrl: "https://example.test/kcrw.mp3",
+      homepageUrl: "https://www.kcrw.com",
+      stationCategories: ["public"],
+    };
+    const current = makeOnAirResponse();
+    const onAirResponse = {
+      ...current,
+      items: [
+        ...current.items,
+        {
+          station: destination,
+          show: null,
+          now: {
+            mbid: "bbbbbbbb-0000-0000-0000-000000000002",
+            title: "Destination Track",
+            artist: "Destination Artist",
+            artworkUrl: null,
+            playedAt: new Date().toISOString(),
+            observedAt: new Date().toISOString(),
+            freshness: "fresh",
+            resolved: true,
+          },
+          earlier: [],
+          matchCount: 5,
+        },
+      ],
+    };
+
+    await page.addInitScript(() => {
+      sessionStorage.setItem("lore:first-run-prompted", "1");
+      class FakeAudio {
+        src = "";
+        volume = 1;
+        muted = false;
+        paused = true;
+        preload = "none";
+        private listeners = new Map<string, Set<EventListener>>();
+        play() {
+          this.paused = false;
+          queueMicrotask(() => {
+            for (const listener of this.listeners.get("playing") ?? []) {
+              listener(new Event("playing"));
+            }
+          });
+          return Promise.resolve();
+        }
+        pause() {
+          this.paused = true;
+          for (const listener of this.listeners.get("pause") ?? []) {
+            listener(new Event("pause"));
+          }
+        }
+        load() {}
+        removeAttribute() {}
+        addEventListener(type: string, listener: EventListener) {
+          const set = this.listeners.get(type) ?? new Set<EventListener>();
+          set.add(listener);
+          this.listeners.set(type, set);
+        }
+        removeEventListener(type: string, listener: EventListener) {
+          this.listeners.get(type)?.delete(listener);
+        }
+      }
+      Object.defineProperty(window, "Audio", { configurable: true, value: FakeAudio });
+    });
+    await injectFakeEventSource(page);
+    await installCommonRoutes(page, onAirResponse);
+    await page.route(`**/api/stations/${destination.slug}/now-playing`, (route) =>
+      route.fulfill({ json: { station: destination, nowPlaying: null } }),
+    );
+
+    let destinationChecks = 0;
+    await page.route("**/api/player/station/*/now", (route) => {
+      const slug = route.request().url().includes("/kcrw/") ? destination.slug : SLUG;
+      if (slug === destination.slug) destinationChecks += 1;
+      const changed = slug === destination.slug && destinationChecks >= 2;
+      route.fulfill({
+        json: {
+          serverTime: new Date().toISOString(),
+          station: { slug, name: slug === destination.slug ? destination.name : STATION.name },
+          now: {
+            mbid: changed
+              ? "cccccccc-0000-0000-0000-000000000003"
+              : slug === destination.slug
+                ? "bbbbbbbb-0000-0000-0000-000000000002"
+                : "aaaaaaaa-0000-0000-0000-000000000001",
+            title: changed ? "Fresh Destination Song" : slug === destination.slug ? "Destination Track" : "Old Track",
+            artist: changed ? "Fresh Destination Artist" : slug === destination.slug ? "Destination Artist" : "Old Artist",
+            artworkUrl: null,
+            playedAt: new Date().toISOString(),
+            observedAt: new Date().toISOString(),
+            freshness: "fresh",
+            resolved: true,
+            estimatedRemainingMs: null,
+            likelyExpiring: false,
+            timingConfidence: "unknown",
+          },
+          refreshTriggered: false,
+        },
+      });
+    });
+
+    await page.goto("/lore/player");
+    await page.getByRole("button", { name: "Play NTS 1" }).click();
+    const dock = page.getByTestId("wp-now-playing");
+    await expect(dock).toBeVisible();
+    await dock.getByTestId("catch-next").click();
+    await dock.getByTestId("catch-best").click();
+
+    await expect(dock.getByText("Catching next on KCRW")).toBeVisible();
+    await expect(dock).toContainText("Current audio continues");
+    await expect(dock.getByText("Fresh song ready")).toBeVisible({ timeout: 8_000 });
+    await expect(dock).toContainText("Fresh Destination Song");
+
+    await dock.getByTestId("live-handoff-switch").click();
+    await expect(page.getByTestId("wp-now-playing")).toContainText("KCRW");
+    await expect(page.getByTestId("live-handoff-pending")).toHaveCount(0);
+  });
 });

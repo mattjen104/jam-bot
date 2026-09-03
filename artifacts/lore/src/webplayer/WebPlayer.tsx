@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +21,9 @@ import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
 import { RunDrawerSheet } from "./RunDrawerSheet";
 import { WpCast } from "./WpCast";
+import { LiveHandoffPanel } from "../components/LiveHandoffPanel";
+import { useLiveHandoff } from "../player/useLiveHandoff";
+import { commitLiveHandoff } from "../player/liveHandoff";
 import { AlbumLoreSheet } from "./AlbumLoreSheet";
 import { LibraryTab } from "./LibraryTab";
 import { rememberPrefersClassic } from "../lib/uiPrefs";
@@ -79,6 +82,28 @@ function NowPlayingCard({
   const { radio, scan } = usePlayer();
   const playingSlug = radio.station?.slug ?? null;
   const item = playingSlug ? onAir.find((i) => i.station.slug === playingSlug) : null;
+  const radioToggle = radio.toggle;
+  const scanToggle = scan.toggle;
+  const scanActive = scan.active;
+  const switchHandoffStation = useCallback((target: WpOnAirItem["station"]) => {
+    commitLiveHandoff(target, playingSlug, scanActive, scanToggle, radioToggle);
+  }, [playingSlug, radioToggle, scanActive, scanToggle]);
+  const handoffState = useLiveHandoff(radio.station, onAir, switchHandoffStation);
+  const stopScanBefore = (action: () => void) => {
+    if (scanActive) scanToggle();
+    action();
+  };
+  const handoff = {
+    ...handoffState,
+    scanning: scanActive,
+    onCatchCurrent: () => stopScanBefore(handoffState.catchCurrent),
+    onCatchBest: () => stopScanBefore(handoffState.catchBest),
+    onCatchCandidate: (candidate: Parameters<typeof handoffState.catchCandidate>[0]) =>
+      stopScanBefore(() => handoffState.catchCandidate(candidate)),
+    onCancel: handoffState.cancel,
+    onSwitchNow: handoffState.switchNow,
+    onKeepWatching: handoffState.keepWatching,
+  };
 
   // During a preview-mode scan, display the scan hop's track instead of the
   // broadcast station. The scan exposes its current track in `scan.current`.
@@ -279,6 +304,11 @@ function NowPlayingCard({
       <div style={{ flexBasis: "100%", minWidth: 0 }}>
         <WpCast />
       </div>
+      {!scanHop && radio.station && (
+        <div style={{ flexBasis: "100%", minWidth: 0 }}>
+          <LiveHandoffPanel {...handoff} />
+        </div>
+      )}
       {/* Bottle panel — message-in-a-bottle annotations anchored to the resolved MBID.
           Hidden during preview scans (no fixed station) and when MBID is unresolved. */}
       {nowMbid && !scanHop && item && (

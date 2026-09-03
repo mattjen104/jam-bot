@@ -34,6 +34,11 @@ export interface WpNow {
    * non-stale.
    */
   freshness?: "fresh" | "aging" | "stale";
+  /** Server-computed advisory expiry fields used by the persistent player. */
+  estimatedRemainingMs?: number | null;
+  likelyExpiring?: boolean;
+  timingConfidence?: "trusted" | "estimated" | "unknown";
+  serverTime?: string;
   resolved: boolean;
   /**
    * True while a provisional spin-raw observation is awaiting its resolved
