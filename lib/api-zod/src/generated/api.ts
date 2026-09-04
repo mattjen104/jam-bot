@@ -1468,6 +1468,112 @@ export const GetAdminPlaybackHealthResponse = zod.object({
 });
 
 /**
+ * @summary Remaining unclassified schedule failures
+ */
+export const GetAdminScheduleCoverageHealthHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const getAdminScheduleCoverageHealthResponseRemainingMin = 0;
+
+export const GetAdminScheduleCoverageHealthResponse = zod.object({
+  remaining: zod
+    .number()
+    .min(getAdminScheduleCoverageHealthResponseRemainingMin),
+  running: zod.boolean(),
+  batchLimit: zod.number().min(1),
+});
+
+/**
+ * @summary Classify one bounded schedule-failure batch
+ */
+export const RunAdminScheduleCoverageBatchHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const runAdminScheduleCoverageBatchBodyAfterIdMin = 0;
+
+export const RunAdminScheduleCoverageBatchBody = zod.object({
+  afterId: zod.number().min(runAdminScheduleCoverageBatchBodyAfterIdMin),
+});
+
+export const runAdminScheduleCoverageBatchResponseProcessedMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsPolicyBlockedMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsSourceUnavailableMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsTransientFetchMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsMissingScheduleLinkMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsMalformedScheduleMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsExtractionFailedMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsPersistenceFailedMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsSuccessfulMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseReasonTotalsUnclassifiedMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseNextAfterIdMin = 0;
+
+export const runAdminScheduleCoverageBatchResponseRemainingMin = 0;
+
+export const RunAdminScheduleCoverageBatchResponse = zod.object({
+  processed: zod
+    .number()
+    .min(runAdminScheduleCoverageBatchResponseProcessedMin),
+  reasonTotals: zod.object({
+    policy_blocked: zod
+      .number()
+      .min(runAdminScheduleCoverageBatchResponseReasonTotalsPolicyBlockedMin),
+    source_unavailable: zod
+      .number()
+      .min(
+        runAdminScheduleCoverageBatchResponseReasonTotalsSourceUnavailableMin,
+      ),
+    transient_fetch: zod
+      .number()
+      .min(runAdminScheduleCoverageBatchResponseReasonTotalsTransientFetchMin),
+    missing_schedule_link: zod
+      .number()
+      .min(
+        runAdminScheduleCoverageBatchResponseReasonTotalsMissingScheduleLinkMin,
+      ),
+    malformed_schedule: zod
+      .number()
+      .min(
+        runAdminScheduleCoverageBatchResponseReasonTotalsMalformedScheduleMin,
+      ),
+    extraction_failed: zod
+      .number()
+      .min(
+        runAdminScheduleCoverageBatchResponseReasonTotalsExtractionFailedMin,
+      ),
+    persistence_failed: zod
+      .number()
+      .min(
+        runAdminScheduleCoverageBatchResponseReasonTotalsPersistenceFailedMin,
+      ),
+    successful: zod
+      .number()
+      .min(runAdminScheduleCoverageBatchResponseReasonTotalsSuccessfulMin),
+    unclassified: zod
+      .number()
+      .min(runAdminScheduleCoverageBatchResponseReasonTotalsUnclassifiedMin),
+  }),
+  nextAfterId: zod
+    .number()
+    .min(runAdminScheduleCoverageBatchResponseNextAfterIdMin)
+    .nullable(),
+  remaining: zod
+    .number()
+    .min(runAdminScheduleCoverageBatchResponseRemainingMin),
+});
+
+/**
  * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.
 
  * @summary A recording's own metadata (song-page header)

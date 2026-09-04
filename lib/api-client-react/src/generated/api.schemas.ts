@@ -4569,6 +4569,53 @@ export interface PostEmbedResolutionRequeueResponse {
   requeued: PostEmbedResolutionRequeueResponseRequeuedItem[];
 }
 
+export interface ScheduleCoverageHealth {
+  /** @minimum 0 */
+  remaining: number;
+  running: boolean;
+  /** @minimum 1 */
+  batchLimit: number;
+}
+
+export interface ScheduleCoverageCursorInput {
+  /** @minimum 0 */
+  afterId: number;
+}
+
+export interface ScheduleCoverageReasonTotals {
+  /** @minimum 0 */
+  policy_blocked: number;
+  /** @minimum 0 */
+  source_unavailable: number;
+  /** @minimum 0 */
+  transient_fetch: number;
+  /** @minimum 0 */
+  missing_schedule_link: number;
+  /** @minimum 0 */
+  malformed_schedule: number;
+  /** @minimum 0 */
+  extraction_failed: number;
+  /** @minimum 0 */
+  persistence_failed: number;
+  /** @minimum 0 */
+  successful: number;
+  /** @minimum 0 */
+  unclassified: number;
+}
+
+export interface ScheduleCoverageBatchResult {
+  /** @minimum 0 */
+  processed: number;
+  reasonTotals: ScheduleCoverageReasonTotals;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  nextAfterId: number | null;
+  /** @minimum 0 */
+  remaining: number;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

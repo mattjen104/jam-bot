@@ -161,6 +161,9 @@ import type {
   ResumeImportedSetResolution202,
   RunCrossingMomentsResponse,
   RymListRequest,
+  ScheduleCoverageBatchResult,
+  ScheduleCoverageCursorInput,
+  ScheduleCoverageHealth,
   ScrapeListBody,
   ScrapeListResponse,
   ScrapedStationList,
@@ -1553,6 +1556,176 @@ export function useGetAdminPlaybackHealth<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Remaining unclassified schedule failures
+ */
+export const getGetAdminScheduleCoverageHealthUrl = () => {
+  return `/api/admin/schedule-coverage-health`;
+};
+
+export const getAdminScheduleCoverageHealth = async (
+  options?: RequestInit,
+): Promise<ScheduleCoverageHealth> => {
+  return customFetch<ScheduleCoverageHealth>(
+    getGetAdminScheduleCoverageHealthUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAdminScheduleCoverageHealthQueryKey = () => {
+  return [`/api/admin/schedule-coverage-health`] as const;
+};
+
+export const getGetAdminScheduleCoverageHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminScheduleCoverageHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminScheduleCoverageHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdminScheduleCoverageHealthQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminScheduleCoverageHealth>>
+  > = ({ signal }) =>
+    getAdminScheduleCoverageHealth({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminScheduleCoverageHealth>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminScheduleCoverageHealthQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminScheduleCoverageHealth>>
+>;
+export type GetAdminScheduleCoverageHealthQueryError = ErrorType<void>;
+
+/**
+ * @summary Remaining unclassified schedule failures
+ */
+
+export function useGetAdminScheduleCoverageHealth<
+  TData = Awaited<ReturnType<typeof getAdminScheduleCoverageHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminScheduleCoverageHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminScheduleCoverageHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Classify one bounded schedule-failure batch
+ */
+export const getRunAdminScheduleCoverageBatchUrl = () => {
+  return `/api/admin/schedule-coverage-backfill/run`;
+};
+
+export const runAdminScheduleCoverageBatch = async (
+  scheduleCoverageCursorInput: ScheduleCoverageCursorInput,
+  options?: RequestInit,
+): Promise<ScheduleCoverageBatchResult> => {
+  return customFetch<ScheduleCoverageBatchResult>(
+    getRunAdminScheduleCoverageBatchUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(scheduleCoverageCursorInput),
+    },
+  );
+};
+
+export const getRunAdminScheduleCoverageBatchMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAdminScheduleCoverageBatch>>,
+    TError,
+    { data: BodyType<ScheduleCoverageCursorInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runAdminScheduleCoverageBatch>>,
+  TError,
+  { data: BodyType<ScheduleCoverageCursorInput> },
+  TContext
+> => {
+  const mutationKey = ["runAdminScheduleCoverageBatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runAdminScheduleCoverageBatch>>,
+    { data: BodyType<ScheduleCoverageCursorInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return runAdminScheduleCoverageBatch(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunAdminScheduleCoverageBatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runAdminScheduleCoverageBatch>>
+>;
+export type RunAdminScheduleCoverageBatchMutationBody =
+  BodyType<ScheduleCoverageCursorInput>;
+export type RunAdminScheduleCoverageBatchMutationError = ErrorType<void>;
+
+/**
+ * @summary Classify one bounded schedule-failure batch
+ */
+export const useRunAdminScheduleCoverageBatch = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAdminScheduleCoverageBatch>>,
+    TError,
+    { data: BodyType<ScheduleCoverageCursorInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runAdminScheduleCoverageBatch>>,
+  TError,
+  { data: BodyType<ScheduleCoverageCursorInput> },
+  TContext
+> => {
+  return useMutation(getRunAdminScheduleCoverageBatchMutationOptions(options));
+};
 
 /**
  * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.

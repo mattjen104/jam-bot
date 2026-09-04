@@ -162,6 +162,10 @@ import {
   listObservabilityEvidence,
   type ObservabilityKind,
 } from "../../lore/observability.js";
+import {
+  getScheduleCoverageBacklogHealth,
+  runScheduleCoverageBacklogBatch,
+} from "../../lore/schedule-coverage-backlog.js";
 
 const router: IRouter = Router();
 const automaticCullCanonicalStation = alias(
@@ -2098,6 +2102,10 @@ router.get("/admin/duration-health", h(async (_req, res) => {
   });
 }));
 
+router.get("/admin/schedule-coverage-health", h(async (_req, res) => {
+  return res.json(await getScheduleCoverageBacklogHealth());
+}));
+
 // GET /api/admin/genre-enrichment-health — durable funnel and per-station
 // recent coverage for active stations on the normal front door.
 router.get("/admin/genre-enrichment-health", h(async (_req, res) => {
@@ -2272,6 +2280,18 @@ router.post("/admin/duration-backfill/run", h(async (_req, res) => {
       err instanceof Error ? err.message : "Duration backfill failed",
     );
   });
+  return res.json(result);
+}));
+
+router.post("/admin/schedule-coverage-backfill/run", h(async (req, res) => {
+  const rawAfterId = req.body?.afterId ?? 0;
+  if (!Number.isSafeInteger(rawAfterId) || rawAfterId < 0) {
+    throw new HttpError(400, "afterId must be a non-negative integer");
+  }
+  const result = await runScheduleCoverageBacklogBatch(rawAfterId);
+  if (!result) {
+    throw new HttpError(409, "A schedule coverage batch is already running");
+  }
   return res.json(result);
 }));
 

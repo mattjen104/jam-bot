@@ -6,6 +6,7 @@ import {
   parseCoverageArgs,
   selectUnclassifiedRefreshCandidates,
 } from "../../src/scripts/audit-schedule-coverage.js";
+import { summarizeScheduleCoverageBatch } from "../../src/lore/schedule-coverage-backlog.js";
 
 describe("all-Lore schedule coverage audit", () => {
   it("is read-only by default and validates bounded refresh arguments", () => {
@@ -96,5 +97,17 @@ describe("all-Lore schedule coverage audit", () => {
 
     expect(selectUnclassifiedRefreshCandidates(rows, 5, 2).map((row) => row.id))
       .toEqual([9, 12]);
+  });
+
+  it("reports successful refreshes separately from still-unclassified failures", () => {
+    expect(summarizeScheduleCoverageBatch([
+      { scheduleScrapedAt: new Date("2026-09-04T00:00:00Z"), reason: null },
+      { scheduleScrapedAt: null, reason: "transient_fetch" },
+      { scheduleScrapedAt: null, reason: null },
+    ])).toMatchObject({
+      successful: 1,
+      transient_fetch: 1,
+      unclassified: 1,
+    });
   });
 });

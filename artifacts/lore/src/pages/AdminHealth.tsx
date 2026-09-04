@@ -3,6 +3,8 @@ import { useAdminToken } from "../hooks/useAdminToken";
 import { AdminNav } from "@/components/AdminNav";
 import type {
   PlaybackHealthResponse,
+  ScheduleCoverageBatchResult,
+  ScheduleCoverageHealth,
   StoreAuditResponse,
 } from "@workspace/api-client-react";
 import {
@@ -304,6 +306,8 @@ function HealthPanel({
   const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [durationHealth, setDurationHealth] = useState<DurationHealth | null>(null);
   const [durationError, setDurationError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [scheduleHealth, setScheduleHealth] = useState<ScheduleCoverageHealth | null>(null);
+  const [scheduleError, setScheduleError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [showAttributionHealth, setShowAttributionHealth] =
     useState<ShowAttributionHealth | null>(null);
   const [showAttributionError, setShowAttributionError] =
@@ -492,6 +496,29 @@ function HealthPanel({
         return false;
       })();
 
+      const schedulePromise = (async () => {
+        try {
+          const response = await fetch("/api/admin/schedule-coverage-health", { headers });
+          if (response.ok) {
+            setScheduleHealth((await response.json()) as ScheduleCoverageHealth);
+            setScheduleError(null);
+            return true;
+          }
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
+          setScheduleError({
+            kind: response.status === 401 ? "auth" : "server",
+            message: body.error ?? `HTTP ${response.status}`,
+          });
+        } catch (err) {
+          setScheduleError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+        }
+        setScheduleHealth(null);
+        return false;
+      })();
+
       const showAttributionPromise = (async () => {
         let response: Response;
         try {
@@ -552,6 +579,7 @@ function HealthPanel({
           swOk,
           ryOk,
           durationOk,
+          scheduleOk,
           showAttributionOk,
           genreOk,
         ] = await Promise.all([
@@ -561,6 +589,7 @@ function HealthPanel({
           swPromise,
           ryPromise,
           durationPromise,
+          schedulePromise,
           showAttributionPromise,
           genrePromise,
         ]);
@@ -574,6 +603,7 @@ function HealthPanel({
           !swOk &&
           !ryOk &&
           !durationOk &&
+          !scheduleOk &&
           !showAttributionOk &&
           !genreOk
         ) {
@@ -879,6 +909,23 @@ function HealthPanel({
             kind={durationError.kind}
             message={durationError.message}
             data-testid="duration-error-banner"
+          />
+        )}
+
+        {!loading && scheduleHealth !== null && (
+          <ScheduleCoverageHealthSection
+            health={scheduleHealth}
+            token={token}
+            onRunComplete={() => void fetchAll({ silent: true })}
+          />
+        )}
+        {!loading && scheduleError !== null && (
+          <SectionErrorBanner
+            icon={<Archive className="h-4 w-4" />}
+            title="Schedule failure backlog"
+            kind={scheduleError.kind}
+            message={scheduleError.message}
+            data-testid="schedule-coverage-error-banner"
           />
         )}
 
@@ -1311,6 +1358,104 @@ interface UnmatchedRunBatchResult {
   definitiveMiss?: number;
   remaining?: number;
   skipped?: boolean;
+}
+
+function ScheduleCoverageHealthSection({
+  health,
+  token,
+  onRunComplete,
+}: {
+  health: ScheduleCoverageHealth;
+  token: string;
+  onRunComplete: () => void;
+}) {
+  const { remaining = 0, running: serverRunning = false, batchLimit = 10 } = health;
+  const [running, setRunning] = useState(false);
+  const [afterId, setAfterId] = useState(0);
+  const [result, setResult] = useState<ScheduleCoverageBatchResult | string | null>(null);
+
+  const handleRun = useCallback(async () => {
+    setRunning(true);
+    setResult(null);
+    try {
+      const response = await fetch("/api/admin/schedule-coverage-backfill/run", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
+        body: JSON.stringify({ afterId }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setResult(body.error ?? `HTTP ${response.status}`);
+        return;
+      }
+      const receipt = (await response.json()) as ScheduleCoverageBatchResult;
+      setResult(receipt);
+      if (receipt.nextAfterId !== null) setAfterId(receipt.nextAfterId);
+      onRunComplete();
+    } catch (err) {
+      setResult(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setRunning(false);
+    }
+  }, [afterId, onRunComplete, token]);
+
+  const reasonSummary =
+    typeof result === "object" && result !== null
+      ? Object.entries(result.reasonTotals)
+          .filter(([, count]) => count > 0)
+          .map(([reason, count]) => `${reason.replaceAll("_", " ")} ${count}`)
+          .join(" · ")
+      : "";
+
+  return (
+    <section className="mt-10" data-testid="schedule-coverage-health-section">
+      <SectionHeading
+        icon={<Archive className="h-4 w-4" />}
+        title="Schedule failure backlog"
+        badge={remaining}
+        description="Classify historical schedule failures in bounded, resumable batches without replacing a healthy saved schedule on weak extraction evidence."
+      />
+      <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <div className="font-mono text-2xl tabular-nums text-foreground">
+              {remaining.toLocaleString()}
+            </div>
+            <div className="text-sm text-muted-foreground">unclassified failures remaining</div>
+          </div>
+          <button
+            onClick={() => void handleRun()}
+            disabled={running || serverRunning || remaining === 0}
+            className="ml-auto flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+          >
+            <RefreshCw className={`h-3 w-3 ${running || serverRunning ? "animate-spin" : ""}`} />
+            {running || serverRunning ? "Running…" : `Run ${batchLimit}-station batch`}
+          </button>
+        </div>
+        {result !== null && (
+          <p className="mt-3 text-sm text-muted-foreground" data-testid="schedule-coverage-run-receipt">
+            {typeof result === "string" ? (
+              <span className="text-destructive">{result}</span>
+            ) : (
+              <>
+                processed <span className="font-mono text-foreground">{result.processed}</span>
+                {" · remaining "}
+                <span className="font-mono text-foreground">{result.remaining}</span>
+                {" · next cursor "}
+                <span className="font-mono text-foreground">
+                  {result.nextAfterId ?? "complete"}
+                </span>
+                {reasonSummary ? ` · ${reasonSummary}` : ""}
+              </>
+            )}
+          </p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function ShowAttributionHealthSection({

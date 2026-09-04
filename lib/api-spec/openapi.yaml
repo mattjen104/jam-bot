@@ -477,6 +477,58 @@ paths:
           description: Missing or invalid admin token
         "503":
           description: Admin entry not configured
+  /admin/schedule-coverage-health:
+    get:
+      operationId: getAdminScheduleCoverageHealth
+      tags: [admin]
+      summary: Remaining unclassified schedule failures
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Current bounded schedule-classification backlog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleCoverageHealth"
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
+  /admin/schedule-coverage-backfill/run:
+    post:
+      operationId: runAdminScheduleCoverageBatch
+      tags: [admin]
+      summary: Classify one bounded schedule-failure batch
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleCoverageCursorInput"
+      responses:
+        "200":
+          description: Batch classification receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleCoverageBatchResult"
+        "400":
+          description: Invalid cursor
+        "409":
+          description: A schedule coverage batch is already running
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
   /recordings/{mbid}:
     get:
       operationId: getRecording
@@ -10231,3 +10283,46 @@ components:
               requestedAt: { type: string }
             required: [provider, role, status, attempts, nextAttemptAt, requestedAt]
       required: [mbid, requeued]
+    ScheduleCoverageHealth:
+      type: object
+      properties:
+        remaining: { type: integer, minimum: 0 }
+        running: { type: boolean }
+        batchLimit: { type: integer, minimum: 1 }
+      required: [remaining, running, batchLimit]
+    ScheduleCoverageCursorInput:
+      type: object
+      properties:
+        afterId: { type: integer, minimum: 0 }
+      required: [afterId]
+    ScheduleCoverageReasonTotals:
+      type: object
+      properties:
+        policy_blocked: { type: integer, minimum: 0 }
+        source_unavailable: { type: integer, minimum: 0 }
+        transient_fetch: { type: integer, minimum: 0 }
+        missing_schedule_link: { type: integer, minimum: 0 }
+        malformed_schedule: { type: integer, minimum: 0 }
+        extraction_failed: { type: integer, minimum: 0 }
+        persistence_failed: { type: integer, minimum: 0 }
+        successful: { type: integer, minimum: 0 }
+        unclassified: { type: integer, minimum: 0 }
+      required:
+        - policy_blocked
+        - source_unavailable
+        - transient_fetch
+        - missing_schedule_link
+        - malformed_schedule
+        - extraction_failed
+        - persistence_failed
+        - successful
+        - unclassified
+    ScheduleCoverageBatchResult:
+      type: object
+      properties:
+        processed: { type: integer, minimum: 0 }
+        reasonTotals:
+          $ref: "#/components/schemas/ScheduleCoverageReasonTotals"
+        nextAfterId: { type: ["integer", "null"], minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+      required: [processed, reasonTotals, nextAfterId, remaining]
