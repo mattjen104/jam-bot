@@ -166,6 +166,11 @@ export async function setup(): Promise<() => Promise<void>> {
     );
     await applySpinPlayOffsetMigration();
 
+    const { applyObservabilityMigration } = await import(
+      "../src/lore/observability-migration.js"
+    );
+    await applyObservabilityMigration();
+
     // Ensures artist_events / artist_events_cache exist — required by the
     // Shows lens read-model tests (me-shows-db).
     const { applyArtistEventsMigration } = await import(
