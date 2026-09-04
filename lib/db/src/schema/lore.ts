@@ -1506,6 +1506,7 @@ export const libraryItemsTable = pgTable(
   (t) => [
     uniqueIndex("library_items_user_mbid_idx").on(t.userId, t.mbid),
     index("library_items_user_added_idx").on(t.userId, t.addedAt),
+    index("library_items_spin_idx").on(t.spinId),
   ],
 );
 
@@ -2441,6 +2442,7 @@ export const listensTable = pgTable(
     releaseGroupMbid: text("release_group_mbid"),
   },
   (t) => [
+    index("listens_spin_idx").on(t.spinId),
     // Primary read path: user's history newest-first.
     index("listens_user_started_idx").on(t.userId, t.startedAt),
     // Album-completion aggregation: which release groups has the user heard?
@@ -2731,6 +2733,7 @@ export const listenSessionsTable = pgTable(
   },
   (t) => [
     index("listen_sessions_user_station_idx").on(t.userId, t.stationId),
+    index("listen_sessions_station_idx").on(t.stationId),
     index("listen_sessions_last_heartbeat_idx").on(t.lastHeartbeatAt),
   ],
 );
@@ -2791,6 +2794,7 @@ export const attendanceTable = pgTable(
   (t) => [
     // One attendance row per (user, spin) — upsert-safe.
     uniqueIndex("attendance_user_spin_uq").on(t.userId, t.spinId),
+    index("attendance_spin_idx").on(t.spinId),
     index("attendance_user_idx").on(t.userId),
     index("attendance_session_idx").on(t.sessionId),
   ],
@@ -3294,6 +3298,7 @@ export const embedResolutionQueueTable = pgTable(
       t.id,
     ),
     index("embed_resolution_queue_recording_idx").on(t.recordingMbid),
+    index("embed_resolution_queue_station_idx").on(t.stationId),
   ],
 );
 

@@ -11,7 +11,7 @@
  * before any worker is spawned, eliminates that contention entirely.
  */
 
-export async function setup(): Promise<void> {
+export async function setup(): Promise<() => Promise<void>> {
   // Provide a fallback URL so the db module doesn't throw when no real DB is
   // configured (pure-unit environments).  The real DATABASE_URL from the
   // Replit environment takes precedence.
@@ -19,6 +19,14 @@ export async function setup(): Promise<void> {
   process.env.MUSICBRAINZ_CONTACT ??= "test@example.com";
 
   try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`select 1`);
+  } catch {
+    return async () => {};
+  }
+
+  {
     const { applyRssArticlesMigration } = await import(
       "../src/lore/rss-articles-migration.js"
     );
@@ -162,8 +170,32 @@ export async function setup(): Promise<void> {
     );
     await applyStationExclusionsMigration();
 
-  } catch {
-    // No real DB available — pure-unit environment.  Workers that need the
-    // tables will skip their tests gracefully via their own dbAvailable guards.
+    const { cleanupStationFixtures } = await import(
+      "../src/lore/station-fixture-audit.js"
+    );
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    await cleanupStationFixtures();
+    const before = await db.execute<{ count: string }>(sql`
+      SELECT count(*)::text AS count
+      FROM stations
+      WHERE active = true AND hidden = false
+    `);
+    const visibleBefore = Number(before.rows[0]?.count ?? 0);
+
+    return async () => {
+      await cleanupStationFixtures();
+      const after = await db.execute<{ count: string }>(sql`
+        SELECT count(*)::text AS count
+        FROM stations
+        WHERE active = true AND hidden = false
+      `);
+      const visibleAfter = Number(after.rows[0]?.count ?? 0);
+      if (visibleAfter > visibleBefore) {
+        throw new Error(
+          `API test suite leaked ${visibleAfter - visibleBefore} active visible station row(s)`,
+        );
+      }
+    };
   }
 }

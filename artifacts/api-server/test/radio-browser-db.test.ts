@@ -11,6 +11,7 @@ import {
   backfillRadioBrowserIcyEnrollment,
   type RadioBrowserStation,
 } from "../src/lore/radio-browser.js";
+import { createStationFixtureTracker } from "./station-fixtures.js";
 
 /**
  * Integration test for ICY auto-enrollment against a real DB — the parts the
@@ -51,6 +52,7 @@ function makeStation(overrides: Partial<RadioBrowserStation> = {}): RadioBrowser
 }
 
 let dbAvailable = false;
+const fixtures = createStationFixtureTracker();
 
 beforeAll(async () => {
   try {
@@ -68,11 +70,9 @@ afterAll(async () => {
     .from(stationsTable)
     .where(eq(stationsTable.name, STATION_NAME));
   for (const row of rows) {
-    await db
-      .delete(radioBrowserStationsTable)
-      .where(eq(radioBrowserStationsTable.stationId, row.id));
+    fixtures.track(row.id);
   }
-  await db.delete(stationsTable).where(eq(stationsTable.name, STATION_NAME));
+  await fixtures.cleanup();
   await db
     .delete(radioBrowserStationsTable)
     .where(eq(radioBrowserStationsTable.radioBrowserUuid, STATION_UUID));

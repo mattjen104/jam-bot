@@ -7,6 +7,19 @@ database shared by all test files in the suite.  Every test must be fully
 self-contained — insert its own rows, clean them up in `afterEach`/`afterAll`,
 and never depend on data left behind by another file.
 
+### Station fixtures
+
+Station-writing tests must use `createStationFixtureTracker()` from
+`test/station-fixtures.ts`. Give every fixture an approved slug prefix (`test-`,
+`fixture-`, `scov-`, `station-test-`, or `rb-test-`) and a second independent
+marker: an `example.invalid`/`example.com` URL or a synthetic Radio Browser UUID.
+The suite teardown removes matching historical fixtures and fails if the active,
+listener-visible station count increased.
+
+Run `pnpm --filter @workspace/api-server audit:station-fixtures` for the
+read-only historical report. Review its exact IDs and evidence before running
+`cleanup:station-fixtures`. Never identify station fixtures by display name.
+
 ---
 
 ## ⚠️ Global-scan functions: use `_testUserIds` scope hooks

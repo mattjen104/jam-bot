@@ -15,7 +15,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   db,
   stationsTable,
@@ -30,6 +30,7 @@ import {
   applyVerifiedRepair,
   type ProbeResult,
 } from "../src/lore/source-probe.js";
+import { createStationFixtureTracker } from "./station-fixtures.js";
 
 const run = randomUUID().slice(0, 8);
 // Unique, deliberately NON-test-like slugs/hosts (the ledger must include
@@ -47,7 +48,7 @@ const SLUGS = {
 const stream = (key: string) => `https://scov-${run}.example.com/${key}`;
 
 let dbAvailable = false;
-const stationIds: number[] = [];
+const fixtures = createStationFixtureTracker();
 
 async function insertStation(
   slug: string,
@@ -63,7 +64,7 @@ async function insertStation(
       ...fields,
     })
     .returning();
-  stationIds.push(row!.id);
+  fixtures.track(row!.id);
   return row!;
 }
 
@@ -122,13 +123,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!dbAvailable) return;
-  // RB rows have no ON DELETE CASCADE on station_id — remove them first.
-  await db
-    .delete(radioBrowserStationsTable)
-    .where(inArray(radioBrowserStationsTable.stationId, stationIds));
-  await db.delete(spinsTable).where(inArray(spinsTable.stationId, stationIds));
-  // station_source_probes cascades with the station delete.
-  await db.delete(stationsTable).where(inArray(stationsTable.id, stationIds));
+  await fixtures.cleanup();
 });
 
 describe("getSourceCoverageLedger", () => {
