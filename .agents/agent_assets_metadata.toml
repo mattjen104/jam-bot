@@ -153,3 +153,17 @@ mtime_ms = 1788370069325
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/483fd168-928e-461f-849f-26270a232fbb/e89790b8-72f8-40ad-bd21-e6bebea0785a"
 storage_version_token = "1788370074624665"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "n3C5ffK-81gq7zx4hOaIX"
+uri = "file://research/notes.md"
+type = "text"
+title = "Research Notes: Lore’s Selector Stations"
+description = "Research plan and running evidence log for stations with strong music commentary, interviews, and live sessions."
+logical_id = "69f53156-4eb8-491c-a2d5-be1b334d9e2c"
+content_hash = "sha256:7f56465190eac74d070a81f346584896369f0f16510713825c216c49d89cdc21"
+size = 1577
+mtime_ms = 1788480315376
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/69f53156-4eb8-491c-a2d5-be1b334d9e2c/cee03e15-528f-400b-8cff-d1cdf251cd87"
+storage_version_token = "1788480326795300"
+content_type = "text/markdown"
