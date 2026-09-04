@@ -60,6 +60,11 @@ export interface WpNow {
   likelyExpiring?: boolean;
   timingConfidence?: "trusted" | "estimated" | "unknown";
   serverTime?: string;
+  broadcastAdvisory?: {
+    kind: "dj_speaking" | "music_resuming";
+    observedAt: string;
+    expiresAt: string;
+  } | null;
   /** Client-only uncertainty from midpoint clock alignment. */
   clockUncertaintyMs?: number | null;
   resolved: boolean;

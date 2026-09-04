@@ -24,6 +24,7 @@ import { WpCast } from "./WpCast";
 import { LiveHandoffPanel } from "../components/LiveHandoffPanel";
 import { useLiveHandoff } from "../player/useLiveHandoff";
 import { commitLiveHandoff } from "../player/liveHandoff";
+import { BroadcastAdvisoryStatus } from "./BroadcastAdvisoryStatus";
 import { AlbumLoreSheet } from "./AlbumLoreSheet";
 import { LibraryTab } from "./LibraryTab";
 import { rememberPrefersClassic } from "../lib/uiPrefs";
@@ -216,6 +217,7 @@ function NowPlayingCard({
             </span>
           )}
         </p>
+        {!scanHop && item && <BroadcastAdvisoryStatus now={item.now} />}
       </div>
       {nowMbid && (
         <LoreChip

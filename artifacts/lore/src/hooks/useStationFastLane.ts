@@ -57,6 +57,13 @@ export interface FastLaneNow {
   /** True when the track is inside the server's likely-expiring window. */
   likelyExpiring?: boolean;
   timingConfidence?: "trusted" | "estimated" | "unknown";
+  broadcastAdvisory?: BroadcastAdvisory | null;
+}
+
+export interface BroadcastAdvisory {
+  kind: "dj_speaking" | "music_resuming";
+  observedAt: string;
+  expiresAt: string;
 }
 
 export interface FastLaneResponse {

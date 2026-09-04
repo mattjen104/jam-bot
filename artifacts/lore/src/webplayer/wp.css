@@ -372,6 +372,33 @@
   }
 }
 
+.wp-broadcast-advisory {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  color: var(--wp-text-secondary);
+  font-size: 12px;
+}
+
+.wp-broadcast-advisory__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--wp-fill-primary);
+  animation: wp-advisory-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes wp-advisory-pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-broadcast-advisory__dot {
+    animation: none;
+  }
+}
+
 @media (max-width: 420px) {
   .wp-support-section,
   .wp-track-provenance,

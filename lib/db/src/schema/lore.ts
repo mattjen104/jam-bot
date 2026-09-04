@@ -3753,6 +3753,9 @@ export const broadcastTimelineEventsTable = pgTable(
   (t) => [
     uniqueIndex("broadcast_timeline_events_idempotency_uq").on(t.idempotencyKey),
     index("broadcast_timeline_events_station_version_idx").on(t.stationId, t.producerVersion, t.occurredAt),
+    index("broadcast_timeline_listener_resumption_idx")
+      .on(t.stationId, t.occurredAt.desc())
+      .where(sql`${t.eventType} = 'speech_ends_then_sustained_music'`),
   ],
 );
 
@@ -3834,6 +3837,9 @@ export const captureOutcomesTable = pgTable(
   (t) => [
     uniqueIndex("capture_outcomes_idempotency_uq").on(t.idempotencyKey),
     index("capture_outcomes_station_version_idx").on(t.stationId, t.producerVersion, t.occurredAt),
+    index("capture_outcomes_listener_speech_idx")
+      .on(t.stationId, t.occurredAt.desc())
+      .where(sql`${t.outcome} IN ('speech', 'speech_over_music')`),
   ],
 );
 

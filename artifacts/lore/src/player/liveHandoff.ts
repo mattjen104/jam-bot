@@ -38,6 +38,27 @@ export interface NextChangeView {
   boundaryAt: number | null;
 }
 
+export interface BroadcastAdvisoryView {
+  kind: "dj_speaking" | "music_resuming";
+  label: "DJ may be speaking" | "Music may be resuming";
+}
+
+export function deriveBroadcastAdvisory(
+  now: Pick<LiveNow, "freshness" | "observedAt" | "broadcastAdvisory"> | null | undefined,
+  atMs = Date.now(),
+): BroadcastAdvisoryView | null {
+  const advisory = now?.broadcastAdvisory;
+  if (!advisory || now?.freshness === "stale") return null;
+  const observedAt = Date.parse(advisory.observedAt);
+  const expiresAt = Date.parse(advisory.expiresAt);
+  const trackObservedAt = now?.observedAt ? Date.parse(now.observedAt) : Number.NaN;
+  if (!Number.isFinite(observedAt) || !Number.isFinite(expiresAt) || expiresAt <= atMs) return null;
+  if (Number.isFinite(trackObservedAt) && trackObservedAt > observedAt) return null;
+  return advisory.kind === "dj_speaking"
+    ? { kind: advisory.kind, label: "DJ may be speaking" }
+    : { kind: advisory.kind, label: "Music may be resuming" };
+}
+
 export interface HandoffCandidate {
   station: Station;
   now: LiveNow;

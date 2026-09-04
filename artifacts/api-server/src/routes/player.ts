@@ -22,6 +22,7 @@ import { classifyFreshness } from "../lore/freshness.js";
 import { estimateExpiry } from "../lore/expiry.js";
 import { recordLandingTiming } from "../lore/live-timing-health.js";
 import { timingConfidence, timingFromStoredRow } from "../lore/timing.js";
+import { getListenerBroadcastAdvisories } from "../lore/listener-broadcast-advisory.js";
 import { pollStation } from "../lore/poller.js";
 import { spinDayExpr } from "../lore/runs.js";
 import { getStationStreamState } from "../lore/resolve.js";
@@ -343,7 +344,13 @@ router.get("/player/onair", h(async (req, res) => {
     }
   }
 
+  const now = new Date();
   const latestByStation = new Map(latest.map((r) => [r.stationId, r]));
+  const broadcastAdvisories = await getListenerBroadcastAdvisories(
+    latest.map((row) => row.stationId).filter((id): id is number => id != null),
+    new Map(latest.flatMap((row) => row.stationId == null ? [] : [[row.stationId, row.observedAt] as const])),
+    now,
+  );
   const earlierByStation = new Map<number, string[]>();
   for (const r of recent) {
     if (r.stationId == null) continue;
@@ -362,7 +369,6 @@ router.get("/player/onair", h(async (req, res) => {
   }
 
   const cutoff = Date.now() - ON_AIR_WINDOW_MS;
-  const now = new Date();
   const itemsRaw = stations.map((s) => {
       const spin = latestByStation.get(s.id);
       if (!spin || spin.playedAt.getTime() < cutoff) return null;
@@ -406,6 +412,7 @@ router.get("/player/onair", h(async (req, res) => {
            estimatedRemainingMs: expiry?.remainingMs ?? null,
            likelyExpiring: expiry?.likelyExpiring ?? false,
            timingConfidence: timingConfidence(timing),
+            broadcastAdvisory: broadcastAdvisories.get(s.id) ?? null,
            ...(streamState ?? {}),
         },
         earlier,
@@ -533,6 +540,13 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
         now,
       })
     : null;
+  const broadcastAdvisory = (
+    await getListenerBroadcastAdvisories(
+      [station.id],
+      new Map(spin ? [[station.id, spin.observedAt]] : []),
+      now,
+    )
+  ).get(station.id) ?? null;
 
   const candidateKey = req.get("X-Lore-Landing-Track") ?? null;
   const landedAtHeader = Number(req.get("X-Lore-Landed-At"));
@@ -652,6 +666,7 @@ router.get("/player/station/:slug/now", h(async (req, res) => {
           /** Fingerprint offsets are the strongest available timing signal;
            * played_at remains useful but is explicitly approximate. */
           timingConfidence: timingConfidence(timing!),
+          broadcastAdvisory,
         }
       : null,
     refreshTriggered,

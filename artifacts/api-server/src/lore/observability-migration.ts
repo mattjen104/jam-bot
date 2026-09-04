@@ -48,4 +48,14 @@ export async function applyObservabilityMigration(): Promise<void> {
       FOR EACH ROW EXECUTE FUNCTION lore_observability_append_only()
     `));
   }
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS capture_outcomes_listener_speech_idx
+    ON capture_outcomes (station_id, occurred_at DESC)
+    WHERE outcome IN ('speech', 'speech_over_music')
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS broadcast_timeline_listener_resumption_idx
+    ON broadcast_timeline_events (station_id, occurred_at DESC)
+    WHERE event_type = 'speech_ends_then_sustained_music'
+  `);
 }

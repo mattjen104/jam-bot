@@ -9,6 +9,54 @@ import type { NowPlayingRaw } from "./types.js";
 const PRODUCER_VERSION = "task-582.timeline.v2";
 const ESTIMATOR_VERSION = "timing-evidence.v1";
 
+export type ListenerBroadcastAdvisoryKind = "dj_speaking" | "music_resuming";
+export interface ListenerBroadcastAdvisory {
+  kind: ListenerBroadcastAdvisoryKind;
+  observedAt: string;
+  expiresAt: string;
+}
+
+/** Speech evidence is deliberately brief and advisory, never track identity. */
+export const LISTENER_BROADCAST_ADVISORY_TTL_MS = 90_000;
+
+/**
+ * Reduce private speech ledgers to a listener-safe state. No transcript,
+ * inferred identity, classifier detail, or predicted track crosses this seam.
+ */
+export function deriveListenerBroadcastAdvisory(args: {
+  capture?: { outcome: string; occurredAt: Date } | null;
+  resumption?: { occurredAt: Date } | null;
+  trackObservedAt?: Date | null;
+  now?: Date;
+}): ListenerBroadcastAdvisory | null {
+  const now = args.now ?? new Date();
+  const candidates: Array<{ kind: ListenerBroadcastAdvisoryKind; occurredAt: Date }> = [];
+  if (
+    args.capture &&
+    (args.capture.outcome === "speech" || args.capture.outcome === "speech_over_music")
+  ) {
+    candidates.push({ kind: "dj_speaking", occurredAt: args.capture.occurredAt });
+  }
+  if (args.resumption) {
+    candidates.push({ kind: "music_resuming", occurredAt: args.resumption.occurredAt });
+  }
+  const latest = candidates.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+  if (!latest) return null;
+  const expiresAt = new Date(latest.occurredAt.getTime() + LISTENER_BROADCAST_ADVISORY_TTL_MS);
+  if (expiresAt.getTime() <= now.getTime()) return null;
+  if (
+    args.trackObservedAt &&
+    args.trackObservedAt.getTime() > latest.occurredAt.getTime()
+  ) {
+    return null;
+  }
+  return {
+    kind: latest.kind,
+    observedAt: latest.occurredAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
 function snapshot(value: Record<string, unknown>): Record<string, unknown> {
   // JSON round-tripping prevents later caller mutation from changing the
   // append-only evidence handed to the persistence layer.

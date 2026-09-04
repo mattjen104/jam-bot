@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Station } from "@workspace/api-client-react";
 import {
+  deriveBroadcastAdvisory,
   deriveNextChange,
   commitLiveHandoff,
   isConfirmedHandoffBoundary,
@@ -146,6 +147,35 @@ describe("deriveNextChange", () => {
       estimatedRemainingMs: 1_000,
       timingConfidence: "trusted",
     }), Date.parse("2026-09-03T12:00:02.000Z")).state).toBe("just-changed");
+  });
+});
+
+describe("deriveBroadcastAdvisory", () => {
+  const evidenceAt = "2026-09-03T12:00:00.000Z";
+  const expiresAt = "2026-09-03T12:01:30.000Z";
+
+  it("uses low-confidence language without exposing identity or a next track", () => {
+    expect(deriveBroadcastAdvisory(now({
+      observedAt: evidenceAt,
+      broadcastAdvisory: { kind: "dj_speaking", observedAt: evidenceAt, expiresAt },
+    }), Date.parse("2026-09-03T12:00:30.000Z"))).toEqual({
+      kind: "dj_speaking",
+      label: "DJ may be speaking",
+    });
+    expect(deriveBroadcastAdvisory(now({
+      observedAt: evidenceAt,
+      broadcastAdvisory: { kind: "music_resuming", observedAt: evidenceAt, expiresAt },
+    }), Date.parse("2026-09-03T12:00:30.000Z"))?.label).toBe("Music may be resuming");
+  });
+
+  it("clears stale, expired, and freshly contradicted evidence", () => {
+    const advisory = { kind: "dj_speaking" as const, observedAt: evidenceAt, expiresAt };
+    expect(deriveBroadcastAdvisory(now({ freshness: "stale", broadcastAdvisory: advisory }))).toBeNull();
+    expect(deriveBroadcastAdvisory(now({ broadcastAdvisory: advisory }), Date.parse(expiresAt))).toBeNull();
+    expect(deriveBroadcastAdvisory(now({
+      observedAt: "2026-09-03T12:00:01.000Z",
+      broadcastAdvisory: advisory,
+    }), Date.parse("2026-09-03T12:00:30.000Z"))).toBeNull();
   });
 });
 
