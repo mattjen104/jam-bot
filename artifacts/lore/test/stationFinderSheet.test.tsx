@@ -30,7 +30,7 @@ const audioPlayMock = vi.fn(() => Promise.resolve());
 const audioPauseMock = vi.fn();
 // A regular function (not an arrow) so `new Audio(url)` works — a
 // constructor that returns an object yields that object.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const AudioCtorMock = vi.fn(function (this: any, _url?: string) {
   return {
     play: audioPlayMock,

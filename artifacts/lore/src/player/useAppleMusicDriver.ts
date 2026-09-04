@@ -315,7 +315,7 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
       },
     }),
     // Re-create when the token or authorization state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [available, developerToken, appName, storefront, authorized, notify, teardown, startProgressInterval, clearProgressInterval],
   );
 }

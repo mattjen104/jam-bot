@@ -1408,7 +1408,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [openAlbumKey, albumGroups.length]);
 
   // Inline group filter (album / artist views only)

@@ -282,7 +282,7 @@ describe("interstitialArmed crossing detection (provider integration)", () => {
         if (step.current !== "live" || !ride.active) return;
         step.current = "past";
         ride.startReplay([SEED_PAST], "Past Run");
-      }); // eslint-disable-line react-hooks/exhaustive-deps
+      });
       return null;
     }
     renderWithProvider(<><Observer /><StateCapture /></>);
@@ -308,7 +308,7 @@ describe("interstitialArmed crossing detection (provider integration)", () => {
         if (step.current !== "first" || !ride.active) return;
         step.current = "second";
         ride.startReplay([SEED2], "Run 2");
-      }); // eslint-disable-line react-hooks/exhaustive-deps
+      });
       return null;
     }
     renderWithProvider(<><Observer /><StateCapture /></>);
@@ -358,7 +358,7 @@ describe("device continuity at live→past crossing (provider integration)", () 
       if (step.current !== "live" || !ride.active) return;
       step.current = "past";
       ride.startReplay([pastSeed ?? makeSeed("dev-past")], "Past Run");
-    }); // eslint-disable-line react-hooks/exhaustive-deps
+    });
 
     return null;
   }
@@ -470,7 +470,7 @@ describe("device continuity at live→past crossing (provider integration)", () 
         if (step.current !== "live1" || !ride.active) return;
         step.current = "past1";
         ride.startReplay([makeSeed("mc-past1")], "Past 1"); // 1st crossing
-      }); // eslint-disable-line react-hooks/exhaustive-deps
+      });
 
       useEffect(() => {
         if (step.current !== "past1" || !ride.active) return;
@@ -478,13 +478,13 @@ describe("device continuity at live→past crossing (provider integration)", () 
         ride.startReplay([makeSeed("mc-live2")], "Live 2", {
           timeOrientation: "live" as any,
         });
-      }); // eslint-disable-line react-hooks/exhaustive-deps
+      });
 
       useEffect(() => {
         if (step.current !== "live2" || !ride.active) return;
         step.current = "past2";
         ride.startReplay([makeSeed("mc-past2")], "Past 2"); // 2nd crossing — flag should block
-      }); // eslint-disable-line react-hooks/exhaustive-deps
+      });
 
       return <span data-testid="mc-step">{step.current}</span>;
     }
@@ -826,7 +826,7 @@ describe("Tier-1 prefetch ownership across ride replacement", () => {
         if (step.current !== "pinned" || !spotify.pinnedDevice) return;
         step.current = "rideA";
         ride.startReplay([seedA], "Ride A");
-      }); // eslint-disable-line react-hooks/exhaustive-deps
+      });
       return (
         <button
           type="button"

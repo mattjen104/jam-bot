@@ -2196,7 +2196,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setAltDriverActiveMbid(null);
       setAltDriversAllFailed(true);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [appleMusicDriver, youtubeDriver, localFileDriver, bandcampDriver, pauseRadio]);
 
   // ---- Preferred service trigger: start the user's chosen driver ----------
@@ -2218,7 +2218,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Not set for Bandcamp (Tier 3) — we want to land on Bandcamp.
     const skipBandcamp = preferredService === "youtube";
     tryAltDriverRef.current(currentMbid, currentItem, skipApple, skipBandcamp);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [active, preferredService, currentMbid, currentItem, playbackMode, interstitialArmed, altDriverActiveMbid, driverActive]);
 
   // Subscribe to Spotify driver status updates — mirror source/status state.
@@ -2317,7 +2317,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setAltDriversAllFailed(true);
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [youtubeDriver, currentMbid, isLiveSvcRide, pauseRadio]);
 
   // Subscribe to Apple Music driver status changes.
@@ -2369,7 +2369,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [appleMusicDriver, currentMbid, currentItem, isLiveSvcRide, pauseRadio]);
 
   // Subscribe to local file driver status changes.
@@ -2415,7 +2415,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [localFileDriver, currentMbid, currentItem, isLiveSvcRide, pauseRadio]);
 
   // Subscribe to Bandcamp driver status changes.
@@ -2457,7 +2457,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [bandcampDriver, currentMbid, currentItem, isLiveSvcRide, pauseRadio]);
 
   // Push-channel trigger hooks: the SSE effect below calls these to fire an
@@ -3113,7 +3113,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           }
         });
     }
-  }, [active, pastModeTier, mode, timeOrientation, queue, index]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, pastModeTier, mode, timeOrientation, queue, index]);
 
   // ---------------------------------------------------------------------------
   // Past-mode Tier 1: queue the entire run in one Spotify uris-array call.
@@ -3273,7 +3273,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }, 3000);
 
     return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [active, mode, timeOrientation, pastModeTier, pastRunFailed, queue]);
 
   // ---------------------------------------------------------------------------
@@ -3414,7 +3414,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // currentMbid (from queue[index].mbid) drives the reset; spinDur is a
     // derived property of the same item so including currentItemSpinDur is
     // sufficient — no need to also depend on index directly here.
-  }, [active, timeOrientation, pastModeTier, cueSheetMbid, currentItemSpinDur]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, timeOrientation, pastModeTier, cueSheetMbid, currentItemSpinDur]);
 
   // Derived Tier-4 cue-sheet visibility. Shown when a Tier-4 past ride has
   // either no spin duration (immediate + persistent) or the spin-duration

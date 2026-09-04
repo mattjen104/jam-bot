@@ -110,7 +110,7 @@ async function injectFakeEventSource(
       constructor(url: string) {
         this.url = url;
         // Store globally so the test can drive events after page load.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         (window as any).__fakeEs = this;
         const urls = ((window as any).__fakeEsUrls ??= []);
         urls.push(url);
@@ -143,7 +143,7 @@ async function injectFakeEventSource(
       }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     (window as any).EventSource = FakeEventSource;
   });
 }
@@ -224,7 +224,7 @@ async function dispatchSseFrame(
 ): Promise<void> {
   const data = JSON.stringify(payload);
   await page.evaluate(({ d, type, lastEventId }) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const es = (window as any).__fakeEs as {
       _dispatch: (d: string, type?: string, lastEventId?: string) => void;
     } | undefined;
@@ -579,7 +579,7 @@ test.describe("WebPlayer live track change via SSE", () => {
     await expect.poll(() => onAirRequests, { timeout: 5_000 }).toBe(beforeResume + 1);
     await expect(row).toContainText("Recovered Artist");
     const urls = await page.evaluate(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       () => (window as any).__fakeEsUrls as string[],
     );
     expect(urls.at(-1)).toContain("lastEventId=4");
