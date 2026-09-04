@@ -195,7 +195,10 @@ export function spinitronCalendarFeedUrl(
  * timestamps through this server's timezone. The date and HH:MM components
  * displayed by Spinitron are the schedule's local wall-clock values.
  */
-export function parseSpinitronCalendarFeed(raw: string): ExtractedShow[] | null {
+export function parseSpinitronCalendarFeed(
+  raw: string,
+  window?: { start: string; end: string },
+): ExtractedShow[] | null {
   let events: unknown;
   try {
     events = JSON.parse(raw);
@@ -214,6 +217,15 @@ export function parseSpinitronCalendarFeed(raw: string): ExtractedShow[] | null 
       typeof value.end !== "string"
     ) {
       return null;
+    }
+    const eventDate = value.start.slice(0, 10);
+    // FullCalendar providers may pad a requested week with events from the
+    // adjacent weekend or following Monday. Those rows are useful to the
+    // calendar UI but would collide with this recurring weekly grid. Keep the
+    // exact requested [start, end) range and never choose between real
+    // same-date conflicts.
+    if (window && (eventDate < window.start || eventDate >= window.end)) {
+      continue;
     }
     const start = value.start.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     const end = value.end.match(/^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})/);
@@ -861,7 +873,11 @@ export async function scrapeStationSchedule(
       });
       const calendarOrigin = new URL(sourceUrl!).origin;
       if (!res.ok || new URL(res.url || feedUrl).origin !== calendarOrigin) return fail();
-      shows = parseSpinitronCalendarFeed(await res.text());
+      const requestedWindow = {
+        start: new URL(feedUrl).searchParams.get("start")!,
+        end: new URL(feedUrl).searchParams.get("end")!,
+      };
+      shows = parseSpinitronCalendarFeed(await res.text(), requestedWindow);
       extraction = "api";
     } catch (err) {
       console.warn(`[schedule-scraper] Spinitron feed failed for ${target.slug}`, err);

@@ -44,6 +44,7 @@ export const SPINITRON_CALLSIGNS: ReadonlySet<string> = new Set([
   "KSJS",
   "KXLU",
   "WLUW",
+  "WPKN",
 ]);
 
 export function spinitronWebSourceForCallsign(
@@ -1953,6 +1954,56 @@ function spinitronCollegeStations(): InsertStation[] {
       stationClass: "community",
       tags: COLLEGE,
       sortOrder: 645,
+    },
+    {
+      slug: "kfjc",
+      name: "KFJC 89.7 FM",
+      org: "Foothill College",
+      country: "US",
+      city: "Los Altos Hills",
+      region: "CA",
+      // KFJC's official listen page publishes these netcast mounts. The
+      // station currently serves them over HTTP, so Lore's existing stream
+      // relay provides HTTPS browser playback without changing the audio.
+      streamUrl: "http://netcast.kfjc.org/kfjc-128k-mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://kfjc.org",
+      // The Broadcast Forecast is KFJC's official rolling programming grid.
+      scheduleUrl: "https://kfjc.org/listen/broadcast-forecast",
+      donateUrl: "https://kfjc.org/support",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "http://netcast.kfjc.org/kfjc-128k-mp3",
+        callsign: "KFJC",
+      },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      tags: COLLEGE,
+      sortOrder: 650,
+    },
+    {
+      slug: "wpkn",
+      name: "WPKN 89.5 FM",
+      org: "WPKN",
+      country: "US",
+      city: "Bridgeport",
+      region: "CT",
+      // Published directly in the official wpkn.org audio player.
+      streamUrl: "https://ice25.securenetsystems.net/WPKN",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wpkn.org",
+      // WPKN's public Spinitron calendar exposes the same weekly programming
+      // through the reusable calendar-feed adapter with row-level provenance.
+      scheduleUrl: "https://spinitron.com/WPKN/calendar",
+      donateUrl: "https://wpkn.org/donate/",
+      ...spinSource("WPKN", "https://ice25.securenetsystems.net/WPKN"),
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      sortOrder: 655,
     },
   ];
 }

@@ -800,6 +800,41 @@ describe("Spinitron public calendar adapter", () => {
     ]))).toBeNull();
   });
 
+  it("drops FullCalendar padding outside the requested week", () => {
+    const result = parseSpinitronCalendarFeed(
+      JSON.stringify([
+        {
+          title: "Previous Sunday",
+          text: "DJ Before",
+          start: "2025-02-23T09:00:00-08:00",
+          end: "2025-02-23T10:00:00-08:00",
+        },
+        {
+          title: "Monday Show",
+          text: "DJ Current",
+          start: "2025-02-24T09:00:00-08:00",
+          end: "2025-02-24T10:00:00-08:00",
+        },
+        {
+          title: "Following Monday",
+          text: "DJ After",
+          start: "2025-03-03T09:00:00-08:00",
+          end: "2025-03-03T10:00:00-08:00",
+        },
+      ]),
+      { start: "2025-02-24", end: "2025-03-03" },
+    );
+    expect(result).toEqual([
+      {
+        showName: "Monday Show",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+        endTime: "10:00",
+        djName: "DJ Current",
+      },
+    ]);
+  });
+
   it("does not follow an off-origin or non-calendar configured endpoint", () => {
     expect(spinitronCalendarFeedUrl(
       "https://spinitron.com/KCSB/calendar",
