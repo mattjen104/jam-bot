@@ -11,6 +11,8 @@
     "audit:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts",
     "cleanup:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts --apply",
     "refresh:soundtap-schedules": "tsx ./src/scripts/refresh-soundtap-schedules.ts",
+    "preflight:speech-pilot": "tsx ./src/scripts/run-speech-pilot.ts --preflight",
+    "run:speech-pilot": "tsx ./src/scripts/run-speech-pilot.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"

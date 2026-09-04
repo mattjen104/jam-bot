@@ -174,27 +174,44 @@ export async function getSpeechPilotAdminStatus() {
  * boundaries. The station-level active set protects the transient capture
  * pipeline from overlapping poller/watcher evidence.
  */
-export function scheduleSpeechTransitionCandidate(station: Station): void {
+/**
+ * `runId` is supplied only by the bounded operator runner.  It deliberately
+ * does not loosen normal admission; it makes the append-only evidence and
+ * reservations attributable to a single invocation.
+ */
+export function scheduleSpeechTransitionCandidate(station: Station, runId?: string, signal?: AbortSignal): Promise<void> {
   if (!started || !scheduler || !stt || pilotKilled || activeStations.has(station.id) ||
     !cohortStationIds.includes(station.id) ||
-    activeStations.size >= integerEnv("LORE_SPEECH_MAX_CONCURRENCY", 1)) return;
-  void refreshPilotGate().then((healthy) => {
-    if (!healthy || !scheduler || !stt || activeStations.has(station.id)) return;
+    activeStations.size >= integerEnv("LORE_SPEECH_MAX_CONCURRENCY", 1)) return Promise.resolve();
+  return new Promise((complete) => {
+  void refreshPilotGate().then(async (healthy) => {
+    if (!healthy || !scheduler || !stt || signal?.aborted || activeStations.has(station.id)) { complete(); return; }
   const at = new Date();
   const mounts = mountsFor(station);
   const rank = estimateTalkWindows(talkHistory, at).find((entry) => entry.stationId === station.id)?.score ?? 0;
-  const admission = scheduler.reserve(station.id, at, mounts);
-  const decisionKey = `speech-shadow:decision:${admission.kind === "sampled" ? admission.reservation.id : `${station.id}:${Math.floor(at.getTime() / 60_000)}`}`;
-  void appendCaptureDecision({
+   const admission = scheduler.reserve(station.id, at, mounts, runId);
+   const captureKey = `${admission.kind === "sampled" ? admission.reservation.id : `${station.id}:${Math.floor(at.getTime() / 60_000)}`}${runId ? `:run:${runId}` : ""}`;
+   const decisionKey = `speech-shadow:decision:${captureKey}`;
+   try {
+   await appendCaptureDecision({
     stationId: station.id, decidedAt: at, decision: admission.kind,
     idempotencyKey: decisionKey, producerVersion: PRODUCER_VERSION,
     outcome: admission.kind === "sampled" ? admission.reason : admission.reason,
-    featureSnapshot: { candidate: "transition", rank, mounts: mounts.length },
-    provenance: { provider: "local_only", source: station.nowPlayingSource ?? "unknown" },
-  }).catch((error) => console.warn("[lore] speech decision append failed", error));
-  if (admission.kind !== "sampled" || admission.reason === "idempotent") return;
+     featureSnapshot: { candidate: runId ? "operator_one_shot" : "transition", rank, mounts: mounts.length },
+     provenance: { provider: "local_only", source: station.nowPlayingSource ?? "unknown", ...(runId ? { pilotRunId: runId } : {}) },
+   });
+   } catch {
+     // Evidence is a prerequisite for collection; never capture an
+     // unaccountable clip when the append-only ledger is unavailable.
+     complete();
+     return;
+   }
+   if (admission.kind !== "sampled" || admission.reason === "idempotent") { complete(); return; }
   activeStations.add(station.id);
   const reservation = admission.reservation;
+   // The global is reset by stop; retain the admitted adapter for this entire
+   // in-flight capture so teardown cannot turn an abort into a null dereference.
+   const adapter = stt;
   void assertPublicHttpStreamUrl(reservation.mountUrl).then((target) => withTransientSpeechClip(
     target.pinnedUrl,
     {
@@ -203,9 +220,9 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
       timeoutMs: integerEnv("LORE_SPEECH_CAPTURE_TIMEOUT_MS", 45_000),
        maxBytes: integerEnv("LORE_SPEECH_CAPTURE_MAX_BYTES", 2_000_000),
       originalAuthority: target.originalAuthority,
-      originalHostname: target.originalHostname,
+       originalHostname: target.originalHostname, signal,
     },
-    async (clip) => ({ outcome: await stt!.transcribe(clip.path), clip }),
+     async (clip) => ({ outcome: await adapter.transcribe(clip.path, signal), clip }),
   )).then(async ({ outcome, clip }) => {
     const classifierIntervals = "intervals" in outcome ? outcome.intervals : undefined;
     const boundary = classifierIntervals
@@ -216,7 +233,7 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
         stationId: station.id,
         eventType: "speech_ends_then_sustained_music",
         occurredAt: new Date(clip.startedAt.getTime() + boundary.musicStartedAtMs),
-        idempotencyKey: `speech-shadow:timeline:${reservation.id}:speech-music`,
+         idempotencyKey: `speech-shadow:timeline:${captureKey}:speech-music`,
         producerVersion: PRODUCER_VERSION,
         outcome: "advisory",
         featureSnapshot: {
@@ -229,7 +246,7 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
         provenance: {
           provider: "local_classifier",
           classifierVersion: "local_classifier_intervals.v1",
-          identityInput: false,
+           identityInput: false, ...(runId ? { pilotRunId: runId } : {}),
         },
       });
     }
@@ -237,18 +254,18 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
       const claims = extractExplicitGroundedClaims(outcome.segments);
       for (const [index, segment] of outcome.segments.entries()) {
         const capturedAt = new Date(clip.startedAt.getTime() + segment.startedAtMs);
-        const segmentKey = `speech-shadow:segment:${reservation.id}:${index}`;
+         const segmentKey = `speech-shadow:segment:${captureKey}:${index}`;
         await appendTranscriptSegment({
           stationId: station.id, capturedAt, idempotencyKey: segmentKey, producerVersion: PRODUCER_VERSION,
           outcome: outcome.kind, featureSnapshot: { ...segment, confidence: null },
-          provenance: { provider: "local_stt", model: process.env["LORE_SPEECH_LOCAL_STT_MODEL"], captureStartedAt: clip.startedAt.toISOString() },
+           provenance: { provider: "local_stt", model: process.env["LORE_SPEECH_LOCAL_STT_MODEL"], captureStartedAt: clip.startedAt.toISOString(), ...(runId ? { pilotRunId: runId } : {}) },
         });
         for (const [claimIndex, claim] of claims.entries()) {
           if (claim.segmentIndex !== index) continue;
           await appendTranscriptClaim({
             stationId: station.id, claimedAt: capturedAt, segmentIdempotencyKey: segmentKey,
             idempotencyKey: `${segmentKey}:claim:${claimIndex}`, producerVersion: PRODUCER_VERSION,
-            outcome: "grounded", featureSnapshot: { ...claim }, provenance: { extractor: "exact_pattern.v1" },
+             outcome: "grounded", featureSnapshot: { ...claim }, provenance: { extractor: "exact_pattern.v1", ...(runId ? { pilotRunId: runId } : {}) },
           });
           if (claim.kind === "dj" || claim.kind === "show") {
             const scheduled = await lookupActiveScheduleEntry(station.id, station.ianaTimezone, capturedAt);
@@ -285,7 +302,7 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
                 comparison: "normalized_exact_name.v1",
                 scheduleReadOnly: true,
                 clipTime: capturedAt.toISOString(),
-                timezone: station.ianaTimezone,
+                 timezone: station.ianaTimezone, ...(runId ? { pilotRunId: runId } : {}),
               },
             });
           }
@@ -299,20 +316,22 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
     }
     return appendCaptureOutcome({
     stationId: station.id, occurredAt: new Date(), decisionIdempotencyKey: decisionKey,
-    idempotencyKey: `speech-shadow:outcome:${reservation.id}`,
+     idempotencyKey: `speech-shadow:outcome:${captureKey}`,
     producerVersion: PRODUCER_VERSION, outcome: outcome.kind,
-    featureSnapshot: { candidate: "transition", localOnly: true, rank },
-    provenance: { provider: "local_stt", captureStartedAt: at.toISOString() },
+     featureSnapshot: { candidate: runId ? "operator_one_shot" : "transition", localOnly: true, rank },
+     provenance: { provider: "local_stt", captureStartedAt: at.toISOString(), ...(runId ? { pilotRunId: runId } : {}) },
   });
   }).catch((error) => appendCaptureOutcome({
     stationId: station.id, occurredAt: new Date(), decisionIdempotencyKey: decisionKey,
-    idempotencyKey: `speech-shadow:outcome:${reservation.id}`,
+     idempotencyKey: `speech-shadow:outcome:${captureKey}`,
     producerVersion: PRODUCER_VERSION, outcome: "capture_failure",
-    featureSnapshot: { candidate: "transition", localOnly: true },
-    provenance: { provider: "local_stt", error: error instanceof Error ? error.message : String(error) },
-  })).finally(() => activeStations.delete(station.id));
+     featureSnapshot: { candidate: runId ? "operator_one_shot" : "transition", localOnly: true },
+     provenance: { provider: "local_stt", error: error instanceof Error ? error.message : String(error), ...(runId ? { pilotRunId: runId } : {}) },
+  })).finally(() => { activeStations.delete(station.id); complete(); });
   }).catch(() => {
     pilotKilled = true;
     scheduler = null;
+    complete();
+  });
   });
 }

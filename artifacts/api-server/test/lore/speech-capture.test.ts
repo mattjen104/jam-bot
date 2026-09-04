@@ -163,6 +163,75 @@ setInterval(() => undefined, 1_000);
     2_000,
   );
 
+  it.skipIf(process.platform !== "linux")(
+    "waits for an aborted local model process to exit",
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "lore-speech-abort-"));
+      const executable = join(directory, "stalled-model");
+      const modelPath = join(directory, "model.bin");
+      const pidPath = join(directory, "child.pid");
+      await writeFile(executable, `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+writeFileSync(process.argv.at(-1), String(process.pid));
+setInterval(() => undefined, 1_000);
+`);
+      await chmod(executable, 0o700);
+      await writeFile(modelPath, "test model");
+      const controller = new AbortController();
+      try {
+        const adapter = new LocalSttAdapter({
+          executable,
+          modelPath,
+          timeoutMs: 3_000,
+          maxConcurrency: 1,
+        });
+        const pending = adapter.transcribe(pidPath, controller.signal);
+        for (let attempt = 0; attempt < 50 && !existsSync(pidPath); attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        controller.abort();
+        await expect(pending).resolves.toEqual({
+          kind: "transcription_failure",
+          reason: "local command aborted",
+        });
+        const pid = Number(await readFile(pidPath, "utf8"));
+        expect(existsSync(`/proc/${pid}`)).toBe(false);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+    5_000,
+  );
+
+  it.skipIf(process.platform !== "linux")(
+    "settles when the local model starts with an already-aborted signal",
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "lore-speech-pre-abort-"));
+      const executable = join(directory, "stalled-model");
+      const modelPath = join(directory, "model.bin");
+      await writeFile(executable, "#!/bin/sh\nsleep 30\n");
+      await chmod(executable, 0o700);
+      await writeFile(modelPath, "test model");
+      const controller = new AbortController();
+      controller.abort();
+      try {
+        const adapter = new LocalSttAdapter({
+          executable,
+          modelPath,
+          timeoutMs: 3_000,
+          maxConcurrency: 1,
+        });
+        await expect(adapter.transcribe("/tmp/pre-aborted.wav", controller.signal)).resolves.toEqual({
+          kind: "transcription_failure",
+          reason: "local command aborted",
+        });
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+    5_000,
+  );
+
   it("classifies silence and music locally before ASR", async () => {
     for (const outcome of ["silence", "music"] as const) {
       const calls: string[] = [];

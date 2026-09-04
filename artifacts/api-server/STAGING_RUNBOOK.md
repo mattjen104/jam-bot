@@ -166,3 +166,48 @@ Before the trial, confirm every item below:
 | MusicBrainz | HTTP 503 | Back-off starts at 30 s, doubles, caps at 5 min | Phase 3 worker pauses; Phase 3 retry scheduler re-attempts 2–6 AM UTC |
 | Odesli (share links) | HTTP 429 | `x-ratelimit-reset` | Per-call cache; retried on next request |
 | Station adapters | HTTP 429 or timeout | `retry-after` header (logged by probe) | Next poll tick; no special back-off |
+
+---
+
+## 8 Local speech-shadow pilot (opt-in, advisory-only)
+
+This pilot is **not enabled by default** and must never be pointed at a hosted
+transcription API. It captures a short, transient local WAV only; transcript
+claims are evidence/ranking hints and never station identity or listener-facing
+text.
+
+Install local `ffmpeg`, an inaSpeechSegmenter-compatible classifier wrapper, a
+Silero-compatible VAD wrapper, and a Whisper-compatible executable. Each
+wrapper must accept `--output-format json <clip>` (and optional `--model
+<path>`). It must also implement `--self-test --output-format json` and emit
+`{"contract":"lore-speech-local.v1","component":"classifier|vad|stt","outputFormat":"json","localOnly":true}`.
+STT emits `{"segments":[{"start":seconds,"end":seconds,"text":"..."}]}`.
+Classifier emits an `outcome` or labelled `segments`; VAD emits `segments` or
+`speech_timestamps`. Put model files on local readable storage.
+
+Use a 1–3 station cohort with known public HTTP(S) mounts; do not select
+private-network, credentialed, or public-safety streams. Safe starter settings:
+
+```bash
+export LORE_SPEECH_SHADOW_ENABLED=true LORE_SPEECH_CAPTURE_ENABLED=true
+export LORE_SPEECH_FFMPEG_EXECUTABLE=/usr/bin/ffmpeg
+export LORE_SPEECH_CLASSIFIER_EXECUTABLE=/opt/lore/classifier
+export LORE_SPEECH_SILERO_VAD_EXECUTABLE=/opt/lore/silero-vad
+export LORE_SPEECH_LOCAL_STT_EXECUTABLE=/opt/lore/whisper
+export LORE_SPEECH_LOCAL_STT_MODEL=/opt/lore/models/whisper.bin
+export LORE_SPEECH_CAPTURE_SECONDS=30 LORE_SPEECH_CAPTURE_MAX_BYTES=2000000
+export LORE_SPEECH_MAX_CONCURRENCY=1
+pnpm --filter @workspace/api-server preflight:speech-pilot -- --stations=12,34
+pnpm --filter @workspace/api-server run:speech-pilot -- --stations=12,34 --timeout-seconds=120 --json
+```
+
+Preflight retains no audio. When capture is enabled it performs a one-second
+decode probe through the production transient-clip path, then deletes it.
+It fails closed on local runtime/model, database,
+cohort, budget, or public-mount errors. The one-shot command directly enqueues
+only the supplied cohort, waits for bounded completion, prints JSON (including
+per-station outcomes, segments, claims, health gate), and removes transient
+clips even on failure. Inspect append-only admin evidence filtered by station
+and the `pilotRunId` printed in provenance. Ctrl-C/SIGTERM stops further
+admission; unset both enable flags after the run. A timeout, kill, failure-rate
+regression, or any retained raw clip is a rollback condition.

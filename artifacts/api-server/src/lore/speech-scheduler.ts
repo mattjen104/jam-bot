@@ -46,7 +46,7 @@ export class SpeechQuotaScheduler {
 
   constructor(private readonly policy: SpeechQuotaPolicy) {}
 
-  reserve(stationId: number, at: Date, mounts: readonly SpeechMount[]): SpeechAdmission {
+  reserve(stationId: number, at: Date, mounts: readonly SpeechMount[], reservationScope?: string): SpeechAdmission {
     if (!this.policy.enabled) return { kind: "skipped", reason: "disabled" };
     if (this.policy.stagedStationIds && !this.policy.stagedStationIds.includes(stationId)) {
       return { kind: "skipped", reason: "staged_mode" };
@@ -54,7 +54,7 @@ export class SpeechQuotaScheduler {
     const windowMs = Math.max(1, this.policy.windowMs);
     const bucket = Math.floor(at.getTime() / windowMs);
     const stationKey = `${stationId}:${bucket}`;
-    const id = `speech:${stationKey}`;
+    const id = `speech:${stationKey}${reservationScope ? `:run:${reservationScope}` : ""}`;
     const existing = this.reservations.get(id);
     if (existing) return { kind: "sampled", reason: "idempotent", reservation: existing };
     const mount = selectCheapestMount(mounts);

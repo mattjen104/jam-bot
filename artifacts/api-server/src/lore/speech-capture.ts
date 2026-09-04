@@ -19,6 +19,7 @@ export type LocalCommandRunner = (
   args: readonly string[],
   timeoutMs: number,
   budget?: { maxCpuMs?: number; maxMemoryBytes?: number },
+  signal?: AbortSignal,
 ) => Promise<LocalCommandResult>;
 
 function runLocalCommand(
@@ -26,15 +27,21 @@ function runLocalCommand(
   args: readonly string[],
   timeoutMs: number,
   budget?: { maxCpuMs?: number; maxMemoryBytes?: number },
+  signal?: AbortSignal,
 ): Promise<LocalCommandResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, [...args], { stdio: ["ignore", "pipe", "pipe"] });
+    const detached = process.platform !== "win32";
+    const child = spawn(executable, [...args], {
+      stdio: ["ignore", "pipe", "pipe"],
+      detached,
+    });
     let stdout = "";
     let stderr = "";
     let cpuMs = 0;
     let maxMemoryBytes = 0;
     let budgetExceeded = false;
     let timeoutError: Error | undefined;
+    let abortError: Error | undefined;
     const maxOutputBytes = 1_000_000;
     let done = false;
     const finish = (error?: Error) => {
@@ -42,12 +49,21 @@ function runLocalCommand(
       done = true;
       clearTimeout(timer);
       clearInterval(resourceTimer);
+      signal?.removeEventListener("abort", onAbort);
       if (error) reject(error);
       else resolve({ stdout, stderr, cpuMs, maxMemoryBytes });
     };
+    const killChild = () => {
+      try {
+        if (detached && child.pid) process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch {
+        child.kill("SIGKILL");
+      }
+    };
     const timer = setTimeout(() => {
       timeoutError = new Error(`local command timed out after ${timeoutMs}ms`);
-      child.kill("SIGKILL");
+      killChild();
     }, timeoutMs);
     const resourceTimer = setInterval(() => {
       void Promise.all([
@@ -63,15 +79,19 @@ function runLocalCommand(
           ((budget?.maxCpuMs != null && cpuMs > budget.maxCpuMs) ||
             (budget?.maxMemoryBytes != null && maxMemoryBytes > budget.maxMemoryBytes))) {
           budgetExceeded = true;
-          child.kill("SIGKILL");
+          killChild();
         }
       }).catch(() => undefined);
     }, 100);
     resourceTimer.unref();
+    const onAbort = () => {
+      abortError = new Error("local command aborted");
+      killChild();
+    };
     const append = (current: string, data: Buffer) => {
       const next = current + data.toString();
       if (Buffer.byteLength(next) > maxOutputBytes) {
-        child.kill("SIGKILL");
+        killChild();
         finish(new Error(`local command exceeded ${maxOutputBytes} byte output limit`));
       }
       return next;
@@ -79,7 +99,12 @@ function runLocalCommand(
     child.stdout.on("data", (data: Buffer) => { stdout = append(stdout, data); });
     child.stderr.on("data", (data: Buffer) => { stderr = append(stderr, data); });
     child.once("error", (error) => finish(error));
-    child.once("close", (code) => finish(timeoutError ?? (code === 0 || budgetExceeded ? undefined : new Error(`${executable} exited ${code}`))));
+    child.once("close", (code) => finish(abortError ?? timeoutError ?? (code === 0 || budgetExceeded ? undefined : new Error(`${executable} exited ${code}`))));
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -93,6 +118,7 @@ export interface SpeechCaptureConfig {
   originalHostname?: string;
   /** A directory supplied by the process owner, or the OS temp directory. */
   tempRoot?: string;
+  signal?: AbortSignal;
 }
 
 function isPublicIpv4(address: string): boolean {
@@ -235,7 +261,7 @@ export async function withTransientSpeechClip<T>(
       "-nostdin", "-loglevel", "error", "-protocol_whitelist", "http,https,tcp,tls",
       "-max_redirects", "0", ...connectionIdentity, ...tlsIdentity, "-i", streamUrl, "-t",
       String(config.durationSeconds), "-ac", "1", "-ar", "16000", path,
-    ], config.timeoutMs);
+    ], config.timeoutMs, undefined, config.signal);
     if (config.maxBytes != null) {
       const clip = await stat(path);
       if (clip.size > config.maxBytes) {
@@ -331,7 +357,7 @@ export class LocalClassifierAdapter {
     private readonly fileAccessible: (path: string) => Promise<void> = access,
   ) {}
 
-  async classify(clipPath: string): Promise<{ kind: "classified"; classification: LocalSpeechClassification; intervals: ClassifiedAudioInterval[] } | { kind: "failure"; reason: string } | { kind: "skipped"; reason: "cpu_budget" | "memory_budget" }> {
+  async classify(clipPath: string, signal?: AbortSignal): Promise<{ kind: "classified"; classification: LocalSpeechClassification; intervals: ClassifiedAudioInterval[] } | { kind: "failure"; reason: string } | { kind: "skipped"; reason: "cpu_budget" | "memory_budget" }> {
     if (!this.config.executable) return { kind: "failure", reason: "classifier executable is not configured" };
     try {
       await this.fileAccessible(this.config.executable);
@@ -339,7 +365,7 @@ export class LocalClassifierAdapter {
       const args = this.config.modelPath
         ? ["--model", this.config.modelPath, "--output-format", "json", clipPath]
         : ["--output-format", "json", clipPath];
-      const result = await this.runner(this.config.executable, args, this.config.timeoutMs, this.config);
+       const result = await this.runner(this.config.executable, args, this.config.timeoutMs, this.config, signal);
       const budget = exceedsBudget(result, this.config);
       if (budget) return { kind: "skipped", reason: budget };
       const parsed = JSON.parse(result.stdout) as LocalClassifierJson;
@@ -377,7 +403,7 @@ export class LocalVadAdapter {
     private readonly fileAccessible: (path: string) => Promise<void> = access,
   ) {}
 
-  async trim(clipPath: string): Promise<{ kind: "speech"; segments: LocalVadSegment[] } | { kind: "failure"; reason: string } | { kind: "skipped"; reason: "cpu_budget" | "memory_budget" }> {
+  async trim(clipPath: string, signal?: AbortSignal): Promise<{ kind: "speech"; segments: LocalVadSegment[] } | { kind: "failure"; reason: string } | { kind: "skipped"; reason: "cpu_budget" | "memory_budget" }> {
     if (!this.config.executable) return { kind: "failure", reason: "VAD executable is not configured" };
     try {
       await this.fileAccessible(this.config.executable);
@@ -385,7 +411,7 @@ export class LocalVadAdapter {
       const args = this.config.modelPath
         ? ["--model", this.config.modelPath, "--output-format", "json", clipPath]
         : ["--output-format", "json", clipPath];
-      const result = await this.runner(this.config.executable, args, this.config.timeoutMs, this.config);
+       const result = await this.runner(this.config.executable, args, this.config.timeoutMs, this.config, signal);
       const budget = exceedsBudget(result, this.config);
       if (budget) return { kind: "skipped", reason: budget };
       const parsed = JSON.parse(result.stdout) as LocalVadJson;
@@ -452,7 +478,7 @@ export class LocalSttAdapter {
     return null;
   }
 
-  async transcribe(clipPath: string): Promise<LocalSttOutcome> {
+  async transcribe(clipPath: string, signal?: AbortSignal): Promise<LocalSttOutcome> {
     const unavailable = await this.availability();
     if (unavailable) return unavailable;
     if (this.active >= this.config.maxConcurrency) return { kind: "skipped", reason: "concurrency_budget" };
@@ -461,7 +487,7 @@ export class LocalSttAdapter {
       let classification: LocalSpeechClassification = "speech";
       let classifiedIntervals: ClassifiedAudioInterval[] | undefined;
       if (this.config.classifier) {
-        const classified = await new LocalClassifierAdapter(this.config.classifier, this.runner, this.fileAccessible).classify(clipPath);
+         const classified = await new LocalClassifierAdapter(this.config.classifier, this.runner, this.fileAccessible).classify(clipPath, signal);
         if (classified.kind === "failure") return { kind: "classification_failure", reason: classified.reason };
         if (classified.kind === "skipped") return { kind: "skipped", reason: classified.reason };
         classification = classified.classification;
@@ -473,7 +499,7 @@ export class LocalSttAdapter {
 
       let trims: LocalVadSegment[] = [{ start: 0, end: 0 }];
       if (this.config.vad) {
-        const trimmed = await new LocalVadAdapter(this.config.vad, this.runner, this.fileAccessible).trim(clipPath);
+         const trimmed = await new LocalVadAdapter(this.config.vad, this.runner, this.fileAccessible).trim(clipPath, signal);
         if (trimmed.kind === "failure") return { kind: "vad_failure", reason: trimmed.reason };
         if (trimmed.kind === "skipped") return { kind: "skipped", reason: trimmed.reason };
         if (!trimmed.segments.length) {
@@ -488,7 +514,7 @@ export class LocalSttAdapter {
         const args = ["--model", this.config.modelPath!, "--output-format", "json"];
         if (this.config.vad) args.push("--clip-timestamps", `${trim.start},${trim.end}`);
         args.push(clipPath);
-        const result = await this.runner(this.config.executable!, args, this.config.timeoutMs, this.config);
+         const result = await this.runner(this.config.executable!, args, this.config.timeoutMs, this.config, signal);
         const budget = exceedsBudget(result, this.config);
         if (budget) return { kind: "skipped", reason: budget };
         const parsed = JSON.parse(result.stdout) as LocalSttJson;
