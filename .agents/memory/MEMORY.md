@@ -151,3 +151,4 @@
 - [Rotating schedule honesty](rotating-schedule-honesty.md) — conflicting official dated events stay date-specific; only conflict-free provider weeks may become recurring grid rows.
 - [Station inventory evidence semantics](station-inventory-evidence-semantics.md) — missing, insufficient, and failed evidence are distinct; action rankings must never turn absence into a measured failure.
 - [Listener speech advisory boundary](listener-speech-advisory-boundary.md) — expose only short-lived generic talk/resumption states; server-clock expiry and fresh metadata always win.
+- [Scheduled speech boundary observer](scheduled-speech-boundary-observer.md) — persist pending boundaries; claim DB attempts before local quota; adapt sampling per show and preserve source provenance.

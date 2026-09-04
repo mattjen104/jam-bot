@@ -3,7 +3,7 @@ import { appendBroadcastTimelineEvent, appendCaptureDecision, appendCaptureOutco
 import { assertPublicHttpStreamUrl, deriveSpeechEndsThenSustainedMusic, LocalSttAdapter, withTransientSpeechClip } from "./speech-capture.js";
 import { extractExplicitGroundedClaims } from "./speech-grounding.js";
 import { compareTranscriptToSchedule, lookupActiveScheduleEntry } from "./speech-schedule-comparison.js";
-import { SpeechQuotaScheduler, type SpeechMount } from "./speech-scheduler.js";
+import { SpeechQuotaScheduler, type SpeechAdmission, type SpeechMount } from "./speech-scheduler.js";
 import { estimateTalkWindows, type TalkObservation } from "./speech-talk-window.js";
 
 const PRODUCER_VERSION = "speech-shadow.pilot.v1";
@@ -16,6 +16,10 @@ let cohortStationIds: number[] = [];
 let pilotKilled = false;
 let lastHealthCheckAt = 0;
 let lastPilotHealth: SpeechPilotHealth | null = null;
+
+export interface SpeechCandidateContext extends Record<string, unknown> {
+  kind: "transition" | "scheduled_boundary" | "operator_one_shot";
+}
 
 function integerEnv(name: string, fallback: number): number {
   const parsed = Number(process.env[name]);
@@ -179,32 +183,86 @@ export async function getSpeechPilotAdminStatus() {
  * does not loosen normal admission; it makes the append-only evidence and
  * reservations attributable to a single invocation.
  */
-export function scheduleSpeechTransitionCandidate(station: Station, runId?: string, signal?: AbortSignal): Promise<void> {
+export function scheduleSpeechTransitionCandidate(
+  station: Station,
+  runId?: string,
+  signal?: AbortSignal,
+  context?: SpeechCandidateContext,
+): Promise<void> {
   if (!started || !scheduler || !stt || pilotKilled || activeStations.has(station.id) ||
     !cohortStationIds.includes(station.id) ||
     activeStations.size >= integerEnv("LORE_SPEECH_MAX_CONCURRENCY", 1)) return Promise.resolve();
   return new Promise((complete) => {
   void refreshPilotGate().then(async (healthy) => {
     if (!healthy || !scheduler || !stt || signal?.aborted || activeStations.has(station.id)) { complete(); return; }
-  const at = new Date();
+   const at = new Date();
+   const candidate = context ?? {
+     kind: runId ? "operator_one_shot" : "transition",
+   } satisfies SpeechCandidateContext;
   const mounts = mountsFor(station);
   const rank = estimateTalkWindows(talkHistory, at).find((entry) => entry.stationId === station.id)?.score ?? 0;
-   const admission = scheduler.reserve(station.id, at, mounts, runId);
-   const captureKey = `${admission.kind === "sampled" ? admission.reservation.id : `${station.id}:${Math.floor(at.getTime() / 60_000)}`}${runId ? `:run:${runId}` : ""}`;
+   const boundaryKey = candidate.kind === "scheduled_boundary" &&
+     typeof candidate.boundaryKey === "string" ? candidate.boundaryKey : null;
+   const attemptBucket = Math.floor(
+     at.getTime() / integerEnv("LORE_SPEECH_SCHEDULE_LEASE_MS", 5 * 60_000),
+   );
+   let admission: SpeechAdmission;
+   let captureKey: string;
+   if (boundaryKey) {
+     // Claim the durable attempt before touching process-local quota. A worker
+     // which loses this insert remains able to recover a later attempt.
+     captureKey = `${boundaryKey}:attempt:${attemptBucket}`;
+     const claimed = await appendCaptureDecision({
+       stationId: station.id,
+       decidedAt: at,
+       decision: "attempt_claimed",
+       idempotencyKey: `speech-shadow:decision:${captureKey}`,
+       producerVersion: PRODUCER_VERSION,
+       outcome: "attempt_claimed",
+       featureSnapshot: { candidate, rank, mounts: mounts.length },
+       provenance: {
+         provider: "local_only",
+         source: station.nowPlayingSource ?? "unknown",
+         candidateKind: candidate.kind,
+       },
+     }).catch(() => false);
+     if (!claimed) { complete(); return; }
+     admission = scheduler.reserve(station.id, at, mounts);
+     if (admission.kind !== "sampled" || admission.reason === "idempotent") {
+       await appendCaptureOutcome({
+         stationId: station.id,
+         occurredAt: new Date(),
+         decisionIdempotencyKey: `speech-shadow:decision:${captureKey}`,
+         idempotencyKey: `speech-shadow:outcome:${captureKey}`,
+         producerVersion: PRODUCER_VERSION,
+         outcome: admission.reason,
+         featureSnapshot: { candidate, localOnly: true, rank },
+         provenance: { provider: "local_only", candidateKind: candidate.kind },
+       });
+       complete();
+       return;
+     }
+   } else {
+     admission = scheduler.reserve(station.id, at, mounts, runId);
+     captureKey = `${admission.kind === "sampled" ? admission.reservation.id : `${station.id}:${Math.floor(at.getTime() / 60_000)}`}${runId ? `:run:${runId}` : ""}`;
+   }
    const decisionKey = `speech-shadow:decision:${captureKey}`;
-   try {
-   await appendCaptureDecision({
-    stationId: station.id, decidedAt: at, decision: admission.kind,
-    idempotencyKey: decisionKey, producerVersion: PRODUCER_VERSION,
-    outcome: admission.kind === "sampled" ? admission.reason : admission.reason,
-     featureSnapshot: { candidate: runId ? "operator_one_shot" : "transition", rank, mounts: mounts.length },
-     provenance: { provider: "local_only", source: station.nowPlayingSource ?? "unknown", ...(runId ? { pilotRunId: runId } : {}) },
-   });
-   } catch {
-     // Evidence is a prerequisite for collection; never capture an
-     // unaccountable clip when the append-only ledger is unavailable.
-     complete();
-     return;
+   if (!boundaryKey) {
+     try {
+      const claimed = await appendCaptureDecision({
+       stationId: station.id, decidedAt: at, decision: admission.kind,
+       idempotencyKey: decisionKey, producerVersion: PRODUCER_VERSION,
+       outcome: admission.kind === "sampled" ? admission.reason : admission.reason,
+        featureSnapshot: { candidate, rank, mounts: mounts.length },
+        provenance: { provider: "local_only", source: station.nowPlayingSource ?? "unknown", candidateKind: candidate.kind, ...(runId ? { pilotRunId: runId } : {}) },
+      });
+      if (!claimed) { complete(); return; }
+     } catch {
+       // Evidence is a prerequisite for collection; never capture an
+       // unaccountable clip when the append-only ledger is unavailable.
+       complete();
+       return;
+     }
    }
    if (admission.kind !== "sampled" || admission.reason === "idempotent") { complete(); return; }
   activeStations.add(station.id);
@@ -258,14 +316,14 @@ export function scheduleSpeechTransitionCandidate(station: Station, runId?: stri
         await appendTranscriptSegment({
           stationId: station.id, capturedAt, idempotencyKey: segmentKey, producerVersion: PRODUCER_VERSION,
           outcome: outcome.kind, featureSnapshot: { ...segment, confidence: null },
-           provenance: { provider: "local_stt", model: process.env["LORE_SPEECH_LOCAL_STT_MODEL"], captureStartedAt: clip.startedAt.toISOString(), ...(runId ? { pilotRunId: runId } : {}) },
+            provenance: { provider: "local_stt", model: process.env["LORE_SPEECH_LOCAL_STT_MODEL"], captureStartedAt: clip.startedAt.toISOString(), candidate, ...(runId ? { pilotRunId: runId } : {}) },
         });
         for (const [claimIndex, claim] of claims.entries()) {
           if (claim.segmentIndex !== index) continue;
           await appendTranscriptClaim({
             stationId: station.id, claimedAt: capturedAt, segmentIdempotencyKey: segmentKey,
             idempotencyKey: `${segmentKey}:claim:${claimIndex}`, producerVersion: PRODUCER_VERSION,
-             outcome: "grounded", featureSnapshot: { ...claim }, provenance: { extractor: "exact_pattern.v1", ...(runId ? { pilotRunId: runId } : {}) },
+             outcome: "grounded", featureSnapshot: { ...claim }, provenance: { extractor: "exact_pattern.v1", candidate, ...(runId ? { pilotRunId: runId } : {}) },
           });
           if (claim.kind === "dj" || claim.kind === "show") {
             const scheduled = await lookupActiveScheduleEntry(station.id, station.ianaTimezone, capturedAt);
@@ -318,15 +376,15 @@ export function scheduleSpeechTransitionCandidate(station: Station, runId?: stri
     stationId: station.id, occurredAt: new Date(), decisionIdempotencyKey: decisionKey,
      idempotencyKey: `speech-shadow:outcome:${captureKey}`,
     producerVersion: PRODUCER_VERSION, outcome: outcome.kind,
-     featureSnapshot: { candidate: runId ? "operator_one_shot" : "transition", localOnly: true, rank },
-     provenance: { provider: "local_stt", captureStartedAt: at.toISOString(), ...(runId ? { pilotRunId: runId } : {}) },
+      featureSnapshot: { candidate, localOnly: true, rank },
+      provenance: { provider: "local_stt", captureStartedAt: at.toISOString(), candidateKind: candidate.kind, ...(runId ? { pilotRunId: runId } : {}) },
   });
   }).catch((error) => appendCaptureOutcome({
     stationId: station.id, occurredAt: new Date(), decisionIdempotencyKey: decisionKey,
      idempotencyKey: `speech-shadow:outcome:${captureKey}`,
     producerVersion: PRODUCER_VERSION, outcome: "capture_failure",
-     featureSnapshot: { candidate: runId ? "operator_one_shot" : "transition", localOnly: true },
-     provenance: { provider: "local_stt", error: error instanceof Error ? error.message : String(error), ...(runId ? { pilotRunId: runId } : {}) },
+      featureSnapshot: { candidate, localOnly: true },
+      provenance: { provider: "local_stt", error: error instanceof Error ? error.message : String(error), candidateKind: candidate.kind, ...(runId ? { pilotRunId: runId } : {}) },
   })).finally(() => { activeStations.delete(station.id); complete(); });
   }).catch(() => {
     pilotKilled = true;

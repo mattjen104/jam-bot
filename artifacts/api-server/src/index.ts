@@ -4,6 +4,7 @@ import { wireSongEnrichment } from "./song/wire.js";
 import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones, seedRollingStone500List, getRollingStone500EntryCount } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startSpeechShadowOrchestrator } from "./lore/speech-shadow-orchestrator.js";
+import { startScheduledSpeechBoundaryObserver } from "./lore/speech-boundary-observer.js";
 import { startLeaseScheduler } from "./lore/socket-leases.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
 import {
@@ -380,6 +381,7 @@ async function bootLore(): Promise<void> {
     // Strictly opt-in local-only shadow sampler; disabled unless every local
     // runner kill-switch/configuration requirement is present.
     startSpeechShadowOrchestrator();
+    startScheduledSpeechBoundaryObserver();
     // Run source repair after the normal fleet is scheduled. A station that
     // proves its metadata source during boot is enrolled through the poller's
     // zero-delay live path instead of being trapped behind its list-position

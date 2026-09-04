@@ -46,7 +46,11 @@ export async function appendBroadcastTimelineEvent(values: ImmutableEvidence & {
   await db.insert(broadcastTimelineEventsTable).values(safeValues(values)).onConflictDoNothing({ target: broadcastTimelineEventsTable.idempotencyKey });
 }
 export async function appendBoundaryPrediction(values: ImmutableEvidence & { predictedAt: Date; predictedBoundaryAt?: Date | null }) {
-  await db.insert(boundaryPredictionsTable).values(safeValues(values)).onConflictDoNothing({ target: boundaryPredictionsTable.idempotencyKey });
+  const inserted = await db.insert(boundaryPredictionsTable)
+    .values(safeValues(values))
+    .onConflictDoNothing({ target: boundaryPredictionsTable.idempotencyKey })
+    .returning({ id: boundaryPredictionsTable.id });
+  return inserted.length > 0;
 }
 export async function appendBoundaryEvaluation(values: ImmutableEvidence & { evaluatedAt: Date; predictionIdempotencyKey?: string | null; errorMs?: number | null }) {
   await db.insert(boundaryEvaluationsTable).values(safeValues(values)).onConflictDoNothing({ target: boundaryEvaluationsTable.idempotencyKey });
@@ -101,7 +105,11 @@ export async function claimLatestUnevaluatedBoundaryEvaluation(args: Omit<Immuta
   });
 }
 export async function appendCaptureDecision(values: ImmutableEvidence & { decidedAt: Date; decision: string }) {
-  await db.insert(captureDecisionsTable).values(safeValues(values)).onConflictDoNothing({ target: captureDecisionsTable.idempotencyKey });
+  const inserted = await db.insert(captureDecisionsTable)
+    .values(safeValues(values))
+    .onConflictDoNothing({ target: captureDecisionsTable.idempotencyKey })
+    .returning({ id: captureDecisionsTable.id });
+  return inserted.length > 0;
 }
 export async function appendCaptureOutcome(values: ImmutableEvidence & { occurredAt: Date; decisionIdempotencyKey?: string | null }) {
   await db.insert(captureOutcomesTable).values(safeValues(values)).onConflictDoNothing({ target: captureOutcomesTable.idempotencyKey });
