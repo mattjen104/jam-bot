@@ -194,6 +194,19 @@ export const SEED_STATIONS: InsertStation[] = [
   ...spinitronCanadianAdditions(),
 ];
 
+const VERIFIED_SCHEDULE_SOURCE_REPAIRS = [
+  {
+    slug: "kzsu",
+    homepageUrl: "https://kzsu.stanford.edu/",
+    scheduleUrl: "https://kzsu.stanford.edu/schedule/",
+  },
+  {
+    slug: "witr",
+    homepageUrl: "https://witr.rit.edu/",
+    scheduleUrl: "https://witr.rit.edu/schedule",
+  },
+] as const;
+
 /**
  * The final four stations from NPR's "streaming alternatives" list.
  *
@@ -780,7 +793,7 @@ function canadianCampusStations(): InsertStation[] {
       streamQuality: "256kbps AAC",
       streamFormat: "aac",
       homepageUrl: "https://ckcu.ca",
-      scheduleUrl: "https://ckcu.ca/schedule",
+      scheduleUrl: "https://cod.ckcufm.com/programs/guide.html",
       ...spinSource("CKCU", "https://stream2.statsradio.com:8124/stream"),
       source: "curated",
       stationClass: "community",
@@ -804,6 +817,7 @@ function canadianCampusStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://ckut.ca",
+      scheduleUrl: "https://ckut.ca/table",
       nowPlayingSource: "radio_browser_icy",
       nowPlayingConfig: {
         streamUrl: "http://delray.ckut.ca:8000/903fm-128-stereo",
@@ -1400,7 +1414,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wprb.com",
-      scheduleUrl: "https://wprb.com/schedule/",
+      scheduleUrl: "https://spinitron.com/WPRB/calendar",
       // Listener-supported non-profit; runs annual pledge drives. /support is
       // their canonical giving page (confirmed path from their nav).
       donateUrl: "https://wprb.com/support",
@@ -1469,8 +1483,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamUrl: "https://listen.kdvs.org/stream",
       streamQuality: "128kbps AAC",
       streamFormat: "aac",
-      homepageUrl: "https://kdvs.org",
-      scheduleUrl: "https://kdvs.org/schedule",
+      homepageUrl: "https://kdvs.org/programming",
+      scheduleUrl: "https://spinitron.com/KDVS/calendar",
       // Freeform non-profit; UC Davis community station with strong DJ culture.
       donateUrl: "https://kdvs.org/donate",
       ...spinSource("KDVS"),
@@ -1762,7 +1776,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wesufm.org",
-      scheduleUrl: "https://wesufm.org/schedule",
+      scheduleUrl: "https://spinitron.com/WESU/calendar",
       donateUrl: "https://wesufm.org/support",
       ...spinSource("WESU"),
       stationClass: "community",
@@ -2092,8 +2106,8 @@ function spinitronJazzStations(): InsertStation[] {
       streamUrl: "https://war.streamguys1.com:7883/wdiy_7880",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
-      homepageUrl: "https://wdiy.org",
-      scheduleUrl: "https://wdiy.org/programs",
+      homepageUrl: "https://www.wdiy.org",
+      scheduleUrl: "https://www.wdiy.org/wdiy-radio-schedule",
       donateUrl: "https://wdiy.org/donate",
       ...spinSource("WDIY", "https://war.streamguys1.com:7883/wdiy_7880"),
       stationClass: "community",
@@ -2388,7 +2402,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   // ── New York / Mid-Atlantic ──────────────────────────────────────────────
   { callsign: "WRPI", name: "WRPI 91.5 FM", org: "Rensselaer Polytechnic Institute", country: "US" },
   { callsign: "WICB", name: "WICB 91.7 FM", org: "Ithaca College", country: "US" },
-  { callsign: "WITR", name: "WITR 89.7 FM", org: "Rochester Institute of Technology", country: "US" },
+  { callsign: "WITR", name: "WITR 89.7 FM", org: "Rochester Institute of Technology", country: "US", homepageUrl: "https://witr.rit.edu/", scheduleUrl: "https://witr.rit.edu/schedule" },
   { callsign: "WRCU", name: "WRCU 90.1 FM", org: "Colgate University", country: "US" },
   { callsign: "WRHU", name: "WRHU 88.7 FM", org: "Hofstra University", country: "US" },
   { callsign: "WVOF", name: "WVOF 88.5 FM", org: "Fairfield University", country: "US" },
@@ -2438,7 +2452,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "KUCI", name: "KUCI 88.9 FM", org: "UC Irvine", country: "US", homepageUrl: "https://kuci.org/", scheduleUrl: "https://kuci.org/show-schedule/" },
   { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US", city: "Los Angeles", region: "CA", tags: ["college"] },
   { callsign: "KSDT", name: "KSDT 95.7 FM", org: "UC San Diego", country: "US" },
-  { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US" },
+  { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US", homepageUrl: "https://kzsu.stanford.edu/", scheduleUrl: "https://kzsu.stanford.edu/schedule/" },
   { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", region: "CA", tags: ["college"] },
   { callsign: "KCRH", name: "KCRH 89.9 FM", org: "Chabot College", country: "US" },
   { callsign: "KTUH", name: "KTUH 90.3 FM", org: "University of Hawaii", country: "US" },
@@ -2869,6 +2883,19 @@ export async function seedStations(): Promise<void> {
         updatedAt: sql`now()`,
       })
       .where(eq(stationsTable.slug, slug));
+  }
+
+  // These stations originate in the separately managed Spinitron directory,
+  // not SEED_STATIONS. Repair only their independently verified schedule
+  // receipts so stale directory URLs cannot return after a restart.
+  for (const repair of VERIFIED_SCHEDULE_SOURCE_REPAIRS) {
+    await db
+      .update(stationsTable)
+      .set({
+        homepageUrl: repair.homepageUrl,
+        scheduleUrl: repair.scheduleUrl,
+      })
+      .where(eq(stationsTable.slug, repair.slug));
   }
 
   // ICY-polled curated stations additionally need a health row whose id is

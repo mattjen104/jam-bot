@@ -15,6 +15,7 @@ import {
   googleCalendarIcsUrl,
   parseCadenceSchedule,
   parseCalendarIcs,
+  parseCkcuGuide,
   parseStructuredScheduleHtml,
   wordpressPageApiUrl,
   wordpressRenderedContent,
@@ -125,6 +126,34 @@ function isSpinitronCalendarUrl(value: string): boolean {
   }
 }
 
+/** CKCU's official schedule is hosted on its separately-operated COD domain. */
+export function isCkcuOfficialGuideUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "cod.ckcufm.com" &&
+      url.pathname === "/programs/guide.html" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedScheduleUrl(target: ScrapeTarget, scheduleUrl: string, homepageOrigin: string): boolean {
+  try {
+    const scheduleOrigin = new URL(scheduleUrl).origin;
+    return (
+      scheduleOrigin === homepageOrigin ||
+      (target.slug === "ckcu" && isCkcuOfficialGuideUrl(scheduleUrl))
+    );
+  } catch {
+    return false;
+  }
+}
+
 interface ScrapeTarget {
   id: number;
   slug: string;
@@ -154,6 +183,204 @@ export interface DatedExtractedShow extends ExtractedShow {
 export interface SpinitronScheduleExtraction {
   recurringShows: ExtractedShow[];
   datedExceptions: DatedExtractedShow[];
+}
+
+export interface FirstPartyScheduleSource {
+  endpointUrl: string;
+  kind: "kzsu" | "witr" | "wdiy";
+  receiptUrl?: string;
+  channelId?: string;
+}
+
+/**
+ * Identify the two known, browser-facing station APIs only from the receipt
+ * URL's host. These APIs belong to the station itself; no page markup is
+ * interpreted to discover an arbitrary endpoint.
+ */
+export function firstPartyScheduleSource(sourceUrl: string): FirstPartyScheduleSource | null {
+  try {
+    const url = new URL(sourceUrl);
+    if (url.hostname === "kzsu.stanford.edu") {
+      return { kind: "kzsu", endpointUrl: "https://kzsu.stanford.edu/api/shows/thisweek/" };
+    }
+    if (url.hostname === "witr.rit.edu") {
+      return {
+        kind: "witr",
+        endpointUrl: "https://witr.rit.edu/api/show/occurrence/list/week",
+      };
+    }
+    if (
+      url.protocol === "https:" &&
+      url.hostname === "www.wdiy.org" &&
+      url.pathname === "/wdiy-radio-schedule" &&
+      url.search === "" &&
+      url.hash === ""
+    ) {
+      const channelId = "73c5c730-b358-48ac-afa3-b6f3a7dc92e9";
+      return {
+        kind: "wdiy",
+        endpointUrl: "https://cadence.nprstations.org/api/cadence/widget/",
+        receiptUrl: `https://cadence.nprstations.org/widgets/iframe/weekly?channelId=${channelId}`,
+        channelId,
+      };
+    }
+  } catch {
+    // A source URL is validated by the scraper before this helper is called.
+  }
+  return null;
+}
+
+function strictIsoDate(value: unknown): { airDate: string; dayOfWeek: string } | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, date] = value.split("-").map(Number);
+  const day = new Date(Date.UTC(year, month - 1, date));
+  if (
+    day.getUTCFullYear() !== year ||
+    day.getUTCMonth() !== month - 1 ||
+    day.getUTCDate() !== date
+  ) return null;
+  return { airDate: value, dayOfWeek: CANONICAL_DAYS[day.getUTCDay()]! };
+}
+
+function kzsuTimeAndEnd(start: unknown, duration: unknown): { startTime: string; endTime: string } | null {
+  if (
+    typeof start !== "string" ||
+    !/^([01]\d|2[0-3])([0-5]\d)$/.test(start) ||
+    typeof duration !== "number" ||
+    !Number.isInteger(duration) ||
+    duration <= 0 ||
+    duration >= 24 * 60
+  ) return null;
+  const startMinutes = Number(start.slice(0, 2)) * 60 + Number(start.slice(2));
+  const endMinutes = (startMinutes + duration) % (24 * 60);
+  return {
+    startTime: `${start.slice(0, 2)}:${start.slice(2)}`,
+    endTime: `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
+  };
+}
+
+function isKzsuDateSpecific(show: Record<string, unknown>): boolean {
+  return (
+    show.special === true ||
+    (typeof show.schedule_type === "string" && /special/i.test(show.schedule_type)) ||
+    (typeof show.date_start === "string" && show.date_start.trim() !== "")
+  );
+}
+
+/**
+ * KZSU's current-week feed is a dated projection. Ordinary non-special slots
+ * are safely collapsed to its weekly grid; special and explicitly dated rows
+ * retain the date on which the station published them.
+ */
+export function parseKzsuSchedule(raw: string): SpinitronScheduleExtraction | null {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!payload || typeof payload !== "object" || !Array.isArray((payload as { days?: unknown }).days)) {
+    return null;
+  }
+  const recurringCandidates: ExtractedShow[] = [];
+  const recurringDatedCandidates: DatedExtractedShow[] = [];
+  const datedExceptions: DatedExtractedShow[] = [];
+  for (const day of (payload as { days: unknown[] }).days) {
+    if (!day || typeof day !== "object") continue;
+    const dayValue = day as Record<string, unknown>;
+    const date = strictIsoDate(dayValue.date);
+    if (!date || !Array.isArray(dayValue.shows)) continue;
+    for (const row of dayValue.shows) {
+      if (!row || typeof row !== "object") continue;
+      const show = row as Record<string, unknown>;
+      const showName = typeof show.title === "string" ? sanitizeScheduleName(show.title) : "";
+      const time = kzsuTimeAndEnd(show.start_time, show.duration);
+      if (!showName || showName.length > 200 || !time) continue;
+      const extracted: ExtractedShow = {
+        showName,
+        dayOfWeek: date.dayOfWeek,
+        startTime: time.startTime,
+        endTime: time.endTime,
+        djName: typeof show.dj_name === "string"
+          ? eligibleDjName(show.dj_name, { showTitle: showName }) ?? null
+          : null,
+      };
+      if (isKzsuDateSpecific(show)) {
+        datedExceptions.push({ ...extracted, airDate: date.airDate });
+      } else {
+        recurringCandidates.push(extracted);
+        recurringDatedCandidates.push({ ...extracted, airDate: date.airDate });
+      }
+    }
+  }
+  const recurringShows = parseExtractedSchedule(JSON.stringify(recurringCandidates));
+  // Conflicting regular rows are still valid evidence for this displayed
+  // week, but cannot safely be represented as a repeating weekly grid.
+  if (recurringShows === null) {
+    return {
+      recurringShows: [],
+      datedExceptions: [...datedExceptions, ...recurringDatedCandidates].slice(0, MAX_SHOWS_PER_STATION),
+    };
+  }
+  return { recurringShows, datedExceptions };
+}
+
+function witrDateParts(epochMs: number): { airDate: string; dayOfWeek: string; time: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(epochMs));
+  const part = (type: string) => parts.find((value) => value.type === type)?.value ?? "";
+  return {
+    airDate: `${part("year")}-${part("month")}-${part("day")}`,
+    dayOfWeek: part("weekday"),
+    time: `${part("hour")}:${part("minute")}`,
+  };
+}
+
+/** WITR publishes concrete epoch-based occurrences, never a recurring grid. */
+export function parseWitrSchedule(raw: string): SpinitronScheduleExtraction | null {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(payload)) return null;
+  const datedExceptions: DatedExtractedShow[] = [];
+  for (const row of payload) {
+    if (!row || typeof row !== "object") continue;
+    const occurrence = row as Record<string, unknown>;
+    if (occurrence.excluded === true) continue;
+    const start = occurrence.start;
+    const end = occurrence.end;
+    const name = (occurrence.show as { name?: unknown } | null)?.name;
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      (end as number) <= (start as number) ||
+      typeof name !== "string"
+    ) continue;
+    const showName = sanitizeScheduleName(name);
+    if (!showName || showName.length > 200) continue;
+    const startParts = witrDateParts(start as number);
+    const endParts = witrDateParts(end as number);
+    datedExceptions.push({
+      showName,
+      airDate: startParts.airDate,
+      dayOfWeek: startParts.dayOfWeek,
+      startTime: startParts.time,
+      endTime: endParts.time,
+      djName: null,
+    });
+  }
+  return { recurringShows: [], datedExceptions };
 }
 
 /**
@@ -729,13 +956,10 @@ export async function scrapeStationSchedule(
   let pageHtml: string | null = null;
   let sourceUrl: string | null = null;
   if (target.scheduleUrl) {
-    let scheduleOrigin: string | null = null;
-    try {
-      scheduleOrigin = new URL(target.scheduleUrl).origin;
-    } catch {
-      /* origin stays null */
-    }
-    if (scheduleOrigin === origin || configuredSpinitronOrigin === scheduleOrigin) {
+    if (
+      isAllowedScheduleUrl(target, target.scheduleUrl, origin) ||
+      configuredSpinitronOrigin !== null
+    ) {
       // Fetch with explicit status capture so we can distinguish permanent
       // failures (404/410 — the page is definitively gone) from transient ones
       // (5xx, timeout, network error) where the pre-known URL may still be valid.
@@ -828,13 +1052,7 @@ export async function scrapeStationSchedule(
     // --- Strategy 1: anchor scan ---
     const scheduleLink = findScheduleLink(homeHtml, target.homepageUrl);
     if (scheduleLink) {
-      let scheduleOrigin: string | null = null;
-      try {
-        scheduleOrigin = new URL(scheduleLink).origin;
-      } catch {
-        /* origin stays null */
-      }
-      if (scheduleOrigin === origin) {
+      if (isAllowedScheduleUrl(target, scheduleLink, origin)) {
         const linkedResult = await fetchPage(scheduleLink);
         if (typeof linkedResult === "string") {
           pageHtml = linkedResult;
@@ -905,6 +1123,7 @@ export async function scrapeStationSchedule(
   let datedExceptions: DatedExtractedShow[] = [];
   let extraction: "api" | "llm" = "llm";
   const feedUrl = sourceUrl ? spinitronCalendarFeedUrl(sourceUrl, pageHtml) : null;
+  const firstPartySource = sourceUrl ? firstPartyScheduleSource(sourceUrl) : null;
   // A Spinitron calendar without a usable public feed is not a page for the
   // LLM fallback: its dynamic grid is absent from visible HTML. Treat a bad
   // configuration as a failed scrape so the prior schedule remains intact.
@@ -932,6 +1151,60 @@ export async function scrapeStationSchedule(
       console.warn(`[schedule-scraper] Spinitron feed failed for ${target.slug}`, err);
       return fail();
     }
+  } else if (firstPartySource) {
+    // These endpoints are the same first-party browser APIs used by the
+    // station schedule pages. A syntactically valid empty response is
+    // authoritative and must not be reinterpreted by the LLM.
+    try {
+      const isWdiyCadence = firstPartySource.kind === "wdiy";
+      const cadenceWeek = isWdiyCadence ? spinitronWeekWindow() : null;
+      const res = await fetchFn(firstPartySource.endpointUrl, {
+        method: isWdiyCadence ? "POST" : "GET",
+        headers: isWdiyCadence
+          ? {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+              "User-Agent": "Lore-Discovery-Bot/1.0",
+            }
+          : { Accept: "application/json", "User-Agent": "Lore-Discovery-Bot/1.0" },
+        body: isWdiyCadence
+          ? JSON.stringify({
+              channelId: firstPartySource.channelId,
+              startDate: cadenceWeek!.start,
+              endDate: cadenceWeek!.end,
+              from: 0,
+              size: 10_000,
+            })
+          : undefined,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (
+        !res.ok ||
+        new URL(res.url || firstPartySource.endpointUrl).origin !==
+          new URL(firstPartySource.endpointUrl).origin
+      ) {
+        return fail();
+      }
+      const raw = await res.text();
+      if (firstPartySource.kind === "wdiy") {
+        const parsed = parseCadenceSchedule(raw);
+        if (!parsed) return fail();
+        shows = parsed;
+        sourceUrl = firstPartySource.receiptUrl!;
+      } else {
+        const parsed = firstPartySource.kind === "kzsu"
+          ? parseKzsuSchedule(raw)
+          : parseWitrSchedule(raw);
+        if (!parsed) return fail();
+        shows = parsed.recurringShows;
+        datedExceptions = parsed.datedExceptions;
+        sourceUrl = firstPartySource.endpointUrl;
+      }
+      extraction = "api";
+    } catch (err) {
+      console.warn(`[schedule-scraper] first-party schedule API failed for ${target.slug}`, err);
+      return fail();
+    }
   } else {
     // Prefer exact, first-party structured representations before asking the
     // LLM to interpret rendered HTML. WordPress advertises the exact REST URL
@@ -939,7 +1212,14 @@ export async function scrapeStationSchedule(
     // public-radio CMS pages commonly publish schema.org Event JSON-LD inline.
     let structured: ExtractedShow[] | null = null;
     let structuredSourceUrl = sourceUrl;
-    const wpUrl = sourceUrl ? wordpressPageApiUrl(sourceUrl, pageHtml) : null;
+    // An empty CKCU guide is still a successful structured result: unlike an
+    // LLM, it must not invent a winner for alternating same-slot programs.
+    const ckcuGuide = sourceUrl && isCkcuOfficialGuideUrl(sourceUrl)
+      ? parseCkcuGuide(pageHtml)
+      : null;
+    const hasCkcuGuide = ckcuGuide !== null;
+    if (hasCkcuGuide) structured = ckcuGuide;
+    const wpUrl = !hasCkcuGuide && sourceUrl ? wordpressPageApiUrl(sourceUrl, pageHtml) : null;
     const calendarUrl = sourceUrl ? googleCalendarIcsUrl(sourceUrl, pageHtml) : null;
     const cadence = sourceUrl ? cadenceScheduleSource(sourceUrl, pageHtml) : null;
     if (wpUrl) {
@@ -955,15 +1235,15 @@ export async function scrapeStationSchedule(
     // JSON-LD and deterministic schedule markup may be emitted directly by a
     // non-WordPress CMS. For WordPress, prefer the advertised REST receipt
     // above even when the rendered page happens to contain the same markup.
-    if (!structured) structured = parseStructuredScheduleHtml(pageHtml);
-    if (!structured && calendarUrl) {
+    if (!hasCkcuGuide && !structured) structured = parseStructuredScheduleHtml(pageHtml);
+    if (!hasCkcuGuide && !structured && calendarUrl) {
       const result = await fetchPage(calendarUrl);
       if (typeof result === "string") {
         structured = parseCalendarIcs(result);
         structuredSourceUrl = calendarUrl;
       }
     }
-    if (!structured && cadence) {
+    if (!hasCkcuGuide && !structured && cadence) {
       try {
         const week = spinitronWeekWindow();
         const res = await fetchFn(cadence.endpointUrl, {
@@ -990,7 +1270,7 @@ export async function scrapeStationSchedule(
         // The rendered official page remains available to the LLM fallback.
       }
     }
-    if (structured) {
+    if (structured !== null) {
       shows = parseExtractedSchedule(JSON.stringify(structured));
       sourceUrl = structuredSourceUrl;
       extraction = "api";

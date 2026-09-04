@@ -23,18 +23,160 @@ import {
   spinitronCalendarFeedUrl,
   parseSpinitronCalendarFeed,
   parseSpinitronCalendarFeedWithExceptions,
+  firstPartyScheduleSource,
+  parseKzsuSchedule,
+  parseWitrSchedule,
+  isCkcuOfficialGuideUrl,
 } from "../../src/lore/schedule-scraper.js";
 import {
   cadenceScheduleSource,
   googleCalendarIcsUrl,
   parseCalendarIcs,
   parseCadenceSchedule,
+  parseCkcuGuide,
   parseJsonLdEvents,
   parseQantumSchedule,
   parseWeeklyScheduleTable,
   wordpressPageApiUrl,
   wordpressRenderedContent,
 } from "../../src/lore/schedule-structured.js";
+
+// ---------------------------------------------------------------------------
+// First-party KZSU and WITR schedule APIs
+// ---------------------------------------------------------------------------
+
+describe("firstPartyScheduleSource", () => {
+  it("selects only the known first-party hosts", () => {
+    expect(firstPartyScheduleSource("https://kzsu.stanford.edu/schedule/")).toEqual({
+      kind: "kzsu",
+      endpointUrl: "https://kzsu.stanford.edu/api/shows/thisweek/",
+    });
+    expect(firstPartyScheduleSource("https://witr.rit.edu/schedule")).toEqual({
+      kind: "witr",
+      endpointUrl: "https://witr.rit.edu/api/show/occurrence/list/week",
+    });
+    expect(firstPartyScheduleSource("https://evil.example/kzsu.stanford.edu")).toBeNull();
+  });
+
+  it("maps only WDIY's exact official schedule page to its known Cadence widget", () => {
+    expect(firstPartyScheduleSource("https://www.wdiy.org/wdiy-radio-schedule")).toEqual({
+      kind: "wdiy",
+      endpointUrl: "https://cadence.nprstations.org/api/cadence/widget/",
+      receiptUrl: "https://cadence.nprstations.org/widgets/iframe/weekly?channelId=73c5c730-b358-48ac-afa3-b6f3a7dc92e9",
+      channelId: "73c5c730-b358-48ac-afa3-b6f3a7dc92e9",
+    });
+    expect(firstPartyScheduleSource("https://wdiy.org/wdiy-radio-schedule")).toBeNull();
+    expect(firstPartyScheduleSource("https://www.wdiy.org/other-schedule")).toBeNull();
+    expect(firstPartyScheduleSource("https://www.wdiy.org/wdiy-radio-schedule?week=next")).toBeNull();
+  });
+});
+
+describe("CKCU guide adapter", () => {
+  it("allows only CKCU's exact official off-site guide URL", () => {
+    expect(isCkcuOfficialGuideUrl("https://cod.ckcufm.com/programs/guide.html")).toBe(true);
+    expect(isCkcuOfficialGuideUrl("https://cod.ckcufm.com/programs/guide.html?week=next")).toBe(false);
+    expect(isCkcuOfficialGuideUrl("https://cod.ckcufm.com/programs/other.html")).toBe(false);
+    expect(isCkcuOfficialGuideUrl("https://evil.example/programs/guide.html")).toBe(false);
+  });
+
+  it("converts 15-minute CKCU rowspans to a valid duration", () => {
+    const result = parseCkcuGuide(`
+      <table id=guidetable><tr>
+        <td rowspan="4" class="tml b">17:00</td>
+        <td class="mon" rowspan="4"><a href="/programs/example">Drive Home</a></td>
+      </tr></table>`);
+    expect(result).toEqual([expect.objectContaining({
+      showName: "Drive Home", dayOfWeek: "Mon", startTime: "17:00", endTime: "18:00",
+    })]);
+  });
+
+  it("skips malformed time and rowspan cells without producing corrupted slots", () => {
+    const result = parseCkcuGuide(`
+      <table id="guidetable">
+        <tr><td rowspan="x" class="tml b">17:00</td><td class="mon" rowspan="4"><a>Broken time</a></td></tr>
+        <tr><td rowspan="4" class="tml b">18:00</td><td class="mon" rowspan="0"><a>Broken span</a></td></tr>
+      </table>`);
+    expect(result).toEqual([]);
+  });
+
+  it("does not invent a recurring winner for alternating same-slot programs", () => {
+    const result = parseCkcuGuide(`
+      <table id="guidetable"><tr>
+        <td rowspan="4" class="tml b">17:00</td>
+        <td class="mon" rowspan="4"><a>Week One</a></td>
+        <td class="mon" rowspan="4"><a>Week Two</a></td>
+      </tr></table>`);
+    expect(result).toEqual([]);
+  });
+
+  it("drops every participant in a staggered overlapping alternation", () => {
+    const result = parseCkcuGuide(`
+      <table id=guidetable>
+        <tr>
+          <td rowspan="4" class="tml b">17:00</td>
+          <td class="mon" rowspan="8"><a>Long Week</a></td>
+        </tr>
+        <tr><td class="mon" rowspan="4"><a>Short Week</a></td></tr>
+      </table>`);
+    expect(result).toEqual([]);
+  });
+});
+
+describe("parseKzsuSchedule", () => {
+  it("turns ordinary weekly rows into recurring slots and retains specials as dated", () => {
+    const result = parseKzsuSchedule(JSON.stringify({
+      days: [{
+        date: "2025-01-06",
+        shows: [
+          { title: "Morning Mix", dj_name: "DJ Ada", start_time: "0600", duration: 120, special: false },
+          { title: "Guest Takeover", dj_name: "Guest DJ", start_time: "0800", duration: 60, special: true },
+        ],
+      }],
+    }));
+    expect(result).toEqual({
+      recurringShows: [expect.objectContaining({
+        showName: "Morning Mix", dayOfWeek: "Mon", startTime: "06:00", endTime: "08:00",
+      })],
+      datedExceptions: [expect.objectContaining({
+        showName: "Guest Takeover", airDate: "2025-01-06", startTime: "08:00", endTime: "09:00",
+      })],
+    });
+  });
+
+  it("skips malformed KZSU rows but accepts an empty valid payload", () => {
+    expect(parseKzsuSchedule(JSON.stringify({
+      days: [{ date: "2025-01-06", shows: [
+        { title: "Bad clock", start_time: "2500", duration: 60 },
+        { title: "Bad duration", start_time: "0600", duration: 0 },
+        { title: "Valid", start_time: "0900", duration: 60 },
+      ] }],
+    }))?.recurringShows).toEqual([expect.objectContaining({ showName: "Valid" })]);
+    expect(parseKzsuSchedule('{"days":[]}')).toEqual({ recurringShows: [], datedExceptions: [] });
+  });
+});
+
+describe("parseWitrSchedule", () => {
+  it("keeps valid occurrences as dated exceptions and skips excluded or invalid rows", () => {
+    const start = Date.parse("2025-01-06T14:00:00.000Z"); // 09:00 at RIT (EST)
+    const result = parseWitrSchedule(JSON.stringify([
+      { start, end: start + 60 * 60 * 1000, show: { name: "Breakfast at WITR" }, excluded: false },
+      { start, end: start + 60 * 60 * 1000, show: { name: "Cancelled" }, excluded: true },
+      { start, end: start, show: { name: "Broken" }, excluded: false },
+    ]));
+    expect(result).toEqual({
+      recurringShows: [],
+      datedExceptions: [expect.objectContaining({
+        showName: "Breakfast at WITR", airDate: "2025-01-06", dayOfWeek: "Mon",
+        startTime: "09:00", endTime: "10:00",
+      })],
+    });
+  });
+
+  it("treats a valid empty WITR array as authoritative", () => {
+    expect(parseWitrSchedule("[]")).toEqual({ recurringShows: [], datedExceptions: [] });
+    expect(parseWitrSchedule("{}")).toBeNull();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // isScheduleUrlPermanentlyGone
@@ -979,5 +1121,8 @@ END:VCALENDAR`);
     }] }))).toEqual([{
       showName: "Overnight Freeform", dayOfWeek: "Mon", startTime: "01:00", endTime: "05:00", djName: null,
     }]);
+    // A valid, empty Cadence response is authoritative for the narrow WDIY
+    // adapter, so it can avoid an LLM fallback.
+    expect(parseCadenceSchedule('{"episodes":[]}')).toEqual([]);
   });
 });

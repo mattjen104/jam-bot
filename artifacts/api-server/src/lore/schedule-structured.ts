@@ -38,6 +38,10 @@ function clock24(time: string, meridiem?: string): string | null {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function minutesFromClock(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+}
+
 function parseTimeRange(value: string): { start: string; end: string } | null {
   const match = value.match(
     /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:[-–—]|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i,
@@ -254,7 +258,114 @@ export function parseCadenceSchedule(raw: string): StructuredShow[] | null {
     );
     if (show) shows.push(show);
   }
-  return shows.length ? shows : null;
+  return shows;
+}
+
+/**
+ * CKCU's guide is a 15-minute physical-row table. Program cells span the
+ * physical rows they occupy, while a day class identifies the weekly column.
+ * A shared day/start represents alternating programming, not a choice for us
+ * to make, so every ambiguous slot is omitted from the recurring grid.
+ */
+export function parseCkcuGuide(html: string): StructuredShow[] | null {
+  const table = [...html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)].find((match) =>
+    /\bid\s*=\s*(?:["']guidetable["']|guidetable)(?:\s|>)/i.test(match[0]),
+  );
+  if (!table) return null;
+  const dayByClass: Record<string, string> = {
+    sun: "Sun", mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat",
+  };
+  const candidates: StructuredShow[] = [];
+  let currentMinutes: number | null = null;
+  for (const row of table[1]!.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...row[1]!.matchAll(/<td\b([^>]*)>([\s\S]*?)<\/td>/gi)].map((cell) => ({
+      attributes: cell[1]!,
+      body: cell[2]!,
+    }));
+    const timeCell = cells.find((cell) => /\btml\b/i.test(cell.attributes));
+    if (timeCell) {
+      const time = clock24(decodeHtml(timeCell.body));
+      const rowspan = timeCell.attributes.match(/\browspan=["']?(\d+)["']?/i)?.[1];
+      if (!time || !rowspan || !Number.isInteger(Number(rowspan)) || Number(rowspan) < 1) {
+        currentMinutes = null;
+        continue;
+      }
+      currentMinutes = minutesFromClock(time);
+    } else if (currentMinutes !== null) {
+      currentMinutes = (currentMinutes + 15) % (24 * 60);
+    }
+    if (currentMinutes === null) continue;
+    for (const cell of cells) {
+      const className = cell.attributes.match(/\bclass=["']([^"']+)["']/i)?.[1] ?? "";
+      const dayClass = Object.keys(dayByClass).find((day) => new RegExp(`\\b${day}\\b`, "i").test(className));
+      if (!dayClass) continue;
+      const rowspan = cell.attributes.match(/\browspan=["']?(\d+)["']?/i)?.[1] ?? "1";
+      const physicalRows = Number(rowspan);
+      const anchor = cell.body.match(/<a\b[^>]*>([\s\S]*?)<\/a>/i)?.[1];
+      if (
+        !anchor ||
+        !Number.isInteger(physicalRows) ||
+        physicalRows < 1 ||
+        physicalRows > 96
+      ) continue;
+      const startTime = `${String(Math.floor(currentMinutes / 60)).padStart(2, "0")}:${String(currentMinutes % 60).padStart(2, "0")}`;
+      const endMinutes = (currentMinutes + physicalRows * 15) % (24 * 60);
+      const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+      if (startTime === endTime) continue;
+      const show = makeShow(anchor, dayByClass[dayClass]!, startTime, endTime);
+      if (show && show.showName.length <= 200) candidates.push(show);
+    }
+  }
+  const ambiguous = new Set<string>();
+  const namesBySlot = new Map<string, Set<string>>();
+  for (const show of candidates) {
+    const key = `${show.dayOfWeek}|${show.startTime}`;
+    const names = namesBySlot.get(key) ?? new Set<string>();
+    names.add(show.showName.toLowerCase());
+    namesBySlot.set(key, names);
+    if (names.size > 1) ambiguous.add(key);
+  }
+  const seen = new Set<string>();
+  const exactSlotFiltered = candidates.filter((show) => {
+    const slot = `${show.dayOfWeek}|${show.startTime}`;
+    const key = `${slot}|${show.showName.toLowerCase()}`;
+    if (ambiguous.has(slot) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // CKCU also represents alternating programs with staggered starts, so they
+  // can overlap without sharing an exact slot key. Remove every participant
+  // in such a conflict rather than letting array order choose a winner.
+  const weekDays = new Map(
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, index) => [day, index]),
+  );
+  const intervals = exactSlotFiltered.map((show) => {
+    const start = minutesFromClock(show.startTime);
+    const end = minutesFromClock(show.endTime);
+    const duration = (end - start + 24 * 60) % (24 * 60);
+    return {
+      start: weekDays.get(show.dayOfWeek)! * 24 * 60 + start,
+      endOffset: duration,
+    };
+  });
+  const overlapping = new Set<number>();
+  const weekMinutes = 7 * 24 * 60;
+  for (let left = 0; left < intervals.length; left++) {
+    const a = intervals[left]!;
+    for (let right = left + 1; right < intervals.length; right++) {
+      const b = intervals[right]!;
+      for (const shift of [-weekMinutes, 0, weekMinutes]) {
+        const bStart = b.start + shift;
+        if (a.start < bStart + b.endOffset && bStart < a.start + a.endOffset) {
+          overlapping.add(left);
+          overlapping.add(right);
+          break;
+        }
+      }
+    }
+  }
+  return exactSlotFiltered.filter((_, index) => !overlapping.has(index)).slice(0, 168);
 }
 
 export function parseCalendarIcs(raw: string): StructuredShow[] | null {
