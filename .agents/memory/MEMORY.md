@@ -156,3 +156,4 @@
 - [Playback rollup dimensions](playback-rollup-dimensions.md) — new privacy-safe telemetry dimensions must update durable row identity and migration upgrades, not only API types.
 - [Broadcast timing provenance](broadcast-timing-provenance.md) — receipt time is never a track start; legacy timing degrades to inferred, and expiry remains advisory until metadata changes.
 - [Render-phase ranked snapshots](render-phase-ranked-snapshots.md) — compare semantic rank inputs, not array identity, or timer/query rerenders can create an infinite update loop.
+- [Spinitron public calendar schedules](spinitron-public-calendar.md) — calendar HTML points to an unauthenticated JSON feed; decode JS-escaped paths and honor the host’s 10-second crawl delay.

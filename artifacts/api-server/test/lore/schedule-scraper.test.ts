@@ -19,6 +19,9 @@ import {
   normalizeDayOfWeek,
   hasOverlappingScheduleSlots,
   requireSourceUrl,
+  spinitronWeekWindow,
+  spinitronCalendarFeedUrl,
+  parseSpinitronCalendarFeed,
 } from "../../src/lore/schedule-scraper.js";
 
 // ---------------------------------------------------------------------------
@@ -735,5 +738,73 @@ describe("requireSourceUrl", () => {
     );
     expect(() => requireSourceUrl("  ")).toThrow(/source URL is required/i);
     expect(() => requireSourceUrl(null)).toThrow(/source URL is required/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Public Spinitron calendar adapter
+// ---------------------------------------------------------------------------
+
+describe("Spinitron public calendar adapter", () => {
+  it("uses the configured same-origin feed and a complete deterministic week", () => {
+    const url = spinitronCalendarFeedUrl(
+      "https://spinitron.com/KCSB/calendar",
+      `<script>jQuery('#calendar-w0').calendar({"events":"\\/KCSB\\/calendar-feed?timeslot=15"});</script>`,
+      new Date(2025, 1, 26, 12), // Wednesday, Feb 26 in the test's local clock
+    );
+    expect(url).toBe(
+      "https://spinitron.com/KCSB/calendar-feed?timeslot=15&start=2025-02-24&end=2025-03-03",
+    );
+    expect(spinitronWeekWindow(new Date(2025, 1, 23, 12))).toEqual({
+      start: "2025-02-17",
+      end: "2025-02-24",
+    });
+  });
+
+  it("parses local timestamp components, sanitizes names, and preserves overnight slots", () => {
+    const result = parseSpinitronCalendarFeed(JSON.stringify([
+      {
+        title: "  Night\u200b Shift  ",
+        text: "DJ Marisol",
+        start: "2025-02-24T23:30:00-08:00",
+        end: "2025-02-25T01:30:00-08:00",
+        className: ["show"],
+        data: {},
+      },
+      // The recurring calendar can return the same slot more than once.
+      {
+        title: "Night Shift",
+        text: "DJ Marisol",
+        start: "2025-03-03T23:30:00-08:00",
+        end: "2025-03-04T01:30:00-08:00",
+        className: ["show"],
+        data: {},
+      },
+    ]));
+    expect(result).toEqual([
+      {
+        showName: "Night Shift",
+        dayOfWeek: "Mon",
+        startTime: "23:30",
+        endTime: "01:30",
+        djName: "DJ Marisol",
+      },
+    ]);
+  });
+
+  it("fails rather than producing a partial schedule for malformed feed data", () => {
+    expect(parseSpinitronCalendarFeed("not JSON")).toBeNull();
+    expect(parseSpinitronCalendarFeed(JSON.stringify([
+      { title: "Good", text: "DJ A", start: "2025-02-24T09:00:00", end: "2025-02-24T10:00:00" },
+      { title: "Broken", text: "DJ B", start: "not-a-date", end: "2025-02-24T11:00:00" },
+    ]))).toBeNull();
+  });
+
+  it("does not follow an off-origin or non-calendar configured endpoint", () => {
+    expect(spinitronCalendarFeedUrl(
+      "https://spinitron.com/KCSB/calendar",
+      `<script>var config = { events: 'https://example.test/feed' };</script>`,
+      new Date(2025, 1, 26),
+    )).toBeNull();
   });
 });

@@ -31,7 +31,10 @@ const ATTEMPT_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
 const BATCH_SIZE = 3;
 const TICK_MS = 45_000;
 const WARMUP_MS = 150_000; // start after the homepage scraper's own warmup
-const MAX_SHOWS_PER_STATION = 40;
+// A complete college/community grid can exceed 40 weekly slots. Keep the
+// ceiling bounded while allowing one distinct hourly slot for every hour of
+// the week; malformed overlaps are rejected separately.
+const MAX_SHOWS_PER_STATION = 168;
 
 const DAY_TOKENS = new Set([
   "Mon",
@@ -66,6 +69,47 @@ export function normalizeDayOfWeek(day: string): string {
 }
 
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const SPINITRON_HOST = "spinitron.com";
+const SPINITRON_CRAWL_DELAY_MS = 10_000;
+const CANONICAL_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+let spinitronFetchQueue = Promise.resolve();
+
+async function fetchSpinitronRespectfully(
+  fetchFn: typeof fetch,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  // Keep tests fast; injected fetch functions are deterministic fakes. Real
+  // network traffic is serialized and paced to Spinitron's robots.txt policy.
+  if (fetchFn !== fetch) return fetchFn(url, init);
+
+  const prior = spinitronFetchQueue;
+  let release!: () => void;
+  spinitronFetchQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await prior;
+  try {
+    await new Promise((resolve) => setTimeout(resolve, SPINITRON_CRAWL_DELAY_MS));
+    return await fetchFn(url, {
+      ...init,
+      // Queue time must not consume the network timeout. Create the signal
+      // only when this request is actually allowed to start.
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } finally {
+    release();
+  }
+}
+
+function isSpinitronCalendarUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.hostname === SPINITRON_HOST && /^\/[^/]+\/calendar\/?$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
 
 interface ScrapeTarget {
   id: number;
@@ -87,6 +131,123 @@ export interface ExtractedShow {
   startTime: string;
   endTime: string;
   djName: string | null;
+}
+
+/**
+ * Return the Monday-through-following-Monday window expected by Spinitron's
+ * FullCalendar feed. The end is exclusive, making this exactly seven days.
+ * `now` is injectable so callers and tests do not depend on the clock.
+ */
+export function spinitronWeekWindow(now: Date = new Date()): { start: string; end: string } {
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const end = new Date(monday);
+  end.setDate(end.getDate() + 7);
+  const format = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return { start: format(monday), end: format(end) };
+}
+
+/**
+ * Extract the public JSON feed configured by a Spinitron calendar page.
+ * Restricting both page and feed to spinitron.com avoids treating arbitrary
+ * embedded event URLs as an API endpoint.
+ */
+export function spinitronCalendarFeedUrl(
+  calendarUrl: string,
+  html: string,
+  now: Date = new Date(),
+): string | null {
+  let page: URL;
+  try {
+    page = new URL(calendarUrl);
+  } catch {
+    return null;
+  }
+  if (!isSpinitronCalendarUrl(calendarUrl)) {
+    return null;
+  }
+  const match = html.match(/["']?events["']?\s*:\s*(["'])([^"']+)\1/i);
+  if (!match) return null;
+  let feed: URL;
+  try {
+    // The value is embedded in a JavaScript string and Spinitron escapes `/`
+    // as `\/`. Decode only that harmless representation before URL parsing;
+    // the strict same-origin/path checks below still decide whether it is safe.
+    feed = new URL(match[2]!.replace(/\\\//g, "/"), page);
+  } catch {
+    return null;
+  }
+  if (
+    feed.origin !== page.origin ||
+    !/^\/[^/]+\/calendar-feed\/?$/.test(feed.pathname)
+  ) {
+    return null;
+  }
+  const week = spinitronWeekWindow(now);
+  feed.searchParams.set("start", week.start);
+  feed.searchParams.set("end", week.end);
+  return feed.toString();
+}
+
+/**
+ * Decode Spinitron's public calendar event payload without converting its
+ * timestamps through this server's timezone. The date and HH:MM components
+ * displayed by Spinitron are the schedule's local wall-clock values.
+ */
+export function parseSpinitronCalendarFeed(raw: string): ExtractedShow[] | null {
+  let events: unknown;
+  try {
+    events = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(events)) return null;
+  const shows: ExtractedShow[] = [];
+  for (const event of events) {
+    if (!event || typeof event !== "object") return null;
+    const value = event as Record<string, unknown>;
+    if (
+      typeof value.title !== "string" ||
+      typeof value.text !== "string" ||
+      typeof value.start !== "string" ||
+      typeof value.end !== "string"
+    ) {
+      return null;
+    }
+    const start = value.start.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    const end = value.end.match(/^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})/);
+    if (!start || !end) return null;
+    const year = Number(start[1]);
+    const month = Number(start[2]);
+    const date = Number(start[3]);
+    const startTime = `${start[4]}:${start[5]}`;
+    const endTime = `${end[1]}:${end[2]}`;
+    // Date.UTC supplies a stable weekday calculation; no instant/offset
+    // conversion is performed on the calendar values themselves.
+    const dayDate = new Date(Date.UTC(year, month - 1, date));
+    if (
+      dayDate.getUTCFullYear() !== year ||
+      dayDate.getUTCMonth() !== month - 1 ||
+      dayDate.getUTCDate() !== date ||
+      !HHMM_RE.test(startTime) ||
+      !HHMM_RE.test(endTime)
+    ) {
+      return null;
+    }
+    const showName = sanitizeScheduleName(value.title);
+    if (!showName || showName.length > 200) return null;
+    const text = sanitizeScheduleName(value.text);
+    shows.push({
+      showName,
+      dayOfWeek: CANONICAL_DAYS[dayDate.getUTCDay()]!,
+      startTime,
+      endTime,
+      djName: eligibleDjName(text, { showTitle: showName }) ?? null,
+    });
+  }
+  // Reuse the one validation point for dedupe, overlap detection, and cap.
+  return parseExtractedSchedule(JSON.stringify(shows));
 }
 
 /** A receipt is required for every durable extracted fact. */
@@ -472,9 +633,18 @@ export async function scrapeStationSchedule(
     return fail();
   }
 
-  if (await isCrawlBlocked(origin, { fetchFn })) {
+  // A configured Spinitron calendar is a trusted, narrowly validated external
+  // schedule provider. Check the provider's robots policy rather than the
+  // station homepage's policy because no homepage content is fetched in this
+  // path.
+  const configuredSpinitronOrigin =
+    target.scheduleUrl && isSpinitronCalendarUrl(target.scheduleUrl)
+      ? new URL(target.scheduleUrl).origin
+      : null;
+  const crawlOrigin = configuredSpinitronOrigin ?? origin;
+  if (await isCrawlBlocked(crawlOrigin, { fetchFn })) {
     console.info(
-      `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=robots_blocked origin=${origin}`,
+      `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=robots_blocked origin=${crawlOrigin}`,
     );
     return fail();
   }
@@ -507,16 +677,19 @@ export async function scrapeStationSchedule(
     } catch {
       /* origin stays null */
     }
-    if (scheduleOrigin === origin) {
+    if (scheduleOrigin === origin || configuredSpinitronOrigin === scheduleOrigin) {
       // Fetch with explicit status capture so we can distinguish permanent
       // failures (404/410 — the page is definitively gone) from transient ones
       // (5xx, timeout, network error) where the pre-known URL may still be valid.
       let scheduleStatus: number | null = null;
       try {
-        const res = await fetchFn(target.scheduleUrl, {
+        const requestInit = {
           headers: { Accept: "text/html", "User-Agent": "Lore-Discovery-Bot/1.0" },
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        });
+        };
+        const res = configuredSpinitronOrigin
+          ? await fetchSpinitronRespectfully(fetchFn, target.scheduleUrl, requestInit)
+          : await fetchFn(target.scheduleUrl, requestInit);
         scheduleStatus = res.status;
         if (res.ok) {
           pageHtml = await res.text();
@@ -670,16 +843,40 @@ export async function scrapeStationSchedule(
     }
   }
 
-  const pageText = htmlToPlainText(pageHtml).slice(0, MAX_PAGE_CHARS);
-  if (!pageText) return fail();
-
   let shows: ExtractedShow[] | null;
-  try {
-    const raw = await extractScheduleRaw(`${EXTRACTION_PROMPT}${pageText}`);
-    shows = parseExtractedSchedule(raw);
-  } catch (err) {
-    console.warn(`[schedule-scraper] extraction failed for ${target.slug}`, err);
-    return fail();
+  let extraction: "api" | "llm" = "llm";
+  const feedUrl = sourceUrl ? spinitronCalendarFeedUrl(sourceUrl, pageHtml) : null;
+  // A Spinitron calendar without a usable public feed is not a page for the
+  // LLM fallback: its dynamic grid is absent from visible HTML. Treat a bad
+  // configuration as a failed scrape so the prior schedule remains intact.
+  if (sourceUrl && isSpinitronCalendarUrl(sourceUrl) && !feedUrl) return fail();
+  if (feedUrl) {
+    // This is Spinitron's unauthenticated, browser-facing calendar endpoint,
+    // not its authenticated developer API. Keep redirect safety equivalent to
+    // discovery: a feed must finish on the calendar page's origin.
+    try {
+      const res = await fetchSpinitronRespectfully(fetchFn, feedUrl, {
+        headers: { Accept: "application/json", "User-Agent": "Lore-Discovery-Bot/1.0" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      const calendarOrigin = new URL(sourceUrl!).origin;
+      if (!res.ok || new URL(res.url || feedUrl).origin !== calendarOrigin) return fail();
+      shows = parseSpinitronCalendarFeed(await res.text());
+      extraction = "api";
+    } catch (err) {
+      console.warn(`[schedule-scraper] Spinitron feed failed for ${target.slug}`, err);
+      return fail();
+    }
+  } else {
+    const pageText = htmlToPlainText(pageHtml).slice(0, MAX_PAGE_CHARS);
+    if (!pageText) return fail();
+    try {
+      const raw = await extractScheduleRaw(`${EXTRACTION_PROMPT}${pageText}`);
+      shows = parseExtractedSchedule(raw);
+    } catch (err) {
+      console.warn(`[schedule-scraper] extraction failed for ${target.slug}`, err);
+      return fail();
+    }
   }
 
   if (shows === null) {
@@ -707,7 +904,7 @@ export async function scrapeStationSchedule(
               djName: s.djName,
               sourceUrl: receiptSourceUrl,
               scrapedAt: now,
-              extraction: "llm",
+               extraction,
             })),
           )
           // Validation already dedupes on the same key as the unique index,
