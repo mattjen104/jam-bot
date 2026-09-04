@@ -112,6 +112,18 @@ interface DurationHealth {
   lastCheckedAt: string | null;
 }
 
+interface ShowAttributionHealth {
+  attributed: number;
+  streamEmitted: number;
+  bySource: {
+    stream_metadata: number;
+    source_api: number;
+    schedule_match: number;
+    manual: number;
+    unknown: number;
+  };
+}
+
 interface GenreStationCoverage {
   stationId: number;
   slug: string;
@@ -292,6 +304,10 @@ function HealthPanel({
   const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [durationHealth, setDurationHealth] = useState<DurationHealth | null>(null);
   const [durationError, setDurationError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [showAttributionHealth, setShowAttributionHealth] =
+    useState<ShowAttributionHealth | null>(null);
+  const [showAttributionError, setShowAttributionError] =
+    useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [genreHealth, setGenreHealth] = useState<GenreEnrichmentHealth | null>(null);
   const [genreError, setGenreError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -476,6 +492,32 @@ function HealthPanel({
         return false;
       })();
 
+      const showAttributionPromise = (async () => {
+        let response: Response;
+        try {
+          response = await fetch("/api/admin/show-attribution-health", { headers });
+        } catch (err) {
+          setShowAttributionError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setShowAttributionHealth(null);
+          return false;
+        }
+        if (response.ok) {
+          setShowAttributionHealth((await response.json()) as ShowAttributionHealth);
+          setShowAttributionError(null);
+          return true;
+        }
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setShowAttributionError({
+          kind: response.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${response.status}`,
+        });
+        setShowAttributionHealth(null);
+        return false;
+      })();
+
       const genrePromise = (async () => {
         let response: Response;
         try {
@@ -503,19 +545,38 @@ function HealthPanel({
       })();
 
       try {
-        const [ffOk, rlOk, phOk, swOk, ryOk, durationOk, genreOk] = await Promise.all([
+        const [
+          ffOk,
+          rlOk,
+          phOk,
+          swOk,
+          ryOk,
+          durationOk,
+          showAttributionOk,
+          genreOk,
+        ] = await Promise.all([
           ffPromise,
           rlPromise,
           phPromise,
           swPromise,
           ryPromise,
           durationPromise,
+          showAttributionPromise,
           genrePromise,
         ]);
         // Only show the top-level error when every endpoint fails at once.
         // Each section already renders its own per-section banner; the shared
         // top-level banner is a last-resort "nothing works at all" indicator.
-        if (!ffOk && !rlOk && !phOk && !swOk && !ryOk && !durationOk && !genreOk) {
+        if (
+          !ffOk &&
+          !rlOk &&
+          !phOk &&
+          !swOk &&
+          !ryOk &&
+          !durationOk &&
+          !showAttributionOk &&
+          !genreOk
+        ) {
           setLoadError("All health endpoints failed — check server logs");
         }
         setLastRefreshed(new Date());
@@ -818,6 +879,19 @@ function HealthPanel({
             kind={durationError.kind}
             message={durationError.message}
             data-testid="duration-error-banner"
+          />
+        )}
+
+        {!loading && showAttributionHealth !== null && (
+          <ShowAttributionHealthSection health={showAttributionHealth} />
+        )}
+        {!loading && showAttributionError !== null && (
+          <SectionErrorBanner
+            icon={<Archive className="h-4 w-4" />}
+            title="Show-name provenance"
+            kind={showAttributionError.kind}
+            message={showAttributionError.message}
+            data-testid="show-attribution-error-banner"
           />
         )}
 
@@ -1237,6 +1311,43 @@ interface UnmatchedRunBatchResult {
   definitiveMiss?: number;
   remaining?: number;
   skipped?: boolean;
+}
+
+function ShowAttributionHealthSection({
+  health,
+}: {
+  health: ShowAttributionHealth;
+}) {
+  const counts = [
+    ["Stream metadata", health.bySource.stream_metadata],
+    ["Source API", health.bySource.source_api],
+    ["Schedule match", health.bySource.schedule_match],
+    ["Manual", health.bySource.manual],
+    ["Historical unknown", health.bySource.unknown],
+  ] as const;
+
+  return (
+    <section className="mt-10" data-testid="show-attribution-health-section">
+      <SectionHeading
+        icon={<Archive className="h-4 w-4" />}
+        title="Show-name provenance"
+        badge={health.attributed}
+        description={`${health.streamEmitted.toLocaleString()} attributed spins carried a show name directly from stream metadata or a first-party source API. Schedule matches are reported separately.`}
+      />
+      <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-card-border bg-card px-5 py-4 sm:grid-cols-5">
+        {counts.map(([label, count]) => (
+          <div key={label}>
+            <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">
+              {label}
+            </dt>
+            <dd className="mt-0.5 font-mono text-2xl tabular-nums text-foreground">
+              {count.toLocaleString()}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
 }
 
 function DurationHealthSection({

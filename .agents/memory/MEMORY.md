@@ -28,7 +28,6 @@
 - [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.
 - [Lore UI component tests](lore-ui-component-tests.md) — per-file jsdom pragma + barrel mock + media stubs; wouter memoryLocation searchPath must NOT start with "?" or params silently vanish.
 - [Lore admin router catch-all](lore-admin-router-catchall.md) — admin router has rate-limit + auth middleware for ALL paths; new /api/* routers must be mounted before loreRouter in routes/index.ts or they get 503 "Admin entry not configured".
-- [db lib dist rebuild](db-lib-dist-rebuild.md) — lib/db AND lib/api-zod both need `tsc -p tsconfig.json` after any task merge that adds schema/types; api-server sees stale .d.ts and reports "no exported member".
 - [Spotify import fetch timeout](spotify-import-fetch-timeout.md) — Node fetch has no default timeout; Spotify silently hangs TCP under rate-limit, leaving import worker frozen forever; fix: AbortController with 20s timeout on every page fetch.
 - [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
 - [Lore share/paste provenance](lore-share-paste-provenance.md) — jam-bot link-unfurl NEVER writes on paste: spins.mbid→recordings FK means aired⟹already-recorded, so lore-iff-exists else links-only; accept any strong id (text OR spotifyId OR isrc).
@@ -86,7 +85,6 @@
 - [Crossings empty-taste fast path](crossings-empty-taste-fastpath.md) — fast path must check EVERY taste source (library_items, taste_seeds, unresolved spotify_library_items) or soft-only users cache []; every library-creating path must bustCrossingsCache.
 - [Crossings query performance](crossings-query-performance.md) — single 180-day bounded query only; unbounded/two-query approach causes 10–16s hangs; cache TTL = 30 min.
 - [Dial ranged coarse-scan window](dial-range-window.md) — time-only spins filters need the played_at-leading index (boot migration); spine goes dense >60 runs; clamp coarseIdx on shrink.
-- [server-db-tests merge gate](server-db-tests-gate.md) — DB suite gates at maxWorkers=2 (4 flakes on 1M-row contention); inline 30s test timeouts override config and must be ≥90s; never hardcode dates.
 - [Test-suite migration DDL deadlocks](test-migration-deadlocks.md) — migrations run once in globalSetup only; mid-suite constraint-swap DDL deadlocks parallel workers; advisory-lock the migration for concurrent boots.
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
@@ -96,14 +94,8 @@
 - [Lore two-layer typography](lore-two-layer-typography.md) — Signifier voice vs system-sans interface; home is Nebula Sans with Semibold headings; sizes still use the 3-token scale.
 - [Playwright autoplay testing](playwright-autoplay-testing.md) — 3 defaults silently allow autoplay (default policy flag, --mute-audio, evaluate's userGesture); a no-gesture control test is mandatory.
 - [Tier-1 prefetch loop & interstitial gating](tier1-prefetch-loop.md) — zero-link items need a fetched-set or prefetch loops when queue-run is deferred; interstitial must gate spotifyQueueRun too.
-- [Crossing-tone e2e merge gate](tone-e2e-gate.md) — `tone-e2e` validation runs the autoplay-policy Playwright spec; fails loudly when Chromium or the lore dev server is missing, so restart the lore workflow first.
-- [Playwright executablePath placement](playwright-executablepath-launchoptions.md) — executablePath is only honored inside use.launchOptions; directly under `use` it's silently ignored and Playwright hunts for downloaded browsers.
-- [Lore e2e suite gate](lore-e2e-suite-gate.md) — 4 route-intercepted specs gate merges (incl. revived sync + dial on-air); fixture pitfalls: zod-required fields, `?**` glob for query-string POSTs; fallbackNotice still excluded.
 - [Dial context rail & sentence grammar](dial-context-rail-grammar.md) — grammar module owns link policy: dotted=navigate, `+`=add, white=yours; no song titles; ContextRail path must stay alive (mocked widely).
-- [lore-tests merge gate](lore-tests-gate.md) — lore vitest suite gates merges via flock-wrapped validation; copy/grammar changes must update tests or the suite rots.
 - [Imported portable sets](imported-sets-pattern.md) — XSPF/JSPF uploads: no-FK isolation from spins, claimed MBIDs only honored if already local (else file could plant spine rows), DTD regex-reject before parse.
-- [api-server vitest contention flakes](api-server-vitest-contention.md) — full-suite DB-test flakes under the running dev server: retry failing files in isolation; stop the API Server workflow before validation.
-- [React-compiler rules now error](react-compiler-rules-error.md) — four hook rules block merges in lore; PlayerProvider's ref-mirror inline disables are deliberate, don't remove.
 - [Now-playing cold-start partial](np-cold-start-partial.md) — boot prewarm + single-flight fill + stations snapshot; boot DB contention makes even trivial SELECTs take seconds, so partials must avoid the pool.
 - [Station context as sidebar tab](context-sidebar-tab.md) — context tab (fixed id) lives in the set-panel strip only in landscape; portrait keeps in-body region; jsdom lacks matchMedia so guard it.
 - [Crossings soft-name normalization](crossings-soft-name-normalization.md) — article/punct-tolerant seed matching is personal-compute only (blended, library-hits, lifetime-job still exact); empty results cache short (~2 min).
@@ -122,9 +114,7 @@
 - [Dial lenses (Radio/Press)](dial-lenses-pattern.md) — exclusive views, lens state local-first; Press busts with the same bustCrossingsCache as Radio; lens-specific filters stay inside their branch.
 - [Now-playing freshness contract](nowplaying-freshness.md) — unchanged-track dedup paths must refresh observed_at (live only, never backfill) or healthy stations go falsely stale; local vitest hangs = merge-gate flock held.
 - [Station landing confirmation](station-landing-confirmation.md) — a fresh aggregate row cannot confirm a tune; confirmation requires a station-scoped post-landing refresh observation.
-- [Positional body.click() in e2e helpers](e2e-positional-body-click.md) — Playwright clicks body center; strip reorders silently retarget the click onto chips; blur via evaluate instead.
 - [Track expiry advisory signal](track-expiry-advisory.md) — likely-expiring estimate never swaps the displayed track, only schedules one boundary re-check; lives on the plain-JSON fast lane, not orval payloads.
-- [Vitest 4 config placement traps](vitest4-config-placement.md) — cacheDir must be top-level (not test.cacheDir); environmentMatchGlobs removed, use test.projects with extends:true; both fail silently.
 - [Native checkboxes invisible on dark mobile panels](native-checkbox-dark-mobile.md) — appearance:none + custom border/check required; computed styles lie, verify via screenshot.
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
 - [Crossing-positive filter test fallout](crossing-positive-filter-tests.md) — default-on filter hides zero-crossing fixtures; pin lore:radioMode or lore:crossingScope in unrelated specs.
@@ -157,3 +147,4 @@
 - [Broadcast timing provenance](broadcast-timing-provenance.md) — receipt time is never a track start; legacy timing degrades to inferred, and expiry remains advisory until metadata changes.
 - [Render-phase ranked snapshots](render-phase-ranked-snapshots.md) — compare semantic rank inputs, not array identity, or timer/query rerenders can create an infinite update loop.
 - [Spinitron public calendar schedules](spinitron-public-calendar.md) — calendar HTML points to an unauthenticated JSON feed; decode JS-escaped paths and honor the host’s 10-second crawl delay.
+- [Show-attribution provenance](show-attribution-provenance.md) — show_id alone is not evidence a stream emitted a show name; preserve legacy provenance as unknown and count schedule matches separately.

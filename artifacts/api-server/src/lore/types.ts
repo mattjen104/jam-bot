@@ -39,6 +39,8 @@ export interface NowPlayingRaw {
 export interface ShowAttribution {
   name: string;
   djName?: string;
+  /** First-party origin of the emitted show name. */
+  attributionSource?: "stream_metadata" | "source_api";
   /**
    * Multiple DJ / co-host names when the source exposes them.  When present,
    * takes precedence over the single `djName` for attribution logic.

@@ -231,7 +231,8 @@ export async function stampSpinShowIds(): Promise<number> {
     ),
     updated AS (
       UPDATE spins sp
-      SET show_id = m.show_id
+      SET show_id = m.show_id,
+          show_attribution_source = 'schedule_match'
       FROM matches m
       WHERE sp.id = m.spin_id
       RETURNING 1

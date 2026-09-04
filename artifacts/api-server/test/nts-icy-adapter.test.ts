@@ -54,7 +54,11 @@ describe("NTS ICY adapter", () => {
     await expect(adapter?.(NTS_CONFIG)).resolves.toEqual({
       rawArtist: "Alice Coltrane",
       rawTitle: "Journey in Satchidananda",
-      show: { name: "Floating Points", djName: "Sam Shepherd" },
+      show: {
+        name: "Floating Points",
+        djName: "Sam Shepherd",
+        attributionSource: "source_api",
+      },
     });
   });
 

@@ -92,7 +92,11 @@ describe("parseKexpPlays", () => {
       recordingId: "mbid-rec-1",
       album: "Remind Me Tomorrow",
       artworkUrl: "http://img/1.jpg",
-      show: { name: "Morning Show", djName: "John R." },
+      show: {
+        name: "Morning Show",
+        djName: "John R.",
+        attributionSource: "source_api",
+      },
     });
     expect(spins[0]!.playedAt?.toISOString()).toBe("2026-07-01T12:00:00.000Z");
   });
@@ -110,7 +114,10 @@ describe("parseKexpPlays", () => {
       { results: [{ id: 1, artist: "Björk", song: "Jóga", show: 7 }] },
       new Map([[7, { name: "Evening Radio", djName: "bjork!" }]]),
     );
-    expect(spins[0]!.show).toEqual({ name: "Evening Radio" });
+    expect(spins[0]!.show).toEqual({
+      name: "Evening Radio",
+      attributionSource: "source_api",
+    });
   });
 });
 
@@ -140,7 +147,11 @@ describe("parseSpinitronSpins", () => {
       album: "I Can Hear the Heart",
       isrc: "USABC1234567",
       durationMs: 372_000,
-      show: { name: "Freeform", djName: "DJ Pat" },
+      show: {
+        name: "Freeform",
+        djName: "DJ Pat",
+        attributionSource: "source_api",
+      },
     });
   });
 
@@ -156,13 +167,20 @@ describe("show attribution guards", () => {
       { items: [{ id: 1, artist: "Sault", song: "Wildfires", playlist_id: 1 }] },
       new Map([[1, { name: "Night Shift", djName: "Wizzy" }]]),
     );
-    expect(alias[0]!.show).toEqual({ name: "Night Shift", djName: "Wizzy" });
+    expect(alias[0]!.show).toEqual({
+      name: "Night Shift",
+      djName: "Wizzy",
+      attributionSource: "source_api",
+    });
 
     const titleCollision = parseSpinitronSpins(
       { items: [{ id: 2, artist: "Sault", song: "Wildfires", playlist_id: 2 }] },
       new Map([[2, { name: "Night Shift", djName: "WILDFIRES" }]]),
     );
-    expect(titleCollision[0]!.show).toEqual({ name: "Night Shift" });
+    expect(titleCollision[0]!.show).toEqual({
+      name: "Night Shift",
+      attributionSource: "source_api",
+    });
   });
 });
 
@@ -358,7 +376,11 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(fullBody)).toEqual({
       rawArtist: "Sam Shepherd",
       rawTitle: "Floating Points",
-      show: { name: "Floating Points", djName: "Sam Shepherd" },
+      show: {
+        name: "Floating Points",
+        djName: "Sam Shepherd",
+        attributionSource: "source_api",
+      },
     });
   });
 
@@ -367,7 +389,7 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(body)).toEqual({
       rawArtist: "Late Night Tales",
       rawTitle: "Late Night Tales",
-      show: { name: "Late Night Tales" },
+      show: { name: "Late Night Tales", attributionSource: "source_api" },
     });
   });
 
@@ -424,12 +446,16 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(findChannel("1"))).toEqual({
       rawArtist: "Sam Shepherd",
       rawTitle: "Floating Points",
-      show: { name: "Floating Points", djName: "Sam Shepherd" },
+      show: {
+        name: "Floating Points",
+        djName: "Sam Shepherd",
+        attributionSource: "source_api",
+      },
     });
     expect(parseNtsLive(findChannel("2"))).toEqual({
       rawArtist: "Late Night Tales",
       rawTitle: "Late Night Tales",
-      show: { name: "Late Night Tales" },
+      show: { name: "Late Night Tales", attributionSource: "source_api" },
     });
     expect(parseNtsLive(findChannel("3"))).toBeNull();
   });
@@ -454,7 +480,11 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(body)).toEqual({
       rawArtist: "Ben UFO",
       rawTitle: "Hessle Audio",
-      show: { name: "Hessle Audio", djName: "Ben UFO" },
+      show: {
+        name: "Hessle Audio",
+        djName: "Ben UFO",
+        attributionSource: "source_api",
+      },
     });
   });
 
@@ -482,7 +512,11 @@ describe("mergeNtsIcyTrackWithLiveShow", () => {
   const liveShow = {
     rawArtist: "Sam Shepherd",
     rawTitle: "Floating Points",
-    show: { name: "Floating Points", djName: "Sam Shepherd" },
+    show: {
+      name: "Floating Points",
+      djName: "Sam Shepherd",
+      attributionSource: "source_api",
+    },
   };
 
   it("keeps ICY artist/title while attaching the live NTS show", () => {
@@ -494,7 +528,11 @@ describe("mergeNtsIcyTrackWithLiveShow", () => {
     ).toEqual({
       rawArtist: "Alice Coltrane",
       rawTitle: "Journey in Satchidananda",
-      show: { name: "Floating Points", djName: "Sam Shepherd" },
+      show: {
+        name: "Floating Points",
+        djName: "Sam Shepherd",
+        attributionSource: "source_api",
+      },
     });
   });
 

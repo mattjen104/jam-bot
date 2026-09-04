@@ -59,6 +59,7 @@ import { applySpinsPlayedAtIndexMigration } from "./lore/spins-played-at-index-m
 import { applySpinObservedAtMigration } from "./lore/spin-observed-at-migration.js";
 import { applySpinPlayOffsetMigration } from "./lore/spin-play-offset-migration.js";
 import { applySpinDurationMigration } from "./lore/spin-duration-migration.js";
+import { applySpinShowAttributionMigration } from "./lore/spin-show-attribution-migration.js";
 import { applyDurationBackfillMigration } from "./lore/duration-backfill-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
 import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
@@ -225,6 +226,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applySpinPlayOffsetMigration", applySpinPlayOffsetMigration);
     await runMigration("applySpinTimingMigration", applySpinTimingMigration);
     await runMigration("applySpinDurationMigration", applySpinDurationMigration);
+    await runMigration("applySpinShowAttributionMigration", applySpinShowAttributionMigration);
     await runMigration("applyDurationBackfillMigration", applyDurationBackfillMigration);
     await runMigration("applyLibraryProvenanceBackfill", async () => {
       await applyLibraryProvenanceBackfill();

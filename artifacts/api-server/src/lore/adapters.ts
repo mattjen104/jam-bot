@@ -30,6 +30,18 @@ import { withStationOriginPolicy } from "./network-policy.js";
 
 const FETCH_TIMEOUT_MS = 8000;
 
+function sourceApiShow(
+  show: ReturnType<typeof usableShowAttribution>,
+): ShowAttribution | null {
+  if (!show) return null;
+  return {
+    name: show.name,
+    ...(show.djName ? { djName: show.djName } : {}),
+    ...(show.djNames?.length ? { djNames: show.djNames } : {}),
+    attributionSource: "source_api",
+  };
+}
+
 async function getJson(
   url: string,
   headers: Record<string, string> = {},
@@ -267,7 +279,8 @@ function parseConfiguredHistoryItems(
         { name: showName, ...(djName ? { djName } : {}) },
         { artist: rawArtist, title: rawTitle },
       );
-      if (usable) spin.show = usable;
+      const sourced = sourceApiShow(usable);
+      if (sourced) spin.show = sourced;
     }
     const archiveTemplate = str(config.archiveUrl);
     if (archiveTemplate && spin.playedAt) {
@@ -583,7 +596,8 @@ export function parseKexpPlays(
     if (showId != null) {
       const show = showMap.get(showId);
        const usable = usableShowAttribution(show, { artist: rawArtist, title: rawTitle });
-       if (usable) spin.show = usable;
+       const sourced = sourceApiShow(usable);
+       if (sourced) spin.show = sourced;
     }
     out.push(spin);
   }
@@ -678,7 +692,8 @@ export function parseSpinitronSpins(
     if (playlistId != null) {
       const show = playlistMap.get(playlistId);
        const usable = usableShowAttribution(show, { artist: rawArtist, title: rawTitle });
-       if (usable) spin.show = usable;
+       const sourced = sourceApiShow(usable);
+       if (sourced) spin.show = sourced;
     }
     out.push(spin);
   }
@@ -876,7 +891,8 @@ export function parseKcrwTrack(body: unknown, feed: string): RawSpin[] {
     const djName = str(t.host);
     if (djName) show.djName = djName;
     const usable = usableShowAttribution(show, { artist: rawArtist, title: rawTitle });
-    if (usable) spin.show = usable;
+    const sourced = sourceApiShow(usable);
+    if (sourced) spin.show = sourced;
   }
   return [spin];
 }
@@ -935,7 +951,7 @@ export function parseNtsLive(
   if (!rawArtist || !rawTitle) return null;
   const out: import("./types.js").NowPlayingRaw = { rawArtist, rawTitle };
   if (broadcastTitle) {
-    out.show = { name: broadcastTitle };
+    out.show = { name: broadcastTitle, attributionSource: "source_api" };
     if (hostName) out.show.djName = hostName;
     // NTS's live endpoint is show-level rather than track-level: `rawArtist`
     // is the host and `rawTitle` is the broadcast title by design, so neither

@@ -661,12 +661,13 @@ async function persistSpin(args: {
   resolution: MbidResolution;
   raw: RawSpin;
   showId: number | null;
+  showAttributionSource?: "stream_metadata" | "source_api" | "schedule_match" | "manual";
   source: string;
   citation?: string;
   enrichLinks?: boolean;
   preserveExistingMetadata?: boolean;
 }): Promise<{ inserted: boolean; artworkUrl: string | null; spinId: number | null }> {
-  const { station, resolution: r, raw, showId, source, citation } = args;
+  const { station, resolution: r, raw, showId, showAttributionSource, source, citation } = args;
   const observedAt = new Date();
   const timing = timingFromRaw(raw);
   let artworkUrl: string | null = null;
@@ -690,6 +691,7 @@ async function persistSpin(args: {
     .values({
       stationId: station.id,
       showId: showId ?? null,
+      showAttributionSource: showId == null ? null : (showAttributionSource ?? null),
       mbid: r.mbid,
       rawArtist: raw.rawArtist,
       rawTitle: raw.rawTitle,
@@ -1290,6 +1292,11 @@ async function logSpinIfChangedInner(
       resolution: r,
       raw: np,
       showId,
+      showAttributionSource: np.show
+        ? (np.show.attributionSource ?? "source_api")
+        : showId != null
+          ? "schedule_match"
+          : undefined,
       source: opts?.source ?? station.nowPlayingSource ?? "unknown",
     });
     wrote = persisted.inserted;
@@ -1495,6 +1502,9 @@ export async function ingestRawSpins(
         resolution: r,
         raw,
         showId,
+        showAttributionSource: showId != null
+          ? (raw.show?.attributionSource ?? "source_api")
+          : undefined,
         source,
         enrichLinks: !backfill,
         preserveExistingMetadata: backfill,
@@ -1550,6 +1560,7 @@ export async function ingestManualSpin(args: {
       ...(args.show ? { show: args.show } : {}),
     },
     showId,
+    showAttributionSource: showId != null ? "manual" : undefined,
     source: "manual",
     citation,
   });

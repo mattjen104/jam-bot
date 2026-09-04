@@ -33,6 +33,7 @@
     { "method": "POST", "path": "/admin/recordings/enrich-release-groups", "kind": "admin", "reason": "Admin ops endpoint (release-group enrichment backfill)." },
     { "method": "GET", "path": "/admin/recordings/{mbid}/release-groups", "kind": "admin", "reason": "Admin ops endpoint (release-group candidates for a recording)." },
     { "method": "GET", "path": "/admin/spinitron-web-health", "kind": "admin", "reason": "Admin health endpoint (Spinitron web scraping)." },
+    { "method": "GET", "path": "/admin/show-attribution-health", "kind": "admin", "reason": "Admin health endpoint (show-name provenance counts)." },
     { "method": "GET", "path": "/admin/release-year-health", "kind": "admin", "reason": "Admin health endpoint (release-year backfill coverage)." },
     { "method": "POST", "path": "/admin/release-year-backfill/run", "kind": "admin", "reason": "Admin ops endpoint (trigger release-year backfill batch)." },
     { "method": "GET", "path": "/admin/duration-health", "kind": "admin", "reason": "Admin health endpoint (duration backfill coverage)." },

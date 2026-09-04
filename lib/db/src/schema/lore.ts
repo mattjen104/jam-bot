@@ -621,6 +621,12 @@ export const spinsTable = pgTable(
       .notNull()
       .references(() => stationsTable.id),
     showId: integer("show_id").references(() => showsTable.id),
+    /**
+     * Where this spin's show attribution came from. Null preserves the honest
+     * unknown state for rows written before provenance was recorded.
+     * "stream_metadata" | "source_api" | "schedule_match" | "manual".
+     */
+    showAttributionSource: text("show_attribution_source"),
     /** Resolved MusicBrainz Recording ID, when we matched one. */
     mbid: text("mbid").references(() => recordingsTable.mbid),
     /** Raw metadata straight from the now-playing source, before normalization. */
@@ -690,6 +696,10 @@ export const spinsTable = pgTable(
     // Null externalIds are distinct in Postgres, so change-detection sources are
     // unaffected.
     uniqueIndex("spins_station_external_idx").on(t.stationId, t.externalId),
+    check(
+      "spins_show_attribution_source_ck",
+      sql`${t.showAttributionSource} is null or ${t.showAttributionSource} in ('stream_metadata', 'source_api', 'schedule_match', 'manual')`,
+    ),
   ],
 );
 

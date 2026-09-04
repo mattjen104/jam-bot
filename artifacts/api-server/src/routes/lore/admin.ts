@@ -1870,6 +1870,48 @@ router.get("/admin/spinitron-web-health", h(async (_req, res) => {
   });
 }));
 
+// GET /api/admin/show-attribution-health — exact provenance of every persisted
+// show_id. Legacy rows remain "unknown" rather than being rewritten from clues.
+router.get("/admin/show-attribution-health", h(async (_req, res) => {
+  const [counts] = await db
+    .select({
+      attributed: sql<number>`count(*) filter (where ${spinsTable.showId} is not null)::int`,
+      streamMetadata: sql<number>`count(*) filter (
+        where ${spinsTable.showId} is not null
+          and ${spinsTable.showAttributionSource} = 'stream_metadata'
+      )::int`,
+      sourceApi: sql<number>`count(*) filter (
+        where ${spinsTable.showId} is not null
+          and ${spinsTable.showAttributionSource} = 'source_api'
+      )::int`,
+      scheduleMatch: sql<number>`count(*) filter (
+        where ${spinsTable.showId} is not null
+          and ${spinsTable.showAttributionSource} = 'schedule_match'
+      )::int`,
+      manual: sql<number>`count(*) filter (
+        where ${spinsTable.showId} is not null
+          and ${spinsTable.showAttributionSource} = 'manual'
+      )::int`,
+      unknown: sql<number>`count(*) filter (
+        where ${spinsTable.showId} is not null
+          and ${spinsTable.showAttributionSource} is null
+      )::int`,
+    })
+    .from(spinsTable);
+
+  return res.json({
+    attributed: counts?.attributed ?? 0,
+    streamEmitted: (counts?.streamMetadata ?? 0) + (counts?.sourceApi ?? 0),
+    bySource: {
+      stream_metadata: counts?.streamMetadata ?? 0,
+      source_api: counts?.sourceApi ?? 0,
+      schedule_match: counts?.scheduleMatch ?? 0,
+      manual: counts?.manual ?? 0,
+      unknown: counts?.unknown ?? 0,
+    },
+  });
+}));
+
 // GET /api/admin/release-year-health — live counts of recordings whose
 // release_year is still unknown, split into:
 //   - inQueue    : year_checked_at IS NULL (not yet attempted by the backfill)
