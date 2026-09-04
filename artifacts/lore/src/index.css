@@ -5933,9 +5933,22 @@
   background: transparent;
   color: inherit;
   text-align: left;
+}
+.adaptive-now__body-main {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
 }
-.adaptive-now__body strong {
+.adaptive-now__body-main strong {
   font-family: var(--app-font-display);
   font-size: var(--lore-size-interface);
 }
@@ -5946,6 +5959,23 @@
   font-size: var(--lore-size-small);
 }
 .adaptive-now__reason { color: hsl(var(--library)); }
+.adaptive-now__reason--link {
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--library) / 0.35);
+  text-underline-offset: 3px;
+}
+.adaptive-now__reason--link:hover { text-decoration-color: currentColor; }
+.dial-station-filter__clear {
+  margin: 0 16px 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--library));
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .adaptive-now__track {
   width: 100%;
   overflow: hidden;

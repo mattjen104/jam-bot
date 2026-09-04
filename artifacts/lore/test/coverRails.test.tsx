@@ -69,6 +69,23 @@ afterEach(() => {
 });
 
 describe("crossingCoverItems", () => {
+  it("keeps historical album crossings for an offline station when explicitly scoped", () => {
+    const row = makeRow({
+      isLive: false,
+      albumCrossings: [{
+        releaseGroupMbid: "release-offline",
+        recordingMbid: "recording-offline",
+        title: "Offline Record",
+        artist: "Broadcast",
+        artworkUrl: "https://example.com/offline.jpg",
+      }],
+    });
+
+    expect(crossingCoverItems([row])).toEqual([]);
+    expect(crossingCoverItems([row], 8, true)).toMatchObject([
+      { stationSlug: row.ds.station.slug, title: "Offline Record", timing: "history" },
+    ]);
+  });
   it("includes a confirmed live exact crossing with album-crossing artwork", () => {
     const row = makeRow({ albumCrossings: [ALBUM_CROSSING] });
     const items = crossingCoverItems([row]);

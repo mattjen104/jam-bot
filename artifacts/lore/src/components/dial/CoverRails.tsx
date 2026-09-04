@@ -151,6 +151,7 @@ export function crossingArtworkFor(
 export function crossingCoverItems(
   rows: DialLaneRow[],
   limit = CROSSING_COVER_LIMIT,
+  includeOfflineHistory = false,
 ): CrossingCoverItem[] {
   const items: CrossingCoverItem[] = [];
   for (const row of rows) {
@@ -189,7 +190,7 @@ export function crossingCoverItems(
   // history, never as the current broadcast.
   for (const row of rows) {
     if (items.length >= limit) break;
-    if (!row.ds.isLive) continue;
+    if (!includeOfflineHistory && !row.ds.isLive) continue;
     for (const crossing of row.ds.albumCrossings ?? []) {
       if (items.length >= limit) break;
       const identity = crossing.releaseGroupMbid ?? crossing.recordingMbid;
@@ -227,11 +228,16 @@ export function crossingCoverItems(
 export function LiveCrossingCoverRail({
   rows,
   onTuneIn,
+  includeOfflineHistory = false,
 }: {
   rows: DialLaneRow[];
   onTuneIn: (row: DialLaneRow) => void;
+  includeOfflineHistory?: boolean;
 }) {
-  const items = useMemo(() => crossingCoverItems(rows), [rows]);
+  const items = useMemo(
+    () => crossingCoverItems(rows, CROSSING_COVER_LIMIT, includeOfflineHistory),
+    [includeOfflineHistory, rows],
+  );
   if (items.length === 0) return null;
   const hasLiveMatch = items.some((item) => item.timing === "live");
   return (
@@ -270,14 +276,16 @@ export function LiveCrossingCoverRail({
                   : "artist crossing"}
             </span>
             <div className="cover-card__actions">
-              <button
-                type="button"
-                className="cover-card__action cover-card__action--tune"
-                aria-label={`Tune in to ${item.stationName}`}
-                onClick={() => onTuneIn(item.row)}
-              >
-                Tune in
-              </button>
+              {item.row.ds.isLive ? (
+                <button
+                  type="button"
+                  className="cover-card__action cover-card__action--tune"
+                  aria-label={`Tune in to ${item.stationName}`}
+                  onClick={() => onTuneIn(item.row)}
+                >
+                  Tune in
+                </button>
+              ) : null}
             </div>
           </article>
         ))}

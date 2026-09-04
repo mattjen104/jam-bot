@@ -7,6 +7,7 @@ import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { readPins, togglePin } from "../hooks/useDialData";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationChangeCountdown } from "./StationChangeCountdown";
+import { stationCrossingSentence } from "../lib/stationCrossingCopy";
 import {
   adaptiveListeningCopy,
   importProgressLabel,
@@ -52,6 +53,13 @@ function reasonFor(row: DialLaneRow, state: AdaptiveListeningState): string {
   return "A strong place to start";
 }
 
+function crossingReasonFor(row: DialLaneRow): string | null {
+  return stationCrossingSentence(
+    row.ds.topArtistNames24h,
+    row.ds.crossings + row.ds.artistCrossings,
+  );
+}
+
 function Row({
   row,
   state,
@@ -68,6 +76,7 @@ function Row({
   const playing = active && radio.status === "playing";
   const artist = track?.artist?.trim() || "Live metadata unavailable";
   const title = track?.title?.trim();
+  const crossingReason = crossingReasonFor(row);
 
   return (
     <article className={`adaptive-now__row${active ? " is-active" : ""}`} data-testid="adaptive-now-row">
@@ -87,18 +96,29 @@ function Row({
         <span>{playing ? "Pause" : "Tune live"}</span>
         {!playing ? <StationChangeCountdown track={track} /> : null}
       </button>
-      <button
-        type="button"
-        className="adaptive-now__body"
-        onClick={() => onInspect(row)}
-        aria-label={`Inspect ${row.ds.station.name}`}
-      >
-        <span className="adaptive-now__reason">{reasonFor(row, state)}</span>
-        <strong>{row.ds.station.name}</strong>
-        <span className="adaptive-now__track">
-          {title ? `${artist} · ${title}` : artist}
-        </span>
-      </button>
+      <div className="adaptive-now__body">
+        {crossingReason ? (
+          <Link
+            className="adaptive-now__reason adaptive-now__reason--link"
+            href={`/feed?station=${encodeURIComponent(row.ds.station.slug)}`}
+          >
+            {crossingReason}
+          </Link>
+        ) : (
+          <span className="adaptive-now__reason">{reasonFor(row, state)}</span>
+        )}
+        <button
+          type="button"
+          className="adaptive-now__body-main"
+          onClick={() => onInspect(row)}
+          aria-label={`Inspect ${row.ds.station.name}`}
+        >
+          <strong>{row.ds.station.name}</strong>
+          <span className="adaptive-now__track">
+            {title ? `${artist} · ${title}` : artist}
+          </span>
+        </button>
+      </div>
       {active ? <span className="adaptive-now__active" aria-label="Current station">On air</span> : null}
     </article>
   );
@@ -155,7 +175,9 @@ function StationDetail({
         <button type="button" onClick={onToggleFollow}>
           {followed ? "Following station" : "Follow station"}
         </button>
-        <Link href="/feed" onClick={onClose}>Explore this station in Feed</Link>
+        <Link href={`/feed?station=${encodeURIComponent(row.ds.station.slug)}`} onClick={onClose}>
+          Explore this station in Feed
+        </Link>
       </div>
     </aside>
   );

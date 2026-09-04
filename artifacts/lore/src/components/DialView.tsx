@@ -1446,6 +1446,11 @@ function _OfflineRow({
 
 export function DialView() {
   const [location, navigate] = useLocation();
+  const stationFilterSlug = useMemo(() => {
+    const routeSearch = location.includes("?") ? `?${location.split("?")[1]}` : "";
+    const search = typeof window === "undefined" ? routeSearch : window.location.search || routeSearch;
+    return new URLSearchParams(search).get("station");
+  }, [location]);
   const [level, setLevel] = useState<Level>("all");
   const [currentStationSlug, setCurrentStationSlug] = useState<string | null>(null);
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
@@ -1731,7 +1736,8 @@ export function DialView() {
   const sortedRows = useMemo(() => {
     const pins = readPins();
     return [...stations]
-      .filter((ds) => ds.isLive)
+      .filter((ds) => ds.isLive || ds.station.slug === stationFilterSlug)
+      .filter((ds) => !stationFilterSlug || ds.station.slug === stationFilterSlug)
       .map((ds) => {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
         // Only the current run may establish live attribution. A recently
@@ -1782,7 +1788,7 @@ export function DialView() {
         if (sortR(a.rz.r) !== sortR(b.rz.r)) return sortR(a.rz.r) - sortR(b.rz.r);
         return a.ds.station.name.localeCompare(b.ds.station.name);
       });
-  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric, skipped]);
+  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric, skipped, stationFilterSlug]);
 
   // Crossing evidence drives Explore's cover rail and header status.
   const withReason = useMemo(
@@ -2497,10 +2503,17 @@ export function DialView() {
     }
   }, [scan, radio, fastLane, fastLaneCandidate]);
   const explorePrimaryCount = withReason.length;
-  const exploreTitle = explorePrimaryCount > 0
+  const filteredStationName = stationFilterSlug
+    ? stations.find((station) => station.station.slug === stationFilterSlug)?.station.name ?? stationFilterSlug
+    : null;
+  const exploreTitle = filteredStationName
+    ? `${filteredStationName} × your library.`
+    : explorePrimaryCount > 0
     ? "Your music is on air."
     : "Explore the dial.";
-  const exploreDescription = explorePrimaryCount > 0
+  const exploreDescription = filteredStationName
+    ? "Album crossings from this station, drawn from your library."
+    : explorePrimaryCount > 0
     ? "Start with a confirmed crossing, then scan when you want another signal."
     : "First plays are below. Scan live radio when you want to move through the dial.";
 
@@ -2584,13 +2597,24 @@ export function DialView() {
                 Contains Zone 1 crossing rows + Zone 2 ghost stations as a
                 subsection below. */}
             {!inContext && (
-              <ExploreHeader
-                title={exploreTitle}
-                description={exploreDescription}
-                liveCount={sortedRows.length}
-                crossingCount={withReason.length}
-                onOpenScan={() => setScanSessionOpen(true)}
-              />
+              <>
+                <ExploreHeader
+                  title={exploreTitle}
+                  description={exploreDescription}
+                  liveCount={sortedRows.length}
+                  crossingCount={withReason.length}
+                  onOpenScan={() => setScanSessionOpen(true)}
+                />
+                {stationFilterSlug ? (
+                  <button
+                    type="button"
+                    className="dial-station-filter__clear"
+                    onClick={() => navigate("/feed")}
+                  >
+                    Show all stations
+                  </button>
+                ) : null}
+              </>
             )}
             {/* Cover-led music rails — the music-object grammar: cover leads,
                 station is provenance. The station feed below stays
@@ -2601,12 +2625,18 @@ export function DialView() {
             {!inContext && (
               <>
                 {!crossingsLoading && (
-                  <LiveCrossingCoverRail rows={sortedRows} onTuneIn={tuneZoneRow} />
+                  <LiveCrossingCoverRail
+                    rows={sortedRows}
+                    onTuneIn={tuneZoneRow}
+                    includeOfflineHistory={Boolean(stationFilterSlug)}
+                  />
                 )}
-                <FirstPlayCoverRail
-                  liveSlugs={onAirSlugSet}
-                  onTuneStation={tuneStationBySlug}
-                />
+                {!stationFilterSlug ? (
+                  <FirstPlayCoverRail
+                    liveSlugs={onAirSlugSet}
+                    onTuneStation={tuneStationBySlug}
+                  />
+                ) : null}
               </>
             )}
             {/* Tuned context must never wait on the crossings query: the
