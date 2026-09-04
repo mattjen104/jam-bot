@@ -15,7 +15,7 @@
  *    "classics", "longtail") are never emitted
  */
 import { describe, expect, it } from "vitest";
-import { deriveStationCategories } from "../src/routes/lore/shared.js";
+import { categoryDiagnostic, deriveStationCategories } from "../src/routes/lore/shared.js";
 import type { Station } from "@workspace/db";
 
 function makeStation(overrides: Partial<Station> = {}): Station {
@@ -160,5 +160,19 @@ describe("deriveStationCategories", () => {
         expect(cats).not.toContain(retired);
       }
     }
+  });
+});
+
+describe("categoryDiagnostic", () => {
+  it("reports an explicit college tag as evidence", () => {
+    expect(categoryDiagnostic(makeStation({ tags: ["college"] }))).toMatchObject({
+      category: "campus", evidence: "explicit_tag",
+    });
+  });
+
+  it("flags a university organization for review without promoting it", () => {
+    expect(categoryDiagnostic(makeStation({ slug: "wxyz", org: "Example University" }))).toEqual({
+      category: "discovery", evidence: "fallback_suspicious_org",
+    });
   });
 });

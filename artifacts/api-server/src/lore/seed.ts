@@ -55,6 +55,17 @@ export function spinitronWebSourceForCallsign(
     : null;
 }
 
+/**
+ * A college tag is only emitted from affiliation text supplied by the curated
+ * roster, never from the callsign. This intentionally favors misses for
+ * abbreviated organizations (for operator review) over speculative tagging.
+ */
+function collegeTagFromAffiliation(org: string | null | undefined): string[] | null {
+  return org && /\b(university|college|universit[éèêäàá]|universidad|universidade)\b/i.test(org)
+    ? ["college"]
+    : null;
+}
+
 /** User-reviewed additions to the listener-facing Core station category. */
 export const CORE_RADIO_ADDITION_SLUGS = [
   "wfmu",
@@ -2678,7 +2689,7 @@ export async function seedSpinitronRoster(): Promise<void> {
       nowPlayingConfig: { callsign: station.callsign },
       source: "curated",
       stationClass: "community",
-      tags: station.tags ?? null,
+      tags: station.tags ?? collegeTagFromAffiliation(station.org),
       active: true,
       homepageUrl:
         station.homepageUrl ??
@@ -2688,7 +2699,21 @@ export async function seedSpinitronRoster(): Promise<void> {
     const result = await db
       .insert(stationsTable)
       .values(row)
-      .onConflictDoNothing({ target: stationsTable.slug })
+      // Roster affiliation tags are additive: a newly reviewed explicit
+      // affiliation repairs older rows without deleting operator tags.
+      .onConflictDoUpdate({
+        target: stationsTable.slug,
+        set: {
+          tags: sql`CASE WHEN EXCLUDED.tags IS NULL THEN ${stationsTable.tags} ELSE (
+            SELECT COALESCE(jsonb_agg(DISTINCT tag), '[]'::jsonb) FROM (
+              SELECT jsonb_array_elements_text(COALESCE(${stationsTable.tags}, '[]'::jsonb)) AS tag
+              UNION
+              SELECT jsonb_array_elements_text(EXCLUDED.tags) AS tag
+            ) merged_tags
+          ) END`,
+          updatedAt: sql`now()`,
+        },
+      })
       .returning({ id: stationsTable.id });
     if (result.length > 0) {
       inserted++;

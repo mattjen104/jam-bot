@@ -50,6 +50,7 @@ import { applyDonateCheckerMigration } from "./lore/donate-checker-migration.js"
 import { applySupportHoldsMigration } from "./lore/support-holds-migration.js";
 import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
 import { startQualityRecomputeJob } from "./lore/quality.js";
+import { applyStationQualityStatusMigration } from "./lore/station-quality-status-migration.js";
 import { startArtPrewarm } from "./lore/artPrewarm.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
 import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
@@ -294,6 +295,7 @@ async function bootLore(): Promise<void> {
     // discovered before ingest-time detection was added. Idempotent (jsonb
     // containment guard skips already-tagged rows).
     await runMigration("applyCollegeTagMigration", applyCollegeTagMigration);
+    await runMigration("applyStationQualityStatusMigration", applyStationQualityStatusMigration);
     // Delete icy_unsupported radio_browser rows whose station also has an
     // active row (stale duplicates inflating the unsupported count), then
     // create the fingerprint-scout tallies table.

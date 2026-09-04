@@ -3755,6 +3755,81 @@ export const AdminStationItemQualityTier = {
   unscored: "unscored",
 } as const;
 
+export type AdminStationItemQualityState =
+  (typeof AdminStationItemQualityState)[keyof typeof AdminStationItemQualityState];
+
+export const AdminStationItemQualityState = {
+  missing: "missing",
+  computed: "computed",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminStationItemUnscoredReason =
+  | (typeof AdminStationItemUnscoredReason)[keyof typeof AdminStationItemUnscoredReason]
+  | null;
+
+export const AdminStationItemUnscoredReason = {
+  not_pollable: "not_pollable",
+  no_observations: "no_observations",
+  insufficient_recent_samples: "insufficient_recent_samples",
+  recompute_missing: "recompute_missing",
+  recompute_failed: "recompute_failed",
+  stale_evidence: "stale_evidence",
+} as const;
+
+export type AdminStationItemFreshness =
+  (typeof AdminStationItemFreshness)[keyof typeof AdminStationItemFreshness];
+
+export const AdminStationItemFreshness = {
+  fresh: "fresh",
+  aging: "aging",
+  stale: "stale",
+  none: "none",
+} as const;
+
+export type AdminStationItemStreamHealth =
+  (typeof AdminStationItemStreamHealth)[keyof typeof AdminStationItemStreamHealth];
+
+export const AdminStationItemStreamHealth = {
+  healthy: "healthy",
+  unhealthy: "unhealthy",
+  unknown: "unknown",
+} as const;
+
+export type AdminStationItemScheduleCoverage =
+  (typeof AdminStationItemScheduleCoverage)[keyof typeof AdminStationItemScheduleCoverage];
+
+export const AdminStationItemScheduleCoverage = {
+  covered: "covered",
+  missing: "missing",
+  stale: "stale",
+} as const;
+
+export type AdminStationItemCategoryEvidence =
+  (typeof AdminStationItemCategoryEvidence)[keyof typeof AdminStationItemCategoryEvidence];
+
+export const AdminStationItemCategoryEvidence = {
+  explicit_tag: "explicit_tag",
+  explicit_flag: "explicit_flag",
+  reviewed_slug: "reviewed_slug",
+  fallback_missing_evidence: "fallback_missing_evidence",
+  fallback_suspicious_org: "fallback_suspicious_org",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminStationItemRecomputeStatus =
+  | (typeof AdminStationItemRecomputeStatus)[keyof typeof AdminStationItemRecomputeStatus]
+  | null;
+
+export const AdminStationItemRecomputeStatus = {
+  ok: "ok",
+  failed: "failed",
+} as const;
+
 /**
  * A station row with quality scores for the admin station list.
  */
@@ -3787,10 +3862,33 @@ export interface AdminStationItem {
   sampleCount: number | null;
   /** @nullable */
   qualityComputedAt: string | null;
+  qualityState: AdminStationItemQualityState;
+  /** @nullable */
+  unscoredReason: AdminStationItemUnscoredReason;
+  pollable: boolean;
+  /** @nullable */
+  latestObservedAt: string | null;
+  freshness: AdminStationItemFreshness;
+  streamHealth: AdminStationItemStreamHealth;
+  scheduleCoverage: AdminStationItemScheduleCoverage;
+  category: string;
+  categoryEvidence: AdminStationItemCategoryEvidence;
+  /** @nullable */
+  weakTailRank: number | null;
+  /** @nullable */
+  categoryReviewRank: number | null;
+  /** @nullable */
+  recomputeStatus: AdminStationItemRecomputeStatus;
+  /** @nullable */
+  recomputeError: string | null;
 }
 
 export interface AdminStationListResponse {
   stations: AdminStationItem[];
+  /** Deterministic action queue ordered by weak-tail rank. */
+  weakTailStationIds: number[];
+  /** Deterministic category-evidence review queue. */
+  categoryReviewStationIds: number[];
 }
 
 /**
@@ -3858,6 +3956,11 @@ export interface StoreAuditRunResponse {
   batchSize: number;
 }
 
+export type RecomputeQualityResponseFailuresItem = {
+  stationId: number;
+  error: string;
+};
+
 /**
  * Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.
  */
@@ -3867,6 +3970,7 @@ export interface RecomputeQualityResponse {
   raw: number;
   silent: number;
   unscored: number;
+  failures: RecomputeQualityResponseFailuresItem[];
 }
 
 /**

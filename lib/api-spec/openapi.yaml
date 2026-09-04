@@ -2640,12 +2640,13 @@ paths:
     get:
       operationId: listAdminStations
       tags: [admin]
-      summary: Admin-only station list with ingest quality scores
+      summary: Admin-only station inventory with quality diagnostics
       description: >
         Full station directory joined with the latest quality scores from the
-        station_quality table. One row per station; quality fields are null for
-        stations that have not been scored yet. Guarded by the `x-admin-token`
-        header matching the LORE_ADMIN_TOKEN env var.
+        station_quality table plus pollability, freshness, stream, schedule, and
+        explicit category evidence. Quality state distinguishes an absent quality
+        row from a computed under-sampled result. Results include deterministic
+        weak-tail and category-review ranks. Guarded by the `x-admin-token` header.
       parameters:
         - name: x-admin-token
           in: header
@@ -2805,7 +2806,7 @@ paths:
       description: >
         Triggers an immediate full recompute of quality scores for all active
         stations — the same job the nightly scheduler runs. Returns a flat
-        tier count summary (keys = tier names, values = station counts).
+        tier count summary plus stations that still failed after their one retry.
         Token-guarded.
       parameters:
         - name: x-admin-token
@@ -9180,6 +9181,40 @@ components:
         qualityComputedAt:
           type: ["string", "null"]
           format: date-time
+        qualityState:
+          type: string
+          enum: [missing, computed]
+        unscoredReason:
+          type: ["string", "null"]
+          enum: [not_pollable, no_observations, insufficient_recent_samples, recompute_missing, recompute_failed, stale_evidence, null]
+        pollable:
+          type: boolean
+        latestObservedAt:
+          type: ["string", "null"]
+          format: date-time
+        freshness:
+          type: string
+          enum: [fresh, aging, stale, none]
+        streamHealth:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+        scheduleCoverage:
+          type: string
+          enum: [covered, missing, stale]
+        category:
+          type: string
+        categoryEvidence:
+          type: string
+          enum: [explicit_tag, explicit_flag, reviewed_slug, fallback_missing_evidence, fallback_suspicious_org]
+        weakTailRank:
+          type: ["integer", "null"]
+        categoryReviewRank:
+          type: ["integer", "null"]
+        recomputeStatus:
+          type: ["string", "null"]
+          enum: [ok, failed, null]
+        recomputeError:
+          type: ["string", "null"]
       required:
         - id
         - slug
@@ -9197,6 +9232,19 @@ components:
         - musicShare
         - sampleCount
         - qualityComputedAt
+        - qualityState
+        - unscoredReason
+        - pollable
+        - latestObservedAt
+        - freshness
+        - streamHealth
+        - scheduleCoverage
+        - category
+        - categoryEvidence
+        - weakTailRank
+        - categoryReviewRank
+        - recomputeStatus
+        - recomputeError
     AdminStationListResponse:
       type: object
       properties:
@@ -9204,8 +9252,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdminStationItem"
+        weakTailStationIds:
+          type: array
+          description: Deterministic action queue ordered by weak-tail rank.
+          items: { type: integer }
+        categoryReviewStationIds:
+          type: array
+          description: Deterministic category-evidence review queue.
+          items: { type: integer }
       required:
         - stations
+        - weakTailStationIds
+        - categoryReviewStationIds
     StoreAuditStation:
       type: object
       description: Homepage-derived store or purchase evidence for one station.
@@ -9300,12 +9358,21 @@ components:
           type: integer
         unscored:
           type: integer
+        failures:
+          type: array
+          items:
+            type: object
+            properties:
+              stationId: { type: integer }
+              error: { type: string }
+            required: [stationId, error]
       required:
         - proven
         - promising
         - raw
         - silent
         - unscored
+        - failures
     LibraryCoverageAlbum:
       type: object
       description: An album from the user's library that appears on a critic list.

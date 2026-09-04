@@ -5,7 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminStationItemCategoryEvidence } from "./adminStationItemCategoryEvidence";
+import type { AdminStationItemFreshness } from "./adminStationItemFreshness";
+import type { AdminStationItemQualityState } from "./adminStationItemQualityState";
 import type { AdminStationItemQualityTier } from "./adminStationItemQualityTier";
+import type { AdminStationItemRecomputeStatus } from "./adminStationItemRecomputeStatus";
+import type { AdminStationItemScheduleCoverage } from "./adminStationItemScheduleCoverage";
+import type { AdminStationItemStreamHealth } from "./adminStationItemStreamHealth";
+import type { AdminStationItemUnscoredReason } from "./adminStationItemUnscoredReason";
 
 /**
  * A station row with quality scores for the admin station list.
@@ -39,4 +46,23 @@ export interface AdminStationItem {
   sampleCount: number | null;
   /** @nullable */
   qualityComputedAt: string | null;
+  qualityState: AdminStationItemQualityState;
+  /** @nullable */
+  unscoredReason: AdminStationItemUnscoredReason;
+  pollable: boolean;
+  /** @nullable */
+  latestObservedAt: string | null;
+  freshness: AdminStationItemFreshness;
+  streamHealth: AdminStationItemStreamHealth;
+  scheduleCoverage: AdminStationItemScheduleCoverage;
+  category: string;
+  categoryEvidence: AdminStationItemCategoryEvidence;
+  /** @nullable */
+  weakTailRank: number | null;
+  /** @nullable */
+  categoryReviewRank: number | null;
+  /** @nullable */
+  recomputeStatus: AdminStationItemRecomputeStatus;
+  /** @nullable */
+  recomputeError: string | null;
 }

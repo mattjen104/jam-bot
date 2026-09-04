@@ -260,6 +260,25 @@ export function deriveStationCategories(s: Station, _qualityTier?: string | null
   return ["discovery"];
 }
 
+/** Explain the category without inventing affiliation from a callsign. */
+export function categoryDiagnostic(s: Pick<Station, "slug" | "tags" | "sleepMode" | "eraGenreMode" | "org">) {
+  const category = deriveStationCategories(s as Station)[0]!;
+  const tags = Array.isArray(s.tags) ? s.tags : [];
+  const categoryTags = new Set(["ambient", "college", "specialist", "anchor", "public", "indie"]);
+  const explicit = tags.some((tag) => categoryTags.has(tag));
+  if (explicit) return { category, evidence: "explicit_tag" as const };
+  if (s.sleepMode === true || s.eraGenreMode === true) {
+    return { category, evidence: "explicit_flag" as const };
+  }
+  if (category !== "discovery") return { category, evidence: "reviewed_slug" as const };
+  // This deliberately only flags a review candidate. It never promotes a
+  // station based on its callsign or on an unverified organization string.
+  if (/\b(university|college|universit[éèêäàá]|universidad|universidade)\b/i.test(s.org ?? "")) {
+    return { category, evidence: "fallback_suspicious_org" as const };
+  }
+  return { category, evidence: "fallback_missing_evidence" as const };
+}
+
 /** Shape a DB station row into the public Station payload.
  *  `qualityTier` comes from a LEFT JOIN on station_quality and is null until
  *  the first nightly recompute has run.

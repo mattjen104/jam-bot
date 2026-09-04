@@ -2114,15 +2114,22 @@ export const stationQualityTable = pgTable(
     mbidResolutionRate: real("mbid_resolution_rate"),
     /** Fraction of spins NOT flagged as ad/promo copy. */
     musicShare: real("music_share"),
-    /** Number of spins in the scoring window. < 20 → "unscored". */
-    sampleCount: integer("sample_count").notNull().default(0),
+    /**
+     * Number of spins in the scoring window. Null means no successful scoring
+     * pass has ever completed; zero is a successful pass with no observations.
+     */
+    sampleCount: integer("sample_count"),
     /**
      * proven | promising | raw | silent | unscored.
      * Derived from the four metrics + sampleCount; stored for fast reads.
      */
-    qualityTier: text("quality_tier").notNull().default("unscored"),
-    /** When these scores were last computed. */
-    computedAt: timestamp("computed_at").defaultNow().notNull(),
+    qualityTier: text("quality_tier"),
+    /** When scores were last successfully computed (not merely attempted). */
+    computedAt: timestamp("computed_at"),
+    /** Outcome of the latest recompute attempt; failed attempts retain the error. */
+    recomputeStatus: text("recompute_status").notNull().default("ok"),
+    recomputeError: text("recompute_error"),
+    recomputeFailedAt: timestamp("recompute_failed_at"),
   },
   (t) => [index("station_quality_station_idx").on(t.stationId)],
 );

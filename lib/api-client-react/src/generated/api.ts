@@ -7512,9 +7512,9 @@ export const useReviewGeniusDraft = <
 };
 
 /**
- * Full station directory joined with the latest quality scores from the station_quality table. One row per station; quality fields are null for stations that have not been scored yet. Guarded by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var.
+ * Full station directory joined with the latest quality scores from the station_quality table plus pollability, freshness, stream, schedule, and explicit category evidence. Quality state distinguishes an absent quality row from a computed under-sampled result. Results include deterministic weak-tail and category-review ranks. Guarded by the `x-admin-token` header.
 
- * @summary Admin-only station list with ingest quality scores
+ * @summary Admin-only station inventory with quality diagnostics
  */
 export const getListAdminStationsUrl = () => {
   return `/api/admin/stations`;
@@ -7565,7 +7565,7 @@ export type ListAdminStationsQueryResult = NonNullable<
 export type ListAdminStationsQueryError = ErrorType<ApiError>;
 
 /**
- * @summary Admin-only station list with ingest quality scores
+ * @summary Admin-only station inventory with quality diagnostics
  */
 
 export function useListAdminStations<
@@ -7839,7 +7839,7 @@ export const useVoidScrapedShow = <
 };
 
 /**
- * Triggers an immediate full recompute of quality scores for all active stations — the same job the nightly scheduler runs. Returns a flat tier count summary (keys = tier names, values = station counts). Token-guarded.
+ * Triggers an immediate full recompute of quality scores for all active stations — the same job the nightly scheduler runs. Returns a flat tier count summary plus stations that still failed after their one retry. Token-guarded.
 
  * @summary Admin-only on-demand station quality recompute
  */

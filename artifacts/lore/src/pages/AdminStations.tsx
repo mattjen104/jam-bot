@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAdminToken } from "../hooks/useAdminToken";
 import { AdminNav } from "@/components/AdminNav";
+import {
+  getListAdminStationsQueryKey,
+  useListAdminStations,
+  useRecomputeStationQuality,
+  type AdminStationItem,
+  type RecomputeQualityResponse,
+} from "@workspace/api-client-react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -66,6 +74,7 @@ interface FlagStation {
 }
 
 type StreamFilter = "all" | "playable" | "missing";
+type StationView = "all" | "weak-tail" | "category-review";
 
 const AUTOMATIC_CULL_LABELS: Record<string, string> = {
   duplicate_stream: "Duplicate stream",
@@ -77,6 +86,25 @@ function automaticCullLabel(reason: string | null): string {
   return reason
     ? (AUTOMATIC_CULL_LABELS[reason] ?? reason.replaceAll("_", " "))
     : "Hidden by operator";
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "error" in error &&
+    typeof error.error === "string"
+  ) {
+    return error.error;
+  }
+  return "Request failed";
+}
+
+function formatObservedAt(value: string | null): string {
+  if (!value) return "none recorded";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 export default function AdminStations() {
@@ -132,6 +160,7 @@ function StationsPanel({
   token: string;
   onClearToken: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [stations, setStations] = useState<FlagStation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -142,6 +171,22 @@ function StationsPanel({
   const [actionError, setActionError] = useState<string | null>(null);
   const [allocation, setAllocation] = useState<Allocation | null>(null);
   const [allocationOpen, setAllocationOpen] = useState(false);
+  const [stationView, setStationView] = useState<StationView>("all");
+  const [recomputeResult, setRecomputeResult] =
+    useState<RecomputeQualityResponse | null>(null);
+  const [recomputeError, setRecomputeError] = useState<string | null>(null);
+
+  const diagnosticsQuery = useListAdminStations({
+    request: { headers: { "x-admin-token": token } },
+    query: {
+      enabled: Boolean(token),
+      queryKey: getListAdminStationsQueryKey(),
+      retry: false,
+    },
+  });
+  const recomputeQuality = useRecomputeStationQuality({
+    request: { headers: { "x-admin-token": token } },
+  });
 
   const loadAllocation = useCallback(async () => {
     try {
@@ -263,10 +308,50 @@ function StationsPanel({
       (streamFilter === "missing" && !hasStream);
     return matchesSearch && matchesStream;
   }, [search, streamFilter]);
-  const visible = useMemo(
-    () => stations.filter((s) => !s.hidden && matchesFilters(s)),
-    [stations, matchesFilters],
+  const diagnosticsByStationId = useMemo(
+    () =>
+      new Map(
+        (diagnosticsQuery.data?.stations ?? []).map((station) => [
+          station.id,
+          station,
+        ]),
+      ),
+    [diagnosticsQuery.data],
   );
+  const visible = useMemo(() => {
+    const candidates = stations.filter((s) => !s.hidden && matchesFilters(s));
+    const idOrder =
+      stationView === "weak-tail"
+        ? diagnosticsQuery.data?.weakTailStationIds ?? []
+        : stationView === "category-review"
+          ? diagnosticsQuery.data?.categoryReviewStationIds ?? []
+          : [];
+    const orderById = new Map(idOrder.map((id, index) => [id, index]));
+
+    return candidates
+      .filter((station) => stationView === "all" || orderById.has(station.id))
+      .sort((a, b) => {
+        if (stationView !== "all") {
+          const fromIds = (orderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+            (orderById.get(b.id) ?? Number.MAX_SAFE_INTEGER);
+          if (fromIds !== 0) return fromIds;
+          const aRank =
+            stationView === "weak-tail"
+              ? diagnosticsByStationId.get(a.id)?.weakTailRank
+              : diagnosticsByStationId.get(a.id)?.categoryReviewRank;
+          const bRank =
+            stationView === "weak-tail"
+              ? diagnosticsByStationId.get(b.id)?.weakTailRank
+              : diagnosticsByStationId.get(b.id)?.categoryReviewRank;
+          if (aRank !== bRank) return (aRank ?? Number.MAX_SAFE_INTEGER) - (bRank ?? Number.MAX_SAFE_INTEGER);
+        }
+        return (
+          a.name.localeCompare(b.name) ||
+          a.slug.localeCompare(b.slug) ||
+          a.id - b.id
+        );
+      });
+  }, [stations, matchesFilters, stationView, diagnosticsQuery.data, diagnosticsByStationId]);
   const hiddenStations = useMemo(
     () => stations.filter((s) => s.hidden && matchesFilters(s)),
     [stations, matchesFilters],
@@ -279,6 +364,20 @@ function StationsPanel({
     () => hiddenStations.filter((s) => !s.automaticCullReason),
     [hiddenStations],
   );
+  const runRecompute = useCallback(async () => {
+    setRecomputeError(null);
+    setRecomputeResult(null);
+    try {
+      const result = await recomputeQuality.mutateAsync();
+      setRecomputeResult(result);
+      await queryClient.invalidateQueries({
+        queryKey: getListAdminStationsQueryKey(),
+      });
+      await diagnosticsQuery.refetch();
+    } catch (error) {
+      setRecomputeError(describeError(error));
+    }
+  }, [diagnosticsQuery, queryClient, recomputeQuality]);
 
   return (
     <div className="min-h-screen">
@@ -426,6 +525,62 @@ function StationsPanel({
           </p>
         )}
 
+        <div className="mt-6 rounded-xl border border-card-border bg-card px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
+                Quality diagnostics
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Recompute active-station quality scores now, then refresh this
+                evidence list.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void runRecompute()}
+              disabled={recomputeQuality.isPending}
+              data-testid="recompute-station-quality"
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1.5 font-mono text-[13px] text-primary hover:bg-primary/10 disabled:opacity-40"
+            >
+              {recomputeQuality.isPending && (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              )}
+              Recompute quality
+            </button>
+          </div>
+          {recomputeError && (
+            <p
+              data-testid="recompute-quality-error"
+              className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground"
+            >
+              Recompute failed: {recomputeError}
+            </p>
+          )}
+          {recomputeResult && (
+            <div
+              data-testid="recompute-quality-result"
+              className="mt-3 text-sm text-muted-foreground"
+            >
+              <p>
+                Updated: {recomputeResult.proven} proven ·{" "}
+                {recomputeResult.promising} promising · {recomputeResult.raw}{" "}
+                raw · {recomputeResult.silent} silent ·{" "}
+                {recomputeResult.unscored} unscored.
+              </p>
+              {recomputeResult.failures.length > 0 && (
+                <ul className="mt-2 space-y-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive-foreground">
+                  {recomputeResult.failures.map((failure) => (
+                    <li key={failure.stationId}>
+                      Station {failure.stationId}: {failure.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Search */}
         <div className="relative mt-6">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
@@ -466,6 +621,52 @@ function StationsPanel({
             </button>
           ))}
         </div>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-1.5"
+          aria-label="Diagnostic station view"
+        >
+          <span className="mr-1 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
+            View
+          </span>
+          {([
+            ["all", "All stations"],
+            ["weak-tail", "Weak tail"],
+            ["category-review", "Category review"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStationView(value)}
+              aria-pressed={stationView === value}
+              data-testid={`station-view-${value}`}
+              className={`rounded-full border px-2.5 py-1 font-mono text-[12px] transition-colors ${
+                stationView === value
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {diagnosticsQuery.isLoading && (
+          <p
+            data-testid="station-diagnostics-loading"
+            className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading quality diagnostics…
+          </p>
+        )}
+        {diagnosticsQuery.isError && (
+          <p
+            data-testid="station-diagnostics-error"
+            className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-muted-foreground"
+          >
+            Diagnostics unavailable: {describeError(diagnosticsQuery.error)}.
+            Flag controls remain available.
+          </p>
+        )}
 
         {loading ? (
           <div className="mt-6 flex items-center gap-2 text-base text-muted-foreground">
@@ -483,6 +684,7 @@ function StationsPanel({
                 <StationRow
                   key={s.id}
                   station={s}
+                  diagnostics={diagnosticsByStationId.get(s.id)}
                   busy={busyIds.has(s.id)}
                   onToggleFavorite={() =>
                     void patchFlags(s.id, { favorite: !s.favorite })
@@ -535,6 +737,7 @@ function StationsPanel({
                         <HiddenStationRow
                           key={s.id}
                           station={s}
+                          diagnostics={diagnosticsByStationId.get(s.id)}
                           busy={busyIds.has(s.id)}
                           onReintroduce={() =>
                             void patchFlags(s.id, { hidden: false })
@@ -557,6 +760,7 @@ function StationsPanel({
                         <HiddenStationRow
                           key={s.id}
                           station={s}
+                          diagnostics={diagnosticsByStationId.get(s.id)}
                           busy={busyIds.has(s.id)}
                           onReintroduce={() =>
                             void patchFlags(s.id, { hidden: false })
@@ -582,10 +786,12 @@ function StationsPanel({
 
 function HiddenStationRow({
   station,
+  diagnostics,
   busy,
   onReintroduce,
 }: {
   station: FlagStation;
+  diagnostics?: AdminStationItem;
   busy: boolean;
   onReintroduce: () => void;
 }) {
@@ -596,43 +802,55 @@ function HiddenStationRow({
           ? `automatic-cull-${station.slug}`
           : `hidden-station-${station.slug}`
       }
-      className="flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card/60 px-4 py-2.5"
+      className="rounded-xl border border-card-border bg-card/60 px-4 py-2.5"
     >
-      <div className="min-w-0">
-        <StationIdentity station={station} dimmed />
-        <p className="mt-1 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
-          {automaticCullLabel(station.automaticCullReason)}
-        </p>
-        {station.automaticCullReason === "duplicate_stream" &&
-          station.automaticCullCanonicalStationName && (
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Canonical station kept:{" "}
-              <span className="text-foreground">
-                {station.automaticCullCanonicalStationName}
-              </span>
-              {station.automaticCullCanonicalStationSlug && (
-                <span className="font-mono text-[12px]">
-                  {" "}
-                  ({station.automaticCullCanonicalStationSlug})
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <StationIdentity station={station} dimmed />
+          <p className="mt-1 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
+            {automaticCullLabel(station.automaticCullReason)}
+          </p>
+          {station.automaticCullReason === "duplicate_stream" &&
+            station.automaticCullCanonicalStationName && (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Canonical station kept:{" "}
+                <span className="text-foreground">
+                  {station.automaticCullCanonicalStationName}
                 </span>
-              )}
-            </p>
+                {station.automaticCullCanonicalStationSlug && (
+                  <span className="font-mono text-[12px]">
+                    {" "}
+                    ({station.automaticCullCanonicalStationSlug})
+                  </span>
+                )}
+              </p>
+            )}
+        </div>
+        <button
+          type="button"
+          onClick={onReintroduce}
+          disabled={busy}
+          data-testid={`reintroduce-${station.slug}`}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 font-mono text-[13px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+        >
+          {busy ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Eye className="h-3 w-3" />
           )}
+          Reintroduce
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onReintroduce}
-        disabled={busy}
-        data-testid={`reintroduce-${station.slug}`}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 font-mono text-[13px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
-      >
-        {busy ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <Eye className="h-3 w-3" />
-        )}
-        Reintroduce
-      </button>
+      {diagnostics ? (
+        <StationEvidence diagnostics={diagnostics} />
+      ) : (
+        <p
+          data-testid={`station-diagnostics-missing-${station.id}`}
+          className="mt-2 text-sm text-muted-foreground"
+        >
+          No diagnostic row available.
+        </p>
+      )}
     </div>
   );
 }
@@ -699,56 +917,109 @@ function StationIdentity({
 
 function StationRow({
   station,
+  diagnostics,
   busy,
   onToggleFavorite,
   onHide,
 }: {
   station: FlagStation;
+  diagnostics?: AdminStationItem;
   busy: boolean;
   onToggleFavorite: () => void;
   onHide: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card px-4 py-2.5">
-      <StationIdentity station={station} />
-      <div className="flex shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          onClick={onToggleFavorite}
-          disabled={busy}
-          data-testid={`favorite-${station.slug}`}
-          aria-pressed={station.favorite}
-          title={
-            station.favorite
-              ? "Unfavorite — drops the persistent connection"
-              : "Favorite — holds a persistent connection for instant now-playing"
-          }
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[13px] transition-colors disabled:opacity-40 ${
-            station.favorite
-              ? "border-[#dedede]/40 bg-[#dedede]/10 text-[#dedede]"
-              : "border-border bg-secondary/30 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {busy ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Star
-              className={`h-3 w-3 ${station.favorite ? "fill-current" : ""}`}
-            />
-          )}
-          {station.favorite ? "Favorite" : "Favorite?"}
-        </button>
-        <button
-          type="button"
-          onClick={onHide}
-          disabled={busy}
-          data-testid={`hide-${station.slug}`}
-          title="Hide — leaves the dial, polling stops; history kept"
-          className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-40"
-        >
-          <EyeOff className="h-3.5 w-3.5" />
-        </button>
+    <div
+      data-testid={`station-row-${station.id}`}
+      className="rounded-xl border border-card-border bg-card px-4 py-2.5"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <StationIdentity station={station} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onToggleFavorite}
+            disabled={busy}
+            data-testid={`favorite-${station.slug}`}
+            aria-pressed={station.favorite}
+            title={
+              station.favorite
+                ? "Unfavorite — drops the persistent connection"
+                : "Favorite — holds a persistent connection for instant now-playing"
+            }
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[13px] transition-colors disabled:opacity-40 ${
+              station.favorite
+                ? "border-[#dedede]/40 bg-[#dedede]/10 text-[#dedede]"
+                : "border-border bg-secondary/30 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {busy ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Star
+                className={`h-3 w-3 ${station.favorite ? "fill-current" : ""}`}
+              />
+            )}
+            {station.favorite ? "Favorite" : "Favorite?"}
+          </button>
+          <button
+            type="button"
+            onClick={onHide}
+            disabled={busy}
+            data-testid={`hide-${station.slug}`}
+            title="Hide — leaves the dial, polling stops; history kept"
+            className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-40"
+          >
+            <EyeOff className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
+      {diagnostics ? (
+        <StationEvidence diagnostics={diagnostics} />
+      ) : (
+        <p
+          data-testid={`station-diagnostics-missing-${station.id}`}
+          className="mt-2 text-sm text-muted-foreground"
+        >
+          No diagnostic row available.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StationEvidence({ diagnostics }: { diagnostics: AdminStationItem }) {
+  const quality = diagnostics.qualityTier ?? "not assigned";
+  return (
+    <div
+      data-testid={`station-evidence-${diagnostics.id}`}
+      className="mt-2 grid gap-x-4 gap-y-1 border-t border-border/60 pt-2 font-mono text-[12px] leading-5 text-muted-foreground sm:grid-cols-2"
+    >
+      <p>
+        Category: <span className="text-foreground">{diagnostics.category}</span>{" "}
+        ({diagnostics.categoryEvidence.replaceAll("_", " ")})
+      </p>
+      <p>
+        Quality: <span className="text-foreground">{diagnostics.qualityState} · {quality}</span>
+        {diagnostics.unscoredReason && ` · ${diagnostics.unscoredReason.replaceAll("_", " ")}`}
+      </p>
+      <p>
+        Polling: <span className="text-foreground">{diagnostics.pollable ? "pollable" : "not pollable"}</span>
+        {" · "}samples: <span className="text-foreground">{diagnostics.sampleCount ?? "none"}</span>
+      </p>
+      <p>
+        Stream: <span className="text-foreground">{diagnostics.streamHealth}</span>
+        {" · "}schedule: <span className="text-foreground">{diagnostics.scheduleCoverage}</span>
+      </p>
+      <p className="sm:col-span-2">
+        Freshness: <span className="text-foreground">{diagnostics.freshness}</span>
+        {" · "}latest observation: <span className="text-foreground">{formatObservedAt(diagnostics.latestObservedAt)}</span>
+      </p>
+      {diagnostics.recomputeStatus === "failed" && (
+        <p className="sm:col-span-2 text-destructive-foreground">
+          Recompute failed: {diagnostics.recomputeError ?? "No error detail returned."}
+        </p>
+      )}
     </div>
   );
 }

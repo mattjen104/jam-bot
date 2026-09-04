@@ -136,10 +136,10 @@ describe("new Spinitron cohort metadata completeness", () => {
 //  - non-allowlisted with a verified ICY-capable stream → radio_browser_icy
 //  - non-allowlisted without one → null (honest silence, no 404-ing scrape)
 // (any of them upgrade to "spinitron" when a SPINITRON_KEY_* env is set)
-const ALLOWLISTED_SLUGS = ["wzbc", "wbrs", "wmfo"] as const;
+const ALLOWLISTED_SLUGS = ["wzbc", "wbrs", "wmfo", "kxlu"] as const;
 const ICY_FALLBACK_SLUGS = ["whpk", "wxdu", "wicb", "wdiy", "ckcu"] as const;
 const NULL_SOURCE_SLUGS = [
-  "wesu", "wrct", "kxlu", "wrir",
+  "wesu", "wrct", "wrir",
   "wbgo", "kcsm", "wpfw",
   "ckua", "cjsf", "chuo",
 ] as const;

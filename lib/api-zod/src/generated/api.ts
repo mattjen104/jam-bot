@@ -5174,9 +5174,9 @@ export const ReviewGeniusDraftResponse = zod.object({
 });
 
 /**
- * Full station directory joined with the latest quality scores from the station_quality table. One row per station; quality fields are null for stations that have not been scored yet. Guarded by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var.
+ * Full station directory joined with the latest quality scores from the station_quality table plus pollability, freshness, stream, schedule, and explicit category evidence. Quality state distinguishes an absent quality row from a computed under-sampled result. Results include deterministic weak-tail and category-review ranks. Guarded by the `x-admin-token` header.
 
- * @summary Admin-only station list with ingest quality scores
+ * @summary Admin-only station inventory with quality diagnostics
  */
 export const ListAdminStationsHeader = zod.object({
   "x-admin-token": zod.string().optional(),
@@ -5211,11 +5211,48 @@ export const ListAdminStationsResponse = zod.object({
         musicShare: zod.number().nullable(),
         sampleCount: zod.number().nullable(),
         qualityComputedAt: zod.string().datetime({}).nullable(),
+        qualityState: zod.enum(["missing", "computed"]),
+        unscoredReason: zod
+          .union([
+            zod.literal("not_pollable"),
+            zod.literal("no_observations"),
+            zod.literal("insufficient_recent_samples"),
+            zod.literal("recompute_missing"),
+            zod.literal("recompute_failed"),
+            zod.literal("stale_evidence"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        pollable: zod.boolean(),
+        latestObservedAt: zod.string().datetime({}).nullable(),
+        freshness: zod.enum(["fresh", "aging", "stale", "none"]),
+        streamHealth: zod.enum(["healthy", "unhealthy", "unknown"]),
+        scheduleCoverage: zod.enum(["covered", "missing", "stale"]),
+        category: zod.string(),
+        categoryEvidence: zod.enum([
+          "explicit_tag",
+          "explicit_flag",
+          "reviewed_slug",
+          "fallback_missing_evidence",
+          "fallback_suspicious_org",
+        ]),
+        weakTailRank: zod.number().nullable(),
+        categoryReviewRank: zod.number().nullable(),
+        recomputeStatus: zod
+          .union([zod.literal("ok"), zod.literal("failed"), zod.literal(null)])
+          .nullable(),
+        recomputeError: zod.string().nullable(),
       })
       .describe(
         "A station row with quality scores for the admin station list.",
       ),
   ),
+  weakTailStationIds: zod
+    .array(zod.number())
+    .describe("Deterministic action queue ordered by weak-tail rank."),
+  categoryReviewStationIds: zod
+    .array(zod.number())
+    .describe("Deterministic category-evidence review queue."),
 });
 
 /**
@@ -5323,7 +5360,7 @@ export const VoidScrapedShowResponse = zod
   );
 
 /**
- * Triggers an immediate full recompute of quality scores for all active stations — the same job the nightly scheduler runs. Returns a flat tier count summary (keys = tier names, values = station counts). Token-guarded.
+ * Triggers an immediate full recompute of quality scores for all active stations — the same job the nightly scheduler runs. Returns a flat tier count summary plus stations that still failed after their one retry. Token-guarded.
 
  * @summary Admin-only on-demand station quality recompute
  */
@@ -5338,6 +5375,12 @@ export const RecomputeStationQualityResponse = zod
     raw: zod.number(),
     silent: zod.number(),
     unscored: zod.number(),
+    failures: zod.array(
+      zod.object({
+        stationId: zod.number(),
+        error: zod.string(),
+      }),
+    ),
   })
   .describe(
     "Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.",

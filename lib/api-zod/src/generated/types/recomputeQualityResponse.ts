@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { RecomputeQualityResponseFailuresItem } from "./recomputeQualityResponseFailuresItem";
 
 /**
  * Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.
@@ -15,4 +16,5 @@ export interface RecomputeQualityResponse {
   raw: number;
   silent: number;
   unscored: number;
+  failures: RecomputeQualityResponseFailuresItem[];
 }

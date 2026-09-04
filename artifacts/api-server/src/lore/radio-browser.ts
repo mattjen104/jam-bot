@@ -538,20 +538,15 @@ export async function upsertRadioBrowserStations(
         .onConflictDoUpdate({
           target: stationsTable.slug,
           set: {
-            // For radio_browser rows: use the freshly-computed tags from this
-            // discovery pass, but preserve the "college" tag if the existing
-            // row already carries it and the new pass didn't re-derive it.
-            // This guards against the case where a station is re-discovered
-            // under a different genre tag whose tags array doesn't include
-            // "college", which would otherwise silently wipe the classification.
-            tags: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN
-              CASE
-                WHEN COALESCE(${stationsTable.tags}, '[]'::jsonb) @> '["college"]'::jsonb
-                 AND NOT ${sql.raw("EXCLUDED.tags")} @> '["college"]'::jsonb
-                THEN ${sql.raw("EXCLUDED.tags")} || '["college"]'::jsonb
-                ELSE ${sql.raw("EXCLUDED.tags")}
-              END
-            ELSE ${stationsTable.tags} END`,
+            // Discovery supplies additive metadata, never an authority to erase
+            // operator-reviewed or earlier explicit affiliation tags.
+            tags: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN (
+              SELECT COALESCE(jsonb_agg(DISTINCT tag), '[]'::jsonb) FROM (
+                SELECT jsonb_array_elements_text(COALESCE(${stationsTable.tags}, '[]'::jsonb)) AS tag
+                UNION
+                SELECT jsonb_array_elements_text(COALESCE(${sql.raw("EXCLUDED.tags")}, '[]'::jsonb)) AS tag
+              ) merged_tags
+            ) ELSE ${stationsTable.tags} END`,
             clickcount: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.clickcount")} ELSE ${stationsTable.clickcount} END`,
             votes: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.votes")} ELSE ${stationsTable.votes} END`,
             bitrate: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.bitrate")} ELSE ${stationsTable.bitrate} END`,

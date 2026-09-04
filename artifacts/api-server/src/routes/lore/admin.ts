@@ -144,6 +144,7 @@ import { stampSpinShowIds } from "../../lore/scraped-shows-sync.js";
 import { clearAutomationClassCache } from "../../lore/scraped-shows-sync.js";
 import { clearPlayerScheduleCache } from "../player.js";
 import { toPicker } from "./shared.js";
+import { rankInventory } from "../../lore/station-inventory.js";
 import { backfillReleaseYearBatch } from "../../lore/release-year-backfill.js";
 import { backfillDurationBatch } from "../../lore/duration-backfill.js";
 import {
@@ -2443,6 +2444,24 @@ router.get("/admin/stations", h(async (_req, res) => {
       nowPlayingSource: stationsTable.nowPlayingSource,
       tier: stationsTable.tier,
       source: stationsTable.source,
+      tags: stationsTable.tags,
+      sleepMode: stationsTable.sleepMode,
+      eraGenreMode: stationsTable.eraGenreMode,
+      healthFailures: stationsTable.healthFailures,
+      lastAliveAt: stationsTable.lastAliveAt,
+      scheduleScrapedAt: stationsTable.scheduleScrapedAt,
+      upcomingShowCount: stationsTable.upcomingShowCount,
+      latestObservedAt: sql<Date | null>`(
+        SELECT max(observed_at) FROM spins WHERE station_id = ${stationsTable.id}
+      )`,
+      icyStatus: sql<string | null>`(
+        SELECT icy_status FROM radio_browser_stations
+        WHERE station_id = ${stationsTable.id} ORDER BY updated_at DESC LIMIT 1
+      )`,
+      icyLastSuccessAt: sql<Date | null>`(
+        SELECT last_success_at FROM radio_browser_stations
+        WHERE station_id = ${stationsTable.id} ORDER BY updated_at DESC LIMIT 1
+      )`,
       qualityTier: stationQualityTable.qualityTier,
       metadataYield: stationQualityTable.metadataYield,
       trackShaped: stationQualityTable.trackShaped,
@@ -2450,17 +2469,21 @@ router.get("/admin/stations", h(async (_req, res) => {
       musicShare: stationQualityTable.musicShare,
       sampleCount: stationQualityTable.sampleCount,
       qualityComputedAt: stationQualityTable.computedAt,
+      recomputeStatus: stationQualityTable.recomputeStatus,
+      recomputeError: stationQualityTable.recomputeError,
     })
     .from(stationsTable)
     .leftJoin(
       stationQualityTable,
       eq(stationQualityTable.stationId, stationsTable.id),
     )
-    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
+    .orderBy(asc(stationsTable.id));
 
+  const { diagnostics: stations, weakOrder, categoryOrder, weakRanks, categoryRanks } =
+    rankInventory(rows, new Date());
   return res.json(
     ListAdminStationsResponse.parse({
-      stations: rows.map((r) => ({
+      stations: stations.map((r) => ({
         id: r.id,
         slug: r.slug,
         name: r.name,
@@ -2477,7 +2500,22 @@ router.get("/admin/stations", h(async (_req, res) => {
         musicShare: r.musicShare ?? null,
         sampleCount: r.sampleCount ?? null,
         qualityComputedAt: r.qualityComputedAt?.toISOString() ?? null,
+        qualityState: r.qualityState,
+        unscoredReason: r.unscoredReason,
+        pollable: r.pollable,
+        latestObservedAt: r.latestObservedAt?.toISOString() ?? null,
+        freshness: r.freshness,
+        streamHealth: r.streamHealth,
+        scheduleCoverage: r.scheduleCoverage,
+        category: r.category,
+        categoryEvidence: r.categoryEvidence,
+        weakTailRank: weakRanks.get(r.id) ?? null,
+        categoryReviewRank: categoryRanks.get(r.id) ?? null,
+        recomputeStatus: r.recomputeStatus ?? null,
+        recomputeError: r.recomputeError ?? null,
       })),
+      weakTailStationIds: weakOrder.map((r) => r.id),
+      categoryReviewStationIds: categoryOrder.map((r) => r.id),
     }),
   );
 }));

@@ -149,3 +149,4 @@
 - [Spinitron public calendar schedules](spinitron-public-calendar.md) — calendar HTML points to an unauthenticated JSON feed; decode JS-escaped paths and honor the host’s 10-second crawl delay.
 - [Show-attribution provenance](show-attribution-provenance.md) — show_id alone is not evidence a stream emitted a show name; preserve legacy provenance as unknown and count schedule matches separately.
 - [Rotating schedule honesty](rotating-schedule-honesty.md) — conflicting official dated events stay date-specific; only conflict-free provider weeks may become recurring grid rows.
+- [Station inventory evidence semantics](station-inventory-evidence-semantics.md) — missing, insufficient, and failed evidence are distinct; action rankings must never turn absence into a measured failure.

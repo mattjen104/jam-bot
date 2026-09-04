@@ -9,4 +9,8 @@ import type { AdminStationItem } from "./adminStationItem";
 
 export interface AdminStationListResponse {
   stations: AdminStationItem[];
+  /** Deterministic action queue ordered by weak-tail rank. */
+  weakTailStationIds: number[];
+  /** Deterministic category-evidence review queue. */
+  categoryReviewStationIds: number[];
 }

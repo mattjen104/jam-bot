@@ -54,6 +54,10 @@ export interface StationQualityMetrics {
   qualityTier: QualityTier;
 }
 
+export interface QualityRecomputeSummary extends Record<QualityTier, number> {
+  failures: Array<{ stationId: number; error: string }>;
+}
+
 /**
  * Compute the four rolling quality metrics for a single station from the last
  * 7 days of logged spins. Pure function of existing DB data — no polling
@@ -142,14 +146,15 @@ export async function computeStationQuality(
  * aborts the batch. Returns a tier count summary.
  */
 export async function recomputeAllQualityScores(): Promise<
-  Record<QualityTier, number>
+  QualityRecomputeSummary
 > {
-  const summary: Record<QualityTier, number> = {
+  const summary: QualityRecomputeSummary = {
     proven: 0,
     promising: 0,
     raw: 0,
     silent: 0,
     unscored: 0,
+    failures: [],
   };
 
   let stations: Array<{ id: number }>;
@@ -160,29 +165,24 @@ export async function recomputeAllQualityScores(): Promise<
       .where(eq(stationsTable.active, true));
   } catch (err) {
     console.error("[lore:quality] could not load stations", err);
-    return summary;
+    // A zeroed summary is indistinguishable from a successful empty batch to
+    // the admin endpoint and scheduler. Propagate so both paths report it.
+    throw err;
   }
 
   for (const station of stations) {
-    try {
-      const q = await computeStationQuality(station.id);
-      const now = new Date();
+    let lastError: unknown;
+    // A single retry covers transient DB/pool faults without hiding a durable
+    // failure behind the next nightly run.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const q = await computeStationQuality(station.id);
+        const now = new Date();
 
-      await db
-        .insert(stationQualityTable)
-        .values({
-          stationId: station.id,
-          metadataYield: q.metadataYield,
-          trackShaped: q.trackShaped,
-          mbidResolutionRate: q.mbidResolutionRate,
-          musicShare: q.musicShare,
-          sampleCount: q.sampleCount,
-          qualityTier: q.qualityTier,
-          computedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: stationQualityTable.stationId,
-          set: {
+        await db
+          .insert(stationQualityTable)
+          .values({
+            stationId: station.id,
             metadataYield: q.metadataYield,
             trackShaped: q.trackShaped,
             mbidResolutionRate: q.mbidResolutionRate,
@@ -190,16 +190,65 @@ export async function recomputeAllQualityScores(): Promise<
             sampleCount: q.sampleCount,
             qualityTier: q.qualityTier,
             computedAt: now,
+            recomputeStatus: "ok",
+            recomputeError: null,
+            recomputeFailedAt: null,
+          })
+          .onConflictDoUpdate({
+            target: stationQualityTable.stationId,
+            set: {
+              metadataYield: q.metadataYield,
+              trackShaped: q.trackShaped,
+              mbidResolutionRate: q.mbidResolutionRate,
+              musicShare: q.musicShare,
+              sampleCount: q.sampleCount,
+              qualityTier: q.qualityTier,
+              computedAt: now,
+              recomputeStatus: "ok",
+              recomputeError: null,
+              recomputeFailedAt: null,
+            },
+          });
+
+        summary[q.qualityTier]++;
+        lastError = undefined;
+        break;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    if (lastError !== undefined) {
+      const error = lastError instanceof Error ? lastError.message : String(lastError);
+      summary.failures.push({ stationId: station.id, error });
+      // Insert permits a failure to be visible even where no prior quality row
+       // exists. A first failure must not fabricate the old default
+       // unscored/zero score; later failures update only attempt status and
+       // therefore retain the last successful measurement.
+      try {
+        await db.insert(stationQualityTable).values({
+          stationId: station.id,
+          metadataYield: null,
+          trackShaped: null,
+          mbidResolutionRate: null,
+          musicShare: null,
+          sampleCount: null,
+          qualityTier: null,
+          computedAt: null,
+          recomputeStatus: "failed",
+          recomputeError: error.slice(0, 1000),
+          recomputeFailedAt: new Date(),
+        }).onConflictDoUpdate({
+          target: stationQualityTable.stationId,
+          set: {
+            recomputeStatus: "failed",
+            recomputeError: error.slice(0, 1000),
+            recomputeFailedAt: new Date(),
           },
         });
-
-      summary[q.qualityTier]++;
-    } catch (err) {
-      console.error(
-        "[lore:quality] recompute failed for station",
-        station.id,
-        err,
-      );
+      } catch (statusErr) {
+        console.error("[lore:quality] could not persist recompute failure", station.id, statusErr);
+      }
+      console.error("[lore:quality] recompute failed after retry", station.id, lastError);
     }
   }
 
