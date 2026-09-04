@@ -138,6 +138,126 @@ export async function getObservabilityHealth() {
   return rows.rows;
 }
 
+export interface SpeechPilotThresholds {
+  minimumSamples: number;
+  minimumSpeechYield: number;
+  minimumOverlapYield: number;
+  minimumScheduleAgreement: number;
+  maximumBoundaryErrorMs: number;
+  maximumFailureRate: number;
+}
+
+export interface SpeechPilotMetrics {
+  captures: number;
+  speechCaptures: number;
+  overlapCaptures: number;
+  failedCaptures: number;
+  scheduleSupporting: number;
+  scheduleContradictory: number;
+  boundaryEvaluations: number;
+  speechYield: number | null;
+  overlapYield: number | null;
+  scheduleAgreement: number | null;
+  meanBoundaryErrorMs: number | null;
+  failureRate: number | null;
+}
+
+export interface SpeechPilotHealth {
+  cohortStationIds: number[];
+  windowHours: number;
+  metrics: SpeechPilotMetrics;
+  thresholds: SpeechPilotThresholds;
+  sampleReady: boolean;
+  healthy: boolean;
+  regressions: string[];
+}
+
+function ratio(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? numerator / denominator : null;
+}
+
+/** Cohort-scoped quality/resource gate used by both runtime admission and admin health. */
+export async function getSpeechPilotHealth(
+  cohortStationIds: readonly number[],
+  thresholds: SpeechPilotThresholds,
+  windowHours = 24,
+): Promise<SpeechPilotHealth> {
+  if (!cohortStationIds.length) {
+    return {
+      cohortStationIds: [], windowHours, thresholds, sampleReady: false, healthy: false,
+      regressions: ["cohort_not_configured"],
+      metrics: {
+        captures: 0, speechCaptures: 0, overlapCaptures: 0, failedCaptures: 0,
+        scheduleSupporting: 0, scheduleContradictory: 0, boundaryEvaluations: 0,
+        speechYield: null, overlapYield: null, scheduleAgreement: null,
+        meanBoundaryErrorMs: null, failureRate: null,
+      },
+    };
+  }
+  const stationIds = sql`ARRAY[${sql.join(cohortStationIds.map((id) => sql`${id}`), sql`, `)}]::integer[]`;
+  const since = sql`now() - (${windowHours} * interval '1 hour')`;
+  const result = await db.execute<{
+    captures: number; speech_captures: number; overlap_captures: number; failed_captures: number;
+    schedule_supporting: number; schedule_contradictory: number; boundary_evaluations: number;
+    mean_boundary_error_ms: number | null;
+  }>(sql`
+    select
+      (select count(*)::int from ${captureOutcomesTable}
+        where station_id = any(${stationIds}) and occurred_at >= ${since}
+          and producer_version like 'speech-shadow.%') as captures,
+      (select count(*)::int from ${captureOutcomesTable}
+        where station_id = any(${stationIds}) and occurred_at >= ${since}
+          and producer_version like 'speech-shadow.%'
+          and outcome in ('speech', 'speech_over_music')) as speech_captures,
+      (select count(*)::int from ${captureOutcomesTable}
+        where station_id = any(${stationIds}) and occurred_at >= ${since}
+          and producer_version like 'speech-shadow.%'
+          and outcome = 'speech_over_music') as overlap_captures,
+      (select count(*)::int from ${captureOutcomesTable}
+        where station_id = any(${stationIds}) and occurred_at >= ${since}
+          and producer_version like 'speech-shadow.%'
+          and (outcome like '%_failure' or outcome in ('capture_failure', 'unavailable', 'skipped'))) as failed_captures,
+      (select count(*)::int from ${scheduleComparisonsTable}
+        where station_id = any(${stationIds}) and compared_at >= ${since}
+          and producer_version like 'speech-shadow.%' and outcome = 'supporting') as schedule_supporting,
+      (select count(*)::int from ${scheduleComparisonsTable}
+        where station_id = any(${stationIds}) and compared_at >= ${since}
+          and producer_version like 'speech-shadow.%' and outcome = 'contradictory') as schedule_contradictory,
+      (select count(error_ms)::int from ${boundaryEvaluationsTable}
+        where station_id = any(${stationIds}) and evaluated_at >= ${since}) as boundary_evaluations,
+      (select avg(abs(error_ms))::float from ${boundaryEvaluationsTable}
+        where station_id = any(${stationIds}) and evaluated_at >= ${since}) as mean_boundary_error_ms
+  `);
+  const row = result.rows[0]!;
+  const metrics: SpeechPilotMetrics = {
+    captures: row.captures,
+    speechCaptures: row.speech_captures,
+    overlapCaptures: row.overlap_captures,
+    failedCaptures: row.failed_captures,
+    scheduleSupporting: row.schedule_supporting,
+    scheduleContradictory: row.schedule_contradictory,
+    boundaryEvaluations: row.boundary_evaluations,
+    speechYield: ratio(row.speech_captures, row.captures),
+    overlapYield: ratio(row.overlap_captures, row.speech_captures),
+    scheduleAgreement: ratio(row.schedule_supporting, row.schedule_supporting + row.schedule_contradictory),
+    meanBoundaryErrorMs: row.mean_boundary_error_ms,
+    failureRate: ratio(row.failed_captures, row.captures),
+  };
+  const sampleReady = metrics.captures >= thresholds.minimumSamples;
+  const regressions = sampleReady ? [
+    metrics.speechYield != null && metrics.speechYield < thresholds.minimumSpeechYield ? "speech_yield" : null,
+    metrics.overlapYield != null && metrics.overlapYield < thresholds.minimumOverlapYield ? "overlap_yield" : null,
+    metrics.scheduleAgreement != null && metrics.scheduleAgreement < thresholds.minimumScheduleAgreement ? "schedule_agreement" : null,
+    metrics.meanBoundaryErrorMs != null && metrics.meanBoundaryErrorMs > thresholds.maximumBoundaryErrorMs ? "boundary_error" : null,
+    metrics.failureRate != null && metrics.failureRate > thresholds.maximumFailureRate ? "failure_rate" : null,
+  ].filter((value): value is string => value != null) : [];
+  return {
+    cohortStationIds: [...cohortStationIds], windowHours, metrics, thresholds, sampleReady,
+    healthy: !sampleReady || regressions.length === 0,
+    regressions,
+  };
+}
+
 export async function listObservabilityEvidence(kind: ObservabilityKind, limit = 100, stationId?: number) {
   const table = tables[kind];
   const rows = await db.select({

@@ -12,6 +12,7 @@ import { SpeechQuotaScheduler, selectCheapestMount } from "../../src/lore/speech
 import { estimateTalkWindows } from "../../src/lore/speech-talk-window.js";
 import { validateGroundedClaim } from "../../src/lore/speech-grounding.js";
 import { compareTranscriptToSchedule } from "../../src/lore/speech-schedule-comparison.js";
+import { parseSpeechPilotCohort, speechShadowEnabled } from "../../src/lore/speech-shadow-orchestrator.js";
 
 describe("speech/capture core", () => {
   it("always removes transient ffmpeg clip directories", async () => {
@@ -25,6 +26,40 @@ describe("speech/capture core", () => {
     }, async () => ({ stdout: "", stderr: "" })).catch(() => undefined);
     expect(clipPath).not.toBe("");
     expect(existsSync(clipPath)).toBe(false);
+  });
+
+  it("rejects oversized transient clips and still removes them", async () => {
+    let clipPath = "";
+    await expect(withTransientSpeechClip("https://radio.example/live", {
+      durationSeconds: 3, timeoutMs: 1_000, maxBytes: 3, tempRoot: tmpdir(),
+    }, async (clip) => {
+      clipPath = clip.path;
+    }, async (_executable, args) => {
+      const path = args.at(-1)!;
+      await writeFile(path, "audio");
+      return { stdout: "", stderr: "" };
+    })).rejects.toThrow("byte limit");
+    expect(existsSync(clipPath)).toBe(false);
+  });
+
+  it("fails closed without a small explicit pilot cohort", () => {
+    const base = {
+      LORE_SPEECH_SHADOW_ENABLED: "true",
+      LORE_SPEECH_CAPTURE_ENABLED: "true",
+      LORE_SPEECH_LOCAL_STT_EXECUTABLE: "whisper",
+      LORE_SPEECH_LOCAL_STT_MODEL: "model",
+      LORE_SPEECH_CLASSIFIER_EXECUTABLE: "classifier",
+      LORE_SPEECH_SILERO_VAD_EXECUTABLE: "vad",
+      LORE_SPEECH_FFMPEG_EXECUTABLE: "ffmpeg",
+    };
+    expect(speechShadowEnabled(base)).toBe(false);
+    expect(speechShadowEnabled({ ...base, LORE_SPEECH_PILOT_STATION_IDS: "3,7" })).toBe(true);
+    expect(speechShadowEnabled({
+      ...base,
+      LORE_SPEECH_PILOT_STATION_IDS: "1,2,3,4,5,6",
+      LORE_SPEECH_PILOT_MAX_STATIONS: "5",
+    })).toBe(false);
+    expect(parseSpeechPilotCohort("7, 3,7,nope,-1")).toEqual([7, 3]);
   });
 
   it("skips an unavailable local STT runner without invoking it", async () => {

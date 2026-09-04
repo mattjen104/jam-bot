@@ -1,21 +1,46 @@
 import { type Station } from "@workspace/db";
-import { appendBroadcastTimelineEvent, appendCaptureDecision, appendCaptureOutcome, appendScheduleComparison, appendTranscriptClaim, appendTranscriptSegment } from "./observability.js";
+import { appendBroadcastTimelineEvent, appendCaptureDecision, appendCaptureOutcome, appendScheduleComparison, appendTranscriptClaim, appendTranscriptSegment, getSpeechPilotHealth, type SpeechPilotHealth, type SpeechPilotThresholds } from "./observability.js";
 import { assertPublicHttpStreamUrl, deriveSpeechEndsThenSustainedMusic, LocalSttAdapter, withTransientSpeechClip } from "./speech-capture.js";
 import { extractExplicitGroundedClaims } from "./speech-grounding.js";
 import { compareTranscriptToSchedule, lookupActiveScheduleEntry } from "./speech-schedule-comparison.js";
 import { SpeechQuotaScheduler, type SpeechMount } from "./speech-scheduler.js";
 import { estimateTalkWindows, type TalkObservation } from "./speech-talk-window.js";
 
-const PRODUCER_VERSION = "task-582.speech-shadow.v1";
+const PRODUCER_VERSION = "speech-shadow.pilot.v1";
 const activeStations = new Set<number>();
 let scheduler: SpeechQuotaScheduler | null = null;
 let stt: LocalSttAdapter | null = null;
 let started = false;
 const talkHistory: TalkObservation[] = [];
+let cohortStationIds: number[] = [];
+let pilotKilled = false;
+let lastHealthCheckAt = 0;
+let lastPilotHealth: SpeechPilotHealth | null = null;
 
 function integerEnv(name: string, fallback: number): number {
   const parsed = Number(process.env[name]);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function ratioEnv(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
+}
+
+export function parseSpeechPilotCohort(value: string | undefined): number[] {
+  if (!value?.trim()) return [];
+  return [...new Set(value.split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+}
+
+function pilotThresholds(): SpeechPilotThresholds {
+  return {
+    minimumSamples: integerEnv("LORE_SPEECH_PILOT_MIN_SAMPLES", 20),
+    minimumSpeechYield: ratioEnv("LORE_SPEECH_PILOT_MIN_SPEECH_YIELD", 0.1),
+    minimumOverlapYield: ratioEnv("LORE_SPEECH_PILOT_MIN_OVERLAP_YIELD", 0),
+    minimumScheduleAgreement: ratioEnv("LORE_SPEECH_PILOT_MIN_SCHEDULE_AGREEMENT", 0.5),
+    maximumBoundaryErrorMs: integerEnv("LORE_SPEECH_PILOT_MAX_BOUNDARY_ERROR_MS", 5_000),
+    maximumFailureRate: ratioEnv("LORE_SPEECH_PILOT_MAX_FAILURE_RATE", 0.2),
+  };
 }
 
 /**
@@ -23,13 +48,18 @@ function integerEnv(name: string, fallback: number): number {
  * collection: this path accepts a local executable and local model only.
  */
 export function speechShadowEnabled(env = process.env): boolean {
+  const cohort = parseSpeechPilotCohort(env["LORE_SPEECH_PILOT_STATION_IDS"]);
+  const maximumCohortSize = Number(env["LORE_SPEECH_PILOT_MAX_STATIONS"] ?? 5);
   return env["LORE_SPEECH_SHADOW_ENABLED"] === "true" &&
     env["LORE_SPEECH_CAPTURE_ENABLED"] === "true" &&
     !!env["LORE_SPEECH_LOCAL_STT_EXECUTABLE"]?.trim() &&
     !!env["LORE_SPEECH_LOCAL_STT_MODEL"]?.trim() &&
     !!env["LORE_SPEECH_CLASSIFIER_EXECUTABLE"]?.trim() &&
     !!env["LORE_SPEECH_SILERO_VAD_EXECUTABLE"]?.trim() &&
-    !!env["LORE_SPEECH_FFMPEG_EXECUTABLE"]?.trim();
+    !!env["LORE_SPEECH_FFMPEG_EXECUTABLE"]?.trim() &&
+    cohort.length > 0 &&
+    Number.isInteger(maximumCohortSize) && maximumCohortSize > 0 &&
+    cohort.length <= maximumCohortSize;
 }
 
 export function mountsFor(station: Station): SpeechMount[] {
@@ -49,8 +79,13 @@ export function mountsFor(station: Station): SpeechMount[] {
 export function startSpeechShadowOrchestrator(): boolean {
   if (started) return true;
   if (!speechShadowEnabled()) return false;
+  cohortStationIds = parseSpeechPilotCohort(process.env["LORE_SPEECH_PILOT_STATION_IDS"]);
+  pilotKilled = false;
+  lastHealthCheckAt = 0;
+  lastPilotHealth = null;
   scheduler = new SpeechQuotaScheduler({
     enabled: true,
+    stagedStationIds: cohortStationIds,
     maxCapturesPerStation: integerEnv("LORE_SPEECH_MAX_PER_STATION", 1),
     maxCapturesPerWindow: integerEnv("LORE_SPEECH_MAX_PER_WINDOW", 3),
     windowMs: integerEnv("LORE_SPEECH_WINDOW_MS", 30 * 60_000),
@@ -87,6 +122,51 @@ export function stopSpeechShadowOrchestrator(): void {
   stt = null;
   activeStations.clear();
   talkHistory.length = 0;
+  cohortStationIds = [];
+  pilotKilled = false;
+  lastHealthCheckAt = 0;
+  lastPilotHealth = null;
+}
+
+export function getSpeechPilotRuntimeStatus() {
+  return {
+    configured: speechShadowEnabled(),
+    running: started,
+    killed: pilotKilled,
+    cohortStationIds: [...cohortStationIds],
+    activeCaptures: activeStations.size,
+    health: lastPilotHealth,
+  };
+}
+
+async function refreshPilotGate(force = false): Promise<boolean> {
+  if (pilotKilled) return false;
+  const now = Date.now();
+  if (!force && now - lastHealthCheckAt < integerEnv("LORE_SPEECH_PILOT_HEALTH_REFRESH_MS", 60_000)) return true;
+  lastHealthCheckAt = now;
+  lastPilotHealth = await getSpeechPilotHealth(
+    cohortStationIds,
+    pilotThresholds(),
+    integerEnv("LORE_SPEECH_PILOT_WINDOW_HOURS", 24),
+  );
+  if (!lastPilotHealth.healthy) {
+    pilotKilled = true;
+    scheduler = null;
+    return false;
+  }
+  return true;
+}
+
+export async function getSpeechPilotAdminStatus() {
+  if (started && !pilotKilled) {
+    try {
+      await refreshPilotGate(true);
+    } catch {
+      pilotKilled = true;
+      scheduler = null;
+    }
+  }
+  return getSpeechPilotRuntimeStatus();
 }
 
 /**
@@ -95,7 +175,11 @@ export function stopSpeechShadowOrchestrator(): void {
  * pipeline from overlapping poller/watcher evidence.
  */
 export function scheduleSpeechTransitionCandidate(station: Station): void {
-  if (!started || !scheduler || !stt || activeStations.has(station.id)) return;
+  if (!started || !scheduler || !stt || pilotKilled || activeStations.has(station.id) ||
+    !cohortStationIds.includes(station.id) ||
+    activeStations.size >= integerEnv("LORE_SPEECH_MAX_CONCURRENCY", 1)) return;
+  void refreshPilotGate().then((healthy) => {
+    if (!healthy || !scheduler || !stt || activeStations.has(station.id)) return;
   const at = new Date();
   const mounts = mountsFor(station);
   const rank = estimateTalkWindows(talkHistory, at).find((entry) => entry.stationId === station.id)?.score ?? 0;
@@ -117,6 +201,7 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
       ffmpegExecutable: process.env["LORE_SPEECH_FFMPEG_EXECUTABLE"],
       durationSeconds: integerEnv("LORE_SPEECH_CAPTURE_SECONDS", 30),
       timeoutMs: integerEnv("LORE_SPEECH_CAPTURE_TIMEOUT_MS", 45_000),
+       maxBytes: integerEnv("LORE_SPEECH_CAPTURE_MAX_BYTES", 2_000_000),
       originalAuthority: target.originalAuthority,
       originalHostname: target.originalHostname,
     },
@@ -226,4 +311,8 @@ export function scheduleSpeechTransitionCandidate(station: Station): void {
     featureSnapshot: { candidate: "transition", localOnly: true },
     provenance: { provider: "local_stt", error: error instanceof Error ? error.message : String(error) },
   })).finally(() => activeStations.delete(station.id));
+  }).catch(() => {
+    pilotKilled = true;
+    scheduler = null;
+  });
 }

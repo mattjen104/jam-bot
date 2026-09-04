@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -18,28 +18,55 @@ export type LocalCommandRunner = (
   executable: string,
   args: readonly string[],
   timeoutMs: number,
+  budget?: { maxCpuMs?: number; maxMemoryBytes?: number },
 ) => Promise<LocalCommandResult>;
 
 function runLocalCommand(
-  executable: string, args: readonly string[], timeoutMs: number,
+  executable: string,
+  args: readonly string[],
+  timeoutMs: number,
+  budget?: { maxCpuMs?: number; maxMemoryBytes?: number },
 ): Promise<LocalCommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, [...args], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    let cpuMs = 0;
+    let maxMemoryBytes = 0;
+    let budgetExceeded = false;
     const maxOutputBytes = 1_000_000;
     let done = false;
     const finish = (error?: Error) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      clearInterval(resourceTimer);
       if (error) reject(error);
-      else resolve({ stdout, stderr });
+      else resolve({ stdout, stderr, cpuMs, maxMemoryBytes });
     };
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       finish(new Error(`local command timed out after ${timeoutMs}ms`));
     }, timeoutMs);
+    const resourceTimer = setInterval(() => {
+      void Promise.all([
+        readFile(`/proc/${child.pid}/stat`, "utf8"),
+        readFile(`/proc/${child.pid}/status`, "utf8"),
+      ]).then(([statValue, status]) => {
+        const fields = statValue.slice(statValue.lastIndexOf(")") + 2).split(" ");
+        // Linux exposes child CPU ticks at fields 14/15; USER_HZ is 100 on Replit.
+        cpuMs = Math.max(cpuMs, ((Number(fields[11]) || 0) + (Number(fields[12]) || 0)) * 10);
+        const memoryKb = Number(/^VmHWM:\s+(\d+)\s+kB$/m.exec(status)?.[1] ?? 0);
+        maxMemoryBytes = Math.max(maxMemoryBytes, memoryKb * 1024);
+        if (!budgetExceeded &&
+          ((budget?.maxCpuMs != null && cpuMs > budget.maxCpuMs) ||
+            (budget?.maxMemoryBytes != null && maxMemoryBytes > budget.maxMemoryBytes))) {
+          budgetExceeded = true;
+          child.kill("SIGKILL");
+        }
+      }).catch(() => undefined);
+    }, 100);
+    resourceTimer.unref();
     const append = (current: string, data: Buffer) => {
       const next = current + data.toString();
       if (Buffer.byteLength(next) > maxOutputBytes) {
@@ -51,7 +78,7 @@ function runLocalCommand(
     child.stdout.on("data", (data: Buffer) => { stdout = append(stdout, data); });
     child.stderr.on("data", (data: Buffer) => { stderr = append(stderr, data); });
     child.once("error", (error) => finish(error));
-    child.once("close", (code) => finish(code === 0 ? undefined : new Error(`${executable} exited ${code}`)));
+    child.once("close", (code) => finish(code === 0 || budgetExceeded ? undefined : new Error(`${executable} exited ${code}`)));
   });
 }
 
@@ -59,6 +86,7 @@ export interface SpeechCaptureConfig {
   ffmpegExecutable?: string;
   durationSeconds: number;
   timeoutMs: number;
+  maxBytes?: number;
   /** Original authority retained after DNS pinning for HTTP Host and TLS verification. */
   originalAuthority?: string;
   originalHostname?: string;
@@ -207,6 +235,12 @@ export async function withTransientSpeechClip<T>(
       "-max_redirects", "0", ...connectionIdentity, ...tlsIdentity, "-i", streamUrl, "-t",
       String(config.durationSeconds), "-ac", "1", "-ar", "16000", path,
     ], config.timeoutMs);
+    if (config.maxBytes != null) {
+      const clip = await stat(path);
+      if (clip.size > config.maxBytes) {
+        throw new Error(`captured clip exceeded ${config.maxBytes} byte limit`);
+      }
+    }
     return await use({ path, startedAt, endedAt: new Date() });
   } finally {
     // Recursive removal also cleans partial clips left by a killed ffmpeg.
@@ -304,7 +338,7 @@ export class LocalClassifierAdapter {
       const args = this.config.modelPath
         ? ["--model", this.config.modelPath, "--output-format", "json", clipPath]
         : ["--output-format", "json", clipPath];
-      const result = await this.runner(this.config.executable, args, this.config.timeoutMs);
+      const result = await this.runner(this.config.executable, args, this.config.timeoutMs, this.config);
       const budget = exceedsBudget(result, this.config);
       if (budget) return { kind: "skipped", reason: budget };
       const parsed = JSON.parse(result.stdout) as LocalClassifierJson;
@@ -350,7 +384,7 @@ export class LocalVadAdapter {
       const args = this.config.modelPath
         ? ["--model", this.config.modelPath, "--output-format", "json", clipPath]
         : ["--output-format", "json", clipPath];
-      const result = await this.runner(this.config.executable, args, this.config.timeoutMs);
+      const result = await this.runner(this.config.executable, args, this.config.timeoutMs, this.config);
       const budget = exceedsBudget(result, this.config);
       if (budget) return { kind: "skipped", reason: budget };
       const parsed = JSON.parse(result.stdout) as LocalVadJson;
@@ -453,7 +487,7 @@ export class LocalSttAdapter {
         const args = ["--model", this.config.modelPath!, "--output-format", "json"];
         if (this.config.vad) args.push("--clip-timestamps", `${trim.start},${trim.end}`);
         args.push(clipPath);
-        const result = await this.runner(this.config.executable!, args, this.config.timeoutMs);
+        const result = await this.runner(this.config.executable!, args, this.config.timeoutMs, this.config);
         const budget = exceedsBudget(result, this.config);
         if (budget) return { kind: "skipped", reason: budget };
         const parsed = JSON.parse(result.stdout) as LocalSttJson;

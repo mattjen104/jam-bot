@@ -166,6 +166,7 @@ import {
   getScheduleCoverageBacklogHealth,
   runScheduleCoverageBacklogBatch,
 } from "../../lore/schedule-coverage-backlog.js";
+import { getSpeechPilotAdminStatus } from "../../lore/speech-shadow-orchestrator.js";
 
 const router: IRouter = Router();
 const automaticCullCanonicalStation = alias(
@@ -222,7 +223,10 @@ router.use((req, res, next) => {
 // GET /api/admin/observability/health — durable per-station/version evidence
 // health. `unknown` and explicit pipeline failures are separate counters.
 router.get("/admin/observability/health", h(async (_req, res) => {
-  return res.json({ metrics: await getObservabilityHealth() });
+  return res.json({
+    metrics: await getObservabilityHealth(),
+    speechPilot: await getSpeechPilotAdminStatus(),
+  });
 }));
 
 // GET /api/admin/observability/evidence?kind=prediction&stationId=1&limit=100
