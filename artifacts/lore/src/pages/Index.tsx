@@ -54,6 +54,9 @@ function useIndexSection(section: IndexSection, filters: IndexFilters) {
 
   useEffect(() => {
     if (!query.data) return;
+    // The paginated query is an external source; this effect folds each
+    // completed page into the section snapshot consumed by the view.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSectionState((previous) => {
       if (previous.filterKey !== filterKey) {
         return {

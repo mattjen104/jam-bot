@@ -432,6 +432,9 @@ export function HomeDiscovery({
    * those are a card change. A scope change or new source play timestamp is the
    * point at which the current ordering is allowed to settle again.
    */
+  // This is an intentional render-time snapshot: mutating the ref does not
+  // drive rendering, and lets enrichment preserve slots without an extra paint.
+  /* eslint-disable react-hooks/refs */
   const stableDisplay = useMemo(() => {
     const previous = stableDisplayRef.current;
     const nextCards = new Map<string, StableDiscoveryCard>();
@@ -459,6 +462,7 @@ export function HomeDiscovery({
     stableDisplayRef.current = nextState;
     return { ...nextState, entriesBySlug };
   }, [liveRows, orderedLive, crossingScope]);
+  /* eslint-enable react-hooks/refs */
 
   const orderedSlots = useMemo(
     () => stableDisplay.order

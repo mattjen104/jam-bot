@@ -210,14 +210,10 @@ async function flushAll(rounds = 5, ms = 10) {
 }
 
 // ---------------------------------------------------------------------------
-// Observer: captures the latest ride + spotify state for assertion
+// Observer: renders the latest ride + spotify state for assertion
 // ---------------------------------------------------------------------------
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-let latestPlayer: ReturnType<typeof usePlayer> | null = null;
-
 function StateCapture() {
   const player = usePlayer();
-  latestPlayer = player;
 
   // Arm-count: count transitions from false → true so tests can verify a
   // crossing happened even after the interstitial auto-dismisses.
@@ -243,7 +239,6 @@ function StateCapture() {
 }
 
 function renderWithProvider(children: React.ReactNode) {
-  latestPlayer = null;
   return render(<PlayerProvider>{children}</PlayerProvider>);
 }
 

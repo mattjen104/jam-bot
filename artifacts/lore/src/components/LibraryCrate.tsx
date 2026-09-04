@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { usePlayer, type RideSeed } from "../player/PlayerProvider";
-import {
-  spotifyPlay,
-} from "@workspace/api-client-react";
-import { useSetLibraryRemoved, type LibraryItem } from "../lib/meHooks";
+import type { LibraryItem } from "../lib/meHooks";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
-import { Play, RotateCcw, Trash2 } from "lucide-react";
-import { toast } from "../hooks/use-toast";
 import type { CSSProperties } from "react";
 
 interface ReleaseMetadata {
@@ -387,141 +381,6 @@ function CrateTrackCard({
   );
 }
 
-function TrackPlayButton({ item }: { item: LibraryItem }) {
-  const { ride, spotify } = usePlayer();
-  const rec = item.recording;
-  const title = rec?.title ?? "Unknown track";
-  const artist = rec?.artist ?? "";
-  const play = () => {
-    if (!item.mbid) return;
-    const seed: RideSeed = {
-      mbid: item.mbid,
-      title,
-      artist,
-      artworkUrl: rec?.artworkUrl ?? null,
-      links: rec?.appleMusicId
-        ? [{ kind: "exact", name: "apple_music", url: `https://music.apple.com/song/i=${rec.appleMusicId}` }]
-        : [],
-    };
-    if (spotify.connected && spotify.premium) {
-      void spotifyPlay({ mbid: item.mbid, deviceId: spotify.pinnedDevice?.id })
-        .then(() => toast({ title: `Playing on Spotify: ${title}` }))
-        .catch(() => {
-          ride.startReplay([seed], title, { timeOrientation: "curated", context: "library" });
-          toast({ title: "Couldn't play on Spotify — using preview" });
-        });
-    } else {
-      ride.startReplay([seed], title, { timeOrientation: "curated", context: "library" });
-    }
-  };
-  return (
-    <button
-      type="button"
-      className="library-crate__play"
-      onClick={(event) => { event.preventDefault(); event.stopPropagation(); play(); }}
-      disabled={!item.mbid}
-      aria-label={`Play ${title}`}
-      title={item.mbid ? "Play this caught track" : "This recording is not resolved yet"}
-      data-testid="library-crate-play"
-    >
-      <Play size={13} fill="currentColor" />
-    </button>
-  );
-}
-
-function ReleaseCard({
-  release,
-  position,
-  opened,
-  attendance,
-  onOpened,
-}: {
-  release: CrateRelease;
-  position: number;
-  opened: boolean;
-  attendance?: ReleaseAttendance;
-  onOpened: (key: string) => void;
-}) {
-  const setRemoved = useSetLibraryRemoved();
-  const item = release.caught;
-  const rec = item.recording;
-  const title = release.title ?? rec?.title ?? "Unresolved recording";
-  const artist = release.artist || rec?.artist || "Unknown artist";
-  const removed = item.removed === true;
-  const tilt = crateTilt(release.key, position);
-  const releaseHref = release.releaseGroupMbid
-    ? `/album/${release.releaseGroupMbid}?tilt=${encodeURIComponent(String(tilt))}`
-    : null;
-  const attendanceLine = attendanceCopy(release.releaseGroupMbid, attendance);
-  const openedKey = release.releaseGroupMbid ?? release.key;
-  return (
-    <article
-      className={`library-crate__card${removed ? " library-crate__card--removed" : ""}${opened ? " library-crate__card--opened" : ""}`}
-      style={{ "--crate-tilt": `${tilt}deg`, "--crate-z": position + 1 } as CSSProperties}
-      data-testid="library-crate-release"
-      data-release-key={release.key}
-    >
-      <div className="library-crate__art-column">
-        {releaseHref ? (
-          <Link
-            href={releaseHref}
-            className="library-crate__cover-link"
-            onClick={() => { rememberOpened(openedKey); onOpened(openedKey); }}
-            aria-label={`Open ${title}`}
-            data-testid="library-crate-release-link"
-          >
-            <Swatch title={title} artworkUrl={release.artworkUrl} />
-          </Link>
-        ) : (
-          <Swatch title={title} artworkUrl={release.artworkUrl} />
-        )}
-      </div>
-      <div className="library-crate__content">
-        <div className="library-crate__scrim" aria-hidden="true" />
-        <div className="library-crate__parent">
-          {releaseHref ? (
-            <Link
-              href={releaseHref}
-              onClick={() => { rememberOpened(openedKey); onOpened(openedKey); }}
-              data-testid="library-crate-parent-link"
-            >
-              {title}{release.year ? ` · ${release.year}` : ""}
-            </Link>
-          ) : (
-            <span>Unresolved recording</span>
-          )}
-        </div>
-        <div className="library-crate__caught">
-          <span className="library-crate__caught-title">{rec?.title ?? "Unresolved recording"}</span>
-          <TrackPlayButton item={item} />
-        </div>
-        <Link href={rec?.artistMbid ? `/artist/${rec.artistMbid}` : "#"} className="library-crate__artist">
-          {artist}
-        </Link>
-        {attendanceLine && <div className="library-crate__attendance">{attendanceLine}</div>}
-        {release.releaseGroupMbid && !attendanceLine && <div className="library-crate__attendance library-crate__attendance--unknown">Attendance unknown</div>}
-        <div className="library-crate__provenance">{keepCopy(item)}</div>
-        <div className="library-crate__actions">
-          <button
-            type="button"
-            className="library-crate__remove"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (item.mbid) setRemoved.mutate({ mbid: item.mbid, spotifyId: item.spotifyId, removed: !removed });
-            }}
-            disabled={setRemoved.isPending || !item.mbid}
-            aria-label={removed ? `Restore ${rec?.title ?? "recording"}` : `Remove ${rec?.title ?? "recording"}`}
-          >
-            {removed ? <RotateCcw size={12} /> : <Trash2 size={12} />}
-          </button>
-          {item.fuzzyMatch && <span className="library-crate__fuzzy">fuzzy match</span>}
-        </div>
-      </div>
-    </article>
-  );
-}
-
 function AddedArtistCard({ artist, position, onOpened }: {
   artist: AddedArtist;
   position: number;
@@ -595,37 +454,6 @@ function useOpenedKeys() {
     setOpened((current) => new Set(current).add(key));
   };
   return [opened, mark] as const;
-}
-
-function useReleaseAttendance(releases: CrateRelease[]) {
-  const ids = useMemo(
-    () => releases.map((release) => release.releaseGroupMbid).filter((id): id is string => Boolean(id)).sort(),
-    [releases],
-  );
-  const [stats, setStats] = useState<Record<string, ReleaseAttendance>>({});
-  const sinceKey = useMemo(
-    () => JSON.stringify(Object.fromEntries(
-      releases
-        .filter((release) =>
-          release.releaseGroupMbid &&
-          release.caught.provenance.kind === "import" &&
-          release.caught.provenance.sourceKeepDate === true)
-        .map((release) => [release.releaseGroupMbid!, release.caught.addedAt]),
-    )),
-    [releases],
-  );
-  useEffect(() => {
-    if (ids.length === 0) return;
-    let cancelled = false;
-    fetch(
-      `/api/me/library/release-stats?rg=${ids.map(encodeURIComponent).join(",")}&since=${encodeURIComponent(sinceKey)}`,
-    )
-      .then((response) => response.ok ? response.json() as Promise<{ stats?: Record<string, ReleaseAttendance> }> : Promise.reject())
-      .then((payload) => { if (!cancelled) setStats(payload.stats ?? {}); })
-      .catch(() => { if (!cancelled) setStats({}); });
-    return () => { cancelled = true; };
-  }, [ids, sinceKey]);
-  return ids.length === 0 ? {} : stats;
 }
 
 export interface LibraryCrateProps {
