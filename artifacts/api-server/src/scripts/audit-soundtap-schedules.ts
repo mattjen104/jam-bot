@@ -11,14 +11,14 @@ const REPORT_PATH = fileURLToPath(
   new URL("../../../../research/soundtap-schedule-gap.json", import.meta.url),
 );
 
-interface SoundtapStation {
+export interface SoundtapStation {
   slug: string;
   label: string;
   callsign: string | null;
   evidenceUrl: string;
 }
 
-function canonicalCallsign(value: string): string | null {
+export function canonicalCallsign(value: string): string | null {
   const candidate = value
     .toUpperCase()
     .replace(/[–—].*$/, "")
@@ -34,6 +34,62 @@ function canonicalCallsign(value: string): string | null {
     return null;
   }
   return candidate;
+}
+
+export interface SoundtapCallsignCandidate {
+  id: number;
+  slug: string;
+  name: string;
+  org: string | null;
+  homepageUrl: string | null;
+  scheduleUrl: string | null;
+  config: Record<string, unknown> | null;
+}
+
+/**
+ * Match only a callsign printed in the preserved Soundtap link. Slugs and
+ * display-name similarity are deliberately never identity evidence.
+ */
+export function selectVerifiedSoundtapMatches<T extends SoundtapCallsignCandidate>(
+  soundtap: SoundtapStation[],
+  stations: T[],
+): {
+  matches: Array<{ soundtap: SoundtapStation; station: T; callsign: string }>;
+  ambiguous: Array<{ soundtap: SoundtapStation; callsign: string; candidates: T[] }>;
+  missing: SoundtapStation[];
+} {
+  const byCallsign = new Map<string, T[]>();
+  for (const station of stations) {
+    const configured =
+      typeof station.config?.callsign === "string"
+        ? canonicalCallsign(station.config.callsign)
+        : null;
+    const callsign =
+      configured ?? canonicalCallsign(station.name) ?? canonicalCallsign(station.org ?? "");
+    if (!callsign) continue;
+    const bucket = byCallsign.get(callsign) ?? [];
+    bucket.push(station);
+    byCallsign.set(callsign, bucket);
+  }
+
+  const matches: Array<{ soundtap: SoundtapStation; station: T; callsign: string }> = [];
+  const ambiguous: Array<{ soundtap: SoundtapStation; callsign: string; candidates: T[] }> = [];
+  const missing: SoundtapStation[] = [];
+  for (const source of soundtap) {
+    if (!source.callsign) {
+      missing.push(source);
+      continue;
+    }
+    const candidates = byCallsign.get(source.callsign) ?? [];
+    if (candidates.length === 1) {
+      matches.push({ soundtap: source, station: candidates[0]!, callsign: source.callsign });
+    } else if (candidates.length > 1) {
+      ambiguous.push({ soundtap: source, callsign: source.callsign, candidates });
+    } else {
+      missing.push(source);
+    }
+  }
+  return { matches, ambiguous, missing };
 }
 
 export function parseSoundtapStations(markdown: string): SoundtapStation[] {
@@ -69,58 +125,31 @@ async function main(): Promise<void> {
     .from(stationsTable)
     .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)));
 
-  const byCallsign = new Map<string, typeof lore>();
-  for (const station of lore) {
-    const configured =
-      typeof station.config?.callsign === "string"
-        ? canonicalCallsign(station.config.callsign)
-        : null;
-    const callsign = configured ?? canonicalCallsign(station.name) ?? canonicalCallsign(station.org ?? "");
-    if (!callsign) continue;
-    const bucket = byCallsign.get(callsign) ?? [];
-    bucket.push(station);
-    byCallsign.set(callsign, bucket);
-  }
-
-  const matches = [];
-  const ambiguous = [];
-  const missing = [];
-  for (const source of soundtap) {
-    if (!source.callsign) {
-      missing.push(source);
-      continue;
-    }
-    const candidates = byCallsign.get(source.callsign) ?? [];
-    if (candidates.length === 1) {
-      const station = candidates[0]!;
-      matches.push({
+  const selection = selectVerifiedSoundtapMatches(soundtap, lore);
+  const matches = selection.matches.map(({ soundtap: source, station, callsign }) => ({
+    soundtap: source.slug,
+    soundtapLabel: source.label,
+    evidenceUrl: source.evidenceUrl,
+    kind: "verified_callsign",
+    callsign,
+    id: station.id,
+    slug: station.slug,
+    name: station.name,
+    homepageUrl: station.homepageUrl,
+    scheduleUrl: station.scheduleUrl,
+    scrapedAt: station.scrapedAt,
+    showCount: station.showCount,
+  }));
+  const ambiguous = selection.ambiguous.map(({ soundtap: source, callsign, candidates }) => ({
         soundtap: source.slug,
-        soundtapLabel: source.label,
-        evidenceUrl: source.evidenceUrl,
-        kind: "verified_callsign",
-        callsign: source.callsign,
-        id: station.id,
-        slug: station.slug,
-        name: station.name,
-        homepageUrl: station.homepageUrl,
-        scheduleUrl: station.scheduleUrl,
-        scrapedAt: station.scrapedAt,
-        showCount: station.showCount,
-      });
-    } else if (candidates.length > 1) {
-      ambiguous.push({
-        soundtap: source.slug,
-        callsign: source.callsign,
+        callsign,
         loreCandidates: candidates.map((candidate) => ({
           id: candidate.id,
           slug: candidate.slug,
           homepageUrl: candidate.homepageUrl,
         })),
-      });
-    } else {
-      missing.push(source);
-    }
-  }
+      }));
+  const missing = selection.missing;
 
   const matchedIds = matches.map((match) => match.id);
   const coverage = matchedIds.length

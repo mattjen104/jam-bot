@@ -1014,6 +1014,34 @@ export async function scrapeStationSchedule(
     return fail();
   }
 
+  // An empty deterministic/API result is authoritative. An LLM-empty result
+  // is weaker evidence: it commonly means the rendered page omitted a grid or
+  // the model failed to recognize it. Do not erase a healthy recurring grid
+  // (or date-specific official slots) on that basis; record the attempt so it
+  // receives normal failure backoff instead.
+  if (extraction === "llm" && shows.length === 0 && datedExceptions.length === 0) {
+    const [recurring, dated] = await Promise.all([
+      db
+        .select({ id: scrapedShowsTable.id })
+        .from(scrapedShowsTable)
+        .where(
+          and(eq(scrapedShowsTable.stationId, target.id), isNull(scrapedShowsTable.voidedAt)),
+        )
+        .limit(1),
+      db
+        .select({ id: scrapedShowExceptionsTable.id })
+        .from(scrapedShowExceptionsTable)
+        .where(eq(scrapedShowExceptionsTable.stationId, target.id))
+        .limit(1),
+    ]);
+    if (recurring.length > 0 || dated.length > 0) {
+      console.info(
+        `[schedule-scraper] preserving existing schedule for ${target.slug}: LLM returned empty`,
+      );
+      return fail();
+    }
+  }
+
   const now = new Date();
   try {
     const receiptSourceUrl = requireSourceUrl(sourceUrl);

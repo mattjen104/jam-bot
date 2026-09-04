@@ -1310,6 +1310,92 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
 });
 
 // ---------------------------------------------------------------------------
+// Empty extraction authority
+// ---------------------------------------------------------------------------
+
+describe("scrapeStationSchedule — empty extraction authority", () => {
+  it("preserves existing rows when an LLM returns an empty array", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    await db.insert(scrapedShowsTable).values({
+      stationId: stationId!,
+      showName: "Existing Grid",
+      dayOfWeek: "Mon",
+      startTime: "09:00",
+      endTime: "10:00",
+      sourceUrl: SCHEDULE_URL,
+      extraction: "llm",
+    });
+    configureScheduleExtractor(async () => "[]");
+    const fetchFn = makeFetch([
+      { pattern: "robots.txt", body: "User-agent: *\nDisallow:\n" },
+      { pattern: "/schedule", body: "<html><body>Schedule</body></html>" },
+    ]);
+
+    const result = await scrapeStationSchedule(
+      {
+        id: stationId!,
+        slug: `test-sched-${run}`,
+        homepageUrl: HOMEPAGE,
+        scheduleUrl: SCHEDULE_URL,
+        city: null,
+        country: null,
+        ianaTimezone: null,
+      },
+      { fetchFn },
+    );
+
+    expect(result).toEqual({ scraped: false, showCount: 0 });
+    expect(await fetchScrapedShows()).toHaveLength(1);
+    const row = await fetchStationRow();
+    expect(row?.scheduleAttemptedAt).toBeInstanceOf(Date);
+    expect(row?.scheduleScrapedAt).toBeNull();
+  });
+
+  it("lets an empty public API result replace existing rows", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    await db.insert(scrapedShowsTable).values({
+      stationId: stationId!,
+      showName: "Existing Grid",
+      dayOfWeek: "Mon",
+      startTime: "09:00",
+      endTime: "10:00",
+      sourceUrl: SCHEDULE_URL,
+      extraction: "llm",
+    });
+    const calendarUrl = "https://spinitron.com/test-station/calendar";
+    const fetchFn = makeFetch([
+      { pattern: "robots.txt", body: "User-agent: *\nDisallow:\n" },
+      { pattern: "calendar-feed", body: "[]" },
+      {
+        pattern: "/calendar",
+        body: '<script>const config = { events: "/test-station/calendar-feed" };</script>',
+      },
+    ]);
+
+    const result = await scrapeStationSchedule(
+      {
+        id: stationId!,
+        slug: `test-sched-${run}`,
+        homepageUrl: HOMEPAGE,
+        scheduleUrl: calendarUrl,
+        city: null,
+        country: null,
+        ianaTimezone: null,
+      },
+      { fetchFn },
+    );
+
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+    expect(await fetchScrapedShows()).toHaveLength(0);
+    const row = await fetchStationRow();
+    expect(row?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(row?.upcomingShowCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Path 7 — missing required fields from LLM are rejected before the DB write
 // ---------------------------------------------------------------------------
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-04T03:40:42.398Z",
+  "generatedAt": "2026-09-04T04:19:50.519Z",
   "methodology": {
     "identity": "Exact callsign printed in the preserved Soundtap station link matched to Lore's configured callsign or station name. Slugs are never identity evidence; ambiguous callsigns are excluded.",
     "sourceSnapshot": "research/sources/soundtap-home.md",
@@ -9,12 +9,12 @@
     "stations": 239,
     "shows": 7713
   },
-  "matches": 46,
-  "missing": 193,
+  "matches": 45,
+  "missing": 194,
   "ambiguous": 0,
-  "sharedWithShows": 17,
-  "showSlotCoverage": 742,
-  "officialScheduleSources": 17,
+  "sharedWithShows": 32,
+  "showSlotCoverage": 1409,
+  "officialScheduleSources": 24,
   "sharedNoShows": [
     {
       "soundtap": "ckcu",
@@ -45,20 +45,6 @@
       "showCount": 0
     },
     {
-      "soundtap": "kaos-olympia",
-      "soundtapLabel": "KAOS",
-      "evidenceUrl": "https://soundtap.fm/stations/kaos-olympia",
-      "kind": "verified_callsign",
-      "callsign": "KAOS",
-      "id": 65311,
-      "slug": "kaos",
-      "name": "KAOS 89.3 FM",
-      "homepageUrl": "https://spinitron.com/KAOS/",
-      "scheduleUrl": "https://spinitron.com/KAOS/calendar",
-      "scrapedAt": "2026-09-02T22:06:51.534Z",
-      "showCount": 0
-    },
-    {
       "soundtap": "kcrw",
       "soundtapLabel": "KCRW",
       "evidenceUrl": "https://soundtap.fm/stations/kcrw",
@@ -73,20 +59,6 @@
       "showCount": 0
     },
     {
-      "soundtap": "kcsb",
-      "soundtapLabel": "KCSB",
-      "evidenceUrl": "https://soundtap.fm/stations/kcsb",
-      "kind": "verified_callsign",
-      "callsign": "KCSB",
-      "id": 65313,
-      "slug": "kcsb",
-      "name": "KCSB 91.9 FM",
-      "homepageUrl": "https://spinitron.com/KCSB/",
-      "scheduleUrl": "https://spinitron.com/KCSB/calendar",
-      "scrapedAt": "2026-09-02T22:05:17.995Z",
-      "showCount": 0
-    },
-    {
       "soundtap": "kdvs",
       "soundtapLabel": "KDVS",
       "evidenceUrl": "https://soundtap.fm/stations/kdvs",
@@ -96,22 +68,8 @@
       "slug": "kdvs",
       "name": "KDVS 90.3 FM",
       "homepageUrl": "https://kdvs.org",
-      "scheduleUrl": "https://kdvs.org/schedule",
-      "scrapedAt": "2026-09-02T00:57:48.371Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "kfai",
-      "soundtapLabel": "KFAI",
-      "evidenceUrl": "https://soundtap.fm/stations/kfai",
-      "kind": "verified_callsign",
-      "callsign": "KFAI",
-      "id": 65309,
-      "slug": "kfai",
-      "name": "KFAI 90.3 FM",
-      "homepageUrl": "https://spinitron.com/KFAI/",
-      "scheduleUrl": "https://spinitron.com/KFAI/calendar",
-      "scrapedAt": "2026-09-02T22:06:53.054Z",
+      "scheduleUrl": "https://kdvs.org/programming",
+      "scrapedAt": "2026-09-04T04:06:50.831Z",
       "showCount": 0
     },
     {
@@ -129,34 +87,6 @@
       "showCount": 0
     },
     {
-      "soundtap": "ksjs",
-      "soundtapLabel": "KSJS",
-      "evidenceUrl": "https://soundtap.fm/stations/ksjs",
-      "kind": "verified_callsign",
-      "callsign": "KSJS",
-      "id": 65327,
-      "slug": "ksjs",
-      "name": "KSJS 90.5 FM",
-      "homepageUrl": "https://spinitron.com/KSJS/",
-      "scheduleUrl": "https://spinitron.com/KSJS/calendar",
-      "scrapedAt": "2026-09-02T22:06:05.471Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "kxua",
-      "soundtapLabel": "KXUA",
-      "evidenceUrl": "https://soundtap.fm/stations/kxua",
-      "kind": "verified_callsign",
-      "callsign": "KXUA",
-      "id": 65303,
-      "slug": "kxua",
-      "name": "KXUA 88.3 FM",
-      "homepageUrl": "https://spinitron.com/KXUA/",
-      "scheduleUrl": "https://spinitron.com/KXUA/calendar",
-      "scrapedAt": "2026-09-02T22:06:04.740Z",
-      "showCount": 0
-    },
-    {
       "soundtap": "kzsu",
       "soundtapLabel": "KZSU",
       "evidenceUrl": "https://soundtap.fm/stations/kzsu",
@@ -168,34 +98,6 @@
       "homepageUrl": "https://spinitron.com/KZSU/",
       "scheduleUrl": null,
       "scrapedAt": null,
-      "showCount": 0
-    },
-    {
-      "soundtap": "wcbn-fm-ann-arbor",
-      "soundtapLabel": "WCBN",
-      "evidenceUrl": "https://soundtap.fm/stations/wcbn-fm-ann-arbor",
-      "kind": "verified_callsign",
-      "callsign": "WCBN",
-      "id": 65287,
-      "slug": "wcbn",
-      "name": "WCBN 88.3 FM",
-      "homepageUrl": "https://spinitron.com/WCBN/",
-      "scheduleUrl": "https://spinitron.com/WCBN/calendar",
-      "scrapedAt": "2026-09-02T22:05:18.758Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "wdce-richmond",
-      "soundtapLabel": "WDCE",
-      "evidenceUrl": "https://soundtap.fm/stations/wdce-richmond",
-      "kind": "verified_callsign",
-      "callsign": "WDCE",
-      "id": 65267,
-      "slug": "wdce",
-      "name": "WDCE 90.1 FM",
-      "homepageUrl": "https://spinitron.com/WDCE/",
-      "scheduleUrl": "https://spinitron.com/WDCE/calendar",
-      "scrapedAt": "2026-09-03T04:04:38.705Z",
       "showCount": 0
     },
     {
@@ -213,20 +115,6 @@
       "showCount": 0
     },
     {
-      "soundtap": "weft",
-      "soundtapLabel": "WEFT",
-      "evidenceUrl": "https://soundtap.fm/stations/weft",
-      "kind": "verified_callsign",
-      "callsign": "WEFT",
-      "id": 65283,
-      "slug": "weft",
-      "name": "WEFT 90.1 FM",
-      "homepageUrl": "https://spinitron.com/WEFT/",
-      "scheduleUrl": "https://spinitron.com/WEFT/calendar",
-      "scrapedAt": "2026-09-03T04:04:37.907Z",
-      "showCount": 0
-    },
-    {
       "soundtap": "88-1-wesu-middletown",
       "soundtapLabel": "WESU",
       "evidenceUrl": "https://soundtap.fm/stations/88-1-wesu-middletown",
@@ -237,7 +125,7 @@
       "name": "WESU 88.1 FM",
       "homepageUrl": "https://wesufm.org",
       "scheduleUrl": "https://wesufm.org/schedule",
-      "scrapedAt": "2026-08-31T16:30:35.210Z",
+      "scrapedAt": "2026-09-04T04:10:25.039Z",
       "showCount": 0
     },
     {
@@ -250,8 +138,8 @@
       "slug": "whrb",
       "name": "WHRB 95.3 FM",
       "homepageUrl": "https://whrb.org",
-      "scheduleUrl": "https://whrb.org/schedule",
-      "scrapedAt": "2026-08-31T16:49:27.916Z",
+      "scheduleUrl": "https://whrb.org/programming/program-guide",
+      "scrapedAt": "2026-09-04T04:10:26.517Z",
       "showCount": 0
     },
     {
@@ -269,48 +157,6 @@
       "showCount": 0
     },
     {
-      "soundtap": "wknc",
-      "soundtapLabel": "WKNC",
-      "evidenceUrl": "https://soundtap.fm/stations/wknc",
-      "kind": "verified_callsign",
-      "callsign": "WKNC",
-      "id": 65265,
-      "slug": "wknc",
-      "name": "WKNC 88.1 FM",
-      "homepageUrl": "https://spinitron.com/WKNC/",
-      "scheduleUrl": "https://spinitron.com/WKNC/calendar",
-      "scrapedAt": "2026-09-02T21:59:48.105Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "wknc-hd-2-raleigh",
-      "soundtapLabel": "WKNC-HD2",
-      "evidenceUrl": "https://soundtap.fm/stations/wknc-hd-2-raleigh",
-      "kind": "verified_callsign",
-      "callsign": "WKNC",
-      "id": 65265,
-      "slug": "wknc",
-      "name": "WKNC 88.1 FM",
-      "homepageUrl": "https://spinitron.com/WKNC/",
-      "scheduleUrl": "https://spinitron.com/WKNC/calendar",
-      "scrapedAt": "2026-09-02T21:59:48.105Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "wluw",
-      "soundtapLabel": "WLUW",
-      "evidenceUrl": "https://soundtap.fm/stations/wluw",
-      "kind": "verified_callsign",
-      "callsign": "WLUW",
-      "id": 65279,
-      "slug": "wluw",
-      "name": "WLUW 88.7 FM",
-      "homepageUrl": "https://spinitron.com/WLUW/",
-      "scheduleUrl": "https://spinitron.com/WLUW/calendar",
-      "scrapedAt": "2026-09-02T22:04:31.056Z",
-      "showCount": 0
-    },
-    {
       "soundtap": "wmtu",
       "soundtapLabel": "WMTU",
       "evidenceUrl": "https://soundtap.fm/stations/wmtu",
@@ -325,48 +171,6 @@
       "showCount": 0
     },
     {
-      "soundtap": "wnur",
-      "soundtapLabel": "WNUR",
-      "evidenceUrl": "https://soundtap.fm/stations/wnur",
-      "kind": "verified_callsign",
-      "callsign": "WNUR",
-      "id": 2702,
-      "slug": "wnur",
-      "name": "WNUR 89.3 FM",
-      "homepageUrl": "https://wnur.northwestern.edu",
-      "scheduleUrl": "https://wnur.northwestern.edu/schedule/",
-      "scrapedAt": "2026-07-25T23:08:29.760Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "wort",
-      "soundtapLabel": "WORT",
-      "evidenceUrl": "https://soundtap.fm/stations/wort",
-      "kind": "verified_callsign",
-      "callsign": "WORT",
-      "id": 65293,
-      "slug": "wort",
-      "name": "WORT 89.9 FM",
-      "homepageUrl": "https://spinitron.com/WORT/",
-      "scheduleUrl": "https://spinitron.com/WORT/calendar",
-      "scrapedAt": "2026-09-03T04:24:14.275Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "wpkn-89-5-fm-bridgeport",
-      "soundtapLabel": "WPKN",
-      "evidenceUrl": "https://soundtap.fm/stations/wpkn-89-5-fm-bridgeport",
-      "kind": "verified_callsign",
-      "callsign": "WPKN",
-      "id": 765731,
-      "slug": "wpkn",
-      "name": "WPKN 89.5 FM",
-      "homepageUrl": "https://wpkn.org",
-      "scheduleUrl": "https://spinitron.com/WPKN/calendar",
-      "scrapedAt": null,
-      "showCount": 0
-    },
-    {
       "soundtap": "wprb-princeton",
       "soundtapLabel": "WPRB",
       "evidenceUrl": "https://soundtap.fm/stations/wprb-princeton",
@@ -377,35 +181,7 @@
       "name": "WPRB 103.3 FM",
       "homepageUrl": "https://wprb.com",
       "scheduleUrl": "https://wprb.com/schedule/",
-      "scrapedAt": "2026-08-31T22:52:43.034Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "wras",
-      "soundtapLabel": "WRAS",
-      "evidenceUrl": "https://soundtap.fm/stations/wras",
-      "kind": "verified_callsign",
-      "callsign": "WRAS",
-      "id": 65263,
-      "slug": "wras",
-      "name": "WRAS 88.5 FM",
-      "homepageUrl": "https://spinitron.com/WRAS/",
-      "scheduleUrl": "https://spinitron.com/WRAS/calendar",
-      "scrapedAt": "2026-09-02T22:00:28.821Z",
-      "showCount": 0
-    },
-    {
-      "soundtap": "wrbb",
-      "soundtapLabel": "WRBB",
-      "evidenceUrl": "https://soundtap.fm/stations/wrbb",
-      "kind": "verified_callsign",
-      "callsign": "WRBB",
-      "id": 65256,
-      "slug": "wrbb",
-      "name": "WRBB 104.9 FM",
-      "homepageUrl": "https://spinitron.com/WRBB/",
-      "scheduleUrl": "https://spinitron.com/WRBB/calendar",
-      "scrapedAt": "2026-09-02T22:04:30.358Z",
+      "scrapedAt": "2026-09-04T04:13:42.216Z",
       "showCount": 0
     },
     {
@@ -448,7 +224,7 @@
       "slug": "cjsf",
       "name": "CJSF 90.1 FM",
       "homepageUrl": "https://www.cjsf.ca",
-      "scheduleUrl": "https://www.cjsf.ca/schedule",
+      "scheduleUrl": "https://www.cjsf.ca/contents/cjsf-901fm",
       "scrapedAt": "2026-08-31T16:31:50.275Z",
       "showCount": 40
     },
@@ -491,7 +267,7 @@
       "name": "KALX 90.7 FM",
       "homepageUrl": "https://kalx.berkeley.edu",
       "scheduleUrl": "https://spinitron.com/KALX/calendar",
-      "scrapedAt": "2026-09-04T03:35:23.386Z",
+      "scrapedAt": "2026-09-04T04:02:18.361Z",
       "showCount": 72
     },
     {
@@ -505,8 +281,8 @@
       "name": "KAOS 89.3 FM",
       "homepageUrl": "https://spinitron.com/KAOS/",
       "scheduleUrl": "https://spinitron.com/KAOS/calendar",
-      "scrapedAt": "2026-09-02T22:06:51.534Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:02:39.376Z",
+      "showCount": 97
     },
     {
       "soundtap": "kcrw",
@@ -533,8 +309,8 @@
       "name": "KCSB 91.9 FM",
       "homepageUrl": "https://spinitron.com/KCSB/",
       "scheduleUrl": "https://spinitron.com/KCSB/calendar",
-      "scrapedAt": "2026-09-02T22:05:17.995Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:03:00.733Z",
+      "showCount": 139
     },
     {
       "soundtap": "kdvs",
@@ -546,8 +322,8 @@
       "slug": "kdvs",
       "name": "KDVS 90.3 FM",
       "homepageUrl": "https://kdvs.org",
-      "scheduleUrl": "https://kdvs.org/schedule",
-      "scrapedAt": "2026-09-02T00:57:48.371Z",
+      "scheduleUrl": "https://kdvs.org/programming",
+      "scrapedAt": "2026-09-04T04:06:50.831Z",
       "showCount": 0
     },
     {
@@ -575,8 +351,8 @@
       "name": "KFAI 90.3 FM",
       "homepageUrl": "https://spinitron.com/KFAI/",
       "scheduleUrl": "https://spinitron.com/KFAI/calendar",
-      "scrapedAt": "2026-09-02T22:06:53.054Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:07:12.098Z",
+      "showCount": 96
     },
     {
       "soundtap": "ksdt",
@@ -603,8 +379,8 @@
       "name": "KSJS 90.5 FM",
       "homepageUrl": "https://spinitron.com/KSJS/",
       "scheduleUrl": "https://spinitron.com/KSJS/calendar",
-      "scrapedAt": "2026-09-02T22:06:05.471Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:07:34.169Z",
+      "showCount": 37
     },
     {
       "soundtap": "kuci",
@@ -617,7 +393,7 @@
       "name": "KUCI 88.9 FM",
       "homepageUrl": "https://kuci.org/",
       "scheduleUrl": "https://kuci.org/show-schedule/",
-      "scrapedAt": "2026-09-04T03:35:26.351Z",
+      "scrapedAt": "2026-09-04T04:07:37.632Z",
       "showCount": 71
     },
     {
@@ -631,7 +407,7 @@
       "name": "KUNM 89.9 FM",
       "homepageUrl": "https://www.kunm.org/",
       "scheduleUrl": "https://www.kunm.org/kunm-radio-schedule",
-      "scrapedAt": "2026-09-04T03:40:40.978Z",
+      "scrapedAt": "2026-09-04T04:07:38.644Z",
       "showCount": 94
     },
     {
@@ -659,8 +435,8 @@
       "name": "KXUA 88.3 FM",
       "homepageUrl": "https://spinitron.com/KXUA/",
       "scheduleUrl": "https://spinitron.com/KXUA/calendar",
-      "scrapedAt": "2026-09-02T22:06:04.740Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:07:59.610Z",
+      "showCount": 46
     },
     {
       "soundtap": "kzsu",
@@ -701,8 +477,8 @@
       "name": "WCBN 88.3 FM",
       "homepageUrl": "https://spinitron.com/WCBN/",
       "scheduleUrl": "https://spinitron.com/WCBN/calendar",
-      "scrapedAt": "2026-09-02T22:05:18.758Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:09:40.587Z",
+      "showCount": 132
     },
     {
       "soundtap": "wdce-richmond",
@@ -715,8 +491,8 @@
       "name": "WDCE 90.1 FM",
       "homepageUrl": "https://spinitron.com/WDCE/",
       "scheduleUrl": "https://spinitron.com/WDCE/calendar",
-      "scrapedAt": "2026-09-03T04:04:38.705Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:10:01.724Z",
+      "showCount": 136
     },
     {
       "soundtap": "wdiy",
@@ -743,8 +519,8 @@
       "name": "WEFT 90.1 FM",
       "homepageUrl": "https://spinitron.com/WEFT/",
       "scheduleUrl": "https://spinitron.com/WEFT/calendar",
-      "scrapedAt": "2026-09-03T04:04:37.907Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:10:23.185Z",
+      "showCount": 87
     },
     {
       "soundtap": "88-1-wesu-middletown",
@@ -757,7 +533,7 @@
       "name": "WESU 88.1 FM",
       "homepageUrl": "https://wesufm.org",
       "scheduleUrl": "https://wesufm.org/schedule",
-      "scrapedAt": "2026-08-31T16:30:35.210Z",
+      "scrapedAt": "2026-09-04T04:10:25.039Z",
       "showCount": 0
     },
     {
@@ -784,8 +560,8 @@
       "slug": "whrb",
       "name": "WHRB 95.3 FM",
       "homepageUrl": "https://whrb.org",
-      "scheduleUrl": "https://whrb.org/schedule",
-      "scrapedAt": "2026-08-31T16:49:27.916Z",
+      "scheduleUrl": "https://whrb.org/programming/program-guide",
+      "scrapedAt": "2026-09-04T04:10:26.517Z",
       "showCount": 0
     },
     {
@@ -799,7 +575,7 @@
       "name": "WICB 91.7 FM",
       "homepageUrl": "https://wicb.org",
       "scheduleUrl": "https://wicb.org/schedule/",
-      "scrapedAt": "2026-09-04T03:35:27.202Z",
+      "scrapedAt": "2026-09-04T04:10:27.273Z",
       "showCount": 84
     },
     {
@@ -855,8 +631,8 @@
       "name": "WKNC 88.1 FM",
       "homepageUrl": "https://spinitron.com/WKNC/",
       "scheduleUrl": "https://spinitron.com/WKNC/calendar",
-      "scrapedAt": "2026-09-02T21:59:48.105Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:11:09.944Z",
+      "showCount": 168
     },
     {
       "soundtap": "wknc-hd-2-raleigh",
@@ -869,8 +645,8 @@
       "name": "WKNC 88.1 FM",
       "homepageUrl": "https://spinitron.com/WKNC/",
       "scheduleUrl": "https://spinitron.com/WKNC/calendar",
-      "scrapedAt": "2026-09-02T21:59:48.105Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:11:09.944Z",
+      "showCount": 168
     },
     {
       "soundtap": "wluw",
@@ -883,8 +659,8 @@
       "name": "WLUW 88.7 FM",
       "homepageUrl": "https://spinitron.com/WLUW/",
       "scheduleUrl": "https://spinitron.com/WLUW/calendar",
-      "scrapedAt": "2026-09-02T22:04:31.056Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:12:56.801Z",
+      "showCount": 79
     },
     {
       "soundtap": "wmtu",
@@ -901,20 +677,6 @@
       "showCount": 0
     },
     {
-      "soundtap": "wnur",
-      "soundtapLabel": "WNUR",
-      "evidenceUrl": "https://soundtap.fm/stations/wnur",
-      "kind": "verified_callsign",
-      "callsign": "WNUR",
-      "id": 2702,
-      "slug": "wnur",
-      "name": "WNUR 89.3 FM",
-      "homepageUrl": "https://wnur.northwestern.edu",
-      "scheduleUrl": "https://wnur.northwestern.edu/schedule/",
-      "scrapedAt": "2026-07-25T23:08:29.760Z",
-      "showCount": 0
-    },
-    {
       "soundtap": "wort",
       "soundtapLabel": "WORT",
       "evidenceUrl": "https://soundtap.fm/stations/wort",
@@ -925,8 +687,8 @@
       "name": "WORT 89.9 FM",
       "homepageUrl": "https://spinitron.com/WORT/",
       "scheduleUrl": "https://spinitron.com/WORT/calendar",
-      "scrapedAt": "2026-09-03T04:24:14.275Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:13:18.049Z",
+      "showCount": 88
     },
     {
       "soundtap": "wpkn-89-5-fm-bridgeport",
@@ -939,8 +701,8 @@
       "name": "WPKN 89.5 FM",
       "homepageUrl": "https://wpkn.org",
       "scheduleUrl": "https://spinitron.com/WPKN/calendar",
-      "scrapedAt": null,
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:13:39.346Z",
+      "showCount": 84
     },
     {
       "soundtap": "wprb-princeton",
@@ -953,7 +715,7 @@
       "name": "WPRB 103.3 FM",
       "homepageUrl": "https://wprb.com",
       "scheduleUrl": "https://wprb.com/schedule/",
-      "scrapedAt": "2026-08-31T22:52:43.034Z",
+      "scrapedAt": "2026-09-04T04:13:42.216Z",
       "showCount": 0
     },
     {
@@ -967,8 +729,8 @@
       "name": "WRAS 88.5 FM",
       "homepageUrl": "https://spinitron.com/WRAS/",
       "scheduleUrl": "https://spinitron.com/WRAS/calendar",
-      "scrapedAt": "2026-09-02T22:00:28.821Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:14:02.833Z",
+      "showCount": 33
     },
     {
       "soundtap": "wrbb",
@@ -981,8 +743,8 @@
       "name": "WRBB 104.9 FM",
       "homepageUrl": "https://spinitron.com/WRBB/",
       "scheduleUrl": "https://spinitron.com/WRBB/calendar",
-      "scrapedAt": "2026-09-02T22:04:30.358Z",
-      "showCount": 0
+      "scrapedAt": "2026-09-04T04:14:23.863Z",
+      "showCount": 104
     },
     {
       "soundtap": "wrct",
@@ -1050,7 +812,7 @@
       "slug": "wxyc",
       "name": "WXYC 89.3 FM",
       "homepageUrl": "https://wxyc.org",
-      "scheduleUrl": "https://wxyc.org/schedule",
+      "scheduleUrl": "https://wxyc.org/programming",
       "scrapedAt": "2026-08-01T23:16:42.796Z",
       "showCount": 9
     },
@@ -1065,7 +827,7 @@
       "name": "WZBC 90.3 FM",
       "homepageUrl": "https://wzbc.org",
       "scheduleUrl": "https://spinitron.com/WZBC/calendar",
-      "scrapedAt": "2026-09-04T03:35:48.051Z",
+      "scrapedAt": "2026-09-04T04:14:45.200Z",
       "showCount": 74
     }
   ],
@@ -2048,6 +1810,12 @@
       "label": "WNMC",
       "callsign": "WNMC",
       "evidenceUrl": "https://soundtap.fm/stations/wnmc"
+    },
+    {
+      "slug": "wnur",
+      "label": "WNUR",
+      "callsign": "WNUR",
+      "evidenceUrl": "https://soundtap.fm/stations/wnur"
     },
     {
       "slug": "wnyc",
