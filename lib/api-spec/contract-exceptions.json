@@ -41,6 +41,8 @@
     { "method": "POST", "path": "/admin/unmatched-spin-backfill/run", "kind": "admin", "reason": "Admin ops endpoint (trigger unmatched-spin convergence batch)." },
     { "method": "GET", "path": "/admin/feed-freshness-health", "kind": "admin", "reason": "Admin health endpoint (now-playing feed freshness)." },
     { "method": "GET", "path": "/admin/resolution-latency-health", "kind": "admin", "reason": "Admin health endpoint (slow-resolution stations)." },
+    { "method": "GET", "path": "/admin/observability/health", "kind": "admin", "reason": "Admin-only broadcast timing and local speech evidence health metrics." },
+    { "method": "GET", "path": "/admin/observability/evidence", "kind": "admin", "reason": "Admin-only inspection of append-only broadcast evidence." },
     { "method": "GET", "path": "/admin/lore/blog-health", "kind": "admin", "reason": "Admin health endpoint (blog ingest freshness)." },
     { "method": "GET", "path": "/admin/lore/list-candidates", "kind": "admin", "reason": "Admin ops endpoint (list scrape candidates)." },
     { "method": "POST", "path": "/admin/lore/list-candidates/{id}/retry", "kind": "admin", "reason": "Admin ops endpoint (retry a failed list candidate)." },

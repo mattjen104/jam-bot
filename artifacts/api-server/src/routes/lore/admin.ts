@@ -157,6 +157,11 @@ import {
 } from "../../lore/unmatched-spin-backfill.js";
 import { triggerBeatoReset } from "../../lore/beato.js";
 import { getPlaybackHealth } from "../../lore/playback-health.js";
+import {
+  getObservabilityHealth,
+  listObservabilityEvidence,
+  type ObservabilityKind,
+} from "../../lore/observability.js";
 
 const router: IRouter = Router();
 const automaticCullCanonicalStation = alias(
@@ -209,6 +214,39 @@ router.use((req, res, next) => {
   }
   next();
 });
+
+// GET /api/admin/observability/health — durable per-station/version evidence
+// health. `unknown` and explicit pipeline failures are separate counters.
+router.get("/admin/observability/health", h(async (_req, res) => {
+  return res.json({ metrics: await getObservabilityHealth() });
+}));
+
+// GET /api/admin/observability/evidence?kind=prediction&stationId=1&limit=100
+// Feature snapshots and provenance are returned verbatim for operator audit.
+router.get("/admin/observability/evidence", h(async (req, res) => {
+  const allowed: readonly ObservabilityKind[] = [
+    "timeline", "prediction", "evaluation", "capture-decision", "capture-outcome",
+    "segment", "claim", "schedule-comparison", "operator-label",
+  ];
+  const kind = typeof req.query["kind"] === "string" ? req.query["kind"] : "";
+  if (!allowed.includes(kind as ObservabilityKind)) {
+    return res.status(400).json({ error: `kind must be one of: ${allowed.join(", ")}` });
+  }
+  const rawStationId = req.query["stationId"];
+  const stationId = rawStationId == null ? undefined : Number(rawStationId);
+  if (stationId !== undefined && (!Number.isInteger(stationId) || stationId <= 0)) {
+    return res.status(400).json({ error: "stationId must be a positive integer" });
+  }
+  const rawLimit = req.query["limit"];
+  const limit = rawLimit == null ? 100 : Number(rawLimit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 250) {
+    return res.status(400).json({ error: "limit must be an integer from 1 to 250" });
+  }
+  return res.json({
+    kind,
+    evidence: await listObservabilityEvidence(kind as ObservabilityKind, limit, stationId),
+  });
+}));
 
 // POST /api/admin/spins — admin-only manual/historical spin entry.
 router.post("/admin/spins", h(async (req, res) => {

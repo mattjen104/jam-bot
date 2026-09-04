@@ -6,8 +6,14 @@ import {
   isPollable,
 } from "./adapters.js";
 import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
-import { IcyWatcher } from "./icy-watcher.js";
+import {
+  IcyWatcher,
+  type IcyMetadataObservation,
+  type IcyTransitionBracket,
+} from "./icy-watcher.js";
 import { parseStreamTitle } from "./icy.js";
+import { recordIcyMetadataObservation } from "./broadcast-timeline.js";
+import { stopSpeechShadowOrchestrator } from "./speech-shadow-orchestrator.js";
 import type { HistoryAdapter, RawSpin, NowPlayingRaw } from "./types.js";
 import {
   recordSpinitronWebResult,
@@ -210,11 +216,21 @@ function startStationWatcher(station: Station): boolean {
   const watcher = new IcyWatcher(station.slug, streamUrl);
   stationWatchers.set(station.id, watcher);
 
-  watcher.on("metadata-observed", (streamTitle: string | null) => {
-    const parsed = streamTitle ? parseStreamTitle(streamTitle) : null;
+  let latestMetadataObservation: IcyMetadataObservation | null = null;
+  let lastTransition: IcyTransitionBracket | null = null;
+  watcher.on("metadata-observation", (observation: IcyMetadataObservation) => {
+    latestMetadataObservation = observation;
+    recordIcyMetadataObservation({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      streamTitle: observation.streamTitle,
+      observedAt: observation.observedAt,
+      monotonicMs: observation.monotonicMs,
+    });
+    const parsed = observation.streamTitle ? parseStreamTitle(observation.streamTitle) : null;
     const quality = classifyMetadataQuality(
       parsed?.rawArtist,
-      parsed?.rawTitle ?? streamTitle,
+      parsed?.rawTitle ?? observation.streamTitle,
     );
     // Usable pairs are recorded by metadata-changed after ingestion so the
     // same atomic update can include written_spin.
@@ -234,10 +250,41 @@ function startStationWatcher(station: Station): boolean {
     });
   });
 
+  watcher.on("metadata-transition", (bracket: IcyTransitionBracket) => {
+    lastTransition = bracket;
+    recordIcyMetadataObservation({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      streamTitle: bracket.nextTitle,
+      observedAt: bracket.newObservedAt,
+      monotonicMs: bracket.newMonotonicMs,
+      transition: {
+        previousTitle: bracket.previousTitle,
+        oldObservedAt: bracket.oldObservedAt,
+        oldMonotonicMs: bracket.oldMonotonicMs,
+      },
+    });
+  });
+
   watcher.on("metadata-changed", (parsed: { rawArtist?: string; rawTitle: string; durationMs?: number; sourceRecordingId?: string }) => {
     const np: NowPlayingRaw = {
       rawArtist: parsed.rawArtist ?? "",
       rawTitle: parsed.rawTitle,
+      ...(latestMetadataObservation
+        ? { metadataObservedAt: latestMetadataObservation.observedAt }
+        : {}),
+      // The transition event is emitted immediately before metadata-changed.
+      // It is kept separately from identity-bearing fields.
+      ...(lastTransition?.nextTitle === latestMetadataObservation?.streamTitle
+        ? {
+            icyTransitionBracket: {
+              oldObservedAt: lastTransition!.oldObservedAt,
+              newObservedAt: lastTransition!.newObservedAt,
+              oldMonotonicMs: lastTransition!.oldMonotonicMs,
+              newMonotonicMs: lastTransition!.newMonotonicMs,
+            },
+          }
+        : {}),
       ...(parsed.durationMs ? { durationMs: parsed.durationMs } : {}),
       ...(parsed.sourceRecordingId
         ? { recordingId: parsed.sourceRecordingId }
@@ -795,6 +842,7 @@ export function stopLorePoller(): void {
   stationWatchers.clear();
   nestedHistoryInFlight.clear();
   stopHostMultiplex();
+  stopSpeechShadowOrchestrator();
   started = false;
 }
 

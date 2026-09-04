@@ -1,0 +1,229 @@
+import { type Station } from "@workspace/db";
+import { appendBroadcastTimelineEvent, appendCaptureDecision, appendCaptureOutcome, appendScheduleComparison, appendTranscriptClaim, appendTranscriptSegment } from "./observability.js";
+import { assertPublicHttpStreamUrl, deriveSpeechEndsThenSustainedMusic, LocalSttAdapter, withTransientSpeechClip } from "./speech-capture.js";
+import { extractExplicitGroundedClaims } from "./speech-grounding.js";
+import { compareTranscriptToSchedule, lookupActiveScheduleEntry } from "./speech-schedule-comparison.js";
+import { SpeechQuotaScheduler, type SpeechMount } from "./speech-scheduler.js";
+import { estimateTalkWindows, type TalkObservation } from "./speech-talk-window.js";
+
+const PRODUCER_VERSION = "task-582.speech-shadow.v1";
+const activeStations = new Set<number>();
+let scheduler: SpeechQuotaScheduler | null = null;
+let stt: LocalSttAdapter | null = null;
+let started = false;
+const talkHistory: TalkObservation[] = [];
+
+function integerEnv(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+/**
+ * Fail closed. In particular, an API key alone can never enable speech
+ * collection: this path accepts a local executable and local model only.
+ */
+export function speechShadowEnabled(env = process.env): boolean {
+  return env["LORE_SPEECH_SHADOW_ENABLED"] === "true" &&
+    env["LORE_SPEECH_CAPTURE_ENABLED"] === "true" &&
+    !!env["LORE_SPEECH_LOCAL_STT_EXECUTABLE"]?.trim() &&
+    !!env["LORE_SPEECH_LOCAL_STT_MODEL"]?.trim() &&
+    !!env["LORE_SPEECH_CLASSIFIER_EXECUTABLE"]?.trim() &&
+    !!env["LORE_SPEECH_SILERO_VAD_EXECUTABLE"]?.trim() &&
+    !!env["LORE_SPEECH_FFMPEG_EXECUTABLE"]?.trim();
+}
+
+export function mountsFor(station: Station): SpeechMount[] {
+  const config = (station.nowPlayingConfig ?? {}) as Record<string, unknown>;
+  const configured = Array.isArray(config.mounts) ? config.mounts : [];
+  const mounts = configured.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const mount = value as { url?: unknown; bitrate?: unknown };
+    if (typeof mount.url !== "string" || !mount.url) return [];
+    return [{ url: mount.url, estimatedCost: typeof mount.bitrate === "number" ? mount.bitrate : 1_000 }];
+  });
+  const fallback = typeof config.streamUrl === "string" && config.streamUrl ? config.streamUrl : station.streamUrl;
+  if (fallback) mounts.push({ url: fallback, estimatedCost: 1_000 });
+  return [...new Map(mounts.map((mount) => [mount.url, mount])).values()];
+}
+
+export function startSpeechShadowOrchestrator(): boolean {
+  if (started) return true;
+  if (!speechShadowEnabled()) return false;
+  scheduler = new SpeechQuotaScheduler({
+    enabled: true,
+    maxCapturesPerStation: integerEnv("LORE_SPEECH_MAX_PER_STATION", 1),
+    maxCapturesPerWindow: integerEnv("LORE_SPEECH_MAX_PER_WINDOW", 3),
+    windowMs: integerEnv("LORE_SPEECH_WINDOW_MS", 30 * 60_000),
+  });
+  stt = new LocalSttAdapter({
+    executable: process.env["LORE_SPEECH_LOCAL_STT_EXECUTABLE"],
+    modelPath: process.env["LORE_SPEECH_LOCAL_STT_MODEL"],
+    timeoutMs: integerEnv("LORE_SPEECH_STT_TIMEOUT_MS", 45_000),
+    maxConcurrency: integerEnv("LORE_SPEECH_MAX_CONCURRENCY", 1),
+    maxCpuMs: integerEnv("LORE_SPEECH_STT_MAX_CPU_MS", 45_000),
+    maxMemoryBytes: integerEnv("LORE_SPEECH_STT_MAX_MEMORY_BYTES", 1_000_000_000),
+    classifier: {
+      executable: process.env["LORE_SPEECH_CLASSIFIER_EXECUTABLE"],
+      modelPath: process.env["LORE_SPEECH_CLASSIFIER_MODEL"]?.trim() || undefined,
+      timeoutMs: integerEnv("LORE_SPEECH_CLASSIFIER_TIMEOUT_MS", 15_000),
+      maxCpuMs: integerEnv("LORE_SPEECH_CLASSIFIER_MAX_CPU_MS", 15_000),
+      maxMemoryBytes: integerEnv("LORE_SPEECH_CLASSIFIER_MAX_MEMORY_BYTES", 512_000_000),
+    },
+    vad: {
+      executable: process.env["LORE_SPEECH_SILERO_VAD_EXECUTABLE"],
+      modelPath: process.env["LORE_SPEECH_SILERO_VAD_MODEL"]?.trim() || undefined,
+      timeoutMs: integerEnv("LORE_SPEECH_VAD_TIMEOUT_MS", 15_000),
+      maxCpuMs: integerEnv("LORE_SPEECH_VAD_MAX_CPU_MS", 15_000),
+      maxMemoryBytes: integerEnv("LORE_SPEECH_VAD_MAX_MEMORY_BYTES", 512_000_000),
+    },
+  });
+  started = true;
+  return true;
+}
+
+export function stopSpeechShadowOrchestrator(): void {
+  started = false;
+  scheduler = null;
+  stt = null;
+  activeStations.clear();
+  talkHistory.length = 0;
+}
+
+/**
+ * Transition candidates are high-ranked talk windows: DJs commonly speak at
+ * boundaries. The station-level active set protects the transient capture
+ * pipeline from overlapping poller/watcher evidence.
+ */
+export function scheduleSpeechTransitionCandidate(station: Station): void {
+  if (!started || !scheduler || !stt || activeStations.has(station.id)) return;
+  const at = new Date();
+  const mounts = mountsFor(station);
+  const rank = estimateTalkWindows(talkHistory, at).find((entry) => entry.stationId === station.id)?.score ?? 0;
+  const admission = scheduler.reserve(station.id, at, mounts);
+  const decisionKey = `speech-shadow:decision:${admission.kind === "sampled" ? admission.reservation.id : `${station.id}:${Math.floor(at.getTime() / 60_000)}`}`;
+  void appendCaptureDecision({
+    stationId: station.id, decidedAt: at, decision: admission.kind,
+    idempotencyKey: decisionKey, producerVersion: PRODUCER_VERSION,
+    outcome: admission.kind === "sampled" ? admission.reason : admission.reason,
+    featureSnapshot: { candidate: "transition", rank, mounts: mounts.length },
+    provenance: { provider: "local_only", source: station.nowPlayingSource ?? "unknown" },
+  }).catch((error) => console.warn("[lore] speech decision append failed", error));
+  if (admission.kind !== "sampled" || admission.reason === "idempotent") return;
+  activeStations.add(station.id);
+  const reservation = admission.reservation;
+  void assertPublicHttpStreamUrl(reservation.mountUrl).then((target) => withTransientSpeechClip(
+    target.pinnedUrl,
+    {
+      ffmpegExecutable: process.env["LORE_SPEECH_FFMPEG_EXECUTABLE"],
+      durationSeconds: integerEnv("LORE_SPEECH_CAPTURE_SECONDS", 30),
+      timeoutMs: integerEnv("LORE_SPEECH_CAPTURE_TIMEOUT_MS", 45_000),
+      originalAuthority: target.originalAuthority,
+      originalHostname: target.originalHostname,
+    },
+    async (clip) => ({ outcome: await stt!.transcribe(clip.path), clip }),
+  )).then(async ({ outcome, clip }) => {
+    const classifierIntervals = "intervals" in outcome ? outcome.intervals : undefined;
+    const boundary = classifierIntervals
+      ? deriveSpeechEndsThenSustainedMusic(classifierIntervals)
+      : null;
+    if (boundary) {
+      await appendBroadcastTimelineEvent({
+        stationId: station.id,
+        eventType: "speech_ends_then_sustained_music",
+        occurredAt: new Date(clip.startedAt.getTime() + boundary.musicStartedAtMs),
+        idempotencyKey: `speech-shadow:timeline:${reservation.id}:speech-music`,
+        producerVersion: PRODUCER_VERSION,
+        outcome: "advisory",
+        featureSnapshot: {
+          ...boundary,
+          intervals: classifierIntervals,
+          captureStartedAt: clip.startedAt.toISOString(),
+          uncertaintyMs: Math.max(0, clip.endedAt.getTime() - clip.startedAt.getTime()),
+          advisoryOnly: true,
+        },
+        provenance: {
+          provider: "local_classifier",
+          classifierVersion: "local_classifier_intervals.v1",
+          identityInput: false,
+        },
+      });
+    }
+    if (outcome.kind === "speech" || outcome.kind === "speech_over_music") {
+      const claims = extractExplicitGroundedClaims(outcome.segments);
+      for (const [index, segment] of outcome.segments.entries()) {
+        const capturedAt = new Date(clip.startedAt.getTime() + segment.startedAtMs);
+        const segmentKey = `speech-shadow:segment:${reservation.id}:${index}`;
+        await appendTranscriptSegment({
+          stationId: station.id, capturedAt, idempotencyKey: segmentKey, producerVersion: PRODUCER_VERSION,
+          outcome: outcome.kind, featureSnapshot: { ...segment, confidence: null },
+          provenance: { provider: "local_stt", model: process.env["LORE_SPEECH_LOCAL_STT_MODEL"], captureStartedAt: clip.startedAt.toISOString() },
+        });
+        for (const [claimIndex, claim] of claims.entries()) {
+          if (claim.segmentIndex !== index) continue;
+          await appendTranscriptClaim({
+            stationId: station.id, claimedAt: capturedAt, segmentIdempotencyKey: segmentKey,
+            idempotencyKey: `${segmentKey}:claim:${claimIndex}`, producerVersion: PRODUCER_VERSION,
+            outcome: "grounded", featureSnapshot: { ...claim }, provenance: { extractor: "exact_pattern.v1" },
+          });
+          if (claim.kind === "dj" || claim.kind === "show") {
+            const scheduled = await lookupActiveScheduleEntry(station.id, station.ianaTimezone, capturedAt);
+            const scheduledValue = claim.kind === "dj" ? scheduled?.djName : scheduled?.showName;
+            const comparison = compareTranscriptToSchedule(claim.value, scheduledValue);
+            await appendScheduleComparison({
+              stationId: station.id,
+              comparedAt: capturedAt,
+              idempotencyKey: `${segmentKey}:schedule:${claimIndex}`,
+              producerVersion: PRODUCER_VERSION,
+              outcome: comparison,
+              featureSnapshot: {
+                claim: {
+                  kind: claim.kind,
+                  value: claim.value,
+                  segmentIndex: claim.segmentIndex,
+                  startedAtMs: claim.startedAtMs,
+                  endedAtMs: claim.endedAtMs,
+                  exactTranscriptSpan: outcome.segments[index]!.text.slice(claim.startChar, claim.endChar),
+                  startChar: claim.startChar,
+                  endChar: claim.endChar,
+                },
+                scheduled: scheduled ? {
+                  value: scheduledValue,
+                  showName: scheduled.showName,
+                  djName: scheduled.djName,
+                  sourceUrl: scheduled.sourceUrl,
+                  extraction: scheduled.extraction,
+                  scheduleKind: scheduled.scheduleKind,
+                } : null,
+                confidence: "deterministic_exact_span",
+              },
+              provenance: {
+                comparison: "normalized_exact_name.v1",
+                scheduleReadOnly: true,
+                clipTime: capturedAt.toISOString(),
+                timezone: station.ianaTimezone,
+              },
+            });
+          }
+        }
+      }
+      talkHistory.push(...outcome.segments.map((segment) => ({
+        stationId: station.id, startedAt: new Date(clip.startedAt.getTime() + segment.startedAtMs),
+        endedAt: new Date(clip.startedAt.getTime() + segment.endedAtMs), speechConfidence: 1,
+      })));
+      if (talkHistory.length > 500) talkHistory.splice(0, talkHistory.length - 500);
+    }
+    return appendCaptureOutcome({
+    stationId: station.id, occurredAt: new Date(), decisionIdempotencyKey: decisionKey,
+    idempotencyKey: `speech-shadow:outcome:${reservation.id}`,
+    producerVersion: PRODUCER_VERSION, outcome: outcome.kind,
+    featureSnapshot: { candidate: "transition", localOnly: true, rank },
+    provenance: { provider: "local_stt", captureStartedAt: at.toISOString() },
+  });
+  }).catch((error) => appendCaptureOutcome({
+    stationId: station.id, occurredAt: new Date(), decisionIdempotencyKey: decisionKey,
+    idempotencyKey: `speech-shadow:outcome:${reservation.id}`,
+    producerVersion: PRODUCER_VERSION, outcome: "capture_failure",
+    featureSnapshot: { candidate: "transition", localOnly: true },
+    provenance: { provider: "local_stt", error: error instanceof Error ? error.message : String(error) },
+  })).finally(() => activeStations.delete(station.id));
+}

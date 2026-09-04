@@ -39,6 +39,8 @@ import {
 } from "./duration-evidence.js";
 import { recordBoundaryTiming } from "./live-timing-health.js";
 import { timingFromRaw } from "./timing.js";
+import { recordConfirmedSpinTimeline } from "./broadcast-timeline.js";
+import { scheduleSpeechTransitionCandidate } from "./speech-shadow-orchestrator.js";
 
 export {
   RESOLUTION_CACHE_VERSION,
@@ -1305,6 +1307,14 @@ async function logSpinIfChangedInner(
     // out the provisional display explicitly.
     if (!wrote) failProvisional("persist-declined");
     if (wrote) {
+      recordConfirmedSpinTimeline({
+        stationId: station.id,
+        source: opts?.source ?? station.nowPlayingSource ?? "unknown",
+        spinId: persisted.spinId,
+        raw: np,
+        liveEvidence: true,
+      });
+      scheduleSpeechTransitionCandidate(station);
       // Check whether this MBID has been logged on any prior calendar day so
       // the SSE event carries the same isFirstSpin flag as the REST response.
       let isFirstSpin = false;
@@ -1509,7 +1519,19 @@ export async function ingestRawSpins(
         enrichLinks: !backfill,
         preserveExistingMetadata: backfill,
       });
-      if (persisted.inserted) logged++;
+      if (persisted.inserted) {
+        logged++;
+        // Archive rows retain their source occurrence time, but are never
+        // evidence about the currently live prediction ledger.
+        recordConfirmedSpinTimeline({
+          stationId: station.id,
+          source,
+          spinId: persisted.spinId,
+          raw,
+          confirmedAt: new Date(),
+          liveEvidence: false,
+        });
+      }
       if (cursorValue) newestCursor = cursorValue;
     }
 

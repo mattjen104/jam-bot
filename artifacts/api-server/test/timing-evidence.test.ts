@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeTimingEvidence } from "../src/lore/timing-evidence.js";
+import {
+  createTimingEvidenceEvent,
+  estimateTimingBoundary,
+  evaluateDelayedBoundary,
+  normalizeTimingEvidence,
+} from "../src/lore/timing-evidence.js";
 import { estimateExpiry } from "../src/lore/expiry.js";
 
 const start = new Date("2026-09-03T12:00:00.000Z");
@@ -70,5 +75,45 @@ describe("normalizeTimingEvidence", () => {
     });
     expect(timing.metadataAudioLagMs).toBeNull();
     expect(timing.estimatedAudibleStartedAt).toEqual(start);
+  });
+});
+
+describe("timing evidence timeline events", () => {
+  it("uses station-scoped deterministic IDs and freezes snapshots", () => {
+    const input = {
+      stationId: 42,
+      eventType: "fingerprint_timing" as const,
+      occurredAt: start,
+      provenance: { basis: "fingerprint" as const, source: "acr", sourceEventId: "match-1" },
+      uncertaintyMs: 3_000,
+      featureSnapshot: { durationMs: 180_000, fingerprintOffsetMs: 64_000 },
+      versionRefs: { recognizerVersion: "acr-v2" },
+    };
+    const one = createTimingEvidenceEvent(input);
+    const retry = createTimingEvidenceEvent({ ...input, occurredAt: new Date(start) });
+    const anotherStation = createTimingEvidenceEvent({ ...input, stationId: 43 });
+    expect(one.id).toBe(retry.id);
+    expect(one.id).not.toBe(anotherStation.id);
+    expect(Object.isFrozen(one)).toBe(true);
+    expect(Object.isFrozen(one.featureSnapshot)).toBe(true);
+    expect(one.occurredAt).not.toBe(start);
+  });
+});
+
+describe("timing boundary estimation", () => {
+  it("projects a capture-end position and delays only through its uncertainty window", () => {
+    const boundary = estimateTimingBoundary({
+      durationMs: 180_000,
+      positionMs: 170_000,
+      observedAt: end,
+      uncertaintyMs: 3_000,
+      now: new Date("2026-09-03T12:00:15.000Z"),
+    });
+    expect(boundary?.estimatedEndedAt.toISOString()).toBe("2026-09-03T12:00:18.000Z");
+    expect(boundary?.remainingMs).toBe(3_000);
+    expect(evaluateDelayedBoundary(boundary, new Date("2026-09-03T12:00:19.000Z")))
+      .toMatchObject({ shouldDelay: true, conclusivelyEnded: false });
+    expect(evaluateDelayedBoundary(boundary, new Date("2026-09-03T12:00:21.000Z")))
+      .toMatchObject({ shouldDelay: false, conclusivelyEnded: true });
   });
 });

@@ -3729,6 +3729,191 @@ export type StationSourceProbe =
   typeof stationSourceProbesTable.$inferSelect;
 
 /**
+ * Immutable operational evidence for the live broadcast pipeline.  These
+ * append-only ledgers deliberately keep the feature packet and version that
+ * produced a decision: aggregate health can be recomputed without guessing
+ * what an older worker knew.  `idempotencyKey` is supplied by the producer and
+ * is unique per ledger, making retries safe without turning evidence into a
+ * mutable current-state record.
+ */
+export const broadcastTimelineEventsTable = pgTable(
+  "broadcast_timeline_events",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    eventType: text("event_type").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("broadcast_timeline_events_idempotency_uq").on(t.idempotencyKey),
+    index("broadcast_timeline_events_station_version_idx").on(t.stationId, t.producerVersion, t.occurredAt),
+  ],
+);
+
+export const boundaryPredictionsTable = pgTable(
+  "boundary_predictions",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    predictedAt: timestamp("predicted_at", { withTimezone: true }).notNull(),
+    predictedBoundaryAt: timestamp("predicted_boundary_at", { withTimezone: true }),
+    producerVersion: text("producer_version").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("boundary_predictions_idempotency_uq").on(t.idempotencyKey),
+    index("boundary_predictions_station_version_idx").on(t.stationId, t.producerVersion, t.predictedAt),
+  ],
+);
+
+export const boundaryEvaluationsTable = pgTable(
+  "boundary_evaluations",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    predictionIdempotencyKey: text("prediction_idempotency_key"),
+    evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    errorMs: integer("error_ms"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("boundary_evaluations_idempotency_uq").on(t.idempotencyKey),
+    index("boundary_evaluations_station_version_idx").on(t.stationId, t.producerVersion, t.evaluatedAt),
+  ],
+);
+
+export const captureDecisionsTable = pgTable(
+  "capture_decisions",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    decision: text("decision").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("capture_decisions_idempotency_uq").on(t.idempotencyKey),
+    index("capture_decisions_station_version_idx").on(t.stationId, t.producerVersion, t.decidedAt),
+  ],
+);
+
+export const captureOutcomesTable = pgTable(
+  "capture_outcomes",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    decisionIdempotencyKey: text("decision_idempotency_key"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("capture_outcomes_idempotency_uq").on(t.idempotencyKey),
+    index("capture_outcomes_station_version_idx").on(t.stationId, t.producerVersion, t.occurredAt),
+  ],
+);
+
+export const transcriptSegmentsTable = pgTable(
+  "transcript_segments",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("transcript_segments_idempotency_uq").on(t.idempotencyKey), index("transcript_segments_station_version_idx").on(t.stationId, t.producerVersion, t.capturedAt)],
+);
+
+export const transcriptClaimsTable = pgTable(
+  "transcript_claims",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    segmentIdempotencyKey: text("segment_idempotency_key"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("transcript_claims_idempotency_uq").on(t.idempotencyKey), index("transcript_claims_station_version_idx").on(t.stationId, t.producerVersion, t.claimedAt)],
+);
+
+export const scheduleComparisonsTable = pgTable(
+  "schedule_comparisons",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    comparedAt: timestamp("compared_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("schedule_comparisons_idempotency_uq").on(t.idempotencyKey), index("schedule_comparisons_station_version_idx").on(t.stationId, t.producerVersion, t.comparedAt)],
+);
+
+export const operatorLabelsTable = pgTable(
+  "operator_labels",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    labeledAt: timestamp("labeled_at", { withTimezone: true }).notNull(),
+    producerVersion: text("producer_version").notNull(),
+    label: text("label").notNull(),
+    outcome: text("outcome").notNull().default("unknown"),
+    featureSnapshot: jsonb("feature_snapshot").$type<Record<string, unknown>>().notNull(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("operator_labels_idempotency_uq").on(t.idempotencyKey), index("operator_labels_station_version_idx").on(t.stationId, t.producerVersion, t.labeledAt)],
+);
+
+export type BroadcastTimelineEvent = typeof broadcastTimelineEventsTable.$inferSelect;
+export type BoundaryPrediction = typeof boundaryPredictionsTable.$inferSelect;
+export type BoundaryEvaluation = typeof boundaryEvaluationsTable.$inferSelect;
+export type CaptureDecision = typeof captureDecisionsTable.$inferSelect;
+export type CaptureOutcome = typeof captureOutcomesTable.$inferSelect;
+export type TranscriptSegment = typeof transcriptSegmentsTable.$inferSelect;
+export type TranscriptClaim = typeof transcriptClaimsTable.$inferSelect;
+export type ScheduleComparison = typeof scheduleComparisonsTable.$inferSelect;
+export type OperatorLabel = typeof operatorLabelsTable.$inferSelect;
+
+/**
  * Per-station/source runtime metadata-quality funnel. Unlike probe evidence,
  * this row is updated by normal polls and persistent watchers and therefore
  * separates source capability from current operational health.

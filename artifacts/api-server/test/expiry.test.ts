@@ -121,6 +121,24 @@ describe("estimateExpiry", () => {
     expect(est?.uncertaintyMs).toBe(30_000);
   });
 
+  it("keeps expiry advisory when a bounded boundary has just passed", () => {
+    const est = estimateExpiry({
+      durationMs: 180_000,
+      playedAt: secsAgo(181),
+      timestampKind: "source",
+      timingUncertaintyMs: 5_000,
+      now: T0,
+    });
+    // The nominal boundary is past, but expiry still reports only a hint; it
+    // never chooses or replaces the currently displayed spin.
+    expect(est).toMatchObject({
+      remainingMs: 0,
+      likelyExpiring: true,
+      positionSource: "played_at",
+      uncertaintyMs: 5_000,
+    });
+  });
+
   it("never treats a receipt timestamp as a track start", () => {
     expect(estimateExpiry({
       durationMs: 180_000,

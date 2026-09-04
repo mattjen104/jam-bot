@@ -20,6 +20,16 @@ export interface NowPlayingRaw {
   /** Precise metadata arrival time; not itself an audible-track boundary. */
   metadataObservedAt?: Date;
   /**
+   * ICY's last old / first new metadata observations.  This is transition
+   * evidence (and its bounded uncertainty), never input to spin identity.
+   */
+  icyTransitionBracket?: {
+    oldObservedAt: Date;
+    newObservedAt: Date;
+    oldMonotonicMs: number;
+    newMonotonicMs: number;
+  };
+  /**
    * ACR fingerprint play offset — how far into the song (ms) the captured
    * clip was, per the provider. Only fingerprint-derived reports carry it.
    */

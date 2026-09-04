@@ -3,6 +3,7 @@ import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
 import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones, seedRollingStone500List, getRollingStone500EntryCount } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
+import { startSpeechShadowOrchestrator } from "./lore/speech-shadow-orchestrator.js";
 import { startLeaseScheduler } from "./lore/socket-leases.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
 import {
@@ -147,6 +148,7 @@ import { applyStoreAuditMigration } from "./lore/store-audit-migration.js";
 import { applyInstrumentalAuditMigration } from "./lore/instrumental-audit-migration.js";
 import { applySpinTimingMigration } from "./lore/spin-timing-migration.js";
 import { applyPlaybackHealthMigration } from "./lore/playback-health-migration.js";
+import { applyObservabilityMigration } from "./lore/observability-migration.js";
 import {
   prunePlaybackHealthRollups,
   startPlaybackHealthRetentionJob,
@@ -209,6 +211,7 @@ async function bootLore(): Promise<void> {
     wireSongEnrichment();
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
+    await runMigration("applyObservabilityMigration", applyObservabilityMigration);
      await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
@@ -374,6 +377,9 @@ async function bootLore(): Promise<void> {
       console.error("[lore] radio-browser ICY backfill failed", err);
     }
     await startLorePoller();
+    // Strictly opt-in local-only shadow sampler; disabled unless every local
+    // runner kill-switch/configuration requirement is present.
+    startSpeechShadowOrchestrator();
     // Run source repair after the normal fleet is scheduled. A station that
     // proves its metadata source during boot is enrolled through the poller's
     // zero-delay live path instead of being trapped behind its list-position

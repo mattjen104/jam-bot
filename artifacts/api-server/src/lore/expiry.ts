@@ -21,6 +21,7 @@
  * real metadata updates (a genuinely new spin) do that. Absent duration ⇒
  * null estimate, no penalty.
  */
+import { estimateTimingBoundary } from "./timing-evidence.js";
 
 /** Remaining time below which a candidate is treated as likely to change. */
 export const LIKELY_EXPIRING_THRESHOLD_MS = 15_000;
@@ -81,9 +82,15 @@ export function estimateExpiry(inputs: ExpiryInputs): ExpiryEstimate | null {
     offsetCapturedAt instanceof Date &&
     !Number.isNaN(offsetCapturedAt.getTime())
   ) {
-    const sinceCapture = now.getTime() - offsetCapturedAt.getTime();
-    if (sinceCapture >= 0) {
-      elapsedMs = playOffsetMs + sinceCapture;
+    const boundary = estimateTimingBoundary({
+      durationMs,
+      positionMs: playOffsetMs,
+      observedAt: offsetCapturedAt,
+      uncertaintyMs: timingUncertaintyMs,
+      now,
+    });
+    if (boundary && now.getTime() >= offsetCapturedAt.getTime()) {
+      elapsedMs = durationMs - (boundary.estimatedEndedAt.getTime() - now.getTime());
       positionSource = "fingerprint";
     }
   }
@@ -91,9 +98,15 @@ export function estimateExpiry(inputs: ExpiryInputs): ExpiryEstimate | null {
   if (elapsedMs == null) {
     if (timestampKind === "fingerprint") return null;
     if (!(playedAt instanceof Date) || Number.isNaN(playedAt.getTime())) return null;
-    const sinceStart = now.getTime() - playedAt.getTime();
-    if (sinceStart < 0) return null;
-    elapsedMs = sinceStart;
+    const boundary = estimateTimingBoundary({
+      durationMs,
+      positionMs: 0,
+      observedAt: playedAt,
+      uncertaintyMs: timingUncertaintyMs,
+      now,
+    });
+    if (!boundary || now.getTime() < playedAt.getTime()) return null;
+    elapsedMs = durationMs - (boundary.estimatedEndedAt.getTime() - now.getTime());
     positionSource = "played_at";
   }
 
