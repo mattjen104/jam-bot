@@ -6,15 +6,17 @@ import { sql } from "drizzle-orm";
  * Existing lyric sentinel rows are migrated conservatively: real lines are
  * `lyrics_found`, -1 rows are `no_result`; no row remains `not_checked`.
  */
-export async function applyInstrumentalAuditMigration(): Promise<void> {
-  await db.execute(sql`
+export async function applyInstrumentalAuditMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
+  await database.execute(sql`
     ALTER TABLE recordings
       ADD COLUMN IF NOT EXISTS lyric_status text NOT NULL DEFAULT 'not_checked',
       ADD COLUMN IF NOT EXISTS lyric_checked_at timestamp,
       ADD COLUMN IF NOT EXISTS lyric_error text
   `);
 
-  await db.execute(sql`
+  await database.execute(sql`
     UPDATE recordings r
     SET
       lyric_status = CASE
@@ -37,7 +39,7 @@ export async function applyInstrumentalAuditMigration(): Promise<void> {
     WHERE r.lyric_status = 'not_checked'
   `);
 
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE TABLE IF NOT EXISTS instrumental_station_audits (
       station_id integer PRIMARY KEY REFERENCES stations(id) ON DELETE CASCADE,
       classification text NOT NULL,
@@ -50,11 +52,11 @@ export async function applyInstrumentalAuditMigration(): Promise<void> {
       updated_at timestamp NOT NULL DEFAULT now()
     )
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS instrumental_station_audits_classification_idx
       ON instrumental_station_audits(classification)
   `);
-  await db.execute(sql`
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS instrumental_station_audits_audited_at_idx
       ON instrumental_station_audits(audited_at)
   `);

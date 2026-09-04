@@ -57,9 +57,11 @@ import {
  * @see artifacts/api-server/src/lore/radio-browser.ts (ERA_GENRE_STATION_PATTERNS, isEraGenreStation)
  * @see artifacts/api-server/src/lore/sleep-stations-migration.ts (runs before this)
  */
-export async function applyEraGenreStationsMigration(): Promise<void> {
+export async function applyEraGenreStationsMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
   // Step 1: ensure the column exists (DDL).
-  await db.execute(sql`
+  await database.execute(sql`
     ALTER TABLE stations
       ADD COLUMN IF NOT EXISTS era_genre_mode boolean NOT NULL DEFAULT false
   `);
@@ -93,7 +95,7 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
   // rows are touched. The explicit blocklist exclusion is required (not just
   // the hidden=false gate) because this migration runs BEFORE the blocklist
   // hide migration at boot — see the header comment.
-  const result = await db.execute<{ rowcount: string }>(sql`
+  const result = await database.execute<{ rowcount: string }>(sql`
     UPDATE stations
     SET
       era_genre_mode = true,
@@ -109,7 +111,7 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
   // Step 2b: repair — clear the era flag from any blocklisted row a previous
   // run of this migration misclassified (blocklist precedence). The row stays
   // hidden (permanent blocklist), it just must not surface in ?mode=era-genre.
-  const repairResult = await db.execute<{ rowcount: string }>(sql`
+  const repairResult = await database.execute<{ rowcount: string }>(sql`
     UPDATE stations
     SET era_genre_mode = false
     WHERE era_genre_mode = true
@@ -119,7 +121,7 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
 
   // Restore rows hidden by the retired era/genre listener pool. Sleep,
   // inactive, and permanent-blocklist rows retain their existing behavior.
-  const unhideResult = await db.execute<{ rowcount: string }>(sql`
+  const unhideResult = await database.execute<{ rowcount: string }>(sql`
     UPDATE stations
     SET hidden = false
     WHERE era_genre_mode = true
@@ -140,7 +142,7 @@ export async function applyEraGenreStationsMigration(): Promise<void> {
   // Gated on era_genre_mode=false so this is a one-time classification: after
   // the first run the migration never touches these rows again, and a later
   // deliberate admin hide (PATCH .../flags) is NOT reverted on restart.
-  const fipResult = await db.execute<{ rowcount: string }>(sql`
+  const fipResult = await database.execute<{ rowcount: string }>(sql`
     UPDATE stations
     SET era_genre_mode = true,
         hidden         = false

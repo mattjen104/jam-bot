@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applyEraGenreStationsMigration } from "../src/lore/era-genre-stations-migration.js";
 import {
   ERA_GENRE_ERA_PATTERNS,
@@ -7,26 +8,18 @@ import {
   RADIO_BROWSER_NAME_BLOCKLIST,
 } from "../src/lore/radio-browser.js";
 
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue({ rowCount: 7 });
   return {
-    ...actual,
-    db: {
-      execute: vi.fn().mockResolvedValue({ rowCount: 7 }),
-    },
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
   };
-});
+}
 
 describe("applyEraGenreStationsMigration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("adds the era_genre_mode column and classifies matching rows", async () => {
-    await expect(applyEraGenreStationsMigration()).resolves.toBeUndefined();
-
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await expect(applyEraGenreStationsMigration(database)).resolves.toBeUndefined();
     expect(execute).toHaveBeenCalledTimes(5);
 
     // Step 1 — idempotent DDL.
@@ -90,11 +83,9 @@ describe("applyEraGenreStationsMigration", () => {
   });
 
   it("is idempotent — a second run issues the same statements without error", async () => {
-    await applyEraGenreStationsMigration();
-    await applyEraGenreStationsMigration();
-
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await applyEraGenreStationsMigration(database);
+    await applyEraGenreStationsMigration(database);
     expect(execute).toHaveBeenCalledTimes(10);
     const firstUpdate = JSON.stringify(execute.mock.calls[1]?.[0]);
     const secondUpdate = JSON.stringify(execute.mock.calls[6]?.[0]);
@@ -102,11 +93,9 @@ describe("applyEraGenreStationsMigration", () => {
   });
 
   it("propagates database errors", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("database unavailable"),
-    );
-    await expect(applyEraGenreStationsMigration()).rejects.toThrow(
+    const { database, execute } = createDatabase();
+    execute.mockRejectedValueOnce(new Error("database unavailable"));
+    await expect(applyEraGenreStationsMigration(database)).rejects.toThrow(
       "database unavailable",
     );
   });

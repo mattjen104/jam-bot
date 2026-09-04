@@ -46,12 +46,14 @@ const {
 
 // ---- Module mocks ----------------------------------------------------------
 
-vi.mock("@workspace/db", () => {
+vi.mock("@workspace/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/db")>();
   // Simulate the drizzle query chain: db.select().from().where().limit(1)
   const limit = mockLimit;
   const where = vi.fn(() => ({ limit }));
   const from = vi.fn(() => ({ where }));
   return {
+    ...actual,
     db: { select: vi.fn(() => ({ from })) },
     stationsTable: {},
     eq: vi.fn(),

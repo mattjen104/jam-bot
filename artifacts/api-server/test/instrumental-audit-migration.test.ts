@@ -1,23 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applyInstrumentalAuditMigration } from "../src/lore/instrumental-audit-migration.js";
 
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue(undefined);
   return {
-    ...actual,
-    db: { execute: vi.fn().mockResolvedValue(undefined) },
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
   };
-});
+}
 
 describe("applyInstrumentalAuditMigration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("is idempotent and issues only guarded DDL/backfill statements", async () => {
-    const { db } = await import("@workspace/db");
-    await expect(applyInstrumentalAuditMigration()).resolves.not.toThrow();
-    const firstPass = (db.execute as ReturnType<typeof vi.fn>).mock.calls
+    const { database, execute } = createDatabase();
+    await expect(applyInstrumentalAuditMigration(database)).resolves.not.toThrow();
+    const firstPass = execute.mock.calls
       .map(([statement]) => JSON.stringify(statement))
       .join("\n");
     expect(firstPass).toContain("ADD COLUMN IF NOT EXISTS lyric_status");
@@ -25,16 +22,14 @@ describe("applyInstrumentalAuditMigration", () => {
     expect(firstPass).toContain("no_result");
     expect(firstPass).not.toContain("instrumental'::text");
 
-    await expect(applyInstrumentalAuditMigration()).resolves.not.toThrow();
-    expect((db.execute as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(10);
+    await expect(applyInstrumentalAuditMigration(database)).resolves.not.toThrow();
+    expect(execute.mock.calls).toHaveLength(10);
   });
 
   it("propagates DB failures to the boot migration registry", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("migration failed"),
-    );
-    await expect(applyInstrumentalAuditMigration()).rejects.toThrow(
+    const { database, execute } = createDatabase();
+    execute.mockRejectedValueOnce(new Error("migration failed"));
+    await expect(applyInstrumentalAuditMigration(database)).rejects.toThrow(
       "migration failed",
     );
   });

@@ -1,19 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applySupportHoldsMigration } from "../src/lore/support-holds-migration.js";
 
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
-  return { ...actual, db: { execute: vi.fn().mockResolvedValue(undefined) } };
-});
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue(undefined);
+  return {
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
+  };
+}
 
 describe("applySupportHoldsMigration", () => {
-  beforeEach(() => vi.clearAllMocks());
-
   it("is additive and idempotent", async () => {
-    await applySupportHoldsMigration();
-    await expect(applySupportHoldsMigration()).resolves.not.toThrow();
-    const { db } = await import("@workspace/db");
-    const calls = (db.execute as ReturnType<typeof vi.fn>).mock.calls;
+    const { database, execute } = createDatabase();
+    await applySupportHoldsMigration(database);
+    await expect(applySupportHoldsMigration(database)).resolves.not.toThrow();
+    const calls = execute.mock.calls;
     expect(calls).toHaveLength(14);
     expect(calls.every(([statement]) => statement && typeof statement === "object")).toBe(true);
   });

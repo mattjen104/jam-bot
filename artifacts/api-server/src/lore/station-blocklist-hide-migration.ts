@@ -46,8 +46,10 @@ import { sql } from "drizzle-orm";
  * @see artifacts/api-server/src/lore/seed.ts (seedStations — COALESCE guard)
  * @see artifacts/api-server/src/routes/lore/admin.ts (PATCH .../now-playing-source)
  */
-export async function applyStationBlocklistHideMigration(): Promise<void> {
-  const result = await db.execute<{ rowcount: string }>(sql`
+export async function applyStationBlocklistHideMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
+  const result = await database.execute<{ rowcount: string }>(sql`
     UPDATE stations
     SET
       hidden = true,
@@ -112,7 +114,7 @@ export async function applyStationBlocklistHideMigration(): Promise<void> {
   // Backfill provenance for rows hidden by an earlier version of this
   // migration. This keeps the admin review surface complete after upgrading
   // an existing catalogue, without touching rows with another known reason.
-  const backfilled = await db.execute(sql`
+  const backfilled = await database.execute(sql`
     UPDATE stations
     SET
       automatic_cull_reason = CASE

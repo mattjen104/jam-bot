@@ -12,8 +12,10 @@ import { sql } from "drizzle-orm";
  * Idempotent: hidden rows leave the ranked candidate set, while the surviving
  * canonical row remains visible on later runs.
  */
-export async function applyStationDuplicateHideMigration(): Promise<void> {
-  const result = await db.execute(sql`
+export async function applyStationDuplicateHideMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
+  const result = await database.execute(sql`
     WITH ranked AS (
       SELECT
         id,
@@ -63,7 +65,7 @@ export async function applyStationDuplicateHideMigration(): Promise<void> {
   // Older deployments hid duplicate rows before provenance was available.
   // Recover their visible canonical peer so operators can review the same
   // information after upgrading.
-  const backfilled = await db.execute(sql`
+  const backfilled = await database.execute(sql`
     WITH visible_ranked AS (
       SELECT
         id,

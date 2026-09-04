@@ -1,26 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applySleepStationsMigration } from "../src/lore/sleep-stations-migration.js";
 
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue({ rowCount: 3 });
   return {
-    ...actual,
-    db: {
-      execute: vi.fn().mockResolvedValue({ rowCount: 3 }),
-    },
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
   };
-});
+}
 
 describe("applySleepStationsMigration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("removes utilities and keeps musical ambient rows in the legacy pool", async () => {
-    await expect(applySleepStationsMigration()).resolves.toBeUndefined();
-
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await expect(applySleepStationsMigration(database)).resolves.toBeUndefined();
     expect(execute).toHaveBeenCalledTimes(3);
 
     // Step 1 — idempotent DDL.
@@ -69,11 +62,9 @@ describe("applySleepStationsMigration", () => {
   });
 
   it("is idempotent — a second run issues the same statements without error", async () => {
-    await applySleepStationsMigration();
-    await applySleepStationsMigration();
-
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await applySleepStationsMigration(database);
+    await applySleepStationsMigration(database);
     expect(execute).toHaveBeenCalledTimes(6);
     expect(JSON.stringify(execute.mock.calls[4]?.[0]))
       .toBe(JSON.stringify(execute.mock.calls[1]?.[0]));
@@ -82,11 +73,9 @@ describe("applySleepStationsMigration", () => {
   });
 
   it("propagates database errors", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("database unavailable"),
-    );
-    await expect(applySleepStationsMigration()).rejects.toThrow(
+    const { database, execute } = createDatabase();
+    execute.mockRejectedValueOnce(new Error("database unavailable"));
+    await expect(applySleepStationsMigration(database)).rejects.toThrow(
       "database unavailable",
     );
   });

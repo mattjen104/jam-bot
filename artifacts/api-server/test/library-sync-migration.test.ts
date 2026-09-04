@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applyLibrarySyncMigration } from "../src/lore/library-sync-migration.js";
 
 /**
@@ -14,45 +15,40 @@ import { applyLibrarySyncMigration } from "../src/lore/library-sync-migration.js
  *     record them in the failure registry; it is the caller's responsibility
  *     to decide whether to crash the boot sequence.
  *
- * The mock replaces @workspace/db so no real database connection is needed.
+ * Each test injects a local executor so no real database connection is needed.
  */
-
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue(undefined);
   return {
-    ...actual,
-    db: {
-      execute: vi.fn().mockResolvedValue(undefined),
-    },
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
   };
-});
+}
 
 describe("applyLibrarySyncMigration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("resolves without throwing on the first boot call", async () => {
-    await expect(applyLibrarySyncMigration()).resolves.not.toThrow();
+    const { database } = createDatabase();
+    await expect(applyLibrarySyncMigration(database)).resolves.not.toThrow();
   });
 
   it("is idempotent — a second call also resolves without throwing", async () => {
-    await applyLibrarySyncMigration();
-    await expect(applyLibrarySyncMigration()).resolves.not.toThrow();
+    const { database } = createDatabase();
+    await applyLibrarySyncMigration(database);
+    await expect(applyLibrarySyncMigration(database)).resolves.not.toThrow();
   });
 
   it("executes exactly two SQL statements per call (CREATE TABLE + ALTER TABLE)", async () => {
-    await applyLibrarySyncMigration();
-    const { db } = await import("@workspace/db");
+    const { database, execute } = createDatabase();
+    await applyLibrarySyncMigration(database);
     // Statement 1: CREATE TABLE IF NOT EXISTS library_sync_jobs
     // Statement 2: ALTER TABLE … ADD COLUMN IF NOT EXISTS committed_offset / resumed_from / matched_json
-    expect((db.execute as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    expect(execute.mock.calls).toHaveLength(2);
   });
 
   it("passes truthy Drizzle SQL objects (not raw strings) to db.execute", async () => {
-    await applyLibrarySyncMigration();
-    const { db } = await import("@workspace/db");
-    const calls = (db.execute as ReturnType<typeof vi.fn>).mock.calls;
+    const { database, execute } = createDatabase();
+    await applyLibrarySyncMigration(database);
+    const calls = execute.mock.calls;
     for (const [sqlArg] of calls) {
       expect(sqlArg).toBeTruthy();
       expect(typeof sqlArg).toBe("object");
@@ -60,28 +56,24 @@ describe("applyLibrarySyncMigration", () => {
   });
 
   it("propagates DB errors so runMigration can record them in the failure registry", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("relation does not exist"),
-    );
+    const { database, execute } = createDatabase();
+    execute.mockRejectedValueOnce(new Error("relation does not exist"));
     // The migration must re-throw — error handling belongs to runMigration,
     // not to the individual migration function.
-    await expect(applyLibrarySyncMigration()).rejects.toThrow("relation does not exist");
+    await expect(applyLibrarySyncMigration(database)).rejects.toThrow("relation does not exist");
   });
 
   it("a subsequent clean call succeeds after a previous failed call", async () => {
-    const { db } = await import("@workspace/db");
+    const { database, execute } = createDatabase();
     // First call throws on the first statement.
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("transient error"),
-    );
-    await expect(applyLibrarySyncMigration()).rejects.toThrow("transient error");
+    execute.mockRejectedValueOnce(new Error("transient error"));
+    await expect(applyLibrarySyncMigration(database)).rejects.toThrow("transient error");
 
-    vi.clearAllMocks();
-    (db.execute as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    execute.mockClear();
+    execute.mockResolvedValue(undefined);
 
     // Second call with a healthy DB succeeds and runs both statements.
-    await expect(applyLibrarySyncMigration()).resolves.not.toThrow();
-    expect((db.execute as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    await expect(applyLibrarySyncMigration(database)).resolves.not.toThrow();
+    expect(execute.mock.calls).toHaveLength(2);
   });
 });

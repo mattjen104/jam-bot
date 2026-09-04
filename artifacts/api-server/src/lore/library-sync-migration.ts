@@ -7,8 +7,10 @@ import { sql } from "drizzle-orm";
  * - Resume columns: `committed_offset`, `resumed_from`, `matched_json`.
  * Safe to run on every boot — uses CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS.
  */
-export async function applyLibrarySyncMigration(): Promise<void> {
-  await db.execute(sql`
+export async function applyLibrarySyncMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
+  await database.execute(sql`
     CREATE TABLE IF NOT EXISTS library_sync_jobs (
       id            serial PRIMARY KEY,
       user_id       integer NOT NULL REFERENCES lore_users(id),
@@ -25,7 +27,7 @@ export async function applyLibrarySyncMigration(): Promise<void> {
   `);
 
   // Resume-support columns — added after initial rollout; idempotent.
-  await db.execute(sql`
+  await database.execute(sql`
     ALTER TABLE library_sync_jobs
       ADD COLUMN IF NOT EXISTS committed_offset integer NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS resumed_from     integer,

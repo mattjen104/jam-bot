@@ -1,26 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applyStationBlocklistHideMigration } from "../src/lore/station-blocklist-hide-migration.js";
 
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue({ rowCount: 2 });
   return {
-    ...actual,
-    db: {
-      execute: vi.fn().mockResolvedValue({ rowCount: 2 }),
-    },
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
   };
-});
+}
 
 describe("applyStationBlocklistHideMigration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("runs the idempotent hide update for blocklisted and dead-end stations", async () => {
-    await expect(applyStationBlocklistHideMigration()).resolves.toBeUndefined();
-
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await expect(applyStationBlocklistHideMigration(database)).resolves.toBeUndefined();
     expect(execute).toHaveBeenCalledTimes(2);
     const hideSql = execute.mock.calls[0]?.[0];
     const backfillSql = execute.mock.calls[1]?.[0];
@@ -41,9 +34,8 @@ describe("applyStationBlocklistHideMigration", () => {
   });
 
   it("covers the coffee-shop/covers/mood patterns retroactively", async () => {
-    await applyStationBlocklistHideMigration();
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await applyStationBlocklistHideMigration(database);
     const rendered: string = JSON.stringify(execute.mock.calls[0]?.[0]);
     for (const pattern of [
       "exclusively ",
@@ -72,9 +64,8 @@ describe("applyStationBlocklistHideMigration", () => {
   });
 
   it("never re-hides or reclassifies sleep-mode stations", async () => {
-    await applyStationBlocklistHideMigration();
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await applyStationBlocklistHideMigration(database);
     const rendered: string = JSON.stringify(execute.mock.calls[0]?.[0]);
     // The guard keeps sleep stations owned by the sleep migration — this
     // migration must skip rows where sleep_mode is already true.
@@ -82,23 +73,21 @@ describe("applyStationBlocklistHideMigration", () => {
   });
 
   it("propagates database errors", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("database unavailable"),
-    );
+    const { database, execute } = createDatabase();
+    execute.mockRejectedValueOnce(new Error("database unavailable"));
 
-    await expect(applyStationBlocklistHideMigration()).rejects.toThrow(
+    await expect(applyStationBlocklistHideMigration(database)).rejects.toThrow(
       "database unavailable",
     );
   });
 
   it("propagates provenance-backfill errors", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>)
+    const { database, execute } = createDatabase();
+    execute
       .mockResolvedValueOnce({ rowCount: 0 })
       .mockRejectedValueOnce(new Error("backfill unavailable"));
 
-    await expect(applyStationBlocklistHideMigration()).rejects.toThrow(
+    await expect(applyStationBlocklistHideMigration(database)).rejects.toThrow(
       "backfill unavailable",
     );
   });

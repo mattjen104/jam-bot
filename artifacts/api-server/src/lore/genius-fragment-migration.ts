@@ -13,8 +13,10 @@ const MIGRATION_NAME = "applyGeniusFragmentPointerMigration";
  * keeps the raw text available until every existing row has been measured and
  * hashed, while the completion ledger makes subsequent boots a no-op.
  */
-export async function applyGeniusFragmentPointerMigration(): Promise<void> {
-  await db.transaction(async (tx) => {
+export async function applyGeniusFragmentPointerMigration(
+  database: Pick<typeof db, "transaction"> = db,
+): Promise<void> {
+  await database.transaction(async (tx) => {
     // Serialize concurrent callers: this transaction takes an AccessShare lock
     // (the SELECTs below) before AccessExclusive (the ALTER TABLEs), which
     // deadlocks (40P01) when two copies run in parallel test workers.

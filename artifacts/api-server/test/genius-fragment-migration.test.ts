@@ -1,25 +1,24 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 
-const execute = vi.fn();
-const transaction = vi.fn(async (callback: (tx: { execute: typeof execute }) => Promise<void>) =>
-  callback({ execute }),
-);
+import { applyGeniusFragmentPointerMigration } from "../src/lore/genius-fragment-migration.js";
 
-vi.mock("@workspace/db", () => ({
-  db: { transaction },
-}));
-
-const { applyGeniusFragmentPointerMigration } = await import(
-  "../src/lore/genius-fragment-migration.js"
-);
+function createDatabase() {
+  const execute = vi.fn();
+  const transaction = vi.fn(
+    async (callback: (tx: { execute: typeof execute }) => Promise<void>) =>
+      callback({ execute }),
+  );
+  return {
+    database: { transaction } as unknown as Pick<typeof db, "transaction">,
+    execute,
+  };
+}
 
 describe("Genius fragment pointer migration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("backfills normalized receipts before dropping the legacy text column", async () => {
+    const { database, execute } = createDatabase();
     execute
       .mockResolvedValueOnce({ rows: [] }) // advisory lock
       .mockResolvedValueOnce({ rows: [] }) // completion ledger
@@ -31,7 +30,7 @@ describe("Genius fragment pointer migration", () => {
       }) // legacy rows
       .mockResolvedValue({ rows: [] });
 
-    await expect(applyGeniusFragmentPointerMigration()).resolves.toBeUndefined();
+    await expect(applyGeniusFragmentPointerMigration(database)).resolves.toBeUndefined();
 
     const calls = execute.mock.calls;
     const statements = calls.map(([statement]) => {
@@ -52,11 +51,12 @@ describe("Genius fragment pointer migration", () => {
   });
 
   it("does not touch rows again after the completion ledger is present", async () => {
+    const { database, execute } = createDatabase();
     execute
       .mockResolvedValueOnce({ rows: [] }) // advisory lock
       .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] });
 
-    await applyGeniusFragmentPointerMigration();
+    await applyGeniusFragmentPointerMigration(database);
 
     // Advisory lock + completion-ledger check only — no row-touching DDL/DML.
     expect(execute).toHaveBeenCalledTimes(2);

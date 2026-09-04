@@ -1,26 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applyStationDuplicateHideMigration } from "../src/lore/station-duplicate-hide-migration.js";
 
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue({ rowCount: 3 });
   return {
-    ...actual,
-    db: {
-      execute: vi.fn().mockResolvedValue({ rowCount: 3 }),
-    },
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
   };
-});
+}
 
 describe("applyStationDuplicateHideMigration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("soft-hides only lower-ranked Radio Browser copies of exact streams", async () => {
-    await expect(applyStationDuplicateHideMigration()).resolves.toBeUndefined();
-
-    const { db } = await import("@workspace/db");
-    const execute = db.execute as ReturnType<typeof vi.fn>;
+    const { database, execute } = createDatabase();
+    await expect(applyStationDuplicateHideMigration(database)).resolves.toBeUndefined();
     expect(execute).toHaveBeenCalledTimes(2);
     const rendered = JSON.stringify(execute.mock.calls[0]?.[0]);
     const backfill = JSON.stringify(execute.mock.calls[1]?.[0]);
@@ -43,23 +36,21 @@ describe("applyStationDuplicateHideMigration", () => {
   });
 
   it("propagates database errors", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("database unavailable"),
-    );
+    const { database, execute } = createDatabase();
+    execute.mockRejectedValueOnce(new Error("database unavailable"));
 
-    await expect(applyStationDuplicateHideMigration()).rejects.toThrow(
+    await expect(applyStationDuplicateHideMigration(database)).rejects.toThrow(
       "database unavailable",
     );
   });
 
   it("propagates provenance-backfill errors", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>)
+    const { database, execute } = createDatabase();
+    execute
       .mockResolvedValueOnce({ rowCount: 0 })
       .mockRejectedValueOnce(new Error("backfill unavailable"));
 
-    await expect(applyStationDuplicateHideMigration()).rejects.toThrow(
+    await expect(applyStationDuplicateHideMigration(database)).rejects.toThrow(
       "backfill unavailable",
     );
   });

@@ -20,16 +20,18 @@ import { sql } from "drizzle-orm";
  *
  * @see artifacts/api-server/src/lore/radio-browser.ts
  */
-export async function applySleepStationsMigration(): Promise<void> {
+export async function applySleepStationsMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
   // Step 1: ensure the column exists (DDL).
-  await db.execute(sql`
+  await database.execute(sql`
     ALTER TABLE stations
       ADD COLUMN IF NOT EXISTS sleep_mode boolean NOT NULL DEFAULT false
   `);
 
   // Step 2: remove non-music utility rows from the ambient pool while keeping
   // them soft-hidden so historical station/spin data remains intact.
-  await db.execute(sql`
+  await database.execute(sql`
     UPDATE stations
     SET
       sleep_mode = false,
@@ -50,7 +52,7 @@ export async function applySleepStationsMigration(): Promise<void> {
   `);
 
   // Step 3: keep musical ambient channels in the legacy ambient pool.
-  const result = await db.execute<{ rowcount: string }>(sql`
+  const result = await database.execute<{ rowcount: string }>(sql`
     UPDATE stations
     SET
       sleep_mode = true,
