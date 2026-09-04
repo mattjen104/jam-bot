@@ -254,6 +254,31 @@ const VERIFIED_SCHEDULE_SOURCE_REPAIRS = [
  */
 function indieInternetStations(): InsertStation[] {
   return [
+    // ByteFM — Hamburg-based German music broadcaster. Keep the official
+    // 192k stream as the canonical Lore identity; the separate HH-UKW Radio
+    // Browser row is a lower-quality regional alias and is quarantined by
+    // applyLocalRosterRepair without touching any history it may acquire.
+    {
+      slug: "bytefm-192k",
+      tags: ["anchor"],
+      name: "ByteFM",
+      org: "ByteFM",
+      country: "DE",
+      city: "Hamburg",
+      streamUrl: "https://bytefm.cast.addradio.de/bytefm/main/high/stream",
+      streamQuality: "192kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.byte.fm/",
+      scheduleUrl: "https://www.byte.fm/programm",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://bytefm.cast.addradio.de/bytefm/main/high/stream",
+      },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      sortOrder: 555,
+    },
     // Dublab — LA-based non-profit internet radio, launched 1999. Weekly
     // show schedule published at dublab.com/schedule.
     // Stream: Airtime Pro's direct TLS Icecast mount (explicit port 8000).
@@ -985,6 +1010,7 @@ const ICY_HEALTH_SEEDS: Array<{
   // publicly accessible now-playing API was found after investigation (2026-07).
   // CKCU was also omitted for the same ICY reason but has been upgraded to use
   // Spinitron (spinitron.com/CKCU) — it no longer needs an ICY health row.
+  { stationSlug: "bytefm-192k", radioBrowserUuid: "manual-bytefm-192k" },
   { stationSlug: "cfuv", radioBrowserUuid: "9619dcac-0601-11e8-ae97-52543be04c81" },
   { stationSlug: "cjsr", radioBrowserUuid: "961a1782-0601-11e8-ae97-52543be04c81" },
   { stationSlug: "ckut", radioBrowserUuid: "c25963ed-7ef5-4789-b8ca-190cbb110154" },
@@ -1013,27 +1039,75 @@ export async function ensureIcyHealthRows(): Promise<void> {
       .limit(1);
     if (!station) continue;
 
-    const [rbRow] = await db
-      .insert(radioBrowserStationsTable)
-      .values({
-        radioBrowserUuid: ref.radioBrowserUuid,
-        streamUrl: seed.streamUrl,
-        name: seed.name,
-        stationId: station.id,
+    // A station may already have one or more Radio Browser rows from
+    // discovery. Reuse the first real row for the canonical config instead
+    // of creating a second health identity; synthetic rows remain the
+    // fallback for curated stations absent from Radio Browser.
+    const existingRows = await db
+      .select({
+        id: radioBrowserStationsTable.id,
+        radioBrowserUuid: radioBrowserStationsTable.radioBrowserUuid,
       })
-      .onConflictDoUpdate({
-        target: radioBrowserStationsTable.radioBrowserUuid,
-        set: {
-          streamUrl: seed.streamUrl,
-          name: seed.name,
-          stationId: station.id,
-          icyStatus: "active",
-          consecutiveErrors: 0,
-          updatedAt: new Date(),
-        },
-      })
-      .returning({ id: radioBrowserStationsTable.id });
+      .from(radioBrowserStationsTable)
+      .where(
+        and(
+          eq(radioBrowserStationsTable.stationId, station.id),
+          eq(radioBrowserStationsTable.streamUrl, seed.streamUrl),
+        ),
+      )
+      .orderBy(
+        sql`CASE WHEN ${radioBrowserStationsTable.radioBrowserUuid} LIKE 'manual-%' THEN 1 ELSE 0 END`,
+        radioBrowserStationsTable.id,
+      );
+    const existing = existingRows[0];
+    const [rbRow] = existing
+      ? await db
+          .update(radioBrowserStationsTable)
+          .set({
+            name: seed.name,
+            icyStatus: "active",
+            consecutiveErrors: 0,
+            updatedAt: new Date(),
+          })
+          .where(eq(radioBrowserStationsTable.id, existing.id))
+          .returning({ id: radioBrowserStationsTable.id })
+      : await db
+          .insert(radioBrowserStationsTable)
+          .values({
+            radioBrowserUuid: ref.radioBrowserUuid,
+            streamUrl: seed.streamUrl,
+            name: seed.name,
+            stationId: station.id,
+          })
+          .onConflictDoUpdate({
+            target: radioBrowserStationsTable.radioBrowserUuid,
+            set: {
+              streamUrl: seed.streamUrl,
+              name: seed.name,
+              stationId: station.id,
+              icyStatus: "active",
+              consecutiveErrors: 0,
+              updatedAt: new Date(),
+            },
+          })
+          .returning({ id: radioBrowserStationsTable.id });
     if (!rbRow) continue;
+
+    // A prior boot may have created a synthetic fallback before discovery
+    // supplied a real row. It has no spin history of its own and is safe to
+    // remove once the real row is selected.
+    if (existing && !existing.radioBrowserUuid.startsWith("manual-")) {
+      await db
+        .delete(radioBrowserStationsTable)
+        .where(
+          and(
+            eq(radioBrowserStationsTable.stationId, station.id),
+            eq(radioBrowserStationsTable.streamUrl, seed.streamUrl),
+            sql`${radioBrowserStationsTable.radioBrowserUuid} LIKE 'manual-%'`,
+            sql`${radioBrowserStationsTable.id} <> ${existing.id}`,
+          ),
+        );
+    }
 
     const baseConfig =
       station.nowPlayingConfig && typeof station.nowPlayingConfig === "object"

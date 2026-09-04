@@ -249,6 +249,11 @@ export function auditSoundtapIdentity<T extends SoundtapIdentityCandidate>(
 
   for (const source of soundtap) {
     const ranked = stations
+      // Hidden/inactive rows may retain useful history after an operator
+      // resolves a duplicate. They are not eligible identities: considering
+      // them here would keep the Soundtap brand ambiguous forever and could
+      // make a later trial target a quarantined row.
+      .filter((station) => station.active !== false && station.hidden !== true)
       .map((station) => {
         const signals = identitySignals(source, station);
         return {
@@ -435,6 +440,10 @@ async function main(): Promise<void> {
       scheduleUrl: stationsTable.scheduleUrl,
       active: stationsTable.active,
       hidden: stationsTable.hidden,
+      source: stationsTable.source,
+      nowPlayingSource: stationsTable.nowPlayingSource,
+      automaticCullReason: stationsTable.automaticCullReason,
+      automaticCullCanonicalStationId: stationsTable.automaticCullCanonicalStationId,
       scrapedAt: stationsTable.scheduleScrapedAt,
       showCount: stationsTable.upcomingShowCount,
       lastAliveAt: stationsTable.lastAliveAt,
@@ -484,6 +493,21 @@ async function main(): Promise<void> {
         .groupBy(spinsTable.stationId)
     : [];
   const observationsById = new Map(observations.map((row) => [row.stationId, row]));
+  const historicalSpinRows = observationStationIds.length
+    ? await db
+        .select({
+          stationId: spinsTable.stationId,
+          spins: sql<number>`count(*)::int`,
+        })
+        .from(spinsTable)
+        .where(sql`${spinsTable.stationId} = any(array[${sql.join(
+          observationStationIds.map((id) => sql`${id}`), sql`, `,
+        )}]::integer[])`)
+        .groupBy(spinsTable.stationId)
+    : [];
+  const historicalSpinsById = new Map(
+    historicalSpinRows.map((row) => [row.stationId, row.spins]),
+  );
   for (const station of lore) {
     const trial = readMonitoredTrial(station.config);
     if (!trial) continue;
@@ -539,10 +563,15 @@ async function main(): Promise<void> {
         id: match.station.id,
         slug: match.station.slug,
         name: match.station.name,
+        source: match.station.source,
+        streamUrl: match.station.streamUrl,
+        nowPlayingSource: match.station.nowPlayingSource,
         active: match.station.active,
         hidden: match.station.hidden,
         homepageUrl: match.station.homepageUrl,
         scheduleUrl: match.station.scheduleUrl,
+        streamHealthy: !!match.station.lastAliveAt,
+        lastAliveAt: match.station.lastAliveAt,
       },
       observationWindow: {
         days: OBSERVATION_DAYS,
@@ -550,6 +579,7 @@ async function main(): Promise<void> {
         endsAt: trial?.endsAt ?? now.toISOString(),
         completed: windowComplete,
         spins: observation.spins,
+        totalSpins: historicalSpinsById.get(match.station.id) ?? 0,
         resolved: observation.resolved,
         recordings: observation.recordings,
         artists: observation.artists,
@@ -623,6 +653,44 @@ async function main(): Promise<void> {
     showSlotCoverage: coverage[0]?.slots ?? 0,
     officialScheduleSources: coverage[0]?.sources ?? 0,
     matchedStations,
+    reviewedDuplicateResolutions: lore
+      .filter((station) =>
+        station.hidden === true &&
+        station.active === false &&
+        station.automaticCullReason === "duplicate_stream" &&
+        typeof station.automaticCullCanonicalStationId === "number",
+      )
+      .map((alias) => {
+        const canonical = lore.find(
+          (station) => station.id === alias.automaticCullCanonicalStationId,
+        );
+        return {
+          alias: {
+            id: alias.id,
+            slug: alias.slug,
+            name: alias.name,
+            streamUrl: alias.streamUrl,
+            totalSpins: historicalSpinsById.get(alias.id) ?? 0,
+            active: alias.active,
+            hidden: alias.hidden,
+          },
+          canonical: canonical
+            ? {
+                id: canonical.id,
+                slug: canonical.slug,
+                name: canonical.name,
+                streamUrl: canonical.streamUrl,
+                homepageUrl: canonical.homepageUrl,
+                scheduleUrl: canonical.scheduleUrl,
+                streamHealthy: !!canonical.lastAliveAt,
+                totalSpins: historicalSpinsById.get(canonical.id) ?? 0,
+                active: canonical.active,
+                hidden: canonical.hidden,
+              }
+            : null,
+        };
+      })
+      .sort((a, b) => a.alias.id - b.alias.id),
     brandedMatches: matchedStations.filter((row) => row.identity.kind === "branded_match"),
     ambiguousStations: selection.ambiguous.map((entry) => ({
       soundtap: entry.soundtap,

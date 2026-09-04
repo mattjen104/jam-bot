@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-04T15:12:03.886Z",
+  "generatedAt": "2026-09-04T15:35:00.492Z",
   "methodology": {
     "identity": "Evidence-weighted comparison of callsign, normalized brand/organization, official domains, geography, stream identity, and configuration. Callsign alone cannot verify identity; conflicts are quarantined.",
     "sourceSnapshot": "research/sources/soundtap-home.md",
@@ -11,14 +11,14 @@
     "shows": 7713
   },
   "cohorts": {
-    "shared": 30,
-    "brandedMatches": 5,
-    "ambiguous": 4,
-    "trulyAbsent": 205
+    "shared": 33,
+    "brandedMatches": 7,
+    "ambiguous": 0,
+    "trulyAbsent": 206
   },
-  "sharedWithShows": 23,
-  "showSlotCoverage": 910,
-  "officialScheduleSources": 16,
+  "sharedWithShows": 24,
+  "showSlotCoverage": 918,
+  "officialScheduleSources": 17,
   "matchedStations": [
     {
       "soundtap": "kfjc",
@@ -47,17 +47,23 @@
         "id": 765730,
         "slug": "kfjc",
         "name": "KFJC 89.7 FM",
+        "source": "curated",
+        "streamUrl": "http://netcast.kfjc.org/kfjc-128k-mp3",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://kfjc.org",
-        "scheduleUrl": "https://kfjc.org/listen/broadcast-forecast"
+        "scheduleUrl": "https://kfjc.org/listen/broadcast-forecast",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T14:45:24.887Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 44,
+        "totalSpins": 44,
         "resolved": 0,
         "recordings": 0,
         "artists": 30,
@@ -68,6 +74,61 @@
       },
       "recommendation": "reject",
       "recommendationReason": "20 or more Lore observations yielded no resolved recordings"
+    },
+    {
+      "soundtap": "bytefm",
+      "soundtapLabel": "ByteFM",
+      "evidenceUrl": "https://soundtap.fm/stations/bytefm",
+      "identity": {
+        "kind": "branded_match",
+        "confidence": "high",
+        "score": 75,
+        "signals": [
+          {
+            "signal": "brand",
+            "outcome": "supports",
+            "reason": "normalized brand \"bytefm\" agrees",
+            "weight": 60
+          },
+          {
+            "signal": "geography",
+            "outcome": "supports",
+            "reason": "country DE agrees",
+            "weight": 15
+          }
+        ]
+      },
+      "lore": {
+        "id": 10753,
+        "slug": "bytefm-192k",
+        "name": "ByteFM",
+        "source": "curated",
+        "streamUrl": "https://bytefm.cast.addradio.de/bytefm/main/high/stream",
+        "nowPlayingSource": "radio_browser_icy",
+        "active": true,
+        "hidden": false,
+        "homepageUrl": "https://www.byte.fm/",
+        "scheduleUrl": "https://www.byte.fm/programm",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T22:13:05.234Z"
+      },
+      "observationWindow": {
+        "days": 7,
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
+        "completed": true,
+        "spins": 0,
+        "totalSpins": 0,
+        "resolved": 0,
+        "recordings": 0,
+        "artists": 0,
+        "resolutionRate": null,
+        "latestSpinAt": null,
+        "qualityTier": "unscored",
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
     },
     {
       "soundtap": "cjsf",
@@ -96,17 +157,23 @@
         "id": 432351,
         "slug": "cjsf",
         "name": "CJSF 90.1 FM",
+        "source": "curated",
+        "streamUrl": "https://www.cjsf.ca/streaming",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.cjsf.ca",
-        "scheduleUrl": "https://www.cjsf.ca/schedule"
+        "scheduleUrl": "https://www.cjsf.ca/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:08:28.097Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -145,17 +212,23 @@
         "id": 65351,
         "slug": "ckcu",
         "name": "CKCU 93.1 FM",
+        "source": "curated",
+        "streamUrl": "https://stream2.statsradio.com:8124/stream",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://ckcu.ca",
-        "scheduleUrl": "https://cod.ckcufm.com/programs/guide.html"
+        "scheduleUrl": "https://cod.ckcufm.com/programs/guide.html",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T22:04:49.531Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -194,17 +267,23 @@
         "id": 65345,
         "slug": "ckut",
         "name": "CKUT 90.3 FM",
+        "source": "curated",
+        "streamUrl": "http://delray.ckut.ca:8000/903fm-128-stereo",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://ckut.ca",
-        "scheduleUrl": "https://ckut.ca/table"
+        "scheduleUrl": "https://ckut.ca/table",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T21:58:55.560Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 7,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -215,6 +294,61 @@
       },
       "recommendation": "trial",
       "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
+      "soundtap": "dublab",
+      "soundtapLabel": "dublab",
+      "evidenceUrl": "https://soundtap.fm/stations/dublab",
+      "identity": {
+        "kind": "branded_match",
+        "confidence": "high",
+        "score": 75,
+        "signals": [
+          {
+            "signal": "brand",
+            "outcome": "supports",
+            "reason": "normalized brand \"dublab\" agrees",
+            "weight": 60
+          },
+          {
+            "signal": "geography",
+            "outcome": "supports",
+            "reason": "country US agrees",
+            "weight": 15
+          }
+        ]
+      },
+      "lore": {
+        "id": 30654,
+        "slug": "dublab",
+        "name": "Dublab",
+        "source": "curated",
+        "streamUrl": "https://dublab.out.airtime.pro:8000/dublab_a",
+        "nowPlayingSource": "radio_browser_icy",
+        "active": true,
+        "hidden": false,
+        "homepageUrl": "https://dublab.com",
+        "scheduleUrl": "https://dublab.com/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T05:52:44.347Z"
+      },
+      "observationWindow": {
+        "days": 7,
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
+        "completed": true,
+        "spins": 138,
+        "totalSpins": 584,
+        "resolved": 37,
+        "recordings": 33,
+        "artists": 70,
+        "resolutionRate": 0.26811594202898553,
+        "latestSpinAt": "2026-09-04 15:04:34.733",
+        "qualityTier": "promising",
+        "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
       "soundtap": "kalx",
@@ -243,22 +377,28 @@
         "id": 2709,
         "slug": "kalx",
         "name": "KALX 90.7 FM",
+        "source": "curated",
+        "streamUrl": "https://stream.kalx.berkeley.edu:8443/kalx-128.mp3",
+        "nowPlayingSource": "spinitron_web",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://kalx.berkeley.edu",
-        "scheduleUrl": "https://spinitron.com/KALX/calendar"
+        "scheduleUrl": "https://spinitron.com/KALX/calendar",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T22:01:45.744Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 593,
-        "resolved": 306,
-        "recordings": 290,
-        "artists": 479,
-        "resolutionRate": 0.5160202360876898,
-        "latestSpinAt": "2026-09-04 14:15:42.277",
+        "spins": 596,
+        "totalSpins": 2016,
+        "resolved": 307,
+        "recordings": 291,
+        "artists": 482,
+        "resolutionRate": 0.5151006711409396,
+        "latestSpinAt": "2026-09-04 15:02:57.046",
         "qualityTier": "proven",
         "scheduleFresh": true
       },
@@ -292,24 +432,85 @@
         "id": 159,
         "slug": "kcrw-eclectic24",
         "name": "KCRW — Eclectic 24",
+        "source": "curated",
+        "streamUrl": "https://streams.kcrw.com/e24_mp3",
+        "nowPlayingSource": "kcrw",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.kcrw.com/music/shows/eclectic24",
-        "scheduleUrl": "https://www.kcrw.com/schedule"
+        "scheduleUrl": "https://www.kcrw.com/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:10:11.637Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 703,
-        "resolved": 388,
-        "recordings": 268,
-        "artists": 413,
-        "resolutionRate": 0.5519203413940256,
-        "latestSpinAt": "2026-09-04 13:43:02",
+        "spins": 704,
+        "totalSpins": 5254,
+        "resolved": 387,
+        "recordings": 267,
+        "artists": 411,
+        "resolutionRate": 0.5497159090909091,
+        "latestSpinAt": "2026-09-04 15:03:49",
         "qualityTier": "proven",
         "scheduleFresh": false
+      },
+      "recommendation": "retain",
+      "recommendationReason": "Lore observed sufficient resolution and recording/artist breadth"
+    },
+    {
+      "soundtap": "kexp",
+      "soundtapLabel": "KEXP",
+      "evidenceUrl": "https://soundtap.fm/stations/kexp",
+      "identity": {
+        "kind": "evidence_match",
+        "confidence": "medium",
+        "score": 50,
+        "signals": [
+          {
+            "signal": "callsign",
+            "outcome": "supports",
+            "reason": "callsign KEXP agrees",
+            "weight": 35
+          },
+          {
+            "signal": "geography",
+            "outcome": "supports",
+            "reason": "country US agrees",
+            "weight": 15
+          }
+        ]
+      },
+      "lore": {
+        "id": 4,
+        "slug": "kexp",
+        "name": "KEXP 90.3 FM",
+        "source": "curated",
+        "streamUrl": "https://kexp.streamguys1.com/kexp160.aac",
+        "nowPlayingSource": "kexp_api",
+        "active": true,
+        "hidden": false,
+        "homepageUrl": "https://kexp.org",
+        "scheduleUrl": "https://kexp.org/schedule/",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T04:40:15.646Z"
+      },
+      "observationWindow": {
+        "days": 7,
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
+        "completed": true,
+        "spins": 2031,
+        "totalSpins": 437747,
+        "resolved": 1752,
+        "recordings": 1546,
+        "artists": 1447,
+        "resolutionRate": 0.8626292466765141,
+        "latestSpinAt": "2026-09-04 15:12:15.233",
+        "qualityTier": "proven",
+        "scheduleFresh": true
       },
       "recommendation": "retain",
       "recommendationReason": "Lore observed sufficient resolution and recording/artist breadth"
@@ -341,17 +542,23 @@
         "id": 65309,
         "slug": "kfai",
         "name": "KFAI 90.3 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/KFAI/",
-        "scheduleUrl": "https://spinitron.com/KFAI/calendar"
+        "scheduleUrl": "https://spinitron.com/KFAI/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 973,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -390,17 +597,23 @@
         "id": 65323,
         "slug": "ksdt",
         "name": "KSDT 95.7 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/KSDT/",
-        "scheduleUrl": null
+        "scheduleUrl": null,
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -439,17 +652,23 @@
         "id": 65307,
         "slug": "kunm",
         "name": "KUNM 89.9 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.kunm.org/",
-        "scheduleUrl": "https://www.kunm.org/kunm-radio-schedule"
+        "scheduleUrl": "https://www.kunm.org/kunm-radio-schedule",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -482,17 +701,23 @@
         "id": 10815,
         "slug": "radio-centraal",
         "name": "radio centraal",
+        "source": "radio_browser",
+        "streamUrl": "http://streams.movemedia.eu/centraal",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "http://www.radiocentraal.be/Realescape/",
-        "scheduleUrl": "http://www.radiocentraal.be/Help/Error/404.htm"
+        "scheduleUrl": "http://www.radiocentraal.be/Help/Error/404.htm",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:09:34.903Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -531,17 +756,23 @@
         "id": 4677,
         "slug": "radio-nova",
         "name": "RADIO NOVA",
+        "source": "radio_browser",
+        "streamUrl": "https://novazz.ice.infomaniak.ch/novazz-128.mp3",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.nova.fr/",
-        "scheduleUrl": null
+        "scheduleUrl": null,
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T04:40:45.824Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -580,17 +811,23 @@
         "id": 30655,
         "slug": "rinse-fm",
         "name": "Rinse FM",
+        "source": "curated",
+        "streamUrl": "https://admin.stream.rinse.fm/proxy/rinse_uk/stream",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://rinse.fm",
-        "scheduleUrl": "https://rinse.fm/schedule"
+        "scheduleUrl": "https://rinse.fm/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:08:41.385Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 6,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -629,20 +866,26 @@
         "id": 30657,
         "slug": "the-lot-radio",
         "name": "The Lot Radio",
+        "source": "curated",
+        "streamUrl": "https://livepeercdn.studio/hls/85c28sa2o8wppm58/index.m3u8",
+        "nowPlayingSource": "lot_radio_schedule",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.thelotradio.com",
-        "scheduleUrl": "https://www.thelotradio.com/schedule"
+        "scheduleUrl": "https://www.thelotradio.com/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T22:13:59.459Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 45,
+        "spins": 44,
+        "totalSpins": 201,
         "resolved": 0,
         "recordings": 0,
-        "artists": 39,
+        "artists": 38,
         "resolutionRate": 0,
         "latestSpinAt": "2026-09-04 14:14:21.708",
         "qualityTier": "promising",
@@ -678,17 +921,23 @@
         "id": 65287,
         "slug": "wcbn",
         "name": "WCBN 88.3 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WCBN/",
-        "scheduleUrl": "https://spinitron.com/WCBN/calendar"
+        "scheduleUrl": "https://spinitron.com/WCBN/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 791,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -727,17 +976,23 @@
         "id": 65267,
         "slug": "wdce",
         "name": "WDCE 90.1 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WDCE/",
-        "scheduleUrl": "https://spinitron.com/WDCE/calendar"
+        "scheduleUrl": "https://spinitron.com/WDCE/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 976,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -776,17 +1031,23 @@
         "id": 65283,
         "slug": "weft",
         "name": "WEFT 90.1 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WEFT/",
-        "scheduleUrl": "https://spinitron.com/WEFT/calendar"
+        "scheduleUrl": "https://spinitron.com/WEFT/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 901,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -825,17 +1086,23 @@
         "id": 2707,
         "slug": "wfmu",
         "name": "WFMU 91.1 FM",
+        "source": "curated",
+        "streamUrl": "https://stream0.wfmu.org/freeform-128k",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://wfmu.org",
-        "scheduleUrl": "https://wfmu.org/schedule"
+        "scheduleUrl": "https://wfmu.org/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T21:52:42.948Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 9,
+        "totalSpins": 20,
         "resolved": 0,
         "recordings": 0,
         "artists": 8,
@@ -874,17 +1141,23 @@
         "id": 65241,
         "slug": "witr",
         "name": "WITR 89.7 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://witr.rit.edu/",
-        "scheduleUrl": "https://witr.rit.edu/schedule"
+        "scheduleUrl": "https://witr.rit.edu/schedule",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -923,17 +1196,23 @@
         "id": 65265,
         "slug": "wknc",
         "name": "WKNC 88.1 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WKNC/",
-        "scheduleUrl": "https://spinitron.com/WKNC/calendar"
+        "scheduleUrl": "https://spinitron.com/WKNC/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 814,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -972,22 +1251,28 @@
         "id": 65279,
         "slug": "wluw",
         "name": "WLUW 88.7 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": "spinitron_web",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WLUW/",
-        "scheduleUrl": "https://spinitron.com/WLUW/calendar"
+        "scheduleUrl": "https://spinitron.com/WLUW/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 48,
-        "resolved": 28,
-        "recordings": 23,
-        "artists": 36,
-        "resolutionRate": 0.5833333333333334,
-        "latestSpinAt": "2026-09-04 14:10:09.688",
+        "spins": 55,
+        "totalSpins": 1022,
+        "resolved": 32,
+        "recordings": 27,
+        "artists": 42,
+        "resolutionRate": 0.5818181818181818,
+        "latestSpinAt": "2026-09-04 15:07:59.042",
         "qualityTier": "proven",
         "scheduleFresh": true
       },
@@ -1021,17 +1306,23 @@
         "id": 65301,
         "slug": "wmtu",
         "name": "WMTU 91.9 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WMTU/",
-        "scheduleUrl": null
+        "scheduleUrl": null,
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1070,22 +1361,28 @@
         "id": 11413,
         "slug": "worldwide-fm",
         "name": "Worldwide FM",
+        "source": "curated",
+        "streamUrl": "https://worldwide-fm.radiocult.fm/stream",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://worldwidefm.net",
-        "scheduleUrl": "https://worldwidefm.net/schedule"
+        "scheduleUrl": "https://worldwidefm.net/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:09:17.358Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 579,
-        "resolved": 272,
+        "spins": 575,
+        "totalSpins": 3337,
+        "resolved": 269,
         "recordings": 143,
-        "artists": 246,
-        "resolutionRate": 0.4697754749568221,
-        "latestSpinAt": "2026-09-04 06:39:13.728",
+        "artists": 245,
+        "resolutionRate": 0.4678260869565217,
+        "latestSpinAt": "2026-09-04 15:13:35.442",
         "qualityTier": "proven",
         "scheduleFresh": true
       },
@@ -1119,17 +1416,23 @@
         "id": 65293,
         "slug": "wort",
         "name": "WORT 89.9 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WORT/",
-        "scheduleUrl": "https://spinitron.com/WORT/calendar"
+        "scheduleUrl": "https://spinitron.com/WORT/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 811,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1168,22 +1471,28 @@
         "id": 765731,
         "slug": "wpkn",
         "name": "WPKN 89.5 FM",
+        "source": "curated",
+        "streamUrl": "https://ice25.securenetsystems.net/WPKN",
+        "nowPlayingSource": "spinitron_web",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://wpkn.org",
-        "scheduleUrl": "https://spinitron.com/WPKN/calendar"
+        "scheduleUrl": "https://spinitron.com/WPKN/calendar",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:09:08.343Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 36,
-        "resolved": 16,
-        "recordings": 13,
-        "artists": 23,
-        "resolutionRate": 0.4444444444444444,
-        "latestSpinAt": "2026-09-04 13:14:46.271",
+        "spins": 42,
+        "totalSpins": 42,
+        "resolved": 18,
+        "recordings": 14,
+        "artists": 26,
+        "resolutionRate": 0.42857142857142855,
+        "latestSpinAt": "2026-09-04 15:04:11.539",
         "qualityTier": "proven",
         "scheduleFresh": true
       },
@@ -1217,17 +1526,23 @@
         "id": 65263,
         "slug": "wras",
         "name": "WRAS 88.5 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WRAS/",
-        "scheduleUrl": "https://spinitron.com/WRAS/calendar"
+        "scheduleUrl": "https://spinitron.com/WRAS/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 1065,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1266,17 +1581,23 @@
         "id": 65256,
         "slug": "wrbb",
         "name": "WRBB 104.9 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WRBB/",
-        "scheduleUrl": "https://spinitron.com/WRBB/calendar"
+        "scheduleUrl": "https://spinitron.com/WRBB/calendar",
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 1827,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1315,22 +1636,28 @@
         "id": 432323,
         "slug": "wrct",
         "name": "WRCT 88.3 FM",
+        "source": "curated",
+        "streamUrl": "https://streamalt.wrct.org/wrct-hi.mp3",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://wrct.org",
-        "scheduleUrl": "https://wrct.org/schedule"
+        "scheduleUrl": "https://wrct.org/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T04:41:01.323Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 883,
+        "spins": 888,
+        "totalSpins": 2196,
         "resolved": 23,
         "recordings": 23,
-        "artists": 748,
-        "resolutionRate": 0.026047565118912798,
-        "latestSpinAt": "2026-09-04 14:25:05.362",
+        "artists": 750,
+        "resolutionRate": 0.0259009009009009,
+        "latestSpinAt": "2026-09-04 15:01:30.035",
         "qualityTier": "promising",
         "scheduleFresh": true
       },
@@ -1364,17 +1691,23 @@
         "id": 65237,
         "slug": "wrpi",
         "name": "WRPI 91.5 FM",
+        "source": "curated",
+        "streamUrl": "",
+        "nowPlayingSource": null,
         "active": true,
         "hidden": false,
         "homepageUrl": "https://spinitron.com/WRPI/",
-        "scheduleUrl": null
+        "scheduleUrl": null,
+        "streamHealthy": false,
+        "lastAliveAt": null
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1413,17 +1746,23 @@
         "id": 743655,
         "slug": "wwoz",
         "name": "WWOZ 90.7 FM",
+        "source": "curated",
+        "streamUrl": "https://www.wwoz.org/listen/hi",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.wwoz.org/",
-        "scheduleUrl": "https://www.wwoz.org/calendar/weekly"
+        "scheduleUrl": "https://www.wwoz.org/calendar/weekly",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:17:38.732Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1462,21 +1801,27 @@
         "id": 2708,
         "slug": "wxyc",
         "name": "WXYC 89.3 FM",
+        "source": "curated",
+        "streamUrl": "https://audio-mp3.ibiblio.org/wxyc.mp3",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://wxyc.org",
-        "scheduleUrl": "https://wxyc.org/schedule"
+        "scheduleUrl": "https://wxyc.org/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T04:39:34.254Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 259,
-        "resolved": 127,
-        "recordings": 121,
-        "artists": 219,
-        "resolutionRate": 0.49034749034749037,
+        "spins": 264,
+        "totalSpins": 264,
+        "resolved": 130,
+        "recordings": 124,
+        "artists": 223,
+        "resolutionRate": 0.49242424242424243,
         "latestSpinAt": "2026-09-04 04:50:02.959",
         "qualityTier": "proven",
         "scheduleFresh": false
@@ -1485,7 +1830,234 @@
       "recommendationReason": "Lore observed sufficient resolution and recording/artist breadth"
     }
   ],
+  "reviewedDuplicateResolutions": [
+    {
+      "alias": {
+        "id": 4797,
+        "slug": "kexp-90-3-fm-seattle",
+        "name": "KEXP 90.3 FM Seattle",
+        "streamUrl": "https://kexp-mp3-128.streamguys1.com/kexp128.mp3",
+        "totalSpins": 6258,
+        "active": false,
+        "hidden": true
+      },
+      "canonical": {
+        "id": 4,
+        "slug": "kexp",
+        "name": "KEXP 90.3 FM",
+        "streamUrl": "https://kexp.streamguys1.com/kexp160.aac",
+        "homepageUrl": "https://kexp.org",
+        "scheduleUrl": "https://kexp.org/schedule/",
+        "streamHealthy": true,
+        "totalSpins": 437747,
+        "active": true,
+        "hidden": false
+      }
+    },
+    {
+      "alias": {
+        "id": 4798,
+        "slug": "bytefm-hh-ukw",
+        "name": "ByteFM | HH-UKW",
+        "streamUrl": "http://bytefm-hamburg.cast.addradio.de/bytefm/hamburg/mp3/mid",
+        "totalSpins": 0,
+        "active": false,
+        "hidden": true
+      },
+      "canonical": {
+        "id": 10753,
+        "slug": "bytefm-192k",
+        "name": "ByteFM",
+        "streamUrl": "https://bytefm.cast.addradio.de/bytefm/main/high/stream",
+        "homepageUrl": "https://www.byte.fm/",
+        "scheduleUrl": "https://www.byte.fm/programm",
+        "streamHealthy": true,
+        "totalSpins": 0,
+        "active": true,
+        "hidden": false
+      }
+    },
+    {
+      "alias": {
+        "id": 19092,
+        "slug": "baku-retro-fm",
+        "name": "Baku Retro Fm",
+        "streamUrl": "http://5.191.241.101:8000/bakuretrofm",
+        "totalSpins": 0,
+        "active": false,
+        "hidden": true
+      },
+      "canonical": {
+        "id": 41053,
+        "slug": "bakuretrofm",
+        "name": "bakuretrofm",
+        "streamUrl": "http://5.191.241.101:8000/bakuretrofm",
+        "homepageUrl": "http://5.191.241.101:8000/bakuretrofm",
+        "scheduleUrl": null,
+        "streamHealthy": false,
+        "totalSpins": 0,
+        "active": false,
+        "hidden": false
+      }
+    },
+    {
+      "alias": {
+        "id": 23637,
+        "slug": "rb-0bb84fe1-e899-11e9-a96c-52543be04c81",
+        "name": "dublab",
+        "streamUrl": "http://dublab.out.airtime.pro:8000/dublab_a",
+        "totalSpins": 332,
+        "active": false,
+        "hidden": true
+      },
+      "canonical": {
+        "id": 30654,
+        "slug": "dublab",
+        "name": "Dublab",
+        "streamUrl": "https://dublab.out.airtime.pro:8000/dublab_a",
+        "homepageUrl": "https://dublab.com",
+        "scheduleUrl": "https://dublab.com/schedule",
+        "streamHealthy": true,
+        "totalSpins": 584,
+        "active": true,
+        "hidden": false
+      }
+    },
+    {
+      "alias": {
+        "id": 207972,
+        "slug": "wfmt-98-7-chicago-il-aac",
+        "name": "WFMT 98.7 Chicago, IL (AAC)",
+        "streamUrl": "http://wowza.wfmt.com/live/smil:wfmt.smil/playlist.m3u8",
+        "totalSpins": 0,
+        "active": false,
+        "hidden": true
+      },
+      "canonical": {
+        "id": 35014,
+        "slug": "wfmt-98-7-chicago-il-mp3",
+        "name": "WFMT 98.7 Chicago, IL (MP3)",
+        "streamUrl": "http://stream.wfmt.com/main-mp3",
+        "homepageUrl": "http://www.wfmt.com/",
+        "scheduleUrl": null,
+        "streamHealthy": true,
+        "totalSpins": 982,
+        "active": true,
+        "hidden": false
+      }
+    }
+  ],
   "brandedMatches": [
+    {
+      "soundtap": "bytefm",
+      "soundtapLabel": "ByteFM",
+      "evidenceUrl": "https://soundtap.fm/stations/bytefm",
+      "identity": {
+        "kind": "branded_match",
+        "confidence": "high",
+        "score": 75,
+        "signals": [
+          {
+            "signal": "brand",
+            "outcome": "supports",
+            "reason": "normalized brand \"bytefm\" agrees",
+            "weight": 60
+          },
+          {
+            "signal": "geography",
+            "outcome": "supports",
+            "reason": "country DE agrees",
+            "weight": 15
+          }
+        ]
+      },
+      "lore": {
+        "id": 10753,
+        "slug": "bytefm-192k",
+        "name": "ByteFM",
+        "source": "curated",
+        "streamUrl": "https://bytefm.cast.addradio.de/bytefm/main/high/stream",
+        "nowPlayingSource": "radio_browser_icy",
+        "active": true,
+        "hidden": false,
+        "homepageUrl": "https://www.byte.fm/",
+        "scheduleUrl": "https://www.byte.fm/programm",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T22:13:05.234Z"
+      },
+      "observationWindow": {
+        "days": 7,
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
+        "completed": true,
+        "spins": 0,
+        "totalSpins": 0,
+        "resolved": 0,
+        "recordings": 0,
+        "artists": 0,
+        "resolutionRate": null,
+        "latestSpinAt": null,
+        "qualityTier": "unscored",
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
+      "soundtap": "dublab",
+      "soundtapLabel": "dublab",
+      "evidenceUrl": "https://soundtap.fm/stations/dublab",
+      "identity": {
+        "kind": "branded_match",
+        "confidence": "high",
+        "score": 75,
+        "signals": [
+          {
+            "signal": "brand",
+            "outcome": "supports",
+            "reason": "normalized brand \"dublab\" agrees",
+            "weight": 60
+          },
+          {
+            "signal": "geography",
+            "outcome": "supports",
+            "reason": "country US agrees",
+            "weight": 15
+          }
+        ]
+      },
+      "lore": {
+        "id": 30654,
+        "slug": "dublab",
+        "name": "Dublab",
+        "source": "curated",
+        "streamUrl": "https://dublab.out.airtime.pro:8000/dublab_a",
+        "nowPlayingSource": "radio_browser_icy",
+        "active": true,
+        "hidden": false,
+        "homepageUrl": "https://dublab.com",
+        "scheduleUrl": "https://dublab.com/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T05:52:44.347Z"
+      },
+      "observationWindow": {
+        "days": 7,
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
+        "completed": true,
+        "spins": 138,
+        "totalSpins": 584,
+        "resolved": 37,
+        "recordings": 33,
+        "artists": 70,
+        "resolutionRate": 0.26811594202898553,
+        "latestSpinAt": "2026-09-04 15:04:34.733",
+        "qualityTier": "promising",
+        "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
     {
       "soundtap": "radiocentraal",
       "soundtapLabel": "Radio Centraal",
@@ -1507,17 +2079,23 @@
         "id": 10815,
         "slug": "radio-centraal",
         "name": "radio centraal",
+        "source": "radio_browser",
+        "streamUrl": "http://streams.movemedia.eu/centraal",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "http://www.radiocentraal.be/Realescape/",
-        "scheduleUrl": "http://www.radiocentraal.be/Help/Error/404.htm"
+        "scheduleUrl": "http://www.radiocentraal.be/Help/Error/404.htm",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:09:34.903Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1556,17 +2134,23 @@
         "id": 4677,
         "slug": "radio-nova",
         "name": "RADIO NOVA",
+        "source": "radio_browser",
+        "streamUrl": "https://novazz.ice.infomaniak.ch/novazz-128.mp3",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.nova.fr/",
-        "scheduleUrl": null
+        "scheduleUrl": null,
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T04:40:45.824Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 0,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1605,17 +2189,23 @@
         "id": 30655,
         "slug": "rinse-fm",
         "name": "Rinse FM",
+        "source": "curated",
+        "streamUrl": "https://admin.stream.rinse.fm/proxy/rinse_uk/stream",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://rinse.fm",
-        "scheduleUrl": "https://rinse.fm/schedule"
+        "scheduleUrl": "https://rinse.fm/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:08:41.385Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
         "spins": 0,
+        "totalSpins": 6,
         "resolved": 0,
         "recordings": 0,
         "artists": 0,
@@ -1654,20 +2244,26 @@
         "id": 30657,
         "slug": "the-lot-radio",
         "name": "The Lot Radio",
+        "source": "curated",
+        "streamUrl": "https://livepeercdn.studio/hls/85c28sa2o8wppm58/index.m3u8",
+        "nowPlayingSource": "lot_radio_schedule",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://www.thelotradio.com",
-        "scheduleUrl": "https://www.thelotradio.com/schedule"
+        "scheduleUrl": "https://www.thelotradio.com/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-03T22:13:59.459Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 45,
+        "spins": 44,
+        "totalSpins": 201,
         "resolved": 0,
         "recordings": 0,
-        "artists": 39,
+        "artists": 38,
         "resolutionRate": 0,
         "latestSpinAt": "2026-09-04 14:14:21.708",
         "qualityTier": "promising",
@@ -1703,22 +2299,28 @@
         "id": 11413,
         "slug": "worldwide-fm",
         "name": "Worldwide FM",
+        "source": "curated",
+        "streamUrl": "https://worldwide-fm.radiocult.fm/stream",
+        "nowPlayingSource": "radio_browser_icy",
         "active": true,
         "hidden": false,
         "homepageUrl": "https://worldwidefm.net",
-        "scheduleUrl": "https://worldwidefm.net/schedule"
+        "scheduleUrl": "https://worldwidefm.net/schedule",
+        "streamHealthy": true,
+        "lastAliveAt": "2026-09-04T03:09:17.358Z"
       },
       "observationWindow": {
         "days": 7,
-        "startedAt": "2026-08-28T15:12:03.886Z",
-        "endsAt": "2026-09-04T15:12:03.886Z",
+        "startedAt": "2026-08-28T15:35:00.492Z",
+        "endsAt": "2026-09-04T15:35:00.492Z",
         "completed": true,
-        "spins": 579,
-        "resolved": 272,
+        "spins": 575,
+        "totalSpins": 3337,
+        "resolved": 269,
         "recordings": 143,
-        "artists": 246,
-        "resolutionRate": 0.4697754749568221,
-        "latestSpinAt": "2026-09-04 06:39:13.728",
+        "artists": 245,
+        "resolutionRate": 0.4678260869565217,
+        "latestSpinAt": "2026-09-04 15:13:35.442",
         "qualityTier": "proven",
         "scheduleFresh": true
       },
@@ -1726,226 +2328,7 @@
       "recommendationReason": "Lore observed sufficient resolution and recording/artist breadth"
     }
   ],
-  "ambiguousStations": [
-    {
-      "soundtap": {
-        "slug": "bytefm",
-        "label": "ByteFM",
-        "callsign": null,
-        "evidenceUrl": "https://soundtap.fm/stations/bytefm",
-        "location": "Germany",
-        "country": "DE"
-      },
-      "reason": "multiple_plausible_matches",
-      "loreCandidates": [
-        {
-          "id": 4798,
-          "slug": "bytefm-hh-ukw",
-          "score": 75,
-          "signals": [
-            {
-              "signal": "brand",
-              "outcome": "supports",
-              "reason": "normalized brand \"bytefm\" agrees",
-              "weight": 60
-            },
-            {
-              "signal": "geography",
-              "outcome": "supports",
-              "reason": "country DE agrees",
-              "weight": 15
-            }
-          ]
-        },
-        {
-          "id": 10753,
-          "slug": "bytefm-192k",
-          "score": 75,
-          "signals": [
-            {
-              "signal": "brand",
-              "outcome": "supports",
-              "reason": "normalized brand \"bytefm\" agrees",
-              "weight": 60
-            },
-            {
-              "signal": "geography",
-              "outcome": "supports",
-              "reason": "country DE agrees",
-              "weight": 15
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "soundtap": {
-        "slug": "dublab",
-        "label": "dublab",
-        "callsign": null,
-        "evidenceUrl": "https://soundtap.fm/stations/dublab",
-        "location": "United States",
-        "country": "US"
-      },
-      "reason": "multiple_plausible_matches",
-      "loreCandidates": [
-        {
-          "id": 23637,
-          "slug": "rb-0bb84fe1-e899-11e9-a96c-52543be04c81",
-          "score": 75,
-          "signals": [
-            {
-              "signal": "brand",
-              "outcome": "supports",
-              "reason": "normalized brand \"dublab\" agrees",
-              "weight": 60
-            },
-            {
-              "signal": "geography",
-              "outcome": "supports",
-              "reason": "country US agrees",
-              "weight": 15
-            }
-          ]
-        },
-        {
-          "id": 30654,
-          "slug": "dublab",
-          "score": 75,
-          "signals": [
-            {
-              "signal": "brand",
-              "outcome": "supports",
-              "reason": "normalized brand \"dublab\" agrees",
-              "weight": 60
-            },
-            {
-              "signal": "geography",
-              "outcome": "supports",
-              "reason": "country US agrees",
-              "weight": 15
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "soundtap": {
-        "slug": "kexp",
-        "label": "KEXP",
-        "callsign": "KEXP",
-        "evidenceUrl": "https://soundtap.fm/stations/kexp",
-        "location": "United States",
-        "country": "US"
-      },
-      "reason": "multiple_plausible_matches",
-      "loreCandidates": [
-        {
-          "id": 4,
-          "slug": "kexp",
-          "score": 50,
-          "signals": [
-            {
-              "signal": "callsign",
-              "outcome": "supports",
-              "reason": "callsign KEXP agrees",
-              "weight": 35
-            },
-            {
-              "signal": "geography",
-              "outcome": "supports",
-              "reason": "country US agrees",
-              "weight": 15
-            }
-          ]
-        },
-        {
-          "id": 4797,
-          "slug": "kexp-90-3-fm-seattle",
-          "score": 50,
-          "signals": [
-            {
-              "signal": "callsign",
-              "outcome": "supports",
-              "reason": "callsign KEXP agrees",
-              "weight": 35
-            },
-            {
-              "signal": "geography",
-              "outcome": "supports",
-              "reason": "country US agrees",
-              "weight": 15
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "soundtap": {
-        "slug": "radioparadise",
-        "label": "Radio Paradise",
-        "callsign": null,
-        "evidenceUrl": "https://soundtap.fm/stations/radioparadise",
-        "location": "Paradise, CA",
-        "country": null
-      },
-      "reason": "multiple_plausible_matches",
-      "loreCandidates": [
-        {
-          "id": 1,
-          "slug": "radio-paradise-main",
-          "score": 55,
-          "signals": [
-            {
-              "signal": "organization",
-              "outcome": "supports",
-              "reason": "normalized organization \"paradise\" agrees",
-              "weight": 55
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "slug": "radio-paradise-mellow",
-          "score": 55,
-          "signals": [
-            {
-              "signal": "organization",
-              "outcome": "supports",
-              "reason": "normalized organization \"paradise\" agrees",
-              "weight": 55
-            }
-          ]
-        },
-        {
-          "id": 3,
-          "slug": "radio-paradise-rock",
-          "score": 55,
-          "signals": [
-            {
-              "signal": "organization",
-              "outcome": "supports",
-              "reason": "normalized organization \"paradise\" agrees",
-              "weight": 55
-            }
-          ]
-        },
-        {
-          "id": 157,
-          "slug": "radio-paradise-world",
-          "score": 55,
-          "signals": [
-            {
-              "signal": "organization",
-              "outcome": "supports",
-              "reason": "normalized organization \"paradise\" agrees",
-              "weight": 55
-            }
-          ]
-        }
-      ]
-    }
-  ],
+  "ambiguousStations": [],
   "absentCandidates": [
     {
       "soundtap": {
@@ -3724,6 +4107,21 @@
         "callsign": null,
         "evidenceUrl": "https://soundtap.fm/stations/radioone91fm",
         "location": "New Zealand",
+        "country": null
+      },
+      "readiness": "needs_first_party_evidence",
+      "score": 0,
+      "reasons": [
+        "Soundtap listing alone is not trial evidence"
+      ]
+    },
+    {
+      "soundtap": {
+        "slug": "radioparadise",
+        "label": "Radio Paradise",
+        "callsign": null,
+        "evidenceUrl": "https://soundtap.fm/stations/radioparadise",
+        "location": "Paradise, CA",
         "country": null
       },
       "readiness": "needs_first_party_evidence",
@@ -5673,26 +6071,7 @@
     {
       "id": 10753,
       "slug": "bytefm-192k",
-      "name": "ByteFM (192k)",
-      "observationWindow": {
-        "days": 7,
-        "spins": 0,
-        "resolved": 0,
-        "recordings": 0,
-        "artists": 0,
-        "resolutionRate": null,
-        "latestSpinAt": null,
-        "qualityTier": "unscored",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
-    },
-    {
-      "id": 4798,
-      "slug": "bytefm-hh-ukw",
-      "name": "ByteFM | HH-UKW",
+      "name": "ByteFM",
       "observationWindow": {
         "days": 7,
         "spins": 0,
@@ -9129,6 +9508,25 @@
       "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
     },
     {
+      "id": 771516,
+      "slug": "test-sl-sta-1240863d",
+      "name": "SL Station A 1240863d",
+      "observationWindow": {
+        "days": 7,
+        "spins": 0,
+        "resolved": 0,
+        "recordings": 0,
+        "artists": 0,
+        "resolutionRate": null,
+        "latestSpinAt": null,
+        "qualityTier": "unscored",
+        "streamHealthy": false,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
       "id": 400443,
       "slug": "test-sl-sta-86d61503",
       "name": "SL Station A 86d61503",
@@ -9167,6 +9565,25 @@
       "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
     },
     {
+      "id": 771517,
+      "slug": "test-sl-stb-1240863d",
+      "name": "SL Station B 1240863d",
+      "observationWindow": {
+        "days": 7,
+        "spins": 0,
+        "resolved": 0,
+        "recordings": 0,
+        "artists": 0,
+        "resolutionRate": null,
+        "latestSpinAt": null,
+        "qualityTier": "unscored",
+        "streamHealthy": false,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
       "id": 400444,
       "slug": "test-sl-stb-86d61503",
       "name": "SL Station B 86d61503",
@@ -9189,6 +9606,25 @@
       "id": 731251,
       "slug": "test-sl-stb-c6db728f",
       "name": "SL Station B c6db728f",
+      "observationWindow": {
+        "days": 7,
+        "spins": 0,
+        "resolved": 0,
+        "recordings": 0,
+        "artists": 0,
+        "resolutionRate": null,
+        "latestSpinAt": null,
+        "qualityTier": "unscored",
+        "streamHealthy": false,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
+      "id": 771518,
+      "slug": "test-sl-stc-1240863d",
+      "name": "SL Station C 1240863d",
       "observationWindow": {
         "days": 7,
         "spins": 0,
@@ -9284,6 +9720,25 @@
       "id": 731252,
       "slug": "test-sl-stc-c6db728f",
       "name": "SL Station C c6db728f",
+      "observationWindow": {
+        "days": 7,
+        "spins": 0,
+        "resolved": 0,
+        "recordings": 0,
+        "artists": 0,
+        "resolutionRate": null,
+        "latestSpinAt": null,
+        "qualityTier": "unscored",
+        "streamHealthy": false,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
+      "id": 771519,
+      "slug": "test-sl-std-1240863d",
+      "name": "SL Station D 1240863d",
       "observationWindow": {
         "days": 7,
         "spins": 0,
@@ -11219,25 +11674,6 @@
       "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
     },
     {
-      "id": 65327,
-      "slug": "ksjs",
-      "name": "KSJS 90.5 FM",
-      "observationWindow": {
-        "days": 7,
-        "spins": 11,
-        "resolved": 2,
-        "recordings": 2,
-        "artists": 10,
-        "resolutionRate": 0.18181818181818182,
-        "latestSpinAt": "2026-09-04 14:02:35.829",
-        "qualityTier": "unscored",
-        "streamHealthy": false,
-        "scheduleFresh": true
-      },
-      "recommendation": "trial",
-      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
-    },
-    {
       "id": 30448,
       "slug": "concertzender-ori-nt-express",
       "name": "Concertzender Oriënt Express",
@@ -11300,7 +11736,7 @@
       "name": "KCHUNG Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 13,
+        "spins": 12,
         "resolved": 0,
         "recordings": 0,
         "artists": 8,
@@ -11309,6 +11745,44 @@
         "qualityTier": "unscored",
         "streamHealthy": true,
         "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
+      "id": 65327,
+      "slug": "ksjs",
+      "name": "KSJS 90.5 FM",
+      "observationWindow": {
+        "days": 7,
+        "spins": 12,
+        "resolved": 3,
+        "recordings": 3,
+        "artists": 11,
+        "resolutionRate": 0.25,
+        "latestSpinAt": "2026-09-04 14:32:44.338",
+        "qualityTier": "unscored",
+        "streamHealthy": false,
+        "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
+    },
+    {
+      "id": 10763,
+      "slug": "informa-radio",
+      "name": "INFORMA RADIO",
+      "observationWindow": {
+        "days": 7,
+        "spins": 14,
+        "resolved": 2,
+        "recordings": 2,
+        "artists": 0,
+        "resolutionRate": 0.14285714285714285,
+        "latestSpinAt": "2026-09-02 16:05:08.490932",
+        "qualityTier": "unscored",
+        "streamHealthy": true,
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
@@ -11333,25 +11807,6 @@
       "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
     },
     {
-      "id": 10763,
-      "slug": "informa-radio",
-      "name": "INFORMA RADIO",
-      "observationWindow": {
-        "days": 7,
-        "spins": 15,
-        "resolved": 2,
-        "recordings": 2,
-        "artists": 0,
-        "resolutionRate": 0.13333333333333333,
-        "latestSpinAt": "2026-09-02 16:05:08.490932",
-        "qualityTier": "unscored",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "fewer than 20 observations in the seven-day comparison window"
-    },
-    {
       "id": 5617,
       "slug": "96-2",
       "name": "Λαϊκός 96.2",
@@ -11362,7 +11817,7 @@
         "recordings": 0,
         "artists": 1,
         "resolutionRate": 0,
-        "latestSpinAt": "2026-09-02 18:41:14.012134",
+        "latestSpinAt": "2026-09-04 15:12:51.641",
         "qualityTier": "unscored",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -11490,12 +11945,12 @@
       "name": "1.FM - Ambient Psychill",
       "observationWindow": {
         "days": 7,
-        "spins": 36,
+        "spins": 38,
         "resolved": 8,
         "recordings": 8,
-        "artists": 30,
-        "resolutionRate": 0.2222222222222222,
-        "latestSpinAt": "2026-09-04 13:35:22.446",
+        "artists": 31,
+        "resolutionRate": 0.21052631578947367,
+        "latestSpinAt": "2026-09-04 15:07:10.475",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -11509,12 +11964,12 @@
       "name": "RadiOzora Chill",
       "observationWindow": {
         "days": 7,
-        "spins": 36,
+        "spins": 38,
         "resolved": 0,
         "recordings": 0,
-        "artists": 25,
+        "artists": 26,
         "resolutionRate": 0,
-        "latestSpinAt": "2026-09-04 06:00:30.525",
+        "latestSpinAt": "2026-09-04 14:43:51.241",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -11528,12 +11983,12 @@
       "name": "Kapitał",
       "observationWindow": {
         "days": 7,
-        "spins": 39,
+        "spins": 40,
         "resolved": 1,
         "recordings": 1,
         "artists": 1,
-        "resolutionRate": 0.02564102564102564,
-        "latestSpinAt": "2026-09-04 14:00:13.034",
+        "resolutionRate": 0.025,
+        "latestSpinAt": "2026-09-04 15:11:54.49",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -11566,10 +12021,10 @@
       "name": "The Lot Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 45,
+        "spins": 44,
         "resolved": 0,
         "recordings": 0,
-        "artists": 39,
+        "artists": 38,
         "resolutionRate": 0,
         "latestSpinAt": "2026-09-04 14:14:21.708",
         "qualityTier": "promising",
@@ -11604,12 +12059,12 @@
       "name": "RadiOzora",
       "observationWindow": {
         "days": 7,
-        "spins": 51,
+        "spins": 52,
         "resolved": 2,
         "recordings": 2,
         "artists": 27,
-        "resolutionRate": 0.0392156862745098,
-        "latestSpinAt": "2026-09-04 14:24:31.15",
+        "resolutionRate": 0.038461538461538464,
+        "latestSpinAt": "2026-09-04 14:59:52.074",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -11623,12 +12078,12 @@
       "name": "Cashmere Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 52,
+        "spins": 54,
         "resolved": 2,
         "recordings": 1,
         "artists": 1,
-        "resolutionRate": 0.038461538461538464,
-        "latestSpinAt": "2026-09-04 13:09:30.131",
+        "resolutionRate": 0.037037037037037035,
+        "latestSpinAt": "2026-09-04 14:40:42.635",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -11642,34 +12097,15 @@
       "name": "Radio Ozora",
       "observationWindow": {
         "days": 7,
-        "spins": 54,
+        "spins": 55,
         "resolved": 1,
         "recordings": 1,
         "artists": 27,
-        "resolutionRate": 0.018518518518518517,
-        "latestSpinAt": "2026-09-04 13:56:02.849",
+        "resolutionRate": 0.01818181818181818,
+        "latestSpinAt": "2026-09-04 15:03:50.439",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 735766,
-      "slug": "oroko-radio",
-      "name": "Oroko Radio",
-      "observationWindow": {
-        "days": 7,
-        "spins": 57,
-        "resolved": 1,
-        "recordings": 1,
-        "artists": 46,
-        "resolutionRate": 0.017543859649122806,
-        "latestSpinAt": "2026-09-04 13:36:28.036",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": true
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -11680,10 +12116,10 @@
       "name": "Radio Petrecăretzu",
       "observationWindow": {
         "days": 7,
-        "spins": 58,
+        "spins": 57,
         "resolved": 0,
         "recordings": 0,
-        "artists": 42,
+        "artists": 41,
         "resolutionRate": 0,
         "latestSpinAt": "2026-09-04 14:12:46.195",
         "qualityTier": "promising",
@@ -11692,6 +12128,44 @@
       },
       "recommendation": "reject",
       "recommendationReason": "20 or more Lore observations yielded no resolved recordings"
+    },
+    {
+      "id": 735766,
+      "slug": "oroko-radio",
+      "name": "Oroko Radio",
+      "observationWindow": {
+        "days": 7,
+        "spins": 59,
+        "resolved": 1,
+        "recordings": 1,
+        "artists": 47,
+        "resolutionRate": 0.01694915254237288,
+        "latestSpinAt": "2026-09-04 14:35:09.335",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 5528,
+      "slug": "radio-posavina-zagreb",
+      "name": "Radio Posavina Zagreb",
+      "observationWindow": {
+        "days": 7,
+        "spins": 70,
+        "resolved": 13,
+        "recordings": 13,
+        "artists": 46,
+        "resolutionRate": 0.18571428571428572,
+        "latestSpinAt": "2026-09-04 15:06:06.935",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
       "id": 735764,
@@ -11732,58 +12206,39 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 23641,
-      "slug": "rb-308a9f58-fb54-44dc-b95d-bb40fe4f3631",
-      "name": "Radio AlHara",
-      "observationWindow": {
-        "days": 7,
-        "spins": 76,
-        "resolved": 5,
-        "recordings": 2,
-        "artists": 27,
-        "resolutionRate": 0.06578947368421052,
-        "latestSpinAt": "2026-09-04 13:58:29.236",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 5528,
-      "slug": "radio-posavina-zagreb",
-      "name": "Radio Posavina Zagreb",
-      "observationWindow": {
-        "days": 7,
-        "spins": 76,
-        "resolved": 14,
-        "recordings": 14,
-        "artists": 50,
-        "resolutionRate": 0.18421052631578946,
-        "latestSpinAt": "2026-09-04 14:18:21.463",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
       "id": 735767,
       "slug": "lyl-radio",
       "name": "LYL Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 77,
+        "spins": 79,
         "resolved": 5,
         "recordings": 2,
-        "artists": 41,
-        "resolutionRate": 0.06493506493506493,
-        "latestSpinAt": "2026-09-04 13:19:32.043",
+        "artists": 42,
+        "resolutionRate": 0.06329113924050633,
+        "latestSpinAt": "2026-09-04 14:37:37.936",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 23641,
+      "slug": "rb-308a9f58-fb54-44dc-b95d-bb40fe4f3631",
+      "name": "Radio AlHara",
+      "observationWindow": {
+        "days": 7,
+        "spins": 79,
+        "resolved": 5,
+        "recordings": 2,
+        "artists": 28,
+        "resolutionRate": 0.06329113924050633,
+        "latestSpinAt": "2026-09-04 15:12:40.433",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -11813,12 +12268,12 @@
       "name": "Lahmacun Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 84,
+        "spins": 86,
         "resolved": 12,
         "recordings": 7,
-        "artists": 41,
-        "resolutionRate": 0.14285714285714285,
-        "latestSpinAt": "2026-09-04 13:12:53.938",
+        "artists": 42,
+        "resolutionRate": 0.13953488372093023,
+        "latestSpinAt": "2026-09-04 15:10:05.338",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -11865,25 +12320,6 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 30654,
-      "slug": "dublab",
-      "name": "Dublab",
-      "observationWindow": {
-        "days": 7,
-        "spins": 133,
-        "resolved": 34,
-        "recordings": 32,
-        "artists": 69,
-        "resolutionRate": 0.2556390977443609,
-        "latestSpinAt": "2026-09-04 13:59:08.139",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": true
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
       "id": 17162,
       "slug": "radio-nostalgia",
       "name": "Radio Nostalgia",
@@ -11922,6 +12358,25 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
+      "id": 30654,
+      "slug": "dublab",
+      "name": "Dublab",
+      "observationWindow": {
+        "days": 7,
+        "spins": 138,
+        "resolved": 37,
+        "recordings": 33,
+        "artists": 70,
+        "resolutionRate": 0.26811594202898553,
+        "latestSpinAt": "2026-09-04 15:04:34.733",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
       "id": 10858,
       "slug": "radio-andina",
       "name": "Radio Andina",
@@ -11946,7 +12401,7 @@
       "name": "WREK 91.1 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 154,
+        "spins": 147,
         "resolved": 0,
         "recordings": 0,
         "artists": 5,
@@ -11979,39 +12434,39 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 10478,
-      "slug": "club-charts-deejay-remix-radio-non-stop-music-ibiza-house-sunset-lounge-melodic-music-edm-deep-house-dance-music-techno-",
-      "name": "Club Charts -  DEEJAY & REMIX Radio @ NON-STOP MUSIC, Ibiza House, Sunset Lounge, Melodic Music, EDM, Deep House, Dance Music, Techno & Hypertechno, Rave Charts, Top 40 Charts, Latin, Reggaeton Music, Moombahton, Urban Hits, HipHop, Party & Clubbing Radio, Trending Charts, RnB, 90s, 90er, Eurodance, Urban, DJ Mixtapes",
-      "observationWindow": {
-        "days": 7,
-        "spins": 171,
-        "resolved": 33,
-        "recordings": 31,
-        "artists": 152,
-        "resolutionRate": 0.19298245614035087,
-        "latestSpinAt": "2026-09-04 14:11:44.188",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
       "id": 4832,
       "slug": "ubuntufm",
       "name": "UbuntuFM",
       "observationWindow": {
         "days": 7,
-        "spins": 178,
+        "spins": 171,
         "resolved": 1,
         "recordings": 1,
         "artists": 2,
-        "resolutionRate": 0.0056179775280898875,
+        "resolutionRate": 0.005847953216374269,
         "latestSpinAt": "2026-09-04 02:16:05.332",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 10478,
+      "slug": "club-charts-deejay-remix-radio-non-stop-music-ibiza-house-sunset-lounge-melodic-music-edm-deep-house-dance-music-techno-",
+      "name": "Club Charts -  DEEJAY & REMIX Radio @ NON-STOP MUSIC, Ibiza House, Sunset Lounge, Melodic Music, EDM, Deep House, Dance Music, Techno & Hypertechno, Rave Charts, Top 40 Charts, Latin, Reggaeton Music, Moombahton, Urban Hits, HipHop, Party & Clubbing Radio, Trending Charts, RnB, 90s, 90er, Eurodance, Urban, DJ Mixtapes",
+      "observationWindow": {
+        "days": 7,
+        "spins": 175,
+        "resolved": 35,
+        "recordings": 33,
+        "artists": 155,
+        "resolutionRate": 0.2,
+        "latestSpinAt": "2026-09-04 15:03:50.839",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -12022,31 +12477,12 @@
       "name": "SLOBODNÝ VYSIELAČ",
       "observationWindow": {
         "days": 7,
-        "spins": 190,
+        "spins": 189,
         "resolved": 46,
         "recordings": 43,
-        "artists": 83,
-        "resolutionRate": 0.24210526315789474,
-        "latestSpinAt": "2026-09-04 14:14:40.576",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 4867,
-      "slug": "techno-by-rautemusik-fm",
-      "name": "__TECHNO__ by rautemusik.fm",
-      "observationWindow": {
-        "days": 7,
-        "spins": 218,
-        "resolved": 46,
-        "recordings": 40,
-        "artists": 155,
-        "resolutionRate": 0.21100917431192662,
-        "latestSpinAt": "2026-09-04 14:21:02.823",
+        "artists": 82,
+        "resolutionRate": 0.24338624338624337,
+        "latestSpinAt": "2026-09-04 15:12:48.64",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12060,15 +12496,34 @@
       "name": "Radio Mojdeh - Iranian Farsi/Persian Christian music and talk",
       "observationWindow": {
         "days": 7,
-        "spins": 225,
+        "spins": 215,
         "resolved": 3,
         "recordings": 2,
         "artists": 77,
-        "resolutionRate": 0.013333333333333334,
+        "resolutionRate": 0.013953488372093023,
         "latestSpinAt": "2026-09-04 05:30:46.23",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 4867,
+      "slug": "techno-by-rautemusik-fm",
+      "name": "__TECHNO__ by rautemusik.fm",
+      "observationWindow": {
+        "days": 7,
+        "spins": 222,
+        "resolved": 46,
+        "recordings": 40,
+        "artists": 158,
+        "resolutionRate": 0.2072072072072072,
+        "latestSpinAt": "2026-09-04 15:04:17.336",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -12079,12 +12534,12 @@
       "name": "WFMT 98.7 Chicago, IL (MP3)",
       "observationWindow": {
         "days": 7,
-        "spins": 246,
+        "spins": 247,
         "resolved": 7,
         "recordings": 7,
         "artists": 167,
-        "resolutionRate": 0.028455284552845527,
-        "latestSpinAt": "2026-09-04 14:10:45.57",
+        "resolutionRate": 0.02834008097165992,
+        "latestSpinAt": "2026-09-04 15:04:04.834",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12098,12 +12553,12 @@
       "name": "Radio Caprice - Bulgarian Pop-Folk/Ethnopop/Chalga",
       "observationWindow": {
         "days": 7,
-        "spins": 249,
+        "spins": 254,
         "resolved": 9,
         "recordings": 9,
-        "artists": 165,
-        "resolutionRate": 0.03614457831325301,
-        "latestSpinAt": "2026-09-04 14:08:58.629",
+        "artists": 166,
+        "resolutionRate": 0.03543307086614173,
+        "latestSpinAt": "2026-09-04 15:07:51.235",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -12117,12 +12572,12 @@
       "name": "80s Forever - We Keep The 80s Alive",
       "observationWindow": {
         "days": 7,
-        "spins": 251,
+        "spins": 258,
         "resolved": 8,
         "recordings": 7,
-        "artists": 210,
-        "resolutionRate": 0.03187250996015936,
-        "latestSpinAt": "2026-09-04 14:23:50.827",
+        "artists": 214,
+        "resolutionRate": 0.031007751937984496,
+        "latestSpinAt": "2026-09-04 15:11:22.436",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12136,12 +12591,12 @@
       "name": "PsyStream",
       "observationWindow": {
         "days": 7,
-        "spins": 259,
+        "spins": 260,
         "resolved": 102,
         "recordings": 95,
-        "artists": 188,
-        "resolutionRate": 0.3938223938223938,
-        "latestSpinAt": "2026-09-04 14:07:01.927",
+        "artists": 187,
+        "resolutionRate": 0.3923076923076923,
+        "latestSpinAt": "2026-09-04 15:04:22.436",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12155,12 +12610,12 @@
       "name": "Omega Radio Greek Music",
       "observationWindow": {
         "days": 7,
-        "spins": 279,
-        "resolved": 15,
+        "spins": 277,
+        "resolved": 13,
         "recordings": 7,
         "artists": 103,
-        "resolutionRate": 0.053763440860215055,
-        "latestSpinAt": "2026-09-04 14:22:20.063",
+        "resolutionRate": 0.04693140794223827,
+        "latestSpinAt": "2026-09-04 15:06:03.24",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12174,12 +12629,12 @@
       "name": "KCSM 91.1 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 304,
-        "resolved": 121,
-        "recordings": 119,
+        "spins": 308,
+        "resolved": 123,
+        "recordings": 120,
         "artists": 231,
-        "resolutionRate": 0.3980263157894737,
-        "latestSpinAt": "2026-09-04 14:04:41.127",
+        "resolutionRate": 0.39935064935064934,
+        "latestSpinAt": "2026-09-04 15:10:53.833",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -12193,12 +12648,12 @@
       "name": "Sveriges Radio P2 flac",
       "observationWindow": {
         "days": 7,
-        "spins": 328,
+        "spins": 334,
         "resolved": 5,
         "recordings": 5,
-        "artists": 273,
-        "resolutionRate": 0.01524390243902439,
-        "latestSpinAt": "2026-09-04 14:05:28.736",
+        "artists": 276,
+        "resolutionRate": 0.014970059880239521,
+        "latestSpinAt": "2026-09-04 15:05:26.341",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12212,12 +12667,12 @@
       "name": "Kurd1 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 340,
+        "spins": 338,
         "resolved": 28,
         "recordings": 23,
         "artists": 135,
-        "resolutionRate": 0.08235294117647059,
-        "latestSpinAt": "2026-09-04 14:14:43.126",
+        "resolutionRate": 0.08284023668639054,
+        "latestSpinAt": "2026-09-04 15:05:43.541",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12231,34 +12686,15 @@
       "name": "p-node",
       "observationWindow": {
         "days": 7,
-        "spins": 340,
+        "spins": 338,
         "resolved": 2,
         "recordings": 2,
         "artists": 18,
-        "resolutionRate": 0.0058823529411764705,
+        "resolutionRate": 0.005917159763313609,
         "latestSpinAt": "2026-09-04 14:14:01.537",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 91515,
-      "slug": "seven-rays-7rays",
-      "name": "Seven Rays - 7rays",
-      "observationWindow": {
-        "days": 7,
-        "spins": 340,
-        "resolved": 127,
-        "recordings": 118,
-        "artists": 197,
-        "resolutionRate": 0.3735294117647059,
-        "latestSpinAt": "2026-09-04 14:12:06.773",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -12269,7 +12705,7 @@
       "name": "Radio Sladko Izkushenie",
       "observationWindow": {
         "days": 7,
-        "spins": 347,
+        "spins": 339,
         "resolved": 0,
         "recordings": 0,
         "artists": 16,
@@ -12283,16 +12719,35 @@
       "recommendationReason": "20 or more Lore observations yielded no resolved recordings"
     },
     {
+      "id": 91515,
+      "slug": "seven-rays-7rays",
+      "name": "Seven Rays - 7rays",
+      "observationWindow": {
+        "days": 7,
+        "spins": 339,
+        "resolved": 127,
+        "recordings": 118,
+        "artists": 197,
+        "resolutionRate": 0.3746312684365782,
+        "latestSpinAt": "2026-09-04 14:12:06.773",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
       "id": 35029,
       "slug": "yerevan-nights",
       "name": "Yerevan Nights",
       "observationWindow": {
         "days": 7,
-        "spins": 350,
+        "spins": 347,
         "resolved": 18,
         "recordings": 18,
-        "artists": 186,
-        "resolutionRate": 0.05142857142857143,
+        "artists": 184,
+        "resolutionRate": 0.05187319884726225,
         "latestSpinAt": "2026-09-02 03:50:48.25989",
         "qualityTier": "promising",
         "streamHealthy": true,
@@ -12307,12 +12762,12 @@
       "name": "4Drive Jazz",
       "observationWindow": {
         "days": 7,
-        "spins": 357,
-        "resolved": 112,
-        "recordings": 95,
+        "spins": 362,
+        "resolved": 114,
+        "recordings": 96,
         "artists": 206,
-        "resolutionRate": 0.3137254901960784,
-        "latestSpinAt": "2026-09-04 14:21:01.561",
+        "resolutionRate": 0.3149171270718232,
+        "latestSpinAt": "2026-09-04 15:06:10.639",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12326,12 +12781,12 @@
       "name": "Lele Male",
       "observationWindow": {
         "days": 7,
-        "spins": 362,
+        "spins": 367,
         "resolved": 24,
         "recordings": 23,
-        "artists": 196,
-        "resolutionRate": 0.06629834254143646,
-        "latestSpinAt": "2026-09-04 14:21:29.535",
+        "artists": 199,
+        "resolutionRate": 0.0653950953678474,
+        "latestSpinAt": "2026-09-04 15:13:48.632",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12345,12 +12800,12 @@
       "name": "..87,5!. Nantes",
       "observationWindow": {
         "days": 7,
-        "spins": 376,
-        "resolved": 143,
-        "recordings": 117,
+        "spins": 375,
+        "resolved": 144,
+        "recordings": 118,
         "artists": 256,
-        "resolutionRate": 0.3803191489361702,
-        "latestSpinAt": "2026-09-04 14:14:49.524",
+        "resolutionRate": 0.384,
+        "latestSpinAt": "2026-09-04 15:07:59.045",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12369,7 +12824,7 @@
         "recordings": 1,
         "artists": 2,
         "resolutionRate": 0.0025974025974025974,
-        "latestSpinAt": "2026-09-04 14:06:53.791",
+        "latestSpinAt": "2026-09-04 15:07:38.785",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12383,32 +12838,13 @@
       "name": "BANDA 93.3 (Monterrey) - 93.3 FM - XHQQ-FM - Grupo Radio Centro - Monterrey, NL",
       "observationWindow": {
         "days": 7,
-        "spins": 404,
-        "resolved": 81,
-        "recordings": 65,
+        "spins": 406,
+        "resolved": 82,
+        "recordings": 66,
         "artists": 145,
-        "resolutionRate": 0.2004950495049505,
-        "latestSpinAt": "2026-09-04 14:03:15.738",
+        "resolutionRate": 0.2019704433497537,
+        "latestSpinAt": "2026-09-04 15:04:28.051",
         "qualityTier": "raw",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 4973,
-      "slug": "hirschmilch-radio",
-      "name": "Hirschmilch Radio",
-      "observationWindow": {
-        "days": 7,
-        "spins": 407,
-        "resolved": 154,
-        "recordings": 144,
-        "artists": 268,
-        "resolutionRate": 0.3783783783783784,
-        "latestSpinAt": "2026-09-04 13:47:16.821",
-        "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
       },
@@ -12435,36 +12871,17 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 10556,
-      "slug": "gem-radio-new-wave",
-      "name": "Gem Radio New Wave",
+      "id": 4973,
+      "slug": "hirschmilch-radio",
+      "name": "Hirschmilch Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 411,
-        "resolved": 120,
-        "recordings": 103,
-        "artists": 147,
-        "resolutionRate": 0.291970802919708,
-        "latestSpinAt": "2026-09-04 13:39:33.455",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 4687,
-      "slug": "airport-lounge-radio",
-      "name": "AIRPORT LOUNGE RADIO",
-      "observationWindow": {
-        "days": 7,
-        "spins": 417,
-        "resolved": 157,
-        "recordings": 116,
-        "artists": 206,
-        "resolutionRate": 0.3764988009592326,
-        "latestSpinAt": "2026-09-04 14:17:59.543",
+        "spins": 409,
+        "resolved": 155,
+        "recordings": 145,
+        "artists": 269,
+        "resolutionRate": 0.37897310513447435,
+        "latestSpinAt": "2026-09-04 15:04:17.84",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12478,12 +12895,31 @@
       "name": "Radio Noordvaarder Reiki",
       "observationWindow": {
         "days": 7,
-        "spins": 419,
-        "resolved": 111,
-        "recordings": 86,
-        "artists": 51,
-        "resolutionRate": 0.2649164677804296,
-        "latestSpinAt": "2026-09-04 14:13:28.625",
+        "spins": 422,
+        "resolved": 112,
+        "recordings": 87,
+        "artists": 52,
+        "resolutionRate": 0.26540284360189575,
+        "latestSpinAt": "2026-09-04 15:11:48.747",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 4687,
+      "slug": "airport-lounge-radio",
+      "name": "AIRPORT LOUNGE RADIO",
+      "observationWindow": {
+        "days": 7,
+        "spins": 426,
+        "resolved": 161,
+        "recordings": 118,
+        "artists": 209,
+        "resolutionRate": 0.3779342723004695,
+        "latestSpinAt": "2026-09-04 15:03:31.53",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12497,12 +12933,12 @@
       "name": "Antología Vallenata, XEH 14-20 (Monterrey) - 1420 AM - XEH-AM - Grupo Radio Centro - Monterrey, NL",
       "observationWindow": {
         "days": 7,
-        "spins": 425,
-        "resolved": 108,
-        "recordings": 103,
-        "artists": 191,
-        "resolutionRate": 0.2541176470588235,
-        "latestSpinAt": "2026-09-04 14:02:04.344",
+        "spins": 426,
+        "resolved": 109,
+        "recordings": 104,
+        "artists": 192,
+        "resolutionRate": 0.25586854460093894,
+        "latestSpinAt": "2026-09-04 15:07:23.853",
         "qualityTier": "proven",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12511,17 +12947,17 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 10546,
-      "slug": "gem-new-wave-radio",
-      "name": "GEM New Wave Radio",
+      "id": 10556,
+      "slug": "gem-radio-new-wave",
+      "name": "Gem Radio New Wave",
       "observationWindow": {
         "days": 7,
-        "spins": 425,
-        "resolved": 132,
-        "recordings": 110,
-        "artists": 150,
-        "resolutionRate": 0.31058823529411766,
-        "latestSpinAt": "2026-09-04 13:40:25.341",
+        "spins": 428,
+        "resolved": 126,
+        "recordings": 105,
+        "artists": 149,
+        "resolutionRate": 0.29439252336448596,
+        "latestSpinAt": "2026-09-04 14:58:58.063",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12535,12 +12971,12 @@
       "name": "Positively Peaceful 432Hz -om",
       "observationWindow": {
         "days": 7,
-        "spins": 435,
-        "resolved": 98,
+        "spins": 433,
+        "resolved": 100,
         "recordings": 14,
         "artists": 6,
-        "resolutionRate": 0.22528735632183908,
-        "latestSpinAt": "2026-09-04 14:22:01.233",
+        "resolutionRate": 0.23094688221709006,
+        "latestSpinAt": "2026-09-04 15:12:09.942",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12557,9 +12993,9 @@
         "spins": 438,
         "resolved": 25,
         "recordings": 21,
-        "artists": 139,
+        "artists": 140,
         "resolutionRate": 0.05707762557077625,
-        "latestSpinAt": "2026-09-04 14:00:08.441",
+        "latestSpinAt": "2026-09-04 15:12:39.238",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12568,20 +13004,20 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 2705,
-      "slug": "whrb",
-      "name": "WHRB 95.3 FM",
+      "id": 10546,
+      "slug": "gem-new-wave-radio",
+      "name": "GEM New Wave Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 440,
-        "resolved": 123,
-        "recordings": 120,
-        "artists": 312,
-        "resolutionRate": 0.27954545454545454,
-        "latestSpinAt": "2026-09-04 14:19:56.535",
+        "spins": 442,
+        "resolved": 138,
+        "recordings": 112,
+        "artists": 152,
+        "resolutionRate": 0.31221719457013575,
+        "latestSpinAt": "2026-09-04 14:58:47.75",
         "qualityTier": "promising",
         "streamHealthy": true,
-        "scheduleFresh": true
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -12606,17 +13042,17 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 9436,
-      "slug": "radio-heimatmelodie",
-      "name": "Radio Heimatmelodie",
+      "id": 2705,
+      "slug": "whrb",
+      "name": "WHRB 95.3 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 447,
-        "resolved": 42,
-        "recordings": 42,
-        "artists": 322,
-        "resolutionRate": 0.09395973154362416,
-        "latestSpinAt": "2026-09-04 14:13:27.431",
+        "spins": 446,
+        "resolved": 123,
+        "recordings": 120,
+        "artists": 317,
+        "resolutionRate": 0.2757847533632287,
+        "latestSpinAt": "2026-09-04 15:05:53.135",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -12630,12 +13066,12 @@
       "name": "Radio FM",
       "observationWindow": {
         "days": 7,
-        "spins": 449,
-        "resolved": 144,
+        "spins": 448,
+        "resolved": 143,
         "recordings": 134,
         "artists": 316,
-        "resolutionRate": 0.3207126948775056,
-        "latestSpinAt": "2026-09-04 13:57:21.966",
+        "resolutionRate": 0.31919642857142855,
+        "latestSpinAt": "2026-09-04 15:05:38.744",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -12649,12 +13085,31 @@
       "name": "Radio Mas 99.7 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 450,
+        "spins": 451,
         "resolved": 19,
         "recordings": 14,
         "artists": 113,
-        "resolutionRate": 0.042222222222222223,
-        "latestSpinAt": "2026-09-04 14:06:31.604",
+        "resolutionRate": 0.04212860310421286,
+        "latestSpinAt": "2026-09-04 15:13:28.739",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 9436,
+      "slug": "radio-heimatmelodie",
+      "name": "Radio Heimatmelodie",
+      "observationWindow": {
+        "days": 7,
+        "spins": 452,
+        "resolved": 42,
+        "recordings": 42,
+        "artists": 324,
+        "resolutionRate": 0.09292035398230089,
+        "latestSpinAt": "2026-09-04 15:03:00.936",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -12668,12 +13123,12 @@
       "name": "DEEP IN SPACE",
       "observationWindow": {
         "days": 7,
-        "spins": 451,
+        "spins": 453,
         "resolved": 175,
         "recordings": 108,
         "artists": 89,
-        "resolutionRate": 0.38802660753880264,
-        "latestSpinAt": "2026-09-04 14:11:55.736",
+        "resolutionRate": 0.38631346578366443,
+        "latestSpinAt": "2026-09-04 15:03:52.935",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12687,11 +13142,11 @@
       "name": "Radio Danielka",
       "observationWindow": {
         "days": 7,
-        "spins": 460,
+        "spins": 458,
         "resolved": 85,
         "recordings": 84,
-        "artists": 233,
-        "resolutionRate": 0.18478260869565216,
+        "artists": 232,
+        "resolutionRate": 0.185589519650655,
         "latestSpinAt": "2026-09-04 14:13:52.457",
         "qualityTier": "promising",
         "streamHealthy": true,
@@ -12706,12 +13161,12 @@
       "name": "Radio Caprice - Indian Spiritual Music",
       "observationWindow": {
         "days": 7,
-        "spins": 462,
-        "resolved": 53,
-        "recordings": 46,
+        "spins": 465,
+        "resolved": 54,
+        "recordings": 47,
         "artists": 188,
-        "resolutionRate": 0.11471861471861472,
-        "latestSpinAt": "2026-09-04 13:32:57.732",
+        "resolutionRate": 0.11612903225806452,
+        "latestSpinAt": "2026-09-04 15:03:55.934",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12725,12 +13180,12 @@
       "name": "Radio Sehara",
       "observationWindow": {
         "days": 7,
-        "spins": 501,
+        "spins": 496,
         "resolved": 124,
         "recordings": 121,
         "artists": 162,
-        "resolutionRate": 0.24750499001996007,
-        "latestSpinAt": "2026-09-04 14:02:15.444",
+        "resolutionRate": 0.25,
+        "latestSpinAt": "2026-09-04 15:07:40.637",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12749,7 +13204,7 @@
         "recordings": 1,
         "artists": 21,
         "resolutionRate": 0.007889546351084813,
-        "latestSpinAt": "2026-09-04 14:25:05.735",
+        "latestSpinAt": "2026-09-04 15:08:31.036",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12763,12 +13218,12 @@
       "name": "Ancient FM",
       "observationWindow": {
         "days": 7,
-        "spins": 511,
+        "spins": 514,
         "resolved": 56,
         "recordings": 52,
         "artists": 257,
-        "resolutionRate": 0.1095890410958904,
-        "latestSpinAt": "2026-09-04 14:23:17.648",
+        "resolutionRate": 0.10894941634241245,
+        "latestSpinAt": "2026-09-04 15:13:19.237",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12782,12 +13237,12 @@
       "name": "Modular-Station",
       "observationWindow": {
         "days": 7,
-        "spins": 514,
+        "spins": 516,
         "resolved": 100,
         "recordings": 87,
-        "artists": 235,
-        "resolutionRate": 0.19455252918287938,
-        "latestSpinAt": "2026-09-04 14:13:59.274",
+        "artists": 234,
+        "resolutionRate": 0.1937984496124031,
+        "latestSpinAt": "2026-09-04 15:03:21.138",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12801,12 +13256,12 @@
       "name": "Radio Manele FM",
       "observationWindow": {
         "days": 7,
-        "spins": 515,
+        "spins": 516,
         "resolved": 7,
         "recordings": 5,
-        "artists": 140,
-        "resolutionRate": 0.013592233009708738,
-        "latestSpinAt": "2026-09-04 14:23:25.273",
+        "artists": 139,
+        "resolutionRate": 0.013565891472868217,
+        "latestSpinAt": "2026-09-04 15:03:50.836",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -12820,11 +13275,11 @@
       "name": "Radyo Tipiti",
       "observationWindow": {
         "days": 7,
-        "spins": 520,
-        "resolved": 57,
+        "spins": 516,
+        "resolved": 55,
         "recordings": 48,
         "artists": 112,
-        "resolutionRate": 0.10961538461538461,
+        "resolutionRate": 0.1065891472868217,
         "latestSpinAt": "2026-09-04 14:13:43.577",
         "qualityTier": "promising",
         "streamHealthy": true,
@@ -12839,34 +13294,15 @@
       "name": "Yabiladi Chaabi Maroc",
       "observationWindow": {
         "days": 7,
-        "spins": 521,
+        "spins": 518,
         "resolved": 35,
         "recordings": 24,
         "artists": 64,
-        "resolutionRate": 0.0671785028790787,
-        "latestSpinAt": "2026-09-04 14:06:20.516",
+        "resolutionRate": 0.06756756756756757,
+        "latestSpinAt": "2026-09-04 14:56:42.739",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 42884,
-      "slug": "folk-alley-irish",
-      "name": "Folk Alley Irish",
-      "observationWindow": {
-        "days": 7,
-        "spins": 531,
-        "resolved": 62,
-        "recordings": 23,
-        "artists": 192,
-        "resolutionRate": 0.1167608286252354,
-        "latestSpinAt": "2026-09-04 14:09:13.361",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": true
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -12877,12 +13313,12 @@
       "name": "Radio Hushove",
       "observationWindow": {
         "days": 7,
-        "spins": 533,
+        "spins": 538,
         "resolved": 1,
         "recordings": 1,
-        "artists": 243,
-        "resolutionRate": 0.001876172607879925,
-        "latestSpinAt": "2026-09-04 14:13:03.017",
+        "artists": 245,
+        "resolutionRate": 0.0018587360594795538,
+        "latestSpinAt": "2026-09-04 15:05:35.244",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12896,12 +13332,12 @@
       "name": "Radio Nuova San Giorgio",
       "observationWindow": {
         "days": 7,
-        "spins": 536,
+        "spins": 538,
         "resolved": 39,
         "recordings": 38,
         "artists": 138,
-        "resolutionRate": 0.07276119402985075,
-        "latestSpinAt": "2026-09-04 14:22:19.074",
+        "resolutionRate": 0.0724907063197026,
+        "latestSpinAt": "2026-09-04 15:07:40.515",
         "qualityTier": "raw",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12915,12 +13351,12 @@
       "name": "RadioActive",
       "observationWindow": {
         "days": 7,
-        "spins": 536,
-        "resolved": 197,
-        "recordings": 195,
-        "artists": 408,
-        "resolutionRate": 0.3675373134328358,
-        "latestSpinAt": "2026-09-04 13:47:20.383",
+        "spins": 539,
+        "resolved": 196,
+        "recordings": 194,
+        "artists": 410,
+        "resolutionRate": 0.36363636363636365,
+        "latestSpinAt": "2026-09-04 15:06:07.944",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -12929,20 +13365,20 @@
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
     },
     {
-      "id": 273446,
-      "slug": "star-88-8",
-      "name": "Star 88.8",
+      "id": 42884,
+      "slug": "folk-alley-irish",
+      "name": "Folk Alley Irish",
       "observationWindow": {
         "days": 7,
-        "spins": 563,
-        "resolved": 212,
-        "recordings": 202,
-        "artists": 142,
-        "resolutionRate": 0.3765541740674956,
-        "latestSpinAt": "2026-09-04 14:13:51.17",
+        "spins": 548,
+        "resolved": 67,
+        "recordings": 23,
+        "artists": 193,
+        "resolutionRate": 0.12226277372262774,
+        "latestSpinAt": "2026-09-04 15:12:19.33",
         "qualityTier": "promising",
         "streamHealthy": true,
-        "scheduleFresh": false
+        "scheduleFresh": true
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -12953,11 +13389,11 @@
       "name": "aNONradio",
       "observationWindow": {
         "days": 7,
-        "spins": 564,
+        "spins": 559,
         "resolved": 56,
         "recordings": 19,
         "artists": 76,
-        "resolutionRate": 0.09929078014184398,
+        "resolutionRate": 0.1001788908765653,
         "latestSpinAt": "2026-09-04 06:08:55.518",
         "qualityTier": "promising",
         "streamHealthy": true,
@@ -12972,12 +13408,31 @@
       "name": "Radio Favorit",
       "observationWindow": {
         "days": 7,
-        "spins": 570,
+        "spins": 565,
         "resolved": 13,
         "recordings": 10,
-        "artists": 302,
-        "resolutionRate": 0.02280701754385965,
+        "artists": 301,
+        "resolutionRate": 0.023008849557522124,
         "latestSpinAt": "2026-09-04 14:14:22.975",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 273446,
+      "slug": "star-88-8",
+      "name": "Star 88.8",
+      "observationWindow": {
+        "days": 7,
+        "spins": 569,
+        "resolved": 214,
+        "recordings": 203,
+        "artists": 143,
+        "resolutionRate": 0.37609841827768015,
+        "latestSpinAt": "2026-09-04 15:03:49.633",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -12994,9 +13449,9 @@
         "spins": 574,
         "resolved": 48,
         "recordings": 44,
-        "artists": 186,
+        "artists": 185,
         "resolutionRate": 0.08362369337979095,
-        "latestSpinAt": "2026-09-04 14:25:16.644",
+        "latestSpinAt": "2026-09-04 15:12:49.936",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13010,12 +13465,12 @@
       "name": "Yabiladi Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 576,
+        "spins": 575,
         "resolved": 71,
         "recordings": 57,
         "artists": 140,
-        "resolutionRate": 0.1232638888888889,
-        "latestSpinAt": "2026-09-04 14:15:05.83",
+        "resolutionRate": 0.12347826086956522,
+        "latestSpinAt": "2026-09-04 15:13:46.742",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13029,12 +13484,12 @@
       "name": "Positively Meditation -om",
       "observationWindow": {
         "days": 7,
-        "spins": 586,
-        "resolved": 60,
-        "recordings": 43,
+        "spins": 588,
+        "resolved": 62,
+        "recordings": 45,
         "artists": 124,
-        "resolutionRate": 0.10238907849829351,
-        "latestSpinAt": "2026-09-04 14:21:30.796",
+        "resolutionRate": 0.1054421768707483,
+        "latestSpinAt": "2026-09-04 15:01:10.941",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13048,12 +13503,12 @@
       "name": "CJSR 88.5 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 601,
+        "spins": 605,
         "resolved": 153,
         "recordings": 142,
-        "artists": 341,
-        "resolutionRate": 0.2545757071547421,
-        "latestSpinAt": "2026-09-04 14:18:41.118",
+        "artists": 342,
+        "resolutionRate": 0.2528925619834711,
+        "latestSpinAt": "2026-09-04 15:05:44.045",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -13067,12 +13522,12 @@
       "name": "Radio Banovina",
       "observationWindow": {
         "days": 7,
-        "spins": 603,
-        "resolved": 129,
-        "recordings": 124,
-        "artists": 288,
-        "resolutionRate": 0.21393034825870647,
-        "latestSpinAt": "2026-09-04 14:13:35.042",
+        "spins": 605,
+        "resolved": 130,
+        "recordings": 125,
+        "artists": 289,
+        "resolutionRate": 0.21487603305785125,
+        "latestSpinAt": "2026-09-04 15:13:52.336",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13086,12 +13541,12 @@
       "name": "FUNKERFM",
       "observationWindow": {
         "days": 7,
-        "spins": 605,
-        "resolved": 104,
-        "recordings": 26,
+        "spins": 606,
+        "resolved": 103,
+        "recordings": 25,
         "artists": 67,
-        "resolutionRate": 0.171900826446281,
-        "latestSpinAt": "2026-09-04 14:26:16.685",
+        "resolutionRate": 0.16996699669966997,
+        "latestSpinAt": "2026-09-04 15:12:40.732",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13105,12 +13560,12 @@
       "name": "WDIY 88.1 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 606,
+        "spins": 609,
         "resolved": 38,
         "recordings": 32,
-        "artists": 404,
-        "resolutionRate": 0.0627062706270627,
-        "latestSpinAt": "2026-09-04 14:16:50.936",
+        "artists": 405,
+        "resolutionRate": 0.06239737274220033,
+        "latestSpinAt": "2026-09-04 15:12:07.642",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -13124,12 +13579,12 @@
       "name": "open broadcast radio",
       "observationWindow": {
         "days": 7,
-        "spins": 607,
+        "spins": 610,
         "resolved": 32,
         "recordings": 29,
-        "artists": 515,
-        "resolutionRate": 0.05271828665568369,
-        "latestSpinAt": "2026-09-04 14:24:03.213",
+        "artists": 517,
+        "resolutionRate": 0.05245901639344262,
+        "latestSpinAt": "2026-09-04 15:07:41.673",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -13143,12 +13598,12 @@
       "name": "SWISS GROOVE",
       "observationWindow": {
         "days": 7,
-        "spins": 609,
-        "resolved": 235,
-        "recordings": 223,
-        "artists": 461,
-        "resolutionRate": 0.38587848932676516,
-        "latestSpinAt": "2026-09-04 14:01:16.089",
+        "spins": 610,
+        "resolved": 236,
+        "recordings": 224,
+        "artists": 460,
+        "resolutionRate": 0.38688524590163936,
+        "latestSpinAt": "2026-09-04 15:05:36.44",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13162,12 +13617,12 @@
       "name": "Γλέντι 101.1",
       "observationWindow": {
         "days": 7,
-        "spins": 613,
+        "spins": 614,
         "resolved": 30,
         "recordings": 22,
-        "artists": 91,
-        "resolutionRate": 0.048939641109298535,
-        "latestSpinAt": "2026-09-04 14:25:50.146",
+        "artists": 90,
+        "resolutionRate": 0.048859934853420196,
+        "latestSpinAt": "2026-09-04 15:07:22.667",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13181,12 +13636,12 @@
       "name": "Play Emotions",
       "observationWindow": {
         "days": 7,
-        "spins": 617,
-        "resolved": 204,
-        "recordings": 194,
-        "artists": 446,
-        "resolutionRate": 0.33063209076175043,
-        "latestSpinAt": "2026-09-04 14:19:44.499",
+        "spins": 622,
+        "resolved": 205,
+        "recordings": 195,
+        "artists": 448,
+        "resolutionRate": 0.3295819935691318,
+        "latestSpinAt": "2026-09-04 15:13:45.831",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13200,12 +13655,12 @@
       "name": "Dare-FM",
       "observationWindow": {
         "days": 7,
-        "spins": 627,
+        "spins": 631,
         "resolved": 11,
         "recordings": 11,
         "artists": 318,
-        "resolutionRate": 0.017543859649122806,
-        "latestSpinAt": "2026-09-04 14:15:54.995",
+        "resolutionRate": 0.017432646592709985,
+        "latestSpinAt": "2026-09-04 15:03:57.243",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -13219,12 +13674,12 @@
       "name": "Ambiento",
       "observationWindow": {
         "days": 7,
-        "spins": 637,
+        "spins": 634,
         "resolved": 227,
         "recordings": 175,
-        "artists": 374,
-        "resolutionRate": 0.3563579277864992,
-        "latestSpinAt": "2026-09-04 14:20:54.529",
+        "artists": 373,
+        "resolutionRate": 0.3580441640378549,
+        "latestSpinAt": "2026-09-04 15:02:53.331",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13238,15 +13693,34 @@
       "name": "WUMB",
       "observationWindow": {
         "days": 7,
-        "spins": 637,
+        "spins": 639,
         "resolved": 36,
         "recordings": 36,
-        "artists": 517,
-        "resolutionRate": 0.0565149136577708,
-        "latestSpinAt": "2026-09-04 14:17:48.655",
+        "artists": 518,
+        "resolutionRate": 0.056338028169014086,
+        "latestSpinAt": "2026-09-04 15:04:09.738",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 207031,
+      "slug": "hexx-9-radio",
+      "name": "HEXX 9 Radio",
+      "observationWindow": {
+        "days": 7,
+        "spins": 641,
+        "resolved": 5,
+        "recordings": 5,
+        "artists": 206,
+        "resolutionRate": 0.0078003120124804995,
+        "latestSpinAt": "2026-09-04 15:06:22.139",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -13262,26 +13736,7 @@
         "recordings": 1,
         "artists": 1,
         "resolutionRate": 0.009316770186335404,
-        "latestSpinAt": "2026-09-04 14:26:03.636",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 207031,
-      "slug": "hexx-9-radio",
-      "name": "HEXX 9 Radio",
-      "observationWindow": {
-        "days": 7,
-        "spins": 645,
-        "resolved": 5,
-        "recordings": 5,
-        "artists": 208,
-        "resolutionRate": 0.007751937984496124,
-        "latestSpinAt": "2026-09-04 14:13:16.268",
+        "latestSpinAt": "2026-09-04 15:08:28.833",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13295,12 +13750,12 @@
       "name": "Radio Studio Emme",
       "observationWindow": {
         "days": 7,
-        "spins": 648,
+        "spins": 647,
         "resolved": 114,
         "recordings": 89,
         "artists": 147,
-        "resolutionRate": 0.17592592592592593,
-        "latestSpinAt": "2026-09-04 13:44:15.03",
+        "resolutionRate": 0.17619783616692428,
+        "latestSpinAt": "2026-09-04 15:04:46.242",
         "qualityTier": "raw",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13314,12 +13769,12 @@
       "name": "Radio 31 Houseworld",
       "observationWindow": {
         "days": 7,
-        "spins": 659,
-        "resolved": 227,
+        "spins": 655,
+        "resolved": 226,
         "recordings": 123,
         "artists": 247,
-        "resolutionRate": 0.34446130500758726,
-        "latestSpinAt": "2026-09-04 14:23:44.759",
+        "resolutionRate": 0.3450381679389313,
+        "latestSpinAt": "2026-09-04 15:10:33.538",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13334,11 +13789,11 @@
       "observationWindow": {
         "days": 7,
         "spins": 669,
-        "resolved": 97,
+        "resolved": 96,
         "recordings": 19,
         "artists": 91,
-        "resolutionRate": 0.14499252615844543,
-        "latestSpinAt": "2026-09-04 14:23:58.372",
+        "resolutionRate": 0.14349775784753363,
+        "latestSpinAt": "2026-09-04 15:12:37.536",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13352,12 +13807,31 @@
       "name": "Tinder Radio - Bollywood",
       "observationWindow": {
         "days": 7,
-        "spins": 674,
-        "resolved": 246,
+        "spins": 671,
+        "resolved": 245,
         "recordings": 182,
-        "artists": 397,
-        "resolutionRate": 0.3649851632047478,
-        "latestSpinAt": "2026-09-04 14:16:20.807",
+        "artists": 396,
+        "resolutionRate": 0.3651266766020864,
+        "latestSpinAt": "2026-09-04 15:05:43.334",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 5512,
+      "slug": "radio-tell",
+      "name": "Radio Tell",
+      "observationWindow": {
+        "days": 7,
+        "spins": 704,
+        "resolved": 23,
+        "recordings": 21,
+        "artists": 563,
+        "resolutionRate": 0.032670454545454544,
+        "latestSpinAt": "2026-09-04 14:07:05.129",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13376,26 +13850,7 @@
         "recordings": 53,
         "artists": 502,
         "resolutionRate": 0.07659574468085106,
-        "latestSpinAt": "2026-09-04 14:17:13.346",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 5512,
-      "slug": "radio-tell",
-      "name": "Radio Tell",
-      "observationWindow": {
-        "days": 7,
-        "spins": 706,
-        "resolved": 23,
-        "recordings": 21,
-        "artists": 564,
-        "resolutionRate": 0.032577903682719546,
-        "latestSpinAt": "2026-09-04 14:07:05.129",
+        "latestSpinAt": "2026-09-04 15:13:47.035",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13414,7 +13869,7 @@
         "recordings": 3,
         "artists": 566,
         "resolutionRate": 0.004225352112676056,
-        "latestSpinAt": "2026-09-04 14:26:04.836",
+        "latestSpinAt": "2026-09-04 15:13:46.042",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13428,12 +13883,31 @@
       "name": "Radio MANELE",
       "observationWindow": {
         "days": 7,
-        "spins": 713,
+        "spins": 711,
         "resolved": 40,
         "recordings": 22,
-        "artists": 150,
-        "resolutionRate": 0.056100981767180924,
-        "latestSpinAt": "2026-09-04 14:18:26.85",
+        "artists": 149,
+        "resolutionRate": 0.05625879043600562,
+        "latestSpinAt": "2026-09-04 15:06:38.84",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 5651,
+      "slug": "shirley-spinoza",
+      "name": "shirley & spinoza",
+      "observationWindow": {
+        "days": 7,
+        "spins": 718,
+        "resolved": 162,
+        "recordings": 159,
+        "artists": 520,
+        "resolutionRate": 0.22562674094707522,
+        "latestSpinAt": "2026-09-04 15:07:47.419",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13447,12 +13921,12 @@
       "name": "Divyavani",
       "observationWindow": {
         "days": 7,
-        "spins": 719,
+        "spins": 724,
         "resolved": 0,
         "recordings": 0,
         "artists": 9,
         "resolutionRate": 0,
-        "latestSpinAt": "2026-09-04 14:25:54.927",
+        "latestSpinAt": "2026-09-04 15:10:16.247",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13461,39 +13935,39 @@
       "recommendationReason": "20 or more Lore observations yielded no resolved recordings"
     },
     {
-      "id": 43834,
-      "slug": "radio-samobor",
-      "name": "Radio Samobor",
-      "observationWindow": {
-        "days": 7,
-        "spins": 719,
-        "resolved": 16,
-        "recordings": 15,
-        "artists": 515,
-        "resolutionRate": 0.022253129346314324,
-        "latestSpinAt": "2026-09-04 14:21:33.382",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
       "id": 10872,
       "slug": "east-tennessee-s-own-wdvx-89-9-fm",
       "name": "East Tennessee's Own WDVX 89.9 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 726,
+        "spins": 725,
         "resolved": 49,
         "recordings": 32,
-        "artists": 343,
-        "resolutionRate": 0.0674931129476584,
-        "latestSpinAt": "2026-09-04 14:07:57.559",
+        "artists": 342,
+        "resolutionRate": 0.06758620689655172,
+        "latestSpinAt": "2026-09-04 15:02:05.744",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 43834,
+      "slug": "radio-samobor",
+      "name": "Radio Samobor",
+      "observationWindow": {
+        "days": 7,
+        "spins": 728,
+        "resolved": 16,
+        "recordings": 15,
+        "artists": 522,
+        "resolutionRate": 0.02197802197802198,
+        "latestSpinAt": "2026-09-04 15:06:35.15",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -13504,12 +13978,12 @@
       "name": "FolkyTon Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 739,
+        "spins": 738,
         "resolved": 20,
         "recordings": 14,
         "artists": 94,
-        "resolutionRate": 0.02706359945872801,
-        "latestSpinAt": "2026-09-04 14:13:48.618",
+        "resolutionRate": 0.02710027100271003,
+        "latestSpinAt": "2026-09-04 15:11:37.638",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13523,34 +13997,15 @@
       "name": "Radio Ritam Srca",
       "observationWindow": {
         "days": 7,
-        "spins": 748,
-        "resolved": 119,
-        "recordings": 88,
+        "spins": 747,
+        "resolved": 117,
+        "recordings": 86,
         "artists": 162,
-        "resolutionRate": 0.1590909090909091,
-        "latestSpinAt": "2026-09-04 14:21:06.679",
+        "resolutionRate": 0.1566265060240964,
+        "latestSpinAt": "2026-09-04 15:06:14.733",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 5498,
-      "slug": "radio-balla-balla",
-      "name": "Radio Balla Balla",
-      "observationWindow": {
-        "days": 7,
-        "spins": 751,
-        "resolved": 94,
-        "recordings": 73,
-        "artists": 232,
-        "resolutionRate": 0.12516644474034622,
-        "latestSpinAt": "2026-09-04 14:24:29.291",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -13561,12 +14016,31 @@
       "name": "Laza Rádió - Mulatós",
       "observationWindow": {
         "days": 7,
-        "spins": 754,
+        "spins": 749,
         "resolved": 69,
         "recordings": 62,
-        "artists": 212,
-        "resolutionRate": 0.09151193633952255,
-        "latestSpinAt": "2026-09-04 14:09:09.853",
+        "artists": 210,
+        "resolutionRate": 0.09212283044058744,
+        "latestSpinAt": "2026-09-04 15:05:38.841",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 5498,
+      "slug": "radio-balla-balla",
+      "name": "Radio Balla Balla",
+      "observationWindow": {
+        "days": 7,
+        "spins": 749,
+        "resolved": 92,
+        "recordings": 72,
+        "artists": 231,
+        "resolutionRate": 0.12283044058744993,
+        "latestSpinAt": "2026-09-04 15:13:05.738",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13580,12 +14054,12 @@
       "name": "Ankara Havalari",
       "observationWindow": {
         "days": 7,
-        "spins": 759,
+        "spins": 758,
         "resolved": 121,
         "recordings": 58,
         "artists": 89,
-        "resolutionRate": 0.15942028985507245,
-        "latestSpinAt": "2026-09-04 14:12:05.479",
+        "resolutionRate": 0.15963060686015831,
+        "latestSpinAt": "2026-09-04 15:10:42.838",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13599,12 +14073,12 @@
       "name": "Radio Underground",
       "observationWindow": {
         "days": 7,
-        "spins": 766,
-        "resolved": 263,
-        "recordings": 254,
-        "artists": 486,
-        "resolutionRate": 0.3433420365535248,
-        "latestSpinAt": "2026-09-04 14:26:17.978",
+        "spins": 764,
+        "resolved": 265,
+        "recordings": 256,
+        "artists": 483,
+        "resolutionRate": 0.3468586387434555,
+        "latestSpinAt": "2026-09-04 15:03:25.531",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13618,12 +14092,12 @@
       "name": "Nóta FM - 128k MP3",
       "observationWindow": {
         "days": 7,
-        "spins": 779,
-        "resolved": 49,
-        "recordings": 45,
-        "artists": 183,
-        "resolutionRate": 0.06290115532734275,
-        "latestSpinAt": "2026-09-04 14:13:14.983",
+        "spins": 778,
+        "resolved": 48,
+        "recordings": 44,
+        "artists": 182,
+        "resolutionRate": 0.061696658097686374,
+        "latestSpinAt": "2026-09-04 15:03:28.84",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13637,11 +14111,11 @@
       "name": "Canal Breizh",
       "observationWindow": {
         "days": 7,
-        "spins": 788,
+        "spins": 786,
         "resolved": 10,
         "recordings": 10,
         "artists": 326,
-        "resolutionRate": 0.012690355329949238,
+        "resolutionRate": 0.01272264631043257,
         "latestSpinAt": "2026-09-04 14:14:24.253",
         "qualityTier": "promising",
         "streamHealthy": true,
@@ -13656,12 +14130,12 @@
       "name": "Anghamy",
       "observationWindow": {
         "days": 7,
-        "spins": 816,
+        "spins": 806,
         "resolved": 36,
         "recordings": 26,
         "artists": 99,
-        "resolutionRate": 0.04411764705882353,
-        "latestSpinAt": "2026-09-04 14:18:57.218",
+        "resolutionRate": 0.04466501240694789,
+        "latestSpinAt": "2026-09-04 15:05:31.754",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13675,12 +14149,12 @@
       "name": "C Lab",
       "observationWindow": {
         "days": 7,
-        "spins": 817,
-        "resolved": 320,
-        "recordings": 267,
-        "artists": 604,
-        "resolutionRate": 0.39167686658506734,
-        "latestSpinAt": "2026-09-04 14:14:44.425",
+        "spins": 807,
+        "resolved": 322,
+        "recordings": 268,
+        "artists": 600,
+        "resolutionRate": 0.3990086741016109,
+        "latestSpinAt": "2026-09-04 15:06:26.739",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -13694,11 +14168,11 @@
       "name": "SRF Musikwelle",
       "observationWindow": {
         "days": 7,
-        "spins": 821,
+        "spins": 815,
         "resolved": 105,
         "recordings": 85,
-        "artists": 381,
-        "resolutionRate": 0.1278928136419001,
+        "artists": 380,
+        "resolutionRate": 0.12883435582822086,
         "latestSpinAt": "2026-09-04 06:45:17.926",
         "qualityTier": "promising",
         "streamHealthy": true,
@@ -13713,12 +14187,12 @@
       "name": "Positively Rejuvenate 528 Hz -om",
       "observationWindow": {
         "days": 7,
-        "spins": 840,
+        "spins": 832,
         "resolved": 19,
         "recordings": 2,
         "artists": 19,
-        "resolutionRate": 0.02261904761904762,
-        "latestSpinAt": "2026-09-04 14:11:58.988",
+        "resolutionRate": 0.02283653846153846,
+        "latestSpinAt": "2026-09-04 15:08:18.547",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13732,12 +14206,12 @@
       "name": "WRCT 88.3 FM",
       "observationWindow": {
         "days": 7,
-        "spins": 883,
+        "spins": 888,
         "resolved": 23,
         "recordings": 23,
-        "artists": 748,
-        "resolutionRate": 0.026047565118912798,
-        "latestSpinAt": "2026-09-04 14:25:05.362",
+        "artists": 750,
+        "resolutionRate": 0.0259009009009009,
+        "latestSpinAt": "2026-09-04 15:01:30.035",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
@@ -13751,12 +14225,12 @@
       "name": "Radio Mela",
       "observationWindow": {
         "days": 7,
-        "spins": 888,
-        "resolved": 235,
-        "recordings": 228,
-        "artists": 470,
-        "resolutionRate": 0.26463963963963966,
-        "latestSpinAt": "2026-09-04 14:02:21.734",
+        "spins": 891,
+        "resolved": 238,
+        "recordings": 230,
+        "artists": 473,
+        "resolutionRate": 0.2671156004489338,
+        "latestSpinAt": "2026-09-04 15:10:49.436",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13770,12 +14244,31 @@
       "name": "RADIO DIMENSIONE RELAX",
       "observationWindow": {
         "days": 7,
-        "spins": 900,
-        "resolved": 210,
-        "recordings": 151,
+        "spins": 901,
+        "resolved": 208,
+        "recordings": 150,
         "artists": 219,
-        "resolutionRate": 0.23333333333333334,
-        "latestSpinAt": "2026-09-04 14:20:56.52",
+        "resolutionRate": 0.23085460599334073,
+        "latestSpinAt": "2026-09-04 15:10:51.232",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 5467,
+      "slug": "yurd-fm",
+      "name": "Yurd FM",
+      "observationWindow": {
+        "days": 7,
+        "spins": 916,
+        "resolved": 7,
+        "recordings": 7,
+        "artists": 254,
+        "resolutionRate": 0.007641921397379912,
+        "latestSpinAt": "2026-09-04 15:01:38.738",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13789,34 +14282,15 @@
       "name": "Radio Veronika",
       "observationWindow": {
         "days": 7,
-        "spins": 921,
-        "resolved": 270,
+        "spins": 918,
+        "resolved": 271,
         "recordings": 113,
-        "artists": 158,
-        "resolutionRate": 0.2931596091205212,
-        "latestSpinAt": "2026-09-04 14:04:37.146",
+        "artists": 156,
+        "resolutionRate": 0.29520697167755994,
+        "latestSpinAt": "2026-09-04 15:05:50.441",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 5467,
-      "slug": "yurd-fm",
-      "name": "Yurd FM",
-      "observationWindow": {
-        "days": 7,
-        "spins": 927,
-        "resolved": 8,
-        "recordings": 8,
-        "artists": 256,
-        "resolutionRate": 0.008629989212513484,
-        "latestSpinAt": "2026-09-04 14:21:06.876",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -13827,34 +14301,15 @@
       "name": "MyNoise Space Odyssey",
       "observationWindow": {
         "days": 7,
-        "spins": 955,
+        "spins": 952,
         "resolved": 13,
         "recordings": 5,
         "artists": 1,
-        "resolutionRate": 0.013612565445026177,
-        "latestSpinAt": "2026-09-04 14:25:55.976",
+        "resolutionRate": 0.01365546218487395,
+        "latestSpinAt": "2026-09-04 15:05:53.037",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": true
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 17516,
-      "slug": "positively-uplifting-417hz-om",
-      "name": "Positively Uplifting 417Hz -om",
-      "observationWindow": {
-        "days": 7,
-        "spins": 955,
-        "resolved": 35,
-        "recordings": 2,
-        "artists": 6,
-        "resolutionRate": 0.03664921465968586,
-        "latestSpinAt": "2026-09-04 14:25:44.803",
-        "qualityTier": "promising",
-        "streamHealthy": true,
-        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -13865,12 +14320,31 @@
       "name": "Radio Jugomania",
       "observationWindow": {
         "days": 7,
-        "spins": 969,
-        "resolved": 249,
-        "recordings": 162,
-        "artists": 189,
-        "resolutionRate": 0.25696594427244585,
-        "latestSpinAt": "2026-09-04 14:18:41.429",
+        "spins": 964,
+        "resolved": 246,
+        "recordings": 161,
+        "artists": 187,
+        "resolutionRate": 0.2551867219917012,
+        "latestSpinAt": "2026-09-04 15:08:30.239",
+        "qualityTier": "promising",
+        "streamHealthy": true,
+        "scheduleFresh": false
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 17516,
+      "slug": "positively-uplifting-417hz-om",
+      "name": "Positively Uplifting 417Hz -om",
+      "observationWindow": {
+        "days": 7,
+        "spins": 971,
+        "resolved": 36,
+        "recordings": 2,
+        "artists": 6,
+        "resolutionRate": 0.037075180226570546,
+        "latestSpinAt": "2026-09-04 15:05:24.43",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13884,12 +14358,12 @@
       "name": "Express-FM Digital",
       "observationWindow": {
         "days": 7,
-        "spins": 997,
+        "spins": 996,
         "resolved": 20,
         "recordings": 9,
         "artists": 1,
-        "resolutionRate": 0.020060180541624874,
-        "latestSpinAt": "2026-09-04 14:11:30.481",
+        "resolutionRate": 0.020080321285140562,
+        "latestSpinAt": "2026-09-04 15:08:08.436",
         "qualityTier": "raw",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13903,12 +14377,12 @@
       "name": "Ballando Web Radio",
       "observationWindow": {
         "days": 7,
-        "spins": 1032,
+        "spins": 1038,
         "resolved": 15,
         "recordings": 2,
         "artists": 3,
-        "resolutionRate": 0.014534883720930232,
-        "latestSpinAt": "2026-09-04 14:26:04.948",
+        "resolutionRate": 0.014450867052023121,
+        "latestSpinAt": "2026-09-04 15:11:50.836",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13922,15 +14396,34 @@
       "name": "MFM STATION",
       "observationWindow": {
         "days": 7,
-        "spins": 1070,
-        "resolved": 296,
-        "recordings": 147,
-        "artists": 395,
-        "resolutionRate": 0.2766355140186916,
-        "latestSpinAt": "2026-09-04 14:04:47.03",
+        "spins": 1055,
+        "resolved": 293,
+        "recordings": 146,
+        "artists": 394,
+        "resolutionRate": 0.2777251184834123,
+        "latestSpinAt": "2026-09-04 15:13:53.732",
         "qualityTier": "raw",
         "streamHealthy": true,
         "scheduleFresh": true
+      },
+      "recommendation": "trial",
+      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
+    },
+    {
+      "id": 5448,
+      "slug": "tukker-fm",
+      "name": "Tukker FM",
+      "observationWindow": {
+        "days": 7,
+        "spins": 1080,
+        "resolved": 378,
+        "recordings": 363,
+        "artists": 545,
+        "resolutionRate": 0.35,
+        "latestSpinAt": "2026-09-04 15:01:40.437",
+        "qualityTier": "raw",
+        "streamHealthy": true,
+        "scheduleFresh": false
       },
       "recommendation": "trial",
       "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
@@ -13942,31 +14435,12 @@
       "observationWindow": {
         "days": 7,
         "spins": 1081,
-        "resolved": 317,
+        "resolved": 316,
         "recordings": 212,
         "artists": 186,
-        "resolutionRate": 0.29324699352451433,
-        "latestSpinAt": "2026-09-04 14:01:10.76",
+        "resolutionRate": 0.2923219241443108,
+        "latestSpinAt": "2026-09-04 15:10:04.231",
         "qualityTier": "proven",
-        "streamHealthy": true,
-        "scheduleFresh": false
-      },
-      "recommendation": "trial",
-      "recommendationReason": "Lore observations exist but resolution or breadth remains inconclusive"
-    },
-    {
-      "id": 5448,
-      "slug": "tukker-fm",
-      "name": "Tukker FM",
-      "observationWindow": {
-        "days": 7,
-        "spins": 1081,
-        "resolved": 377,
-        "recordings": 362,
-        "artists": 545,
-        "resolutionRate": 0.34875115633672527,
-        "latestSpinAt": "2026-09-04 14:07:53.773",
-        "qualityTier": "raw",
         "streamHealthy": true,
         "scheduleFresh": false
       },
@@ -13979,12 +14453,12 @@
       "name": "NEU RADIO",
       "observationWindow": {
         "days": 7,
-        "spins": 1133,
+        "spins": 1147,
         "resolved": 356,
-        "recordings": 340,
-        "artists": 627,
-        "resolutionRate": 0.3142100617828773,
-        "latestSpinAt": "2026-09-04 14:17:36.565",
+        "recordings": 341,
+        "artists": 630,
+        "resolutionRate": 0.31037489102005233,
+        "latestSpinAt": "2026-09-04 15:08:23.745",
         "qualityTier": "proven",
         "streamHealthy": true,
         "scheduleFresh": false
@@ -13998,12 +14472,12 @@
       "name": "WBEZ-HD2 \"Vocalo Stream\" Chicago, IL",
       "observationWindow": {
         "days": 7,
-        "spins": 1483,
+        "spins": 1481,
         "resolved": 340,
-        "recordings": 254,
-        "artists": 472,
-        "resolutionRate": 0.22926500337154418,
-        "latestSpinAt": "2026-09-04 14:11:33.617",
+        "recordings": 251,
+        "artists": 468,
+        "resolutionRate": 0.22957461174881835,
+        "latestSpinAt": "2026-09-04 15:11:58.63",
         "qualityTier": "promising",
         "streamHealthy": true,
         "scheduleFresh": false

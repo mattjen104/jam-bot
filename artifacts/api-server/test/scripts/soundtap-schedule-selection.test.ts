@@ -183,6 +183,43 @@ describe("Soundtap evidence-based identity audit", () => {
     expect(result.ambiguous).toHaveLength(1);
   });
 
+  it("ignores hidden inactive aliases after an identity is resolved", () => {
+    const source = parseSoundtapStations(
+      "[ByteFM](https://soundtap.fm/stations/bytefm)\n\nGermany\n",
+    );
+    const result = auditSoundtapIdentity(source, [
+      {
+        ...station,
+        id: 10,
+        name: "ByteFM",
+        org: "ByteFM",
+        country: "DE",
+        active: true,
+        hidden: false,
+        homepageUrl: "https://www.byte.fm/",
+        streamUrl: "https://bytefm.cast.addradio.de/bytefm/main/high/stream",
+      },
+      {
+        ...station,
+        id: 11,
+        name: "ByteFM | HH-UKW",
+        org: null,
+        country: "DE",
+        active: false,
+        hidden: true,
+        homepageUrl: "https://www.byte.fm/",
+        streamUrl: "http://bytefm-hamburg.cast.addradio.de/bytefm/hamburg/mp3/mid",
+      },
+    ]);
+    expect(result.shared).toEqual([
+      expect.objectContaining({
+        confidence: "high",
+        station: expect.objectContaining({ id: 10 }),
+      }),
+    ]);
+    expect(result.ambiguous).toEqual([]);
+  });
+
   it("keeps evidence-insufficient absent candidates out of trials", () => {
     const source = parseSoundtapStations(
       "[ByteFM](https://soundtap.fm/stations/bytefm)\n\nGermany\n",

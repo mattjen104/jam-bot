@@ -21,6 +21,7 @@ export async function applyLocalRosterRepair(): Promise<void> {
         WHEN 'kexp-90-3-fm-seattle' THEN 'Seattle'
         WHEN 'dublab' THEN 'Los Angeles'
         WHEN 'rb-0bb84fe1-e899-11e9-a96c-52543be04c81' THEN 'Los Angeles'
+        WHEN 'bytefm-192k' THEN 'Hamburg'
         WHEN 'kcrw-eclectic24' THEN 'Los Angeles'
         WHEN 'kalx' THEN 'Berkeley'
         WHEN 'kcsm' THEN 'San Mateo'
@@ -46,7 +47,10 @@ export async function applyLocalRosterRepair(): Promise<void> {
         ) THEN 'IL'
         ELSE region
       END,
-      country = 'US',
+      country = CASE
+        WHEN slug = 'bytefm-192k' THEN 'DE'
+        ELSE 'US'
+      END,
       tags = CASE
         WHEN slug IN ('kucr', 'kxlu', 'ksjs', 'wluw')
           THEN (
@@ -79,6 +83,7 @@ export async function applyLocalRosterRepair(): Promise<void> {
       'kexp-90-3-fm-seattle',
       'dublab',
       'rb-0bb84fe1-e899-11e9-a96c-52543be04c81',
+      'bytefm-192k',
       'kcrw-eclectic24',
       'kalx',
       'kcsm',
@@ -95,6 +100,7 @@ export async function applyLocalRosterRepair(): Promise<void> {
       VALUES
         ('kexp-90-3-fm-seattle', 'kexp'),
         ('rb-0bb84fe1-e899-11e9-a96c-52543be04c81', 'dublab'),
+        ('bytefm-hh-ukw', 'bytefm-192k'),
         ('wfmt-98-7-chicago-il-aac', 'wfmt-98-7-chicago-il-mp3')
     )
     UPDATE stations duplicate
