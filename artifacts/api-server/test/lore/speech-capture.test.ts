@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
@@ -73,6 +74,57 @@ describe("speech/capture core", () => {
     });
     expect(invoked).toBe(false);
   });
+
+  it.skipIf(process.platform !== "linux").each([
+    {
+      resource: "CPU",
+      budget: { maxCpuMs: 10 },
+      body: "while (true) { Math.sqrt(Math.random()); }",
+      reason: "cpu_budget",
+    },
+    {
+      resource: "memory",
+      budget: { maxMemoryBytes: 1 },
+      body: "const memory = []; while (true) { memory.push(Buffer.alloc(1024 * 1024, 1)); }",
+      reason: "memory_budget",
+    },
+  ] as const)(
+    "kills a real child that exceeds its $resource budget",
+    async ({ budget, body, reason }) => {
+      const directory = await mkdtemp(join(tmpdir(), "lore-speech-budget-"));
+      const executable = join(directory, "runaway-model");
+      const modelPath = join(directory, "model.bin");
+      const pidPath = join(directory, "child.pid");
+      await writeFile(executable, `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+writeFileSync(process.argv.at(-1), String(process.pid));
+${body}
+`);
+      await chmod(executable, 0o700);
+      await writeFile(modelPath, "test model");
+
+      try {
+        const adapter = new LocalSttAdapter({
+          executable,
+          modelPath,
+          timeoutMs: 3_000,
+          maxConcurrency: 1,
+          ...budget,
+        });
+        await expect(adapter.transcribe(pidPath)).resolves.toEqual({
+          kind: "skipped",
+          reason,
+        });
+
+        const pid = Number(await readFile(pidPath, "utf8"));
+        expect(Number.isInteger(pid)).toBe(true);
+        expect(existsSync(`/proc/${pid}`)).toBe(false);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+    5_000,
+  );
 
   it("classifies silence and music locally before ASR", async () => {
     for (const outcome of ["silence", "music"] as const) {
