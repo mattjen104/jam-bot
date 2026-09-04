@@ -126,6 +126,43 @@ ${body}
     5_000,
   );
 
+  it.skipIf(process.platform !== "linux")(
+    "waits for a timed-out real child to exit before returning its failure",
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "lore-speech-timeout-"));
+      const executable = join(directory, "stalled-model");
+      const modelPath = join(directory, "model.bin");
+      const pidPath = join(directory, "child.pid");
+      await writeFile(executable, `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+writeFileSync(process.argv.at(-1), String(process.pid));
+setInterval(() => undefined, 1_000);
+`);
+      await chmod(executable, 0o700);
+      await writeFile(modelPath, "test model");
+
+      try {
+        const adapter = new LocalSttAdapter({
+          executable,
+          modelPath,
+          timeoutMs: 150,
+          maxConcurrency: 1,
+        });
+        await expect(adapter.transcribe(pidPath)).resolves.toEqual({
+          kind: "transcription_failure",
+          reason: "local command timed out after 150ms",
+        });
+
+        const pid = Number(await readFile(pidPath, "utf8"));
+        expect(Number.isInteger(pid)).toBe(true);
+        expect(existsSync(`/proc/${pid}`)).toBe(false);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+    2_000,
+  );
+
   it("classifies silence and music locally before ASR", async () => {
     for (const outcome of ["silence", "music"] as const) {
       const calls: string[] = [];

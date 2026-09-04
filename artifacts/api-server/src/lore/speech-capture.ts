@@ -34,6 +34,7 @@ function runLocalCommand(
     let cpuMs = 0;
     let maxMemoryBytes = 0;
     let budgetExceeded = false;
+    let timeoutError: Error | undefined;
     const maxOutputBytes = 1_000_000;
     let done = false;
     const finish = (error?: Error) => {
@@ -45,8 +46,8 @@ function runLocalCommand(
       else resolve({ stdout, stderr, cpuMs, maxMemoryBytes });
     };
     const timer = setTimeout(() => {
+      timeoutError = new Error(`local command timed out after ${timeoutMs}ms`);
       child.kill("SIGKILL");
-      finish(new Error(`local command timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     const resourceTimer = setInterval(() => {
       void Promise.all([
@@ -78,7 +79,7 @@ function runLocalCommand(
     child.stdout.on("data", (data: Buffer) => { stdout = append(stdout, data); });
     child.stderr.on("data", (data: Buffer) => { stderr = append(stderr, data); });
     child.once("error", (error) => finish(error));
-    child.once("close", (code) => finish(code === 0 || budgetExceeded ? undefined : new Error(`${executable} exited ${code}`)));
+    child.once("close", (code) => finish(timeoutError ?? (code === 0 || budgetExceeded ? undefined : new Error(`${executable} exited ${code}`))));
   });
 }
 
