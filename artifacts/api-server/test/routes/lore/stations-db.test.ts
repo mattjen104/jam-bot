@@ -22,6 +22,7 @@ import app from "../../../src/app.js";
  */
 const run = randomUUID().slice(0, 8);
 const SLUG = `test-rt-st-${run}`;
+const OTHER_REGION_SLUG = `test-rt-st-other-region-${run}`;
 const HIDDEN_SLUG = `test-rt-st-hidden-${run}`;
 const INACTIVE_SLUG = `test-rt-st-inactive-${run}`;
 const SLEEP_SLUG = `test-rt-st-sleep-${run}`;
@@ -52,6 +53,18 @@ beforeAll(async () => {
         name: `Test RT Station ${run}`,
         streamUrl: "http://example.invalid/rt",
         stationClass: "community",
+        city: "Riverside",
+        region: "CA",
+        country: "US",
+      },
+      {
+        slug: OTHER_REGION_SLUG,
+        name: `Test RT Other Region ${run}`,
+        streamUrl: "http://example.invalid/rt-other-region",
+        stationClass: "community",
+        city: "Seattle",
+        region: "WA",
+        country: "US",
       },
       {
         slug: HIDDEN_SLUG,
@@ -137,8 +150,31 @@ describe("GET /api/stations", () => {
     expect(slugs).not.toContain(INACTIVE_SLUG);
 
     const ours = body.stations.find((s: { slug: string }) => s.slug === SLUG);
-    expect(ours).toMatchObject({ slug: SLUG, name: `Test RT Station ${run}` });
+    expect(ours).toMatchObject({
+      slug: SLUG,
+      name: `Test RT Station ${run}`,
+      city: "Riverside",
+      region: "CA",
+      country: "US",
+    });
     expect(typeof ours.name).toBe("string");
+  });
+
+  it("uses city and region hints only for locality ordering", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(
+      `${baseUrl}/api/stations?city=Riverside&region=CA&country=US`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const local = body.stations.findIndex((s: { slug: string }) => s.slug === SLUG);
+    const otherRegion = body.stations.findIndex(
+      (s: { slug: string }) => s.slug === OTHER_REGION_SLUG,
+    );
+    expect(local).toBeGreaterThanOrEqual(0);
+    expect(otherRegion).toBeGreaterThanOrEqual(0);
+    expect(local).toBeLessThan(otherRegion);
+    expect(body.stations[local].stationCategories).toEqual(["discovery"]);
   });
 
   it("excludes sleep stations from the default directory", async (ctx) => {

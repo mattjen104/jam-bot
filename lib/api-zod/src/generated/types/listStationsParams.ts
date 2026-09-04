@@ -13,4 +13,16 @@ export type ListStationsParams = {
 
  */
   mode?: ListStationsMode;
+  /**
+   * Optional listener city; exact city matches rank first without changing station categories.
+   */
+  city?: string;
+  /**
+   * Optional state/province/region; regional matches rank ahead of other stations.
+   */
+  region?: string;
+  /**
+   * Optional country code/name used as the broadest locality ranking hint.
+   */
+  country?: string;
 };

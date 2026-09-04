@@ -605,6 +605,32 @@ function publishStationDirectoryCache(
   return entry;
 }
 
+function normalizedLocality(value: unknown): string | null {
+  return typeof value === "string" && value.trim()
+    ? value.trim().toLocaleLowerCase("en")
+    : null;
+}
+
+function rankStationDirectoryForLocality(
+  response: ReturnType<typeof ListStationsResponse.parse>,
+  locality: { city: string | null; region: string | null; country: string | null },
+) {
+  if (!locality.city && !locality.region && !locality.country) return response;
+  const rank = (station: (typeof response.stations)[number]) => {
+    if (locality.city && normalizedLocality(station.city) === locality.city) return 0;
+    if (locality.region && normalizedLocality(station.region) === locality.region) return 1;
+    if (locality.country && normalizedLocality(station.country) === locality.country) return 2;
+    return 3;
+  };
+  return {
+    ...response,
+    stations: response.stations
+      .map((station, index) => ({ station, index, rank: rank(station) }))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map(({ station }) => station),
+  };
+}
+
 function fillStationDirectoryCache(
   mode: StationDirectoryMode,
 ): Promise<StationDirectoryCacheEntry> {
@@ -721,9 +747,14 @@ router.get("/stations", h(async (req, res) => {
     return res.status(400).json({ error: `Unknown mode: "${rawMode}". Supported values: sleep, era-genre` });
   }
   const mode: StationDirectoryMode = rawMode ?? "default";
+  const locality = {
+    city: normalizedLocality(req.query.city),
+    region: normalizedLocality(req.query.region),
+    country: normalizedLocality(req.query.country),
+  };
   const cached = stationDirectoryCache.get(mode);
   if (cached && Date.now() - cached.builtAt < STATION_DIRECTORY_CACHE_TTL_MS) {
-    return res.json(cached.response);
+    return res.json(rankStationDirectoryForLocality(cached.response, locality));
   }
 
   const fill = fillStationDirectoryCache(mode);
@@ -733,11 +764,11 @@ router.get("/stations", h(async (req, res) => {
     void fill.catch(() => {
       // Keep serving stale; the next request retries.
     });
-    return res.json(cached.response);
+    return res.json(rankStationDirectoryForLocality(cached.response, locality));
   }
 
   const entry = await fill;
-  return res.json(entry.response);
+  return res.json(rankStationDirectoryForLocality(entry.response, locality));
 }));
 
 // GET /api/stations/now-playing — latest spin per station (the dial pulse).

@@ -74,6 +74,7 @@ export const SEED_STATIONS: InsertStation[] = [
     org: "KEXP",
     country: "US",
     city: "Seattle",
+    region: "WA",
     streamUrl: "https://kexp.streamguys1.com/kexp160.aac",
     streamQuality: "160kbps AAC",
     streamFormat: "aac",
@@ -91,6 +92,7 @@ export const SEED_STATIONS: InsertStation[] = [
     name: "WWOZ 90.7 FM",
     org: "WWOZ",
     city: "New Orleans",
+    region: "LA",
     country: "US",
     streamUrl: "https://www.wwoz.org/listen/hi",
     streamQuality: "128kbps MP3",
@@ -115,6 +117,7 @@ export const SEED_STATIONS: InsertStation[] = [
     name: "KUTX 98.9 FM",
     org: "KUTX",
     city: "Austin",
+    region: "TX",
     country: "US",
     streamUrl: "https://streams.kut.org/4428_56?aw_0_1st.playerid=kutx-web",
     streamQuality: "56kbps AAC+",
@@ -137,6 +140,7 @@ export const SEED_STATIONS: InsertStation[] = [
     org: "KCRW",
     country: "US",
     city: "Los Angeles",
+    region: "CA",
     streamUrl: "https://streams.kcrw.com/e24_mp3",
     streamQuality: "128kbps MP3",
     streamFormat: "mp3",
@@ -238,6 +242,7 @@ function indieInternetStations(): InsertStation[] {
       org: "Dublab",
       country: "US",
       city: "Los Angeles",
+      region: "CA",
       streamUrl: "https://dublab.out.airtime.pro:8000/dublab_a",
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
@@ -565,6 +570,7 @@ function specialistAdditions(): InsertStation[] {
     {
       slug: "8ball-radio", name: "8Ball Radio", org: "8 Ball Community",
       city: "New York", country: "US", streamUrl: "https://8ballradio.nyc/",
+      region: "NY",
       streamQuality: "Official browser player", streamFormat: "hls",
       homepageUrl: "https://8ballradio.nyc/", scheduleUrl: "https://8ballradio.nyc/",
       donateUrl: "https://8ballradio.nyc/", nowPlayingSource: null,
@@ -1812,6 +1818,7 @@ function spinitronCollegeStations(): InsertStation[] {
       org: "Loyola Marymount University",
       country: "US",
       city: "Los Angeles",
+      region: "CA",
       // StreamGuys CDN stream — same CDN as WPRB and WKCR; /kxlu-hi is the
       // standard high-quality mount naming for StreamGuys-hosted stations.
       streamUrl: "https://kxlu.streamguys1.com/kxlu-hi",
@@ -2143,6 +2150,8 @@ export interface SpinitronDirectoryStation {
   country?: string;
   /** Broadcast city when the embedded curated roster knows it. */
   city?: string;
+  /** State/province/region when the embedded curated roster knows it. */
+  region?: string;
   /** Editorial tags that must survive first insert from the fallback roster. */
   tags?: string[];
   /** Station homepage URL from the Spinitron directory. */
@@ -2348,7 +2357,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "WLUR", name: "WLUR 91.5 FM", org: "Washington and Lee University", country: "US" },
 
   // ── Midwest ─────────────────────────────────────────────────────────────
-  { callsign: "WLUW", name: "WLUW 88.7 FM", org: "Loyola University Chicago", country: "US", city: "Chicago", tags: ["college"] },
+  { callsign: "WLUW", name: "WLUW 88.7 FM", org: "Loyola University Chicago", country: "US", city: "Chicago", region: "IL", tags: ["college"] },
   { callsign: "WHPK", name: "WHPK 88.5 FM", org: "University of Chicago", country: "US" },
   { callsign: "WEFT", name: "WEFT 90.1 FM", org: "WEFT Community Radio", country: "US" },
   { callsign: "WMHW", name: "WMHW 91.5 FM", org: "Central Michigan University", country: "US" },
@@ -2370,13 +2379,13 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
 
   // ── West Coast ──────────────────────────────────────────────────────────
   { callsign: "KCSB", name: "KCSB 91.9 FM", org: "UC Santa Barbara", country: "US" },
-  { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US", city: "Riverside", tags: ["college"] },
+  { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US", city: "Riverside", region: "CA", tags: ["college"] },
   { callsign: "KZSC", name: "KZSC 88.1 FM", org: "UC Santa Cruz", country: "US" },
   { callsign: "KUCI", name: "KUCI 88.9 FM", org: "UC Irvine", country: "US" },
-  { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US", city: "Los Angeles", tags: ["college"] },
+  { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US", city: "Los Angeles", region: "CA", tags: ["college"] },
   { callsign: "KSDT", name: "KSDT 95.7 FM", org: "UC San Diego", country: "US" },
   { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US" },
-  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", tags: ["college"] },
+  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", region: "CA", tags: ["college"] },
   { callsign: "KCRH", name: "KCRH 89.9 FM", org: "Chabot College", country: "US" },
   { callsign: "KTUH", name: "KTUH 90.3 FM", org: "University of Hawaii", country: "US" },
   { callsign: "KASC", name: "KASC 1260 AM", org: "Arizona State University", country: "US" },
@@ -2595,6 +2604,7 @@ export async function seedSpinitronRoster(): Promise<void> {
       org: station.org ?? null,
       country: station.country ?? "US",
       city: station.city ?? null,
+      region: station.region ?? null,
       streamUrl: "",
       nowPlayingSource: spinitronWebSourceForCallsign(station.callsign),
       nowPlayingConfig: { callsign: station.callsign },
@@ -2691,6 +2701,8 @@ export async function seedStations(): Promise<void> {
           // Populate seed-owned city data without erasing an operator correction
           // for older stations whose seed does not carry a city.
           city: sql`COALESCE(EXCLUDED.city, ${stationsTable.city})`,
+          // Region follows the same seed-owned, operator-correction-safe rule.
+          region: sql`COALESCE(EXCLUDED.region, ${stationsTable.region})`,
           streamUrl: s.streamUrl,
           streamQuality: s.streamQuality ?? null,
           streamFormat: s.streamFormat ?? "aac",

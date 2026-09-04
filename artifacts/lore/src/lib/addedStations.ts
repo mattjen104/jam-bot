@@ -202,6 +202,7 @@ export function addedStationToStation(s: AddedStation): Station {
     name: s.name,
     org: null,
     city: null,
+    region: s.state,
     country: s.country,
     streamUrl: s.streamUrl,
     streamQuality: qualityLabel(s.bitrate, s.codec),

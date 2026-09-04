@@ -569,6 +569,11 @@ export interface Station {
    * @nullable
    */
   city?: string | null;
+  /**
+   * State, province, or region, stored separately from city for locality ranking.
+   * @nullable
+   */
+  region?: string | null;
   /** @nullable */
   country?: string | null;
   streamUrl: string;
@@ -4439,6 +4444,18 @@ export type ListStationsParams = {
 
  */
   mode?: ListStationsMode;
+  /**
+   * Optional listener city; exact city matches rank first without changing station categories.
+   */
+  city?: string;
+  /**
+   * Optional state/province/region; regional matches rank ahead of other stations.
+   */
+  region?: string;
+  /**
+   * Optional country code/name used as the broadest locality ranking hint.
+   */
+  country?: string;
 };
 
 export type ListStationsMode =

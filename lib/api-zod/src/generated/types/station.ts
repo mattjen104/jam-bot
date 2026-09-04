@@ -24,6 +24,11 @@ export interface Station {
    * @nullable
    */
   city?: string | null;
+  /**
+   * State, province, or region, stored separately from city for locality ranking.
+   * @nullable
+   */
+  region?: string | null;
   /** @nullable */
   country?: string | null;
   streamUrl: string;

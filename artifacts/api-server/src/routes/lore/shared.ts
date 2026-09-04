@@ -278,6 +278,7 @@ export function toStation(
     org: s.org,
     country: s.country,
     city: s.city ?? null,
+    region: s.region ?? null,
     ianaTimezone: s.ianaTimezone ?? null,
     streamUrl: s.streamUrl,
     streamQuality: s.streamQuality,

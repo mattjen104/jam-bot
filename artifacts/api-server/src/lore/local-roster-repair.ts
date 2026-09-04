@@ -31,6 +31,21 @@ export async function applyLocalRosterRepair(): Promise<void> {
         WHEN 'wfmt-98-7-chicago-il-mp3' THEN 'Chicago'
         ELSE city
       END,
+      region = CASE
+        WHEN slug IN (
+          'kucr', 'kxlu', 'ksjs', 'kexp', 'kexp-90-3-fm-seattle',
+          'dublab', 'rb-0bb84fe1-e899-11e9-a96c-52543be04c81',
+          'kcrw-eclectic24', 'kalx', 'kcsm'
+        ) THEN CASE
+          WHEN slug IN ('kexp', 'kexp-90-3-fm-seattle') THEN 'WA'
+          ELSE 'CA'
+        END
+        WHEN slug IN (
+          'wluw', 'whpk', 'wnur', 'wbez-hd2-vocalo-stream-chicago-il',
+          'wfmt-98-7-chicago-il-aac', 'wfmt-98-7-chicago-il-mp3'
+        ) THEN 'IL'
+        ELSE region
+      END,
       country = 'US',
       tags = CASE
         WHEN slug IN ('kucr', 'kxlu', 'ksjs', 'wluw')

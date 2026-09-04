@@ -258,6 +258,24 @@ export const ListStationsQueryParams = zod.object({
     .describe(
       "Station set to retrieve. Omit for the normal public directory. `sleep` returns only active Sleep Radio stations (ambient\/utility channels hidden from the normal dial). `era-genre` returns only active era\/genre stations (decade\/oldies\/retro and single-genre algorithmic channels hidden from the normal dial). Unknown values return 400.\n",
     ),
+  city: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Optional listener city; exact city matches rank first without changing station categories.",
+    ),
+  region: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Optional state\/province\/region; regional matches rank ahead of other stations.",
+    ),
+  country: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Optional country code\/name used as the broadest locality ranking hint.",
+    ),
 });
 
 export const listStationsResponseStationsItemPlaybackCandidatesMax = 4;
@@ -279,6 +297,12 @@ export const ListStationsResponse = zod.object({
           .nullish()
           .describe(
             "City the station broadcasts from, when known. Used alongside org and country for the station's location byline.",
+          ),
+        region: zod
+          .string()
+          .nullish()
+          .describe(
+            "State, province, or region, stored separately from city for locality ranking.",
           ),
         country: zod.string().nullish(),
         streamUrl: zod.string(),
@@ -1002,6 +1026,12 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           "City the station broadcasts from, when known. Used alongside org and country for the station's location byline.",
+        ),
+      region: zod
+        .string()
+        .nullish()
+        .describe(
+          "State, province, or region, stored separately from city for locality ranking.",
         ),
       country: zod.string().nullish(),
       streamUrl: zod.string(),
@@ -2125,6 +2155,12 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           "City the station broadcasts from, when known. Used alongside org and country for the station's location byline.",
+        ),
+      region: zod
+        .string()
+        .nullish()
+        .describe(
+          "State, province, or region, stored separately from city for locality ranking.",
         ),
       country: zod.string().nullish(),
       streamUrl: zod.string(),

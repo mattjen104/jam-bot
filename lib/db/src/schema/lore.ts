@@ -163,6 +163,8 @@ export const stationsTable = pgTable("stations", {
   country: text("country"),
   /** City the station broadcasts from (e.g. "London", "Berlin"). Populated for CRI-sourced stations. */
   city: text("city"),
+  /** State, province, or region, stored separately from city for locality ranking. */
+  region: text("region"),
   /**
    * IANA timezone identifier inferred from city + country (e.g. "America/Los_Angeles").
    * Stored so the schedule endpoint doesn't re-run the lookup on every request.

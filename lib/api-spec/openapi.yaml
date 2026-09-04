@@ -161,6 +161,24 @@ paths:
           schema:
             type: string
             enum: [sleep, era-genre]
+        - name: city
+          in: query
+          required: false
+          description: Optional listener city; exact city matches rank first without changing station categories.
+          schema:
+            type: string
+        - name: region
+          in: query
+          required: false
+          description: Optional state/province/region; regional matches rank ahead of other stations.
+          schema:
+            type: string
+        - name: country
+          in: query
+          required: false
+          description: Optional country code/name used as the broadest locality ranking hint.
+          schema:
+            type: string
       responses:
         "200":
           description: Station directory
@@ -5050,6 +5068,9 @@ components:
           description: >-
             City the station broadcasts from, when known. Used alongside org and
             country for the station's location byline.
+        region:
+          type: ["string", "null"]
+          description: State, province, or region, stored separately from city for locality ranking.
         country:
           type: ["string", "null"]
         streamUrl:

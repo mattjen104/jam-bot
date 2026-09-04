@@ -19,6 +19,7 @@ const DISCOVERY_COLUMNS = [
   "favorite",
   "hidden",
   "crossing_eligible",
+  "region",
 ] as const;
 
 /**
@@ -45,7 +46,8 @@ export async function applyStationDiscoveryMigration(): Promise<void> {
           'active', 'source', 'tier', 'tags', 'last_alive_at',
           'resolution_rate', 'clickcount', 'votes', 'bitrate', 'codec',
           'health_failures', 'discovery_score', 'homepage_blurb',
-          'homepage_scraped_at', 'favorite', 'hidden', 'crossing_eligible'
+          'homepage_scraped_at', 'favorite', 'hidden', 'crossing_eligible',
+          'region'
         ]::text[]
       )
   `);
@@ -72,7 +74,8 @@ export async function applyStationDiscoveryMigration(): Promise<void> {
       ADD COLUMN IF NOT EXISTS homepage_scraped_at  timestamptz,
       ADD COLUMN IF NOT EXISTS favorite           boolean  NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS hidden             boolean  NOT NULL DEFAULT false,
-      ADD COLUMN IF NOT EXISTS crossing_eligible  boolean  NOT NULL DEFAULT true
+      ADD COLUMN IF NOT EXISTS crossing_eligible  boolean  NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS region             text
   `);
   console.info("[migration] station discovery fields: OK");
 }

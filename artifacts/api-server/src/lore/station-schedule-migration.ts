@@ -86,7 +86,6 @@ export async function applyStationScheduleMigration(): Promise<void> {
   await db.execute(sql`
     ALTER TABLE stations ADD COLUMN IF NOT EXISTS iana_timezone text
   `);
-
   // Receipt columns were added after scraped_shows had already been deployed.
   // Add them nullable first so legacy rows can be backfilled transactionally
   // below, then enforce the invariant after the backfill.
