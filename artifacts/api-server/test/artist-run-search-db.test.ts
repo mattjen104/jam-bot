@@ -26,6 +26,10 @@ import app from "../src/app.js";
 const run = randomUUID().slice(0, 8);
 const ARTIST = `Zqartist ${run}`;
 const MBID = `test-ars-${run}`;
+const JUNK_MBID = `test-ars-junk-${run}`;
+const ALIAS_MBID = `test-ars-alias-${run}`;
+const ARTIST_MBID = `test-artist-${run}`;
+const ARTIST_ALIAS = `Zz Alias ${run}`;
 const MIN = 60 * 1000;
 
 // Base a couple of minutes ahead of now; keep the window inside one UTC day.
@@ -66,7 +70,11 @@ beforeAll(async () => {
   // NOT match — exercises the recordings-join match path).
   await db
     .insert(recordingsTable)
-    .values([{ mbid: MBID, title: "ARS Song", artist: ARTIST }]);
+    .values([
+      { mbid: MBID, title: "ARS Song", artist: ARTIST, artistMbid: ARTIST_MBID },
+      { mbid: JUNK_MBID, title: "Station break", artist: "Commercial Break" },
+      { mbid: ALIAS_MBID, title: "Alias Song", artist: ARTIST_ALIAS, artistMbid: ARTIST_MBID },
+    ]);
 
   await db.insert(spinsTable).values([
     // Run: 3 spins on one day. Spin 1 (earliest, the anchor) does NOT match.
@@ -93,6 +101,22 @@ beforeAll(async () => {
       rawArtist: "mislabeled",
       rawTitle: "resolved hit",
       playedAt: new Date(base + 2 * MIN),
+    },
+    {
+      stationId,
+      mbid: JUNK_MBID,
+      confidence: "text",
+      rawArtist: `Test Station ${run}`,
+      rawTitle: "Station break",
+      playedAt: new Date(base + 24 * 60 * MIN),
+    },
+    {
+      stationId,
+      mbid: ALIAS_MBID,
+      confidence: "text",
+      rawArtist: ARTIST_ALIAS,
+      rawTitle: "Alias Song",
+      playedAt: new Date(base + 48 * 60 * MIN),
     },
   ]);
 
@@ -149,7 +173,7 @@ afterAll(async () => {
     await db.delete(picksTable).where(eq(picksTable.pickerId, pickerId));
     await db.delete(pickersTable).where(eq(pickersTable.id, pickerId));
   }
-  await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID]));
+  await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID, JUNK_MBID, ALIAS_MBID]));
   if (stationId) {
     await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
   }
@@ -231,5 +255,51 @@ describe("GET /api/archive/artist-runs", () => {
     expect(
       body.stationRuns.find((m) => m.station.slug === `test-ars-${run}`),
     ).toBeUndefined();
+  });
+});
+
+describe("GET /api/archive/artist-suggestions", () => {
+  it("returns canonical played artists and excludes raw station labels and junk artists", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const canonical = await fetch(
+      `${baseUrl}/api/archive/artist-suggestions?q=${encodeURIComponent(`zqartist ${run.slice(0, 3)}`)}`,
+    );
+    expect(canonical.status).toBe(200);
+    const canonicalBody = (await canonical.json()) as {
+      suggestions: Array<{ name: string; playCount: number }>;
+    };
+    expect(canonicalBody.suggestions).toContainEqual({ name: ARTIST, playCount: 2 });
+
+    const alias = await fetch(
+      `${baseUrl}/api/archive/artist-suggestions?q=${encodeURIComponent(ARTIST_ALIAS)}`,
+    );
+    expect(alias.status).toBe(200);
+    const aliasBody = (await alias.json()) as {
+      suggestions: Array<{ name: string; playCount: number }>;
+    };
+    expect(aliasBody.suggestions).toContainEqual({ name: ARTIST, playCount: 2 });
+
+    const rawStation = await fetch(
+      `${baseUrl}/api/archive/artist-suggestions?q=${encodeURIComponent(`Test Station ${run}`)}`,
+    );
+    expect(rawStation.status).toBe(200);
+    expect((await rawStation.json()) as { suggestions: unknown[] }).toEqual(
+      expect.objectContaining({ suggestions: [] }),
+    );
+
+    const junk = await fetch(
+      `${baseUrl}/api/archive/artist-suggestions?q=Commercial`,
+    );
+    expect(junk.status).toBe(200);
+    const junkBody = (await junk.json()) as {
+      suggestions: Array<{ name: string }>;
+    };
+    expect(junkBody.suggestions.some((suggestion) => suggestion.name === "Commercial Break")).toBe(false);
+  });
+
+  it("rejects queries shorter than two characters", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const response = await fetch(`${baseUrl}/api/archive/artist-suggestions?q=z`);
+    expect(response.status).toBe(400);
   });
 });

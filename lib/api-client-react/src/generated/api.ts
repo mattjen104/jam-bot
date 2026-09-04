@@ -28,6 +28,7 @@ import type {
   ArchiveRecentRuns,
   ArtistResult,
   ArtistRunSearch,
+  ArtistSuggestions,
   BlogIngestRequest,
   BookDraftList,
   BookIngestResponse,
@@ -205,6 +206,7 @@ import type {
   StationsScheduleResult,
   StoreAuditResponse,
   StoreAuditRunResponse,
+  SuggestArchiveArtistsParams,
   SupportHoldResponse,
   TracklistRequest,
   TracklistResult,
@@ -4707,6 +4709,111 @@ export function useSearchArtistRuns<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getSearchArtistRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Case-insensitive typeahead over canonical recording artists attached to real station spins. Results are deduplicated by normalized artist name, exclude non-musical metadata labels, and rank prefix matches before contains matches, then by play count and recency.
+
+ * @summary Suggest canonical artists Lore has played
+ */
+export const getSuggestArchiveArtistsUrl = (
+  params: SuggestArchiveArtistsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/archive/artist-suggestions?${stringifiedParams}`
+    : `/api/archive/artist-suggestions`;
+};
+
+export const suggestArchiveArtists = async (
+  params: SuggestArchiveArtistsParams,
+  options?: RequestInit,
+): Promise<ArtistSuggestions> => {
+  return customFetch<ArtistSuggestions>(getSuggestArchiveArtistsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSuggestArchiveArtistsQueryKey = (
+  params?: SuggestArchiveArtistsParams,
+) => {
+  return [
+    `/api/archive/artist-suggestions`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getSuggestArchiveArtistsQueryOptions = <
+  TData = Awaited<ReturnType<typeof suggestArchiveArtists>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: SuggestArchiveArtistsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof suggestArchiveArtists>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getSuggestArchiveArtistsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof suggestArchiveArtists>>
+  > = ({ signal }) =>
+    suggestArchiveArtists(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof suggestArchiveArtists>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SuggestArchiveArtistsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof suggestArchiveArtists>>
+>;
+export type SuggestArchiveArtistsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Suggest canonical artists Lore has played
+ */
+
+export function useSuggestArchiveArtists<
+  TData = Awaited<ReturnType<typeof suggestArchiveArtists>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: SuggestArchiveArtistsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof suggestArchiveArtists>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSuggestArchiveArtistsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

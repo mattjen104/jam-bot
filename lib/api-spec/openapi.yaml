@@ -1494,6 +1494,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /archive/artist-suggestions:
+    get:
+      operationId: suggestArchiveArtists
+      tags: [archive]
+      summary: Suggest canonical artists Lore has played
+      description: >
+        Case-insensitive typeahead over canonical recording artists attached to
+        real station spins. Results are deduplicated by normalized artist name,
+        exclude non-musical metadata labels, and rank prefix matches before
+        contains matches, then by play count and recency.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+          description: Artist name fragment to suggest.
+      responses:
+        "200":
+          description: Canonical artist suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistSuggestions"
+        "400":
+          description: Missing or invalid search query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /scraped-shows:
     get:
       operationId: getAllScrapedShows
@@ -7620,6 +7652,28 @@ components:
         - query
         - stationRuns
         - pickerRuns
+    ArtistSuggestion:
+      type: object
+      properties:
+        name:
+          type: string
+        playCount:
+          type: integer
+      required:
+        - name
+        - playCount
+    ArtistSuggestions:
+      type: object
+      properties:
+        query:
+          type: string
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtistSuggestion"
+      required:
+        - query
+        - suggestions
     StationCoverage:
       type: object
       description: >-

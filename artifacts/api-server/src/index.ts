@@ -154,6 +154,7 @@ import {
   prunePlaybackHealthRollups,
   startPlaybackHealthRetentionJob,
 } from "./lore/playback-health.js";
+import { applyArtistSuggestionsIndexMigration } from "./lore/artist-suggestions-index-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -248,6 +249,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyCrossingsCacheMigration", applyCrossingsCacheMigration);
     await runMigration("applyBlendedCrossingsCacheMigration", applyBlendedCrossingsCacheMigration);
     await runMigration("applyBlendedCrossingsPerformanceIndexMigration", applyBlendedCrossingsPerformanceIndexMigration);
+    await runMigration("applyArtistSuggestionsIndexMigration", applyArtistSuggestionsIndexMigration);
     await runMigration("applyImportItemsMigration", applyImportItemsMigration);
     await runMigration("applyAttendanceMigration", applyAttendanceMigration);
     await runMigration("applyTasteSeedsMigration", applyTasteSeedsMigration);

@@ -204,7 +204,7 @@ describe("Dial artist filter builder", () => {
 
     expect(screen.queryByRole("button", { name: "Open tuned artists" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Close tuned artists" })).toBeNull();
-    expect(screen.getByRole("textbox", { name: "Artist name" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Artist name" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit artist document" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
@@ -215,7 +215,7 @@ describe("Dial artist filter builder", () => {
     mockDial();
     render(<DialView />);
 
-    expect(screen.getByRole("textbox", { name: "Artist name" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Artist name" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Remove Radiohead" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Remove Portishead" })).toBeTruthy();

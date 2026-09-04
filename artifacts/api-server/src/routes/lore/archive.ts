@@ -12,6 +12,8 @@ import {
   GetPickerRunInsightsResponse,
   SearchArtistRunsQueryParams,
   SearchArtistRunsResponse,
+  SuggestArchiveArtistsQueryParams,
+  SuggestArchiveArtistsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -34,6 +36,7 @@ import {
   validScheduleShowAttribution,
 } from "./shared.js";
 import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
+import { isJunkArtistValue } from "../../lore/icy.js";
 
 const router: IRouter = Router();
 
@@ -740,6 +743,108 @@ router.get("/archive/artist-runs", h(async (req, res) => {
   return res.json(
     SearchArtistRunsResponse.parse({ query: q, stationRuns, pickerRuns }),
   );
+}));
+
+// GET /api/archive/artist-suggestions?q=… — canonical artist names for the
+// Feed seed-builder typeahead. Only resolved recording artists attached to a
+// real spin qualify, so station/show text in unresolved metadata cannot leak
+// into the suggestions.
+router.get("/archive/artist-suggestions", h(async (req, res) => {
+  if (typeof req.query.q !== "string") {
+    return res.status(400).json({ error: "Missing search query" });
+  }
+  const parsed = SuggestArchiveArtistsQueryParams.safeParse({ q: req.query.q.trim() });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Search query must be 2 to 100 characters" });
+  }
+  const q = parsed.data.q.trim();
+  const escaped = q.replace(/[\\%_]/g, (character) => `\\${character}`);
+  const containsPattern = `%${escaped}%`;
+  const prefixPattern = `${escaped}%`;
+
+  const result = await db.execute(sql`
+    WITH matched_identities AS MATERIALIZED (
+      SELECT DISTINCT
+        COALESCE(
+          'mbid:' || r.artist_mbid,
+          'name:' || lower(regexp_replace(r.artist, '[^[:alnum:]]', '', 'g'))
+        ) AS artist_key,
+        r.artist_mbid,
+        CASE
+          WHEN r.artist_mbid IS NULL
+          THEN lower(regexp_replace(r.artist, '[^[:alnum:]]', '', 'g'))
+          ELSE NULL
+        END AS fallback_key
+      FROM recordings r
+      WHERE lower(trim(r.artist)) LIKE lower(${containsPattern})
+        AND EXISTS (
+          SELECT 1
+          FROM spins matched_spin
+          WHERE matched_spin.mbid = r.mbid
+        )
+    ),
+    identity_recordings AS MATERIALIZED (
+      SELECT
+        matched.artist_key,
+        r.mbid,
+        trim(r.artist) AS display_name
+      FROM matched_identities matched
+      JOIN recordings r ON r.artist_mbid = matched.artist_mbid
+      WHERE matched.artist_mbid IS NOT NULL
+
+      UNION ALL
+
+      SELECT
+        matched.artist_key,
+        r.mbid,
+        trim(r.artist) AS display_name
+      FROM matched_identities matched
+      JOIN recordings r
+        ON r.artist_mbid IS NULL
+       AND lower(regexp_replace(r.artist, '[^[:alnum:]]', '', 'g')) = matched.fallback_key
+      WHERE matched.artist_mbid IS NULL
+    ),
+    variants AS (
+      SELECT
+        identity_recordings.artist_key,
+        identity_recordings.display_name,
+        count(*)::int AS play_count,
+        max(s.played_at) AS last_played_at
+      FROM identity_recordings
+      JOIN spins s ON s.mbid = identity_recordings.mbid
+      GROUP BY identity_recordings.artist_key, identity_recordings.display_name
+    ),
+    canonical AS (
+      SELECT
+        artist_key,
+        min(display_name) AS display_name
+      FROM variants
+      GROUP BY artist_key
+    ),
+    totals AS (
+      SELECT
+        artist_key,
+        sum(play_count)::int AS play_count,
+        max(last_played_at) AS last_played_at
+      FROM variants
+      GROUP BY artist_key
+    )
+    SELECT
+      canonical.display_name AS "name",
+      totals.play_count AS "playCount"
+    FROM canonical
+    JOIN totals USING (artist_key)
+    ORDER BY
+      CASE WHEN canonical.display_name ILIKE ${prefixPattern} THEN 0 ELSE 1 END,
+      totals.play_count DESC,
+      totals.last_played_at DESC,
+      canonical.display_name
+  `);
+
+  const suggestions = (result.rows as unknown as Array<{ name: string; playCount: number }>)
+    .filter((row) => !isJunkArtistValue(row.name))
+    .slice(0, 8);
+  return res.json(SuggestArchiveArtistsResponse.parse({ query: q, suggestions }));
 }));
 
 // GET /api/archive/coverage — how deep the archive goes, per source.

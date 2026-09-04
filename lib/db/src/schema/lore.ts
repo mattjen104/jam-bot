@@ -144,6 +144,13 @@ export const recordingsTable = pgTable("recordings", {
   // Blended crossings expands active listeners' artist taste into recording
   // MBIDs before probing the spin archive.
   index("recordings_artist_mbid_idx").on(t.artistMbid),
+  index("recordings_artist_search_trgm_idx").using(
+    "gin",
+    sql`lower(trim(${t.artist})) gin_trgm_ops`,
+  ),
+  index("recordings_artist_fallback_key_idx")
+    .on(sql`lower(regexp_replace(${t.artist}, '[^[:alnum:]]', '', 'g'))`)
+    .where(sql`${t.artistMbid} IS NULL`),
 ]);
 
 export type Recording = typeof recordingsTable.$inferSelect;

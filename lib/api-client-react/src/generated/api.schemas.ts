@@ -2578,6 +2578,16 @@ export interface ArtistRunSearch {
   pickerRuns: ArtistPickerRunMatch[];
 }
 
+export interface ArtistSuggestion {
+  name: string;
+  playCount: number;
+}
+
+export interface ArtistSuggestions {
+  query: string;
+  suggestions: ArtistSuggestion[];
+}
+
 /**
  * Archive depth for one station: how far back documented spins reach, how many resolved to the spine, and whether the deep backfill is still digging (`backfillDone=false` with a cursor means the walk is mid-way; no cursor means the source only supports live polling).
  */
@@ -4751,6 +4761,15 @@ export type SearchArtistRunsParams = {
   /**
    * Artist name (or fragment) to search for.
    * @minLength 1
+   */
+  q: string;
+};
+
+export type SuggestArchiveArtistsParams = {
+  /**
+   * Artist name fragment to suggest.
+   * @minLength 2
+   * @maxLength 100
    */
   q: string;
 };

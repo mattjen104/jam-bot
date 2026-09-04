@@ -3807,6 +3807,32 @@ export const SearchArtistRunsResponse = zod.object({
 });
 
 /**
+ * Case-insensitive typeahead over canonical recording artists attached to real station spins. Results are deduplicated by normalized artist name, exclude non-musical metadata labels, and rank prefix matches before contains matches, then by play count and recency.
+
+ * @summary Suggest canonical artists Lore has played
+ */
+export const suggestArchiveArtistsQueryQMin = 2;
+export const suggestArchiveArtistsQueryQMax = 100;
+
+export const SuggestArchiveArtistsQueryParams = zod.object({
+  q: zod.coerce
+    .string()
+    .min(suggestArchiveArtistsQueryQMin)
+    .max(suggestArchiveArtistsQueryQMax)
+    .describe("Artist name fragment to suggest."),
+});
+
+export const SuggestArchiveArtistsResponse = zod.object({
+  query: zod.string(),
+  suggestions: zod.array(
+    zod.object({
+      name: zod.string(),
+      playCount: zod.number(),
+    }),
+  ),
+});
+
+/**
  * Returns every station that has a scraped weekly schedule, deduplicated by fingerprint (same show set = same station), sorted by station name. Powers the schedule calendar and the in-progress show detection on station cards.
 
  * @summary All stations with their scraped weekly programming grids
