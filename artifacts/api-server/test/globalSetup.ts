@@ -44,6 +44,16 @@ export async function setup(): Promise<() => Promise<void>> {
     );
     await applyStationDiscoveryMigration();
 
+    const { applyMigrationCompletionsMigration } = await import(
+      "../src/lore/migration-completions-migration.js"
+    );
+    await applyMigrationCompletionsMigration();
+
+    const { applyStationScheduleMigration } = await import(
+      "../src/lore/station-schedule-migration.js"
+    );
+    await applyStationScheduleMigration();
+
     const { applySelectorClaimsMigration } = await import(
       "../src/lore/selector-claims-migration.js"
     );

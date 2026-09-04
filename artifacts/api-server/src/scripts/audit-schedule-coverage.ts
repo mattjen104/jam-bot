@@ -13,7 +13,11 @@ import {
   auditSoundtapIdentity,
   parseSoundtapStations,
 } from "./audit-soundtap-schedules.js";
-import { scrapeStationSchedule } from "../lore/schedule-scraper.js";
+import {
+  SCHEDULE_FAILURE_REASONS,
+  scrapeStationSchedule,
+  type ScheduleFailureReason,
+} from "../lore/schedule-scraper.js";
 import { wireScheduleExtractor } from "../lore/schedule-wire.js";
 
 const SOUNDTAP_SOURCE = fileURLToPath(
@@ -93,6 +97,8 @@ type LoreStation = {
   hidden: boolean;
   scheduleScrapedAt: Date | null;
   scheduleAttemptedAt: Date | null;
+  scheduleFailureReason: ScheduleFailureReason | null;
+  scheduleFailureAt: Date | null;
   lastAliveAt: Date | null;
   qualityTier: string | null;
   sampleCount: number | null;
@@ -172,6 +178,18 @@ function countByStatus(rows: Array<{ status: ScheduleCoverageStatus }>) {
   );
 }
 
+export function countScheduleFailures(
+  rows: Array<{ scheduleFailureReason: ScheduleFailureReason | null }>,
+): Record<ScheduleFailureReason | "unclassified", number> {
+  const counts = Object.fromEntries(
+    [...SCHEDULE_FAILURE_REASONS, "unclassified"].map((reason) => [reason, 0]),
+  ) as Record<ScheduleFailureReason | "unclassified", number>;
+  for (const row of rows) {
+    counts[row.scheduleFailureReason ?? "unclassified"]++;
+  }
+  return counts;
+}
+
 function coverageSort(
   a: { status: ScheduleCoverageStatus; scheduleAttemptedAt: Date | null; name: string },
   b: { status: ScheduleCoverageStatus; scheduleAttemptedAt: Date | null; name: string },
@@ -212,6 +230,8 @@ async function main(): Promise<void> {
         hidden: stationsTable.hidden,
         scheduleScrapedAt: stationsTable.scheduleScrapedAt,
         scheduleAttemptedAt: stationsTable.scheduleAttemptedAt,
+        scheduleFailureReason: stationsTable.scheduleFailureReason,
+        scheduleFailureAt: stationsTable.scheduleFailureAt,
         lastAliveAt: stationsTable.lastAliveAt,
         qualityTier: stationQualityTable.qualityTier,
         sampleCount: stationQualityTable.sampleCount,
@@ -298,6 +318,8 @@ async function main(): Promise<void> {
         sourceUrls: [...fact.sourceUrls].sort(),
         scrapedAt: station.scheduleScrapedAt,
         attemptedAt: station.scheduleAttemptedAt,
+        failureReason: station.scheduleFailureReason,
+        failureAt: station.scheduleFailureAt,
       },
       soundtap: {
         kind: verified.length
@@ -372,6 +394,8 @@ async function main(): Promise<void> {
         id: stationsTable.id,
         scheduleScrapedAt: stationsTable.scheduleScrapedAt,
         scheduleAttemptedAt: stationsTable.scheduleAttemptedAt,
+        scheduleFailureReason: stationsTable.scheduleFailureReason,
+        scheduleFailureAt: stationsTable.scheduleFailureAt,
       })
       .from(stationsTable)
       .where(sql`${stationsTable.id} = any(array[${sql.join(
@@ -391,6 +415,8 @@ async function main(): Promise<void> {
       row.schedule.sourceUrls = [...fact.sourceUrls].sort();
       row.schedule.scrapedAt = timestamp.scheduleScrapedAt;
       row.schedule.attemptedAt = timestamp.scheduleAttemptedAt;
+      row.schedule.failureReason = timestamp.scheduleFailureReason;
+      row.schedule.failureAt = timestamp.scheduleFailureAt;
       row.schedule.status = classifyScheduleCoverage(
         row.schedule.totalCount,
         timestamp.scheduleScrapedAt,
@@ -455,6 +481,11 @@ async function main(): Promise<void> {
     },
     coverage: {
       stationStatus: countByStatus(rows.map((row) => ({ status: row.schedule.status }))),
+      failuresByReason: countScheduleFailures(
+        rows
+          .filter((row) => row.schedule.status === "attempted_without_success")
+          .map((row) => ({ scheduleFailureReason: row.schedule.failureReason })),
+      ),
       stationsWithAnySchedule: rows.filter((row) => row.schedule.totalCount > 0).length,
       stationCoverageRate: eligible.length
         ? rows.filter((row) => row.schedule.totalCount > 0).length / eligible.length

@@ -494,6 +494,22 @@ export const stationsTable = pgTable("stations", {
    * every 45s tick forever and starving other stations' turn in the batch.
    */
   scheduleAttemptedAt: timestamp("schedule_attempted_at"),
+  /**
+   * Low-cardinality diagnosis for the most recent failed schedule attempt.
+   * Cleared atomically by the next successful refresh. Failure writes never
+   * remove previously healthy scraped schedule rows.
+   */
+  scheduleFailureReason: text("schedule_failure_reason").$type<
+    | "policy_blocked"
+    | "source_unavailable"
+    | "transient_fetch"
+    | "missing_schedule_link"
+    | "malformed_schedule"
+    | "extraction_failed"
+    | "persistence_failed"
+  >(),
+  /** When scheduleFailureReason was recorded. Null after a successful refresh. */
+  scheduleFailureAt: timestamp("schedule_failure_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -91,6 +91,12 @@ export async function applyStationScheduleMigration(): Promise<void> {
   await db.execute(sql`
     ALTER TABLE stations ADD COLUMN IF NOT EXISTS schedule_attempted_at timestamptz
   `);
+  await db.execute(sql`
+    ALTER TABLE stations ADD COLUMN IF NOT EXISTS schedule_failure_reason text
+  `);
+  await db.execute(sql`
+    ALTER TABLE stations ADD COLUMN IF NOT EXISTS schedule_failure_at timestamptz
+  `);
   // Denormalized show count — written in the same transaction as each full
   // scraped_shows replace, so the Featured tab never needs a second join.
   // NOT NULL DEFAULT 0: Postgres adds this as a catalog-only default (instant,

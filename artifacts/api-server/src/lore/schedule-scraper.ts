@@ -185,6 +185,17 @@ export interface SpinitronScheduleExtraction {
   datedExceptions: DatedExtractedShow[];
 }
 
+export const SCHEDULE_FAILURE_REASONS = [
+  "policy_blocked",
+  "source_unavailable",
+  "transient_fetch",
+  "missing_schedule_link",
+  "malformed_schedule",
+  "extraction_failed",
+  "persistence_failed",
+] as const;
+export type ScheduleFailureReason = (typeof SCHEDULE_FAILURE_REASONS)[number];
+
 export interface FirstPartyScheduleSource {
   endpointUrl: string;
   kind: "kzsu" | "witr" | "wdiy";
@@ -901,13 +912,21 @@ export async function scrapeStationSchedule(
   // reflects the most recent attempt, success or failure — that's what lets
   // loadStaleTargets back off a persistently-failing station instead of
   // reselecting it on every single tick.
-  const markAttempted = () =>
-    db
+  const fail = async (
+    reason: ScheduleFailureReason,
+  ): Promise<{ scraped: false; showCount: 0 }> => {
+    const now = new Date();
+    console.info(
+      `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=${reason}`,
+    );
+    await db
       .update(stationsTable)
-      .set({ scheduleAttemptedAt: new Date() })
+      .set({
+        scheduleAttemptedAt: now,
+        scheduleFailureReason: reason,
+        scheduleFailureAt: now,
+      })
       .where(eq(stationsTable.id, target.id));
-  const fail = async (): Promise<{ scraped: false; showCount: 0 }> => {
-    await markAttempted();
     return { scraped: false, showCount: 0 };
   };
 
@@ -915,7 +934,7 @@ export async function scrapeStationSchedule(
   try {
     origin = new URL(target.homepageUrl).origin;
   } catch {
-    return fail();
+    return fail("source_unavailable");
   }
 
   // A configured Spinitron calendar is a trusted, narrowly validated external
@@ -931,7 +950,7 @@ export async function scrapeStationSchedule(
     console.info(
       `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=robots_blocked origin=${crawlOrigin}`,
     );
-    return fail();
+    return fail("policy_blocked");
   }
 
   // Returns the page text on success, null on transient error, or the HTTP
@@ -1046,7 +1065,11 @@ export async function scrapeStationSchedule(
       console.info(
         `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=no_link_found (homepage fetch failed)`,
       );
-      return fail();
+      return fail(
+        typeof homeResult === "number" && isScheduleUrlPermanentlyGone(homeResult)
+          ? "source_unavailable"
+          : "transient_fetch",
+      );
     }
 
     // --- Strategy 1: anchor scan ---
@@ -1098,7 +1121,7 @@ export async function scrapeStationSchedule(
       console.info(
         `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=probe_exhausted`,
       );
-      return fail();
+      return fail("missing_schedule_link");
     }
 
     // Persist the newly-discovered schedule URL so future re-scrapes skip
@@ -1127,7 +1150,9 @@ export async function scrapeStationSchedule(
   // A Spinitron calendar without a usable public feed is not a page for the
   // LLM fallback: its dynamic grid is absent from visible HTML. Treat a bad
   // configuration as a failed scrape so the prior schedule remains intact.
-  if (sourceUrl && isSpinitronCalendarUrl(sourceUrl) && !feedUrl) return fail();
+  if (sourceUrl && isSpinitronCalendarUrl(sourceUrl) && !feedUrl) {
+    return fail("malformed_schedule");
+  }
   if (feedUrl) {
     // This is Spinitron's unauthenticated, browser-facing calendar endpoint,
     // not its authenticated developer API. Keep redirect safety equivalent to
@@ -1138,7 +1163,9 @@ export async function scrapeStationSchedule(
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       const calendarOrigin = new URL(sourceUrl!).origin;
-      if (!res.ok || new URL(res.url || feedUrl).origin !== calendarOrigin) return fail();
+      if (!res.ok || new URL(res.url || feedUrl).origin !== calendarOrigin) {
+        return fail(isScheduleUrlPermanentlyGone(res.status) ? "source_unavailable" : "transient_fetch");
+      }
       const requestedWindow = {
         start: new URL(feedUrl).searchParams.get("start")!,
         end: new URL(feedUrl).searchParams.get("end")!,
@@ -1149,7 +1176,7 @@ export async function scrapeStationSchedule(
       extraction = "api";
     } catch (err) {
       console.warn(`[schedule-scraper] Spinitron feed failed for ${target.slug}`, err);
-      return fail();
+      return fail("transient_fetch");
     }
   } else if (firstPartySource) {
     // These endpoints are the same first-party browser APIs used by the
@@ -1183,19 +1210,19 @@ export async function scrapeStationSchedule(
         new URL(res.url || firstPartySource.endpointUrl).origin !==
           new URL(firstPartySource.endpointUrl).origin
       ) {
-        return fail();
+        return fail(isScheduleUrlPermanentlyGone(res.status) ? "source_unavailable" : "transient_fetch");
       }
       const raw = await res.text();
       if (firstPartySource.kind === "wdiy") {
         const parsed = parseCadenceSchedule(raw);
-        if (!parsed) return fail();
+        if (!parsed) return fail("malformed_schedule");
         shows = parsed;
         sourceUrl = firstPartySource.receiptUrl!;
       } else {
         const parsed = firstPartySource.kind === "kzsu"
           ? parseKzsuSchedule(raw)
           : parseWitrSchedule(raw);
-        if (!parsed) return fail();
+        if (!parsed) return fail("malformed_schedule");
         shows = parsed.recurringShows;
         datedExceptions = parsed.datedExceptions;
         sourceUrl = firstPartySource.endpointUrl;
@@ -1203,7 +1230,7 @@ export async function scrapeStationSchedule(
       extraction = "api";
     } catch (err) {
       console.warn(`[schedule-scraper] first-party schedule API failed for ${target.slug}`, err);
-      return fail();
+      return fail("transient_fetch");
     }
   } else {
     // Prefer exact, first-party structured representations before asking the
@@ -1276,13 +1303,13 @@ export async function scrapeStationSchedule(
       extraction = "api";
     } else {
       const pageText = htmlToPlainText(pageHtml).slice(0, MAX_PAGE_CHARS);
-      if (!pageText) return fail();
+      if (!pageText) return fail("malformed_schedule");
       try {
         const raw = await extractScheduleRaw(`${EXTRACTION_PROMPT}${pageText}`);
         shows = parseExtractedSchedule(raw);
       } catch (err) {
         console.warn(`[schedule-scraper] extraction failed for ${target.slug}`, err);
-        return fail();
+        return fail("extraction_failed");
       }
     }
   }
@@ -1291,7 +1318,7 @@ export async function scrapeStationSchedule(
     console.info(
       `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=llm_empty (unparseable result)`,
     );
-    return fail();
+    return fail("malformed_schedule");
   }
 
   // An empty deterministic/API result is authoritative. An LLM-empty result
@@ -1318,7 +1345,7 @@ export async function scrapeStationSchedule(
       console.info(
         `[schedule-scraper] preserving existing schedule for ${target.slug}: LLM returned empty`,
       );
-      return fail();
+      return fail("extraction_failed");
     }
   }
 
@@ -1379,13 +1406,15 @@ export async function scrapeStationSchedule(
         .set({
           scheduleScrapedAt: now,
           scheduleAttemptedAt: now,
+          scheduleFailureReason: null,
+          scheduleFailureAt: null,
           upcomingShowCount: shows!.length + datedExceptions.length,
         })
         .where(eq(stationsTable.id, target.id));
     });
   } catch (err) {
     console.warn(`[schedule-scraper] write failed for ${target.slug}`, err);
-    return fail();
+    return fail("persistence_failed");
   }
 
   // Backfill iana_timezone for stations that gained scraped_shows but have no

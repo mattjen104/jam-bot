@@ -144,6 +144,8 @@ afterEach(async () => {
       .set({
         scheduleScrapedAt: null,
         scheduleAttemptedAt: null,
+        scheduleFailureReason: null,
+        scheduleFailureAt: null,
         upcomingShowCount: 0,
         // Reset any scheduleUrl written by probe-path tests so subsequent
         // tests start with a clean slate and don't skip discovery.
@@ -163,6 +165,8 @@ async function fetchStationRow() {
     .select({
       scheduleScrapedAt: stationsTable.scheduleScrapedAt,
       scheduleAttemptedAt: stationsTable.scheduleAttemptedAt,
+      scheduleFailureReason: stationsTable.scheduleFailureReason,
+      scheduleFailureAt: stationsTable.scheduleFailureAt,
       upcomingShowCount: stationsTable.upcomingShowCount,
     })
     .from(stationsTable)
@@ -258,6 +262,36 @@ describe("scrapeStationSchedule — scheduleUrl direct-fetch path", () => {
     );
     expect(homepageCalls).toHaveLength(0);
   });
+
+  it("records a policy block without deleting an existing healthy schedule", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    await db.insert(scrapedShowsTable).values({
+      stationId: stationId!,
+      showName: "Existing Grid",
+      dayOfWeek: "Mon",
+      startTime: "09:00",
+      endTime: "10:00",
+      sourceUrl: SCHEDULE_URL,
+      extraction: "llm",
+    });
+    const fetchFn = makeFetch([
+      { pattern: "robots.txt", body: "User-agent: *\nDisallow: /\n" },
+    ]);
+
+    const result = await scrapeStationSchedule({
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+    }, { fetchFn });
+
+    expect(result).toEqual({ scraped: false, showCount: 0 });
+    expect(await fetchScrapedShows()).toHaveLength(1);
+    const station = await fetchStationRow();
+    expect(station?.scheduleFailureReason).toBe("policy_blocked");
+    expect(station?.scheduleFailureAt).toBeInstanceOf(Date);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -327,6 +361,8 @@ describe("scrapeStationSchedule — scheduleUrl fails → homepage fallback", ()
     expect(station?.scheduleAttemptedAt).toBeInstanceOf(Date);
     // scheduleScrapedAt must remain null (no successful scrape).
     expect(station?.scheduleScrapedAt).toBeNull();
+    expect(station?.scheduleFailureReason).toBe("transient_fetch");
+    expect(station?.scheduleFailureAt).toBeInstanceOf(Date);
   });
 });
 
@@ -1350,6 +1386,8 @@ describe("scrapeStationSchedule — empty extraction authority", () => {
     const row = await fetchStationRow();
     expect(row?.scheduleAttemptedAt).toBeInstanceOf(Date);
     expect(row?.scheduleScrapedAt).toBeNull();
+    expect(row?.scheduleFailureReason).toBe("extraction_failed");
+    expect(row?.scheduleFailureAt).toBeInstanceOf(Date);
   });
 
   it("lets an empty public API result replace existing rows", async (ctx) => {
@@ -1365,6 +1403,28 @@ describe("scrapeStationSchedule — empty extraction authority", () => {
       extraction: "llm",
     });
     const calendarUrl = "https://spinitron.com/test-station/calendar";
+    const failed = await scrapeStationSchedule(
+      {
+        id: stationId!,
+        slug: `test-sched-${run}`,
+        homepageUrl: HOMEPAGE,
+        scheduleUrl: calendarUrl,
+        city: null,
+        country: null,
+        ianaTimezone: null,
+      },
+      {
+        fetchFn: makeFetch([
+          { pattern: "robots.txt", body: "User-agent: *\nDisallow:\n" },
+          { pattern: "/calendar", body: "", ok: false, status: 503 },
+          { pattern: HOMEPAGE, body: "", ok: false, status: 503 },
+        ]),
+      },
+    );
+    expect(failed).toEqual({ scraped: false, showCount: 0 });
+    expect((await fetchStationRow())?.scheduleFailureReason).toBe("transient_fetch");
+    expect(await fetchScrapedShows()).toHaveLength(1);
+
     const fetchFn = makeFetch([
       { pattern: "robots.txt", body: "User-agent: *\nDisallow:\n" },
       { pattern: "calendar-feed", body: "[]" },
@@ -1391,6 +1451,8 @@ describe("scrapeStationSchedule — empty extraction authority", () => {
     expect(await fetchScrapedShows()).toHaveLength(0);
     const row = await fetchStationRow();
     expect(row?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(row?.scheduleFailureReason).toBeNull();
+    expect(row?.scheduleFailureAt).toBeNull();
     expect(row?.upcomingShowCount).toBe(0);
   });
 });

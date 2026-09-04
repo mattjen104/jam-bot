@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyScheduleCoverage,
+  countScheduleFailures,
   parseCoverageArgs,
 } from "../../src/scripts/audit-schedule-coverage.js";
 
@@ -66,5 +67,19 @@ describe("all-Lore schedule coverage audit", () => {
       new Date("2026-09-01T00:00:00Z"),
       now,
     )).toBe("populated_stale");
+  });
+
+  it("groups failed attempts by their durable reason", () => {
+    expect(countScheduleFailures([
+      { scheduleFailureReason: "policy_blocked" },
+      { scheduleFailureReason: "transient_fetch" },
+      { scheduleFailureReason: "transient_fetch" },
+      { scheduleFailureReason: null },
+    ])).toMatchObject({
+      policy_blocked: 1,
+      transient_fetch: 2,
+      source_unavailable: 0,
+      unclassified: 1,
+    });
   });
 });
