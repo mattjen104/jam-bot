@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { applyStationDiscoveryMigration } from "../src/lore/station-migration.js";
 
 /**
@@ -9,52 +10,45 @@ import { applyStationDiscoveryMigration } from "../src/lore/station-migration.js
  * column already exists, so a second call must succeed without throwing.
  */
 
-vi.mock("@workspace/db", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/db")>();
+function createDatabase() {
+  const execute = vi.fn().mockResolvedValue({
+    rows: Array.from({ length: 18 }, () => ({ column_name: "present" })),
+  });
   return {
-    ...actual,
-    db: {
-      execute: vi.fn().mockResolvedValue({
-        rows: Array.from({ length: 17 }, () => ({ column_name: "present" })),
-      }),
-    },
+    database: { execute } as unknown as Pick<typeof db, "execute">,
+    execute,
   };
-});
+}
 
 describe("applyStationDiscoveryMigration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("executes without throwing on first run", async () => {
-    await expect(applyStationDiscoveryMigration()).resolves.not.toThrow();
+    const { database } = createDatabase();
+    await expect(applyStationDiscoveryMigration(database)).resolves.not.toThrow();
   });
 
   it("is idempotent — succeeds on a second call (no-op ADD COLUMN IF NOT EXISTS)", async () => {
-    await applyStationDiscoveryMigration();
-    await expect(applyStationDiscoveryMigration()).resolves.not.toThrow();
-    const { db } = await import("@workspace/db");
-    expect((db.execute as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    const { database, execute } = createDatabase();
+    await applyStationDiscoveryMigration(database);
+    await expect(applyStationDiscoveryMigration(database)).resolves.not.toThrow();
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it("executes exactly one SQL statement per call", async () => {
-    await applyStationDiscoveryMigration();
-    const { db } = await import("@workspace/db");
-    expect((db.execute as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+    const { database, execute } = createDatabase();
+    await applyStationDiscoveryMigration(database);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it("propagates DB errors (so boot knows the migration failed)", async () => {
-    const { db } = await import("@workspace/db");
-    (db.execute as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("syntax error at or near ALTER"),
-    );
-    await expect(applyStationDiscoveryMigration()).rejects.toThrow("syntax error");
+    const { database, execute } = createDatabase();
+    execute.mockRejectedValueOnce(new Error("syntax error at or near ALTER"));
+    await expect(applyStationDiscoveryMigration(database)).rejects.toThrow("syntax error");
   });
 
   it("passes a non-null Drizzle SQL object to db.execute", async () => {
-    await applyStationDiscoveryMigration();
-    const { db } = await import("@workspace/db");
-    const sqlArg = (db.execute as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    const { database, execute } = createDatabase();
+    await applyStationDiscoveryMigration(database);
+    const sqlArg = execute.mock.calls[0]?.[0];
     // Must be a truthy Drizzle SQL object (not a raw string or null).
     expect(sqlArg).toBeTruthy();
     expect(typeof sqlArg).toBe("object");

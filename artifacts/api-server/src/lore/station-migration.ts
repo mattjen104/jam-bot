@@ -35,8 +35,10 @@ const DISCOVERY_COLUMNS = [
  *   active=true, source='curated', tier='flagship', clickcount=0, votes=0,
  *   health_failures=0. All nullable columns stay NULL.
  */
-export async function applyStationDiscoveryMigration(): Promise<void> {
-  const existing = await db.execute<{ column_name: string }>(sql`
+export async function applyStationDiscoveryMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
+  const existing = await database.execute<{ column_name: string }>(sql`
     SELECT column_name
     FROM information_schema.columns
     WHERE table_schema = 'public'
@@ -56,7 +58,7 @@ export async function applyStationDiscoveryMigration(): Promise<void> {
     return;
   }
 
-  await db.execute(sql`
+  await database.execute(sql`
     ALTER TABLE stations
       ADD COLUMN IF NOT EXISTS active          boolean  NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS source          text     NOT NULL DEFAULT 'curated',
