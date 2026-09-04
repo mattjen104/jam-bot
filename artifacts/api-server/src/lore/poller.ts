@@ -33,6 +33,10 @@ import {
   sourceCapabilityFor,
   type MetadataQualityOutcome,
 } from "./metadata-quality.js";
+import {
+  isMonitoredTrialStation,
+  monitoredTrialFromConfig,
+} from "./monitored-trial.js";
 export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
 export { getFeedFreshnessStaleStations } from "./feed-freshness-health.js";
 
@@ -724,9 +728,12 @@ export async function startLorePoller(): Promise<void> {
     return;
   }
 
-  // Hidden stations are soft-removed: no watcher, no interval poll.
+  // Explicit, bounded monitored trials remain listener-hidden but may gather
+  // the same observation evidence as visible incumbents.
   const pollable = stations.filter(
-    (s) => isPollable(s.nowPlayingSource) && !s.hidden,
+    (s) =>
+      isPollable(s.nowPlayingSource) &&
+      (!s.hidden || isMonitoredTrialStation(s)),
   );
   console.info(`[lore] starting pollers for ${pollable.length} station(s)`);
 
@@ -751,6 +758,7 @@ export async function startLorePoller(): Promise<void> {
   const WATCHER_STAGGER_MS = 1_000;
   let watcherIndex = 0;
   pollable.forEach((station, i) => {
+    scheduleMonitoredTrialExpiry(station);
     scheduleNestedHistoryPolling(station, i * STAGGER_MS);
     // Favorite radio_browser_icy stations get a persistent watcher (instant
     // metadata) when a streamUrl is available; everything else — including
@@ -807,9 +815,10 @@ export function enrollStationPoller(station: Station): void {
   // Clear any existing timers for this station so re-enrollment (e.g. admin
   // calling enroll twice for the same UUID) doesn't create duplicate loops.
   unenrollStationPoller(station.id);
-  // Hidden stations are soft-removed: enrollment is a no-op (the unenroll
-  // above already stopped anything running, so this doubles as "apply hide").
-  if (station.hidden) return;
+  // Ordinary hidden stations stay stopped. A valid monitored trial is the one
+  // exception and never changes listener visibility.
+  if (station.hidden && !isMonitoredTrialStation(station)) return;
+  scheduleMonitoredTrialExpiry(station);
   scheduleNestedHistoryPolling(station, 0);
   if (
     station.nowPlayingSource === "radio_browser_icy" &&
@@ -819,6 +828,18 @@ export function enrollStationPoller(station: Station): void {
     return;
   }
   routePollingTier(station, 0);
+}
+
+function scheduleMonitoredTrialExpiry(station: Station): void {
+  const trial = monitoredTrialFromConfig(station.nowPlayingConfig);
+  if (!trial) return;
+  const delay = Math.max(0, Date.parse(trial.endsAt) - Date.now());
+  const handle = setTimeout(() => {
+    console.info(`[lore] monitored trial expired for station ${station.id}`);
+    unenrollStationPoller(station.id);
+  }, delay);
+  timers.push(handle);
+  trackStationTimer(station.id, handle);
 }
 
 /** Test seam: whether this process currently owns a poller or watcher for a station. */

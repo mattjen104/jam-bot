@@ -1,5 +1,36 @@
 # Lore Station Identity Audit
 
+## Soundtap candidate audit — September 4, 2026
+
+The Soundtap comparison now uses an evidence ledger rather than callsign-only
+overlap. Each match records support or conflict from callsign, normalized
+brand/organization, official domain, geography, stream identity, and configured
+identity. A callsign or geography by itself cannot trigger an automatic action.
+
+The generated operator artifact is
+`research/soundtap-schedule-gap.json`. It separates:
+
+- shared identities, including branded matches;
+- ambiguous or conflicting identities quarantined from action;
+- truly absent listings ranked by first-party candidate readiness; and
+- a weak incumbent cohort evaluated over the same seven-day Lore observation
+  window used for monitored candidates.
+
+The preserved Soundtap snapshot contains no first-party stream, homepage, or
+schedule URLs for absent stations, so those records honestly remain
+`needs_first_party_evidence`; Soundtap presence and tags add zero readiness
+points. An operator may stage a candidate only after Lore records its own
+first-party homepage, stream, polling adapter, and a high-confidence identity.
+The refresh command can then start one explicitly named seven-day trial. Trial
+stations remain hidden and crossing-ineligible while Lore gathers stream
+health, fresh spins, unique recording and artist breadth, resolution quality,
+and schedule freshness.
+
+Retain, trial, and reject recommendations are based only on Lore observations.
+The workflow never promotes or removes a station automatically, never treats
+Soundtap popularity or homepage copy as quality evidence, and never copies
+Soundtap schedule data.
+
 **Audit date:** September 2, 2026  
 **Data source:** Current Lore development database  
 **Scope:** The 43 stations in the default Anchor, Campus, and Public & Community pool  

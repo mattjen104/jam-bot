@@ -8,6 +8,11 @@ import {
   stationsTable,
 } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
+import {
+  canStartMonitoredTrial,
+  MONITORED_TRIAL_DAYS,
+} from "../lore/monitored-trial.js";
+import { enrollStationPoller } from "../lore/poller.js";
 import { scrapeStationSchedule } from "../lore/schedule-scraper.js";
 import { wireScheduleExtractor } from "../lore/schedule-wire.js";
 import {
@@ -26,10 +31,16 @@ type Status = {
   sourceUrl: string | null;
 };
 
-function parseArgs(args: string[]): { apply: boolean; limit: number | null; offset: number } {
+export function parseArgs(args: string[]): {
+  apply: boolean;
+  limit: number | null;
+  offset: number;
+  trialSlug: string | null;
+} {
   const apply = args.includes("--apply");
   const limitArg = args.find((arg) => arg.startsWith("--limit="));
   const offsetArg = args.find((arg) => arg.startsWith("--offset="));
+  const trialArg = args.find((arg) => arg.startsWith("--trial="));
   const limit = limitArg ? Number(limitArg.slice("--limit=".length)) : null;
   const offset = offsetArg ? Number(offsetArg.slice("--offset=".length)) : 0;
   if (limit !== null && (!Number.isSafeInteger(limit) || limit < 1)) {
@@ -38,7 +49,15 @@ function parseArgs(args: string[]): { apply: boolean; limit: number | null; offs
   if (!Number.isSafeInteger(offset) || offset < 0) {
     throw new Error("--offset must be a non-negative integer");
   }
-  return { apply, limit, offset };
+  if (trialArg && !apply) {
+    throw new Error("--trial is state-changing and requires --apply");
+  }
+  return {
+    apply,
+    limit,
+    offset,
+    trialSlug: trialArg?.slice("--trial=".length).trim() || null,
+  };
 }
 
 async function stationStatus(stationId: number, fallbackSourceUrl: string | null): Promise<Status> {
@@ -60,7 +79,7 @@ async function stationStatus(stationId: number, fallbackSourceUrl: string | null
 }
 
 export async function refreshSoundtapSchedules(args = process.argv.slice(2)): Promise<void> {
-  const { apply, limit, offset } = parseArgs(args);
+  const { apply, limit, offset, trialSlug } = parseArgs(args);
   const soundtap = parseSoundtapStations(await readFile(SOUNDTAP_SOURCE, "utf8"));
   const stations = await db
     .select({
@@ -73,17 +92,22 @@ export async function refreshSoundtapSchedules(args = process.argv.slice(2)): Pr
       city: stationsTable.city,
       country: stationsTable.country,
       ianaTimezone: stationsTable.ianaTimezone,
+      streamUrl: stationsTable.streamUrl,
+      nowPlayingSource: stationsTable.nowPlayingSource,
+      active: stationsTable.active,
+      hidden: stationsTable.hidden,
+      crossingEligible: stationsTable.crossingEligible,
       upcomingShowCount: stationsTable.upcomingShowCount,
       config: stationsTable.nowPlayingConfig,
     })
     .from(stationsTable)
-    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)));
+    ;
 
   const selection = selectVerifiedSoundtapMatches(soundtap, stations);
   // A scraper target must be entirely DB-derived. The Soundtap slug is only
   // identity evidence; it is never used to construct or guess a URL.
   const seenStationIds = new Set<number>();
-  const eligible = selection.matches
+  const eligible = selection.shared
     .filter(({ station }) => {
       if (!station.homepageUrl || seenStationIds.has(station.id)) return false;
       seenStationIds.add(station.id);
@@ -92,26 +116,28 @@ export async function refreshSoundtapSchedules(args = process.argv.slice(2)): Pr
     .sort(
       (a, b) =>
         (a.station.upcomingShowCount ?? 0) - (b.station.upcomingShowCount ?? 0) ||
-        a.callsign.localeCompare(b.callsign),
+        a.soundtap.label.localeCompare(b.soundtap.label),
     );
   // Dry runs list every verified overlap. Applies are deliberately bounded
   // even when the operator omits --limit.
   const applyLimit = limit ?? DEFAULT_APPLY_LIMIT;
-  const selected = apply ? eligible.slice(offset, offset + applyLimit) : eligible;
+  const scheduleApply = apply && !trialSlug;
+  const selected = scheduleApply ? eligible.slice(offset, offset + applyLimit) : [];
   const selectedIds = new Set(selected.map(({ station }) => station.id));
   const output = [];
+  let trialFound = false;
 
-  if (apply) {
+  if (scheduleApply) {
     // Structured adapters do not require AI, but ordinary official schedule
     // pages use the same managed extractor as the long-running server worker.
     // Wiring failure remains non-fatal per station and existing rows are kept.
     await wireScheduleExtractor();
   }
 
-  for (const match of selection.matches) {
-    const { station, callsign } = match;
+  for (const match of selection.shared) {
+    const { station } = match;
     const prior = await stationStatus(station.id, station.scheduleUrl ?? station.homepageUrl);
-    const willApply = apply && selectedIds.has(station.id);
+    const willApply = scheduleApply && selectedIds.has(station.id);
     let final = prior;
     let scraperResult: { scraped: boolean; showCount: number } | null = null;
     let error: string | null = null;
@@ -136,8 +162,47 @@ export async function refreshSoundtapSchedules(args = process.argv.slice(2)): Pr
       }
     }
 
+    let trialStarted = false;
+    if (trialSlug === station.slug) {
+      trialFound = true;
+      if (
+        match.confidence !== "high" ||
+        !canStartMonitoredTrial(station)
+      ) {
+        throw new Error(
+          `station ${station.slug} lacks high-confidence identity or first-party polling evidence`,
+        );
+      }
+      const startedAt = new Date();
+      const endsAt = new Date(
+        startedAt.getTime() + MONITORED_TRIAL_DAYS * 86_400_000,
+      );
+      const [updated] = await db
+        .update(stationsTable)
+        .set({
+          active: true,
+          nowPlayingConfig: {
+            ...(station.config ?? {}),
+            monitoredTrial: {
+              kind: "soundtap_candidate",
+              startedAt: startedAt.toISOString(),
+              endsAt: endsAt.toISOString(),
+            },
+          },
+        })
+        .where(eq(stationsTable.id, station.id))
+        .returning();
+      if (!updated) throw new Error(`station ${station.slug} disappeared`);
+      enrollStationPoller(updated);
+      trialStarted = true;
+    }
+
     output.push({
-      callsign,
+      identity: {
+        confidence: match.confidence,
+        score: match.score,
+        signals: match.signals,
+      },
       slug: station.slug,
       sourceUrl: prior.sourceUrl,
       prior,
@@ -145,21 +210,27 @@ export async function refreshSoundtapSchedules(args = process.argv.slice(2)): Pr
       scraperResult,
       error,
       applied: willApply,
+      trialStarted,
     });
+  }
+  if (trialSlug && !trialFound) {
+    throw new Error(
+      `--trial target ${trialSlug} is not a uniquely verified Soundtap identity`,
+    );
   }
 
   console.log(
     JSON.stringify(
       {
         dryRun: !apply,
-        limit: apply ? applyLimit : limit,
+        limit: scheduleApply ? applyLimit : limit,
         offset,
-        verifiedMatches: selection.matches.length,
+        verifiedMatches: selection.shared.length,
         eligibleTargets: eligible.length,
         selectedTargets: selected.length,
-        skippedWithoutHomepage: selection.matches.length - eligible.length,
-        ambiguousCallsigns: selection.ambiguous.length,
-        missingSoundtapStations: selection.missing.length,
+        skippedWithoutHomepage: selection.shared.length - eligible.length,
+        ambiguousIdentities: selection.ambiguous.length,
+        absentSoundtapStations: selection.absent.length,
         stations: output,
       },
       null,
