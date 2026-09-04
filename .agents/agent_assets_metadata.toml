@@ -167,3 +167,17 @@ mtime_ms = 1788480315376
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/69f53156-4eb8-491c-a2d5-be1b334d9e2c/cee03e15-528f-400b-8cff-d1cdf251cd87"
 storage_version_token = "1788480326795300"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "c7gWdbzB2j5BlMRtaJI_O"
+uri = "file://.agents/outputs/current-import-crossings-report.md"
+type = "text"
+title = "Current Import Crossings Report"
+description = "Complete read-only ranked report for the latest completed Spotify import, covering Now, Set, 24 hours, 7 days, and Lifetime across all seven Lore station categories."
+logical_id = "bb6125cb-61c8-4ce3-bc45-119a83663e1d"
+content_hash = "sha256:eaa21025e88637f5c8d9588c16eddef203206ddd7878ffc812ed3484b508f467"
+size = 566577
+mtime_ms = 1788504058486
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/bb6125cb-61c8-4ce3-bc45-119a83663e1d/ed91c022-d7c9-4ce1-9a78-9c52d0d443d9"
+storage_version_token = "1788504083712743"
+content_type = "text/markdown"
