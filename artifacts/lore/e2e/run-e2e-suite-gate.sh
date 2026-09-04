@@ -20,6 +20,8 @@
 #                                       order non-decreasing)
 #   - liveTrackChange.spec.ts          (SSE fast path: spin-raw provisional cue appears
 #   - adminHealthRecovery.spec.ts      (authenticated admin recovery controls)
+#   - rotatingScheduleDisplay.spec.ts  (dated alternatives remain complete while
+#                                       recurring stations keep the weekly grid)
 #                                       immediately; spin-changed/spin-raw-failed clear it
 #                                       on WebPlayer and Dial rows; rapid station switches
 #                                       cannot let an old landing confirm PlayerDock)
@@ -98,6 +100,7 @@ RUN_SPECS=(
   e2e/dialInfiniteScroll.spec.ts
   e2e/dialAgeFilter.spec.ts
   e2e/adminHealthRecovery.spec.ts
+  e2e/rotatingScheduleDisplay.spec.ts
   e2e/liveTrackChange.spec.ts
   e2e/stationAdminRemoval.spec.ts
   e2e/unifiedScanSession.spec.ts
