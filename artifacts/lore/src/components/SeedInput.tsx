@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { MAX_TASTE_SEEDS } from "../lib/tasteSeeds";
 
 // ---------------------------------------------------------------------------
 // SeedInput — single-line artist-name input with an Add button.
@@ -44,7 +45,7 @@ export function SeedInput({
         type="button"
         className="seed-add-btn"
         onClick={submit}
-        disabled={!value.trim() || seeds.length >= 10}
+        disabled={!value.trim() || seeds.length >= MAX_TASTE_SEEDS}
       >
         Add
       </button>
@@ -79,7 +80,7 @@ export function SeedBar({
             >×</button>
           </span>
         ))}
-        {seeds.length < 10 && (
+        {seeds.length < MAX_TASTE_SEEDS && (
           <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="+ artist" />
         )}
       </div>

@@ -12,7 +12,7 @@
 import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ME_TASTE_SEEDS_KEY, useMyTasteSeeds, useSetTasteSeeds } from "../lib/meHooks";
-import { MAX_TASTE_SEEDS } from "./useDialData";
+import { MAX_TASTE_SEEDS } from "../lib/tasteSeeds";
 
 let seedWriteQueue: Promise<string[]> = Promise.resolve([]);
 

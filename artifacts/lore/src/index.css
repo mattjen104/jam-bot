@@ -5976,6 +5976,54 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
+.dial-artist-builder {
+  margin: 0 16px 18px;
+  padding: 14px 0;
+  border-top: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
+}
+.dial-artist-builder__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.dial-artist-builder__heading strong {
+  font-family: var(--app-font-display);
+  font-size: var(--lore-size-interface);
+}
+.dial-artist-builder__heading p {
+  margin: 3px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+.dial-artist-builder__document {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--library));
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.dial-artist-builder__status {
+  display: block;
+  margin-top: 8px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+}
+@media (max-width: 640px) {
+  .dial-artist-builder__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
 .adaptive-now__track {
   width: 100%;
   overflow: hidden;

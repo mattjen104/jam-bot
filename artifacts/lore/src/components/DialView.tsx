@@ -19,6 +19,8 @@ import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
 import { ExploreHeader } from "./ExploreHeader";
+import { ArtistDocument } from "./ArtistDocument";
+import { SeedBar } from "./SeedInput";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { useSocialMode } from "../lib/social";
 import { useSleepMode } from "../lib/sleepMode";
@@ -42,6 +44,7 @@ import {
   type CrossingScope,
   type StationSortMetric,
 } from "../lib/crossingScope";
+import { MAX_TASTE_SEEDS } from "../lib/tasteSeeds";
 import {
   nameNodes,
   reason,
@@ -832,8 +835,6 @@ function RunRow({ run, focused = false }: { run: OverlapRun; focused?: boolean }
 //   Zone 3 p50≈3  p90≈7  max≈12
 // Zone 1 p90 > 5, so truncation is worth shipping.
 // ---------------------------------------------------------------------------
-/** Max taste seeds per user — must match MAX_SEEDS in api-server taste-seeds.ts. */
-const MAX_TASTE_SEEDS = 50;
 /** Stable, case-insensitive ordering for the listener's configured artists. */
 export function sortTasteSeeds(seeds: string[]): string[] {
   return [...seeds].sort((a, b) => {
@@ -1456,6 +1457,7 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
   const { enabled: socialEnabled } = useSocialMode();
   const { enabled: sleepEnabled } = useSleepMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
@@ -1659,6 +1661,34 @@ export function DialView() {
       }
     });
     void seedWriteRef.current.catch(() => undefined);
+  }, [seedArtists, setSeedsMutation, visibleSeeds]);
+
+  const replaceSeeds = useCallback((artists: string[]) => {
+    const pending = seedWriteRef.current;
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
+    const operation = base.then(async () => {
+      const seen = new Set<string>();
+      const next = artists
+        .map((artist) => artist.trim())
+        .filter((artist) => {
+          const key = artist.toLocaleLowerCase();
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .slice(0, MAX_TASTE_SEEDS);
+      setOptimisticSeeds(next);
+      try {
+        const result = await setSeedsMutation.mutateAsync(next);
+        setOptimisticSeeds(result.artists);
+        return result.artists;
+      } catch (error) {
+        setOptimisticSeeds(null);
+        throw error;
+      }
+    });
+    seedWriteRef.current = operation;
+    return operation;
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
 
   const seedsLower = useMemo(
@@ -2613,6 +2643,41 @@ export function DialView() {
                   >
                     Show all stations
                   </button>
+                ) : null}
+                {!stationFilterSlug ? (
+                  <section className="dial-artist-builder" aria-label="Artist filter">
+                    <div className="dial-artist-builder__heading">
+                      <div>
+                        <strong>Build your artist filter</strong>
+                        <p>Add another artist and Lore will refresh these stations.</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="dial-artist-builder__document"
+                        onClick={() => setArtistDocumentOpen((open) => !open)}
+                        aria-expanded={artistDocumentOpen}
+                      >
+                        {artistDocumentOpen ? "Close artist document" : "Edit artist document"}
+                      </button>
+                    </div>
+                    <SeedBar
+                      seeds={visibleSeeds}
+                      onAddSeed={addSeed}
+                      onRemoveSeed={removeSeed}
+                    />
+                    {crossingsLoading ? (
+                      <span className="dial-artist-builder__status" role="status" aria-live="polite">
+                        Refreshing station matches…
+                      </span>
+                    ) : null}
+                    {artistDocumentOpen ? (
+                      <ArtistDocument
+                        artists={visibleSeeds}
+                        onSave={replaceSeeds}
+                        onClose={() => setArtistDocumentOpen(false)}
+                      />
+                    ) : null}
+                  </section>
                 ) : null}
               </>
             )}

@@ -197,25 +197,28 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Dial add-artist controls are removed", () => {
-  it("exposes no tuned-artists toggle and no artist-name input anywhere on the dial", () => {
+describe("Dial artist filter builder", () => {
+  it("keeps an artist-name input beside the station results", () => {
     mockDial();
     render(<DialView />);
 
     expect(screen.queryByRole("button", { name: "Open tuned artists" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Close tuned artists" })).toBeNull();
-    expect(screen.queryByRole("textbox", { name: "Artist name" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Artist name" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit artist document" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Tuned artists" })).toBeNull();
   });
 
-  it("keeps the add-artist controls absent even when the listener already has seeds", () => {
+  it("shows existing artists as removable chips while keeping the add field available", () => {
     tasteSeeds.mockReturnValue({ data: ["Radiohead", "Portishead"] });
     mockDial();
     render(<DialView />);
 
-    expect(screen.queryByRole("textbox", { name: "Artist name" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Artist name" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove Radiohead" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove Portishead" })).toBeTruthy();
   });
 });
 
