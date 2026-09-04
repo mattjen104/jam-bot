@@ -33,26 +33,26 @@ export type CoverageArgs = {
   refresh: boolean;
   includeHidden: boolean;
   limit: number | null;
-  offset: number;
+  afterId: number;
   write: boolean;
 };
 
 export function parseCoverageArgs(args: string[]): CoverageArgs {
   const limitArg = args.find((arg) => arg.startsWith("--limit="));
-  const offsetArg = args.find((arg) => arg.startsWith("--offset="));
+  const afterIdArg = args.find((arg) => arg.startsWith("--after-id="));
   const limit = limitArg ? Number(limitArg.slice("--limit=".length)) : null;
-  const offset = offsetArg ? Number(offsetArg.slice("--offset=".length)) : 0;
+  const afterId = afterIdArg ? Number(afterIdArg.slice("--after-id=".length)) : 0;
   if (limit !== null && (!Number.isSafeInteger(limit) || limit < 1)) {
     throw new Error("--limit must be a positive integer");
   }
-  if (!Number.isSafeInteger(offset) || offset < 0) {
-    throw new Error("--offset must be a non-negative integer");
+  if (!Number.isSafeInteger(afterId) || afterId < 0) {
+    throw new Error("--after-id must be a non-negative integer");
   }
   return {
     refresh: args.includes("--refresh"),
     includeHidden: args.includes("--include-hidden"),
     limit,
-    offset,
+    afterId,
     write: args.includes("--write"),
   };
 }
@@ -188,6 +188,30 @@ export function countScheduleFailures(
     counts[row.scheduleFailureReason ?? "unclassified"]++;
   }
   return counts;
+}
+
+type RefreshCandidate = {
+  id: number;
+  schedule: {
+    status: ScheduleCoverageStatus;
+    failureReason: ScheduleFailureReason | null;
+  };
+};
+
+export function selectUnclassifiedRefreshCandidates<T extends RefreshCandidate>(
+  rows: T[],
+  afterId: number,
+  limit: number,
+): T[] {
+  return rows
+    .filter(
+      (row) =>
+        row.id > afterId &&
+        row.schedule.status === "attempted_without_success" &&
+        row.schedule.failureReason === null,
+    )
+    .sort((a, b) => a.id - b.id)
+    .slice(0, limit);
 }
 
 function coverageSort(
@@ -349,11 +373,13 @@ async function main(): Promise<void> {
 
   let refreshResults: Array<Record<string, unknown>> = [];
   const refreshLimit = args.limit ?? DEFAULT_REFRESH_LIMIT;
-  // Refresh offsets must remain valid after earlier pages mutate schedule
-  // status. Station IDs are immutable; status/attempt-time ordering is not.
-  const refreshCandidates = [...rows].sort((a, b) => a.id - b.id);
+  const failuresBefore = countScheduleFailures(
+    rows
+      .filter((row) => row.schedule.status === "attempted_without_success")
+      .map((row) => ({ scheduleFailureReason: row.schedule.failureReason })),
+  );
   const selected = args.refresh
-    ? refreshCandidates.slice(args.offset, args.offset + refreshLimit)
+    ? selectUnclassifiedRefreshCandidates(rows, args.afterId, refreshLimit)
     : [];
   if (args.refresh && selected.length) {
     await wireScheduleExtractor();
@@ -441,6 +467,17 @@ async function main(): Promise<void> {
   const verifiedWithSchedules = verifiedRows.filter(
     (row) => row.schedule.totalCount > 0,
   ).length;
+  const failuresAfter = countScheduleFailures(
+    rows
+      .filter((row) => row.schedule.status === "attempted_without_success")
+      .map((row) => ({ scheduleFailureReason: row.schedule.failureReason })),
+  );
+  const newlyPopulatedReasonTotals = Object.fromEntries(
+    SCHEDULE_FAILURE_REASONS.map((reason) => [
+      reason,
+      Math.max(0, failuresAfter[reason] - failuresBefore[reason]),
+    ]),
+  ) as Record<ScheduleFailureReason, number>;
 
   const report = {
     generatedAt: now.toISOString(),
@@ -449,6 +486,8 @@ async function main(): Promise<void> {
         "By default, stable means active, visible, and homepage-backed. Use --include-hidden to inspect active hidden stations.",
       schedule:
         "Recurring rows and dated exceptions are counted separately. A failed attempt never counts as a valid empty schedule.",
+      backlogRefresh:
+        "Refresh targets only attempted-without-success stations lacking a durable failure reason. Batches are bounded by --limit and resume after the reported nextAfterId with --after-id.",
       freshness: `A populated schedule is current for ${FRESH_DAYS} days after its last successful scrape.`,
       identity:
         "Soundtap labels are annotations only: verified, branded, ambiguous, or none. No Soundtap URL is used as a Lore scrape target.",
@@ -501,9 +540,16 @@ async function main(): Promise<void> {
     refresh: {
       enabled: args.refresh,
       limit: args.refresh ? refreshLimit : null,
-      offset: args.refresh ? args.offset : null,
+      afterId: args.refresh ? args.afterId : null,
       ordering: args.refresh ? "station_id_ascending" : null,
+      candidateClass: args.refresh ? "attempted_without_success_unclassified" : null,
       selectedTargets: selected.map((row) => row.slug),
+      nextAfterId: args.refresh && selected.length
+        ? selected[selected.length - 1]!.id
+        : null,
+      unclassifiedBefore: failuresBefore.unclassified,
+      unclassifiedRemaining: failuresAfter.unclassified,
+      newlyPopulatedReasonTotals,
       results: refreshResults,
     },
     stations: rows,
