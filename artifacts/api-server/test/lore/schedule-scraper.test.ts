@@ -24,6 +24,17 @@ import {
   parseSpinitronCalendarFeed,
   parseSpinitronCalendarFeedWithExceptions,
 } from "../../src/lore/schedule-scraper.js";
+import {
+  cadenceScheduleSource,
+  googleCalendarIcsUrl,
+  parseCalendarIcs,
+  parseCadenceSchedule,
+  parseJsonLdEvents,
+  parseQantumSchedule,
+  parseWeeklyScheduleTable,
+  wordpressPageApiUrl,
+  wordpressRenderedContent,
+} from "../../src/lore/schedule-structured.js";
 
 // ---------------------------------------------------------------------------
 // isScheduleUrlPermanentlyGone
@@ -878,5 +889,95 @@ describe("Spinitron public calendar adapter", () => {
       `<script>var config = { events: 'https://example.test/feed' };</script>`,
       new Date(2025, 1, 26),
     )).toBeNull();
+  });
+});
+
+describe("official CMS schedule adapters", () => {
+  it("discovers the exact WordPress page REST endpoint", () => {
+    const html = `<link rel="alternate" title="JSON" type="application/json"
+      href="https://radio.example/wp-json/wp/v2/pages/2808" />`;
+    expect(wordpressPageApiUrl("https://radio.example/schedule/", html)).toBe(
+      "https://radio.example/wp-json/wp/v2/pages/2808",
+    );
+    expect(wordpressRenderedContent(JSON.stringify({ content: { rendered: "<table>grid</table>" } })))
+      .toBe("<table>grid</table>");
+  });
+
+  it("parses a WordPress weekly table without station-specific selectors", () => {
+    const result = parseWeeklyScheduleTable(`<table>
+      <tr><th>Time</th><th>Sunday</th><th>Monday</th><th>Tuesday</th></tr>
+      <tr><td>10 am - 12 pm</td><td><a>Sunday Soul</a></td>
+        <td><a>Morning Mix</a><br>with DJ Jules</td><td>Off Air</td></tr>
+    </table>`);
+    expect(result).toEqual([
+      { showName: "Sunday Soul", dayOfWeek: "Sun", startTime: "10:00", endTime: "12:00", djName: null },
+      { showName: "Morning Mix", dayOfWeek: "Mon", startTime: "10:00", endTime: "12:00", djName: "DJ Jules" },
+    ]);
+  });
+
+  it("parses recurring QantumThemes cards and derives their end from the next slot", () => {
+    const result = parseQantumSchedule(`
+      <div class="qt-part-archive-item qt-part-show-schedule-day-item"><span class="qt-time">8:00</span><span class="qt-am">am</span>
+        <span class="qt-day">Monday</span><a class="qt-t">Morning Sound</a></div>
+      <div class="qt-part-archive-item qt-part-show-schedule-day-item"><span class="qt-time">10:00</span><span class="qt-am">am</span>
+        <span class="qt-day">Monday</span><a class="qt-t">Late Shift</a></div>`);
+    expect(result?.[0]).toEqual({
+      showName: "Morning Sound", dayOfWeek: "Mon", startTime: "08:00", endTime: "10:00", djName: null,
+    });
+  });
+
+  it("parses public-radio schema.org Event JSON-LD", () => {
+    const result = parseJsonLdEvents(`<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org", "@type": "Event", name: "Global Music",
+      startDate: "2026-09-07T19:00:00-06:00", endDate: "2026-09-07T21:00:00-06:00",
+    })}</script>`);
+    expect(result).toEqual([
+      { showName: "Global Music", dayOfWeek: "Mon", startTime: "19:00", endTime: "21:00", djName: null },
+    ]);
+  });
+
+  it("discovers and parses a public Google Calendar ICS feed", () => {
+    const html = `<iframe src="https://calendar.google.com/calendar/embed?src=station%40group.calendar.google.com"></iframe>`;
+    expect(googleCalendarIcsUrl("https://radio.example/schedule", html)).toBe(
+      "https://calendar.google.com/calendar/ical/station%40group.calendar.google.com/public/basic.ics",
+    );
+    const result = parseCalendarIcs(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20260908T220000
+DTEND;TZID=America/New_York:20260909T000000
+SUMMARY:Night\\, Music
+END:VEVENT
+END:VCALENDAR`);
+    expect(result).toEqual([
+      { showName: "Night, Music", dayOfWeek: "Tue", startTime: "22:00", endTime: "00:00", djName: null },
+    ]);
+  });
+
+  it("discovers and parses the NPR Stations Cadence schedule API", () => {
+    expect(cadenceScheduleSource(
+      "https://radio.example/schedule",
+      `<iframe src="//cadence.nprstations.org/widgets/iframe/weekly?channelId=8ecd5b8a-8934-4bab-a49a-d0289ea526ab&amp;fontSize=13"></iframe>`,
+    )).toEqual({
+      endpointUrl: "https://cadence.nprstations.org/api/cadence/widget/",
+      receiptUrl: "https://cadence.nprstations.org/widgets/iframe/weekly?channelId=8ecd5b8a-8934-4bab-a49a-d0289ea526ab&fontSize=13",
+      channelId: "8ecd5b8a-8934-4bab-a49a-d0289ea526ab",
+    });
+    expect(cadenceScheduleSource(
+      "https://radio.example/schedule",
+      `<iframe src="http://internal.test/cadence.nprstations.org/widgets/iframe/weekly?channelId=8ecd5b8a-8934-4bab-a49a-d0289ea526ab"></iframe>`,
+    )).toBeNull();
+    expect(googleCalendarIcsUrl(
+      "https://radio.example/schedule",
+      `<a href="http://internal.test/calendar.google.com/private.ics">Calendar</a>`,
+    )).toBeNull();
+    expect(parseCadenceSchedule(JSON.stringify({ episodes: [{
+      episode: {
+        programName: "Overnight Freeform",
+        start: { local: "2026-08-31T01:00:00-06:00" },
+        end: { local: "2026-08-31T05:00:00-06:00" },
+      },
+    }] }))).toEqual([{
+      showName: "Overnight Freeform", dayOfWeek: "Mon", startTime: "01:00", endTime: "05:00", djName: null,
+    }]);
   });
 });

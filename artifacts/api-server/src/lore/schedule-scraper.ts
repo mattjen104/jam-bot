@@ -10,6 +10,15 @@ import { extractScheduleRaw } from "./schedule-llm.js";
 import { inferTimezone } from "./timezone.js";
 import { sanitizeScheduleName } from "./schedule-name-sanitizer.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
+import {
+  cadenceScheduleSource,
+  googleCalendarIcsUrl,
+  parseCadenceSchedule,
+  parseCalendarIcs,
+  parseStructuredScheduleHtml,
+  wordpressPageApiUrl,
+  wordpressRenderedContent,
+} from "./schedule-structured.js";
 
 /**
  * Weekly-schedule scraper — a second, slower-paced sibling to
@@ -924,14 +933,77 @@ export async function scrapeStationSchedule(
       return fail();
     }
   } else {
-    const pageText = htmlToPlainText(pageHtml).slice(0, MAX_PAGE_CHARS);
-    if (!pageText) return fail();
-    try {
-      const raw = await extractScheduleRaw(`${EXTRACTION_PROMPT}${pageText}`);
-      shows = parseExtractedSchedule(raw);
-    } catch (err) {
-      console.warn(`[schedule-scraper] extraction failed for ${target.slug}`, err);
-      return fail();
+    // Prefer exact, first-party structured representations before asking the
+    // LLM to interpret rendered HTML. WordPress advertises the exact REST URL
+    // for its schedule page; Google Calendar embeds advertise a public ICS;
+    // public-radio CMS pages commonly publish schema.org Event JSON-LD inline.
+    let structured: ExtractedShow[] | null = null;
+    let structuredSourceUrl = sourceUrl;
+    const wpUrl = sourceUrl ? wordpressPageApiUrl(sourceUrl, pageHtml) : null;
+    const calendarUrl = sourceUrl ? googleCalendarIcsUrl(sourceUrl, pageHtml) : null;
+    const cadence = sourceUrl ? cadenceScheduleSource(sourceUrl, pageHtml) : null;
+    if (wpUrl) {
+      const result = await fetchPage(wpUrl);
+      if (typeof result === "string") {
+        const rendered = wordpressRenderedContent(result);
+        if (rendered) {
+          structured = parseStructuredScheduleHtml(rendered);
+          structuredSourceUrl = wpUrl;
+        }
+      }
+    }
+    // JSON-LD and deterministic schedule markup may be emitted directly by a
+    // non-WordPress CMS. For WordPress, prefer the advertised REST receipt
+    // above even when the rendered page happens to contain the same markup.
+    if (!structured) structured = parseStructuredScheduleHtml(pageHtml);
+    if (!structured && calendarUrl) {
+      const result = await fetchPage(calendarUrl);
+      if (typeof result === "string") {
+        structured = parseCalendarIcs(result);
+        structuredSourceUrl = calendarUrl;
+      }
+    }
+    if (!structured && cadence) {
+      try {
+        const week = spinitronWeekWindow();
+        const res = await fetchFn(cadence.endpointUrl, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Lore-Discovery-Bot/1.0",
+          },
+          body: JSON.stringify({
+            channelId: cadence.channelId,
+            startDate: week.start,
+            endDate: week.end,
+            from: 0,
+            size: 10_000,
+          }),
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
+        if (res.ok) {
+          structured = parseCadenceSchedule(await res.text());
+          structuredSourceUrl = cadence.receiptUrl;
+        }
+      } catch {
+        // The rendered official page remains available to the LLM fallback.
+      }
+    }
+    if (structured) {
+      shows = parseExtractedSchedule(JSON.stringify(structured));
+      sourceUrl = structuredSourceUrl;
+      extraction = "api";
+    } else {
+      const pageText = htmlToPlainText(pageHtml).slice(0, MAX_PAGE_CHARS);
+      if (!pageText) return fail();
+      try {
+        const raw = await extractScheduleRaw(`${EXTRACTION_PROMPT}${pageText}`);
+        shows = parseExtractedSchedule(raw);
+      } catch (err) {
+        console.warn(`[schedule-scraper] extraction failed for ${target.slug}`, err);
+        return fail();
+      }
     }
   }
 

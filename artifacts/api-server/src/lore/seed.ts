@@ -1582,7 +1582,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://kalx.berkeley.edu",
-      scheduleUrl: "https://kalx.berkeley.edu/schedule",
+      // The official KALX schedule page embeds this public Spinitron grid.
+      scheduleUrl: "https://spinitron.com/KALX/calendar",
       // Listener-supported non-profit; UC Berkeley's freeform station.
       // Berkeley routes institutional giving through give.berkeley.edu — the
       // /support path on their own domain is the listener-facing entry point.
@@ -1783,7 +1784,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wzbc.org",
-      scheduleUrl: "https://wzbc.org/schedule",
+      scheduleUrl: "https://spinitron.com/WZBC/calendar",
       ...spinSource("WZBC"),
       stationClass: "community",
       tags: COLLEGE,
@@ -1936,7 +1937,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wicb.org",
-      scheduleUrl: "https://wicb.org/schedule",
+      scheduleUrl: "https://wicb.org/schedule/",
       ...spinSource("WICB", "https://icecast.do.zufall.co/wicb_mp3_high"),
       // Audited 2026-09-02: WICB's own site reads the Last 92 from this
       // first-party JSON endpoint. Each row has a stable play id plus a local
@@ -2207,6 +2208,8 @@ export interface SpinitronDirectoryStation {
   tags?: string[];
   /** Station homepage URL from the Spinitron directory. */
   homepageUrl?: string;
+  /** Exact official weekly schedule page, when independently verified. */
+  scheduleUrl?: string;
 }
 
 /**
@@ -2424,7 +2427,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   // ── Southwest / Mountain ────────────────────────────────────────────────
   { callsign: "KXUA", name: "KXUA 88.3 FM", org: "University of Arkansas", country: "US" },
   { callsign: "KDUR", name: "KDUR 91.9 FM", org: "Fort Lewis College", country: "US" },
-  { callsign: "KUNM", name: "KUNM 89.9 FM", org: "University of New Mexico", country: "US" },
+  { callsign: "KUNM", name: "KUNM 89.9 FM", org: "University of New Mexico", country: "US", homepageUrl: "https://www.kunm.org/", scheduleUrl: "https://www.kunm.org/kunm-radio-schedule" },
   { callsign: "KFAI", name: "KFAI 90.3 FM", org: "KFAI Fresh Air Community Radio", country: "US" },
   { callsign: "KAOS", name: "KAOS 89.3 FM", org: "The Evergreen State College", country: "US" },
 
@@ -2432,7 +2435,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "KCSB", name: "KCSB 91.9 FM", org: "UC Santa Barbara", country: "US" },
   { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US", city: "Riverside", region: "CA", tags: ["college"] },
   { callsign: "KZSC", name: "KZSC 88.1 FM", org: "UC Santa Cruz", country: "US" },
-  { callsign: "KUCI", name: "KUCI 88.9 FM", org: "UC Irvine", country: "US" },
+  { callsign: "KUCI", name: "KUCI 88.9 FM", org: "UC Irvine", country: "US", homepageUrl: "https://kuci.org/", scheduleUrl: "https://kuci.org/show-schedule/" },
   { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US", city: "Los Angeles", region: "CA", tags: ["college"] },
   { callsign: "KSDT", name: "KSDT 95.7 FM", org: "UC San Diego", country: "US" },
   { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US" },
@@ -2666,6 +2669,7 @@ export async function seedSpinitronRoster(): Promise<void> {
       homepageUrl:
         station.homepageUrl ??
         `https://spinitron.com/${encodeURIComponent(station.callsign)}/`,
+      scheduleUrl: station.scheduleUrl ?? null,
     };
     const result = await db
       .insert(stationsTable)
@@ -2677,6 +2681,20 @@ export async function seedSpinitronRoster(): Promise<void> {
     } else {
       skipped++;
     }
+  }
+
+  // The live Spinitron directory does not carry schedule-page metadata, while
+  // the reviewed fallback does. Merge those independently verified URLs onto
+  // existing rows as well as fresh inserts so deployments converge on restart.
+  for (const station of EMBEDDED_SPINITRON_STATIONS) {
+    if (!station.scheduleUrl) continue;
+    await db
+      .update(stationsTable)
+      .set({
+        homepageUrl: station.homepageUrl ?? sql`${stationsTable.homepageUrl}`,
+        scheduleUrl: station.scheduleUrl,
+      })
+      .where(eq(stationsTable.slug, station.callsign.toLowerCase()));
   }
 
   await runSpinitronKeyUpgradePass();
