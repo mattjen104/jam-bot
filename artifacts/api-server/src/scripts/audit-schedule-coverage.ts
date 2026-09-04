@@ -8,7 +8,7 @@ import {
   stationQualityTable,
   stationsTable,
 } from "@workspace/db";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   auditSoundtapIdentity,
   parseSoundtapStations,
@@ -88,6 +88,7 @@ type LoreStation = {
   streamUrl: string | null;
   homepageUrl: string | null;
   scheduleUrl: string | null;
+  ianaTimezone: string | null;
   active: boolean;
   hidden: boolean;
   scheduleScrapedAt: Date | null;
@@ -142,14 +143,14 @@ async function loadScheduleFacts(stationIds: number[]): Promise<Map<number, Sche
     const fact = facts.get(row.stationId);
     if (!fact) continue;
     fact.recurringCount++;
-    fact.showNames.add(row.showName.toLocaleLowerCase());
+    fact.showNames.add(row.showName.toLowerCase());
     fact.sourceUrls.add(row.sourceUrl);
   }
   for (const row of dated) {
     const fact = facts.get(row.stationId);
     if (!fact) continue;
     fact.datedCount++;
-    fact.showNames.add(row.showName.toLocaleLowerCase());
+    fact.showNames.add(row.showName.toLowerCase());
     fact.sourceUrls.add(row.sourceUrl);
   }
   return facts;
@@ -206,6 +207,7 @@ async function main(): Promise<void> {
         streamUrl: stationsTable.streamUrl,
         homepageUrl: stationsTable.homepageUrl,
         scheduleUrl: stationsTable.scheduleUrl,
+        ianaTimezone: stationsTable.ianaTimezone,
         active: stationsTable.active,
         hidden: stationsTable.hidden,
         scheduleScrapedAt: stationsTable.scheduleScrapedAt,
@@ -228,8 +230,15 @@ async function main(): Promise<void> {
   ) as LoreStation[];
   const excluded = {
     inactive: lore.filter((station) => !station.active).length,
-    hidden: lore.filter((station) => station.active && station.hidden).length,
-    withoutHomepage: lore.filter((station) => station.active && !station.homepageUrl).length,
+    hidden: args.includeHidden
+      ? 0
+      : lore.filter((station) => station.active && station.hidden).length,
+    withoutHomepage: lore.filter(
+      (station) =>
+        station.active &&
+        (args.includeHidden || !station.hidden) &&
+        !station.homepageUrl,
+    ).length,
   };
   const facts = await loadScheduleFacts(eligible.map((station) => station.id));
   const identity = auditSoundtapIdentity(soundtap, lore);
@@ -303,11 +312,27 @@ async function main(): Promise<void> {
         ambiguousSlugs: ambiguous,
       },
     };
-  }).sort(coverageSort);
+  }).sort((a, b) => coverageSort(
+    {
+      status: a.schedule.status,
+      scheduleAttemptedAt: a.schedule.attemptedAt,
+      name: a.name,
+    },
+    {
+      status: b.schedule.status,
+      scheduleAttemptedAt: b.schedule.attemptedAt,
+      name: b.name,
+    },
+  ));
 
   let refreshResults: Array<Record<string, unknown>> = [];
   const refreshLimit = args.limit ?? DEFAULT_REFRESH_LIMIT;
-  const selected = args.refresh ? rows.slice(args.offset, args.offset + refreshLimit) : [];
+  // Refresh offsets must remain valid after earlier pages mutate schedule
+  // status. Station IDs are immutable; status/attempt-time ordering is not.
+  const refreshCandidates = [...rows].sort((a, b) => a.id - b.id);
+  const selected = args.refresh
+    ? refreshCandidates.slice(args.offset, args.offset + refreshLimit)
+    : [];
   if (args.refresh && selected.length) {
     await wireScheduleExtractor();
     refreshResults = [];
@@ -321,7 +346,7 @@ async function main(): Promise<void> {
           scheduleUrl: station.scheduleUrl,
           city: station.city,
           country: station.country,
-          ianaTimezone: null,
+          ianaTimezone: station.ianaTimezone,
         });
         refreshResults.push({
           id: station.id,
@@ -375,6 +400,22 @@ async function main(): Promise<void> {
     }
   }
 
+  const uniqueShowNames = new Set<string>();
+  for (const fact of facts.values()) {
+    for (const showName of fact.showNames) uniqueShowNames.add(showName);
+  }
+  if (args.refresh) {
+    const refreshedFacts = await loadScheduleFacts(eligible.map((station) => station.id));
+    uniqueShowNames.clear();
+    for (const fact of refreshedFacts.values()) {
+      for (const showName of fact.showNames) uniqueShowNames.add(showName);
+    }
+  }
+  const verifiedRows = rows.filter((row) => row.soundtap.kind === "verified");
+  const verifiedWithSchedules = verifiedRows.filter(
+    (row) => row.schedule.totalCount > 0,
+  ).length;
+
   const report = {
     generatedAt: now.toISOString(),
     methodology: {
@@ -389,31 +430,48 @@ async function main(): Promise<void> {
     inventory: {
       loreTotal: lore.length,
       eligible: eligible.length,
-      excluded,
+      excludedMutuallyExclusive: excluded,
       soundtapStations: soundtap.length,
     },
     soundtapOverlap: {
       verifiedStations: new Set(identity.shared.map((match) => match.station.id)).size,
       brandedStations: new Set(identity.branded.map((match) => match.station.id)).size,
-      ambiguousStations: ambiguousById.size,
-      verifiedWithSchedules: rows.filter(
-        (row) => row.soundtap.kind === "verified" && row.schedule.totalCount > 0,
+      ambiguousSoundtapIdentities: identity.ambiguous.length,
+      ambiguousLoreCandidates: ambiguousById.size,
+      verifiedEverAttempted: verifiedRows.filter(
+        (row) => !!row.schedule.attemptedAt,
       ).length,
+      verifiedEverSuccessfullyScraped: verifiedRows.filter(
+        (row) => !!row.schedule.scrapedAt,
+      ).length,
+      verifiedWithSchedules,
+      verifiedStatus: countByStatus(
+        verifiedRows.map((row) => ({ status: row.schedule.status })),
+      ),
+      verifiedScheduleCoverageRate: identity.shared.length
+        ? verifiedWithSchedules /
+          new Set(identity.shared.map((match) => match.station.id)).size
+        : null,
     },
     coverage: {
-      stationStatus: countByStatus(rows),
+      stationStatus: countByStatus(rows.map((row) => ({ status: row.schedule.status }))),
       stationsWithAnySchedule: rows.filter((row) => row.schedule.totalCount > 0).length,
+      stationCoverageRate: eligible.length
+        ? rows.filter((row) => row.schedule.totalCount > 0).length / eligible.length
+        : null,
+      stationsWithConfiguredScheduleUrl: rows.filter((row) => !!row.scheduleUrl).length,
+      stationsEverSuccessfullyScraped: rows.filter((row) => !!row.schedule.scrapedAt).length,
+      stationsEverAttempted: rows.filter((row) => !!row.schedule.attemptedAt).length,
       recurringSlots: rows.reduce((sum, row) => sum + row.schedule.recurringCount, 0),
       datedSlots: rows.reduce((sum, row) => sum + row.schedule.datedCount, 0),
       totalSlots: rows.reduce((sum, row) => sum + row.schedule.totalCount, 0),
-      uniqueShowNames: new Set(
-        rows.flatMap((row) => row.schedule.sourceUrls.length ? [row.id] : []),
-      ).size,
+      uniqueShowNames: uniqueShowNames.size,
     },
     refresh: {
       enabled: args.refresh,
       limit: args.refresh ? refreshLimit : null,
       offset: args.refresh ? args.offset : null,
+      ordering: args.refresh ? "station_id_ascending" : null,
       selectedTargets: selected.map((row) => row.slug),
       results: refreshResults,
     },
