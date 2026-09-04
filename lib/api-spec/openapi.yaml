@@ -6551,6 +6551,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScrapedShow"
+        datedExceptions:
+          type: array
+          description: >-
+            Official date-specific slots for rotating or conflicting schedules
+            that cannot honestly be represented as a recurring weekly grid.
+          items:
+            $ref: "#/components/schemas/DatedScheduleException"
         lastScrapedAt:
           type: ["string", "null"]
           description: >-
@@ -6565,8 +6572,32 @@ components:
       required:
         - stationSlug
         - shows
+        - datedExceptions
         - lastScrapedAt
         - timezoneHint
+    DatedScheduleException:
+      type: object
+      description: An official date-specific schedule slot preserved without recurrence.
+      properties:
+        showName: { type: string }
+        airDate: { type: string, format: date }
+        dayOfWeek: { type: string, enum: [Mon, Tue, Wed, Thu, Fri, Sat, Sun] }
+        startTime: { type: string, pattern: '^\d{2}:\d{2}$' }
+        endTime: { type: string, pattern: '^\d{2}:\d{2}$' }
+        djName: { type: ["string", "null"] }
+        sourceUrl: { type: string, format: uri }
+        scrapedAt: { type: string, format: date-time }
+        extraction: { type: string, enum: [api, manual] }
+      required:
+        - showName
+        - airDate
+        - dayOfWeek
+        - startTime
+        - endTime
+        - djName
+        - sourceUrl
+        - scrapedAt
+        - extraction
     DjShowEntry:
       type: object
       description: One scraped weekly show slot for a DJ at a specific station.

@@ -6,6 +6,7 @@ import {
   integer,
   real,
   boolean,
+  date,
   timestamp,
   jsonb,
   index,
@@ -605,6 +606,47 @@ export const scrapedShowsTable = pgTable(
 
 export type ScrapedShow = typeof scrapedShowsTable.$inferSelect;
 export type InsertScrapedShow = typeof scrapedShowsTable.$inferInsert;
+
+/**
+ * An official, date-specific station schedule used when a provider publishes
+ * overlapping or rotating programming that cannot honestly be flattened into
+ * the recurring weekly `scraped_shows` grid.
+ */
+export const scrapedShowExceptionsTable = pgTable(
+  "scraped_show_exceptions",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id),
+    showName: text("show_name").notNull(),
+    /** ISO calendar date in the station's published local wall clock. */
+    airDate: date("air_date", { mode: "string" }).notNull(),
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time").notNull(),
+    djName: text("dj_name"),
+    sourceUrl: text("source_url").notNull(),
+    scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
+    extraction: text("extraction").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("scraped_show_exceptions_slot_uq").on(
+      t.stationId,
+      t.airDate,
+      t.startTime,
+      t.showName,
+    ),
+    index("scraped_show_exceptions_station_date_idx").on(t.stationId, t.airDate),
+    check(
+      "scraped_show_exceptions_extraction_ck",
+      sql`${t.extraction} in ('api', 'manual')`,
+    ),
+  ],
+);
+
+export type ScrapedShowException = typeof scrapedShowExceptionsTable.$inferSelect;
+export type InsertScrapedShowException = typeof scrapedShowExceptionsTable.$inferInsert;
 
 /**
  * One play (spin) of a track on a station. This is the play-history spine's edge

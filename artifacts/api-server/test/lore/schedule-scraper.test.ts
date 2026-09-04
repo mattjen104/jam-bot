@@ -22,6 +22,7 @@ import {
   spinitronWeekWindow,
   spinitronCalendarFeedUrl,
   parseSpinitronCalendarFeed,
+  parseSpinitronCalendarFeedWithExceptions,
 } from "../../src/lore/schedule-scraper.js";
 
 // ---------------------------------------------------------------------------
@@ -832,6 +833,42 @@ describe("Spinitron public calendar adapter", () => {
         endTime: "10:00",
         djName: "DJ Current",
       },
+    ]);
+  });
+
+  it("preserves every same-date conflict as a dated exception instead of choosing a weekly row", () => {
+    const result = parseSpinitronCalendarFeedWithExceptions(
+      JSON.stringify([
+        {
+          title: "Alternating A",
+          text: "DJ One",
+          start: "2025-02-24T09:00:00-05:00",
+          end: "2025-02-24T11:00:00-05:00",
+        },
+        {
+          title: "Alternating B",
+          text: "DJ Two",
+          start: "2025-02-24T09:00:00-05:00",
+          end: "2025-02-24T11:00:00-05:00",
+        },
+      ]),
+      { start: "2025-02-24", end: "2025-03-03" },
+    );
+
+    expect(result?.recurringShows).toEqual([]);
+    expect(result?.datedExceptions).toEqual([
+      expect.objectContaining({
+        showName: "Alternating A",
+        airDate: "2025-02-24",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+      }),
+      expect.objectContaining({
+        showName: "Alternating B",
+        airDate: "2025-02-24",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+      }),
     ]);
   });
 

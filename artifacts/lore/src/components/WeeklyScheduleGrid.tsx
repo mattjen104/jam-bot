@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import type { ScrapedShow } from "@workspace/api-client-react";
+import type { DatedScheduleException, ScrapedShow } from "@workspace/api-client-react";
 import { Radio } from "lucide-react";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -95,12 +95,18 @@ function friendlyTimezone(ianaZone: string): string {
 
 interface WeeklyScheduleGridProps {
   shows: ScrapedShow[];
+  datedExceptions?: DatedScheduleException[];
   lastScrapedAt: string | null;
   timezoneHint?: string | null;
 }
 
-export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: WeeklyScheduleGridProps) {
-  if (shows.length === 0) {
+export function WeeklyScheduleGrid({
+  shows,
+  datedExceptions = [],
+  lastScrapedAt,
+  timezoneHint,
+}: WeeklyScheduleGridProps) {
+  if (shows.length === 0 && datedExceptions.length === 0) {
     return (
       <div className="rounded-xl border border-card-border bg-card p-8 text-center">
         <Radio className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
@@ -128,8 +134,42 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Horizontal-scroll wrapper so the 7-column grid works on small screens */}
-      <div className="overflow-x-auto rounded-xl border border-card-border">
+      {datedExceptions.length > 0 && (
+        <div className="rounded-xl border border-card-border bg-card p-4">
+          <p className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
+            Date-specific schedule
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This station rotates or overlaps programs, so these official dates are not shown as a weekly grid.
+          </p>
+          <ul className="mt-3 divide-y divide-card-border">
+            {datedExceptions.map((show) => (
+              <li key={`${show.airDate}-${show.startTime}-${show.showName}`} className="py-3">
+                <div className="font-medium text-foreground">{show.showName}</div>
+                <div className="mt-0.5 font-mono text-[12px] text-muted-foreground">
+                  {new Date(`${show.airDate}T12:00:00`).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}{" "}
+                  · {show.startTime}–{show.endTime}
+                  {show.djName ? ` · ${show.djName}` : ""}
+                </div>
+                <a
+                  className="mt-1 inline-block font-mono text-[11px] text-primary hover:underline"
+                  href={show.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Official schedule
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {shows.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-card-border">
         <table className="w-full min-w-[640px] border-collapse text-left">
           <thead>
             <tr className="border-b border-card-border bg-card">
@@ -218,7 +258,8 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
             ))}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
 
       {lastScrapedAt && (
         <p className="font-mono text-[12px] text-muted-foreground/50">

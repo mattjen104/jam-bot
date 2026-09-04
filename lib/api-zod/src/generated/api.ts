@@ -3918,6 +3918,11 @@ export const GetStationUpcomingScheduleParams = zod.object({
   slug: zod.coerce.string().min(1),
 });
 
+export const getStationUpcomingScheduleResponseDatedExceptionsItemStartTimeRegExp =
+  new RegExp("^\\d{2}:\\d{2}$");
+export const getStationUpcomingScheduleResponseDatedExceptionsItemEndTimeRegExp =
+  new RegExp("^\\d{2}:\\d{2}$");
+
 export const GetStationUpcomingScheduleResponse = zod
   .object({
     stationSlug: zod.string(),
@@ -3953,6 +3958,43 @@ export const GetStationUpcomingScheduleResponse = zod
           "One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.",
         ),
     ),
+    datedExceptions: zod
+      .array(
+        zod
+          .object({
+            showName: zod.string(),
+            airDate: zod.string().date(),
+            dayOfWeek: zod.enum([
+              "Mon",
+              "Tue",
+              "Wed",
+              "Thu",
+              "Fri",
+              "Sat",
+              "Sun",
+            ]),
+            startTime: zod
+              .string()
+              .regex(
+                getStationUpcomingScheduleResponseDatedExceptionsItemStartTimeRegExp,
+              ),
+            endTime: zod
+              .string()
+              .regex(
+                getStationUpcomingScheduleResponseDatedExceptionsItemEndTimeRegExp,
+              ),
+            djName: zod.string().nullable(),
+            sourceUrl: zod.string().url(),
+            scrapedAt: zod.string().datetime({}),
+            extraction: zod.enum(["api", "manual"]),
+          })
+          .describe(
+            "An official date-specific schedule slot preserved without recurrence.",
+          ),
+      )
+      .describe(
+        "Official date-specific slots for rotating or conflicting schedules that cannot honestly be represented as a recurring weekly grid.",
+      ),
     lastScrapedAt: zod
       .string()
       .nullable()

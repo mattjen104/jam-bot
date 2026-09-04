@@ -55,6 +55,31 @@ export async function applyStationScheduleMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS scraped_shows_station_idx
       ON scraped_shows (station_id)
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS scraped_show_exceptions (
+      id            serial PRIMARY KEY,
+      station_id    integer NOT NULL REFERENCES stations(id),
+      show_name     text NOT NULL,
+      air_date      date NOT NULL,
+      start_time    text NOT NULL,
+      end_time      text NOT NULL,
+      dj_name       text,
+      source_url    text NOT NULL,
+      scraped_at    timestamptz NOT NULL DEFAULT now(),
+      extraction    text NOT NULL,
+      created_at    timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT scraped_show_exceptions_extraction_ck
+        CHECK (extraction IN ('api', 'manual'))
+    )
+  `);
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS scraped_show_exceptions_slot_uq
+      ON scraped_show_exceptions (station_id, air_date, start_time, show_name)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS scraped_show_exceptions_station_date_idx
+      ON scraped_show_exceptions (station_id, air_date)
+  `);
   // Freshness marker set on every successful schedule scrape (including a
   // legitimate empty result) — see stationsTable.scheduleScrapedAt for why
   // this can't be derived from scraped_shows row presence.

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DatedScheduleException } from "./datedScheduleException";
 import type { ScrapedShow } from "./scrapedShow";
 
 /**
@@ -13,6 +14,8 @@ import type { ScrapedShow } from "./scrapedShow";
 export interface StationUpcomingSchedule {
   stationSlug: string;
   shows: ScrapedShow[];
+  /** Official date-specific slots for rotating or conflicting schedules that cannot honestly be represented as a recurring weekly grid. */
+  datedExceptions: DatedScheduleException[];
   /**
    * ISO timestamp of the last successful schedule scrape. Null when never successfully scraped.
    * @nullable

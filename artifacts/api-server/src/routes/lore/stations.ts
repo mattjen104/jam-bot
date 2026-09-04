@@ -37,6 +37,7 @@ import {
   pickersTable,
   picksTable,
   scrapedShowsTable,
+  scrapedShowExceptionsTable,
   stationQualityTable,
 } from "@workspace/db";
 import { eq, ne, and, or, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
@@ -2560,6 +2561,21 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
     )
     .orderBy(asc(dayRank), asc(scrapedShowsTable.startTime));
 
+  const datedRows = await db
+    .select({
+      showName: scrapedShowExceptionsTable.showName,
+      airDate: scrapedShowExceptionsTable.airDate,
+      startTime: scrapedShowExceptionsTable.startTime,
+      endTime: scrapedShowExceptionsTable.endTime,
+      djName: scrapedShowExceptionsTable.djName,
+      sourceUrl: scrapedShowExceptionsTable.sourceUrl,
+      scrapedAt: scrapedShowExceptionsTable.scrapedAt,
+      extraction: scrapedShowExceptionsTable.extraction,
+    })
+    .from(scrapedShowExceptionsTable)
+    .where(eq(scrapedShowExceptionsTable.stationId, station[0]!.id))
+    .orderBy(asc(scrapedShowExceptionsTable.airDate), asc(scrapedShowExceptionsTable.startTime));
+
   // Freshness comes from stationsTable.scheduleScrapedAt (set on every
   // successful scrape, including a legitimate empty result) rather than from
   // row data — otherwise a station with a real, successfully-confirmed empty
@@ -2582,8 +2598,16 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
         endTime: r.endTime,
         djName: r.djName ?? null,
         sourceUrl: r.sourceUrl,
-        scrapedAt: r.scrapedAt,
+        scrapedAt: r.scrapedAt.toISOString(),
         extraction: r.extraction,
+      })),
+      datedExceptions: datedRows.map((r) => ({
+        ...r,
+        scrapedAt: r.scrapedAt.toISOString(),
+        dayOfWeek: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+          new Date(`${r.airDate}T00:00:00Z`).getUTCDay()
+        ],
+        djName: r.djName ?? null,
       })),
       lastScrapedAt,
       timezoneHint,

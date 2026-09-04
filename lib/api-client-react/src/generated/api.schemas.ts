@@ -1747,12 +1747,53 @@ export type VoidScrapedShowResponse = ScrapedShow & {
   voidReason: string | null;
 };
 
+export type DatedScheduleExceptionDayOfWeek =
+  (typeof DatedScheduleExceptionDayOfWeek)[keyof typeof DatedScheduleExceptionDayOfWeek];
+
+export const DatedScheduleExceptionDayOfWeek = {
+  Mon: "Mon",
+  Tue: "Tue",
+  Wed: "Wed",
+  Thu: "Thu",
+  Fri: "Fri",
+  Sat: "Sat",
+  Sun: "Sun",
+} as const;
+
+export type DatedScheduleExceptionExtraction =
+  (typeof DatedScheduleExceptionExtraction)[keyof typeof DatedScheduleExceptionExtraction];
+
+export const DatedScheduleExceptionExtraction = {
+  api: "api",
+  manual: "manual",
+} as const;
+
+/**
+ * An official date-specific schedule slot preserved without recurrence.
+ */
+export interface DatedScheduleException {
+  showName: string;
+  airDate: string;
+  dayOfWeek: DatedScheduleExceptionDayOfWeek;
+  /** @pattern ^\d{2}:\d{2}$ */
+  startTime: string;
+  /** @pattern ^\d{2}:\d{2}$ */
+  endTime: string;
+  /** @nullable */
+  djName: string | null;
+  sourceUrl: string;
+  scrapedAt: string;
+  extraction: DatedScheduleExceptionExtraction;
+}
+
 /**
  * A station's scraped upcoming schedule. `shows` is empty (never fabricated) when the station's page had no parseable schedule.
  */
 export interface StationUpcomingSchedule {
   stationSlug: string;
   shows: ScrapedShow[];
+  /** Official date-specific slots for rotating or conflicting schedules that cannot honestly be represented as a recurring weekly grid. */
+  datedExceptions: DatedScheduleException[];
   /**
    * ISO timestamp of the last successful schedule scrape. Null when never successfully scraped.
    * @nullable

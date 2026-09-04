@@ -1562,13 +1562,14 @@ router.delete("/admin/stations/:id/permanent", h(async (req, res) => {
 
     // Documented FK order (see lore-station-deletion-fk-order): spins, then
     // segue_edges (references shows too, so before shows), shows,
-    // radio_browser_stations, station_quality, scraped_shows, stations.
+    // radio_browser_stations, station_quality, schedule rows, stations.
     await tx.execute(sql`DELETE FROM spins WHERE station_id = ${id}`);
     await tx.execute(sql`DELETE FROM segue_edges WHERE station_id = ${id}`);
     await tx.execute(sql`DELETE FROM shows WHERE station_id = ${id}`);
     await tx.execute(sql`DELETE FROM radio_browser_stations WHERE station_id = ${id}`);
     await tx.execute(sql`DELETE FROM station_quality WHERE station_id = ${id}`);
     await tx.execute(sql`DELETE FROM scraped_shows WHERE station_id = ${id}`);
+    await tx.execute(sql`DELETE FROM scraped_show_exceptions WHERE station_id = ${id}`);
     await tx.execute(sql`DELETE FROM stations WHERE id = ${id}`);
 
     // Tombstone the UUID inside the same transaction so a concurrent

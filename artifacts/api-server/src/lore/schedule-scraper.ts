@@ -1,4 +1,9 @@
-import { db, stationsTable, scrapedShowsTable } from "@workspace/db";
+import {
+  db,
+  stationsTable,
+  scrapedShowsTable,
+  scrapedShowExceptionsTable,
+} from "@workspace/db";
 import { and, eq, isNotNull, lt, or, isNull, sql } from "drizzle-orm";
 import { isCrawlBlocked } from "./blog-crossref.js";
 import { extractScheduleRaw } from "./schedule-llm.js";
@@ -133,6 +138,15 @@ export interface ExtractedShow {
   djName: string | null;
 }
 
+export interface DatedExtractedShow extends ExtractedShow {
+  airDate: string;
+}
+
+export interface SpinitronScheduleExtraction {
+  recurringShows: ExtractedShow[];
+  datedExceptions: DatedExtractedShow[];
+}
+
 /**
  * Return the Monday-through-following-Monday window expected by Spinitron's
  * FullCalendar feed. The end is exclusive, making this exactly seven days.
@@ -195,10 +209,10 @@ export function spinitronCalendarFeedUrl(
  * timestamps through this server's timezone. The date and HH:MM components
  * displayed by Spinitron are the schedule's local wall-clock values.
  */
-export function parseSpinitronCalendarFeed(
+export function parseSpinitronCalendarFeedWithExceptions(
   raw: string,
   window?: { start: string; end: string },
-): ExtractedShow[] | null {
+): SpinitronScheduleExtraction | null {
   let events: unknown;
   try {
     events = JSON.parse(raw);
@@ -206,7 +220,7 @@ export function parseSpinitronCalendarFeed(
     return null;
   }
   if (!Array.isArray(events)) return null;
-  const shows: ExtractedShow[] = [];
+  const shows: DatedExtractedShow[] = [];
   for (const event of events) {
     if (!event || typeof event !== "object") return null;
     const value = event as Record<string, unknown>;
@@ -252,14 +266,37 @@ export function parseSpinitronCalendarFeed(
     const text = sanitizeScheduleName(value.text);
     shows.push({
       showName,
+      airDate: eventDate,
       dayOfWeek: CANONICAL_DAYS[dayDate.getUTCDay()]!,
       startTime,
       endTime,
       djName: eligibleDjName(text, { showTitle: showName }) ?? null,
     });
   }
-  // Reuse the one validation point for dedupe, overlap detection, and cap.
-  return parseExtractedSchedule(JSON.stringify(shows));
+  const recurringShows = parseExtractedSchedule(JSON.stringify(shows));
+  if (recurringShows !== null) {
+    return { recurringShows, datedExceptions: [] };
+  }
+
+  // A provider conflict is valid dated evidence, not a broken weekly grid.
+  // Preserve every official event on its actual date rather than selecting a
+  // winner or pretending each row recurs every week.
+  const seen = new Set<string>();
+  const datedExceptions = shows.filter((show) => {
+    const key = `${show.airDate}|${show.startTime}|${show.showName.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { recurringShows: [], datedExceptions: datedExceptions.slice(0, MAX_SHOWS_PER_STATION) };
+}
+
+/** Backward-compatible recurring-grid view for callers that do not consume exceptions. */
+export function parseSpinitronCalendarFeed(
+  raw: string,
+  window?: { start: string; end: string },
+): ExtractedShow[] | null {
+  return parseSpinitronCalendarFeedWithExceptions(raw, window)?.recurringShows ?? null;
 }
 
 /** A receipt is required for every durable extracted fact. */
@@ -856,6 +893,7 @@ export async function scrapeStationSchedule(
   }
 
   let shows: ExtractedShow[] | null;
+  let datedExceptions: DatedExtractedShow[] = [];
   let extraction: "api" | "llm" = "llm";
   const feedUrl = sourceUrl ? spinitronCalendarFeedUrl(sourceUrl, pageHtml) : null;
   // A Spinitron calendar without a usable public feed is not a page for the
@@ -877,7 +915,9 @@ export async function scrapeStationSchedule(
         start: new URL(feedUrl).searchParams.get("start")!,
         end: new URL(feedUrl).searchParams.get("end")!,
       };
-      shows = parseSpinitronCalendarFeed(await res.text(), requestedWindow);
+      const parsed = parseSpinitronCalendarFeedWithExceptions(await res.text(), requestedWindow);
+      shows = parsed?.recurringShows ?? null;
+      datedExceptions = parsed?.datedExceptions ?? [];
       extraction = "api";
     } catch (err) {
       console.warn(`[schedule-scraper] Spinitron feed failed for ${target.slug}`, err);
@@ -907,6 +947,9 @@ export async function scrapeStationSchedule(
     const receiptSourceUrl = requireSourceUrl(sourceUrl);
     await db.transaction(async (tx) => {
       await tx.delete(scrapedShowsTable).where(eq(scrapedShowsTable.stationId, target.id));
+      await tx
+        .delete(scrapedShowExceptionsTable)
+        .where(eq(scrapedShowExceptionsTable.stationId, target.id));
       if (shows!.length > 0) {
         await tx
           .insert(scrapedShowsTable)
@@ -929,13 +972,35 @@ export async function scrapeStationSchedule(
           // starve the batch by leaving scheduleAttemptedAt unset.
           .onConflictDoNothing();
       }
+      if (datedExceptions.length > 0) {
+        await tx
+          .insert(scrapedShowExceptionsTable)
+          .values(
+            datedExceptions.map((s) => ({
+              stationId: target.id,
+              showName: s.showName,
+              airDate: s.airDate,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              djName: s.djName,
+              sourceUrl: receiptSourceUrl,
+              scrapedAt: now,
+              extraction: "api",
+            })),
+          )
+          .onConflictDoNothing();
+      }
       // Stamp both freshness markers AND the denormalized show count in the
       // same transaction as the row swap so they are always consistent:
       // - scheduleScrapedAt / scheduleAttemptedAt drive the re-scrape cadence
       // - upcomingShowCount lets GET /api/stations avoid a second round-trip
       await tx
         .update(stationsTable)
-        .set({ scheduleScrapedAt: now, scheduleAttemptedAt: now, upcomingShowCount: shows!.length })
+        .set({
+          scheduleScrapedAt: now,
+          scheduleAttemptedAt: now,
+          upcomingShowCount: shows!.length + datedExceptions.length,
+        })
         .where(eq(stationsTable.id, target.id));
     });
   } catch (err) {
@@ -950,7 +1015,7 @@ export async function scrapeStationSchedule(
   // timezone.  This runs outside the schedule transaction (best-effort: a
   // failure here must not roll back the freshly-written shows) and is a
   // no-op when the timezone was already set.
-  if (shows.length > 0 && !target.ianaTimezone) {
+  if ((shows.length > 0 || datedExceptions.length > 0) && !target.ianaTimezone) {
     const tz = inferTimezone(target.city, target.country);
     if (tz) {
       try {
@@ -969,7 +1034,7 @@ export async function scrapeStationSchedule(
     }
   }
 
-  return { scraped: true, showCount: shows.length };
+  return { scraped: true, showCount: shows.length + datedExceptions.length };
 }
 
 let started = false;
