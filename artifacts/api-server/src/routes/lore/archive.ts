@@ -495,7 +495,11 @@ router.get("/archive/recent-runs", h(async (req, res) => {
               spinCount: r.spinCount,
               resolvedCount: r.resolvedCount,
               sourceUrl:
-                stationArchiveUrl(station.nowPlayingSource, r.date) ??
+                stationArchiveUrl(
+                  station.nowPlayingSource,
+                  r.date,
+                  station.nowPlayingConfig,
+                ) ??
                 r.citation ??
                 null,
               startedAt: new Date(r.startedAt).toISOString(),
@@ -854,6 +858,7 @@ router.get("/archive/coverage", h(async (_req, res) => {
       slug: stationsTable.slug,
       name: stationsTable.name,
       source: stationsTable.nowPlayingSource,
+      sourceConfig: stationsTable.nowPlayingConfig,
       backfillDone: stationsTable.backfillDone,
       backfillCursor: stationsTable.backfillCursor,
       spinCount: sql<number>`count(${spinsTable.id})::int`,
@@ -869,6 +874,7 @@ router.get("/archive/coverage", h(async (_req, res) => {
       stationsTable.slug,
       stationsTable.name,
       stationsTable.nowPlayingSource,
+      stationsTable.nowPlayingConfig,
       stationsTable.backfillDone,
       stationsTable.backfillCursor,
     )
@@ -899,7 +905,7 @@ router.get("/archive/coverage", h(async (_req, res) => {
         resolvedCount: r.resolvedCount,
         oldestSpinAt: r.oldestSpinAt ? new Date(r.oldestSpinAt).toISOString() : null,
         newestSpinAt: r.newestSpinAt ? new Date(r.newestSpinAt).toISOString() : null,
-        supportsBackfill: supportsBackfill(r.source),
+        supportsBackfill: supportsBackfill(r.source, r.sourceConfig),
         backfillDone: r.backfillDone,
         backfillCursor: r.backfillCursor ?? null,
       })),

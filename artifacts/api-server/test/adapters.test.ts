@@ -13,6 +13,7 @@ import {
   parseFipSteps,
   stationArchiveUrl,
   supportsBackfill,
+  spinitronSourceCapabilities,
   parseRadiojarNowPlaying,
   parseLotRadioSchedule,
   parseIcyNowPlaying,
@@ -602,8 +603,45 @@ describe("supportsBackfill", () => {
   it("only time-anchored history sources qualify", () => {
     expect(supportsBackfill("kexp_api")).toBe(true);
     expect(supportsBackfill("somafm")).toBe(true);
+    expect(supportsBackfill("spinitron")).toBe(false);
+    expect(supportsBackfill("spinitron", { apiKey: "configured" })).toBe(true);
     expect(supportsBackfill("radio_paradise")).toBe(false);
     expect(supportsBackfill(null)).toBe(false);
+  });
+
+  it("builds public calendar URLs for no-key Spinitron web stations", () => {
+    expect(
+      stationArchiveUrl("spinitron_web", "2026-07-01", { callsign: "WPRB" }),
+    ).toBe("https://spinitron.com/WPRB/calendar/date/2026-07-01");
+  });
+});
+
+describe("spinitronSourceCapabilities", () => {
+  it("describes the no-key public baseline without claiming history", () => {
+    expect(
+      spinitronSourceCapabilities("spinitron_web", { callsign: "WPRB" }),
+    ).toEqual({
+      publicLiveMetadata: true,
+      publicSchedule: true,
+      authenticatedHistory: false,
+      historyStatus: "not_configured",
+      directoryCoverage: "public_fallback",
+    });
+  });
+
+  it("treats station authentication as history access, not directory access", () => {
+    expect(
+      spinitronSourceCapabilities("spinitron", {
+        stationHandle: "WPRB",
+        apiKey: "configured",
+      }),
+    ).toEqual({
+      publicLiveMetadata: false,
+      publicSchedule: true,
+      authenticatedHistory: true,
+      historyStatus: "available",
+      directoryCoverage: "public_fallback",
+    });
   });
 });
 

@@ -13,6 +13,11 @@ import {
   stationsTable,
 } from "@workspace/db";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { spinitronSourceCapabilities } from "./adapters.js";
+import {
+  compareIcyCandidateToSchedule,
+  lookupActiveScheduleEntry,
+} from "./speech-schedule-comparison.js";
 
 type Snapshot = Record<string, unknown>;
 const ICY_CANDIDATE_RETENTION_DAYS = 90;
@@ -104,12 +109,74 @@ export async function getIcyMetadataCandidateHealth(windowDays = 30) {
     observedAt: icyMetadataCandidatesTable.observedAt,
     candidateClass: icyMetadataCandidatesTable.candidateClass,
     rejectionReason: icyMetadataCandidatesTable.rejectionReason,
+    stationTimezone: stationsTable.ianaTimezone,
   }).from(icyMetadataCandidatesTable)
     .innerJoin(stationsTable, eq(stationsTable.id, icyMetadataCandidatesTable.stationId))
     .where(sql`${icyMetadataCandidatesTable.observedAt} >= ${since}`)
     .orderBy(desc(icyMetadataCandidatesTable.observedAt))
     .limit(50);
-  return { windowDays, metrics: metrics.rows, recent };
+  const recentWithSchedule = await Promise.all(recent.map(async (candidate) => {
+    const schedule = await lookupActiveScheduleEntry(
+      candidate.stationId,
+      candidate.stationTimezone,
+      candidate.observedAt,
+    );
+    const comparison = compareIcyCandidateToSchedule(
+      candidate.rawStreamTitle,
+      schedule,
+    );
+    const { stationTimezone: _stationTimezone, ...publicCandidate } = candidate;
+    return {
+      ...publicCandidate,
+      scheduleCorroboration: comparison.outcome === "supporting"
+        ? {
+            ...comparison,
+            showName: schedule!.showName,
+            djName: schedule!.djName,
+            sourceUrl: schedule!.sourceUrl,
+            scheduleKind: schedule!.scheduleKind,
+          }
+        : comparison,
+    };
+  }));
+  return { windowDays, metrics: metrics.rows, recent: recentWithSchedule };
+}
+
+export async function getSpinitronCapabilityHealth() {
+  const rows = await db.select({
+    stationId: stationsTable.id,
+    stationSlug: stationsTable.slug,
+    stationName: stationsTable.name,
+    source: stationsTable.nowPlayingSource,
+    config: stationsTable.nowPlayingConfig,
+  }).from(stationsTable)
+    .where(sql`${stationsTable.nowPlayingSource} in ('spinitron', 'spinitron_web')`)
+    .orderBy(stationsTable.name);
+  const stations = rows.map(({ config, ...row }) => ({
+    ...row,
+    capabilities: spinitronSourceCapabilities(row.source, config),
+  }));
+  return {
+    stations,
+    directoryCoverage: process.env["SPINITRON_API_KEY"]
+      ? "authenticated"
+      : "public_fallback",
+    totals: {
+      stations: stations.length,
+      publicLiveMetadata: stations.filter(
+        (row) => row.capabilities?.publicLiveMetadata,
+      ).length,
+      publicSchedule: stations.filter(
+        (row) => row.capabilities?.publicSchedule,
+      ).length,
+      authenticatedHistory: stations.filter(
+        (row) => row.capabilities?.authenticatedHistory,
+      ).length,
+      historyNotConfigured: stations.filter(
+        (row) => row.capabilities?.historyStatus === "not_configured",
+      ).length,
+    },
+  };
 }
 export async function appendBoundaryPrediction(values: ImmutableEvidence & { predictedAt: Date; predictedBoundaryAt?: Date | null }) {
   const inserted = await db.insert(boundaryPredictionsTable)

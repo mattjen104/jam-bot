@@ -329,6 +329,14 @@ export function getStationHistoryAuditStatus() {
   };
 }
 
+/** Unsupported contracts must be recorded without invoking their adapter. */
+export function canAuditHistorySource(
+  contract: HistorySourceContract | null,
+  hasAdapter: boolean,
+): boolean {
+  return !!contract && hasAdapter && contract.retryPolicy !== "unsupported";
+}
+
 /** Start the bounded audit off-request; returns false when one is in flight. */
 export function startStationHistoryAudit(): boolean {
   if (auditRunning) return false;
@@ -371,19 +379,22 @@ export async function auditStationHistorySources(
     const source = selected.source ?? "none";
     const contract = historySourceContract(source, selected.config);
     const history = getHistoryAdapter(source);
-    if (!contract || !history) {
+    if (!canAuditHistorySource(contract, !!history)) {
       const unsupportedContract: HistorySourceContract = {
-        source,
-        family: "official_api",
-        surface: station.homepageUrl
-          ? "Station website without a configured deterministic history adapter"
-          : "No station-published history surface configured",
-        cursorMode: "fixed_feed",
-        supportsBackfill: false,
-        stableIdentity: "required",
-        reportedTimestamp: "required",
-        archiveCitation: "none",
-        supportedDepthDays: null,
+        ...(contract ?? {
+          source,
+          family: "official_api",
+          surface: station.homepageUrl
+            ? "Station website without a configured deterministic history adapter"
+            : "No station-published history surface configured",
+          cursorMode: "fixed_feed",
+          supportsBackfill: false,
+          stableIdentity: "required",
+          reportedTimestamp: "required",
+          archiveCitation: "none",
+          supportedDepthDays: null,
+          retryPolicy: "unsupported",
+        }),
         retryPolicy: "unsupported",
       };
       await upsertHistoryLedger({
@@ -391,11 +402,16 @@ export async function auditStationHistorySources(
         contract: unsupportedContract,
         status: "unsupported",
         sourceUrl: station.homepageUrl,
-        failure: "No supported deterministic history surface is configured.",
+        failure: contract
+          ? `${contract.surface} is not configured for this station.`
+          : "No supported deterministic history surface is configured.",
       });
       result.unsupported++;
       continue;
     }
+    // `canAuditHistorySource` guarantees both at runtime; keep the explicit
+    // guard so TypeScript preserves the non-null contract/adapter types below.
+    if (!contract || !history) continue;
     let parserReview: HistoryFetchReview | undefined;
     try {
       const batch = await history(selected.config, {

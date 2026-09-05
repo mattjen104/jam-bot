@@ -12,7 +12,10 @@ import {
 import { SpeechQuotaScheduler, selectCheapestMount } from "../../src/lore/speech-scheduler.js";
 import { estimateTalkWindows } from "../../src/lore/speech-talk-window.js";
 import { extractExplicitGroundedClaims, validateGroundedClaim } from "../../src/lore/speech-grounding.js";
-import { compareTranscriptToSchedule } from "../../src/lore/speech-schedule-comparison.js";
+import {
+  compareIcyCandidateToSchedule,
+  compareTranscriptToSchedule,
+} from "../../src/lore/speech-schedule-comparison.js";
 import { parseSpeechPilotCohort, speechShadowEnabled } from "../../src/lore/speech-shadow-orchestrator.js";
 
 describe("speech/capture core", () => {
@@ -435,6 +438,26 @@ setInterval(() => undefined, 1_000);
     expect(compareTranscriptToSchedule("DJ Nova", "DJ Nova")).toBe("supporting");
     expect(compareTranscriptToSchedule("DJ Nova", "DJ Lunar")).toBe("contradictory");
     expect(compareTranscriptToSchedule("", "DJ Nova")).toBe("inconclusive");
+  });
+
+  it("lets ICY text corroborate only the active schedule identity", () => {
+    const schedule = {
+      showName: "The Outer Limits",
+      djName: "DJ Nova",
+    };
+    expect(
+      compareIcyCandidateToSchedule("Now airing: The Outer Limits", schedule),
+    ).toEqual({ outcome: "supporting", matchedField: "show" });
+    expect(
+      compareIcyCandidateToSchedule("DJ Nova", schedule),
+    ).toEqual({ outcome: "supporting", matchedField: "dj" });
+    expect(
+      compareIcyCandidateToSchedule("WPRB Princeton", schedule),
+    ).toEqual({ outcome: "inconclusive", matchedField: null });
+    expect(compareIcyCandidateToSchedule("DJ Nova", null)).toEqual({
+      outcome: "inconclusive",
+      matchedField: null,
+    });
   });
 
   it("extracts only explicit DJ and show introductions with exact supporting spans", () => {

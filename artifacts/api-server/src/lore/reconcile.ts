@@ -111,7 +111,10 @@ async function sweepStation(stationId: number): Promise<number> {
   if (!station || station.hidden) return 0;
 
   const history = getHistoryAdapter(station.nowPlayingSource);
-  if (!history || !supportsBackfill(station.nowPlayingSource)) return 0;
+  if (
+    !history ||
+    !supportsBackfill(station.nowPlayingSource, station.nowPlayingConfig)
+  ) return 0;
 
   const now = new Date();
   const start = windowStart(now);
@@ -164,9 +167,15 @@ export async function startReconcileJob(): Promise<void> {
   let ids: number[];
   try {
     const rows = await db
-      .select({ id: stationsTable.id, source: stationsTable.nowPlayingSource })
+      .select({
+        id: stationsTable.id,
+        source: stationsTable.nowPlayingSource,
+        config: stationsTable.nowPlayingConfig,
+      })
       .from(stationsTable);
-    ids = rows.filter((r) => supportsBackfill(r.source)).map((r) => r.id);
+    ids = rows
+      .filter((r) => supportsBackfill(r.source, r.config))
+      .map((r) => r.id);
   } catch (err) {
     console.error("[lore] reconcile could not load stations; not started", err);
     started = false;

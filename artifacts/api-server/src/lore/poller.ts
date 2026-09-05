@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import {
   getNowPlayingAdapter,
   getHistoryAdapter,
+  hasSpinitronAuthentication,
   isPollable,
 } from "./adapters.js";
 import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
@@ -568,6 +569,12 @@ async function pollStationMode(
     if (nestedHistoryOnly && !nested) return;
     const historySource = nested?.source ?? source;
     const historyConfig = nested?.config ?? station.nowPlayingConfig ?? {};
+    if (
+      historySource === "spinitron" &&
+      !hasSpinitronAuthentication(historyConfig)
+    ) {
+      return;
+    }
     const history = getHistoryAdapter(historySource);
     if (history) {
       // Reload for the freshest cursor (advanced by prior ticks / enroll).

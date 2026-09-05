@@ -8,3 +8,5 @@ Spinitron’s public `/CALLSIGN/calendar` page does not include its show grid as
 **Why:** Treating the calendar HTML as ordinary page text produced “successful” empty schedules. Real pages also encode the feed path inside JavaScript as `\/...`, and Spinitron’s robots policy publishes a 10-second crawl delay.
 
 **How to apply:** For strictly validated `spinitron.com/<station>/calendar` sources, decode only JavaScript-escaped slashes, require the feed to stay on the same origin and expected path, request one bounded week, and discard FullCalendar padding outside the exact `[start, end)` dates before deriving recurring weekdays. Preserve local wall-clock timestamp components and serialize real network requests at the published crawl delay.
+
+Treat public live metadata, public calendars, authenticated station history, and all-stations directory access as separate capabilities. A station-scoped key enables only that station's history; it never implies partner directory coverage. Without a key, report history as unavailable rather than as a successful empty archive.

@@ -8,7 +8,10 @@ import {
   parseHistoryRss,
   supportsBackfill,
 } from "../src/lore/adapters.js";
-import { reviewHistoricalBatch } from "../src/lore/backfill.js";
+import {
+  canAuditHistorySource,
+  reviewHistoricalBatch,
+} from "../src/lore/backfill.js";
 import type { RawSpin } from "../src/lore/types.js";
 
 const config = {
@@ -193,6 +196,17 @@ describe("historical row safety gate", () => {
 });
 
 describe("history source contract", () => {
+  it("describes no-key Spinitron history as unsupported, not empty", () => {
+    const noKey = historySourceContract("spinitron", {});
+    expect(noKey).toMatchObject({
+      surface: "Spinitron authenticated playlist API",
+      supportsBackfill: false,
+      retryPolicy: "unsupported",
+    });
+    expect(canAuditHistorySource(noKey, true)).toBe(false);
+    expect(historySourceContract("spinitron", { accessToken: "configured" }))
+      .toMatchObject({ supportsBackfill: true, retryPolicy: "retryable" });
+  });
   it("describes WICB as a shallow, independently cited archive", () => {
     expect(supportsBackfill("wicb_history")).toBe(false);
     expect(historySourceContract("wicb_history")).toMatchObject({

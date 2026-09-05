@@ -1694,6 +1694,39 @@ export function isPollable(source: string | null | undefined): boolean {
   return !!getNowPlayingAdapter(source) || !!getHistoryAdapter(source);
 }
 
+export interface SpinitronSourceCapabilities {
+  publicLiveMetadata: boolean;
+  publicSchedule: boolean;
+  authenticatedHistory: boolean;
+  historyStatus: "available" | "not_configured";
+  directoryCoverage: "public_fallback";
+}
+
+/** Credential check shared by polling, reconciliation, backfill, and health. */
+export function hasSpinitronAuthentication(
+  config?: Record<string, unknown> | null,
+): boolean {
+  return !!(str(config?.apiKey) ?? str(config?.accessToken));
+}
+
+/** Honest station-level capabilities for either Spinitron source mode. */
+export function spinitronSourceCapabilities(
+  source: string | null | undefined,
+  config?: Record<string, unknown> | null,
+): SpinitronSourceCapabilities | null {
+  if (source !== "spinitron" && source !== "spinitron_web") return null;
+  const authenticatedHistory =
+    source === "spinitron" && hasSpinitronAuthentication(config);
+  return {
+    publicLiveMetadata: source === "spinitron_web",
+    publicSchedule: !!(str(config?.callsign) ?? str(config?.stationHandle)),
+    authenticatedHistory,
+    historyStatus: authenticatedHistory ? "available" : "not_configured",
+    // A station-scoped key does not imply partner/all-stations directory access.
+    directoryCoverage: "public_fallback",
+  };
+}
+
 /**
  * Sources whose history API honors `FetchRecentOptions.before` (time-anchored
  * deep paging). Only these can be enrolled for the deep-history backfill job —
@@ -1706,12 +1739,12 @@ export function supportsBackfill(
 ): boolean {
   if (
     source === "kexp_api" ||
-    source === "spinitron" ||
     source === "somafm" ||
     source === "wxyc_history"
   ) {
     return true;
   }
+  if (source === "spinitron") return hasSpinitronAuthentication(config);
   if (source === "station_history_json") {
     return config?.cursorMode === "time_anchor" && !!str(config.beforeParam);
   }
@@ -1746,14 +1779,16 @@ export function historySourceContract(
       return {
         source,
         family: "platform_archive",
-        surface: "Spinitron public playlist API",
+        surface: "Spinitron authenticated playlist API",
         cursorMode: "time_anchor",
-        supportsBackfill: true,
+        supportsBackfill: hasSpinitronAuthentication(config),
         stableIdentity: "required",
         reportedTimestamp: "required",
         archiveCitation: "dated",
         supportedDepthDays: null,
-        retryPolicy: "retryable",
+        retryPolicy: hasSpinitronAuthentication(config)
+          ? "retryable"
+          : "unsupported",
       };
     case "bbc_api":
       return {

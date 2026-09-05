@@ -81,3 +81,32 @@ export function compareTranscriptToSchedule(
   if (heard === scheduled || heard.includes(scheduled) || scheduled.includes(heard)) return "supporting";
   return "contradictory";
 }
+
+export interface IcyScheduleCorroboration {
+  outcome: "supporting" | "inconclusive";
+  matchedField: "show" | "dj" | null;
+}
+
+/**
+ * An ICY candidate can corroborate the schedule active at the same station and
+ * instant, but disagreement is not contradictory: ICY strings are untrusted
+ * and may be station labels or other non-program text.
+ */
+export function compareIcyCandidateToSchedule(
+  rawStreamTitle: string,
+  schedule: Pick<ActiveScheduleEntry, "showName" | "djName"> | null,
+): IcyScheduleCorroboration {
+  if (!schedule) return { outcome: "inconclusive", matchedField: null };
+  if (
+    compareTranscriptToSchedule(rawStreamTitle, schedule.showName) === "supporting"
+  ) {
+    return { outcome: "supporting", matchedField: "show" };
+  }
+  if (
+    schedule.djName &&
+    compareTranscriptToSchedule(rawStreamTitle, schedule.djName) === "supporting"
+  ) {
+    return { outcome: "supporting", matchedField: "dj" };
+  }
+  return { outcome: "inconclusive", matchedField: null };
+}
