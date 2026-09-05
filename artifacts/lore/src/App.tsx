@@ -90,7 +90,7 @@ function Router() {
         <Route path="/">
           {() => <ErrorBoundary><Home /></ErrorBoundary>}
         </Route>
-        {/* Full scrollable Dial — the pre-split front door */}
+        {/* Legacy full scrollable Dial deep link; visible discovery starts at /explore. */}
         <Route path="/feed">
           {() => <ErrorBoundary><Feed /></ErrorBoundary>}
         </Route>
@@ -217,7 +217,7 @@ function BottomShell() {
       <div className="bottom-shell">
         <div className="bottom-shell__strip" aria-hidden="true" />
         <PlayerDock />
-        {/* Spotify-style mobile nav row — [lore] / [my library] at the very
+        {/* Mobile Now / Explore / Library nav row at the very
             bottom of the screen, below the mini player. CSS shows this only
             at phone widths; desktop keeps the corner-link treatment. */}
         <SlimSectionNav

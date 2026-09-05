@@ -413,11 +413,11 @@ describe("CompactStack collapsed rows", () => {
     renderStack({ homeCarousel: true, homeBootstrapPending: true });
 
     expect(
-      screen.getByRole("button", { name: "Building your starter Stack…" }),
+      screen.getByRole("button", { name: "Building your starter Library…" }),
     ).toBeTruthy();
     expect(
       screen.queryByRole("button", {
-        name: "Nothing kept yet — keep a track to grow your artist → album Stack.",
+        name: "Nothing kept yet — keep a track to grow your artist → album Library.",
       }),
     ).toBeNull();
   });
@@ -427,7 +427,7 @@ describe("CompactStack collapsed rows", () => {
     renderStack();
 
     const fallback = screen.getByRole("button", {
-      name: "We couldn’t load your Stack — open Stack to retry.",
+      name: "We couldn’t load your Library — open Library to retry.",
     });
     fireEvent.click(fallback);
 
@@ -712,8 +712,8 @@ describe("CompactStack expansion", () => {
     });
     expect(srcLink.getAttribute("href")).toBe("https://pitchfork.com/y");
 
-    // → Stack link navigates to the album in the full Stack
-    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    // → Library link navigates to the album in the full Library
+    fireEvent.click(screen.getByRole("button", { name: "Library" }));
     expect(setLocation).toHaveBeenCalledWith(
       `/library?openAlbum=${encodeURIComponent("Second Album\x1fB")}`,
     );
@@ -892,11 +892,11 @@ describe("CompactStack album checkboxes", () => {
     renderStack({ skipped: new Set(), onToggleSkip: vi.fn() });
     await screen.findByRole("button", { name: "Expand Blue Lines · Massive Attack" });
     const skip = screen.getByRole("checkbox", {
-      name: "Skip Blue Lines · Massive Attack in the Stack window",
+      name: "Skip Blue Lines · Massive Attack in the Library window",
     });
     expect(skip.getAttribute("class")).toContain("compact-stack__scan-checkbox");
     screen.getByRole("checkbox", {
-      name: "Skip Dummy · Portishead in the Stack window",
+      name: "Skip Dummy · Portishead in the Library window",
     });
   });
 
@@ -912,7 +912,7 @@ describe("CompactStack album checkboxes", () => {
     const onToggleSkip = vi.fn();
     renderStack({ skipped: new Set(), onToggleSkip });
     const checkbox = await screen.findByRole("checkbox", {
-      name: "Skip Dummy · Portishead in the Stack window",
+      name: "Skip Dummy · Portishead in the Library window",
     });
     fireEvent.click(checkbox);
     expect(onToggleSkip).toHaveBeenCalledWith("Dummy\x1fPortishead");
@@ -946,7 +946,7 @@ describe("CompactStack album checkboxes", () => {
 
     // The skipped row stays interactive: its checkbox offers re-inclusion.
     const recheck = screen.getByRole("checkbox", {
-      name: "Include Dummy · Portishead in the Stack window",
+      name: "Include Dummy · Portishead in the Library window",
     });
     fireEvent.click(recheck);
     expect(onToggleSkip).toHaveBeenCalledWith("Dummy\x1fPortishead");
@@ -1259,9 +1259,9 @@ describe("CompactStack → Stack link href", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Expand Portishead · Portishead" }),
     );
-    await screen.findByRole("button", { name: "Stack" });
+    await screen.findByRole("button", { name: "Library" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Library" }));
     expect(setLocation).toHaveBeenCalledWith(
       `/library?openAlbum=${encodeURIComponent("Portishead\x1fPortishead")}`,
     );
@@ -1293,7 +1293,7 @@ describe("CompactStack → Stack link href", () => {
     await screen.findByRole("button", { name: "Collapse Third" });
 
     // → Stack now links to the swapped album, not the kept one.
-    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Library" }));
     expect(setLocation).toHaveBeenCalledWith(
       `/library?openAlbum=${encodeURIComponent("Third\x1fPortishead")}`,
     );
@@ -1334,7 +1334,7 @@ describe("CompactStack → Stack link href", () => {
     fireEvent.click(screen.getByRole("button", { name: "View Dummy (1994)" }));
     await screen.findByRole("button", { name: "Collapse Dummy" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Library" }));
     expect(setLocation).toHaveBeenCalledWith(
       `/library?openAlbum=${encodeURIComponent("Dummy\x1fPortishead")}`,
     );

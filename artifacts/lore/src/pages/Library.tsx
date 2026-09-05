@@ -1497,7 +1497,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
       {!isStackView && (
         <div className="dial-topbar">
           <span className="dial-topbar__wordmark">Lore</span>
-          <span className="dial-topbar__title dial-topbar__title--active">Stack</span>
+          <span className="dial-topbar__title dial-topbar__title--active">Library</span>
           {(libraryTotal ?? keptItems.length) > 0 ? (
             <span className="dial-topbar__sort-chip">
               {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
@@ -1828,7 +1828,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
             >
               {(
                 [
-                  { value: "" as const, label: "Stack" },
+                  { value: "" as const, label: "Library" },
                   { value: "artists" as const, label: "Artists" },
                   { value: "recent" as const, label: "Recent keeps" },
                   { value: "lore" as const, label: "From Lore" },
@@ -2001,7 +2001,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
                   ? "Critics' picks"
                   : lens === "artists"
                   ? "Artists"
-                  : "Stack"
+                  : "Library"
               }
               count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
               hint={

@@ -249,7 +249,7 @@ export function LiveCrossingCoverRail({
       <header className="cover-rail__header">
         <h2 className="cover-rail__title">Crossings</h2>
         <span className="cover-rail__context">
-          {hasLiveMatch ? "on air first" : "from your Stack"}
+          {hasLiveMatch ? "on air first" : "from your Library"}
         </span>
       </header>
       <div className="cover-rail__scroll">

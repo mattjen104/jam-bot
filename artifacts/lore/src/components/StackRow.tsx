@@ -239,8 +239,8 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle, is
               checked={!isSkipped}
               aria-label={
                 isSkipped
-                  ? `Show ${group.albumTitle} in the Stack`
-                  : `Hide ${group.albumTitle} from the Stack`
+                  ? `Show ${group.albumTitle} in the Library`
+                  : `Hide ${group.albumTitle} from the Library`
               }
               title={
                 isSkipped

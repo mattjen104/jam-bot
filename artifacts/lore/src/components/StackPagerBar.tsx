@@ -93,7 +93,7 @@ export function StackPagerBar({
           rows — without it a long page list would overflow the viewport on
           narrow screens and strand the later stack pages. */}
       <div className="home-cli-strip__filter-rail stack-pager-bar__rail">
-      <div className="home-cli-strip__filter-row home-cli-strip__scan-remote" role="group" aria-label="Stack pages">
+      <div className="home-cli-strip__filter-row home-cli-strip__scan-remote" role="group" aria-label="Library pages">
         {/* Always-visible count of albums in the Stack window's scope */}
         <span className="home-cli-strip__station-count">
           {totalGroups} {totalGroups === 1 ? "album" : "albums"}
@@ -111,7 +111,7 @@ export function StackPagerBar({
         {/* Page selectors — always numeric like the Dial's page controls.
             Album labels remain available in the accessible name and tooltip
             so they add context without replacing the page number visually. */}
-        <div className="home-cli-strip__page-selectors" role="group" aria-label="Stack page">
+        <div className="home-cli-strip__page-selectors" role="group" aria-label="Library page">
           {Array.from({ length: Math.max(1, stackPageCount) }, (_, i) => {
             const isCurrentPage = currentPage === i;
             const album = pageLabels?.[i] ?? null;
@@ -120,8 +120,8 @@ export function StackPagerBar({
             // opening with the same album title stay unambiguous.
             const windowCount = Math.min(pageSize, Math.max(0, totalGroups - i * pageSize));
             const ariaLabel = album
-              ? `stack page ${i + 1}: ${album}${windowCount > 1 ? `, +${windowCount - 1} more` : ""}`
-              : `stack page ${i + 1}`;
+              ? `library page ${i + 1}: ${album}${windowCount > 1 ? `, +${windowCount - 1} more` : ""}`
+              : `library page ${i + 1}`;
             return (
               <button
                 key={i}

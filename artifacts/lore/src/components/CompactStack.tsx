@@ -465,13 +465,13 @@ function CompactStackRow({
           checked={!isSkipped}
           aria-label={
             isSkipped
-              ? `Include ${label} in the Stack window`
-              : `Skip ${label} in the Stack window`
+              ? `Include ${label} in the Library window`
+              : `Skip ${label} in the Library window`
           }
           title={
             isSkipped
-              ? "Excluded from the Stack window — check to include"
-              : "Shown in the Stack window — uncheck to skip"
+              ? "Excluded from the Library window — check to include"
+              : "Shown in the Library window — uncheck to skip"
           }
           onChange={() => onToggleSkip(group.key)}
           onClick={(e) => e.stopPropagation()}
@@ -1049,7 +1049,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
             onClick={() => setLocation(stackHref)}
           >
             <ArrowRight aria-hidden="true" />
-            <span>Stack</span>
+            <span>Library</span>
           </button>
           </div>
         </div>
@@ -1068,7 +1068,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         {skippedGroups.filter((g) => g.key !== expandedKey).length > 0 && (
           <div
             className="compact-stack__skipped-region"
-            aria-label="Excluded from the Stack window"
+            aria-label="Excluded from the Library window"
           >
             <StackTreeRows
               items={skippedGroups.filter((g) => g.key !== expandedKey)}
@@ -1106,7 +1106,7 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
       {!homeCarousel && skippedGroups.length > 0 && (
         <div
           className="compact-stack__skipped-region"
-          aria-label="Excluded from the Stack window"
+          aria-label="Excluded from the Library window"
         >
           <StackTreeRows
             items={skippedGroups}
@@ -1129,11 +1129,11 @@ export function CompactStack({ offset = 0, density = "normal", shuffleKey = null
         >
           {isLoading || (homeCarousel && (homeBootstrapPending || isFetching))
             ? homeCarousel && homeBootstrapPending
-              ? "Building your starter Stack…"
-              : "Loading your artist → album Stack…"
+              ? "Building your starter Library…"
+              : "Loading your artist → album Library…"
             : isError
-              ? "We couldn’t load your Stack — open Stack to retry."
-              : "Nothing kept yet — keep a track to grow your artist → album Stack."}
+              ? "We couldn’t load your Library — open Library to retry."
+              : "Nothing kept yet — keep a track to grow your artist → album Library."}
         </button>
       )}
     </div>

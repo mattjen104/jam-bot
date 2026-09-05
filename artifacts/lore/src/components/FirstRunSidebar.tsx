@@ -285,11 +285,11 @@ export function FirstRunSidebar({
         </button>
         {expanded && (
           <div className="frb__shelves">
-            <Link href="/feed">Electronic and ambient</Link>
-            <Link href="/feed">Guitars and left-field</Link>
-            <Link href="/feed">Hip-hop, soul, and global</Link>
-            <Link href="/feed">Jazz and funk</Link>
-            <Link href="/feed">Browse categories</Link>
+            <Link href="/explore?draft=genre">Electronic and ambient</Link>
+            <Link href="/explore?draft=genre">Guitars and left-field</Link>
+            <Link href="/explore?draft=genre">Hip-hop, soul, and global</Link>
+            <Link href="/explore?draft=genre">Jazz and funk</Link>
+            <Link href="/explore?draft=genre">Browse categories</Link>
             <Link href="/index?section=stations">Search stations</Link>
           </div>
         )}

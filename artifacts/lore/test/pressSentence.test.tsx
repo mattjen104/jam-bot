@@ -50,7 +50,7 @@ describe("pressDateLabel", () => {
 describe("pressSentence", () => {
   it("list entries read 'made [Source] in [year]'", () => {
     const text = textOf(pressSentence(mention(), NOW));
-    expect(text).toBe("Fleetwood Mac, from your Stack, made Pitchfork — Best Albums of 1977 in 2023.");
+    expect(text).toBe("Fleetwood Mac, from your Library, made Pitchfork — Best Albums of 1977 in 2023.");
   });
 
   it("picks read 'picked by [Source]'", () => {
@@ -59,7 +59,7 @@ describe("pressSentence", () => {
       sourceLabel: "Bandcamp Daily",
       occurredAt: "2026-08-13T00:00:00.000Z",
     }), NOW));
-    expect(text).toBe("Fleetwood Mac, from your Stack, picked by Bandcamp Daily this week.");
+    expect(text).toBe("Fleetwood Mac, from your Library, picked by Bandcamp Daily this week.");
   });
 
   it("track claims read 'covered by [Source]'", () => {
@@ -68,12 +68,12 @@ describe("pressSentence", () => {
       sourceLabel: "Classic Albums: Rumours",
       occurredAt: "2026-07-25T00:00:00.000Z",
     }), NOW));
-    expect(text).toBe("Fleetwood Mac, from your Stack, covered by Classic Albums: Rumours this month.");
+    expect(text).toBe("Fleetwood Mac, from your Library, covered by Classic Albums: Rumours this month.");
   });
 
   it("omits the date clause when undated", () => {
     const text = textOf(pressSentence(mention({ occurredAt: null }), NOW));
-    expect(text).toBe("Fleetwood Mac, from your Stack, made Pitchfork — Best Albums of 1977.");
+    expect(text).toBe("Fleetwood Mac, from your Library, made Pitchfork — Best Albums of 1977.");
   });
 
   it("returns null without an artist — no subject, no sentence", () => {

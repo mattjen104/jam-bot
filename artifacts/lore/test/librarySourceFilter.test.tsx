@@ -185,8 +185,8 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Lens tabs are only rendered in non-default views", () => {
-  it("does NOT render lens pills in the default Stack view (album-first full-screen list)", async () => {
-    // The default Stack surface strips all dashboard chrome including lens controls.
+  it("labels the default album-first view Library without rendering lens pills", async () => {
+    // The default Library surface strips all dashboard chrome including lens controls.
     mockUseSearch.mockReturnValue("");
     await renderLibrary();
     expect(screen.queryByTestId("library-lens-timeline")).toBeNull();

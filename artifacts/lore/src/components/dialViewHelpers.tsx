@@ -613,9 +613,9 @@ export interface PressMentionLike {
  * full weight, the source is the byline, the date reads naturally. No song
  * titles (artist-level crossing). The verb varies by mention kind:
  *
- *   pick        → "[Artist], from your Stack, picked by [Source] this week."
- *   list_entry  → "[Artist], from your Stack, made [Source] in 2023."
- *   track_claim → "[Artist], from your Stack, covered by [Source] this month."
+ *   pick        → "[Artist], from your Library, picked by [Source] this week."
+ *   list_entry  → "[Artist], from your Library, made [Source] in 2023."
+ *   track_claim → "[Artist], from your Library, covered by [Source] this month."
  *
  * Returns null when the mention has no artist — a Press sentence without a
  * subject can't be rendered honestly.
@@ -631,7 +631,7 @@ export function pressSentence(mention: PressMentionLike, now: Date = new Date())
   return (
     <>
       <b className="fdrow__artist">{artist}</b>
-      {", from your Stack, "}
+      {", from your Library, "}
       {verb}
       {" "}
       <span className="fdrow__show">{mention.sourceLabel}</span>
@@ -714,10 +714,10 @@ export interface ShowsEventLike {
 /**
  * Shows row sentence — same row grammar as the live feed: the artist leads at
  * full weight; venue+date is the byline. The sentence answers "who from your
- * Stack plays where and when."
+ * Library plays where and when."
  *
- *   "[Artist], from your Stack, plays the Crystal Ballroom Thursday."
- *   "[Artist], from your Stack, plays Portland, OR tonight."
+ *   "[Artist], from your Library, plays the Crystal Ballroom Thursday."
+ *   "[Artist], from your Library, plays Portland, OR tonight."
  *
  * Returns null when the event has no usable date (past or unparseable) or no
  * artist name — never fabricate partial sentences.
@@ -742,7 +742,7 @@ export function showsSentence(
   const node = (
     <>
       <b className="fdrow__artist">{artist}</b>
-      {", from your Stack, plays "}
+      {", from your Library, plays "}
       <span className="fdrow__show">{venuePhrase}</span>
       {" "}
       {dateLabel}

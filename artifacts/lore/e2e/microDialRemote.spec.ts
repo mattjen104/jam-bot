@@ -569,7 +569,7 @@ test.describe("Adaptive Now — listening jobs in a real browser", () => {
     await expect(picker.locator(".adaptive-now__picker-list > button")).toHaveCount(STATION_COUNT);
   });
 
-  test("keeps Explore and Stack as explicit route destinations", async ({ page }) => {
+  test("keeps All, Following, and Near You as explicit Now destinations", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
     await page.addInitScript(() => {
@@ -578,8 +578,9 @@ test.describe("Adaptive Now — listening jobs in a real browser", () => {
     await page.goto("/lore/");
 
     const frontDoorNav = page.getByTestId("now-header");
-    await expect(frontDoorNav.getByRole("link", { name: "Explore" })).toHaveAttribute("href", "/explore");
-    await expect(frontDoorNav.getByRole("link", { name: "Stack" })).toHaveAttribute("href", "/library");
+    await expect(frontDoorNav.getByRole("link", { name: "All" })).toHaveAttribute("href", "/");
+    await expect(frontDoorNav.getByRole("link", { name: "Following" })).toHaveAttribute("href", "/following");
+    await expect(frontDoorNav.getByRole("link", { name: "Near You" })).toHaveAttribute("href", "/explore?draft=location");
   });
 });
 

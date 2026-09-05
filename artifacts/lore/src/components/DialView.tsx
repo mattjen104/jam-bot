@@ -2,8 +2,8 @@
  * DialView — the Dial Radio timeline.
  *
  * Manages a level state machine (all → station → show → dj) and renders the
- * appropriate view at each level. The bottom pill-nav (Radio · Selectors ·
- * Library) lives in AppLayout; DialView renders the topbar/scanbar/subnav
+ * appropriate view at each level. The primary Now · Explore · Library nav
+ * lives in AppLayout; DialView renders the topbar/scanbar/subnav
  * chrome above the scroll body.
  */
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
@@ -1610,7 +1610,7 @@ export function DialView() {
               kind: "success",
               message: mattStarterMutation.data.addedCount > 0
                 ? `Added ${mattStarterMutation.data.addedCount} album${mattStarterMutation.data.addedCount === 1 ? "" : "s"} from Matt’s starter library.`
-                : "Matt’s starter library is already in your Stack.",
+                : "Matt’s starter library is already in your Library.",
             }
           : {
               kind: "error",

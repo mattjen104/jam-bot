@@ -1,6 +1,7 @@
 /**
  * Lore's front door. The full category browser remains on /feed; home is a
- * calm two-mode surface for live radio and the existing Library crate.
+ * calm live-radio surface. Discovery lives in Explore and intentional keeps
+ * remain in Library.
  */
 import { useCallback, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -157,13 +158,13 @@ export default function SplitHome() {
               >
                 Add albums
               </button>}{" "}
-              {coldStartSession ? "Choose by the music sounding now." : "Your Stack, live crossings, and the wider dial stay one click away."}
+              {coldStartSession ? "Choose by the music sounding now." : "Your Library, live crossings, and the wider dial stay one click away."}
             </p>
           </div>
           <nav className="front-door-jobs" aria-label="Listening jobs">
-            <Link href="/explore">Explore</Link>
+            <Link href="/" aria-current="page">All</Link>
             <Link href="/following">Following</Link>
-            <Link href="/library">Stack</Link>
+            <Link href="/explore?draft=location">Near You</Link>
           </nav>
         </header>
 

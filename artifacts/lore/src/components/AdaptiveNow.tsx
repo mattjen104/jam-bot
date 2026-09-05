@@ -289,8 +289,8 @@ export function AdaptiveNow({
           </button>
         ) : null}
         <button type="button" onClick={() => setPickerOpen(true)}>Switch station</button>
-        <Link href="/feed">Explore the full Feed</Link>
-        <Link href="/library">Open Stack</Link>
+        <Link href="/explore">Explore live radio</Link>
+        <Link href="/library">Open Library</Link>
       </div>
       {inspected ? (
         <StationDetail

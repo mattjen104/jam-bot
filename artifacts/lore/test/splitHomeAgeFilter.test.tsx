@@ -55,6 +55,7 @@ vi.mock("../src/lib/meHooks", () => ({
   useAppConfig: () => ({ data: { listenerArchiveNavEnabled: false } }),
   useMattStarterLibrary: () => ({ data: { available: true, addedCount: 0, totalCount: 2 } }),
   useStartMattLibrary: () => ({ mutate: mockStartMattLibrary, isPending: false, data: undefined, error: null }),
+  useLatestImportJob: () => ({ data: undefined }),
   // SplitHome reads the first library page itself to size the stack pager.
   useMyLibraryInfinite: () => ({
     data: { pages: [{ items: [], nextCursor: null }] },
@@ -84,7 +85,11 @@ vi.mock("../src/hooks/useRadioPlayer", () => ({
 }));
 
 vi.mock("../src/hooks/useSeedManager", () => ({
-  useSeedManager: () => ({ addSeed: vi.fn() }),
+  useSeedManager: () => ({
+    visibleSeeds: [],
+    addSeed: vi.fn(),
+    replaceSeeds: vi.fn(),
+  }),
 }));
 
 vi.mock("../src/hooks/useStationPresence", () => ({
@@ -107,6 +112,7 @@ vi.mock("../src/hooks/useDialData", () => ({
   }),
   readPins: () => new Set<string>(),
   normalizeDjName: (s: string) => s.toLowerCase(),
+  liveIdentityKey: (s: string) => s.trim().toLowerCase(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -543,15 +549,15 @@ describe.skip("SplitHome — retired front-door remote", () => {
   });
 });
 
-describe("SplitHome — archive lens compatibility", () => {
+describe("SplitHome — retired home-lens compatibility", () => {
   it.each(["press", "firstPlays"])(
-    "coerces a persisted %s lens back to Radio when archive navigation is hidden",
+    "ignores a persisted %s lens without breaking the Now front door",
     (persistedLens) => {
       localStorage.setItem("lore:homeLens", persistedLens);
       render(<SplitHome />);
 
-      expect(screen.getByTestId("minimal-radio-empty")).toBeTruthy();
-      expect(localStorage.getItem("lore:homeLens")).toBe("radio");
+      expect(screen.getByTestId("now-header")).toBeTruthy();
+      expect(localStorage.getItem("lore:homeLens")).toBe(persistedLens);
     },
   );
 });

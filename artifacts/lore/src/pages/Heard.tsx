@@ -157,7 +157,7 @@ export default function Heard() {
           </div>
         </div>
         <p className="heard-page__intent" data-testid="heard-intent-note">
-          Heard is automatic attendance. It never saves a track to Stack.
+          Heard is automatic attendance. It never saves a track to Library.
         </p>
         {isLoading && (
           <div className="heard-page__state" data-testid="heard-loading">

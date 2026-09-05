@@ -44,7 +44,7 @@ function renderPager(overrides: Partial<React.ComponentProps<typeof StackPagerBa
 describe("StackPagerBar", () => {
   it("renders page buttons proportional to the library size", () => {
     renderPager({ stackPageCount: 4, totalGroups: 18 });
-    const pageGroup = screen.getByRole("group", { name: "Stack page" });
+    const pageGroup = screen.getByRole("group", { name: "Library page" });
     const buttons = [...pageGroup.querySelectorAll("button")];
     expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4"]);
     // Same visual style hooks as the Dial page buttons.
@@ -55,10 +55,10 @@ describe("StackPagerBar", () => {
 
   it("renders a single page selector for a one-page library", () => {
     renderPager({ stackPageCount: 1, totalGroups: 3 });
-    const pageGroup = screen.getByRole("group", { name: "Stack page" });
+    const pageGroup = screen.getByRole("group", { name: "Library page" });
     expect(pageGroup.querySelectorAll("button")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "stack page 1" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "stack page 2" })).toBeNull();
+    expect(screen.getByRole("button", { name: "library page 1" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "library page 2" })).toBeNull();
   });
 
   it("keeps page buttons numeric while exposing the first album in context", () => {
@@ -70,36 +70,36 @@ describe("StackPagerBar", () => {
 
     // Visible text is always the page number; album context is not used as the
     // selector label because it makes the pager look like an artist/album list.
-    const pageGroup = screen.getByRole("group", { name: "Stack page" });
+    const pageGroup = screen.getByRole("group", { name: "Library page" });
     const buttons = [...pageGroup.querySelectorAll("button")];
     expect(buttons.map((b) => b.textContent)).toEqual(["1", "2", "3", "4"]);
 
     // Accessible labels keep the page number and add the window's album
     // count ("+N more"); the last page's short window counts down.
-    screen.getByRole("button", { name: "stack page 1: Rumours, +4 more" });
-    screen.getByRole("button", { name: "stack page 2: Blue Lines, +4 more" });
-    screen.getByRole("button", { name: "stack page 3" });
-    screen.getByRole("button", { name: "stack page 4: Third, +2 more" });
+    screen.getByRole("button", { name: "library page 1: Rumours, +4 more" });
+    screen.getByRole("button", { name: "library page 2: Blue Lines, +4 more" });
+    screen.getByRole("button", { name: "library page 3" });
+    screen.getByRole("button", { name: "library page 4: Third, +2 more" });
 
     // Clicks still route offsets by page index.
-    fireEvent.click(screen.getByRole("button", { name: "stack page 4: Third, +2 more" }));
+    fireEvent.click(screen.getByRole("button", { name: "library page 4: Third, +2 more" }));
     expect(props.onSelectStackPage).toHaveBeenCalledWith(15);
   });
 
   it("labels a single-album page without a '+N more' count", () => {
     renderPager({ stackPageCount: 1, totalGroups: 1, pageLabels: ["Rumours"] });
-    screen.getByRole("button", { name: "stack page 1: Rumours" });
+    screen.getByRole("button", { name: "library page 1: Rumours" });
   });
 
   it("marks the current page via aria-pressed and routes clicks as offsets", () => {
     const { props } = renderPager({ stackOffset: 5, stackPageCount: 4 });
-    expect(screen.getByRole("button", { name: "stack page 2" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "stack page 1" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("button", { name: "stack page 3" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "library page 2" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "library page 1" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "library page 3" }).getAttribute("aria-pressed")).toBe("false");
 
-    fireEvent.click(screen.getByRole("button", { name: "stack page 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "library page 3" }));
     expect(props.onSelectStackPage).toHaveBeenCalledWith(10);
-    fireEvent.click(screen.getByRole("button", { name: "stack page 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "library page 1" }));
     expect(props.onSelectStackPage).toHaveBeenCalledWith(0);
   });
 
@@ -110,10 +110,10 @@ describe("StackPagerBar", () => {
     renderPager({ stackPageCount: 40, totalGroups: 200 });
     const rail = document.querySelector(".stack-pager-bar .home-cli-strip__filter-rail");
     expect(rail).toBeTruthy();
-    expect(rail!.contains(screen.getByRole("group", { name: "Stack page" }))).toBe(true);
+    expect(rail!.contains(screen.getByRole("group", { name: "Library page" }))).toBe(true);
     expect(rail!.contains(screen.getByRole("button", { name: "shuffle all albums" }))).toBe(true);
     // All 40 page selectors render inside the scrollable rail.
-    expect(screen.getByRole("button", { name: "stack page 40" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "library page 40" })).toBeTruthy();
   });
 
   it("renders Shuffle and Shuffle all controls that route to their callbacks", () => {
@@ -216,17 +216,17 @@ describe("StackPagerBar", () => {
       stackPageCount: 9,
       stackDensity: "normal",
     });
-    const pageGroup = () => screen.getByRole("group", { name: "Stack page" });
+    const pageGroup = () => screen.getByRole("group", { name: "Library page" });
     expect(pageGroup().querySelectorAll("button")).toHaveLength(9);
-    expect(screen.getByRole("button", { name: "stack page 9" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "library page 9" })).toBeTruthy();
 
     rerender(<StackPagerBar {...props} stackDensity="compact" stackPageCount={5} />);
     expect(pageGroup().querySelectorAll("button")).toHaveLength(5);
-    expect(screen.queryByRole("button", { name: "stack page 6" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "library page 6" })).toBeNull();
 
     rerender(<StackPagerBar {...props} stackDensity="micro" stackPageCount={3} />);
     expect(pageGroup().querySelectorAll("button")).toHaveLength(3);
-    expect(screen.queryByRole("button", { name: "stack page 4" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "library page 4" })).toBeNull();
   });
 
   it("routes page clicks as density-sized offsets", () => {
@@ -236,14 +236,14 @@ describe("StackPagerBar", () => {
       totalGroups: 42,
     });
     // At 10 rows per page, page 3 starts at offset 20 (not 10).
-    fireEvent.click(screen.getByRole("button", { name: "stack page 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "library page 3" }));
     expect(props.onSelectStackPage).toHaveBeenCalledWith(20);
   });
 
   it("marks the current page by density-sized offset", () => {
     renderPager({ stackDensity: "compact", stackOffset: 10, stackPageCount: 5, totalGroups: 42 });
-    expect(screen.getByRole("button", { name: "stack page 2" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "stack page 1" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "library page 2" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "library page 1" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("renders the first page's album art as a decorative backdrop", () => {

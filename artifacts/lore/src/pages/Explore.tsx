@@ -35,7 +35,7 @@ const MODES: Array<{
   { mode: "genre", label: "Genres", detail: "Match station profiles", icon: Compass },
   { mode: "newness", label: "New Music", detail: "Find recent rotation", icon: Sparkles },
   { mode: "station", label: "Stations", detail: "Open one station", icon: Radio },
-  { mode: "library-crossing", label: "Library", detail: "Hear your Stack cross live radio", icon: Library },
+  { mode: "library-crossing", label: "Library", detail: "Hear your kept music cross live radio", icon: Library },
 ];
 
 function parseMode(value: string | null): ExploreMode | null {

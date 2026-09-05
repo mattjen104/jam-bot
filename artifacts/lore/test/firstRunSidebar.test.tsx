@@ -209,7 +209,7 @@ describe("FirstRunSidebar", () => {
     render(<FirstRunSidebar stations={[roster[0]]} {...props} />);
     expect(screen.queryByRole("link", { name: "Jazz and funk" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "More stations" }));
-    expect(screen.getByRole("link", { name: "Electronic and ambient" }).getAttribute("href")).toBe("/feed");
+    expect(screen.getByRole("link", { name: "Electronic and ambient" }).getAttribute("href")).toBe("/explore?draft=genre");
     expect(screen.getByRole("link", { name: "Browse categories" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Search stations" }).getAttribute("href")).toContain("/index");
   });

@@ -7,8 +7,7 @@ export function sectionFor(location: string): Section {
   const path = location.split("?")[0] ?? location;
   if (path === "/library" || path.startsWith("/library/") ||
       path === "/journal" || path.startsWith("/journal/") ||
-      path === "/sets" || path.startsWith("/sets/") ||
-      path === "/following" || path.startsWith("/following/")) return "stack";
+      path === "/sets" || path.startsWith("/sets/")) return "stack";
   if (path === "/feed" || path.startsWith("/feed/") ||
       path === "/explore" || path.startsWith("/explore/") ||
       path === "/heard" || path.startsWith("/heard/") ||
@@ -18,7 +17,7 @@ export function sectionFor(location: string): Section {
 }
 
 /**
- * Section nav — the Now / Explore / Stack plain-text hyperlinks.
+ * Section nav — the Now / Explore / Library plain-text hyperlinks.
  *
  * Two placements share one component:
  *  - variant="corner" (default): fixed bottom-corner links layered above the
@@ -65,11 +64,11 @@ export function SlimSectionNav({
       <nav className="bottom-nav" aria-label="Primary">
         {(["now", "feed", "stack"] as Section[]).map((section) => {
           const active = activeSection === section;
-          const label = section === "now" ? "Now" : section === "feed" ? "Explore" : "Stack";
+          const label = section === "now" ? "Now" : section === "feed" ? "Explore" : "Library";
           return (
             <Link
               key={section}
-              href={section === "now" ? "/" : section === "feed" ? "/feed" : "/library"}
+              href={section === "now" ? "/" : section === "feed" ? "/explore" : "/library"}
               className={`bottom-nav__link${active ? " bottom-nav__link--active" : ""}`}
               data-section={section}
               aria-current={active ? "page" : undefined}
@@ -87,11 +86,11 @@ export function SlimSectionNav({
     <nav className="corner-nav" aria-label="Primary">
       {(["now", "feed", "stack"] as Section[]).map((section) => {
         const active = activeSection === section;
-        const label = section === "now" ? "Now" : section === "feed" ? "Explore" : "Stack";
+        const label = section === "now" ? "Now" : section === "feed" ? "Explore" : "Library";
         return (
           <Link
             key={section}
-            href={section === "now" ? "/" : section === "feed" ? "/feed" : "/library"}
+            href={section === "now" ? "/" : section === "feed" ? "/explore" : "/library"}
             className={`corner-nav__link corner-nav__link--${section === "now" ? "left" : "right"}${active ? " corner-nav__link--active" : ""}`}
             data-section={section}
             aria-current={active ? "page" : undefined}

@@ -43,13 +43,13 @@ export function adaptiveListeningCopy(state: AdaptiveListeningState): AdaptiveLi
       };
     case "importing":
       return {
-        eyebrow: "Your Stack is arriving",
+        eyebrow: "Your Library is arriving",
         title: "Live radio now; matching as it goes.",
         description: "Your partial library is already useful. Matching continues without hiding the stations you can hear.",
       };
     case "resolving":
       return {
-        eyebrow: "Matching your Stack",
+        eyebrow: "Matching your Library",
         title: "We’re finding your records on air.",
         description: "Some matches are ready while the rest resolve. Nothing provisional is presented as a crossing.",
       };
@@ -70,6 +70,6 @@ export function adaptiveListeningCopy(state: AdaptiveListeningState): AdaptiveLi
 
 export function importProgressLabel(job: AdaptiveListeningInput["importJob"]): string | null {
   if (!job || (job.status !== "running" && job.status !== "pending")) return null;
-  if (job.total <= 0) return "Matching your Stack · progress will appear as tracks resolve";
-  return `Matching your Stack · ${job.resolved.toLocaleString()} of ${job.total.toLocaleString()} tracks resolved`;
+  if (job.total <= 0) return "Matching your Library · progress will appear as tracks resolve";
+  return `Matching your Library · ${job.resolved.toLocaleString()} of ${job.total.toLocaleString()} tracks resolved`;
 }
