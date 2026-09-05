@@ -22,6 +22,7 @@ import Following from "@/pages/Following";
 import Library from "@/pages/Library";
 import Heard from "@/pages/Heard";
 import Index from "@/pages/Index";
+import Explore from "@/pages/Explore";
 import ImportedSets from "@/pages/ImportedSets";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
@@ -92,6 +93,9 @@ function Router() {
         {/* Full scrollable Dial — the pre-split front door */}
         <Route path="/feed">
           {() => <ErrorBoundary><Feed /></ErrorBoundary>}
+        </Route>
+        <Route path="/explore">
+          {() => <ErrorBoundary><Explore /></ErrorBoundary>}
         </Route>
         <Route path="/song/:mbid" component={Song} />
         <Route path="/artist/:mbid" component={Artist} />

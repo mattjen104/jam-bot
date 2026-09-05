@@ -10,6 +10,7 @@ export function sectionFor(location: string): Section {
       path === "/sets" || path.startsWith("/sets/") ||
       path === "/following" || path.startsWith("/following/")) return "stack";
   if (path === "/feed" || path.startsWith("/feed/") ||
+      path === "/explore" || path.startsWith("/explore/") ||
       path === "/heard" || path.startsWith("/heard/") ||
       path === "/index" || path.startsWith("/index/") ||
       path === "/stations" || path.startsWith("/stations/")) return "feed";

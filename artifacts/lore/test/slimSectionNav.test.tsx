@@ -25,7 +25,7 @@ describe("sectionFor — primary section model", () => {
   });
 
   it("groups Feed, Heard, Index, and station exploration under Explore", () => {
-    for (const path of ["/feed", "/heard", "/heard/today", "/index", "/index?section=stations", "/stations/kexp"]) {
+    for (const path of ["/feed", "/explore", "/explore?mode=genre&q=jazz", "/heard", "/heard/today", "/index", "/index?section=stations", "/stations/kexp"]) {
       expect(sectionFor(path)).toBe("feed");
     }
   });

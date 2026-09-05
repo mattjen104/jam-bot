@@ -214,6 +214,7 @@ router.get("/explore", h(async (req, res) => {
   const filtered = typedMode === "genre" ? candidates.filter((c) => c.exactGenre || c.adjacentGenre)
     : typedMode === "artist" ? candidates.filter((c) => c.artistCount > 0)
       : typedMode === "library-crossing" ? candidates.filter((c) => c.crossingCount > 0)
+        : typedMode === "newness" ? candidates.filter((c) => c.freshness?.hasRecentUsableSpin === true)
         : typedMode === "location" && origin ? candidates.filter((c) =>
           usableCoordinates(c.station.latitude, c.station.longitude) &&
           distanceMiles(origin, { latitude: c.station.latitude, longitude: c.station.longitude as number }) <= radiusInput

@@ -56,7 +56,7 @@ describe("GET /explore", () => {
     const row = (slug: string, upcoming: string, known: string, liveName: string | null) => ({
       slug, name: slug, city: null, region: null, latitude: null, longitude: null,
       discovery_score: 1, artist_count: 0, crossing_count: 0,
-      recent_profile: { readinessTier: "ready", top: [] }, freshness_signal: null,
+      recent_profile: { readinessTier: "ready", top: [] }, freshness_signal: { hasRecentUsableSpin: true },
       live: Boolean(liveName), show_name: liveName, dj_name: null,
       start_time: liveName ? "09:00" : null, end_time: liveName ? "10:00" : null,
       upcoming_show_name: `Next ${slug}`, upcoming_dj_name: null,
@@ -81,5 +81,23 @@ describe("GET /explore", () => {
     expect(response.body.showsToKnow.some((known: { show: { name: string } }) =>
       response.body.onAirNow.some((live: { show: { name: string } }) => live.show.name === known.show.name)
     )).toBe(false);
+  });
+
+  it("keeps stale stations out of New Music results", async () => {
+    const row = (slug: string, fresh: boolean) => ({
+      slug, name: slug, city: null, region: null, latitude: null, longitude: null,
+      discovery_score: 50, artist_count: 0, crossing_count: 0,
+      recent_profile: { readinessTier: "ready", top: [] },
+      freshness_signal: { hasRecentUsableSpin: fresh },
+      live: false, show_name: null, dj_name: null, start_time: null, end_time: null,
+      upcoming_show_name: null, upcoming_dj_name: null, upcoming_starts_at: null, upcoming_ends_at: null,
+      known_show_name: null, known_dj_name: null, known_last_aired_at: null,
+    });
+    executeMock.mockResolvedValueOnce({ rows: [row("fresh", true), row("stale", false)] });
+
+    const response = await request(app).get("/explore?mode=newness");
+
+    expect(response.status).toBe(200);
+    expect(response.body.stations.map((item: { station: { slug: string } }) => item.station.slug)).toEqual(["fresh"]);
   });
 });
