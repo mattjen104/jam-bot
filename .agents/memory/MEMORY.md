@@ -157,3 +157,4 @@
 - [Transcript identity grounding](transcript-identity-grounding.md) — exact words are not identity evidence; require an explicit role/program introduction and retain claimless speech.
 - [Local station location evidence](local-station-location-evidence.md) — ZIPs stay request-scoped; radius uses station-base evidence only and excludes unknown/suspect coordinates.
 - [Device-local station follows](device-local-station-follows.md) — listener follows unify curated and personal stations, but never affect editorial favorites, Library, or poller enrollment.
+- [On-air identity phrases](on-air-identity-phrases.md) — capture relational host/show references too; schedule evidence may resolve ASR noise but cannot identify the speaker by implication.
