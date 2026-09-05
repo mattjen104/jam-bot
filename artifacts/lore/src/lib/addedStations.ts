@@ -39,6 +39,13 @@ export interface AddedStation {
   faviconUrl: string | null;
   /** Radio Browser "state" (region/province); the API has no city field. */
   state: string | null;
+  /** Compatible station-base evidence. Optional so older localStorage entries remain valid. */
+  city?: string | null;
+  region?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationSource?: string | null;
+  locationConfidence?: "verified" | "directory" | "coarse" | null;
   country: string | null;
   tags: string[];
   bitrate: number | null;
@@ -201,9 +208,13 @@ export function addedStationToStation(s: AddedStation): Station {
     slug: personalStationSlug(s.radioBrowserUuid),
     name: s.name,
     org: null,
-    city: null,
-    region: s.state,
+    city: s.city ?? null,
+    region: s.region ?? s.state,
     country: s.country,
+    latitude: s.latitude ?? null,
+    longitude: s.longitude ?? null,
+    locationSource: s.locationSource ?? null,
+    locationConfidence: s.locationConfidence ?? null,
     streamUrl: s.streamUrl,
     streamQuality: qualityLabel(s.bitrate, s.codec),
     streamFormat: s.streamFormat,

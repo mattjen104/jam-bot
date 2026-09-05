@@ -14,6 +14,7 @@ import {
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { upsertPicker } from "./picks.js";
 import { inferTimezone } from "./timezone.js";
+import { coarseUsCityLocation } from "./station-location.js";
 
 /**
  * Curated seed of high-quality, real radio stations. A smaller reliable set
@@ -2866,6 +2867,7 @@ export async function seedStations(): Promise<void> {
   for (const s of SEED_STATIONS) {
     if (excludedSlugs.has(s.slug)) continue;
     const computedTimezone = inferTimezone(s.city ?? null, s.country ?? null);
+    const computedLocation = coarseUsCityLocation(s);
     const forceKnownUnavailable =
       !!s.nowPlayingConfig &&
       typeof s.nowPlayingConfig === "object" &&
@@ -2873,7 +2875,7 @@ export async function seedStations(): Promise<void> {
       (s.nowPlayingConfig as Record<string, unknown>).knownUnavailable === true;
     await db
       .insert(stationsTable)
-      .values({ ...s, ianaTimezone: computedTimezone })
+      .values({ ...s, ...computedLocation, ianaTimezone: computedTimezone })
       .onConflictDoUpdate({
         target: stationsTable.slug,
         set: {
@@ -2885,6 +2887,10 @@ export async function seedStations(): Promise<void> {
           city: sql`COALESCE(EXCLUDED.city, ${stationsTable.city})`,
           // Region follows the same seed-owned, operator-correction-safe rule.
           region: sql`COALESCE(EXCLUDED.region, ${stationsTable.region})`,
+          latitude: sql`COALESCE(${stationsTable.latitude}, EXCLUDED.latitude)`,
+          longitude: sql`COALESCE(${stationsTable.longitude}, EXCLUDED.longitude)`,
+          locationSource: sql`CASE WHEN ${stationsTable.latitude} IS NULL OR ${stationsTable.longitude} IS NULL THEN EXCLUDED.location_source ELSE ${stationsTable.locationSource} END`,
+          locationConfidence: sql`CASE WHEN ${stationsTable.latitude} IS NULL OR ${stationsTable.longitude} IS NULL THEN EXCLUDED.location_confidence ELSE ${stationsTable.locationConfidence} END`,
           streamUrl: s.streamUrl,
           streamQuality: s.streamQuality ?? null,
           streamFormat: s.streamFormat ?? "aac",

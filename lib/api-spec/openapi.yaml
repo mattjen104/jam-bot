@@ -135,6 +135,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/nearby:
+    get:
+      operationId: listNearbyStations
+      tags: [stations]
+      summary: Find stations based near a US ZIP centroid
+      description: >
+        Resolves the ZIP against a bundled local dataset and returns curated and
+        Radio Browser stations whose station-base coordinates are within the
+        selected straight-line radius. The ZIP is request-scoped and is not
+        persisted. Distance is approximate and is not a reception-coverage claim.
+      parameters:
+        - name: zip
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{5}$'
+        - name: radiusMiles
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [25, 50, 100, 250]
+            default: 50
+      responses:
+        "200":
+          description: Nearby station results and location-evidence coverage.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NearbyStationsResponse"
+        "400":
+          description: Malformed ZIP or unsupported radius.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Well-formed ZIP absent from the bundled local dataset.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations:
     get:
       operationId: listStations
@@ -5156,6 +5199,19 @@ components:
         region:
           type: ["string", "null"]
           description: State, province, or region, stored separately from city for locality ranking.
+        latitude:
+          type: ["number", "null"]
+          description: Coarse station-base latitude for discovery; never a listener coordinate.
+        longitude:
+          type: ["number", "null"]
+          description: Coarse station-base longitude for discovery; never a listener coordinate.
+        locationSource:
+          type: ["string", "null"]
+          description: Provenance for the station-base location evidence.
+        locationConfidence:
+          type: ["string", "null"]
+          enum: ["verified", "directory", "coarse", null]
+          description: Quality of the station-base coordinate; null when distance is unavailable.
         country:
           type: ["string", "null"]
         streamUrl:
@@ -5280,6 +5336,146 @@ components:
         - clickcount
         - upcomingShowCount
         - stationCategories
+    NearbyStation:
+      type: object
+      description: A playable station with compatible station-base location evidence.
+      required:
+        - resultId
+        - source
+        - catalogStationId
+        - name
+        - city
+        - region
+        - country
+        - latitude
+        - longitude
+        - locationSource
+        - locationConfidence
+        - approximateDistanceMiles
+        - tags
+        - url
+        - favicon
+        - bitrate
+        - codec
+        - radioBrowserUuid
+        - inLoreCatalog
+      properties:
+        resultId:
+          type: string
+        source:
+          type: string
+          enum: [catalog, radio_browser]
+        catalogStationId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        city:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        locationSource:
+          type: ["string", "null"]
+        locationConfidence:
+          type: ["string", "null"]
+          enum: ["verified", "directory", "coarse", null]
+        approximateDistanceMiles:
+          type: ["number", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        url:
+          type: string
+        favicon:
+          type: ["string", "null"]
+        bitrate:
+          type: ["integer", "null"]
+        codec:
+          type: ["string", "null"]
+        radioBrowserUuid:
+          type: ["string", "null"]
+        inLoreCatalog:
+          type: boolean
+    NearbyStationsResponse:
+      type: object
+      required:
+        - origin
+        - radiusMiles
+        - distanceMeaning
+        - directoryStatus
+        - coverage
+        - dataset
+        - results
+      properties:
+        origin:
+          type: object
+          required: [city, region, country, latitude, longitude]
+          properties:
+            city:
+              type: string
+            region:
+              type: string
+            country:
+              type: string
+            latitude:
+              type: number
+            longitude:
+              type: number
+        radiusMiles:
+          type: integer
+          enum: [25, 50, 100, 250]
+        distanceMeaning:
+          type: string
+        directoryStatus:
+          type: string
+          enum: [available, unavailable]
+        coverage:
+          type: object
+          required:
+            - catalogTotal
+            - catalogLocated
+            - catalogExcludedUnknownLocation
+            - catalogInsideRadius
+            - directoryReturned
+            - directoryLocated
+            - directoryExcludedUnknownLocation
+          properties:
+            catalogTotal:
+              type: integer
+            catalogLocated:
+              type: integer
+            catalogExcludedUnknownLocation:
+              type: integer
+            catalogInsideRadius:
+              type: integer
+            directoryReturned:
+              type: integer
+            directoryLocated:
+              type: integer
+            directoryExcludedUnknownLocation:
+              type: integer
+        dataset:
+          type: object
+          required: [name, version, license, sourceUrl]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            license:
+              type: string
+            sourceUrl:
+              type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/NearbyStation"
     PlaybackCandidate:
       type: object
       properties:

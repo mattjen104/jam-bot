@@ -7,6 +7,7 @@
  */
 import type { PlaybackCandidate } from "./playbackCandidate";
 import type { StationAutomationClass } from "./stationAutomationClass";
+import type { StationLocationConfidence } from "./stationLocationConfidence";
 import type { StationQualityTier } from "./stationQualityTier";
 
 /**
@@ -29,6 +30,26 @@ export interface Station {
    * @nullable
    */
   region?: string | null;
+  /**
+   * Coarse station-base latitude for discovery; never a listener coordinate.
+   * @nullable
+   */
+  latitude?: number | null;
+  /**
+   * Coarse station-base longitude for discovery; never a listener coordinate.
+   * @nullable
+   */
+  longitude?: number | null;
+  /**
+   * Provenance for the station-base location evidence.
+   * @nullable
+   */
+  locationSource?: string | null;
+  /**
+   * Quality of the station-base coordinate; null when distance is unavailable.
+   * @nullable
+   */
+  locationConfidence?: StationLocationConfidence;
   /** @nullable */
   country?: string | null;
   streamUrl: string;

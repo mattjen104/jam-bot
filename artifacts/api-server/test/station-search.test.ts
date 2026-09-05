@@ -32,6 +32,8 @@ vi.mock("@workspace/db", () => ({
     name: "stations.name",
     active: "stations.active",
     hidden: "stations.hidden",
+    latitude: "stations.latitude",
+    longitude: "stations.longitude",
   },
   radioBrowserStationsTable: {
     radioBrowserUuid: "radio_browser_stations.radio_browser_uuid",
@@ -55,6 +57,7 @@ app.use(stationSearchRouter);
 
 let uuidRows: { uuid: string }[] = [];
 let nameRows: { name: string }[] = [];
+let catalogRows: unknown[] = [];
 
 /** Minimal chainable stand-in for the drizzle select query builder. */
 function makeQuery(rows: unknown[]) {
@@ -89,13 +92,78 @@ beforeEach(() => {
   vi.clearAllMocks();
   uuidRows = [];
   nameRows = [];
+  catalogRows = [];
   // The response cache is module-level — reset it so each test's fetch
   // expectations start cold.
   __testOnlyResetStationSearchCache();
   // The handler runs two selects: one projecting { uuid }, one { name }.
-  selectMock.mockImplementation((sel: Record<string, unknown>) =>
-    makeQuery("uuid" in sel ? uuidRows : nameRows),
+  selectMock.mockImplementation((sel?: Record<string, unknown>) =>
+    makeQuery(!sel ? catalogRows : "uuid" in sel ? uuidRows : nameRows),
   );
+});
+
+describe("nearby station search", () => {
+  it("rejects malformed and unknown ZIPs without contacting a third party", async () => {
+    expect((await request(app).get("/stations/nearby?zip=9411&radiusMiles=50")).status).toBe(400);
+    expect((await request(app).get("/stations/nearby?zip=00000&radiusMiles=50")).status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns only station-base coordinates inside the selected radius and never echoes the ZIP", async () => {
+    catalogRows = [
+      {
+        id: 1,
+        name: "KALX",
+        city: "Berkeley",
+        region: "CA",
+        country: "US",
+        latitude: 37.8715,
+        longitude: -122.273,
+        locationSource: "zip_city_centroid",
+        locationConfidence: "coarse",
+        tags: ["college"],
+        streamUrl: "https://example.com/kalx",
+        logoUrl: null,
+        bitrate: 128,
+        codec: "MP3",
+      },
+      {
+        id: 2,
+        name: "Unknown Location",
+        latitude: null,
+        longitude: null,
+      },
+    ];
+    fetchMock.mockResolvedValue(rbOk([
+      rbStation({
+        stationuuid: "uuid-near",
+        name: "Nearby FM",
+        geo_lat: 37.78,
+        geo_long: -122.41,
+      }),
+      rbStation({
+        stationuuid: "uuid-far",
+        name: "Far FM",
+        geo_lat: 34.05,
+        geo_long: -118.24,
+      }),
+    ]));
+
+    const res = await request(app).get("/stations/nearby?zip=94110&radiusMiles=50");
+
+    expect(res.status).toBe(200);
+    const [upstreamUrl] = fetchMock.mock.calls[0] as [string, unknown];
+    expect(upstreamUrl).toContain("geo_distance=80.4672");
+    expect(res.body.origin).toMatchObject({ city: "San Francisco", region: "CA" });
+    expect(res.body.coverage).toMatchObject({
+      catalogTotal: 2,
+      catalogLocated: 1,
+      catalogExcludedUnknownLocation: 1,
+    });
+    expect(res.body.results.map((row: { name: string }) => row.name)).toEqual(["Nearby FM", "KALX"]);
+    expect(res.body.results[0].approximateDistanceMiles).toBeTypeOf("number");
+    expect(JSON.stringify(res.body)).not.toContain("94110");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,9 +218,19 @@ describe("proxy + trimming", () => {
     expect(res.body.results).toHaveLength(1);
     const r = res.body.results[0];
     expect(r).toEqual({
+      resultId: "radio-browser:uuid-aaa",
+      source: "radio_browser",
+      catalogStationId: null,
       name: "Boogie Radio",
+      city: null,
       state: "California",
+      region: "California",
       country: "United States",
+      latitude: null,
+      longitude: null,
+      locationSource: null,
+      locationConfidence: null,
+      approximateDistanceMiles: null,
       tags: ["funk", "disco", "soul"],
       // url_resolved is preferred over url
       url: "https://cdn.example.com/boogie",
@@ -161,6 +239,17 @@ describe("proxy + trimming", () => {
       codec: "MP3",
       radioBrowserUuid: "uuid-aaa",
       inLoreCatalog: false,
+    });
+  });
+
+  it("retains valid Radio Browser station-base coordinates", async () => {
+    fetchMock.mockResolvedValue(rbOk([rbStation({ geo_lat: 37.77, geo_long: -122.42 })]));
+    const res = await request(app).get("/stations/search?q=boogie");
+    expect(res.body.results[0]).toMatchObject({
+      latitude: 37.77,
+      longitude: -122.42,
+      locationSource: "radio_browser",
+      locationConfidence: "directory",
     });
   });
 

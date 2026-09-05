@@ -247,6 +247,93 @@ export const GetOembedResponse = zod.object({
 });
 
 /**
+ * Resolves the ZIP against a bundled local dataset and returns curated and Radio Browser stations whose station-base coordinates are within the selected straight-line radius. The ZIP is request-scoped and is not persisted. Distance is approximate and is not a reception-coverage claim.
+
+ * @summary Find stations based near a US ZIP centroid
+ */
+export const listNearbyStationsQueryZipRegExp = new RegExp("^\\d{5}$");
+export const listNearbyStationsQueryRadiusMilesDefault = 50;
+
+export const ListNearbyStationsQueryParams = zod.object({
+  zip: zod.coerce.string().regex(listNearbyStationsQueryZipRegExp),
+  radiusMiles: zod
+    .union([
+      zod.literal(25),
+      zod.literal(50),
+      zod.literal(100),
+      zod.literal(250),
+    ])
+    .default(listNearbyStationsQueryRadiusMilesDefault),
+});
+
+export const ListNearbyStationsResponse = zod.object({
+  origin: zod.object({
+    city: zod.string(),
+    region: zod.string(),
+    country: zod.string(),
+    latitude: zod.number(),
+    longitude: zod.number(),
+  }),
+  radiusMiles: zod.union([
+    zod.literal(25),
+    zod.literal(50),
+    zod.literal(100),
+    zod.literal(250),
+  ]),
+  distanceMeaning: zod.string(),
+  directoryStatus: zod.enum(["available", "unavailable"]),
+  coverage: zod.object({
+    catalogTotal: zod.number(),
+    catalogLocated: zod.number(),
+    catalogExcludedUnknownLocation: zod.number(),
+    catalogInsideRadius: zod.number(),
+    directoryReturned: zod.number(),
+    directoryLocated: zod.number(),
+    directoryExcludedUnknownLocation: zod.number(),
+  }),
+  dataset: zod.object({
+    name: zod.string(),
+    version: zod.string(),
+    license: zod.string(),
+    sourceUrl: zod.string(),
+  }),
+  results: zod.array(
+    zod
+      .object({
+        resultId: zod.string(),
+        source: zod.enum(["catalog", "radio_browser"]),
+        catalogStationId: zod.number().nullable(),
+        name: zod.string(),
+        city: zod.string().nullable(),
+        region: zod.string().nullable(),
+        country: zod.string().nullable(),
+        latitude: zod.number().nullable(),
+        longitude: zod.number().nullable(),
+        locationSource: zod.string().nullable(),
+        locationConfidence: zod
+          .union([
+            zod.literal("verified"),
+            zod.literal("directory"),
+            zod.literal("coarse"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        approximateDistanceMiles: zod.number().nullable(),
+        tags: zod.array(zod.string()),
+        url: zod.string(),
+        favicon: zod.string().nullable(),
+        bitrate: zod.number().nullable(),
+        codec: zod.string().nullable(),
+        radioBrowserUuid: zod.string().nullable(),
+        inLoreCatalog: zod.boolean(),
+      })
+      .describe(
+        "A playable station with compatible station-base location evidence.",
+      ),
+  ),
+});
+
+/**
  * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate). Pass `mode=sleep` to retrieve the Sleep Radio station list, or `mode=era-genre` to retrieve the era/genre station list, instead of the normal public directory. Unknown mode values return 400.
 
  * @summary List curated radio stations
@@ -303,6 +390,33 @@ export const ListStationsResponse = zod.object({
           .nullish()
           .describe(
             "State, province, or region, stored separately from city for locality ranking.",
+          ),
+        latitude: zod
+          .number()
+          .nullish()
+          .describe(
+            "Coarse station-base latitude for discovery; never a listener coordinate.",
+          ),
+        longitude: zod
+          .number()
+          .nullish()
+          .describe(
+            "Coarse station-base longitude for discovery; never a listener coordinate.",
+          ),
+        locationSource: zod
+          .string()
+          .nullish()
+          .describe("Provenance for the station-base location evidence."),
+        locationConfidence: zod
+          .union([
+            zod.literal("verified"),
+            zod.literal("directory"),
+            zod.literal("coarse"),
+            zod.literal(null),
+          ])
+          .nullish()
+          .describe(
+            "Quality of the station-base coordinate; null when distance is unavailable.",
           ),
         country: zod.string().nullish(),
         streamUrl: zod.string(),
@@ -1032,6 +1146,33 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           "State, province, or region, stored separately from city for locality ranking.",
+        ),
+      latitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Coarse station-base latitude for discovery; never a listener coordinate.",
+        ),
+      longitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Coarse station-base longitude for discovery; never a listener coordinate.",
+        ),
+      locationSource: zod
+        .string()
+        .nullish()
+        .describe("Provenance for the station-base location evidence."),
+      locationConfidence: zod
+        .union([
+          zod.literal("verified"),
+          zod.literal("directory"),
+          zod.literal("coarse"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Quality of the station-base coordinate; null when distance is unavailable.",
         ),
       country: zod.string().nullish(),
       streamUrl: zod.string(),
@@ -2267,6 +2408,33 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           "State, province, or region, stored separately from city for locality ranking.",
+        ),
+      latitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Coarse station-base latitude for discovery; never a listener coordinate.",
+        ),
+      longitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Coarse station-base longitude for discovery; never a listener coordinate.",
+        ),
+      locationSource: zod
+        .string()
+        .nullish()
+        .describe("Provenance for the station-base location evidence."),
+      locationConfidence: zod
+        .union([
+          zod.literal("verified"),
+          zod.literal("directory"),
+          zod.literal("coarse"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Quality of the station-base coordinate; null when distance is unavailable.",
         ),
       country: zod.string().nullish(),
       streamUrl: zod.string(),

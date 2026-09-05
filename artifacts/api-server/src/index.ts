@@ -36,6 +36,7 @@ import {
 } from "./lore/radio-browser.js";
 import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
+import { applyStationLocationMigration, backfillCoarseStationLocations } from "./lore/station-location-migration.js";
 import { applyStationCullMetadataMigration } from "./lore/station-cull-metadata-migration.js";
 import { applyStationLogoMigration } from "./lore/station-logo-migration.js";
 import { applyStationExclusionsMigration } from "./lore/station-exclusions-migration.js";
@@ -217,6 +218,8 @@ async function bootLore(): Promise<void> {
      await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
+    await runMigration("applyStationLocationMigration", applyStationLocationMigration);
+    await backfillCoarseStationLocations();
      await runMigration("applyStoreAuditMigration", applyStoreAuditMigration);
     await runMigration("applyStationCullMetadataMigration", applyStationCullMetadataMigration);
     await runMigration("applyStationLogoMigration", applyStationLogoMigration);

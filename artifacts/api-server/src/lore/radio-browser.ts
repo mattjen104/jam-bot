@@ -6,6 +6,7 @@ import {
   type Station,
 } from "@workspace/db";
 import { sql, eq, and, isNull } from "drizzle-orm";
+import { usableCoordinates } from "./station-location.js";
 
 /**
  * radio-browser.info discovery worker.
@@ -317,6 +318,10 @@ export interface RadioBrowserStation {
   url: string;
   tags: string;
   country: string;
+  countrycode?: string;
+  state?: string;
+  geo_lat?: number | null;
+  geo_long?: number | null;
   homepage: string;
   favicon: string;
   codec: string;
@@ -504,6 +509,7 @@ export async function upsertRadioBrowserStations(
     // GET /api/stations?mode=era-genre.
     const eraGenreStation = isEraGenreStation(baseName, slug);
     const hiddenAtInsert = sleepStation || eraGenreStation;
+    const hasDirectoryLocation = usableCoordinates(s.geo_lat, s.geo_long);
 
     try {
       const [stationRow] = await db
@@ -514,6 +520,11 @@ export async function upsertRadioBrowserStations(
           streamUrl,
           streamFormat: detectFormat(s.codec, streamUrl),
           country: clamp(s.country) ?? null,
+          region: clamp(s.state) ?? null,
+          latitude: hasDirectoryLocation ? s.geo_lat : null,
+          longitude: hasDirectoryLocation ? s.geo_long : null,
+          locationSource: hasDirectoryLocation ? "radio_browser" : null,
+          locationConfidence: hasDirectoryLocation ? "directory" : null,
           homepageUrl: clamp(s.homepage) ?? null,
           logoUrl: clamp(s.favicon) ?? null,
           logoSource: clamp(s.favicon) ? "radio_browser" : null,
@@ -551,6 +562,11 @@ export async function upsertRadioBrowserStations(
             votes: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.votes")} ELSE ${stationsTable.votes} END`,
             bitrate: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.bitrate")} ELSE ${stationsTable.bitrate} END`,
             codec: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.codec")} ELSE ${stationsTable.codec} END`,
+            region: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN COALESCE(EXCLUDED.region, ${stationsTable.region}) ELSE ${stationsTable.region} END`,
+            latitude: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN COALESCE(EXCLUDED.latitude, ${stationsTable.latitude}) ELSE ${stationsTable.latitude} END`,
+            longitude: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN COALESCE(EXCLUDED.longitude, ${stationsTable.longitude}) ELSE ${stationsTable.longitude} END`,
+            locationSource: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' AND EXCLUDED.latitude IS NOT NULL AND EXCLUDED.longitude IS NOT NULL THEN EXCLUDED.location_source ELSE ${stationsTable.locationSource} END`,
+            locationConfidence: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' AND EXCLUDED.latitude IS NOT NULL AND EXCLUDED.longitude IS NOT NULL THEN EXCLUDED.location_confidence ELSE ${stationsTable.locationConfidence} END`,
             // Only (re)activate ICY polling for genuine radio-browser rows —
             // never clobber a curated station that happens to share a slug.
             nowPlayingSource: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN 'radio_browser_icy' ELSE ${stationsTable.nowPlayingSource} END`,

@@ -480,6 +480,20 @@ export interface OEmbed {
 }
 
 /**
+ * Quality of the station-base coordinate; null when distance is unavailable.
+ * @nullable
+ */
+export type StationLocationConfidence =
+  | (typeof StationLocationConfidence)[keyof typeof StationLocationConfidence]
+  | null;
+
+export const StationLocationConfidence = {
+  verified: "verified",
+  directory: "directory",
+  coarse: "coarse",
+} as const;
+
+/**
  * Ingest quality tier derived from the last 7 days of logged spins. "proven" = strong MBID resolution (≥40%); "promising" = mostly track-shaped spins (≥50%); "raw" = metadata present but low resolution (≥20% yield); "silent" = active but near-zero usable metadata; "unscored" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.
  * @nullable
  */
@@ -574,6 +588,26 @@ export interface Station {
    * @nullable
    */
   region?: string | null;
+  /**
+   * Coarse station-base latitude for discovery; never a listener coordinate.
+   * @nullable
+   */
+  latitude?: number | null;
+  /**
+   * Coarse station-base longitude for discovery; never a listener coordinate.
+   * @nullable
+   */
+  longitude?: number | null;
+  /**
+   * Provenance for the station-base location evidence.
+   * @nullable
+   */
+  locationSource?: string | null;
+  /**
+   * Quality of the station-base coordinate; null when distance is unavailable.
+   * @nullable
+   */
+  locationConfidence?: StationLocationConfidence;
   /** @nullable */
   country?: string | null;
   streamUrl: string;
@@ -641,6 +675,118 @@ export interface Station {
   playbackCandidates?: PlaybackCandidate[];
   /** Safe, non-secret category labels derived from the station's metadata. Possible values: "spinitron" (now-playing comes from Spinitron or the Spinitron web adapter), "college" (confirmed campus/college station), "longtail" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values. */
   stationCategories: string[];
+}
+
+export type NearbyStationSource =
+  (typeof NearbyStationSource)[keyof typeof NearbyStationSource];
+
+export const NearbyStationSource = {
+  catalog: "catalog",
+  radio_browser: "radio_browser",
+} as const;
+
+/**
+ * @nullable
+ */
+export type NearbyStationLocationConfidence =
+  | (typeof NearbyStationLocationConfidence)[keyof typeof NearbyStationLocationConfidence]
+  | null;
+
+export const NearbyStationLocationConfidence = {
+  verified: "verified",
+  directory: "directory",
+  coarse: "coarse",
+} as const;
+
+/**
+ * A playable station with compatible station-base location evidence.
+ */
+export interface NearbyStation {
+  resultId: string;
+  source: NearbyStationSource;
+  /** @nullable */
+  catalogStationId: number | null;
+  name: string;
+  /** @nullable */
+  city: string | null;
+  /** @nullable */
+  region: string | null;
+  /** @nullable */
+  country: string | null;
+  /** @nullable */
+  latitude: number | null;
+  /** @nullable */
+  longitude: number | null;
+  /** @nullable */
+  locationSource: string | null;
+  /** @nullable */
+  locationConfidence: NearbyStationLocationConfidence;
+  /** @nullable */
+  approximateDistanceMiles: number | null;
+  tags: string[];
+  url: string;
+  /** @nullable */
+  favicon: string | null;
+  /** @nullable */
+  bitrate: number | null;
+  /** @nullable */
+  codec: string | null;
+  /** @nullable */
+  radioBrowserUuid: string | null;
+  inLoreCatalog: boolean;
+}
+
+export type NearbyStationsResponseOrigin = {
+  city: string;
+  region: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type NearbyStationsResponseRadiusMiles =
+  (typeof NearbyStationsResponseRadiusMiles)[keyof typeof NearbyStationsResponseRadiusMiles];
+
+export const NearbyStationsResponseRadiusMiles = {
+  NUMBER_25: 25,
+  NUMBER_50: 50,
+  NUMBER_100: 100,
+  NUMBER_250: 250,
+} as const;
+
+export type NearbyStationsResponseDirectoryStatus =
+  (typeof NearbyStationsResponseDirectoryStatus)[keyof typeof NearbyStationsResponseDirectoryStatus];
+
+export const NearbyStationsResponseDirectoryStatus = {
+  available: "available",
+  unavailable: "unavailable",
+} as const;
+
+export type NearbyStationsResponseCoverage = {
+  catalogTotal: number;
+  catalogLocated: number;
+  catalogExcludedUnknownLocation: number;
+  catalogInsideRadius: number;
+  directoryReturned: number;
+  directoryLocated: number;
+  directoryExcludedUnknownLocation: number;
+};
+
+export type NearbyStationsResponseDataset = {
+  name: string;
+  version: string;
+  license: string;
+  sourceUrl: string;
+};
+
+export interface NearbyStationsResponse {
+  origin: NearbyStationsResponseOrigin;
+  radiusMiles: NearbyStationsResponseRadiusMiles;
+  distanceMeaning: string;
+  directoryStatus: NearbyStationsResponseDirectoryStatus;
+  coverage: NearbyStationsResponseCoverage;
+  dataset: NearbyStationsResponseDataset;
+  results: NearbyStation[];
 }
 
 export type PlaybackEventInputTransport =
@@ -4639,6 +4785,24 @@ export type GetOembedParams = {
    */
   url: string;
 };
+
+export type ListNearbyStationsParams = {
+  /**
+   * @pattern ^\d{5}$
+   */
+  zip: string;
+  radiusMiles?: ListNearbyStationsRadiusMiles;
+};
+
+export type ListNearbyStationsRadiusMiles =
+  (typeof ListNearbyStationsRadiusMiles)[keyof typeof ListNearbyStationsRadiusMiles];
+
+export const ListNearbyStationsRadiusMiles = {
+  NUMBER_25: 25,
+  NUMBER_50: 50,
+  NUMBER_100: 100,
+  NUMBER_250: 250,
+} as const;
 
 export type ListStationsParams = {
   /**

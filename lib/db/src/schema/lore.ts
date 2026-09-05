@@ -173,6 +173,14 @@ export const stationsTable = pgTable("stations", {
   city: text("city"),
   /** State, province, or region, stored separately from city for locality ranking. */
   region: text("region"),
+  /** Coarse station-base coordinate for discovery, never a listener coordinate. */
+  latitude: real("latitude"),
+  /** Coarse station-base coordinate for discovery, never a listener coordinate. */
+  longitude: real("longitude"),
+  /** Provenance for latitude/longitude, e.g. curated, radio_browser, zip_city_centroid. */
+  locationSource: text("location_source"),
+  /** Evidence quality for the station-base coordinate: verified, directory, or coarse. */
+  locationConfidence: text("location_confidence"),
   /**
    * IANA timezone identifier inferred from city + country (e.g. "America/Los_Angeles").
    * Stored so the schedule endpoint doesn't re-run the lookup on every request.

@@ -99,6 +99,60 @@ describe("StationFinderSheet", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("finds stations by ZIP without persisting the listener ZIP", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        origin: { city: "San Francisco", region: "CA" },
+        directoryStatus: "available",
+        results: [rbResult({
+          resultId: "radio-browser:uuid-boogie",
+          source: "radio_browser",
+          catalogStationId: null,
+          city: "Berkeley",
+          region: "CA",
+          latitude: 37.87,
+          longitude: -122.27,
+          locationSource: "radio_browser",
+          locationConfidence: "directory",
+          approximateDistanceMiles: 10.4,
+        })],
+      }),
+    });
+    render(<StationFinderSheet onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Near me" }));
+    fireEvent.change(screen.getByLabelText("US ZIP code"), { target: { value: "94110" } });
+    fireEvent.change(screen.getByLabelText("Search radius"), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find stations" }));
+
+    await screen.findByText("Boogie Radio");
+    const [url] = fetchMock.mock.calls[0] as [string, unknown];
+    expect(url).toContain("/api/stations/nearby?");
+    expect(url).toContain("zip=94110");
+    expect(url).toContain("radiusMiles=25");
+    expect(screen.getByText(/Based in Berkeley, CA, United States · approximately 10.4 miles away/)).toBeTruthy();
+    expect(localStorage.getItem(ADDED_STATIONS_LS_KEY) ?? "").not.toContain("94110");
+    expect(screen.getByText("Used for this search only. Not saved.")).toBeTruthy();
+  });
+
+  it("aborts an in-flight name search when switching to nearby mode", async () => {
+    let requestSignal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, options?: RequestInit) => {
+      requestSignal = options?.signal ?? undefined;
+      return new Promise(() => {});
+    });
+    render(<StationFinderSheet onClose={vi.fn()} />);
+    await typeQuery("boogie");
+    expect(requestSignal?.aborted).toBe(false);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Near me" }));
+
+    expect(requestSignal?.aborted).toBe(true);
+    expect(screen.getByText(/Your ZIP is not saved/)).toBeTruthy();
+    expect(screen.queryByText("Boogie Radio")).toBeNull();
+  });
+
   it("searches after the debounce and renders rows with location, tags, and quality", async () => {
     render(<StationFinderSheet onClose={vi.fn()} />);
     await typeQuery("boogie");

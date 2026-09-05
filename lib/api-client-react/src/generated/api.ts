@@ -97,6 +97,7 @@ import type {
   ListGeniusDraftsParams,
   ListMyLibraryParams,
   ListMyListensParams,
+  ListNearbyStationsParams,
   ListPickersParams,
   ListRadioBrowserStationsResponse,
   ListSourcesResponse,
@@ -118,6 +119,7 @@ import type {
   MePressCrossingsResponse,
   MeRecentSetsResponse,
   MeShowsResponse,
+  NearbyStationsResponse,
   OEmbed,
   OverlapSpineResponse,
   PatchClaimRequest,
@@ -576,6 +578,105 @@ export function useGetOembed<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetOembedQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Resolves the ZIP against a bundled local dataset and returns curated and Radio Browser stations whose station-base coordinates are within the selected straight-line radius. The ZIP is request-scoped and is not persisted. Distance is approximate and is not a reception-coverage claim.
+
+ * @summary Find stations based near a US ZIP centroid
+ */
+export const getListNearbyStationsUrl = (params: ListNearbyStationsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/nearby?${stringifiedParams}`
+    : `/api/stations/nearby`;
+};
+
+export const listNearbyStations = async (
+  params: ListNearbyStationsParams,
+  options?: RequestInit,
+): Promise<NearbyStationsResponse> => {
+  return customFetch<NearbyStationsResponse>(getListNearbyStationsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListNearbyStationsQueryKey = (
+  params?: ListNearbyStationsParams,
+) => {
+  return [`/api/stations/nearby`, ...(params ? [params] : [])] as const;
+};
+
+export const getListNearbyStationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listNearbyStations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: ListNearbyStationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listNearbyStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListNearbyStationsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listNearbyStations>>
+  > = ({ signal }) => listNearbyStations(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listNearbyStations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListNearbyStationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listNearbyStations>>
+>;
+export type ListNearbyStationsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Find stations based near a US ZIP centroid
+ */
+
+export function useListNearbyStations<
+  TData = Awaited<ReturnType<typeof listNearbyStations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: ListNearbyStationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listNearbyStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListNearbyStationsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

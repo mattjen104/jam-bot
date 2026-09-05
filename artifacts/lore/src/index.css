@@ -1608,6 +1608,18 @@
   border-bottom: 1px solid hsl(var(--border));
   flex-shrink: 0;
 }
+.sfinder-tabs { display: flex; gap: 4px; flex: 1; }
+.sfinder-tabs button {
+  border: 1px solid hsl(var(--border)); background: none; color: hsl(var(--dim));
+  border-radius: 3px; padding: 5px 10px; font: inherit; font-size: var(--lore-size-small); cursor: pointer;
+}
+.sfinder-tabs button[aria-selected="true"] { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+.sfinder-searchline { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid hsl(var(--border)); }
+.sfinder-nearby {
+  display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid hsl(var(--border));
+}
+.sfinder-privacy { grid-column: 1 / -1; font-family: var(--app-font-display); font-size: var(--lore-size-small); color: hsl(var(--faint)); }
 .sfinder-icon { color: hsl(var(--dim)); flex-shrink: 0; }
 .sfinder-input {
   flex: 1;
