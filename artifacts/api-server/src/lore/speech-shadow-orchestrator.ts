@@ -323,7 +323,7 @@ export function scheduleSpeechTransitionCandidate(
           await appendTranscriptClaim({
             stationId: station.id, claimedAt: capturedAt, segmentIdempotencyKey: segmentKey,
             idempotencyKey: `${segmentKey}:claim:${claimIndex}`, producerVersion: PRODUCER_VERSION,
-             outcome: "grounded", featureSnapshot: { ...claim }, provenance: { extractor: "exact_pattern.v1", candidate, ...(runId ? { pilotRunId: runId } : {}) },
+              outcome: "grounded", featureSnapshot: { ...claim }, provenance: { extractor: "exact_pattern.v2", candidate, ...(runId ? { pilotRunId: runId } : {}) },
           });
           if (claim.kind === "dj" || claim.kind === "show") {
             const scheduled = await lookupActiveScheduleEntry(station.id, station.ianaTimezone, capturedAt);

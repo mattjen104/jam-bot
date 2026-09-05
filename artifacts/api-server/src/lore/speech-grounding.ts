@@ -19,6 +19,40 @@ export interface GroundedSpeechClaim {
   endChar: number;
 }
 
+interface ExplicitClaimPattern {
+  kind: SpeechClaimKind;
+  expression: RegExp;
+}
+
+/*
+ * A bare “this is NAME” or “I'm WORDS” is not identity evidence: on radio it
+ * commonly introduces a track, quotation, or ordinary clause. DJ extraction
+ * therefore needs either an explicit DJ/deejay prefix or a first-person/host
+ * naming phrase. Show extraction likewise needs an explicit show/program noun.
+ */
+const EXPLICIT_CLAIM_PATTERNS: readonly ExplicitClaimPattern[] = [
+  {
+    kind: "dj",
+    expression: /\b(?:this is|i(?:['’]m| am)|you(?:['’]re| are) listening to)\s+((?:dj|deejay)\s+[\p{L}\p{N}](?:[\p{L}\p{N}'’.-]*[\p{L}\p{N}'’-])?(?:\s+[\p{L}\p{N}](?:[\p{L}\p{N}'’.-]*[\p{L}\p{N}'’-])?){0,3})(?=\s*(?:[,.;!?]|$|\b(?:and|here|on|with)\b))/giu,
+  },
+  {
+    kind: "dj",
+    expression: /\b(?:my name is|your (?:dj|host) is|i(?:['’]m| am) your (?:dj|host))\s*[:,-]?\s+((?:(?:dj|deejay)\s+)?[\p{L}\p{N}](?:[\p{L}\p{N}'’.-]*[\p{L}\p{N}'’-])?(?:\s+[\p{L}\p{N}](?:[\p{L}\p{N}'’.-]*[\p{L}\p{N}'’-])?){0,3})(?=\s*(?:[,.;!?]|$|\b(?:and|here|on|with)\b))/giu,
+  },
+  {
+    kind: "show",
+    expression: /\b(?:you(?:['’]re| are) listening to|this is|welcome to)\s+(?:the\s+)?([\p{L}\p{N}][\p{L}\p{N}&'’.,:!? -]{0,60}?)\s+(?:show|program)\b/giu,
+  },
+  {
+    kind: "show",
+    expression: /\b(?:the\s+)?(?:show|program)\s+(?:is\s+)?called\s+([\p{L}\p{N}][\p{L}\p{N}&'’.,:!? -]{1,60}?)(?=\s*(?:[,.;!?]|$|\b(?:and|here|on|with)\b))/giu,
+  },
+  {
+    kind: "topic",
+    expression: /\b(?:today(?:'s)? topic is|we(?:'re| are) talking about)\s+([A-Za-z][A-Za-z0-9 &'-]{1,80})\b/giu,
+  },
+];
+
 /** Validate an exact, bounded supporting text span (not a model paraphrase). */
 export function validateSupportingSpan(
   segments: readonly TimestampedTranscriptSegment[],
@@ -40,6 +74,19 @@ export function validateGroundedClaim(
   claim: GroundedSpeechClaim,
 ): boolean {
   if (!validateSupportingSpan(segments, claim)) return false;
+  const segment = segments[claim.segmentIndex]!;
+  const hasExplicitCue = EXPLICIT_CLAIM_PATTERNS
+    .filter((pattern) => pattern.kind === claim.kind)
+    .some(({ expression }) => {
+      expression.lastIndex = 0;
+      for (const match of segment.text.matchAll(expression)) {
+        const captured = match[1] ?? "";
+        const startChar = (match.index ?? -1) + match[0].indexOf(captured);
+        if (startChar === claim.startChar && startChar + captured.length === claim.endChar) return true;
+      }
+      return false;
+    });
+  if (!hasExplicitCue) return false;
   return claim.kind !== "dj" || eligibleDjName(claim.value) !== null;
 }
 
@@ -52,13 +99,8 @@ export function extractExplicitGroundedClaims(
   segments: readonly TimestampedTranscriptSegment[],
 ): GroundedSpeechClaim[] {
   const claims: GroundedSpeechClaim[] = [];
-  const patterns: Array<{ kind: SpeechClaimKind; expression: RegExp }> = [
-    { kind: "dj", expression: /\b(?:this is|i'?m|your host is)\s+((?:DJ\s+)?[A-Z][\p{L}'-]*(?:\s+[A-Z][\p{L}'-]*){0,2})\b/giu },
-    { kind: "show", expression: /\b(?:you(?:'re| are) listening to|this is)\s+([A-Z][\p{L}0-9&' -]{1,60})\s+(?:show|radio)\b/giu },
-    { kind: "topic", expression: /\b(?:today(?:'s)? topic is|we(?:'re| are) talking about)\s+([A-Za-z][A-Za-z0-9 &'-]{1,80})\b/giu },
-  ];
   segments.forEach((segment, segmentIndex) => {
-    for (const { kind, expression } of patterns) {
+    for (const { kind, expression } of EXPLICIT_CLAIM_PATTERNS) {
       expression.lastIndex = 0;
       for (const match of segment.text.matchAll(expression)) {
         const value = match[1]?.trim();

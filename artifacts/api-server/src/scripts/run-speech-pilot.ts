@@ -180,23 +180,26 @@ export async function getSpeechPilotRunReport(runId: string, stationIds: number[
   const [outcomes, decisions, segments, claims, comparisons, timeline] = await Promise.all([
     db.select({ stationId: captureOutcomesTable.stationId, outcome: captureOutcomesTable.outcome }).from(captureOutcomesTable).where(and(inArray(captureOutcomesTable.stationId, stationIds), sql`${captureOutcomesTable.provenance}->>'pilotRunId' = ${runId}`)),
     db.select({ stationId: captureDecisionsTable.stationId, decision: captureDecisionsTable.decision, outcome: captureDecisionsTable.outcome }).from(captureDecisionsTable).where(and(inArray(captureDecisionsTable.stationId, stationIds), sql`${captureDecisionsTable.provenance}->>'pilotRunId' = ${runId}`)),
-    db.select({ stationId: transcriptSegmentsTable.stationId }).from(transcriptSegmentsTable).where(and(inArray(transcriptSegmentsTable.stationId, stationIds), sql`${transcriptSegmentsTable.provenance}->>'pilotRunId' = ${runId}`)),
-    db.select({ stationId: transcriptClaimsTable.stationId }).from(transcriptClaimsTable).where(and(inArray(transcriptClaimsTable.stationId, stationIds), sql`${transcriptClaimsTable.provenance}->>'pilotRunId' = ${runId}`)),
+    db.select({ stationId: transcriptSegmentsTable.stationId, idempotencyKey: transcriptSegmentsTable.idempotencyKey }).from(transcriptSegmentsTable).where(and(inArray(transcriptSegmentsTable.stationId, stationIds), sql`${transcriptSegmentsTable.provenance}->>'pilotRunId' = ${runId}`)),
+    db.select({ stationId: transcriptClaimsTable.stationId, segmentIdempotencyKey: transcriptClaimsTable.segmentIdempotencyKey }).from(transcriptClaimsTable).where(and(inArray(transcriptClaimsTable.stationId, stationIds), sql`${transcriptClaimsTable.provenance}->>'pilotRunId' = ${runId}`)),
     db.select({ stationId: scheduleComparisonsTable.stationId, outcome: scheduleComparisonsTable.outcome }).from(scheduleComparisonsTable).where(and(inArray(scheduleComparisonsTable.stationId, stationIds), sql`${scheduleComparisonsTable.provenance}->>'pilotRunId' = ${runId}`)),
     db.select({ stationId: broadcastTimelineEventsTable.stationId, eventType: broadcastTimelineEventsTable.eventType }).from(broadcastTimelineEventsTable).where(and(inArray(broadcastTimelineEventsTable.stationId, stationIds), sql`${broadcastTimelineEventsTable.provenance}->>'pilotRunId' = ${runId}`)),
   ]);
   const count = <T extends { outcome: string }>(rows: T[]) => rows.reduce<Record<string, number>>((r, row) => { r[row.outcome] = (r[row.outcome] ?? 0) + 1; return r; }, {});
+  const claimedSegmentKeys = new Set(claims.flatMap((claim) => claim.segmentIdempotencyKey ? [claim.segmentIdempotencyKey] : []));
+  const claimlessSegments = segments.filter((segment) => !claimedSegmentKeys.has(segment.idempotencyKey));
   return {
     stations: stationIds.map((stationId) => ({
       stationId,
       decisions: decisions.filter((r) => r.stationId === stationId),
       outcomes: outcomes.filter((r) => r.stationId === stationId),
       transcriptSegments: segments.filter((r) => r.stationId === stationId).length,
+      claimlessTranscriptSegments: claimlessSegments.filter((r) => r.stationId === stationId).length,
       groundedClaims: claims.filter((r) => r.stationId === stationId).length,
       scheduleComparisons: comparisons.filter((r) => r.stationId === stationId),
       timelineEvidence: timeline.filter((r) => r.stationId === stationId),
     })),
-    aggregate: { captures: outcomes.length, outcomes: count(outcomes), transcriptSegments: segments.length, groundedClaims: claims.length, scheduleComparisons: count(comparisons), timelineEvidence: timeline.length, insufficientSamples: outcomes.length < thresholds.minimumSamples },
+    aggregate: { captures: outcomes.length, outcomes: count(outcomes), transcriptSegments: segments.length, claimlessTranscriptSegments: claimlessSegments.length, groundedClaims: claims.length, scheduleComparisons: count(comparisons), timelineEvidence: timeline.length, insufficientSamples: outcomes.length < thresholds.minimumSamples },
   };
 }
 export async function runSpeechPilot(args: PilotArgs): Promise<Record<string, unknown>> {
@@ -265,13 +268,13 @@ export function formatPilotReport(result: Record<string, unknown>): string {
   }
   const preflight = result.preflight as { ok?: boolean; errors?: string[] } | undefined;
   if (preflight && !preflight.ok) return `Speech pilot preflight FAILED\n${(preflight.errors ?? []).map((error) => `- ${error}`).join("\n")}`;
-  const aggregate = result.aggregate as { captures?: number; transcriptSegments?: number; groundedClaims?: number; outcomes?: Record<string, number>; scheduleComparisons?: Record<string, number>; insufficientSamples?: boolean } | undefined;
+  const aggregate = result.aggregate as { captures?: number; transcriptSegments?: number; claimlessTranscriptSegments?: number; groundedClaims?: number; outcomes?: Record<string, number>; scheduleComparisons?: Record<string, number>; insufficientSamples?: boolean } | undefined;
   const stations = result.stations as Array<{ stationId: number; decisions?: Array<{ decision: string; outcome: string }>; outcomes: Array<{ outcome: string }> }> | undefined;
   const rolling = result.rollingProductionHealth as { sampleReady?: boolean; healthy?: boolean; regressions?: string[] } | undefined;
   return [
     `Speech pilot ${result.completed ? "completed" : "incomplete"}: ${result.runId ?? "no run id"}`,
     ...(stations ?? []).map((station) => `station ${station.stationId}: decisions=${station.decisions?.map((row) => `${row.decision}:${row.outcome}`).join(", ") || "none"}; outcomes=${station.outcomes.map((row) => row.outcome).join(", ") || "none"}`),
-    `captures=${aggregate?.captures ?? 0}; segments=${aggregate?.transcriptSegments ?? 0}; groundedClaims=${aggregate?.groundedClaims ?? 0}`,
+    `captures=${aggregate?.captures ?? 0}; segments=${aggregate?.transcriptSegments ?? 0}; claimlessSegments=${aggregate?.claimlessTranscriptSegments ?? 0}; groundedClaims=${aggregate?.groundedClaims ?? 0}`,
     `outcomes: ${Object.entries(aggregate?.outcomes ?? {}).map(([kind, count]) => `${kind}=${count}`).join(", ") || "none"}`,
     `schedule: ${Object.entries(aggregate?.scheduleComparisons ?? {}).map(([kind, count]) => `${kind}=${count}`).join(", ") || "none"}`,
     `pilot gate: ${result.killed ? "KILLED" : result.completed ? "advisory / completed" : "INCOMPLETE"}; ${aggregate?.insufficientSamples ? "insufficient run samples" : "run sample count met"}`,

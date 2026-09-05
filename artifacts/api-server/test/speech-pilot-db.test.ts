@@ -21,6 +21,7 @@ const keys = {
   decision: `${runId}:decision`,
   outcome: `${runId}:outcome`,
   segment: `${runId}:segment`,
+  claimlessSegment: `${runId}:segment:no-claim`,
   claim: `${runId}:claim`,
   comparison: `${runId}:comparison`,
   timeline: `${runId}:timeline`,
@@ -44,6 +45,7 @@ describe("speech pilot durable report", () => {
       await appendCaptureDecision({ ...common, decidedAt: at, decision: "sampled", outcome: "admitted", idempotencyKey: keys.decision });
       await appendCaptureOutcome({ ...common, occurredAt: at, outcome: "speech", decisionIdempotencyKey: keys.decision, idempotencyKey: keys.outcome });
       await appendTranscriptSegment({ ...common, capturedAt: at, outcome: "speech", idempotencyKey: keys.segment });
+      await appendTranscriptSegment({ ...common, capturedAt: at, outcome: "speech", idempotencyKey: keys.claimlessSegment });
       await appendTranscriptClaim({ ...common, claimedAt: at, outcome: "grounded", segmentIdempotencyKey: keys.segment, idempotencyKey: keys.claim });
       await appendScheduleComparison({ ...common, comparedAt: at, outcome: "supporting", idempotencyKey: keys.comparison });
       await appendBroadcastTimelineEvent({ ...common, occurredAt: at, eventType: "speech_ends_then_sustained_music", outcome: "advisory", idempotencyKey: keys.timeline });
@@ -62,14 +64,16 @@ describe("speech pilot durable report", () => {
     expect(report.aggregate).toMatchObject({
       captures: 1,
       outcomes: { speech: 1 },
-      transcriptSegments: 1,
+      transcriptSegments: 2,
+      claimlessTranscriptSegments: 1,
       groundedClaims: 1,
       scheduleComparisons: { supporting: 1 },
       timelineEvidence: 1,
     });
     expect(report.stations[0]).toMatchObject({
       stationId,
-      transcriptSegments: 1,
+      transcriptSegments: 2,
+      claimlessTranscriptSegments: 1,
       groundedClaims: 1,
     });
     expect(report.stations[0]!.decisions).toHaveLength(1);

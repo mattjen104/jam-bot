@@ -11,7 +11,7 @@ import {
 } from "../../src/lore/speech-capture.js";
 import { SpeechQuotaScheduler, selectCheapestMount } from "../../src/lore/speech-scheduler.js";
 import { estimateTalkWindows } from "../../src/lore/speech-talk-window.js";
-import { validateGroundedClaim } from "../../src/lore/speech-grounding.js";
+import { extractExplicitGroundedClaims, validateGroundedClaim } from "../../src/lore/speech-grounding.js";
 import { compareTranscriptToSchedule } from "../../src/lore/speech-schedule-comparison.js";
 import { parseSpeechPilotCohort, speechShadowEnabled } from "../../src/lore/speech-shadow-orchestrator.js";
 
@@ -430,8 +430,48 @@ setInterval(() => undefined, 1_000);
     const segments = [{ startedAtMs: 0, endedAtMs: 1_000, text: "You are listening to DJ Nova." }];
     expect(validateGroundedClaim(segments, { kind: "dj", value: "DJ Nova", segmentIndex: 0, startedAtMs: 0, endedAtMs: 1_000, startChar: 21, endChar: 28 })).toBe(true);
     expect(validateGroundedClaim(segments, { kind: "dj", value: "DJ Nova", segmentIndex: 0, startedAtMs: 0, endedAtMs: 1_000, startChar: 0, endChar: 7 })).toBe(false);
+    const ordinarySpeech = [{ startedAtMs: 0, endedAtMs: 1_000, text: "I'm saying what you gotta hear." }];
+    expect(validateGroundedClaim(ordinarySpeech, { kind: "dj", value: "saying", segmentIndex: 0, startedAtMs: 0, endedAtMs: 1_000, startChar: 4, endChar: 10 })).toBe(false);
     expect(compareTranscriptToSchedule("DJ Nova", "DJ Nova")).toBe("supporting");
     expect(compareTranscriptToSchedule("DJ Nova", "DJ Lunar")).toBe("contradictory");
     expect(compareTranscriptToSchedule("", "DJ Nova")).toBe("inconclusive");
+  });
+
+  it("extracts only explicit DJ and show introductions with exact supporting spans", () => {
+    const segments = [
+      { startedAtMs: 0, endedAtMs: 1_000, text: "This is DJ Hate Feeler, here on KALX." },
+      { startedAtMs: 1_000, endedAtMs: 2_000, text: "My name is Pushmi-Pullyu." },
+      { startedAtMs: 2_000, endedAtMs: 3_000, text: "I'm your host: Diane Kamikaze, with you until ten." },
+      { startedAtMs: 3_000, endedAtMs: 4_000, text: "You’re listening to the Midnight Signals show." },
+      { startedAtMs: 4_000, endedAtMs: 5_000, text: "Welcome to Big Shoes Blues program!" },
+    ];
+
+    const claims = extractExplicitGroundedClaims(segments);
+    expect(claims.map(({ kind, value }) => ({ kind, value }))).toEqual([
+      { kind: "dj", value: "DJ Hate Feeler" },
+      { kind: "dj", value: "Pushmi-Pullyu" },
+      { kind: "dj", value: "Diane Kamikaze" },
+      { kind: "show", value: "Midnight Signals" },
+      { kind: "show", value: "Big Shoes Blues" },
+    ]);
+    for (const claim of claims) {
+      const segment = segments[claim.segmentIndex]!;
+      expect(segment.text.slice(claim.startChar, claim.endChar)).toBe(claim.value);
+      expect(validateGroundedClaim(segments, claim)).toBe(true);
+    }
+  });
+
+  it.each([
+    "I'm saying what you gotta hear.",
+    "This is the werewolf song.",
+    "You're listening to the werewolf song.",
+    "This is music from Boards of Canada.",
+    "I'm talking about tonight's schedule.",
+    "This is DJ.",
+    "Your host is.",
+  ])("keeps ordinary or incomplete speech inconclusive: %s", (text) => {
+    expect(extractExplicitGroundedClaims([
+      { startedAtMs: 0, endedAtMs: 1_000, text },
+    ])).toEqual([]);
   });
 });
