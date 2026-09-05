@@ -157,6 +157,7 @@
     { "method": "GET", "path": "/spotify/album-tracks", "kind": "plain-json", "reason": "Album-tracks read model via hand-written fetch." },
 
     { "method": "GET", "path": "/stations/search", "kind": "plain-json", "reason": "Radio Browser search proxy for the Station Finder via hand-written fetch." },
+    { "method": "GET", "path": "/explore", "kind": "plain-json", "reason": "Unified bounded show-discovery read model consumed by the hand-written Explore client." },
 
     { "method": "POST", "path": "/me/apple-library-import", "kind": "plain-json", "reason": "Apple Music library batch import — registered by lore/apple-library-batch-endpoint.ts (mounted from routes/me/library.ts), hand-written fetch." },
     { "method": "GET", "path": "/me/apple-library-import/status", "kind": "plain-json", "reason": "Apple Music import status read model — registered by lore/apple-library-batch-endpoint.ts (mounted from routes/me/library.ts), hand-written fetch." },

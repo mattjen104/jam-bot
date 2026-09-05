@@ -9,6 +9,7 @@ import artRouter from "./art.js";
 import meRouter from "./me/index.js";
 import playerRouter from "./player.js";
 import stationSearchRouter from "./station-search.js";
+import exploreRouter from "./explore.js";
 import bottlesRouter from "./lore/bottles.js";
 import importedSetsRouter from "./lore/imported-sets.js";
 import appleMusicJamsRouter from "./lore/apple-music-jams.js";
@@ -34,6 +35,7 @@ router.use(appleMusicJamsRouter);
 // Station search (Radio Browser proxy for the Station Finder) is public and
 // must also precede loreRouter (same catch-all caveat).
 router.use(stationSearchRouter);
+router.use(exploreRouter);
 router.use(loreRouter);
 
 export default router;
