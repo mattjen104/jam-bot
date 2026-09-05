@@ -1,13 +1,16 @@
 import {
   appendBoundaryPrediction,
   appendBroadcastTimelineEvent,
+  appendIcyMetadataCandidate,
   claimLatestUnevaluatedBoundaryEvaluation,
 } from "./observability.js";
+import { classifyIcyStreamTitle } from "./icy.js";
 import { normalizeTimingEvidence } from "./timing-evidence.js";
 import type { NowPlayingRaw } from "./types.js";
 
 const PRODUCER_VERSION = "task-582.timeline.v2";
 const ESTIMATOR_VERSION = "timing-evidence.v1";
+const ICY_CANDIDATE_BUCKET_MS = 15 * 60_000;
 
 export type ListenerBroadcastAdvisoryKind = "dj_speaking" | "music_resuming";
 export interface ListenerBroadcastAdvisory {
@@ -121,6 +124,72 @@ export function recordIcyMetadataObservation(args: {
       ...wall,
     }),
     provenance: snapshot({ source: args.source, sourceEventId, transport: "icy" }),
+  }));
+}
+
+export interface IcyMetadataCandidateRecord {
+  rawStreamTitle: string;
+  candidateClass: Exclude<
+    ReturnType<typeof classifyIcyStreamTitle>["candidateClass"],
+    "blank" | "track"
+  >;
+  rejectionReason: string;
+  parsedArtist: string | null;
+  parsedTitle: string | null;
+  bucketStartedAt: Date;
+}
+
+export function buildIcyMetadataCandidate(
+  streamTitle: string | null,
+  observedAt: Date,
+): IcyMetadataCandidateRecord | null {
+  const classified = classifyIcyStreamTitle(streamTitle);
+  if (
+    !classified.raw ||
+    classified.usable ||
+    classified.candidateClass === "blank" ||
+    classified.candidateClass === "track"
+  ) {
+    return null;
+  }
+  return {
+    rawStreamTitle: classified.raw,
+    candidateClass: classified.candidateClass,
+    rejectionReason: classified.rejectionReason ?? "not_usable",
+    parsedArtist: classified.artist,
+    parsedTitle: classified.title,
+    bucketStartedAt: new Date(
+      Math.floor(observedAt.getTime() / ICY_CANDIDATE_BUCKET_MS) *
+        ICY_CANDIDATE_BUCKET_MS,
+    ),
+  };
+}
+
+export function recordIcyMetadataCandidate(args: {
+  stationId: number;
+  source: string;
+  streamTitle: string | null;
+  observedAt: Date;
+  transport: "watcher" | "poller";
+}): void {
+  const candidate = buildIcyMetadataCandidate(args.streamTitle, args.observedAt);
+  if (!candidate) return;
+  void appendSafely(() => appendIcyMetadataCandidate({
+    stationId: args.stationId,
+    source: args.source,
+    rawStreamTitle: candidate.rawStreamTitle,
+    observedAt: args.observedAt,
+    bucketStartedAt: candidate.bucketStartedAt,
+    candidateClass: candidate.candidateClass,
+    rejectionReason: candidate.rejectionReason,
+    parsedArtist: candidate.parsedArtist,
+    parsedTitle: candidate.parsedTitle,
+    provenance: snapshot({
+      transport: args.transport,
+      confirmedIdentity: false,
+      retentionDays: 90,
+      producerVersion: PRODUCER_VERSION,
+    }),
   }));
 }
 

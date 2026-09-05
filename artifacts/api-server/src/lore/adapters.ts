@@ -1064,7 +1064,11 @@ const fip: NowPlayingAdapter = async (config) => {
 
 // ---- Radio Browser ICY (now-playing, change-detection) ------------------
 
-import { fetchIcyMetadata, parseStreamTitle, isJunkMetadata } from "./icy.js";
+import {
+  fetchIcyMetadata,
+  parseStreamTitle,
+  isJunkMetadata,
+} from "./icy.js";
 import {
   db as _icyDb,
   stationsTable as _icyStationsTable,
@@ -1302,8 +1306,21 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
 
   if (!result.streamTitle) return null; // between tracks — no change to log
   const icyTrack = parseIcyNowPlaying(result.streamTitle);
-  if (!ntsLiveResult) return icyTrack;
-  return mergeNtsIcyTrackWithLiveShow(icyTrack, await ntsLiveResult);
+  const rawStreamTitle = result.streamTitle.trim().slice(0, 2_048);
+  const parsedObservation = parseStreamTitle(rawStreamTitle);
+  const observed: NowPlayingRaw | null = icyTrack
+    ? icyTrack
+    : rawStreamTitle
+      ? {
+          rawArtist: parsedObservation?.rawArtist ?? "",
+          rawTitle: parsedObservation?.rawTitle ?? rawStreamTitle,
+          icyStreamTitle: rawStreamTitle,
+        }
+      : null;
+  if (!ntsLiveResult) return observed;
+  return icyTrack
+    ? mergeNtsIcyTrackWithLiveShow(icyTrack, await ntsLiveResult)
+    : observed;
 };
 
 // ---- Radiojar (now-playing, change-detection) ---------------------------

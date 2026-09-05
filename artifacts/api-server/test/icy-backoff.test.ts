@@ -41,7 +41,7 @@ vi.mock("../src/lore/icy.js", () => ({
     const parts = s.split(" - ");
     return parts.length >= 2
       ? { rawArtist: parts[0], rawTitle: parts[1] }
-      : { rawArtist: parts[0], rawTitle: parts[0] };
+      : { rawTitle: parts[0] };
   }),
   isJunkMetadata: vi.fn(() => false),
 }));
@@ -115,6 +115,28 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("ICY error-backoff gate", () => {
+  it("returns title-only metadata for observational retention without inventing an artist", async () => {
+    const adapter = getNowPlayingAdapter("radio_browser_icy");
+    (mockDb.select as ReturnType<typeof vi.fn>)
+      .mockReturnValue(mockSelectRow({
+        icyStatus: "active",
+        consecutiveErrors: 0,
+        stationId: null,
+      }));
+    (mockDb.update as ReturnType<typeof vi.fn>).mockReturnValue(mockUpdate());
+    mockFetchIcy.mockResolvedValue({
+      ok: true,
+      streamTitle: "Sounds of Survivance with Tory J",
+      icyMetaint: 8192,
+    });
+
+    await expect(adapter!(ADAPTER_CONFIG)).resolves.toEqual({
+      rawArtist: "",
+      rawTitle: "Sounds of Survivance with Tory J",
+      icyStreamTitle: "Sounds of Survivance with Tory J",
+    });
+  });
+
   it("skips fetchIcyMetadata within the 30-minute window after first probe", async () => {
     const adapter = getNowPlayingAdapter("radio_browser_icy");
     expect(adapter).not.toBeNull();

@@ -9,11 +9,15 @@ import {
   transcriptClaimsTable,
   scheduleComparisonsTable,
   operatorLabelsTable,
+  icyMetadataCandidatesTable,
   stationsTable,
 } from "@workspace/db";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 type Snapshot = Record<string, unknown>;
+const ICY_CANDIDATE_RETENTION_DAYS = 90;
+const ICY_CANDIDATE_PRUNE_INTERVAL_MS = 6 * 60 * 60_000;
+let nextIcyCandidatePruneAt = 0;
 type ImmutableEvidence = {
   stationId?: number | null;
   idempotencyKey: string;
@@ -44,6 +48,68 @@ function safeValues<T extends ImmutableEvidence>(values: T): T {
 
 export async function appendBroadcastTimelineEvent(values: ImmutableEvidence & { eventType: string; occurredAt: Date }) {
   await db.insert(broadcastTimelineEventsTable).values(safeValues(values)).onConflictDoNothing({ target: broadcastTimelineEventsTable.idempotencyKey });
+}
+
+export async function appendIcyMetadataCandidate(values: {
+  stationId: number;
+  source: string;
+  rawStreamTitle: string;
+  observedAt: Date;
+  bucketStartedAt: Date;
+  candidateClass: string;
+  rejectionReason: string;
+  parsedArtist?: string | null;
+  parsedTitle?: string | null;
+  provenance: Snapshot;
+}): Promise<void> {
+  await db.insert(icyMetadataCandidatesTable).values(values).onConflictDoNothing({
+    target: [
+      icyMetadataCandidatesTable.stationId,
+      icyMetadataCandidatesTable.source,
+      icyMetadataCandidatesTable.rawStreamTitle,
+      icyMetadataCandidatesTable.bucketStartedAt,
+    ],
+  });
+  const now = Date.now();
+  if (now >= nextIcyCandidatePruneAt) {
+    nextIcyCandidatePruneAt = now + ICY_CANDIDATE_PRUNE_INTERVAL_MS;
+    await db.delete(icyMetadataCandidatesTable).where(
+      sql`${icyMetadataCandidatesTable.observedAt} < now() - (${ICY_CANDIDATE_RETENTION_DAYS} * interval '1 day')`,
+    );
+  }
+}
+
+export async function getIcyMetadataCandidateHealth(windowDays = 30) {
+  const since = sql`now() - (${windowDays} * interval '1 day')`;
+  const metrics = await db.execute<{
+    candidate_class: string;
+    stations: number;
+    candidates: number;
+    latest_observation: Date;
+  }>(sql`
+    SELECT candidate_class,
+      count(DISTINCT station_id)::int AS stations,
+      count(*)::int AS candidates,
+      max(observed_at) AS latest_observation
+    FROM ${icyMetadataCandidatesTable}
+    WHERE observed_at >= ${since}
+    GROUP BY candidate_class
+    ORDER BY candidates DESC
+  `);
+  const recent = await db.select({
+    stationId: icyMetadataCandidatesTable.stationId,
+    stationName: stationsTable.name,
+    source: icyMetadataCandidatesTable.source,
+    rawStreamTitle: icyMetadataCandidatesTable.rawStreamTitle,
+    observedAt: icyMetadataCandidatesTable.observedAt,
+    candidateClass: icyMetadataCandidatesTable.candidateClass,
+    rejectionReason: icyMetadataCandidatesTable.rejectionReason,
+  }).from(icyMetadataCandidatesTable)
+    .innerJoin(stationsTable, eq(stationsTable.id, icyMetadataCandidatesTable.stationId))
+    .where(sql`${icyMetadataCandidatesTable.observedAt} >= ${since}`)
+    .orderBy(desc(icyMetadataCandidatesTable.observedAt))
+    .limit(50);
+  return { windowDays, metrics: metrics.rows, recent };
 }
 export async function appendBoundaryPrediction(values: ImmutableEvidence & { predictedAt: Date; predictedBoundaryAt?: Date | null }) {
   const inserted = await db.insert(boundaryPredictionsTable)

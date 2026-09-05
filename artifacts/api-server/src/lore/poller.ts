@@ -12,7 +12,10 @@ import {
   type IcyTransitionBracket,
 } from "./icy-watcher.js";
 import { parseStreamTitle } from "./icy.js";
-import { recordIcyMetadataObservation } from "./broadcast-timeline.js";
+import {
+  recordIcyMetadataCandidate,
+  recordIcyMetadataObservation,
+} from "./broadcast-timeline.js";
 import { stopSpeechShadowOrchestrator } from "./speech-shadow-orchestrator.js";
 import type { HistoryAdapter, RawSpin, NowPlayingRaw } from "./types.js";
 import {
@@ -226,6 +229,13 @@ function startStationWatcher(station: Station): boolean {
       streamTitle: observation.streamTitle,
       observedAt: observation.observedAt,
       monotonicMs: observation.monotonicMs,
+    });
+    recordIcyMetadataCandidate({
+      stationId: station.id,
+      source: station.nowPlayingSource ?? "radio_browser_icy",
+      streamTitle: observation.streamTitle,
+      observedAt: observation.observedAt,
+      transport: "watcher",
     });
     const parsed = observation.streamTitle ? parseStreamTitle(observation.streamTitle) : null;
     const quality = classifyMetadataQuality(
@@ -697,6 +707,15 @@ async function pollStationMode(
       return;
     }
     const quality = classifyMetadataQuality(np.rawArtist, np.rawTitle);
+    if (source === "radio_browser_icy" && np.icyStreamTitle) {
+      recordIcyMetadataCandidate({
+        stationId: station.id,
+        source,
+        streamTitle: np.icyStreamTitle,
+        observedAt: np.metadataObservedAt ?? new Date(),
+        transport: "poller",
+      });
+    }
     if (quality.outcome !== "usable_pair") {
       await recordMetadataQuality({
         stationId: station.id,

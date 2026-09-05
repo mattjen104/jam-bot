@@ -58,4 +58,37 @@ export async function applyObservabilityMigration(): Promise<void> {
     ON broadcast_timeline_events (station_id, occurred_at DESC)
     WHERE event_type = 'speech_ends_then_sustained_music'
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS icy_metadata_candidates (
+      id serial PRIMARY KEY,
+      station_id integer NOT NULL REFERENCES stations(id) ON DELETE CASCADE,
+      source text NOT NULL,
+      raw_stream_title text NOT NULL,
+      observed_at timestamptz NOT NULL,
+      bucket_started_at timestamptz NOT NULL,
+      candidate_class text NOT NULL,
+      rejection_reason text NOT NULL,
+      parsed_artist text,
+      parsed_title text,
+      provenance jsonb NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS icy_metadata_candidates_dedup_uq
+    ON icy_metadata_candidates (station_id, source, raw_stream_title, bucket_started_at)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS icy_metadata_candidates_station_time_idx
+    ON icy_metadata_candidates (station_id, observed_at DESC)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS icy_metadata_candidates_class_time_idx
+    ON icy_metadata_candidates (candidate_class, observed_at DESC)
+  `);
+  // Candidate text is operational review data, not an immutable evidence ledger.
+  await db.execute(sql`
+    DELETE FROM icy_metadata_candidates
+    WHERE observed_at < now() - interval '90 days'
+  `);
 }

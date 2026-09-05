@@ -158,6 +158,7 @@ import {
 import { triggerBeatoReset } from "../../lore/beato.js";
 import { getPlaybackHealth } from "../../lore/playback-health.js";
 import {
+  getIcyMetadataCandidateHealth,
   getObservabilityHealth,
   listObservabilityEvidence,
   type ObservabilityKind,
@@ -225,6 +226,7 @@ router.use((req, res, next) => {
 router.get("/admin/observability/health", h(async (_req, res) => {
   return res.json({
     metrics: await getObservabilityHealth(),
+    icyMetadataCandidates: await getIcyMetadataCandidateHealth(),
     speechPilot: await getSpeechPilotAdminStatus(),
   });
 }));

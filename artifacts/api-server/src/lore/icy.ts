@@ -182,15 +182,27 @@ export function parseStreamTitle(streamTitle: string): ParsedStreamTitle | null 
 }
 
 export interface ClassifiedIcyStreamTitle {
+  raw: string | null;
   artist: string | null;
   title: string | null;
   stationLabel: string | null;
   usable: boolean;
+  candidateClass:
+    | "blank"
+    | "track"
+    | "program_or_person"
+    | "station_or_archive"
+    | "transport_junk"
+    | "non_music_pair";
+  rejectionReason: string | null;
 }
 
+export const MAX_RETAINED_ICY_STREAM_TITLE_LENGTH = 2_048;
 const BLANK_STREAM_TITLE_RE = /^[\s\-–—|/\\:;,.·_]*$/u;
 const STATION_OR_ARCHIVE_LABEL_RE =
   /\b(?:station\s*(?:id|identification)|legal\s+id|archive(?:d)?|archivio|archivo|listen\s+back|previously\s+recorded)\b/i;
+const OBVIOUS_TRANSPORT_JUNK_RE =
+  /^(?:\d+|[A-Z][A-Z0-9_-]*_[A-Z0-9_-]*|https?:\/\/\S+)$/;
 
 /**
  * Classify one observed ICY StreamTitle for discovery/review.
@@ -202,9 +214,17 @@ const STATION_OR_ARCHIVE_LABEL_RE =
 export function classifyIcyStreamTitle(
   streamTitle: string | null,
 ): ClassifiedIcyStreamTitle {
-  const raw = streamTitle?.trim() ?? "";
+  const raw = streamTitle?.trim().slice(0, MAX_RETAINED_ICY_STREAM_TITLE_LENGTH) ?? "";
   if (!raw || BLANK_STREAM_TITLE_RE.test(raw)) {
-    return { artist: null, title: null, stationLabel: null, usable: false };
+    return {
+      raw: raw || null,
+      artist: null,
+      title: null,
+      stationLabel: null,
+      usable: false,
+      candidateClass: "blank",
+      rejectionReason: "blank",
+    };
   }
 
   const parsed = parseStreamTitle(raw);
@@ -217,14 +237,43 @@ export function classifyIcyStreamTitle(
     !isJunkMetadata(artist ?? "", title ?? "");
 
   if (usable) {
-    return { artist, title, stationLabel: null, usable: true };
+    return {
+      raw,
+      artist,
+      title,
+      stationLabel: null,
+      usable: true,
+      candidateClass: "track",
+      rejectionReason: null,
+    };
   }
 
+  const transportJunk =
+    OBVIOUS_TRANSPORT_JUNK_RE.test(raw) ||
+    AUDIO_EXT_RE.test(raw) ||
+    isDomainLike(raw) ||
+    (raw.length >= 4 && countChar(raw, "\uFFFD") / raw.length >= 0.5);
+  const candidateClass = isStationOrArchiveLabel
+    ? "station_or_archive"
+    : transportJunk
+      ? "transport_junk"
+      : !artist
+        ? "program_or_person"
+        : "non_music_pair";
   return {
-    artist: null,
-    title: null,
-    stationLabel: raw,
+    raw,
+    artist,
+    title,
+    stationLabel: isStationOrArchiveLabel ? raw : null,
     usable: false,
+    candidateClass,
+    rejectionReason: isStationOrArchiveLabel
+      ? "station_or_archive_label"
+      : transportJunk
+        ? "transport_junk"
+        : !artist
+          ? "title_only"
+          : "junk_metadata",
   };
 }
 

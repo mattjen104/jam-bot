@@ -6,6 +6,7 @@ import {
   isJunkMetadata,
   isJunkArtistValue,
   stripLeadingDelimiter,
+  classifyIcyStreamTitle,
 } from "../src/lore/icy.js";
 
 // ---- parseIcyStreamTitle -------------------------------------------------
@@ -166,6 +167,45 @@ describe("parseStreamTitle", () => {
   it("returns null for empty string", () => {
     expect(parseStreamTitle("")).toBeNull();
     expect(parseStreamTitle("   ")).toBeNull();
+  });
+});
+
+describe("classifyIcyStreamTitle", () => {
+  it("keeps the existing track acceptance boundary", () => {
+    expect(classifyIcyStreamTitle("Beck - Heart Is A Drum")).toMatchObject({
+      raw: "Beck - Heart Is A Drum",
+      artist: "Beck",
+      title: "Heart Is A Drum",
+      usable: true,
+      candidateClass: "track",
+      rejectionReason: null,
+    });
+  });
+
+  it("classifies title-only program or person text without confirming identity", () => {
+    expect(classifyIcyStreamTitle("Sounds of Survivance with Tory J")).toMatchObject({
+      raw: "Sounds of Survivance with Tory J",
+      artist: null,
+      title: "Sounds of Survivance with Tory J",
+      usable: false,
+      candidateClass: "program_or_person",
+      rejectionReason: "title_only",
+    });
+  });
+
+  it("separates archive labels and transport junk from useful candidates", () => {
+    expect(classifyIcyStreamTitle("Previously recorded archive")).toMatchObject({
+      candidateClass: "station_or_archive",
+      rejectionReason: "station_or_archive_label",
+    });
+    expect(classifyIcyStreamTitle("https://station.example")).toMatchObject({
+      candidateClass: "transport_junk",
+      rejectionReason: "transport_junk",
+    });
+    expect(classifyIcyStreamTitle("   ")).toMatchObject({
+      candidateClass: "blank",
+      rejectionReason: "blank",
+    });
   });
 });
 

@@ -7,6 +7,8 @@
 export interface NowPlayingRaw {
   rawArtist: string;
   rawTitle: string;
+  /** Lossless bounded ICY value for observational candidate retention only. */
+  icyStreamTitle?: string;
   album?: string;
   artworkUrl?: string;
   /** MusicBrainz Recording ID, when the source provides one (e.g. KEXP). */

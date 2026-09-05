@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveListenerBroadcastAdvisory,
   LISTENER_BROADCAST_ADVISORY_TTL_MS,
+  buildIcyMetadataCandidate,
 } from "../../src/lore/broadcast-timeline.js";
 
 describe("listener broadcast advisory", () => {
@@ -41,5 +42,33 @@ describe("listener broadcast advisory", () => {
       capture: { outcome: "speech", occurredAt },
       now: new Date(occurredAt.getTime() + LISTENER_BROADCAST_ADVISORY_TTL_MS),
     })).toBeNull();
+  });
+});
+
+describe("ICY metadata candidate retention", () => {
+  const observedAt = new Date("2026-09-05T12:07:31.000Z");
+
+  it("retains unconfirmed program/person candidates in a stable time bucket", () => {
+    expect(buildIcyMetadataCandidate(
+      "Sounds of Survivance with Tory J",
+      observedAt,
+    )).toEqual({
+      rawStreamTitle: "Sounds of Survivance with Tory J",
+      candidateClass: "program_or_person",
+      rejectionReason: "title_only",
+      parsedArtist: null,
+      parsedTitle: "Sounds of Survivance with Tory J",
+      bucketStartedAt: new Date("2026-09-05T12:00:00.000Z"),
+    });
+  });
+
+  it("never creates candidate records for tracks or blank metadata", () => {
+    expect(buildIcyMetadataCandidate("Beck - Heart Is A Drum", observedAt)).toBeNull();
+    expect(buildIcyMetadataCandidate("", observedAt)).toBeNull();
+  });
+
+  it("bounds retained raw metadata", () => {
+    const candidate = buildIcyMetadataCandidate("x".repeat(3_000), observedAt);
+    expect(candidate?.rawStreamTitle).toHaveLength(2_048);
   });
 });

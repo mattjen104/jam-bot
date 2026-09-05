@@ -3774,6 +3774,34 @@ export const broadcastTimelineEventsTable = pgTable(
   ],
 );
 
+/**
+ * Bounded, observational ICY values rejected from the music path. These are
+ * candidates for later review, never confirmed show/DJ identity.
+ */
+export const icyMetadataCandidatesTable = pgTable(
+  "icy_metadata_candidates",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").notNull().references(() => stationsTable.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    rawStreamTitle: text("raw_stream_title").notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    bucketStartedAt: timestamp("bucket_started_at", { withTimezone: true }).notNull(),
+    candidateClass: text("candidate_class").notNull(),
+    rejectionReason: text("rejection_reason").notNull(),
+    parsedArtist: text("parsed_artist"),
+    parsedTitle: text("parsed_title"),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("icy_metadata_candidates_dedup_uq")
+      .on(t.stationId, t.source, t.rawStreamTitle, t.bucketStartedAt),
+    index("icy_metadata_candidates_station_time_idx").on(t.stationId, t.observedAt.desc()),
+    index("icy_metadata_candidates_class_time_idx").on(t.candidateClass, t.observedAt.desc()),
+  ],
+);
+
 export const boundaryPredictionsTable = pgTable(
   "boundary_predictions",
   {

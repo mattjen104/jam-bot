@@ -40,6 +40,7 @@
 - [Poller overlapping-tick races](lore-poller-overlap-race.md) — a tight-interval nowPlaying source (e.g. 30s) can overlap ticks on a slow fetch; both read the same "last spin" and both insert — guard with a per-station in-flight Set, not just content dedup.
 - [Station removal FK order](lore-station-deletion-fk-order.md) — deleting a stations row needs spins, shows, AND radio_browser_stations cleared first (no cascade); discovery needs a name blocklist too or whitelisted tags let it reappear.
 - [Cheap ad detection via metadata](lore-ad-detection-metadata.md) — detect ad breaks from already-polled ICY/now-playing text (regex + same-field-filler heuristic) instead of audio analysis; run before dedup so repeats still count.
+- [ICY identity candidates](icy-identity-candidates.md) — retain rejected show/host-like ICY text across watcher and fallback paths, but never promote it to identity without independent evidence.
 - [Structured LLM extraction from scraped pages](schedule-scraper-llm-pattern.md) — injectable extractor seam (like askLLM), strip fences + field-validate every entry, distinguish null (failed) from [] (no data).
 - [Import job polling invalidation](import-job-poll-invalidation.md) — latest-import-job query stops polling on terminal status; every postStartImport call site must invalidate it in finally (incl. 409).
 - [Schedule live-first overnight carryover](schedule-overnight-carryover.md) — per-day schedule grids hide post-midnight tails: live detection needs a yesterday-slot carryover check, not just same-day isSlotLive.
@@ -66,7 +67,6 @@
 - [Import Phase 3 negative cache on MB 503](import-negative-cache-503.md) — MB 503 errors must not write negative cache; use resolveErrored flag to guard the else-if branch.
 - [Canadian campus radio ICY fix](canadian-stations-icy-fix.md) — CFUV/CHMR/CISM/CJSR/CKCU/CKUT not on Spinitron; need radio_browser_icy + favorite=true (mux reads empty status.xsl; only watcher reads inline ICY metadata).
 - [ICY watcher startup failure limit](icy-watcher-startup-failure.md) — FAILURE_LIMIT=5 / 10min caused permanent fallback during boot (mux probes 400+ hosts concurrently); raised to 12/30min + 15s timeout so startup contention doesn't trigger permanent fallback.
-- [Dial crossing computation — three gaps](dial-crossing-gaps.md) — (1) recent-spins API capped at 8/station (raise to 80, chip strip already slices client-side); (2) artistCrossings excluded from station-level sum; (3) live artist-hit not checked in reason() rung 1 (add rung 1.5 for currentTrack.isArtistHit).
 - [Crossings soft-artist array bottleneck](crossings-soft-artist-query.md) — passing ~1500 unresolved artist names as a SQL literal array to ANY() caused 20s+ query; replace with a SQL subquery so Postgres plans a hash-join.
 - [Library API total count](library-total-count.md) — GET /api/me/library omits total on pages 2+; run COUNT(*) only on first page (cursor IS NULL) and spread into response; client reads keptData.pages[0].total.
 - [Library removed/active state](library-removed-state.md) — removed_at IS NULL = active on both library tables; no central predicate, every taste query filters explicitly; deselect never unsaves on Spotify.
@@ -88,7 +88,6 @@
 - [Test-suite migration DDL deadlocks](test-migration-deadlocks.md) — migrations run once in globalSetup only; mid-suite constraint-swap DDL deadlocks parallel workers; advisory-lock the migration for concurrent boots.
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
-- [Crossings merge-splice failures](crossings-route-merge-splice.md) — merges can duplicate handlers/tests or truncate handler tails; grep duplicate titles and brace-check the route.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
 - [Lore test provider drift](lore-test-provider-drift.md) — new react-query hooks in shared components break provider-less tests; fix via meHooks/api-client barrel mocks, not QueryClientProvider wrapping.
 - [Lore two-layer typography](lore-two-layer-typography.md) — Signifier voice vs system-sans interface; home is Nebula Sans with Semibold headings; sizes still use the 3-token scale.
@@ -117,7 +116,6 @@
 - [Track expiry advisory signal](track-expiry-advisory.md) — likely-expiring estimate never swaps the displayed track, only schedules one boundary re-check; lives on the plain-JSON fast lane, not orval payloads.
 - [Native checkboxes invisible on dark mobile panels](native-checkbox-dark-mobile.md) — appearance:none + custom border/check required; computed styles lie, verify via screenshot.
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
-- [Crossing-positive filter test fallout](crossing-positive-filter-tests.md) — default-on filter hides zero-crossing fixtures; pin lore:radioMode or lore:crossingScope in unrelated specs.
 - [Radio duck/restore contract](radio-duck-contract.md) — duck writes element volume only; setVolume-while-ducked updates the saved target; BOTH ride-start paths restore before pauseRadio; hand-written useRadioPlayer mocks break on new methods.
 - [Global scan test fixtures](global-scan-test-fixtures.md) — shared-DB background-job tests assert fixture effects and relative batch invariants, never absolute global totals.
 - [Blended first-play cache compatibility](blended-first-play-cache.md) — global/blended Dial aggregates must evolve with personal ones; reject legacy blended cache rows missing new score fields.
@@ -133,8 +131,6 @@
 - [Library release metadata gaps](library-release-metadata-gaps.md) — saved recordings may lack release-group rows; hydrate missing album identity in rate-limited MB batches and derive CAA art.
 - [Crossing cover fallback](crossing-cover-fallback.md) — exact crossed crate tracks may have artwork but no release-group bridge; never suppress covers solely because album identity is absent.
 - [Radio hero axis model](radio-hero-axis-model.md) — four compact station rows stay visible; identity, now-playing, crossing covers, and controls read left-to-right.
-- [Minimal radio crossing fixtures](minimal-radio-crossing-fixtures.md) — front-door fixtures need both a live hit and server crossing aggregates for Lifetime mode.
-- [Minimal radio first-play previews](minimal-radio-first-play-previews.md) — station cards use the existing station-filtered history read model for first-play art; keep aggregate lifetime counts separate.
 - [Apple jam room protocol](apple-jam-room-protocol.md) — snapshots and ordered events commit atomically; short room codes are private capabilities, while Apple authorization always stays browser-local.
 - [Resolver cache versions](resolver-cache-versions.md) — text resolver changes need a new key namespace; keep old rows for audit and share one bounded variant policy across live and replay.
 - [Station history source separation](station-history-source-separation.md) — published archives may differ from live metadata; configure history independently and never share their cursors.
