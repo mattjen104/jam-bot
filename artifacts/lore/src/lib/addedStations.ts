@@ -24,6 +24,7 @@
  */
 import type { Station } from "@workspace/api-client-react";
 import { categoryForTags } from "./dialCategories";
+import { followStation, unfollowStation } from "./stationFollows";
 
 export const ADDED_STATIONS_LS_KEY = "lore_added_stations";
 export const PERSONAL_STATION_SLUG_PREFIX = "rb-";
@@ -107,10 +108,13 @@ function writeAddedStations(next: AddedStation[]): void {
 export function addAddedStation(station: AddedStation): AddedStation[] {
   const current = readAddedStations();
   if (current.some((s) => s.radioBrowserUuid === station.radioBrowserUuid)) {
+    followStation(personalStationSlug(station.radioBrowserUuid));
     return current;
   }
   const next = [...current, station];
   writeAddedStations(next);
+  // Adding a directory station is also an explicit listener follow.
+  followStation(personalStationSlug(station.radioBrowserUuid));
   return next;
 }
 
@@ -120,6 +124,8 @@ export function removeAddedStation(uuid: string): AddedStation[] {
   if (!current.some((s) => s.radioBrowserUuid === uuid)) return current;
   const next = current.filter((s) => s.radioBrowserUuid !== uuid);
   writeAddedStations(next);
+  // Removing it from My stations also removes its device-local follow.
+  unfollowStation(personalStationSlug(uuid));
   return next;
 }
 

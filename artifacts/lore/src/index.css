@@ -3144,6 +3144,11 @@
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 0.45rem;
 }
+.scan-session__station-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+}
 .scan-session__station-list button {
   display: grid;
   gap: 0.15rem;
@@ -3155,6 +3160,12 @@
   background: rgb(255 255 255 / 3%);
   text-align: left;
   cursor: pointer;
+}
+.scan-session__station-list .scan-session__follow {
+  align-content: center;
+  padding-inline: 0.55rem;
+  color: #b7d99a;
+  font-size: 0.72rem;
 }
 .scan-session__station-list button[aria-pressed="true"] {
   border-color: #b7d99a;

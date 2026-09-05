@@ -22,6 +22,7 @@ import { useExplore, type ExploreCandidate, type ExploreMode } from "../hooks/us
 import { useDialData, type DialStation } from "../hooks/useDialData";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { usePlayer } from "../player/PlayerProvider";
+import { useStationFollows } from "../hooks/useStationFollows";
 
 const MODES: Array<{
   mode: ExploreMode;
@@ -94,6 +95,7 @@ function ExploreSurface({ queryString }: { queryString: string }) {
     deferEnrichment: true,
   });
   const { radio } = usePlayer();
+  const { isFollowing, toggleFollow } = useStationFollows();
 
   const setExplore = (next: URLSearchParams) => {
     setLocation(`/explore?${next.toString()}`);
@@ -298,6 +300,8 @@ function ExploreSurface({ queryString }: { queryString: string }) {
             dialStations={dialStations}
             onTune={tune}
             onPivot={pivot}
+             isFollowing={isFollowing}
+             onToggleFollow={toggleFollow}
           />
         ) : null}
       </div>
@@ -319,11 +323,15 @@ function ExploreResults({
   dialStations,
   onTune,
   onPivot,
+  isFollowing,
+  onToggleFollow,
 }: {
   data: NonNullable<ReturnType<typeof useExplore>["data"]>;
   dialStations: DialStation[];
   onTune: (candidate: ExploreCandidate) => void;
   onPivot: (mode: ExploreMode, value?: string) => void;
+  isFollowing: (slug: string) => boolean;
+  onToggleFollow: (slug: string) => void;
 }) {
   const sections = [
     { key: "live", title: "Live radio", description: "Playable broadcasts matching this path right now.", items: data.onAirNow },
@@ -356,6 +364,8 @@ function ExploreResults({
                   dialStation={dialStations.find(({ station }) => station.slug === candidate.station.slug)}
                   onTune={() => onTune(candidate)}
                   onPivot={onPivot}
+                   following={isFollowing(candidate.station.slug)}
+                   onToggleFollow={() => onToggleFollow(candidate.station.slug)}
                   kind={section.key}
                 />
               ))}
@@ -379,12 +389,16 @@ function CandidateCard({
   onTune,
   onPivot,
   kind,
+  following,
+  onToggleFollow,
 }: {
   candidate: ExploreCandidate;
   dialStation?: DialStation;
   onTune: () => void;
   onPivot: (mode: ExploreMode, value?: string) => void;
   kind: "live" | "upcoming" | "known" | "stations";
+  following: boolean;
+  onToggleFollow: () => void;
 }) {
   const { radio } = usePlayer();
   const { station, show, evidence, timing } = candidate;
@@ -473,6 +487,15 @@ function CandidateCard({
             Station <ArrowRight aria-hidden="true" size={12} />
           </Link>
         )}
+        <button
+          type="button"
+          className="explore-card__link"
+          onClick={onToggleFollow}
+          aria-pressed={following}
+          data-testid={`button-follow-${station.slug}`}
+        >
+          {following ? "Following" : "Follow"}
+        </button>
       </footer>
     </article>
   );

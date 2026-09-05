@@ -67,7 +67,6 @@ import { runDate, clockTime } from "../lib/format";
 // ---------------------------------------------------------------------------
 import {
   useDialData,
-  readPins,
   normalizeDjName,
   liveIdentityKey,
   type DialStation,
@@ -77,6 +76,7 @@ import {
   type OnboardingArtistSuggestion,
   type DialDisplayMode,
 } from "../hooks/useDialData";
+import { useStationFollows } from "../hooks/useStationFollows";
 import {
   FrontDoorRow,
   PopCrossingLine,
@@ -1446,6 +1446,7 @@ function _OfflineRow({
 
 
 export function DialView() {
+  const { followedSlugs, isFollowing, toggleFollow } = useStationFollows();
   const [location, navigate] = useLocation();
   const stationFilterSlug = useMemo(() => {
     const routeSearch = location.includes("?") ? `?${location.split("?")[1]}` : "";
@@ -1764,7 +1765,6 @@ export function DialView() {
   // --- attribution-ladder sort (spec §4) ---
   // One live entry per stream (show and station are 1:1 at any instant — §5)
   const sortedRows = useMemo(() => {
-    const pins = readPins();
     return [...stations]
       .filter((ds) => ds.isLive || ds.station.slug === stationFilterSlug)
       .filter((ds) => !stationFilterSlug || ds.station.slug === stationFilterSlug)
@@ -1781,7 +1781,7 @@ export function DialView() {
           ? { ...show, djName: effectiveDjName }
           : show;
         const rz = reason(attributionSafeShow, ds.crossings, ds.artistCrossings, crossingSourceMode);
-        const isPinned = pins.has(ds.station.slug);
+        const isPinned = followedSlugs.has(ds.station.slug.toLowerCase());
         return { ds, show: attributionSafeShow, rz, effectiveDjName, isPinned };
       })
       .sort((a, b) => {
@@ -1791,6 +1791,10 @@ export function DialView() {
         const aSkip = skipped.has(a.ds.station.slug) ? 1 : 0;
         const bSkip = skipped.has(b.ds.station.slug) ? 1 : 0;
         if (aSkip !== bSkip) return aSkip - bSkip;
+        // Listener follows are the strongest personal station preference.
+        const aFollow = a.isPinned ? 0 : 1;
+        const bFollow = b.isPinned ? 0 : 1;
+        if (aFollow !== bFollow) return aFollow - bFollow;
         // 1. Live crossing (rung 1) floats to the very top
         const ac = a.rz.r === 1 ? 0 : 1;
         const bc = b.rz.r === 1 ? 0 : 1;
@@ -1818,7 +1822,7 @@ export function DialView() {
         if (sortR(a.rz.r) !== sortR(b.rz.r)) return sortR(a.rz.r) - sortR(b.rz.r);
         return a.ds.station.name.localeCompare(b.ds.station.name);
       });
-  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric, skipped, stationFilterSlug]);
+  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric, skipped, stationFilterSlug, followedSlugs]);
 
   // Crossing evidence drives Explore's cover rail and header status.
   const withReason = useMemo(
@@ -2554,6 +2558,13 @@ export function DialView() {
     () => new Set(sortedRows.filter((r) => r.ds.isLive).map((r) => r.ds.station.slug)),
     [sortedRows],
   );
+  const scanNowPlayingBySlug = useMemo(
+    () => new Map(sortedRows.flatMap((row) => {
+      const track = row.ds.liveTrack ?? row.show?.currentTrack ?? null;
+      return track ? [[row.ds.station.slug, track] as const] : [];
+    })),
+    [sortedRows],
+  );
   const tuneStationBySlug = useCallback(
     (slug: string) => {
       const row = sortedRows.find((r) => r.ds.station.slug === slug);
@@ -2572,6 +2583,12 @@ export function DialView() {
           filter={scanSessionFilter}
           onSourceChange={setScanSessionSource}
           onFilterChange={setScanSessionFilter}
+          liveStations={sortedRows.map((row) => row.ds.station)}
+          liveNowPlayingBySlug={scanNowPlayingBySlug}
+          activeStationSlug={radio.station?.slug ?? null}
+          onTuneStation={tuneStationBySlug}
+          isFollowingStation={isFollowing}
+          onToggleFollowStation={toggleFollow}
           onClose={() => setScanSessionOpen(false)}
         />
       )}

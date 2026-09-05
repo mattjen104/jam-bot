@@ -25,6 +25,8 @@ export interface ScanSessionProps {
   liveNowPlayingBySlug?: Map<string, DialSpin>;
   activeStationSlug?: string | null;
   onTuneStation?: (slug: string) => void;
+  isFollowingStation?: (slug: string) => boolean;
+  onToggleFollowStation?: (slug: string) => void;
   onClose: () => void;
 }
 
@@ -51,6 +53,8 @@ export function ScanSession({
   liveNowPlayingBySlug = new Map(),
   activeStationSlug = null,
   onTuneStation,
+  isFollowingStation,
+  onToggleFollowStation,
   onClose,
 }: ScanSessionProps) {
   const { scan, ride } = usePlayer();
@@ -157,15 +161,27 @@ export function ScanSession({
                       const now = liveNowPlayingBySlug.get(station.slug);
                       const isActive = activeStationSlug === station.slug;
                       return (
-                        <button
-                          key={station.slug}
-                          type="button"
-                          aria-pressed={isActive}
-                          onClick={() => onTuneStation(station.slug)}
-                        >
-                          <span>{station.name}</span>
-                          <small>{now?.artist ? `${now.artist} · ${now.title}` : "Quiet right now"}</small>
-                        </button>
+                        <div key={station.slug} className="scan-session__station-item">
+                          <button
+                            type="button"
+                            aria-pressed={isActive}
+                            onClick={() => onTuneStation(station.slug)}
+                          >
+                            <span>{station.name}</span>
+                            <small>{now?.artist ? `${now.artist} · ${now.title}` : "Quiet right now"}</small>
+                          </button>
+                          {isFollowingStation && onToggleFollowStation ? (
+                            <button
+                              type="button"
+                              className="scan-session__follow"
+                              aria-pressed={isFollowingStation(station.slug)}
+                              onClick={() => onToggleFollowStation(station.slug)}
+                              data-testid={`button-follow-${station.slug}`}
+                            >
+                              {isFollowingStation(station.slug) ? "Following" : "Follow"}
+                            </button>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>

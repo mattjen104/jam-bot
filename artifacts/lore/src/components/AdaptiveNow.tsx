@@ -4,7 +4,7 @@ import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationCategory } from "../lib/dialCategories";
 import { STATION_CATEGORY_DEFINITIONS } from "../lib/dialCategories";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
-import { readPins, togglePin } from "../hooks/useDialData";
+import { useStationFollows } from "../hooks/useStationFollows";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import { stationCrossingSentence } from "../lib/stationCrossingCopy";
@@ -70,6 +70,7 @@ function Row({
   onInspect: (row: DialLaneRow) => void;
 }) {
   const { radio } = usePlayer();
+  const { isFollowing, toggleFollow } = useStationFollows();
   const track = trackFor(row);
   const playable = resolvePlaybackSource(row.ds.station) != null;
   const active = radio.station?.slug === row.ds.station.slug;
@@ -119,6 +120,15 @@ function Row({
           </span>
         </button>
       </div>
+      <button
+        type="button"
+        className="adaptive-now__active"
+        onClick={() => toggleFollow(row.ds.station.slug)}
+        aria-pressed={isFollowing(row.ds.station.slug)}
+        data-testid={`button-follow-${row.ds.station.slug}`}
+      >
+        {isFollowing(row.ds.station.slug) ? "Following" : "Follow"}
+      </button>
       {active ? <span className="adaptive-now__active" aria-label="Current station">On air</span> : null}
     </article>
   );
@@ -196,7 +206,7 @@ export function AdaptiveNow({
   const [expanded, setExpanded] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [inspected, setInspected] = useState<DialLaneRow | null>(null);
-  const [followedSlugs, setFollowedSlugs] = useState<Set<string>>(() => readPins());
+  const { isFollowing, toggleFollow } = useStationFollows();
   const copy = adaptiveListeningCopy(state);
   const progress = importProgressLabel(importJob);
   const visibleRows = useMemo(() => {
@@ -285,12 +295,8 @@ export function AdaptiveNow({
       {inspected ? (
         <StationDetail
           row={inspected}
-          followed={followedSlugs.has(inspected.ds.station.slug)}
-          onToggleFollow={() => {
-            const slug = inspected.ds.station.slug;
-            togglePin(slug);
-            setFollowedSlugs(readPins());
-          }}
+          followed={isFollowing(inspected.ds.station.slug)}
+          onToggleFollow={() => toggleFollow(inspected.ds.station.slug)}
           onClose={() => setInspected(null)}
         />
       ) : null}

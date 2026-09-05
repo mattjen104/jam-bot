@@ -13,6 +13,7 @@ import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
 import { WeeklyScheduleGrid } from "../components/WeeklyScheduleGrid";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ArrowUpRight, CalendarDays, Ghost, Radio, Users } from "lucide-react";
+import { useStationFollows } from "../hooks/useStationFollows";
 
 type Tab = "archive" | "schedule";
 
@@ -29,6 +30,7 @@ export default function StationArchive() {
   const { data: scheduleData, isLoading: scheduleLoading } = useGetStationUpcomingSchedule(slug);
 
   const [activeTab, setActiveTab] = useState<Tab>("archive");
+  const { isFollowing, toggleFollow } = useStationFollows();
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -64,6 +66,15 @@ export default function StationArchive() {
                   sharePath={`stations/${data.station.slug}`}
                   kind="station"
                 />
+                <button
+                  type="button"
+                  onClick={() => toggleFollow(data.station.slug)}
+                  aria-pressed={isFollowing(data.station.slug)}
+                  className="rounded-full border border-card-border px-4 py-2 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+                  data-testid={`button-follow-${data.station.slug}`}
+                >
+                  {isFollowing(data.station.slug) ? "Following" : "Follow"}
+                </button>
               </div>
               <p className="mt-2 font-mono text-sm text-muted-foreground">
                 {data.runs.length} documented run{data.runs.length === 1 ? "" : "s"} ·

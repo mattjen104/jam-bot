@@ -162,6 +162,7 @@ export default function SplitHome() {
           </div>
           <nav className="front-door-jobs" aria-label="Listening jobs">
             <Link href="/explore">Explore</Link>
+            <Link href="/following">Following</Link>
             <Link href="/library">Stack</Link>
           </nav>
         </header>

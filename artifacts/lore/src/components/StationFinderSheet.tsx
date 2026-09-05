@@ -371,7 +371,7 @@ export function StationFinderSheet({ onClose }: StationFinderSheetProps) {
                         onClick={() => removeStation(s.radioBrowserUuid)}
                         aria-label={`Remove ${s.name} from my stations`}
                       >
-                        Remove
+                        Remove + unfollow
                       </button>
                     </div>
                   </li>

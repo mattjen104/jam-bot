@@ -156,3 +156,4 @@
 - [Local speech runtime portability](local-speech-runtime-portability.md) — use CPU-local models; fetch pinned streams without redirects before decoding; reject GPU-heavy dependency trees.
 - [Transcript identity grounding](transcript-identity-grounding.md) — exact words are not identity evidence; require an explicit role/program introduction and retain claimless speech.
 - [Local station location evidence](local-station-location-evidence.md) — ZIPs stay request-scoped; radius uses station-base evidence only and excludes unknown/suspect coordinates.
+- [Device-local station follows](device-local-station-follows.md) — listener follows unify curated and personal stations, but never affect editorial favorites, Library, or poller enrollment.
