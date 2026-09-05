@@ -21,7 +21,8 @@ type ExploreDbRow = Record<string, unknown> & {
   freshness_signal: ExploreCandidate["freshness"]; live: boolean;
   show_name: string | null; dj_name: string | null; start_time: string | null; end_time: string | null;
   upcoming_show_name: string | null; upcoming_dj_name: string | null;
-  upcoming_start_time: string | null; upcoming_end_time: string | null;
+  upcoming_starts_at: Date | string | null; upcoming_ends_at: Date | string | null;
+  known_show_name: string | null; known_dj_name: string | null; known_last_aired_at: Date | string | null;
 };
 
 export interface ExploreCandidate {
@@ -35,6 +36,7 @@ export interface ExploreCandidate {
   exactGenre: boolean;
   adjacentGenre: boolean;
   upcoming?: { name: string; djName: string | null; startsAt: string; endsAt: string } | null;
+  knownShow?: { name: string; djName: string | null; lastAiredAt: string } | null;
 }
 
 /** Pure, deliberately legible ordering shared by route tests. */
@@ -83,6 +85,7 @@ export function composeExplore(
 }
 
 router.get("/explore", h(async (req, res) => {
+  const toIso = (value: Date | string) => value instanceof Date ? value.toISOString() : new Date(value).toISOString();
   const mode = typeof req.query.mode === "string" ? req.query.mode : "";
   if (!MODES.has(mode)) return res.status(400).json({ code: "invalid_mode", error: "mode must be location, station, artist, genre, newness, or library-crossing." });
   const typedMode = mode as ExploreMode;
@@ -91,6 +94,7 @@ router.get("/explore", h(async (req, res) => {
   const station = typeof req.query.station === "string" ? req.query.station.trim() : "";
   const term = typeof req.query.q === "string" ? req.query.q.trim() : "";
   if (station.length > 100 || term.length > 100 || ((typedMode === "artist" || typedMode === "genre") && !term)) return res.status(400).json({ code: "invalid_constraint", error: "A bounded q is required for artist and genre modes." });
+  if (typedMode === "station" && !station) return res.status(400).json({ code: "invalid_station", error: "station mode requires a station slug." });
   const zip = typeof req.query.zip === "string" ? req.query.zip.trim() : "";
   const origin = zip ? resolveUsZip(zip) : null;
   if (typedMode === "location" && !origin) return res.status(400).json({ code: "invalid_zip", error: "location mode requires a known 5-digit US ZIP." });
@@ -113,7 +117,9 @@ router.get("/explore", h(async (req, res) => {
       SELECT s.*, ${artistPredicate} AS artist_count, ${crossingPredicate} AS crossing_count,
         live_slot.show_name, live_slot.dj_name, live_slot.start_time, live_slot.end_time,
         future_slot.show_name AS upcoming_show_name, future_slot.dj_name AS upcoming_dj_name,
-        future_slot.start_time AS upcoming_start_time, future_slot.end_time AS upcoming_end_time,
+        future_slot.starts_at AS upcoming_starts_at, future_slot.ends_at AS upcoming_ends_at,
+        known_slot.show_name AS known_show_name, known_slot.dj_name AS known_dj_name,
+        known_slot.last_aired_at AS known_last_aired_at,
         live_slot.show_name IS NOT NULL AS live
       FROM stations s
       LEFT JOIN LATERAL (
@@ -131,13 +137,67 @@ router.get("/explore", h(async (req, res) => {
         ORDER BY start_time DESC LIMIT 1
       ) live_slot ON true
       LEFT JOIN LATERAL (
-        SELECT show_name, dj_name, start_time, end_time FROM scraped_shows
-        WHERE station_id=s.id AND voided_at IS NULL
-          AND day_of_week=to_char(now() at time zone s.iana_timezone, 'Dy')
-          AND start_time > to_char(now() at time zone s.iana_timezone, 'HH24:MI')
-          AND end_time <> start_time
-        ORDER BY start_time ASC LIMIT 1
+        SELECT next_slot.show_name, next_slot.dj_name, next_slot.starts_at,
+          next_slot.starts_at + CASE
+            WHEN next_slot.end_time > next_slot.start_time
+              THEN next_slot.end_time::time - next_slot.start_time::time
+            ELSE interval '1 day' + next_slot.end_time::time - next_slot.start_time::time
+          END AS ends_at
+        FROM (
+          SELECT ss.show_name, ss.dj_name, ss.start_time, ss.end_time,
+            (
+              date_trunc('day', now() at time zone s.iana_timezone)
+              + (
+                (
+                  CASE ss.day_of_week
+                    WHEN 'Sun' THEN 0 WHEN 'Mon' THEN 1 WHEN 'Tue' THEN 2
+                    WHEN 'Wed' THEN 3 WHEN 'Thu' THEN 4 WHEN 'Fri' THEN 5
+                    WHEN 'Sat' THEN 6
+                  END
+                  - extract(dow from now() at time zone s.iana_timezone)::int + 7
+                ) % 7
+                + CASE
+                    WHEN ss.day_of_week=to_char(now() at time zone s.iana_timezone, 'Dy')
+                      AND ss.start_time <= to_char(now() at time zone s.iana_timezone, 'HH24:MI')
+                    THEN 7 ELSE 0
+                  END
+              ) * interval '1 day'
+              + ss.start_time::time
+            ) at time zone s.iana_timezone AS starts_at
+          FROM scraped_shows ss
+          WHERE ss.station_id=s.id AND ss.voided_at IS NULL AND ss.end_time <> ss.start_time
+        ) next_slot
+        ORDER BY next_slot.starts_at ASC LIMIT 1
       ) future_slot ON true
+      LEFT JOIN LATERAL (
+        SELECT sp.show_id
+        FROM spins sp
+        WHERE sp.station_id=s.id
+          AND sp.show_id IS NOT NULL
+          AND live_slot.show_name IS NOT NULL
+          AND sp.played_at >= (
+            date_trunc('day', now() at time zone s.iana_timezone)
+            + live_slot.start_time::time
+            - CASE
+                WHEN live_slot.end_time < live_slot.start_time
+                  AND to_char(now() at time zone s.iana_timezone, 'HH24:MI') < live_slot.end_time
+                THEN interval '1 day'
+                ELSE interval '0'
+              END
+          ) at time zone s.iana_timezone
+          AND sp.played_at <= now()
+        ORDER BY sp.played_at DESC, sp.id DESC
+        LIMIT 1
+      ) active_show ON true
+      LEFT JOIN LATERAL (
+        SELECT sh.name AS show_name, sh.dj_name, max(sp.played_at) AS last_aired_at
+        FROM shows sh
+        JOIN spins sp ON sp.show_id=sh.id
+        WHERE sh.station_id=s.id
+          AND sh.id IS DISTINCT FROM active_show.show_id
+        GROUP BY sh.id, sh.name, sh.dj_name
+        ORDER BY max(sp.played_at) DESC LIMIT 1
+      ) known_slot ON true
       WHERE s.active=true AND s.hidden=false ${station ? sql`AND s.slug=${station}` : sql``}
     ), ranked AS (
       SELECT *, row_number() over (partition by id order by live desc nulls last, start_time asc nulls last) rn FROM base
@@ -149,7 +209,7 @@ router.get("/explore", h(async (req, res) => {
     const query = term.toLowerCase();
     const exactGenre = typedMode === "genre" && top.some((g) => g.genre.toLowerCase() === query);
     const adjacentGenre = typedMode === "genre" && !exactGenre && top.some((g) => g.genre.toLowerCase().includes(query) || query.includes(g.genre.toLowerCase()));
-    return { station: { slug: r.slug, name: r.name, city: r.city, region: r.region, latitude: r.latitude, longitude: r.longitude }, show: r.live && r.show_name ? { name: r.show_name, djName: r.dj_name, startsAt: r.start_time, endsAt: r.end_time, live: true } : null, upcoming: r.upcoming_show_name && r.upcoming_start_time && r.upcoming_end_time ? { name: r.upcoming_show_name, djName: r.upcoming_dj_name, startsAt: r.upcoming_start_time, endsAt: r.upcoming_end_time } : null, recentProfile: r.recent_profile ?? null, freshness: r.freshness_signal ?? null, discoveryScore: r.discovery_score == null ? null : Number(r.discovery_score), artistCount: Number(r.artist_count), crossingCount: Number(r.crossing_count), exactGenre, adjacentGenre };
+    return { station: { slug: r.slug, name: r.name, city: r.city, region: r.region, latitude: r.latitude, longitude: r.longitude }, show: r.live && r.show_name ? { name: r.show_name, djName: r.dj_name, startsAt: r.start_time, endsAt: r.end_time, live: true } : null, upcoming: r.upcoming_show_name && r.upcoming_starts_at && r.upcoming_ends_at ? { name: r.upcoming_show_name, djName: r.upcoming_dj_name, startsAt: toIso(r.upcoming_starts_at), endsAt: toIso(r.upcoming_ends_at) } : null, knownShow: r.known_show_name && r.known_last_aired_at ? { name: r.known_show_name, djName: r.known_dj_name, lastAiredAt: toIso(r.known_last_aired_at) } : null, recentProfile: r.recent_profile ?? null, freshness: r.freshness_signal ?? null, discoveryScore: r.discovery_score == null ? null : Number(r.discovery_score), artistCount: Number(r.artist_count), crossingCount: Number(r.crossing_count), exactGenre, adjacentGenre };
   });
   const filtered = typedMode === "genre" ? candidates.filter((c) => c.exactGenre || c.adjacentGenre)
     : typedMode === "artist" ? candidates.filter((c) => c.artistCount > 0)
@@ -175,7 +235,23 @@ router.get("/explore", h(async (req, res) => {
       return at.localeCompare(bt) || a.station.name.localeCompare(b.station.name);
     })
     .slice(0, limitInput);
-  return res.json({ onAirNow, comingUp, showsToKnow: items.filter((i) => i.show), stations: items, metadata: { mode: typedMode, radiusMiles: typedMode === "location" ? radiusInput : null, partial: { schedules: candidates.some((c) => !c.show), genreEnrichment: candidates.some((c) => !c.recentProfile), coordinates: origin ? candidates.some((c) => c.station.latitude == null || c.station.longitude == null) : false, personalCrossings: typedMode === "library-crossing" && !user }, locality: origin ? { city: origin.city, region: origin.region, country: origin.country } : null } });
+  const showsToKnow = filtered
+    .flatMap((candidate) => {
+      if (!candidate.knownShow) return [];
+      return composeExplore([{
+        ...candidate,
+        show: {
+          name: candidate.knownShow.name,
+          djName: candidate.knownShow.djName,
+          startsAt: candidate.knownShow.lastAiredAt,
+          endsAt: null,
+          live: false,
+        },
+      }], typedMode, 1, origin);
+    })
+    .sort((a, b) => (b.timing?.startsAt ?? "").localeCompare(a.timing?.startsAt ?? ""))
+    .slice(0, limitInput);
+  return res.json({ onAirNow, comingUp, showsToKnow, stations: items, metadata: { mode: typedMode, radiusMiles: typedMode === "location" ? radiusInput : null, partial: { schedules: candidates.some((c) => !c.show), genreEnrichment: candidates.some((c) => !c.recentProfile), coordinates: origin ? candidates.some((c) => c.station.latitude == null || c.station.longitude == null) : false, personalCrossings: typedMode === "library-crossing" && !user }, locality: origin ? { city: origin.city, region: origin.region, country: origin.country } : null } });
 }));
 
 export default router;
