@@ -1,15 +1,27 @@
 ---
-name: Lore Feed/Stack unified interface migration
-description: Status + conventions for the Radio→Keep→Albums interface migration (nav labels, compact row grammar, what remains in later tasks)
+name: Lore Now/Explore/Library interface migration
+description: Status and conventions for Lore's three-section listener model, compact row grammar, and Library behavior.
 ---
 
-# Lore Feed/Stack unified interface migration
+# Lore Now/Explore/Library interface migration
+
+## Current product direction
+
+The listener-facing sections are **Now**, **Explore**, and **Library**:
+
+- **Now** is the live radio surface: what is playable at this moment, including followed and local stations.
+- **Explore** is the query-driven show finder: artist, genre, station, location, newness, and library-crossing entry paths converge on live and upcoming shows.
+- **Library** is intentionally kept music and its artist/album lenses. Followed stations, followed shows, and saved Explore presets do not become Library items.
+
+**Why:** live listening, discovery, and intentional music keeps are distinct jobs. Putting follows into Library confuses programming subscriptions with music ownership; making Explore a separate section allows multiple discovery lenses without overloading Now.
+
+**How to apply:** change listener-visible navigation labels while preserving internal section IDs until dependent CSS, gestures, and tests are deliberately migrated. Reuse live cards between Now and Explore, but make Explore cards show the active query reason.
 
 Spec lives at `artifacts/lore/INTERFACE_ARCHITECTURE.md` (approved); annotated
 grayscale mockup in the mockup-sandbox under `lore-grayscale/`.
 
-## Landed (first live slice)
-- Primary nav labels are now **Feed** (`/`) and **Stack** (`/library`) in both
+## Landed (earlier live slice)
+- Primary nav labels previously landed as **Feed** (`/`) and **Stack** (`/library`) in both
   SlimSectionNav variants (corner + bottom). Section ids/data-section hooks
   stay `lore`/`library` — CSS, gestures (five-tap sleep, long-press era/genre),
   and e2e locators key off those, so never rename the ids, only the labels.
