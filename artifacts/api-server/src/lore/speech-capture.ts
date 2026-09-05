@@ -369,16 +369,16 @@ export class LocalClassifierAdapter {
       const budget = exceedsBudget(result, this.config);
       if (budget) return { kind: "skipped", reason: budget };
       const parsed = JSON.parse(result.stdout) as LocalClassifierJson;
-      if (parsed.outcome && ["silence", "music", "speech", "speech_over_music"].includes(parsed.outcome)) {
-        return { kind: "classified", classification: parsed.outcome, intervals: [] };
-      }
-      if (parsed.outcome) return { kind: "failure", reason: "classifier returned unknown audio class" };
       const intervals = (parsed.segments ?? []).flatMap((segment) => {
         const kind = segment.label?.toLowerCase();
         return (kind === "silence" || kind === "music" || kind === "speech" || kind === "speech_over_music") &&
           typeof segment.start === "number" && typeof segment.end === "number" && segment.end >= segment.start
           ? [{ kind, startedAtMs: Math.round(segment.start * 1000), endedAtMs: Math.round(segment.end * 1000) } as ClassifiedAudioInterval] : [];
       });
+      if (parsed.outcome && ["silence", "music", "speech", "speech_over_music"].includes(parsed.outcome)) {
+        return { kind: "classified", classification: parsed.outcome, intervals };
+      }
+      if (parsed.outcome) return { kind: "failure", reason: "classifier returned unknown audio class" };
       const labels = new Set(intervals.map((segment) => segment.kind));
       const hasSpeech = labels.has("speech");
       const hasMusic = labels.has("music");
@@ -503,6 +503,11 @@ export class LocalSttAdapter {
         if (trimmed.kind === "failure") return { kind: "vad_failure", reason: trimmed.reason };
         if (trimmed.kind === "skipped") return { kind: "skipped", reason: trimmed.reason };
         if (!trimmed.segments.length) {
+          if (this.config.classifier && (classification === "speech" || classification === "speech_over_music")) {
+            return classifiedIntervals?.length
+              ? { kind: classification, segments: [], intervals: classifiedIntervals }
+              : { kind: classification, segments: [] };
+          }
           return classifiedIntervals?.length
             ? { kind: "silence", intervals: classifiedIntervals }
             : { kind: "silence" };
@@ -526,14 +531,13 @@ export class LocalSttAdapter {
           segments.push({ startedAtMs: Math.round((segment.start + trim.start) * 1000), endedAtMs: Math.round((segment.end + trim.start) * 1000), text: segment.text.trim() });
         }
       }
+      if (this.config.classifier && (classification === "speech" || classification === "speech_over_music")) {
+        return classifiedIntervals?.length
+          ? { kind: classification, segments, intervals: classifiedIntervals }
+          : { kind: classification, segments };
+      }
       return segments.length
-        ? classification === "speech_over_music"
-          ? classifiedIntervals?.length
-            ? { kind: "speech_over_music", segments, intervals: classifiedIntervals }
-            : { kind: "speech_over_music", segments }
-          : classifiedIntervals?.length
-            ? { kind: "speech", segments, intervals: classifiedIntervals }
-            : { kind: "speech", segments }
+        ? { kind: "speech", segments }
         : classifiedIntervals?.length ? { kind: "silence", intervals: classifiedIntervals } : { kind: "silence" };
     } catch (error) {
       return { kind: "transcription_failure", reason: error instanceof Error ? error.message : String(error) };

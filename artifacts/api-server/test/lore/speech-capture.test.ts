@@ -284,6 +284,58 @@ setInterval(() => undefined, 1_000);
     });
   });
 
+  it("keeps timeline intervals when the classifier also returns an outcome", async () => {
+    const adapter = new LocalSttAdapter({
+      executable: "whisper", modelPath: "model", timeoutMs: 10, maxConcurrency: 1,
+      classifier: { executable: "classifier", timeoutMs: 10 },
+    }, async (executable) => executable === "classifier"
+      ? { stdout: '{"outcome":"speech_over_music","segments":[{"label":"music","start":0,"end":1},{"label":"speech","start":1,"end":2}]}', stderr: "" }
+      : { stdout: '{"segments":[{"start":0,"end":1,"text":"station ID"}]}', stderr: "" },
+    async () => undefined);
+    await expect(adapter.transcribe("/tmp/a.wav")).resolves.toEqual({
+      kind: "speech_over_music",
+      segments: [{ startedAtMs: 0, endedAtMs: 1_000, text: "station ID" }],
+      intervals: [
+        { kind: "music", startedAtMs: 0, endedAtMs: 1_000 },
+        { kind: "speech", startedAtMs: 1_000, endedAtMs: 2_000 },
+      ],
+    });
+  });
+
+  it.each(["speech", "speech_over_music"] as const)(
+    "keeps classifier-detected %s when ASR recognizes no words",
+    async (outcome) => {
+      const adapter = new LocalSttAdapter({
+        executable: "whisper", modelPath: "model", timeoutMs: 10, maxConcurrency: 1,
+        classifier: { executable: "classifier", timeoutMs: 10 },
+      }, async (executable) => executable === "classifier"
+        ? { stdout: JSON.stringify({ outcome, segments: [{ label: outcome, start: 0, end: 1 }] }), stderr: "" }
+        : { stdout: '{"segments":[]}', stderr: "" },
+      async () => undefined);
+      await expect(adapter.transcribe("/tmp/quiet-id.wav")).resolves.toEqual({
+        kind: outcome,
+        segments: [],
+        intervals: [{ kind: outcome, startedAtMs: 0, endedAtMs: 1_000 }],
+      });
+    },
+  );
+
+  it("keeps classifier-detected speech when the trimming VAD returns no intervals", async () => {
+    const adapter = new LocalSttAdapter({
+      executable: "whisper", modelPath: "model", timeoutMs: 10, maxConcurrency: 1,
+      classifier: { executable: "classifier", timeoutMs: 10 },
+      vad: { executable: "vad", timeoutMs: 10 },
+    }, async (executable) => executable === "classifier"
+      ? { stdout: '{"outcome":"speech","segments":[{"label":"speech","start":0,"end":1}]}', stderr: "" }
+      : { stdout: '{"segments":[]}', stderr: "" },
+    async () => undefined);
+    await expect(adapter.transcribe("/tmp/quiet-id.wav")).resolves.toEqual({
+      kind: "speech",
+      segments: [],
+      intervals: [{ kind: "speech", startedAtMs: 0, endedAtMs: 1_000 }],
+    });
+  });
+
   it("does not turn classifier failures into no-speech or invoke ASR", async () => {
     let calls = 0;
     const adapter = new LocalSttAdapter({
