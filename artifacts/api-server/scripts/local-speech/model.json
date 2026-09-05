@@ -1,0 +1,5 @@
+{
+  "model": "tiny.en",
+  "device": "cpu",
+  "computeType": "int8"
+}

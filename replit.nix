@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.ffmpeg_7-full
     pkgs.udev
     pkgs.eudev
     pkgs.chromium
