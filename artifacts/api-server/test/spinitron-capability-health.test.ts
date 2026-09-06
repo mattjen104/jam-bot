@@ -8,9 +8,18 @@ import express from "express";
 const API_KEY = "spinitron-api-key-must-not-leak";
 const ACCESS_TOKEN = "spinitron-access-token-must-not-leak";
 
-const { mockDbSelect, mockDbExecute } = vi.hoisted(() => ({
+const {
+  mockDbSelect,
+  mockDbExecute,
+  mockGetObservabilityHealth,
+  mockGetIcyMetadataCandidateHealth,
+  mockGetSpeechPilotAdminStatus,
+} = vi.hoisted(() => ({
   mockDbSelect: vi.fn(),
   mockDbExecute: vi.fn(),
+  mockGetObservabilityHealth: vi.fn(),
+  mockGetIcyMetadataCandidateHealth: vi.fn(),
+  mockGetSpeechPilotAdminStatus: vi.fn(),
 }));
 
 vi.mock("@workspace/db", async (importOriginal) => {
@@ -24,6 +33,27 @@ vi.mock("@workspace/db", async (importOriginal) => {
       delete: vi.fn(),
       execute: mockDbExecute,
     },
+  };
+});
+
+vi.mock("../src/lore/observability.js", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../src/lore/observability.js")
+  >();
+  return {
+    ...actual,
+    getObservabilityHealth: mockGetObservabilityHealth,
+    getIcyMetadataCandidateHealth: mockGetIcyMetadataCandidateHealth,
+  };
+});
+
+vi.mock("../src/lore/speech-shadow-orchestrator.js", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../src/lore/speech-shadow-orchestrator.js")
+  >();
+  return {
+    ...actual,
+    getSpeechPilotAdminStatus: mockGetSpeechPilotAdminStatus,
   };
 });
 
@@ -215,5 +245,106 @@ describe("GET /admin/spinitron-capability-health", () => {
     expect(serialized).not.toContain(ACCESS_TOKEN);
     expect(serialized).not.toContain("also-must-not-leak");
     expect(serialized).not.toMatch(/"(apiKey|accessToken|nestedCredential|config)"\s*:/i);
+  });
+});
+
+describe("GET /admin/observability/health", () => {
+  it("keeps nested Spinitron capability data operator-safe", async () => {
+    const failureAt = new Date("2026-09-06T02:00:00.000Z");
+    mockGetObservabilityHealth.mockResolvedValueOnce([]);
+    mockGetIcyMetadataCandidateHealth.mockResolvedValueOnce({
+      windowDays: 30,
+      metrics: [],
+      recent: [],
+    });
+    mockGetSpeechPilotAdminStatus.mockResolvedValueOnce({
+      enabled: false,
+    });
+    mockStationRows([
+      {
+        stationId: 61704,
+        stationSlug: "combined-health-fm",
+        stationName: "Combined Health FM",
+        source: "spinitron",
+        scheduleAttemptedAt: null,
+        scheduleFailureAt: null,
+        scheduleFailureReason: null,
+        sourceLastOutcome: "response_error",
+        sourceLastDetail:
+          `Provider rejected apiKey=${API_KEY}&access-token=${ACCESS_TOKEN}`,
+        sourceLastAttemptAt: failureAt,
+        config: {
+          apiKey: API_KEY,
+          accessToken: ACCESS_TOKEN,
+          callsign: "SAFE",
+          token: "fixture-token-must-not-leak",
+          nestedCredential: { secret: "fixture-secret-must-not-leak" },
+        },
+      },
+    ]);
+    mockDbExecute.mockResolvedValueOnce({ rows: [] });
+
+    const response = await fetch(`${serverUrl}/admin/observability/health`, {
+      headers: { "x-admin-token": ADMIN_TOKEN },
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      metrics: unknown[];
+      icyMetadataCandidates: Record<string, unknown>;
+      speechPilot: Record<string, unknown>;
+      spinitronCapabilities: {
+        stations: Array<Record<string, unknown>>;
+        totals: Record<string, number>;
+      };
+    };
+
+    expect(body.metrics).toEqual([]);
+    expect(body.icyMetadataCandidates).toEqual({
+      windowDays: 30,
+      metrics: [],
+      recent: [],
+    });
+    expect(body.speechPilot).toEqual({ enabled: false });
+    expect(body.spinitronCapabilities.stations).toEqual([
+      {
+        stationId: 61704,
+        stationSlug: "combined-health-fm",
+        stationName: "Combined Health FM",
+        source: "spinitron",
+        capabilities: {
+          publicLiveMetadata: false,
+          publicSchedule: true,
+          authenticatedHistory: true,
+          historyStatus: "available",
+          directoryCoverage: "public_fallback",
+        },
+        attribution: {
+          status: "failed",
+          latestSpinAt: null,
+          latestAttributionAt: null,
+          staleAfterMs: 1_800_000,
+          lastAttemptAt: failureAt.toISOString(),
+          failure: {
+            at: failureAt.toISOString(),
+            reason: "provider_response_error",
+          },
+        },
+      },
+    ]);
+    expect(body.spinitronCapabilities.totals).toMatchObject({
+      stations: 1,
+      authenticatedHistory: 1,
+      failedAttribution: 1,
+    });
+
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain(API_KEY);
+    expect(serialized).not.toContain(ACCESS_TOKEN);
+    expect(serialized).not.toContain("fixture-token-must-not-leak");
+    expect(serialized).not.toContain("fixture-secret-must-not-leak");
+    expect(serialized).not.toMatch(
+      /"(config|apiKey|accessToken|token|nestedCredential|secret)"\s*:/i,
+    );
   });
 });
