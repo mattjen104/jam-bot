@@ -233,6 +233,12 @@ router.get("/admin/observability/health", h(async (_req, res) => {
   });
 }));
 
+// GET /api/admin/spinitron-capability-health — sanitized operator read model.
+// Station config is consumed server-side to derive booleans and is never returned.
+router.get("/admin/spinitron-capability-health", h(async (_req, res) => {
+  return res.json(await getSpinitronCapabilityHealth());
+}));
+
 // GET /api/admin/observability/evidence?kind=prediction&stationId=1&limit=100
 // Feature snapshots and provenance are returned verbatim for operator audit.
 router.get("/admin/observability/evidence", h(async (req, res) => {

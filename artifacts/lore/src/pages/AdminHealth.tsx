@@ -78,6 +78,32 @@ interface SpinitronWebResponse {
   stations: SpinitronWebStation[];
 }
 
+interface SpinitronCapabilityStation {
+  stationId?: number;
+  stationSlug?: string;
+  stationName?: string;
+  source?: string;
+  capabilities?: {
+    publicLiveMetadata?: boolean;
+    publicSchedule?: boolean;
+    authenticatedHistory?: boolean;
+    historyStatus?: "available" | "not_configured";
+    directoryCoverage?: "public_fallback";
+  } | null;
+}
+
+interface SpinitronCapabilityResponse {
+  stations?: SpinitronCapabilityStation[];
+  directoryCoverage?: "authenticated" | "public_fallback";
+  totals?: {
+    stations?: number;
+    publicLiveMetadata?: number;
+    publicSchedule?: number;
+    authenticatedHistory?: number;
+    historyNotConfigured?: number;
+  };
+}
+
 interface ReleaseYearHealth {
   totalNull: number;
   /** Eligible work: null year, null checked_at, has spins, non-synthetic MBID. */
@@ -302,6 +328,10 @@ function HealthPanel({
   const [phError, setPhError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [spiWeb, setSpiWeb] = useState<SpinitronWebResponse | null>(null);
   const [swError, setSwError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [spinitronCapabilities, setSpinitronCapabilities] =
+    useState<SpinitronCapabilityResponse | null>(null);
+  const [spinitronCapabilitiesError, setSpinitronCapabilitiesError] =
+    useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [ryHealth, setRyHealth] = useState<ReleaseYearHealth | null>(null);
   const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [durationHealth, setDurationHealth] = useState<DurationHealth | null>(null);
@@ -431,6 +461,34 @@ function HealthPanel({
           message: body.error ?? `HTTP ${swRes.status}`,
         });
         setSpiWeb(null);
+        return false;
+      })();
+
+      const spinitronCapabilitiesPromise = (async () => {
+        let response: Response;
+        try {
+          response = await fetch("/api/admin/spinitron-capability-health", { headers });
+        } catch (err) {
+          setSpinitronCapabilitiesError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+          setSpinitronCapabilities(null);
+          return false;
+        }
+        if (response.ok) {
+          setSpinitronCapabilities(
+            (await response.json()) as SpinitronCapabilityResponse,
+          );
+          setSpinitronCapabilitiesError(null);
+          return true;
+        }
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setSpinitronCapabilitiesError({
+          kind: response.status === 401 ? "auth" : "server",
+          message: body.error ?? `HTTP ${response.status}`,
+        });
+        setSpinitronCapabilities(null);
         return false;
       })();
 
@@ -577,6 +635,7 @@ function HealthPanel({
           rlOk,
           phOk,
           swOk,
+          spinitronCapabilitiesOk,
           ryOk,
           durationOk,
           scheduleOk,
@@ -587,6 +646,7 @@ function HealthPanel({
           rlPromise,
           phPromise,
           swPromise,
+          spinitronCapabilitiesPromise,
           ryPromise,
           durationPromise,
           schedulePromise,
@@ -601,6 +661,7 @@ function HealthPanel({
           !rlOk &&
           !phOk &&
           !swOk &&
+          !spinitronCapabilitiesOk &&
           !ryOk &&
           !durationOk &&
           !scheduleOk &&
@@ -887,6 +948,19 @@ function HealthPanel({
           </section>
         )}
 
+        {!loading && spinitronCapabilitiesError && (
+          <SectionErrorBanner
+            icon={<Info className="h-4 w-4" />}
+            title="Spinitron capabilities"
+            kind={spinitronCapabilitiesError.kind}
+            message={spinitronCapabilitiesError.message}
+            data-testid="spinitron-capabilities-error"
+          />
+        )}
+        {!loading && !spinitronCapabilitiesError && spinitronCapabilities && (
+          <SpinitronCapabilitiesSection health={spinitronCapabilities} />
+        )}
+
         {/* Release year enrichment health — always independent */}
         {!loading && ryHealth !== null && (
           <ReleaseYearHealthSection health={ryHealth} token={token} onRunComplete={() => void fetchAll({ silent: true })} />
@@ -1141,6 +1215,116 @@ function SpinitronWebCard({ station }: { station: SpinitronWebStation }) {
         <DataRow label="Consecutive nulls" value={String(station.consecutiveNulls)} />
       </dl>
     </div>
+  );
+}
+
+function CapabilityValue({
+  available,
+  unavailableLabel = "Not available",
+}: {
+  available: boolean;
+  unavailableLabel?: string;
+}) {
+  return (
+    <span className={available ? "text-foreground" : "text-muted-foreground"}>
+      {available ? "Available" : unavailableLabel}
+    </span>
+  );
+}
+
+function SpinitronCapabilitiesSection({
+  health,
+}: {
+  health: SpinitronCapabilityResponse;
+}) {
+  const stations = Array.isArray(health.stations) ? health.stations : [];
+  const total = health.totals?.stations ?? stations.length;
+  const publicLive = health.totals?.publicLiveMetadata
+    ?? stations.filter((station) => station.capabilities?.publicLiveMetadata === true).length;
+  const publicSchedule = health.totals?.publicSchedule
+    ?? stations.filter((station) => station.capabilities?.publicSchedule === true).length;
+  const history = health.totals?.authenticatedHistory
+    ?? stations.filter((station) => station.capabilities?.authenticatedHistory === true).length;
+  const historyNotConfigured = health.totals?.historyNotConfigured
+    ?? stations.filter((station) => station.capabilities?.historyStatus === "not_configured").length;
+
+  return (
+    <section className="mt-10" data-testid="spinitron-capabilities-section">
+      <SectionHeading
+        icon={<Info className="h-4 w-4" />}
+        title="Spinitron capabilities"
+        badge={total}
+        description="What each Spinitron-backed station can provide. Authenticated history is optional and does not affect public live metadata or schedules."
+      />
+      <p className="mt-2 text-sm text-muted-foreground">
+        {publicLive} public live · {publicSchedule} public schedule · {history} authenticated history
+        {historyNotConfigured > 0 ? ` · ${historyNotConfigured} optional history not configured` : ""}
+        {" · "}Directory: {health.directoryCoverage === "authenticated"
+          ? "authenticated"
+          : "public fallback"}
+      </p>
+      {stations.length === 0 ? (
+        <div className="mt-4">
+          <HealthyRow label="Spinitron stations" detail="No Spinitron-backed stations reported." />
+        </div>
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-card/60">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-border text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-normal">Station</th>
+                <th className="px-3 py-3 font-normal">Public live</th>
+                <th className="px-3 py-3 font-normal">Public schedule</th>
+                <th className="px-3 py-3 font-normal">History</th>
+                <th className="px-3 py-3 font-normal">Directory</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stations.map((station, index) => {
+                const capabilities = station.capabilities;
+                const historyAvailable = capabilities?.authenticatedHistory === true;
+                return (
+                  <tr
+                    key={station.stationId ?? station.stationSlug ?? index}
+                    className="border-b border-border/60 last:border-0"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-mono text-foreground">
+                        {station.stationSlug ?? "Unknown station"}
+                      </div>
+                      {station.stationName && (
+                        <div className="text-muted-foreground">{station.stationName}</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <CapabilityValue available={capabilities?.publicLiveMetadata === true} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <CapabilityValue available={capabilities?.publicSchedule === true} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <CapabilityValue
+                        available={historyAvailable}
+                        unavailableLabel={
+                          capabilities?.historyStatus === "not_configured"
+                            ? "Optional history not configured"
+                            : "Not available"
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-3 text-muted-foreground">
+                      {capabilities?.directoryCoverage === "public_fallback"
+                        ? "Public fallback"
+                        : "Not reported"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
