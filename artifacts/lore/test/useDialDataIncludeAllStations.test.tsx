@@ -13,9 +13,32 @@
  *  - the same station IS returned when includeAllStations is true
  *  - metadata-category filtering still applies on top of includeAllStations
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import type { Station } from "@workspace/api-client-react";
+
+const onAirState = vi.hoisted(() => ({
+  data: undefined as
+    | {
+        items: Array<{
+          station: { slug: string; name: string };
+          show: { name: string; djName: string | null } | null;
+          now: {
+            mbid: string;
+            title: string;
+            artist: string;
+            artworkUrl: null;
+            playedAt: string;
+            freshness: "fresh";
+            resolved: true;
+          };
+          earlier: string[];
+          matchCount: null;
+        }>;
+        authenticated: false;
+      }
+    | undefined,
+}));
 
 const makeStation = (
   slug: string,
@@ -63,7 +86,7 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
   const { makeWebplayerHooksMock } = await import("./helpers/webplayerHooksMock");
   return makeWebplayerHooksMock(importOriginal, {
     useWpOnAir: vi.fn(() => ({
-      data: undefined,
+      data: onAirState.data,
       isLoading: false,
       dataUpdatedAt: 0,
     })),
@@ -81,6 +104,10 @@ function slugsFor(opts: {
 }
 
 describe("useDialData includeAllStations", () => {
+  beforeEach(() => {
+    onAirState.data = undefined;
+  });
+
   it("default filter drops off-air non-flagship stations without a named show", () => {
     expect(slugsFor({})).toEqual(["kexp"]);
   });
@@ -111,5 +138,62 @@ describe("useDialData includeAllStations", () => {
     expect(
       slugsFor({ includeAllStations: true, categories: new Set(["discovery"]) }),
     ).toEqual(["rb-quiet-webstream"]);
+  });
+
+  it("keeps one current track while a provider show handoff updates its eligible byline", () => {
+    const playedAt = new Date().toISOString();
+    const now = {
+      mbid: "same-live-track",
+      title: "Shared Track",
+      artist: "Broadcast Artist",
+      artworkUrl: null,
+      playedAt,
+      freshness: "fresh" as const,
+      resolved: true as const,
+    };
+    const setShow = (name: string, djName: string | null) => {
+      onAirState.data = {
+        authenticated: false,
+        items: [{
+          station: { slug: "kexp", name: "KEXP" },
+          show: { name, djName },
+          now,
+          earlier: [],
+          matchCount: null,
+        }],
+      };
+    };
+
+    setShow("Morning Transmission", "DJ First");
+    const { result, rerender } = renderHook(() =>
+      useDialData("personal", { includeAllStations: true }),
+    );
+    const first = result.current.stations.find((item) => item.station.slug === "kexp")!;
+    expect(first.shows).toHaveLength(1);
+    expect(first.shows[0]).toMatchObject({
+      showName: "Morning Transmission",
+      djName: "DJ First",
+      currentTrack: { mbid: "same-live-track", title: "Shared Track" },
+    });
+
+    setShow("Afternoon Transmission", "DJ Second");
+    rerender();
+    const handedOff = result.current.stations.find((item) => item.station.slug === "kexp")!;
+    expect(handedOff.shows).toHaveLength(1);
+    expect(handedOff.shows[0]).toMatchObject({
+      showName: "Afternoon Transmission",
+      djName: "DJ Second",
+      currentTrack: { mbid: "same-live-track", title: "Shared Track" },
+    });
+
+    setShow("Artist Takeover", "Broadcast Artist");
+    rerender();
+    const collision = result.current.stations.find((item) => item.station.slug === "kexp")!;
+    expect(collision.shows).toHaveLength(1);
+    expect(collision.shows[0]).toMatchObject({
+      showName: "Artist Takeover",
+      djName: null,
+      currentTrack: { mbid: "same-live-track", title: "Shared Track" },
+    });
   });
 });

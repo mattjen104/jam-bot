@@ -1813,6 +1813,12 @@ export function useDialData(
       const liveAttribution = liveAttributionBySlug.get(station.slug);
       const liveTrack = nowPlayingBySlug.get(station.slug) ?? null;
       if (isLive && liveAttribution && liveTrack) {
+        const liveDjName = eligibleDjName(liveAttribution.djName, {
+          artist: liveTrack.artist,
+          title: liveTrack.title,
+          showTitle: liveAttribution.showName,
+          stationName: station.name,
+        });
         const liveIndex = shows.findIndex((show) => show.state === "live");
         if (liveIndex >= 0) {
           shows = shows.map((show, index) =>
@@ -1820,7 +1826,7 @@ export function useDialData(
               ? {
                   ...show,
                   showName: liveAttribution.showName,
-                  djName: liveAttribution.djName,
+                  djName: liveDjName,
                   djNames: undefined,
                   currentTrack: liveTrack,
                 }
@@ -1834,7 +1840,7 @@ export function useDialData(
             {
               runId: null,
               showName: liveAttribution.showName,
-              djName: liveAttribution.djName,
+              djName: liveDjName,
               startedAt,
               endedAt: new Date(startedMs + 2 * 60 * 60 * 1000).toISOString(),
               ianaTimezone: station.ianaTimezone ?? null,

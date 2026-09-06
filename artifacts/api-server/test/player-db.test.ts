@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   pool,
@@ -196,6 +196,33 @@ describe("GET /api/player/onair", () => {
     expect(mine!.earlier).toContain(`Beta Artist ${run}`);
     expect(mine!.earlier).not.toContain(`Alpha Artist ${run}`);
     expect(mine!.matchCount).toBeNull();
+  });
+
+  it("suppresses a DJ name that collides with the current artist", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    await db
+      .update(showsTable)
+      .set({ djName: `Alpha Artist ${run}` })
+      .where(eq(showsTable.id, showIds[0]!));
+    try {
+      const res = await fetch(`${baseUrl}/api/player/onair`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        items: Array<{
+          station: { slug: string };
+          show: { name: string; djName: string | null } | null;
+        }>;
+      };
+      expect(body.items.find((item) => item.station.slug === slug)?.show).toEqual({
+        name: `Test WP Show ${run}`,
+        djName: null,
+      });
+    } finally {
+      await db
+        .update(showsTable)
+        .set({ djName: "DJ Wp" })
+        .where(eq(showsTable.id, showIds[0]!));
+    }
   });
 });
 
