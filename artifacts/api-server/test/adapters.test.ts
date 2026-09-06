@@ -199,6 +199,26 @@ describe("parseSpinitronPlaylists", () => {
     expect(map.get(4)).toEqual({ name: "Jazz Hours", djName: "Sam" });
     expect(map.has(5)).toBe(false);
   });
+
+  it("keeps public-only and authenticated history capabilities distinct", () => {
+    expect(
+      spinitronSourceCapabilities("spinitron_web", { callsign: "WPRB" }),
+    ).toMatchObject({
+      publicLiveMetadata: true,
+      publicSchedule: true,
+      authenticatedHistory: false,
+      historyStatus: "not_configured",
+    });
+    expect(
+      spinitronSourceCapabilities("spinitron", {
+        callsign: "WPRB",
+        accessToken: "configured",
+      }),
+    ).toMatchObject({
+      authenticatedHistory: true,
+      historyStatus: "available",
+    });
+  });
 });
 
 describe("parseBbcSegments", () => {

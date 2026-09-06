@@ -80,7 +80,7 @@ describe("fetchPlaysUntilCursor", () => {
     expect(pagesFetched()).toBe(2);
   });
 
-  it("ends paging cleanly when a page fetch throws", async () => {
+  it("discards collected pages when a later page fetch throws", async () => {
     let calls = 0;
     const adapter: HistoryAdapter = async (_config, opts) => {
       calls++;
@@ -93,9 +93,10 @@ describe("fetchPlaysUntilCursor", () => {
       }
       throw new Error("upstream 500");
     };
-    // Cursor not on page 0, so it tries page 1, which throws -> stop with page 0.
+    // Cursor not on page 0, so it tries page 1, which throws. Returning page 0
+    // would let ingestion advance the cursor past the missing history.
     const out = await fetchPlaysUntilCursor(adapter, {}, "missing", 200, 10);
-    expect(out.length).toBe(10);
+    expect(out).toEqual([]);
     expect(calls).toBe(2);
   });
 

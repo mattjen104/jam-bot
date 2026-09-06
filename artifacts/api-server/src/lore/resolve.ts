@@ -652,6 +652,39 @@ async function upsertShow(
   }
 }
 
+async function reconcileSpinShowAttribution(args: {
+  spinId: number;
+  station: Station;
+  show?: ShowAttribution;
+  playedAt: Date;
+  artist?: string | null;
+  title?: string | null;
+}): Promise<boolean> {
+  const showId = args.show
+    ? await upsertShow(args.station.id, args.show, {
+        artist: args.artist,
+        title: args.title,
+      })
+    : args.station.ianaTimezone
+      ? await lookupScrapedShowId(
+          args.station.id,
+          args.station.ianaTimezone,
+          args.playedAt,
+        )
+      : null;
+  if (showId == null) return false;
+  await db
+    .update(spinsTable)
+    .set({
+      showId,
+      showAttributionSource: args.show
+        ? (args.show.attributionSource ?? "source_api")
+        : "schedule_match",
+    })
+    .where(eq(spinsTable.id, args.spinId));
+  return true;
+}
+
 /**
  * Persist one resolved spin: upsert its recording node (when resolved), then
  * insert the spin row. The unique (station, externalId) index makes this
@@ -1194,6 +1227,18 @@ async function logSpinIfChangedInner(
             : {}),
         })
         .where(eq(spinsTable.id, last.id));
+      // A show can cross its boundary while a long track remains on air.
+      // Reconcile identity onto the existing spin instead of manufacturing a
+      // duplicate play. A failed/missing lookup is a no-op, preserving the
+      // last valid attribution through transient provider failures.
+      await reconcileSpinShowAttribution({
+        spinId: last.id,
+        station,
+        show: np.show,
+        playedAt: np.playedAt ?? new Date(),
+        artist: np.rawArtist,
+        title: np.rawTitle,
+      });
       return false;
     }
 
@@ -1490,6 +1535,31 @@ export async function ingestRawSpins(
       const cursorValue =
         raw.externalId ?? raw.playedAt?.toISOString() ?? null;
       if (raw.externalId && seen.has(raw.externalId)) {
+        // The track row may have arrived during a temporary /playlists
+        // failure. A later authenticated response can safely converge its
+        // show/persona without resolving or inserting the spin again.
+        if (raw.show) {
+          const [existingSpin] = await db
+            .select({ id: spinsTable.id })
+            .from(spinsTable)
+            .where(
+              and(
+                eq(spinsTable.stationId, station.id),
+                eq(spinsTable.externalId, raw.externalId),
+              ),
+            )
+            .limit(1);
+          if (existingSpin) {
+            await reconcileSpinShowAttribution({
+              spinId: existingSpin.id,
+              station,
+              show: raw.show,
+              playedAt: raw.playedAt ?? new Date(),
+              artist: raw.rawArtist,
+              title: raw.rawTitle,
+            });
+          }
+        }
         if (cursorValue) newestCursor = cursorValue;
         continue;
       }

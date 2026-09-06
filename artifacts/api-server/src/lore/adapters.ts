@@ -736,15 +736,14 @@ const spinitron: HistoryAdapter = async (config, opts) => {
   const page = opts?.before ? 1 : Math.max(opts?.page ?? 0, 0) + 1;
 
   // Playlists first (bounded) so we can attribute show + DJ to each spin.
-  let playlistMap = new Map<number, { name: string; djName?: string }>();
-  try {
-    const plBody = await getJson(
-      `https://spinitron.com/api/playlists?${auth}&count=50&expand=persona${endDate}`,
-    );
-    playlistMap = parseSpinitronPlaylists(plBody);
-  } catch {
-    // Attribution is best-effort; spins are still logged without it.
-  }
+  // Treat playlist/persona evidence as part of the authenticated history
+  // contract. If it fails, fail the whole attempt so the poller preserves its
+  // cursor and retries later instead of presenting a healthy-but-unattributed
+  // partial playlist.
+  const plBody = await getJson(
+    `https://spinitron.com/api/playlists?${auth}&count=50&expand=persona${endDate}`,
+  );
+  const playlistMap = parseSpinitronPlaylists(plBody);
   const spinsBody = await getJson(
     `https://spinitron.com/api/spins?${auth}&count=${count}&page=${page}${endDate}`,
   );

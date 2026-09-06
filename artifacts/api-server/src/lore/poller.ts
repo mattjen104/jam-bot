@@ -516,8 +516,9 @@ function stopBoundaryPolls(): void {
  * newest externalId we've already ingested), a page runs short (source has no
  * more history), or we hit `maxPlays`. Returns the union of pages; the ingest
  * path dedups the overlap. On first enroll (`cursor` null) it simply pages the
- * bounded backfill window. Never throws — a failed page just ends paging with
- * whatever was collected so far.
+ * bounded backfill window. Never throws. If any page fails, the whole batch is
+ * discarded so callers cannot ingest a partial catch-up and advance past
+ * history that was never fetched.
  */
 export async function fetchPlaysUntilCursor(
   history: HistoryAdapter,
@@ -536,7 +537,7 @@ export async function fetchPlaysUntilCursor(
     } catch (err) {
       console.error("[lore] history page fetch failed", page, err);
       onError?.(err);
-      break;
+      return [];
     }
     if (!batch.length) break;
     collected.push(...batch);

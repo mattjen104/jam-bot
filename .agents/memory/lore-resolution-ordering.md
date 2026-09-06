@@ -34,7 +34,10 @@ useless if it only sizes the initial backfill.
 and keep walking pages until the batch contains the last-seen cursor externalId,
 a page runs short, or a catch-up cap is hit. `ingestRawSpins` dedups the overlap,
 so a generous page size costs no extra MusicBrainz calls (only genuinely-new
-externalIds get resolved).
+externalIds get resolved). Treat the paged catch-up as atomic: if any required
+page or its attribution dependency fails, discard all pages from that attempt
+and leave the cursor unchanged. Ingesting a successful prefix advances the
+cursor past the missing suffix and permanently loses it.
 
 ## Resolver failure semantics
 

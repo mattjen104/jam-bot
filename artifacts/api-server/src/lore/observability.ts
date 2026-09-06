@@ -11,6 +11,7 @@ import {
   operatorLabelsTable,
   icyMetadataCandidatesTable,
   stationsTable,
+  stationSourceQualityTable,
 } from "@workspace/db";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { spinitronSourceCapabilities } from "./adapters.js";
@@ -149,13 +150,104 @@ export async function getSpinitronCapabilityHealth() {
     stationName: stationsTable.name,
     source: stationsTable.nowPlayingSource,
     config: stationsTable.nowPlayingConfig,
+    scheduleAttemptedAt: stationsTable.scheduleAttemptedAt,
+    scheduleFailureAt: stationsTable.scheduleFailureAt,
+    scheduleFailureReason: stationsTable.scheduleFailureReason,
+    sourceLastOutcome: stationSourceQualityTable.lastOutcome,
+    sourceLastDetail: stationSourceQualityTable.lastDetail,
+    sourceLastAttemptAt: stationSourceQualityTable.lastAttemptAt,
   }).from(stationsTable)
-    .where(sql`${stationsTable.nowPlayingSource} in ('spinitron', 'spinitron_web')`)
+    .leftJoin(
+      stationSourceQualityTable,
+      and(
+        eq(stationSourceQualityTable.stationId, stationsTable.id),
+        eq(stationSourceQualityTable.source, stationsTable.nowPlayingSource),
+      ),
+    )
+    .where(
+      sql`${stationsTable.active} = true
+        and ${stationsTable.nowPlayingSource} in ('spinitron', 'spinitron_web')`,
+    )
     .orderBy(stationsTable.name);
-  const stations = rows.map(({ config, ...row }) => ({
-    ...row,
-    capabilities: spinitronSourceCapabilities(row.source, config),
-  }));
+  const attributionRows = rows.length
+    ? await db.execute<{
+        station_id: number;
+        latest_spin_at: Date | null;
+        latest_attribution_at: Date | null;
+      }>(sql`
+        SELECT target.id AS station_id,
+          max(sp.observed_at) AS latest_spin_at,
+          max(sp.observed_at) FILTER (
+            WHERE sp.show_id IS NOT NULL
+              AND sp.show_attribution_source IN ('source_api', 'schedule_match')
+          ) AS latest_attribution_at
+        FROM ${stationsTable} target
+        LEFT JOIN spins sp
+          ON sp.station_id = target.id
+          AND sp.observed_at >= now() - interval '30 days'
+        WHERE target.active = true
+          AND target.now_playing_source IN ('spinitron', 'spinitron_web')
+        GROUP BY target.id
+      `)
+    : { rows: [] };
+  const attributionByStation = new Map(
+    attributionRows.rows.map((row) => [row.station_id, row]),
+  );
+  const now = Date.now();
+  const stations = rows.map(({ config, ...row }) => {
+    const capabilities = spinitronSourceCapabilities(row.source, config);
+    const evidence = attributionByStation.get(row.stationId);
+    const latestAttributionAt = evidence?.latest_attribution_at ?? null;
+    const latestSpinAt = evidence?.latest_spin_at ?? null;
+    const staleAfterMs = row.source === "spinitron" ? 30 * 60_000 : 10 * 60_000;
+    const scheduleFailure =
+      row.scheduleFailureAt &&
+      (!latestAttributionAt ||
+        row.scheduleFailureAt.getTime() >
+          new Date(latestAttributionAt).getTime())
+        ? {
+            at: row.scheduleFailureAt,
+            reason: row.scheduleFailureReason ?? "unknown",
+          }
+        : null;
+    const providerFailure =
+      row.sourceLastOutcome === "response_error" &&
+      row.sourceLastAttemptAt &&
+      (!latestAttributionAt ||
+        row.sourceLastAttemptAt.getTime() >
+          new Date(latestAttributionAt).getTime())
+        ? {
+            at: row.sourceLastAttemptAt,
+            reason: row.sourceLastDetail ?? "provider_response_error",
+          }
+        : null;
+    const attributionFailure = providerFailure ?? scheduleFailure;
+    const attributionStatus =
+      attributionFailure
+        ? "failed"
+        : latestAttributionAt &&
+            now - new Date(latestAttributionAt).getTime() <= staleAfterMs
+          ? "healthy"
+          : latestAttributionAt
+            ? "stale"
+            : latestSpinAt
+              ? "not_produced"
+              : capabilities?.authenticatedHistory
+                ? "configured_no_evidence"
+                : "public_only";
+    return {
+      ...row,
+      capabilities,
+      attribution: {
+        status: attributionStatus,
+        latestSpinAt,
+        latestAttributionAt,
+        staleAfterMs,
+        lastAttemptAt: row.sourceLastAttemptAt,
+        failure: attributionFailure,
+      },
+    };
+  });
   return {
     stations,
     directoryCoverage: process.env["SPINITRON_API_KEY"]
@@ -174,6 +266,23 @@ export async function getSpinitronCapabilityHealth() {
       ).length,
       historyNotConfigured: stations.filter(
         (row) => row.capabilities?.historyStatus === "not_configured",
+      ).length,
+      healthyAttribution: stations.filter(
+        (row) => row.attribution.status === "healthy",
+      ).length,
+      staleAttribution: stations.filter(
+        (row) => row.attribution.status === "stale",
+      ).length,
+      failedAttribution: stations.filter(
+        (row) => row.attribution.status === "failed",
+      ).length,
+      attributionNotProduced: stations.filter(
+        (row) =>
+          row.attribution.status === "not_produced" ||
+          row.attribution.status === "configured_no_evidence",
+      ).length,
+      publicOnly: stations.filter(
+        (row) => row.attribution.status === "public_only",
       ).length,
     },
   };
