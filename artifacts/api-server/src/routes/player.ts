@@ -27,6 +27,7 @@ import { pollStation } from "../lore/poller.js";
 import { spinDayExpr } from "../lore/runs.js";
 import { getStationStreamState } from "../lore/resolve.js";
 import { h } from "../middlewares/asyncHandler.js";
+import { eligibleDjName } from "@workspace/lore-attribution";
 
 /**
  * Webplayer read-models — plain-JSON endpoints consumed by the /player front
@@ -392,7 +393,15 @@ router.get("/player/onair", h(async (req, res) => {
         ),
         show:
           spin.showName != null
-            ? { name: spin.showName, djName: spin.showDj ?? null }
+            ? {
+                name: spin.showName,
+                djName: eligibleDjName(spin.showDj, {
+                  showTitle: spin.showName,
+                  stationName: s.name,
+                  artist: spin.artist ?? spin.rawArtist,
+                  title: spin.title ?? spin.rawTitle,
+                }),
+              }
             : null,
         now: {
           mbid: spin.mbid ?? null,

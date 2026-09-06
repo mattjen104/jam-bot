@@ -1123,6 +1123,34 @@ export function useDialData(
   // player. Use it as a metadata/timing fallback when the heavier dial pulse is
   // still serving its stations-only cold-start partial under DB contention.
   const { data: onAirData } = useWpOnAir();
+  const liveAttributionBySlug = useMemo(() => {
+    const attribution = new Map<string, {
+      showName: string;
+      djName: string | null;
+      playedAt: string;
+    }>();
+    for (const item of onAirData?.items ?? []) {
+      if (!item.show?.name) continue;
+      attribution.set(item.station.slug, {
+        showName: item.show.name,
+        djName: item.show.djName,
+        playedAt: item.now.playedAt,
+      });
+    }
+    for (const item of liveData?.items ?? []) {
+      const np = item.nowPlaying as {
+        playedAt?: string | null;
+        show?: { name: string; djName: string | null } | null;
+      } | null;
+      if (!np?.show?.name || !np.playedAt) continue;
+      attribution.set(item.slug, {
+        showName: np.show.name,
+        djName: np.show.djName,
+        playedAt: np.playedAt,
+      });
+    }
+    return attribution;
+  }, [liveData, onAirData]);
 
   // Replay-window expiry and browser resume need the same immediate REST
   // backstop as the webplayer read model. On a server epoch change, discard
@@ -1692,7 +1720,7 @@ export function useDialData(
       );
 
       // Build enriched shows by associating spins with their run window
-      const shows: DialShow[] = sortedRuns.map((run) => {
+      let shows: DialShow[] = sortedRuns.map((run) => {
         const state = showState(run, isLive);
         const startMs = new Date(run.startedAt).getTime();
         const endMs = new Date(run.endedAt).getTime();
@@ -1777,6 +1805,52 @@ export function useDialData(
           isPickerShow,
         };
       });
+      // Provider-authenticated attribution arrives on the same now-playing row
+      // as the track. Prefer it over schedule inference so a same-track show
+      // handoff updates the listener-visible byline without manufacturing a
+      // second spin. When no schedule run covers the instant, add a lightweight
+      // live show around the existing current track.
+      const liveAttribution = liveAttributionBySlug.get(station.slug);
+      const liveTrack = nowPlayingBySlug.get(station.slug) ?? null;
+      if (isLive && liveAttribution && liveTrack) {
+        const liveIndex = shows.findIndex((show) => show.state === "live");
+        if (liveIndex >= 0) {
+          shows = shows.map((show, index) =>
+            index === liveIndex
+              ? {
+                  ...show,
+                  showName: liveAttribution.showName,
+                  djName: liveAttribution.djName,
+                  djNames: undefined,
+                  currentTrack: liveTrack,
+                }
+              : show,
+          );
+        } else {
+          const startedAt = liveAttribution.playedAt;
+          const startedMs = Date.parse(startedAt);
+          shows = [
+            ...shows,
+            {
+              runId: null,
+              showName: liveAttribution.showName,
+              djName: liveAttribution.djName,
+              startedAt,
+              endedAt: new Date(startedMs + 2 * 60 * 60 * 1000).toISOString(),
+              ianaTimezone: station.ianaTimezone ?? null,
+              state: "live",
+              spins: [liveTrack],
+              crossings: liveTrack.isLibraryHit ? 1 : 0,
+              artistCrossings: liveTrack.isArtistHit ? 1 : 0,
+              topArtists: liveTrack.isLibraryHit ? [liveTrack.artist] : [],
+              topArtistNames: liveTrack.isArtistHit ? [liveTrack.artist] : [],
+              currentTrack: liveTrack,
+              isPickerShow: false,
+              pickerId: null,
+            },
+          ];
+        }
+      }
 
       // Prefer server-computed crossings (accurate window, full spin history,
       // consistent across clients); fall back to client-computed reduction if
@@ -1886,7 +1960,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, wantNormalList, metaCategories, personalStations, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
+  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, wantNormalList, metaCategories, personalStations, liveBySlug, liveAttributionBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading
     || (categories != null && wantAmbient && ambientLoading)

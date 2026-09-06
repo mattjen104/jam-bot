@@ -59,6 +59,17 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   return makeMeHooksMock(importOriginal);
 });
 
+vi.mock("../src/webplayer/hooks", async (importOriginal) => {
+  const { makeWebplayerHooksMock } = await import("./helpers/webplayerHooksMock");
+  return makeWebplayerHooksMock(importOriginal, {
+    useWpOnAir: vi.fn(() => ({
+      data: undefined,
+      isLoading: false,
+      dataUpdatedAt: 0,
+    })),
+  });
+});
+
 import { useDialData, type DialStationCategory } from "../src/hooks/useDialData";
 
 function slugsFor(opts: {
