@@ -14,6 +14,7 @@ import {
 import { ingestRawSpins } from "./resolve.js";
 import { isJunkMetadata } from "./icy.js";
 import { recordMetadataQuality } from "./metadata-quality.js";
+import { safeFailureMessage } from "./safe-error.js";
 import type {
   HistoryFetchReview,
   HistorySourceContract,
@@ -348,7 +349,10 @@ export function startStationHistoryAudit(): boolean {
       auditLastResult = result;
     })
     .catch((error) => {
-      console.error("[lore] station history audit failed", error);
+      console.error(
+        "[lore] station history audit failed",
+        safeFailureMessage(error),
+      );
     })
     .finally(() => {
       auditRunning = false;
@@ -438,7 +442,7 @@ export async function auditStationHistorySources(
       if (reviewed.accepted.length) result.usable++;
       else result.unsupported++;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = safeFailureMessage(error);
       await upsertHistoryLedger({
         station,
         contract,
@@ -504,13 +508,19 @@ export async function backfillStationHistorySlice(
       },
     });
   } catch (err) {
-    console.error("[lore] backfill fetch failed", station.slug, err);
+    const failure = safeFailureMessage(err);
+    console.error("[lore] backfill fetch failed", {
+      stationId: station.id,
+      slug: station.slug,
+      source: selected.source ?? "unknown",
+      error: failure,
+    });
     await upsertHistoryLedger({
       station,
       contract,
       status: "transient_failure",
       sourceUrl: safeHistorySourceUrl(station),
-      failure: (err instanceof Error ? err.message : String(err)).slice(0, 500),
+      failure: failure.slice(0, 500),
       accumulate: true,
     });
     return 0; // transient — the next tick retries from the same cursor
@@ -635,7 +645,10 @@ async function tick(stationIds: number[]): Promise<void> {
   try {
     await backfillStationHistorySlice(id);
   } catch (err) {
-    console.error("[lore] backfill slice failed", id, err);
+    console.error("[lore] backfill slice failed", {
+      stationId: id,
+      error: safeFailureMessage(err),
+    });
   }
 }
 

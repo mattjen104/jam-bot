@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -19,7 +19,12 @@ import {
   parseIcyNowPlaying,
   parseSpinitronWebPage,
   parseSomaFmSongs,
+  getHistoryAdapter,
 } from "../src/lore/adapters.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("pickPath", () => {
   it("reads nested object + array dot-paths", () => {
@@ -218,6 +223,35 @@ describe("parseSpinitronPlaylists", () => {
       authenticatedHistory: true,
       historyStatus: "available",
     });
+  });
+});
+
+describe("Spinitron authenticated failure safety", () => {
+  it.each([
+    ["apiKey", "spinitron-api-key-fixture-DO-NOT-LOG"],
+    ["accessToken", "spinitron-access-token-fixture-DO-NOT-LOG"],
+  ])("omits %s credentials and request URLs from adapter errors", async (field, credential) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, { status: 401, statusText: "Unauthorized" }),
+      ),
+    );
+    const adapter = getHistoryAdapter("spinitron");
+
+    await expect(
+      adapter!({ [field]: credential, stationHandle: "TEST-FM" }, { limit: 20 }),
+    ).rejects.toThrow("HTTP 401 Unauthorized");
+
+    try {
+      await adapter!({ [field]: credential }, { limit: 20 });
+    } catch (error) {
+      const logged = String(error);
+      expect(logged).not.toContain(credential);
+      expect(logged).not.toContain("access-token");
+      expect(logged).not.toContain("spinitron.com/api");
+      expect(logged).not.toContain(field);
+    }
   });
 });
 

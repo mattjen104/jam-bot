@@ -5,6 +5,7 @@ import {
   stopLorePoller,
   unenrollStationPoller,
   _testOnlyStationTimerCount,
+  safeFailureMessage,
 } from "../src/lore/poller.js";
 import type { HistoryAdapter, RawSpin } from "../src/lore/types.js";
 import type { Station } from "@workspace/db";
@@ -98,6 +99,49 @@ describe("fetchPlaysUntilCursor", () => {
     const out = await fetchPlaysUntilCursor(adapter, {}, "missing", 200, 10);
     expect(out).toEqual([]);
     expect(calls).toBe(2);
+  });
+
+  it("logs useful failure context without authenticated Spinitron credentials", async () => {
+    const credential = "spinitron-secret-fixture-DO-NOT-LOG";
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const adapter: HistoryAdapter = async () => {
+      throw new Error(
+        `401 Unauthorized for https://spinitron.com/api/spins?access-token=${credential}&count=50`,
+      );
+    };
+
+    await fetchPlaysUntilCursor(
+      adapter,
+      { apiKey: credential, stationHandle: "TEST-FM" },
+      null,
+      50,
+    );
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[lore] history page fetch failed",
+      expect.objectContaining({
+        page: 0,
+        error: expect.stringContaining("401 Unauthorized"),
+      }),
+    );
+    const emitted = JSON.stringify(errorSpy.mock.calls);
+    expect(emitted).not.toContain(credential);
+    expect(emitted).not.toContain("apiKey");
+    expect(emitted).not.toContain("stationHandle");
+    errorSpy.mockRestore();
+  });
+
+  it("sanitizes the failure detail used by operational logs and health records", () => {
+    const credential = "spinitron-persisted-secret-DO-NOT-LOG";
+    const detail = safeFailureMessage(
+      new Error(
+        `401 Unauthorized for https://spinitron.com/api/spins?access-token=${credential}&count=50`,
+      ),
+    );
+
+    expect(detail).toContain("401 Unauthorized");
+    expect(detail).toContain("access-token=[REDACTED]");
+    expect(detail).not.toContain(credential);
   });
 
   // ---- Non-paginating sources (BBC, SomaFM) --------------------------------

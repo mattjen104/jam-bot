@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getHistoryAdapter, supportsBackfill } from "./adapters.js";
 import { oldestPlayedAt } from "./backfill.js";
 import { ingestRawSpins } from "./resolve.js";
+import { safeFailureMessage } from "./safe-error.js";
 import type { HistoryAdapter, RawSpin } from "./types.js";
 
 /**
@@ -77,7 +78,10 @@ export async function collectWindowPlays(
     try {
       batch = await history(config, { limit: pageSize, before });
     } catch (err) {
-      console.error("[lore] reconcile page fetch failed", err);
+      console.error("[lore] reconcile page fetch failed", {
+        page,
+        error: safeFailureMessage(err),
+      });
       break;
     }
     if (!batch.length) break;
@@ -150,7 +154,10 @@ async function tick(stationIds: number[]): Promise<void> {
     try {
       await sweepStation(id);
     } catch (err) {
-      console.error("[lore] reconcile sweep failed", id, err);
+      console.error("[lore] reconcile sweep failed", {
+        stationId: id,
+        error: safeFailureMessage(err),
+      });
     }
   }
 }

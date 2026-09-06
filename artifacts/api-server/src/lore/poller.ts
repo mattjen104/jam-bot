@@ -47,6 +47,8 @@ import {
   isMonitoredTrialStation,
   monitoredTrialFromConfig,
 } from "./monitored-trial.js";
+import { safeFailureMessage } from "./safe-error.js";
+export { safeFailureMessage } from "./safe-error.js";
 export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
 export { getFeedFreshnessStaleStations } from "./feed-freshness-health.js";
 
@@ -535,7 +537,10 @@ export async function fetchPlaysUntilCursor(
     try {
       batch = await history(config, { limit, page });
     } catch (err) {
-      console.error("[lore] history page fetch failed", page, err);
+      console.error(
+        "[lore] history page fetch failed",
+        { page, error: safeFailureMessage(err) },
+      );
       onError?.(err);
       return [];
     }
@@ -626,9 +631,7 @@ async function pollStationMode(
         artist: newestQuality?.artist,
         title: newestQuality?.title,
         detail: fetchError
-          ? fetchError instanceof Error
-            ? fetchError.message
-            : String(fetchError)
+          ? safeFailureMessage(fetchError)
           : newestQuality?.detail ??
             "Source responded without any recent track entries.",
       });
@@ -759,7 +762,13 @@ async function pollStationMode(
       );
     }
   } catch (err) {
-    console.error("[lore] poll failed", station.slug, err);
+    const detail = safeFailureMessage(err);
+    console.error("[lore] poll failed", {
+      stationId: station.id,
+      slug: station.slug,
+      source: source ?? "unknown",
+      error: detail,
+    });
     if (source) {
       await recordMetadataQuality({
         stationId: station.id,
@@ -767,7 +776,7 @@ async function pollStationMode(
         capability: sourceCapabilityFor(source),
         outcomes: ["response_error"],
         responded: false,
-        detail: err instanceof Error ? err.message : String(err),
+        detail,
       });
     }
   } finally {

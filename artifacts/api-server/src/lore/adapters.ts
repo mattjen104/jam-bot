@@ -50,7 +50,7 @@ async function getJson(
     headers: { Accept: "application/json", ...headers },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`.trim());
   return res.json();
 }
 
