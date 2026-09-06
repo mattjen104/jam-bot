@@ -194,7 +194,14 @@ export async function getSpinitronCapabilityHealth() {
     attributionRows.rows.map((row) => [row.station_id, row]),
   );
   const now = Date.now();
-  const stations = rows.map(({ config, ...row }) => {
+  const stations = rows.map((row) => {
+    const {
+      stationId,
+      stationSlug,
+      stationName,
+      source,
+      config,
+    } = row;
     const capabilities = spinitronSourceCapabilities(row.source, config);
     const evidence = attributionByStation.get(row.stationId);
     const latestAttributionAt = evidence?.latest_attribution_at ?? null;
@@ -207,7 +214,7 @@ export async function getSpinitronCapabilityHealth() {
           new Date(latestAttributionAt).getTime())
         ? {
             at: row.scheduleFailureAt,
-            reason: row.scheduleFailureReason ?? "unknown",
+            reason: "schedule_fetch_failed" as const,
           }
         : null;
     const providerFailure =
@@ -218,7 +225,7 @@ export async function getSpinitronCapabilityHealth() {
           new Date(latestAttributionAt).getTime())
         ? {
             at: row.sourceLastAttemptAt,
-            reason: row.sourceLastDetail ?? "provider_response_error",
+            reason: "provider_response_error" as const,
           }
         : null;
     const attributionFailure = providerFailure ?? scheduleFailure;
@@ -236,7 +243,10 @@ export async function getSpinitronCapabilityHealth() {
                 ? "configured_no_evidence"
                 : "public_only";
     return {
-      ...row,
+      stationId,
+      stationSlug,
+      stationName,
+      source,
       capabilities,
       attribution: {
         status: attributionStatus,
