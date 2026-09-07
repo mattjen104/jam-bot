@@ -12,6 +12,7 @@ async function readRow() {
   const result = await db.execute(sql`
     SELECT
       owner_id AS "ownerId",
+      process_started_at AS "processStartedAt",
       heartbeat_at AS "heartbeatAt",
       active,
       last_cycle_completed_at AS "lastCycleCompletedAt",
@@ -23,9 +24,10 @@ async function readRow() {
   return result.rows[0] as
     | {
         ownerId: string;
+        processStartedAt: Date | string;
         heartbeatAt: Date;
         active: boolean;
-        lastCycleCompletedAt: Date | null;
+        lastCycleCompletedAt: Date | string | null;
         attemptedStationCount: number;
         successfulStationCount: number;
       }
@@ -50,6 +52,45 @@ afterAll(async () => {
 });
 
 describe("poller health rolling restart persistence", () => {
+  it("rejects an older owner's initial claim when its database write arrives late", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-07T11:00:00.000Z"));
+
+    let releaseOwnerA!: () => void;
+    const ownerAGate = new Promise<void>((resolve) => {
+      releaseOwnerA = resolve;
+    });
+
+    vi.resetModules();
+    const ownerA = await import("../src/lore/poller-health.js");
+    ownerA.setPollerHealthKeyForTests(healthKey);
+    ownerA.setPollerOwnershipGateForTests(ownerAGate);
+    const ownerAStart = ownerA.startPollerHeartbeat([10]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    vi.setSystemTime(new Date("2026-09-07T11:02:00.000Z"));
+    vi.resetModules();
+    const ownerB = await import("../src/lore/poller-health.js");
+    ownerB.setPollerHealthKeyForTests(healthKey);
+    await ownerB.startPollerHeartbeat([10]);
+
+    const claimedByB = await readRow();
+    expect(new Date(claimedByB!.processStartedAt)).toEqual(
+      new Date("2026-09-07T11:02:00.000Z"),
+    );
+
+    releaseOwnerA();
+    await ownerAStart;
+
+    expect(await readRow()).toEqual(claimedByB);
+
+    await ownerA.stopPollerHeartbeat();
+    await ownerB.stopPollerHeartbeat();
+    await db.execute(sql`DELETE FROM lore_poller_health WHERE key = ${healthKey}`);
+  });
+
   it("rejects a retiring owner's late writes and carries cycle counters into the replacement", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
@@ -64,12 +105,12 @@ describe("poller health rolling restart persistence", () => {
     ownerA.recordPollerCompletion(10, true);
     ownerA.recordPollerCompletion(20, false);
     ownerA.recordPollerCompletion(30, true);
-    await vi.advanceTimersByTimeAsync(ownerA.POLLER_HEARTBEAT_INTERVAL_MS);
+    await ownerA.persistPollerHeartbeatForTests();
 
     const completedByA = await readRow();
     expect(completedByA?.attemptedStationCount).toBe(3);
     expect(completedByA?.successfulStationCount).toBe(2);
-    expect(completedByA?.lastCycleCompletedAt).toBeInstanceOf(Date);
+    expect(completedByA?.lastCycleCompletedAt).not.toBeNull();
 
     vi.setSystemTime(new Date("2026-09-07T12:02:00.000Z"));
     vi.resetModules();
@@ -87,13 +128,13 @@ describe("poller health rolling restart persistence", () => {
     );
 
     vi.setSystemTime(new Date("2026-09-07T12:03:00.000Z"));
-    await vi.advanceTimersByTimeAsync(ownerA.POLLER_HEARTBEAT_INTERVAL_MS);
+    await ownerA.persistPollerHeartbeatForTests();
     await ownerA.stopPollerHeartbeat();
 
     const afterLateOwnerA = await readRow();
     expect(afterLateOwnerA).toEqual(takenOverByB);
 
-    await vi.advanceTimersByTimeAsync(ownerB.POLLER_HEARTBEAT_INTERVAL_MS);
+    await ownerB.persistPollerHeartbeatForTests();
     const afterOwnerBHeartbeat = await readRow();
     expect(afterOwnerBHeartbeat?.ownerId).toBe(takenOverByB?.ownerId);
     expect(afterOwnerBHeartbeat?.active).toBe(true);

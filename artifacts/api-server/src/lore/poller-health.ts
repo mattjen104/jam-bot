@@ -73,6 +73,7 @@ interface RuntimeState {
 let runtime: RuntimeState | null = null;
 let heartbeatTimer: NodeJS.Timeout | null = null;
 let persistenceQueue: Promise<void> = Promise.resolve();
+let ownershipGateForTests: Promise<void> | null = null;
 
 export function classifyPollerHeartbeat(
   row: Pick<
@@ -142,7 +143,38 @@ async function readDurableRow(
     FROM lore_poller_health
     WHERE key = ${key}
   `);
-  return (result.rows[0] as unknown as DurablePollerHealthRow | undefined) ?? null;
+  const row = result.rows[0] as
+    | (Omit<
+        DurablePollerHealthRow,
+        | "processStartedAt"
+        | "heartbeatAt"
+        | "cycleStartedAt"
+        | "lastCycleCompletedAt"
+        | "lastStallDetectedAt"
+        | "lastRecoveredAt"
+      > & {
+        processStartedAt: Date | string;
+        heartbeatAt: Date | string;
+        cycleStartedAt: Date | string;
+        lastCycleCompletedAt: Date | string | null;
+        lastStallDetectedAt: Date | string | null;
+        lastRecoveredAt: Date | string | null;
+      })
+    | undefined;
+  if (!row) return null;
+  return {
+    ...row,
+    processStartedAt: new Date(row.processStartedAt),
+    heartbeatAt: new Date(row.heartbeatAt),
+    cycleStartedAt: new Date(row.cycleStartedAt),
+    lastCycleCompletedAt: row.lastCycleCompletedAt
+      ? new Date(row.lastCycleCompletedAt)
+      : null,
+    lastStallDetectedAt: row.lastStallDetectedAt
+      ? new Date(row.lastStallDetectedAt)
+      : null,
+    lastRecoveredAt: row.lastRecoveredAt ? new Date(row.lastRecoveredAt) : null,
+  };
 }
 
 function rosterComplete(state: RuntimeState): boolean {
@@ -170,6 +202,7 @@ function completeFleetCycleIfReady(now: Date = new Date()): void {
 }
 
 async function takeOwnership(state: RuntimeState): Promise<void> {
+  await ownershipGateForTests;
   await db.execute(sql`
     INSERT INTO lore_poller_health (
       key, owner_id, process_started_at, heartbeat_at, active,
@@ -197,6 +230,7 @@ async function takeOwnership(state: RuntimeState): Promise<void> {
       last_stall_detected_at = EXCLUDED.last_stall_detected_at,
       last_recovered_at = EXCLUDED.last_recovered_at,
       updated_at = now()
+    WHERE lore_poller_health.process_started_at <= EXCLUDED.process_started_at
   `);
 }
 
@@ -390,10 +424,19 @@ export function clearPollerHealthForTests(): void {
   heartbeatTimer = null;
   runtime = null;
   persistenceQueue = Promise.resolve();
+  ownershipGateForTests = null;
   healthKey = DEFAULT_HEALTH_KEY;
 }
 
 export function setPollerHealthKeyForTests(key: string): void {
   if (runtime) throw new Error("Cannot change poller health key while heartbeat is active");
   healthKey = key;
+}
+
+export function setPollerOwnershipGateForTests(gate: Promise<void> | null): void {
+  ownershipGateForTests = gate;
+}
+
+export function persistPollerHeartbeatForTests(now: Date = new Date()): Promise<void> {
+  return queueHeartbeat(now);
 }
