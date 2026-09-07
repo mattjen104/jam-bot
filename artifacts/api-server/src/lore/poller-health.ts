@@ -8,7 +8,8 @@ export const POLLER_STALE_THRESHOLD_MS = 3 * POLLER_HEARTBEAT_INTERVAL_MS;
 // minutes on a large roster. Forty-five minutes allows a full round without
 // masking a genuinely wedged set of station workers.
 export const POLLER_CYCLE_STALE_THRESHOLD_MS = 45 * 60_000;
-const HEALTH_KEY = "now-playing";
+const DEFAULT_HEALTH_KEY = "now-playing";
+let healthKey = DEFAULT_HEALTH_KEY;
 
 export type PollerRecoveryState = "healthy" | "recovering" | "stalled" | "stopped";
 
@@ -51,6 +52,7 @@ export interface PollerHealthSnapshot {
 }
 
 interface RuntimeState {
+  healthKey: string;
   ownerId: string;
   processStartedAt: Date;
   heartbeatAt: Date;
@@ -120,7 +122,9 @@ export function classifyPollerHeartbeat(
   };
 }
 
-async function readDurableRow(): Promise<DurablePollerHealthRow | null> {
+async function readDurableRow(
+  key: string = healthKey,
+): Promise<DurablePollerHealthRow | null> {
   const result = await db.execute(sql`
     SELECT
       process_started_at AS "processStartedAt",
@@ -136,7 +140,7 @@ async function readDurableRow(): Promise<DurablePollerHealthRow | null> {
       last_stall_detected_at AS "lastStallDetectedAt",
       last_recovered_at AS "lastRecoveredAt"
     FROM lore_poller_health
-    WHERE key = ${HEALTH_KEY}
+    WHERE key = ${key}
   `);
   return (result.rows[0] as unknown as DurablePollerHealthRow | undefined) ?? null;
 }
@@ -173,7 +177,7 @@ async function takeOwnership(state: RuntimeState): Promise<void> {
       last_cycle_completed_at, attempted_station_count, successful_station_count,
       recovery_state, last_stall_detected_at, last_recovered_at, updated_at
     ) VALUES (
-      ${HEALTH_KEY}, ${state.ownerId}, ${state.processStartedAt}, ${state.heartbeatAt}, true,
+      ${state.healthKey}, ${state.ownerId}, ${state.processStartedAt}, ${state.heartbeatAt}, true,
       ${state.expectedStationIds.size}, ${state.enrolledStationIds.size}, ${state.cycleStartedAt},
       ${state.lastCycleCompletedAt}, ${state.attemptedStationCount}, ${state.successfulStationCount},
       ${state.recoveryState}, ${state.lastStallDetectedAt}, ${state.lastRecoveredAt}, now()
@@ -237,7 +241,7 @@ async function persistHeartbeat(state: RuntimeState, now: Date): Promise<void> {
       last_stall_detected_at = ${state.lastStallDetectedAt},
       last_recovered_at = ${state.lastRecoveredAt},
       updated_at = now()
-    WHERE key = ${HEALTH_KEY} AND owner_id = ${state.ownerId}
+    WHERE key = ${state.healthKey} AND owner_id = ${state.ownerId}
   `);
 }
 
@@ -254,12 +258,14 @@ function queueHeartbeat(now: Date = new Date()): Promise<void> {
 
 export async function startPollerHeartbeat(expectedStationIds: number[]): Promise<void> {
   const now = new Date();
-  const previous = await readDurableRow().catch(() => null);
+  const key = healthKey;
+  const previous = await readDurableRow(key).catch(() => null);
   const previousHealth = classifyPollerHeartbeat(previous, now);
   const recovering =
     previousHealth.stale || previous?.active === true || previous?.recoveryState === "stalled";
 
   runtime = {
+    healthKey: key,
     ownerId: randomUUID(),
     processStartedAt: now,
     heartbeatAt: now,
@@ -330,7 +336,7 @@ export async function stopPollerHeartbeat(): Promise<void> {
   await db.execute(sql`
     UPDATE lore_poller_health
     SET active = false, recovery_state = 'stopped', updated_at = now()
-    WHERE key = ${HEALTH_KEY} AND owner_id = ${state.ownerId}
+    WHERE key = ${state.healthKey} AND owner_id = ${state.ownerId}
   `).catch(() => undefined);
 }
 
@@ -384,4 +390,10 @@ export function clearPollerHealthForTests(): void {
   heartbeatTimer = null;
   runtime = null;
   persistenceQueue = Promise.resolve();
+  healthKey = DEFAULT_HEALTH_KEY;
+}
+
+export function setPollerHealthKeyForTests(key: string): void {
+  if (runtime) throw new Error("Cannot change poller health key while heartbeat is active");
+  healthKey = key;
 }
