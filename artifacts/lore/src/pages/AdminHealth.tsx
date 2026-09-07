@@ -71,11 +71,36 @@ interface SpinitronWebStation {
   lastNullAt: string;
   consecutiveNulls: number;
   staleSinceMs: number;
+  lastOutcome?: "success" | "null" | "http_error" | "timeout" | "network_error" | "parser_error";
+  lastHttpStatus?: number | null;
 }
 
 interface SpinitronWebResponse {
   staleCount: number;
   stations: SpinitronWebStation[];
+}
+
+interface PollerHealthResponse {
+  active?: boolean;
+  stale?: boolean;
+  status?: "healthy" | "recovering" | "stalled" | "stopped";
+  processStartedAt?: string | null;
+  heartbeatAt?: string | null;
+  heartbeatAgeMs?: number | null;
+  staleThresholdMs?: number;
+  cycleStaleThresholdMs?: number;
+  cycleAgeMs?: number | null;
+  expectedStationCount?: number;
+  enrolledStationCount?: number;
+  rosterComplete?: boolean;
+  cycleStartedAt?: string | null;
+  lastCycleCompletedAt?: string | null;
+  attemptedStationCount?: number;
+  successfulStationCount?: number;
+  currentAttemptedStationCount?: number;
+  currentSuccessfulStationCount?: number;
+  lastStallDetectedAt?: string | null;
+  lastRecoveredAt?: string | null;
 }
 
 interface SpinitronCapabilityStation {
@@ -328,6 +353,9 @@ function HealthPanel({
   const [phError, setPhError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [spiWeb, setSpiWeb] = useState<SpinitronWebResponse | null>(null);
   const [swError, setSwError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [pollerHealth, setPollerHealth] = useState<PollerHealthResponse | null>(null);
+  const [pollerError, setPollerError] =
+    useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [spinitronCapabilities, setSpinitronCapabilities] =
     useState<SpinitronCapabilityResponse | null>(null);
   const [spinitronCapabilitiesError, setSpinitronCapabilitiesError] =
@@ -356,6 +384,36 @@ function HealthPanel({
       setLoadError(null);
 
       const headers = { "x-admin-token": token };
+
+      const pollerPromise = (async () => {
+        try {
+          const response = await fetch("/api/admin/poller-health", { headers });
+          if (response.ok) {
+            setPollerHealth((await response.json()) as PollerHealthResponse);
+            setPollerError(null);
+            return true;
+          }
+          // Older API deployments do not expose this section yet. Keep the
+          // rest of Admin Health usable during a rolling frontend/backend update.
+          if (response.status === 404) {
+            setPollerHealth(null);
+            setPollerError(null);
+            return true;
+          }
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
+          setPollerError({
+            kind: response.status === 401 ? "auth" : "server",
+            message: body.error ?? `HTTP ${response.status}`,
+          });
+        } catch (err) {
+          setPollerError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+        }
+        setPollerHealth(null);
+        return false;
+      })();
 
       // ── Feed-freshness (independent error path) ─────────────────────────
       const ffPromise = (async () => {
@@ -631,6 +689,7 @@ function HealthPanel({
 
       try {
         const [
+          pollerOk,
           ffOk,
           rlOk,
           phOk,
@@ -642,6 +701,7 @@ function HealthPanel({
           showAttributionOk,
           genreOk,
         ] = await Promise.all([
+          pollerPromise,
           ffPromise,
           rlPromise,
           phPromise,
@@ -658,6 +718,7 @@ function HealthPanel({
         // top-level banner is a last-resort "nothing works at all" indicator.
         if (
           !ffOk &&
+          !pollerOk &&
           !rlOk &&
           !phOk &&
           !swOk &&
@@ -698,6 +759,8 @@ function HealthPanel({
     !loadError &&
     !ffError &&
     !swError &&
+    !pollerError &&
+    (!pollerHealth || pollerHealth.status === "healthy") &&
     totalStale === 0;
 
   return (
@@ -770,6 +833,20 @@ function HealthPanel({
               No silent stations detected. BBC and SomaFM feeds are receiving spins on schedule.
             </p>
           </div>
+        )}
+
+        {/* Feed freshness section — error or data, independent of spinitron-web */}
+        {!loading && pollerError && (
+          <SectionErrorBanner
+            icon={<Radio className="h-4 w-4" />}
+            title="Now-playing poller"
+            kind={pollerError.kind}
+            message={pollerError.message}
+            data-testid="poller-health-error"
+          />
+        )}
+        {!loading && !pollerError && pollerHealth && (
+          <PollerHealthSection health={pollerHealth} />
         )}
 
         {/* Feed freshness section — error or data, independent of spinitron-web */}
@@ -1213,8 +1290,80 @@ function SpinitronWebCard({ station }: { station: SpinitronWebStation }) {
         <DataRow label="Last success" value={formatTimestamp(station.lastSuccessAt)} />
         <DataRow label="Last null" value={formatTimestamp(station.lastNullAt)} />
         <DataRow label="Consecutive nulls" value={String(station.consecutiveNulls)} />
+        <DataRow
+          label="Last outcome"
+          value={
+            station.lastOutcome
+              ? `${station.lastOutcome}${station.lastHttpStatus ? ` · HTTP ${station.lastHttpStatus}` : ""}`
+              : "Unavailable"
+          }
+        />
       </dl>
     </div>
+  );
+}
+
+function PollerHealthSection({ health }: { health: PollerHealthResponse }) {
+  const status = health.stale
+    ? "stalled"
+    : health.status ?? (health.active === false ? "stopped" : "healthy");
+  const isOutage = status === "stalled" || status === "stopped";
+  const expected = health.expectedStationCount ?? 0;
+  const enrolled = health.enrolledStationCount ?? 0;
+  const attempted = health.attemptedStationCount ?? 0;
+  const succeeded = health.successfulStationCount ?? 0;
+
+  return (
+    <section className="mt-10" data-testid="poller-health-section">
+      <SectionHeading
+        icon={isOutage ? <AlertTriangle className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
+        title="Now-playing poller"
+        badge={succeeded}
+        description={
+          isOutage
+            ? "Fleet-wide ingestion is not advancing. Treat this as a poller/process outage, not as simultaneous station failures."
+            : status === "recovering"
+              ? "The process restarted and re-enrolled the station roster. Waiting for a successful source observation to confirm recovery."
+              : "Process heartbeat is advancing independently of individual source results."
+        }
+      />
+      <div
+        className={`mt-4 rounded-xl border px-5 py-4 ${
+          isOutage
+            ? "border-destructive/30 bg-destructive/10"
+            : "border-card-border bg-card"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-normal text-foreground">
+            {status === "healthy"
+              ? "Active"
+              : status === "recovering"
+                ? "Recovering after restart"
+                : status === "stalled"
+                  ? "Heartbeat stalled"
+                  : "Stopped"}
+          </span>
+          <span className="font-mono text-sm uppercase text-muted-foreground">{status}</span>
+        </div>
+        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-base sm:grid-cols-3">
+          <DataRow label="Last heartbeat" value={formatTimestamp(health.heartbeatAt ?? null)} />
+          <DataRow
+            label="Last completed cycle"
+            value={formatTimestamp(health.lastCycleCompletedAt ?? null)}
+          />
+          <DataRow label="Process started" value={formatTimestamp(health.processStartedAt ?? null)} />
+          <DataRow label="Roster enrolled" value={`${enrolled} / ${expected}`} />
+          <DataRow label="Stations attempted" value={String(attempted)} />
+          <DataRow label="Successful observations" value={String(succeeded)} />
+        </dl>
+        {health.rosterComplete === false && expected > 0 && (
+          <p className="mt-3 text-sm text-destructive">
+            The active station roster is not fully enrolled.
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -1609,6 +1609,38 @@ export const GetAdminPlaybackHealthResponse = zod.object({
 });
 
 /**
+ * Admin-only process heartbeat and full-roster cycle progress for distinguishing a fleet scheduler outage from individual source failures.
+ * @summary Fleet-wide now-playing poller health
+ */
+export const GetAdminPollerHealthHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const GetAdminPollerHealthResponse = zod.object({
+  processStartedAt: zod.string().datetime({}).nullish(),
+  heartbeatAt: zod.string().datetime({}).nullish(),
+  active: zod.boolean(),
+  stale: zod.boolean(),
+  status: zod.enum(["healthy", "stalled", "recovering", "stopped"]),
+  heartbeatAgeMs: zod.number().nullable(),
+  staleThresholdMs: zod.number(),
+  cycleStaleThresholdMs: zod.number(),
+  cycleAgeMs: zod.number().nullable(),
+  expectedStationCount: zod.number(),
+  enrolledStationCount: zod.number(),
+  rosterComplete: zod.boolean(),
+  cycleStartedAt: zod.string().datetime({}).nullish(),
+  lastCycleCompletedAt: zod.string().datetime({}).nullish(),
+  attemptedStationCount: zod.number(),
+  successfulStationCount: zod.number(),
+  currentAttemptedStationCount: zod.number(),
+  currentCompletedStationCount: zod.number(),
+  currentSuccessfulStationCount: zod.number(),
+  lastStallDetectedAt: zod.string().datetime({}).nullish(),
+  lastRecoveredAt: zod.string().datetime({}).nullish(),
+});
+
+/**
  * @summary Remaining unclassified schedule failures
  */
 export const GetAdminScheduleCoverageHealthHeader = zod.object({

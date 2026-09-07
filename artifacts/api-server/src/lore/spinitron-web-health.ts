@@ -20,6 +20,8 @@ export interface SpinitronWebStationState {
   lastSuccessAt: Date | null;
   lastNullAt: Date | null;
   consecutiveNulls: number;
+  lastOutcome: "success" | "null" | "http_error" | "timeout" | "network_error" | "parser_error";
+  lastHttpStatus: number | null;
 }
 
 export interface SpinitronWebStaleEntry {
@@ -29,6 +31,8 @@ export interface SpinitronWebStaleEntry {
   lastNullAt: Date;
   consecutiveNulls: number;
   staleSinceMs: number;
+  lastOutcome: SpinitronWebStationState["lastOutcome"];
+  lastHttpStatus: number | null;
 }
 
 const state = new Map<number, SpinitronWebStationState>();
@@ -44,8 +48,9 @@ const state = new Map<number, SpinitronWebStationState>();
 export function recordSpinitronWebResult(
   stationId: number,
   slug: string,
-  kind: "success" | "null",
+  kind: SpinitronWebStationState["lastOutcome"],
   now: Date = new Date(),
+  httpStatus: number | null = null,
 ): { shouldWarn: true; lastSuccessAt: Date } | { shouldWarn: false } {
   const existing = state.get(stationId) ?? {
     stationId,
@@ -53,6 +58,8 @@ export function recordSpinitronWebResult(
     lastSuccessAt: null,
     lastNullAt: null,
     consecutiveNulls: 0,
+    lastOutcome: "null" as const,
+    lastHttpStatus: null,
   };
 
   if (kind === "success") {
@@ -61,6 +68,8 @@ export function recordSpinitronWebResult(
       slug,
       lastSuccessAt: now,
       consecutiveNulls: 0,
+      lastOutcome: kind,
+      lastHttpStatus: httpStatus,
     });
     return { shouldWarn: false };
   }
@@ -71,6 +80,8 @@ export function recordSpinitronWebResult(
     slug,
     lastNullAt: now,
     consecutiveNulls: newNulls,
+    lastOutcome: kind,
+    lastHttpStatus: httpStatus,
   });
 
   if (existing.lastSuccessAt !== null && newNulls === 1) {
@@ -107,6 +118,8 @@ export function getSpinitronWebStaleStations(
         lastNullAt: entry.lastNullAt,
         consecutiveNulls: entry.consecutiveNulls,
         staleSinceMs,
+        lastOutcome: entry.lastOutcome,
+        lastHttpStatus: entry.lastHttpStatus,
       });
     }
   }

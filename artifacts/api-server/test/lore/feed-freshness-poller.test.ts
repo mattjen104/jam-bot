@@ -35,6 +35,7 @@ const {
   mockGetNowPlayingAdapter,
   mockLogSpinIfChanged,
   mockTryJoinHostGroup,
+  mockRecordPollerCompletion,
 } = vi.hoisted(() => ({
   mockLimit: vi.fn(),
   mockIngestRawSpins: vi.fn(),
@@ -42,6 +43,7 @@ const {
   mockGetNowPlayingAdapter: vi.fn(),
   mockLogSpinIfChanged: vi.fn(),
   mockTryJoinHostGroup: vi.fn(),
+  mockRecordPollerCompletion: vi.fn(),
 }));
 
 // ---- Module mocks ----------------------------------------------------------
@@ -63,7 +65,19 @@ vi.mock("@workspace/db", async (importOriginal) => {
 vi.mock("../../src/lore/adapters.js", () => ({
   getHistoryAdapter: mockGetHistoryAdapter,
   getNowPlayingAdapter: mockGetNowPlayingAdapter,
+  fetchSpinitronWebWithOutcome: vi.fn(),
+  hasSpinitronAuthentication: vi.fn(() => false),
   isPollable: vi.fn(() => true),
+}));
+
+vi.mock("../../src/lore/poller-health.js", () => ({
+  startPollerHeartbeat: vi.fn(),
+  stopPollerHeartbeat: vi.fn(),
+  markPollerRosterEnrolled: vi.fn(),
+  registerPollerStation: vi.fn(),
+  unregisterPollerStation: vi.fn(),
+  recordPollerAttempt: vi.fn(),
+  recordPollerCompletion: mockRecordPollerCompletion,
 }));
 
 vi.mock("../../src/lore/resolve.js", () => ({
@@ -140,6 +154,21 @@ beforeEach(() => {
   mockGetNowPlayingAdapter.mockReset().mockReturnValue(null);
   mockLogSpinIfChanged.mockReset().mockResolvedValue(false);
   mockTryJoinHostGroup.mockReset().mockReturnValue(false);
+  mockRecordPollerCompletion.mockReset();
+});
+
+it("counts an unchanged current track as a successful fleet observation", async () => {
+  const station = makeStation(1099, "unchanged-fm", "station_page");
+  mockGetHistoryAdapter.mockReturnValue(null);
+  mockGetNowPlayingAdapter.mockReturnValue(
+    vi.fn().mockResolvedValue({ rawArtist: "Broadcast", rawTitle: "Echo's Answer" }),
+  );
+  mockLogSpinIfChanged.mockResolvedValue(false);
+
+  await pollStation(station);
+
+  expect(mockLogSpinIfChanged).toHaveBeenCalledOnce();
+  expect(mockRecordPollerCompletion).toHaveBeenCalledWith(station.id, true);
 });
 
 function wicbStation(id: number, favorite = false): Station {

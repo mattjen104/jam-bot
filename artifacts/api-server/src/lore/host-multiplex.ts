@@ -54,6 +54,9 @@ export interface MultiplexConfig {
 type ReenrollHook = (station: Station) => void;
 let fallbackToInterval: ReenrollHook = () => {};
 let reenrollStation: ReenrollHook = () => {};
+let recordFleetAttempt: (stationId: number) => void = () => {};
+let recordFleetCompletion: (stationId: number, successful: boolean) => void =
+  () => {};
 
 /**
  * Install poller hooks. `fallback` schedules classic per-station interval
@@ -64,9 +67,13 @@ let reenrollStation: ReenrollHook = () => {};
 export function initHostMultiplex(hooks: {
   fallback: ReenrollHook;
   reenroll: ReenrollHook;
+  recordAttempt?: (stationId: number) => void;
+  recordCompletion?: (stationId: number, successful: boolean) => void;
 }): void {
   fallbackToInterval = hooks.fallback;
   reenrollStation = hooks.reenroll;
+  recordFleetAttempt = hooks.recordAttempt ?? (() => {});
+  recordFleetCompletion = hooks.recordCompletion ?? (() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +358,10 @@ function recordHostGroupOutcome(
   responded: boolean,
 ): void {
   for (const station of group.stations.values()) {
+    recordFleetCompletion(
+      station.id,
+      outcome === "empty_metadata" && responded,
+    );
     void recordMetadataQuality({
       stationId: station.id,
       source: station.nowPlayingSource ?? "radio_browser_icy",
@@ -368,6 +379,9 @@ function recordHostGroupOutcome(
 async function pollHostGroup(group: HostGroup): Promise<void> {
   if (group.inFlight) return; // overlap guard — one fetch per host at a time
   group.inFlight = true;
+  for (const station of group.stations.values()) {
+    recordFleetAttempt(station.id);
+  }
   try {
     if (group.flavor === "icecast") {
       const res = await fetch(`${group.origin}/status-json.xsl`, {
@@ -414,6 +428,9 @@ async function pollHostGroup(group: HostGroup): Promise<void> {
               : "Configured stream mount was absent from Icecast status.",
           });
         }
+      }
+      for (const station of group.stations.values()) {
+        recordFleetCompletion(station.id, true);
       }
     } else {
       const res = await fetch(`${group.origin}/api/nowplaying`, {
@@ -470,6 +487,9 @@ async function pollHostGroup(group: HostGroup): Promise<void> {
           responded: true,
           detail: "AzuraCast response contained no current track for this station.",
         });
+      }
+      for (const station of group.stations.values()) {
+        recordFleetCompletion(station.id, true);
       }
     }
   } catch (err) {
@@ -586,6 +606,8 @@ function sseOnFailure(conn: SseConn, message: string): void {
   );
   conn.failureTimestamps.push(now);
   for (const station of conn.stations.values()) {
+    recordFleetAttempt(station.id);
+    recordFleetCompletion(station.id, false);
     void recordMetadataQuality({
       stationId: station.id,
       source: station.nowPlayingSource ?? "radio_browser_icy",
@@ -641,6 +663,10 @@ function connectSse(conn: SseConn): void {
         if (done) break;
         if (conn.generation !== generation) return; // membership changed
         armIdle();
+        for (const station of conn.stations.values()) {
+          recordFleetAttempt(station.id);
+          recordFleetCompletion(station.id, true);
+        }
         // Success signal — reset backoff/failures once bytes flow.
         conn.backoffMs = SSE_BACKOFF_FLOOR_MS;
         conn.failureTimestamps = [];

@@ -520,6 +520,92 @@ paths:
           description: Missing or invalid admin token
         "503":
           description: Admin entry not configured
+  /admin/poller-health:
+    get:
+      operationId: getAdminPollerHealth
+      tags: [admin]
+      summary: Fleet-wide now-playing poller health
+      description: >-
+        Admin-only process heartbeat and full-roster cycle progress for
+        distinguishing a fleet scheduler outage from individual source failures.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Current poller process and fleet-cycle health
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - active
+                  - stale
+                  - status
+                  - heartbeatAgeMs
+                  - staleThresholdMs
+                  - cycleStaleThresholdMs
+                  - cycleAgeMs
+                  - expectedStationCount
+                  - enrolledStationCount
+                  - rosterComplete
+                  - attemptedStationCount
+                  - successfulStationCount
+                  - currentAttemptedStationCount
+                  - currentCompletedStationCount
+                  - currentSuccessfulStationCount
+                properties:
+                  processStartedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  heartbeatAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  active: { type: boolean }
+                  stale: { type: boolean }
+                  status:
+                    type: string
+                    enum: [healthy, stalled, recovering, stopped]
+                  heartbeatAgeMs:
+                    type: integer
+                    nullable: true
+                  staleThresholdMs: { type: integer }
+                  cycleStaleThresholdMs: { type: integer }
+                  cycleAgeMs:
+                    type: integer
+                    nullable: true
+                  expectedStationCount: { type: integer }
+                  enrolledStationCount: { type: integer }
+                  rosterComplete: { type: boolean }
+                  cycleStartedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  lastCycleCompletedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  attemptedStationCount: { type: integer }
+                  successfulStationCount: { type: integer }
+                  currentAttemptedStationCount: { type: integer }
+                  currentCompletedStationCount: { type: integer }
+                  currentSuccessfulStationCount: { type: integer }
+                  lastStallDetectedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  lastRecoveredAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
   /admin/schedule-coverage-health:
     get:
       operationId: getAdminScheduleCoverageHealth

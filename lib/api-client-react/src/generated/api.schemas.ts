@@ -4863,6 +4863,40 @@ export type ListStationsNowPlayingParams = {
   includeModePools?: boolean;
 };
 
+export type GetAdminPollerHealth200Status =
+  (typeof GetAdminPollerHealth200Status)[keyof typeof GetAdminPollerHealth200Status];
+
+export const GetAdminPollerHealth200Status = {
+  healthy: "healthy",
+  stalled: "stalled",
+  recovering: "recovering",
+  stopped: "stopped",
+} as const;
+
+export type GetAdminPollerHealth200 = {
+  processStartedAt?: string | null;
+  heartbeatAt?: string | null;
+  active: boolean;
+  stale: boolean;
+  status: GetAdminPollerHealth200Status;
+  heartbeatAgeMs: number | null;
+  staleThresholdMs: number;
+  cycleStaleThresholdMs: number;
+  cycleAgeMs: number | null;
+  expectedStationCount: number;
+  enrolledStationCount: number;
+  rosterComplete: boolean;
+  cycleStartedAt?: string | null;
+  lastCycleCompletedAt?: string | null;
+  attemptedStationCount: number;
+  successfulStationCount: number;
+  currentAttemptedStationCount: number;
+  currentCompletedStationCount: number;
+  currentSuccessfulStationCount: number;
+  lastStallDetectedAt?: string | null;
+  lastRecoveredAt?: string | null;
+};
+
 export type GetRecordingsAvailabilityParams = {
   /**
    * Comma-separated recording MBIDs (max 100).

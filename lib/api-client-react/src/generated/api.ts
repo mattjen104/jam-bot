@@ -47,6 +47,7 @@ import type {
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
+  GetAdminPollerHealth200,
   GetArchiveRecentRunsParams,
   GetEmbedCoverageParams,
   GetEmbedCoverageResponse,
@@ -1652,6 +1653,82 @@ export function useGetAdminPlaybackHealth<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetAdminPlaybackHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Admin-only process heartbeat and full-roster cycle progress for distinguishing a fleet scheduler outage from individual source failures.
+ * @summary Fleet-wide now-playing poller health
+ */
+export const getGetAdminPollerHealthUrl = () => {
+  return `/api/admin/poller-health`;
+};
+
+export const getAdminPollerHealth = async (
+  options?: RequestInit,
+): Promise<GetAdminPollerHealth200> => {
+  return customFetch<GetAdminPollerHealth200>(getGetAdminPollerHealthUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminPollerHealthQueryKey = () => {
+  return [`/api/admin/poller-health`] as const;
+};
+
+export const getGetAdminPollerHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminPollerHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPollerHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminPollerHealthQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminPollerHealth>>
+  > = ({ signal }) => getAdminPollerHealth({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPollerHealth>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminPollerHealthQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminPollerHealth>>
+>;
+export type GetAdminPollerHealthQueryError = ErrorType<void>;
+
+/**
+ * @summary Fleet-wide now-playing poller health
+ */
+
+export function useGetAdminPollerHealth<
+  TData = Awaited<ReturnType<typeof getAdminPollerHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPollerHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminPollerHealthQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

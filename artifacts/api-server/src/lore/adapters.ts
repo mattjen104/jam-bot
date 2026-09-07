@@ -1519,11 +1519,23 @@ export function parseSpinitronWebPage(html: string): NowPlayingRaw | null {
  * Config: `{ callsign: "WPRB" }`.
  * Best-effort: returns null on any error, parse failure, or when nothing plays.
  */
-const spinitronWeb: NowPlayingAdapter = async (config) => {
+export type SpinitronWebOutcome =
+  | { kind: "success"; status: number }
+  | { kind: "http_error"; status: number }
+  | { kind: "timeout" }
+  | { kind: "network_error" }
+  | { kind: "parser_error"; status: number };
+
+export async function fetchSpinitronWebWithOutcome(
+  config: Record<string, unknown>,
+  fetchFn: typeof fetch = fetch,
+): Promise<{ nowPlaying: NowPlayingRaw | null; outcome: SpinitronWebOutcome }> {
   const callsign = str(config.callsign);
-  if (!callsign) return null;
+  if (!callsign) {
+    return { nowPlaying: null, outcome: { kind: "parser_error", status: 0 } };
+  }
   try {
-    const res = await fetch(
+    const res = await fetchFn(
       `https://spinitron.com/${encodeURIComponent(callsign)}/`,
       {
         headers: {
@@ -1536,7 +1548,9 @@ const spinitronWeb: NowPlayingAdapter = async (config) => {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return { nowPlaying: null, outcome: { kind: "http_error", status: res.status } };
+    }
 
     const contentType = res.headers.get("content-type") ?? "";
     if (contentType.includes("json")) {
@@ -1550,16 +1564,41 @@ const spinitronWeb: NowPlayingAdapter = async (config) => {
           : typeof body.title === "string"
             ? body.title.trim()
             : null;
-      if (rawArtist && rawTitle) return { rawArtist, rawTitle };
-      return null;
+      if (rawArtist && rawTitle) {
+        return {
+          nowPlaying: { rawArtist, rawTitle },
+          outcome: { kind: "success", status: res.status },
+        };
+      }
+      return {
+        nowPlaying: null,
+        outcome: { kind: "parser_error", status: res.status },
+      };
     }
 
     // HTML response (current Spinitron behaviour) — parse the page widget.
     const html = await res.text();
-    return parseSpinitronWebPage(html);
-  } catch {
-    return null;
+    const nowPlaying = parseSpinitronWebPage(html);
+    return {
+      nowPlaying,
+      outcome: nowPlaying
+        ? { kind: "success", status: res.status }
+        : { kind: "parser_error", status: res.status },
+    };
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    return {
+      nowPlaying: null,
+      outcome:
+        name === "AbortError" || name === "TimeoutError"
+          ? { kind: "timeout" }
+          : { kind: "network_error" },
+    };
   }
+}
+
+const spinitronWeb: NowPlayingAdapter = async (config) => {
+  return (await fetchSpinitronWebWithOutcome(config)).nowPlaying;
 };
 
 // ---- The Lot Radio schedule (now-playing, change-detection) ------------

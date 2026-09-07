@@ -98,6 +98,7 @@ import {
 } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, getFeedFreshnessStaleStations, coverageClassFor } from "../../lore/poller.js";
 import { monitoringSince } from "../../lore/feed-freshness-health.js";
+import { getPollerHealth } from "../../lore/poller-health.js";
 import {
   latencyMonitoringSince,
   getSlowResolutionStations,
@@ -1924,7 +1925,22 @@ router.get("/admin/spinitron-web-health", h(async (_req, res) => {
       lastNullAt: s.lastNullAt.toISOString(),
       consecutiveNulls: s.consecutiveNulls,
       staleSinceMs: s.staleSinceMs,
+      lastOutcome: s.lastOutcome,
+      lastHttpStatus: s.lastHttpStatus,
     })),
+  });
+}));
+
+router.get("/admin/poller-health", h(async (_req, res) => {
+  const health = await getPollerHealth();
+  return res.json({
+    ...health,
+    processStartedAt: health.processStartedAt?.toISOString() ?? null,
+    heartbeatAt: health.heartbeatAt?.toISOString() ?? null,
+    cycleStartedAt: health.cycleStartedAt?.toISOString() ?? null,
+    lastCycleCompletedAt: health.lastCycleCompletedAt?.toISOString() ?? null,
+    lastStallDetectedAt: health.lastStallDetectedAt?.toISOString() ?? null,
+    lastRecoveredAt: health.lastRecoveredAt?.toISOString() ?? null,
   });
 }));
 

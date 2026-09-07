@@ -134,6 +134,7 @@ import { startSoundOnSoundClaimsJob } from "./lore/sound-on-sound-claims.js";
 import { ingestAllBookSources } from "./lore/book-knowledge.js";
 import { applyMetacriticMissCleanupMigration } from "./lore/metacritic-miss-cleanup-migration.js";
 import { applyJobTimestampsMigration } from "./lore/job-timestamps-migration.js";
+import { applyPollerHealthMigration } from "./lore/poller-health-migration.js";
 import { applyBeatoMissSentinelMigration } from "./lore/beato-miss-sentinel-migration.js";
 import { startBeatoJob } from "./lore/beato.js";
 import { applyArtistEventsMigration } from "./lore/artist-events-migration.js";
@@ -317,6 +318,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyMetacriticMissCleanupMigration", applyMetacriticMissCleanupMigration);
     await runMigration("applyBeatoMissSentinelMigration", applyBeatoMissSentinelMigration);
     await runMigration("applyJobTimestampsMigration", applyJobTimestampsMigration);
+    await runMigration("applyPollerHealthMigration", applyPollerHealthMigration);
     await runMigration("applyArtistEventsMigration", applyArtistEventsMigration);
     try {
       await backfillStationTimezones();

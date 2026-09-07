@@ -262,6 +262,10 @@ export class IcyWatcher extends EventEmitter {
     };
     const previous = this.lastObservation;
     this.lastObservation = observation;
+    // Transport liveness is independent of title change. Consumers such as the
+    // fleet heartbeat need every received metadata block, while ingestion below
+    // remains strictly change-only.
+    this.emit("transport-observation", observation);
     // Repeated metadata blocks matter for transition bracketing even though
     // downstream track ingestion remains change-only.
     if (streamTitle === this.lastStreamTitle) return;

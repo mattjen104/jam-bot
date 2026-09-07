@@ -45,7 +45,19 @@ vi.mock("@workspace/db", async (importOriginal) => {
 vi.mock("../../src/lore/adapters.js", () => ({
   getHistoryAdapter: vi.fn(() => null),
   getNowPlayingAdapter: vi.fn(() => null),
+  fetchSpinitronWebWithOutcome: vi.fn(),
+  hasSpinitronAuthentication: vi.fn(() => false),
   isPollable: vi.fn(() => true),
+}));
+
+vi.mock("../../src/lore/poller-health.js", () => ({
+  startPollerHeartbeat: vi.fn(),
+  stopPollerHeartbeat: vi.fn(),
+  markPollerRosterEnrolled: vi.fn(),
+  registerPollerStation: vi.fn(),
+  unregisterPollerStation: vi.fn(),
+  recordPollerAttempt: vi.fn(),
+  recordPollerCompletion: vi.fn(),
 }));
 
 vi.mock("../../src/lore/resolve.js", () => ({

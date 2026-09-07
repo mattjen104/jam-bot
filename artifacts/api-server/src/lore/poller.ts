@@ -5,6 +5,7 @@ import {
   getHistoryAdapter,
   hasSpinitronAuthentication,
   isPollable,
+  fetchSpinitronWebWithOutcome,
 } from "./adapters.js";
 import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
 import {
@@ -48,6 +49,15 @@ import {
   monitoredTrialFromConfig,
 } from "./monitored-trial.js";
 import { safeFailureMessage } from "./safe-error.js";
+import {
+  markPollerRosterEnrolled,
+  recordPollerCompletion,
+  recordPollerAttempt,
+  registerPollerStation,
+  startPollerHeartbeat,
+  stopPollerHeartbeat,
+  unregisterPollerStation,
+} from "./poller-health.js";
 export { safeFailureMessage } from "./safe-error.js";
 export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
 export { getFeedFreshnessStaleStations } from "./feed-freshness-health.js";
@@ -261,6 +271,10 @@ function startStationWatcher(station: Station): boolean {
       title: quality.title,
       detail: quality.detail,
     });
+  });
+  watcher.on("transport-observation", () => {
+    recordPollerAttempt(station.id);
+    recordPollerCompletion(station.id, true);
   });
 
   watcher.on("metadata-transition", (bracket: IcyTransitionBracket) => {
@@ -570,6 +584,8 @@ async function pollStationMode(
   if (flightSet.has(station.id)) return;
   flightSet.add(station.id);
   const source = station.nowPlayingSource;
+  let pollSuccessful = false;
+  if (!nestedHistoryOnly) recordPollerAttempt(station.id);
   try {
     const nested = nestedHistoryOnly ? nestedHistoryConfig(station) : null;
     if (nestedHistoryOnly && !nested) return;
@@ -605,6 +621,7 @@ async function pollStationMode(
           fetchError = error;
         },
       );
+      if (!fetchError) pollSuccessful = true;
       const logged = await ingestRawSpins(
         current,
         spins,
@@ -641,7 +658,6 @@ async function pollStationMode(
             (firstEnroll ? " (backfill)" : ""),
         );
       }
-
       // Feed-freshness health tracking for fixed-size, non-paginating sources
       // (bbc_api, somafm). A poll that returns no new spins after a successful
       // run is normal during low-traffic periods, but sustained silence beyond
@@ -676,34 +692,60 @@ async function pollStationMode(
     if (nestedHistoryOnly) return;
     const nowPlaying = getNowPlayingAdapter(source);
     if (!nowPlaying) return;
-    const np = await nowPlaying(station.nowPlayingConfig ?? {});
+    const spinitronResult =
+      source === "spinitron_web"
+        ? await fetchSpinitronWebWithOutcome(station.nowPlayingConfig ?? {})
+        : null;
+    const np = spinitronResult
+      ? spinitronResult.nowPlaying
+      : await nowPlaying(station.nowPlayingConfig ?? {});
 
     if (source === "spinitron_web") {
+      const outcome = spinitronResult?.outcome ?? { kind: "network_error" as const };
+      const outcomeKind = outcome.kind;
       if (!np) {
         const warning = recordSpinitronWebResult(
           station.id,
           station.slug,
-          "null",
+          outcomeKind,
+          new Date(),
+          "status" in outcome ? outcome.status : null,
         );
         if (warning.shouldWarn) {
-          console.warn("[lore] spinitron_web returned null for a previously-active station", {
+            console.warn("[lore] spinitron_web failed for a previously-active station", {
             source: "spinitron_web",
             stationId: station.id,
             slug: station.slug,
             lastSuccessAt: warning.lastSuccessAt.toISOString(),
+              outcome: outcomeKind,
+              ...("status" in outcome ? { httpStatus: outcome.status } : {}),
           });
         }
         await recordMetadataQuality({
           stationId: station.id,
           source,
           capability: sourceCapabilityFor(source),
-          outcomes: ["empty_metadata"],
-          responded: true,
-          detail: "Spinitron page responded without a current track pair.",
+          outcomes:
+            outcomeKind === "parser_error"
+              ? ["empty_metadata"]
+              : ["response_error"],
+          responded: outcomeKind === "parser_error",
+          detail:
+            outcomeKind === "parser_error"
+              ? "Spinitron page responded without a current track pair."
+              : `Spinitron page request failed (${outcomeKind}${"status" in outcome ? `, HTTP ${outcome.status}` : ""}).`,
         });
         return;
       }
-      recordSpinitronWebResult(station.id, station.slug, "success");
+      recordSpinitronWebResult(
+        station.id,
+        station.slug,
+        "success",
+        new Date(),
+        spinitronResult?.outcome.kind === "success"
+          ? spinitronResult.outcome.status
+          : null,
+      );
     }
 
     if (!np) {
@@ -717,6 +759,7 @@ async function pollStationMode(
       });
       return;
     }
+    pollSuccessful = true;
     const quality = classifyMetadataQuality(np.rawArtist, np.rawTitle);
     if (source === "radio_browser_icy" && np.icyStreamTitle) {
       recordIcyMetadataCandidate({
@@ -780,6 +823,9 @@ async function pollStationMode(
       });
     }
   } finally {
+    if (!nestedHistoryOnly) {
+      recordPollerCompletion(station.id, pollSuccessful);
+    }
     flightSet.delete(station.id);
   }
 }
@@ -819,6 +865,7 @@ export async function startLorePoller(): Promise<void> {
       (!s.hidden || isMonitoredTrialStation(s)),
   );
   console.info(`[lore] starting pollers for ${pollable.length} station(s)`);
+  await startPollerHeartbeat(pollable.map((station) => station.id));
 
   // Install multiplex hooks BEFORE any routing/probing so a fast probe can
   // never complete against the default no-op hooks (which would leave a
@@ -832,6 +879,8 @@ export async function startLorePoller(): Promise<void> {
       if (stationWatchers.has(station.id)) return;
       enrollStationPoller(station);
     },
+    recordAttempt: recordPollerAttempt,
+    recordCompletion: recordPollerCompletion,
   });
 
   // Stagger watcher socket dials — opening hundreds of TCP/TLS connections in
@@ -863,6 +912,7 @@ export async function startLorePoller(): Promise<void> {
     }
     routePollingTier(station, i * STAGGER_MS);
   });
+  markPollerRosterEnrolled(pollable.map((station) => station.id));
 
   // One-off backfill for stations enrolled before host classification existed;
   // no-ops for already-classified rows, so steady-state boots cost nothing.
@@ -879,6 +929,7 @@ export function stopLorePoller(): void {
   nestedHistoryInFlight.clear();
   stopHostMultiplex();
   stopSpeechShadowOrchestrator();
+  void stopPollerHeartbeat();
   started = false;
 }
 
@@ -898,10 +949,11 @@ export function enrollStationPoller(station: Station): void {
   if (!isPollable(station.nowPlayingSource)) return;
   // Clear any existing timers for this station so re-enrollment (e.g. admin
   // calling enroll twice for the same UUID) doesn't create duplicate loops.
-  unenrollStationPoller(station.id);
+  unenrollStationPoller(station.id, true);
   // Ordinary hidden stations stay stopped. A valid monitored trial is the one
   // exception and never changes listener visibility.
   if (station.hidden && !isMonitoredTrialStation(station)) return;
+  registerPollerStation(station.id);
   scheduleMonitoredTrialExpiry(station);
   scheduleNestedHistoryPolling(station, 0);
   if (
@@ -953,7 +1005,7 @@ export function leaseStationWatcher(station: Station): boolean {
   }
   // Favorites already hold a pinned watcher — leasing one is a no-op success.
   if (station.favorite && stationWatchers.has(station.id)) return true;
-  unenrollStationPoller(station.id);
+  unenrollStationPoller(station.id, true);
   leasedIds.add(station.id);
   scheduleNestedHistoryPolling(station, 0);
   if (!startStationWatcher(station)) {
@@ -971,7 +1023,7 @@ export function leaseStationWatcher(station: Station): boolean {
  */
 export function releaseStationLease(station: Station): void {
   if (!leasedIds.delete(station.id)) return;
-  unenrollStationPoller(station.id);
+  unenrollStationPoller(station.id, true);
   if (!station.hidden) {
     scheduleNestedHistoryPolling(station, 0);
     routePollingTier(station, 0);
@@ -1022,7 +1074,11 @@ export function coverageClassFor(station: Station): CoverageClass {
  * Called by the admin DELETE endpoint so removed stations stop being polled
  * without waiting for a process restart.
  */
-export function unenrollStationPoller(stationId: number): void {
+export function unenrollStationPoller(
+  stationId: number,
+  preserveRoster = false,
+): void {
+  if (!preserveRoster) unregisterPollerStation(stationId);
   stopStationWatcher(stationId);
   leasedIds.delete(stationId);
   leaveHostGroups(stationId);

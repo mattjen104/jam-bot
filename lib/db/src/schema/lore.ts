@@ -3619,6 +3619,25 @@ export const jobTimestampsTable = pgTable("job_timestamps", {
     .notNull(),
 });
 
+/** Durable singleton heartbeat for the in-process now-playing scheduler. */
+export const lorePollerHealthTable = pgTable("lore_poller_health", {
+  key: text("key").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  processStartedAt: timestamp("process_started_at", { withTimezone: true }).notNull(),
+  heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }).notNull(),
+  active: boolean("active").default(false).notNull(),
+  expectedStationCount: integer("expected_station_count").default(0).notNull(),
+  enrolledStationCount: integer("enrolled_station_count").default(0).notNull(),
+  cycleStartedAt: timestamp("cycle_started_at", { withTimezone: true }).notNull(),
+  lastCycleCompletedAt: timestamp("last_cycle_completed_at", { withTimezone: true }),
+  attemptedStationCount: integer("attempted_station_count").default(0).notNull(),
+  successfulStationCount: integer("successful_station_count").default(0).notNull(),
+  recoveryState: text("recovery_state").default("healthy").notNull(),
+  lastStallDetectedAt: timestamp("last_stall_detected_at", { withTimezone: true }),
+  lastRecoveredAt: timestamp("last_recovered_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 /**
  * Durable, privacy-safe playback health rollups. Rows are daily buckets so
  * the API can retain a fixed rolling window while counters and bounded latency
