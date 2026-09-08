@@ -9,7 +9,7 @@ import {
   partitionCrateItems,
   primaryReleaseMetadata,
   sortCrateReleases,
-} from "../src/components/LibraryCrate";
+} from "../src/lib/crate";
 import type { LibraryItem } from "../src/lib/meHooks";
 
 function item(overrides: Partial<LibraryItem> & {
