@@ -320,7 +320,8 @@ async function persistHeartbeat(state: RuntimeState, now: Date): Promise<void> {
       )
       SELECT ${alertKey}, ${state.ownerId}, ${alertKind}, ${incidentAt}, ${payload}::jsonb
       FROM persisted
-      WHERE ${alertKind} IS NOT NULL AND ${incidentAt} IS NOT NULL
+      WHERE ${alertKind}::text IS NOT NULL
+        AND ${incidentAt}::timestamptz IS NOT NULL
       ON CONFLICT (alert_key) DO NOTHING
       RETURNING id
     )
@@ -388,16 +389,18 @@ export async function startPollerHeartbeat(expectedStationIds: number[]): Promis
   void deliverPendingFleetAlert(runtimeState).catch(() => undefined);
 }
 
-export function markPollerRosterEnrolled(stationIds: number[]): void {
-  if (!runtime) return;
+export function markPollerRosterEnrolled(stationIds: number[]): Promise<void> {
+  if (!runtime) return Promise.resolve();
   runtime.enrolledStationIds = new Set(stationIds);
   completeFleetCycleIfReady();
+  return queueHeartbeat();
 }
 
 export function registerPollerStation(stationId: number): void {
   if (!runtime) return;
   runtime.expectedStationIds.add(stationId);
   runtime.enrolledStationIds.add(stationId);
+  void queueHeartbeat();
 }
 
 export function unregisterPollerStation(stationId: number): void {
@@ -408,6 +411,7 @@ export function unregisterPollerStation(stationId: number): void {
   runtime.completed.delete(stationId);
   runtime.successful.delete(stationId);
   completeFleetCycleIfReady();
+  void queueHeartbeat();
 }
 
 export function recordPollerAttempt(stationId: number): void {

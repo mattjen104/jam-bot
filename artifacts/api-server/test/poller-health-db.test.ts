@@ -15,6 +15,8 @@ async function readRow() {
       process_started_at AS "processStartedAt",
       heartbeat_at AS "heartbeatAt",
       active,
+      expected_station_count AS "expectedStationCount",
+      enrolled_station_count AS "enrolledStationCount",
       last_cycle_completed_at AS "lastCycleCompletedAt",
       attempted_station_count AS "attemptedStationCount",
       successful_station_count AS "successfulStationCount"
@@ -27,6 +29,8 @@ async function readRow() {
         processStartedAt: Date | string;
         heartbeatAt: Date;
         active: boolean;
+        expectedStationCount: number;
+        enrolledStationCount: number;
         lastCycleCompletedAt: Date | string | null;
         attemptedStationCount: number;
         successfulStationCount: number;
@@ -52,6 +56,26 @@ afterAll(async () => {
 });
 
 describe("poller health rolling restart persistence", () => {
+  it("persists the enrolled roster immediately when no alert transition exists", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-07T09:00:00.000Z"));
+
+    vi.resetModules();
+    const owner = await import("../src/lore/poller-health.js");
+    owner.setPollerHealthKeyForTests(healthKey);
+    await owner.startPollerHeartbeat([10, 20, 30]);
+    await owner.markPollerRosterEnrolled([10, 20, 30]);
+
+    const enrolled = await readRow();
+    expect(enrolled?.expectedStationCount).toBe(3);
+    expect(enrolled?.enrolledStationCount).toBe(3);
+
+    await owner.stopPollerHeartbeat();
+    await db.execute(sql`DELETE FROM lore_poller_health WHERE key = ${healthKey}`);
+  });
+
   it("keeps one deterministic owner when starts share the same timestamp", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
@@ -141,7 +165,7 @@ describe("poller health rolling restart persistence", () => {
     const ownerA = await import("../src/lore/poller-health.js");
     ownerA.setPollerHealthKeyForTests(healthKey);
     await ownerA.startPollerHeartbeat([10, 20, 30]);
-    ownerA.markPollerRosterEnrolled([10, 20, 30]);
+    await ownerA.markPollerRosterEnrolled([10, 20, 30]);
     ownerA.recordPollerCompletion(10, true);
     ownerA.recordPollerCompletion(20, false);
     ownerA.recordPollerCompletion(30, true);

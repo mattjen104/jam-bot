@@ -104,7 +104,7 @@ describe("poller heartbeat classification", () => {
 
   it("publishes a completed fleet cycle only after every enrolled station finishes", async () => {
     await startPollerHeartbeat([10, 20, 30]);
-    markPollerRosterEnrolled([10, 20, 30]);
+    await markPollerRosterEnrolled([10, 20, 30]);
 
     recordPollerAttempt(10);
     recordPollerCompletion(10, true);
@@ -149,25 +149,25 @@ describe("poller fleet alert transitions", () => {
     execute.mockClear();
 
     await startPollerHeartbeat([10]);
-    markPollerRosterEnrolled([10]);
-    expect(execute).toHaveBeenCalledTimes(2);
+    await markPollerRosterEnrolled([10]);
+    expect(execute).toHaveBeenCalledTimes(3);
 
     recordPollerCompletion(10, true);
     await flushPollerHeartbeatForTests(startedAt);
-    expect(execute).toHaveBeenCalledTimes(3);
+    expect(execute).toHaveBeenCalledTimes(4);
 
     const stalledAt = new Date(startedAt.getTime() + POLLER_CYCLE_STALE_THRESHOLD_MS + 1);
     await flushPollerHeartbeatForTests(stalledAt);
-    expect(execute).toHaveBeenCalledTimes(4);
+    expect(execute).toHaveBeenCalledTimes(5);
 
     await flushPollerHeartbeatForTests(new Date(stalledAt.getTime() + 1_000));
-    expect(execute).toHaveBeenCalledTimes(5);
+    expect(execute).toHaveBeenCalledTimes(6);
 
     const recoveredAt = new Date(stalledAt.getTime() + 2_000);
     vi.setSystemTime(recoveredAt);
     recordPollerCompletion(10, true);
     await flushPollerHeartbeatForTests(recoveredAt);
-    expect(execute).toHaveBeenCalledTimes(6);
+    expect(execute).toHaveBeenCalledTimes(7);
   });
 
   it("does not enqueue an alert after durable ownership has moved", async () => {
@@ -179,15 +179,15 @@ describe("poller fleet alert transitions", () => {
     execute.mockClear();
 
     await startPollerHeartbeat([10]);
-    markPollerRosterEnrolled([10]);
+    await markPollerRosterEnrolled([10]);
     recordPollerCompletion(10, true);
     await flushPollerHeartbeatForTests(startedAt);
-    expect(execute).toHaveBeenCalledTimes(3);
+    expect(execute).toHaveBeenCalledTimes(4);
 
     execute.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
     await flushPollerHeartbeatForTests(
       new Date(startedAt.getTime() + POLLER_CYCLE_STALE_THRESHOLD_MS + 1),
     );
-    expect(execute).toHaveBeenCalledTimes(4);
+    expect(execute).toHaveBeenCalledTimes(5);
   });
 });

@@ -912,7 +912,7 @@ export async function startLorePoller(): Promise<void> {
     }
     routePollingTier(station, i * STAGGER_MS);
   });
-  markPollerRosterEnrolled(pollable.map((station) => station.id));
+  await markPollerRosterEnrolled(pollable.map((station) => station.id));
 
   // One-off backfill for stations enrolled before host classification existed;
   // no-ops for already-classified rows, so steady-state boots cost nothing.
