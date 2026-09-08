@@ -3,8 +3,8 @@ name: Library artist-to-album navigation
 description: Product rule for presenting a track-backed library through artist and album navigation.
 ---
 
-The library remains track-backed: radio keeps and imported songs stay as individual saved items with their provenance and timestamps. Artist rows are only a navigation index, and album surfaces are derived from the saved/imported tracks belonging to that artist.
+The library remains track-backed: radio keeps and imported songs stay as individual saved items with their provenance and timestamps. Artist Document artists join those track-backed artists in one case-insensitively deduplicated index.
 
-**Why:** Listeners want to browse by artist and album without losing the ability to replay the exact songs that populated the library.
+**Why:** Artist mode is a compact navigation index, not another track presentation. It should make the combined taste collection scannable without album art or representative-song bias.
 
-**How to apply:** When opening an artist, default to the album containing that artist's most recently saved track, using the latest keep/import event as the ordering signal. Let the listener cycle through the artist's other known albums with the fixed album-art hero. Album playback is explicit and starts at track 1; do not generate playlists, autoplay, or automatically expand queues. Removing an artist from active tuning/library membership must not delete the underlying saved tracks.
+**How to apply:** Sort Artist mode A–Z. Render one plain row per artist with no artwork or track title. Keep albums hidden until the artist row is clicked, then reveal album names only—never tracks or covers. Seed-only artists remain valid rows even when Lore has no saved album for them. Removing an artist from active tuning/library membership must not delete underlying saved tracks.

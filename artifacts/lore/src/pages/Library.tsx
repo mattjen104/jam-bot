@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
 import { Link, useLocation, useSearch } from "wouter";
@@ -27,7 +27,6 @@ import {
   ME_OVERLAP_RUNS_KEY,
   useMyLibraryCoverage,
   useMyAlbumAvatar,
-  useSetAlbumAvatar,
   ME_LIBRARY_COVERAGE_KEY,
   useMyInvestigationCoverage,
   type LibraryCoverageList,
@@ -53,7 +52,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { YourWeekCard } from "../components/YourWeekCard";
-import { toast } from "../hooks/use-toast";
 import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
 import { LibraryCrate } from "../components/LibraryCrate";
 import { useSeedManager } from "../hooks/useSeedManager";
@@ -608,31 +606,50 @@ export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
   return [...map.values()];
 }
 
-export function buildArtistGroups(items: LibraryItem[]): ArtistGroup[] {
+export function buildArtistGroups(items: LibraryItem[], seedArtists: string[] = []): ArtistGroup[] {
   const artistMap = new Map<string, ArtistGroup>();
   for (const item of items) {
     const artist = item.recording?.artist ?? "Unknown artist";
-    let ag = artistMap.get(artist);
+    const key = artist.trim().toLocaleLowerCase();
+    let ag = artistMap.get(key);
     if (!ag) {
       ag = {
-        key: artist,
+        key,
         artist,
         artistMbid: item.recording?.artistMbid ?? null,
         items: [],
         albums: [],
       };
-      artistMap.set(artist, ag);
+      artistMap.set(key, ag);
     }
     if (!ag.artistMbid && item.recording?.artistMbid) {
       ag.artistMbid = item.recording.artistMbid;
     }
     ag.items.push(item);
   }
+  for (const seedArtist of seedArtists) {
+    const artist = seedArtist.trim();
+    if (!artist) continue;
+    const key = artist.toLocaleLowerCase();
+    if (!artistMap.has(key)) {
+      artistMap.set(key, {
+        key,
+        artist,
+        artistMbid: null,
+        items: [],
+        albums: [],
+      });
+    }
+  }
   // Build per-artist album sub-groups (preserving track order within each artist)
   for (const ag of artistMap.values()) {
-    ag.albums = buildAlbumGroups(ag.items);
+    ag.albums = buildAlbumGroups(ag.items).sort((a, b) =>
+      a.albumTitle.localeCompare(b.albumTitle, undefined, { sensitivity: "base" }),
+    );
   }
-  return [...artistMap.values()];
+  return [...artistMap.values()].sort((a, b) =>
+    a.artist.localeCompare(b.artist, undefined, { sensitivity: "base" }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -841,46 +858,36 @@ export function AlbumGroupRow({
 // ---------------------------------------------------------------------------
 export function ArtistGroupRow({
   group,
-  openDoorMbid,
-  setOpenDoorMbid,
-  openShelfMbid,
-  setOpenShelfMbid,
-  forceOpen,
-  onMakeAvatar,
-  avatarRecordingMbid,
-  onInvestigate,
 }: {
   group: ArtistGroup;
-  openDoorMbid: string | null;
-  setOpenDoorMbid: (v: string | null) => void;
-  openShelfMbid: string | null;
-  setOpenShelfMbid: (v: string | null) => void;
-  forceOpen?: boolean;
-  onMakeAvatar?: (recordingMbid: string) => void;
-  avatarRecordingMbid?: string | null;
-  onInvestigate?: (group: AlbumGroup) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const isOpen = forceOpen || open;
+  const canExpand = group.albums.length > 0;
+  const isOpen = canExpand && open;
   return (
     <div data-testid="library-artist-group">
       {/* Artist header */}
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen((v) => !v); }}
+        role={canExpand ? "button" : undefined}
+        tabIndex={canExpand ? 0 : undefined}
+        onClick={() => { if (canExpand) setOpen((v) => !v); }}
+        onKeyDown={(e) => {
+          if (canExpand && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
           padding: "9px 15px",
-          cursor: "pointer",
+          cursor: canExpand ? "pointer" : "default",
           borderBottom: "1px solid hsl(var(--border) / 0.5)",
           background: isOpen ? "hsl(var(--secondary) / 0.6)" : "transparent",
           transition: "background 0.15s",
         }}
-        aria-expanded={isOpen}
+        aria-expanded={canExpand ? isOpen : undefined}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
@@ -896,7 +903,7 @@ export function ArtistGroupRow({
           >
             {group.artist}
           </div>
-          <div
+          {group.items.length > 0 && <div
             style={{
               fontFamily: "var(--app-font-mono)",
               fontSize: 10,
@@ -907,7 +914,7 @@ export function ArtistGroupRow({
             {group.albums.length} album{group.albums.length === 1 ? "" : "s"}
             {" · "}
             {group.items.length} track{group.items.length === 1 ? "" : "s"}
-          </div>
+          </div>}
         </div>
         {group.artistMbid && (
           <Link
@@ -929,121 +936,29 @@ export function ArtistGroupRow({
             Index
           </Link>
         )}
-        {isOpen ? (
+        {canExpand && (isOpen ? (
           <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
         ) : (
           <ChevronDown style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
-        )}
+        ))}
       </div>
 
-      {/* Expanded: albums as sub-rows with tracks */}
+      {/* Expanded: album names only. Artist mode never displays tracks or art. */}
       {isOpen && (
         <div style={{ borderLeft: "2px solid hsl(var(--library) / 0.2)" }}>
           {group.albums.map((album) => (
-            <div key={album.key}>
-              {/* Album sub-header */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "6px 15px",
-                  borderBottom: "1px solid hsl(var(--border) / 0.3)",
-                  background: "hsl(var(--card) / 0.5)",
-                }}
-              >
-                {album.artworkUrl ? (
-                  <img
-                    src={proxyArtUrl(album.artworkUrl) ?? album.artworkUrl}
-                    alt=""
-                    style={{ width: 24, height: 24, borderRadius: 2, flexShrink: 0, objectFit: "cover" }}
-                    loading="lazy"
-                    onError={onArtError}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 2,
-                      flexShrink: 0,
-                      background: artGradient(album.albumTitle, album.artist),
-                      display: "block",
-                    }}
-                    aria-hidden="true"
-                  />
-                )}
-                <span
-                  style={{
-                    fontFamily: "var(--app-font-display)",
-                    fontSize: 12,
-                    fontWeight: 400,
-                    color: "hsl(var(--dim))",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  {album.albumTitle}
-                </span>
-                {album.items.find((item) => item.mbid)?.mbid && onInvestigate && (
-                  <button
-                    type="button"
-                    className="album-inv__marker"
-                    title={`Investigate ${album.albumTitle}`}
-                    aria-label={`Investigate ${album.albumTitle}`}
-                    onClick={() => onInvestigate(album)}
-                  >
-                    ✳
-                  </button>
-                )}
-                {album.items.find((item) => item.mbid)?.mbid && (
-                  <button
-                    type="button"
-                    title="Make this album my avatar"
-                    aria-label={`Make ${album.albumTitle} my avatar`}
-                    onClick={() => {
-                      const mbid = album.items.find((item) => item.mbid)?.mbid;
-                      if (mbid) onMakeAvatar?.(mbid);
-                    }}
-                    style={{ border: "none", background: "none", color: "hsl(var(--faint))", cursor: "pointer", padding: 3 }}
-                  >
-                    {album.items.some((item) => item.mbid === avatarRecordingMbid) ? "●" : "◎"}
-                  </button>
-                )}
-                <span
-                  style={{
-                    fontFamily: "var(--app-font-mono)",
-                    fontSize: 10,
-                    color: "hsl(var(--faint))",
-                    flexShrink: 0,
-                  }}
-                >
-                  {album.items.length}
-                </span>
-              </div>
-              {/* Tracks */}
-              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                {album.items.map((item) => {
-                  const rowKey = item.mbid ?? `soft:${item.spotifyId ?? item.addedAt}`;
-                  return (
-                    <LibraryRow
-                      key={rowKey}
-                      item={item}
-                      isOpen={item.mbid != null && openDoorMbid === item.mbid}
-                      onToggle={item.mbid != null
-                        ? () => setOpenDoorMbid(openDoorMbid === item.mbid ? null : item.mbid)
-                        : undefined}
-                      isShelfOpen={item.mbid != null && openShelfMbid === item.mbid}
-                      onShelfToggle={item.mbid != null
-                        ? () => setOpenShelfMbid(openShelfMbid === item.mbid ? null : item.mbid)
-                        : undefined}
-                    />
-                  );
-                })}
-              </ul>
+            <div
+              key={album.key}
+              style={{
+                padding: "7px 15px 7px 24px",
+                borderBottom: "1px solid hsl(var(--border) / 0.3)",
+                background: "hsl(var(--card) / 0.5)",
+                fontFamily: "var(--app-font-reading)",
+                fontSize: 13,
+                color: "hsl(var(--dim))",
+              }}
+            >
+              {album.albumTitle}
             </div>
           ))}
         </div>
@@ -1063,12 +978,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const { radio } = usePlayer();
   const { data: albumAvatar } = useMyAlbumAvatar();
-  const setAlbumAvatar = useSetAlbumAvatar();
-  const chooseAlbumAvatar = useCallback((recordingMbid: string) => {
-    setAlbumAvatar.mutate(recordingMbid, {
-      onSuccess: () => toast({ title: "This album is now your anonymous listener cover" }),
-    });
-  }, [setAlbumAvatar]);
 
   // Lens — persisted in URL as ?lens=recent|albums|artists|lore|matching|critic
   // (absent = the mixed chronological timeline).
@@ -1114,7 +1023,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   // Every reachable Library URL is the same fanned crate. URL lenses still
   // scope the server query, while the crate remains the single visual shell
   // instead of reviving the retired dashboard/list presentation.
-  const isStackView = true;
+  const isStackView = viewMode !== "artist";
 
   // appConfig retained for other consumers in this file
   useAppConfig();
@@ -1379,8 +1288,8 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     [viewMode, keptItems],
   );
   const artistGroups = useMemo(
-    () => (viewMode === "artist" ? buildArtistGroups(keptItems) : []),
-    [viewMode, keptItems],
+    () => (viewMode === "artist" ? buildArtistGroups(keptItems, visibleSeeds) : []),
+    [viewMode, keptItems, visibleSeeds],
   );
 
   // Per-album hide preference — shared with the compact Stack on the front door
@@ -1882,7 +1791,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
               data-testid="library-sort-controls"
             >
               {/* Sort buttons — hidden in grouped views (grouping implies its own order) */}
-              {viewMode === "track" && (
+              {(viewMode as string) === "track" && (
                 <>
                   <span
                     style={{
@@ -2070,6 +1979,42 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
 
+        {!libLoading && keptItems.length > 0 && (
+          <div
+            data-testid="library-view-toggle"
+            style={{
+              display: "flex",
+              gap: 4,
+              padding: "8px 15px",
+              borderBottom: "1px solid hsl(var(--border) / 0.5)",
+            }}
+          >
+            {([
+              { value: "" as const, label: "Albums" },
+              { value: "artists" as const, label: "Artists" },
+            ]).map(({ value, label }) => {
+              const active = value === "artists" ? viewMode === "artist" : viewMode !== "artist";
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setLens(value)}
+                  aria-pressed={active}
+                  className="dial-ctabtn"
+                  style={active ? {
+                    color: "hsl(var(--library))",
+                    borderColor: "hsl(var(--library))",
+                    background: "hsl(var(--library) / 0.12)",
+                  } : undefined}
+                  data-testid={`library-view-${label.toLowerCase()}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {!isStackView &&
           jobData?.status === "done" &&
           sourceFilter !== "keep" &&
@@ -2215,13 +2160,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
                   <ArtistGroupRow
                     key={group.key}
                     group={group}
-                    openDoorMbid={openDoorMbid}
-                    setOpenDoorMbid={setOpenDoorMbid}
-                    openShelfMbid={openShelfMbid}
-                    setOpenShelfMbid={setOpenShelfMbid}
-                    forceOpen={!!groupFilterQ}
-                    onMakeAvatar={chooseAlbumAvatar}
-                    avatarRecordingMbid={albumAvatar?.current?.recordingMbid}
                   />
                 ))
               ) : (

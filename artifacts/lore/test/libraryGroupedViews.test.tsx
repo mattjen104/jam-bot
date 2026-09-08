@@ -212,6 +212,25 @@ describe("buildArtistGroups", () => {
     expect(solo.albums).toHaveLength(1);
   });
 
+  it("sorts artists and their albums alphabetically", () => {
+    const groups = buildArtistGroups([
+      makeItem({ mbid: "z", artist: "Zulu", albumTitle: "First" }),
+      makeItem({ mbid: "b", artist: "Alpha", albumTitle: "Bravo" }),
+      makeItem({ mbid: "a", artist: "Alpha", albumTitle: "Alpha" }),
+    ]);
+    expect(groups.map((group) => group.artist)).toEqual(["Alpha", "Zulu"]);
+    expect(groups[0]!.albums.map((album) => album.albumTitle)).toEqual(["Alpha", "Bravo"]);
+  });
+
+  it("includes and case-insensitively deduplicates Artist Document seeds", () => {
+    const groups = buildArtistGroups(
+      [makeItem({ mbid: "a", artist: "Broadcast", albumTitle: "Tender Buttons" })],
+      ["broadcast", "Cocteau Twins"],
+    );
+    expect(groups.map((group) => group.artist)).toEqual(["Broadcast", "Cocteau Twins"]);
+    expect(groups[1]!.items).toHaveLength(0);
+  });
+
   it("removing all tracks from one album removes that album sub-group while preserving the artist", () => {
     const album1Track1 = makeItem({ mbid: "a1t1", artist: "The Band", albumTitle: "Album 1" });
     const album1Track2 = makeItem({ mbid: "a1t2", artist: "The Band", albumTitle: "Album 1" });
@@ -394,9 +413,7 @@ describe("ArtistGroupRow", () => {
     const group = makeArtistGroup([
       { title: "Album 1", items: [makeItem({ mbid: "t1", artist: "The Band", albumTitle: "Album 1" })] },
     ]);
-    render(
-      <ArtistGroupRow group={group} openDoorMbid={null} setOpenDoorMbid={vi.fn()} />,
-    );
+    render(<ArtistGroupRow group={group} />);
     expect(screen.getByText("The Band")).toBeTruthy();
   });
 
@@ -414,9 +431,7 @@ describe("ArtistGroupRow", () => {
         items: [makeItem({ mbid: "t3", artist: "The Band", albumTitle: "Album 2" })],
       },
     ]);
-    render(
-      <ArtistGroupRow group={group} openDoorMbid={null} setOpenDoorMbid={vi.fn()} />,
-    );
+    render(<ArtistGroupRow group={group} />);
     expect(screen.getByText(/2 albums/)).toBeTruthy();
     expect(screen.getByText(/3 tracks/)).toBeTruthy();
   });
@@ -425,14 +440,12 @@ describe("ArtistGroupRow", () => {
     const group = makeArtistGroup([
       { title: "Album 1", items: [makeItem({ mbid: "t1" })] },
     ]);
-    render(
-      <ArtistGroupRow group={group} openDoorMbid={null} setOpenDoorMbid={vi.fn()} />,
-    );
+    render(<ArtistGroupRow group={group} />);
     expect(screen.queryByTestId("library-row")).toBeNull();
     expect(screen.queryByText("Album 1")).toBeNull();
   });
 
-  it("shows both album sub-headers and their tracks when expanded", () => {
+  it("shows album names but no tracks or artwork when expanded", () => {
     const group = makeArtistGroup([
       {
         title: "Album 1",
@@ -443,13 +456,12 @@ describe("ArtistGroupRow", () => {
         items: [makeItem({ mbid: "t2", title: "Song Two", artist: "The Band", albumTitle: "Album 2" })],
       },
     ]);
-    render(
-      <ArtistGroupRow group={group} openDoorMbid={null} setOpenDoorMbid={vi.fn()} />,
-    );
+    render(<ArtistGroupRow group={group} />);
     fireEvent.click(screen.getByTestId("library-artist-group").querySelector("[role='button']")!);
     expect(screen.getByText("Album 1")).toBeTruthy();
     expect(screen.getByText("Album 2")).toBeTruthy();
-    expect(screen.getAllByTestId("library-row")).toHaveLength(2);
+    expect(screen.queryByTestId("library-row")).toBeNull();
+    expect(screen.getByTestId("library-artist-group").querySelector("img")).toBeNull();
   });
 
   it("removes only the un-kept album's sub-row when its tracks are removed mid-session", () => {
@@ -476,7 +488,7 @@ describe("ArtistGroupRow", () => {
           <button data-testid="unkept-album1" onClick={() => setIncludeAlbum1(false)}>
             unkept album1
           </button>
-          <ArtistGroupRow group={group} openDoorMbid={null} setOpenDoorMbid={vi.fn()} />
+          <ArtistGroupRow group={group} />
         </>
       );
     }
@@ -489,16 +501,16 @@ describe("ArtistGroupRow", () => {
     // Both albums visible before toggle
     expect(screen.getByText("Album 1")).toBeTruthy();
     expect(screen.getByText("Album 2")).toBeTruthy();
-    expect(screen.getAllByTestId("library-row")).toHaveLength(2);
+    expect(screen.queryByTestId("library-row")).toBeNull();
 
     // Un-keep all Album 1 tracks → parent re-renders with updated group
     fireEvent.click(screen.getByTestId("unkept-album1"));
 
     expect(screen.queryByText("Album 1")).toBeNull();
     expect(screen.getByText("Album 2")).toBeTruthy();
-    expect(screen.getAllByTestId("library-row")).toHaveLength(1);
+    expect(screen.queryByTestId("library-row")).toBeNull();
     expect(screen.queryByText("A1 Song")).toBeNull();
-    expect(screen.getByText("A2 Song")).toBeTruthy();
+    expect(screen.queryByText("A2 Song")).toBeNull();
   });
 
   it("collapses to a single album row when one of two albums has all its tracks removed", () => {
@@ -517,7 +529,7 @@ describe("ArtistGroupRow", () => {
           <button data-testid="remove-first" onClick={() => setItems([a2])}>
             remove first
           </button>
-          <ArtistGroupRow group={group} openDoorMbid={null} setOpenDoorMbid={vi.fn()} />
+          <ArtistGroupRow group={group} />
         </>
       );
     }
@@ -525,13 +537,13 @@ describe("ArtistGroupRow", () => {
     render(<Wrapper />);
     // Expand
     fireEvent.click(screen.getByTestId("library-artist-group").querySelector("[role='button']")!);
-    expect(screen.getAllByTestId("library-row")).toHaveLength(2);
+    expect(screen.queryByTestId("library-row")).toBeNull();
 
     // Remove First Album's track
     fireEvent.click(screen.getByTestId("remove-first"));
     expect(screen.queryByText("First Album")).toBeNull();
     expect(screen.getByText("Second Album")).toBeTruthy();
-    expect(screen.getAllByTestId("library-row")).toHaveLength(1);
+    expect(screen.queryByTestId("library-row")).toBeNull();
 
     // Confirm header counts update too
     expect(screen.getByText(/1 album/)).toBeTruthy();
