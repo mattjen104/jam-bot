@@ -269,6 +269,28 @@ describe("new Spinitron stations: nowPlayingSource and nowPlayingConfig", () => 
   });
 });
 
+describe("reviewed public Spinitron calendars", () => {
+  it("keeps the remaining repaired stations on their credential-free calendar pages", () => {
+    const callsignsBySlug = {
+      kvsc: "KVSC",
+      wbrs: "WBRS",
+      whrb: "WHRB",
+      wmfo: "WMFO",
+      wpkn: "WPKN",
+      wuog: "WUOG",
+    } as const;
+
+    for (const [slug, callsign] of Object.entries(callsignsBySlug)) {
+      const station = SEED_STATIONS.find((candidate) => candidate.slug === slug);
+      expect(station, `missing seed station ${slug}`).toBeDefined();
+      expect(station!.scheduleUrl).toBe(
+        `https://spinitron.com/${callsign}/calendar`,
+      );
+      expect(station!.scheduleUrl).not.toContain("spa.spinitron.com");
+    }
+  });
+});
+
 // ── Late key upgrade contract ─────────────────────────────────────────────
 
 describe("late key upgrade contract (spinitron_web → spinitron)", () => {

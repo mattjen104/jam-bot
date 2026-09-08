@@ -1591,7 +1591,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://whrb.org",
-      scheduleUrl: "https://whrb.org/schedule",
+      scheduleUrl: "https://spinitron.com/WHRB/calendar",
       // Listener-supported non-profit; Harvard's independent radio station.
       donateUrl: "https://whrb.org/support",
       ...spinSource("WHRB"),
@@ -1775,7 +1775,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wuog.org",
-      scheduleUrl: "https://wuog.org/schedule",
+      scheduleUrl: "https://spinitron.com/WUOG/calendar",
       // Listener-supported non-profit; University of Georgia's community station.
       donateUrl: "https://wuog.org/donate",
       ...spinSource("WUOG"),
@@ -1815,7 +1815,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.kvsc.org",
-      scheduleUrl: "https://www.kvsc.org/programs/",
+      scheduleUrl: "https://spinitron.com/KVSC/calendar",
       // Listener-supported non-profit; St. Cloud State University. Famous for
       // their annual 50-hour Trivia Weekend fundraiser. /pledge is their
       // standard giving page; spot-check if they've moved to /donate or /give.
@@ -1959,7 +1959,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wbrs.fm",
-      scheduleUrl: "https://wbrs.fm/schedule",
+      scheduleUrl: "https://spinitron.com/WBRS/calendar",
       ...spinSource("WBRS"),
       stationClass: "community",
       tags: COLLEGE,
@@ -1984,7 +1984,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "52kbps AAC+",
       streamFormat: "aac",
       homepageUrl: "https://wmfo.org",
-      scheduleUrl: "https://wmfo.org/schedule",
+      scheduleUrl: "https://spinitron.com/WMFO/calendar",
       donateUrl: "https://wmfo.org/donate",
       ...spinSource("WMFO"),
       stationClass: "community",
