@@ -139,13 +139,13 @@ export function inferTimezone(city: string | null, country: string | null): stri
   // US — need city to confidently assign a zone
   if (c === "US" || (c === null && ci)) {
     if (!ci) return null;
-    if (/seattle|portland|san francisco|los angeles|berkeley|davis|san diego|santa barbara|santa cruz|pasadena|irvine|long beach|riverside|fresno|sacramento|stockton|olympia|spokane|eugene|tacoma/.test(ci))
+    if (/seattle|portland|san francisco|san jose|los angeles|berkeley|davis|san diego|santa barbara|santa cruz|pasadena|irvine|long beach|riverside|fresno|sacramento|stockton|olympia|spokane|eugene|tacoma/.test(ci))
       return "America/Los_Angeles";
     if (/denver|boulder|salt lake|albuquerque|phoenix|tucson|colorado springs|fort collins|provo/.test(ci))
       return "America/Denver";
     if (/chicago|evanston|austin|houston|dallas|nashville|new orleans|minneapolis|st\. cloud|saint cloud|kansas city|wichita|oklahoma city|des moines|madison|milwaukee/.test(ci))
       return "America/Chicago";
-    if (/new york|brooklyn|queens|bronx|staten island|boston|cambridge|princeton|stony brook|atlanta|miami|chapel hill|durham|raleigh|medford|waltham|washington|pittsburgh|philadelphia|columbus|cleveland|cincinnati|detroit|ann arbor|lansing|buffalo|rochester|albany|providence|hartford|new haven|baltimore|norfolk|richmond|charlotte|columbia|savannah|jacksonville|orlando|tampa|fort lauderdale/.test(ci))
+    if (/new york|brooklyn|queens|bronx|staten island|boston|cambridge|princeton|stony brook|atlanta|athens|miami|chapel hill|durham|raleigh|medford|waltham|bridgeport|washington|pittsburgh|philadelphia|columbus|cleveland|cincinnati|detroit|ann arbor|lansing|buffalo|rochester|albany|providence|hartford|new haven|baltimore|norfolk|richmond|charlotte|columbia|savannah|jacksonville|orlando|tampa|fort lauderdale/.test(ci))
       return "America/New_York";
     // Hawaii
     if (/honolulu|hilo/.test(ci)) return "Pacific/Honolulu";

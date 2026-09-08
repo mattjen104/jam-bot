@@ -1583,6 +1583,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WHRB 95.3 FM",
       org: "Harvard University",
       country: "US",
+      city: "Cambridge",
+      region: "MA",
       // HTTPS stream confirmed reachable (200 audio/mpeg) from the Replit container.
       // URL sourced from their homepage embedded player.
       streamUrl: "https://stream.whrb.org/whrb-mp3",
@@ -1602,6 +1604,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WKCR 89.9 FM",
       org: "Columbia University",
       country: "US",
+      city: "New York",
+      region: "NY",
       // CDN stream confirmed reachable (200) from the Replit container.
       streamUrl: "https://wkcr.streamguys1.com/live",
       streamQuality: "128kbps MP3",
@@ -1763,6 +1767,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WUOG 90.5 FM",
       org: "University of Georgia",
       country: "US",
+      city: "Athens",
+      region: "GA",
       // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
       // container. WUOG's Nginx/Icecast endpoint provides the 128kbps MP3 feed.
       streamUrl: "https://stream.wuog.org/stream",
@@ -1801,6 +1807,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "KVSC 88.1 FM",
       org: "St. Cloud State University",
       country: "US",
+      city: "St. Cloud",
+      region: "MN",
       // HTTPS stream on port 443 confirmed reachable (200 audio/mpeg) from the
       // Replit container. URL sourced from their jPlayer config on the listen page.
       streamUrl: "https://corn.kvsc.org:443/broadband",
@@ -1874,6 +1882,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WZBC 90.3 FM",
       org: "Boston College",
       country: "US",
+      city: "Boston",
+      region: "MA",
       // WZBC's own Icecast server with HTTPS front-end at stream.wzbc.org —
       // confirmed 200 audio/mpeg from the Replit container (2026-08). Returns
       // 400 on HEAD (normal Icecast behaviour) but streams correctly on GET.
@@ -1939,6 +1949,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WBRS 100.1 FM",
       org: "Brandeis University",
       country: "US",
+      city: "Waltham",
+      region: "MA",
       // Investigation (2026-08): wbrs.fm DNS does not resolve; the station
       // is absent from radio-browser. No stream URL (HTTP or HTTPS) found via
       // common Icecast, StreamGuys, Airtime Pro, or Brandeis-domain patterns.
@@ -1958,6 +1970,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WMFO 91.5 FM",
       org: "Tufts University",
       country: "US",
+      city: "Medford",
+      region: "MA",
       // Shoutcast DNAS at new-webstream.wmfo.org — HTTP-only (port 80);
       // the server does not expose TLS. Investigation (2026-08): 200 audio/aacp
       // confirmed on the HTTP URL, icy-br:52 (52kbps AAC+). No HTTPS CDN
@@ -2462,24 +2476,24 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "WNUR", name: "WNUR 89.3 FM", org: "Northwestern University", country: "US" },
   { callsign: "WREK", name: "WREK 91.1 FM", org: "Georgia Institute of Technology", country: "US" },
   { callsign: "KDVS", name: "KDVS 90.3 FM", org: "UC Davis", country: "US" },
-  { callsign: "WHRB", name: "WHRB 95.3 FM", org: "Harvard University", country: "US" },
-  { callsign: "WKCR", name: "WKCR 89.9 FM", org: "Columbia University", country: "US" },
+  { callsign: "WHRB", name: "WHRB 95.3 FM", org: "Harvard University", country: "US", city: "Cambridge", region: "MA", scheduleUrl: "https://spinitron.com/WHRB/calendar" },
+  { callsign: "WKCR", name: "WKCR 89.9 FM", org: "Columbia University", country: "US", city: "New York", region: "NY", scheduleUrl: "https://spinitron.com/WKCR/calendar" },
   { callsign: "WFMU", name: "WFMU 91.1 FM", org: "WFMU", country: "US" },
   { callsign: "WXYC", name: "WXYC 89.3 FM", org: "UNC Chapel Hill", country: "US" },
   { callsign: "KALX", name: "KALX 90.7 FM", org: "UC Berkeley", country: "US" },
   { callsign: "KVRX", name: "KVRX 91.7 FM", org: "UT Austin", country: "US" },
   { callsign: "WMBR", name: "WMBR 88.1 FM", org: "MIT", country: "US" },
   { callsign: "WUSB", name: "WUSB 90.1 FM", org: "Stony Brook University", country: "US" },
-  { callsign: "WUOG", name: "WUOG 90.5 FM", org: "University of Georgia", country: "US" },
+  { callsign: "WUOG", name: "WUOG 90.5 FM", org: "University of Georgia", country: "US", city: "Athens", region: "GA", scheduleUrl: "https://spinitron.com/WUOG/calendar" },
   { callsign: "WVUM", name: "WVUM 90.5 FM", org: "University of Miami", country: "US" },
-  { callsign: "KVSC", name: "KVSC 88.1 FM", org: "St. Cloud State University", country: "US" },
+  { callsign: "KVSC", name: "KVSC 88.1 FM", org: "St. Cloud State University", country: "US", city: "St. Cloud", region: "MN", scheduleUrl: "https://spinitron.com/KVSC/calendar" },
 
   // ── New England ─────────────────────────────────────────────────────────
-  { callsign: "WMFO", name: "WMFO 91.5 FM", org: "Tufts University", country: "US" },
+  { callsign: "WMFO", name: "WMFO 91.5 FM", org: "Tufts University", country: "US", city: "Medford", region: "MA", scheduleUrl: "https://spinitron.com/WMFO/calendar" },
   { callsign: "WERS", name: "WERS 88.9 FM", org: "Emerson College", country: "US" },
-  { callsign: "WBRS", name: "WBRS 100.1 FM", org: "Brandeis University", country: "US" },
-  { callsign: "WZBC", name: "WZBC 90.3 FM", org: "Boston College", country: "US" },
-  { callsign: "WTBU", name: "WTBU 89.3 FM", org: "Boston University", country: "US" },
+  { callsign: "WBRS", name: "WBRS 100.1 FM", org: "Brandeis University", country: "US", city: "Waltham", region: "MA", scheduleUrl: "https://spinitron.com/WBRS/calendar" },
+  { callsign: "WZBC", name: "WZBC 90.3 FM", org: "Boston College", country: "US", city: "Boston", region: "MA", scheduleUrl: "https://spinitron.com/WZBC/calendar" },
+  { callsign: "WTBU", name: "WTBU 89.3 FM", org: "Boston University", country: "US", city: "Boston", region: "MA", scheduleUrl: "https://spinitron.com/WTBU/calendar" },
   { callsign: "WUML", name: "WUML 91.5 FM", org: "UMass Lowell", country: "US" },
   { callsign: "WMWM", name: "WMWM 91.7 FM", org: "Salem State University", country: "US" },
   { callsign: "WCFM", name: "WCFM 91.9 FM", org: "Williams College", country: "US" },
@@ -2539,7 +2553,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US", city: "Los Angeles", region: "CA", tags: ["college"] },
   { callsign: "KSDT", name: "KSDT 95.7 FM", org: "UC San Diego", country: "US" },
   { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US", homepageUrl: "https://kzsu.stanford.edu/", scheduleUrl: "https://kzsu.stanford.edu/schedule/" },
-  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", region: "CA", tags: ["college"] },
+  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", region: "CA", tags: ["college"], scheduleUrl: "https://spinitron.com/KSJS/calendar" },
   { callsign: "KCRH", name: "KCRH 89.9 FM", org: "Chabot College", country: "US" },
   { callsign: "KTUH", name: "KTUH 90.3 FM", org: "University of Hawaii", country: "US" },
   { callsign: "KASC", name: "KASC 1260 AM", org: "Arizona State University", country: "US" },
@@ -2797,16 +2811,45 @@ export async function seedSpinitronRoster(): Promise<void> {
     }
   }
 
-  // The live Spinitron directory does not carry schedule-page metadata, while
-  // the reviewed fallback does. Merge those independently verified URLs onto
-  // existing rows as well as fresh inserts so deployments converge on restart.
+  // The live Spinitron directory does not reliably carry schedule or location
+  // metadata, while the reviewed fallback does. Merge that independently
+  // verified evidence onto existing rows as well as fresh inserts so deployed
+  // stations gain the timezone needed for schedule attribution.
   for (const station of EMBEDDED_SPINITRON_STATIONS) {
-    if (!station.scheduleUrl) continue;
+    const inferredTimezone = inferTimezone(
+      station.city ?? null,
+      station.country ?? "US",
+    );
+    if (
+      !station.scheduleUrl &&
+      !station.homepageUrl &&
+      !station.city &&
+      !station.region &&
+      !inferredTimezone
+    ) {
+      continue;
+    }
     await db
       .update(stationsTable)
       .set({
         homepageUrl: station.homepageUrl ?? sql`${stationsTable.homepageUrl}`,
-        scheduleUrl: station.scheduleUrl,
+        scheduleUrl: station.scheduleUrl ?? sql`${stationsTable.scheduleUrl}`,
+        // A newly reviewed source should be retried immediately instead of
+        // inheriting the old URL's success/failure backoff window.
+        scheduleAttemptedAt: station.scheduleUrl
+          ? sql`CASE WHEN ${stationsTable.scheduleUrl} IS DISTINCT FROM ${station.scheduleUrl} THEN NULL ELSE ${stationsTable.scheduleAttemptedAt} END`
+          : sql`${stationsTable.scheduleAttemptedAt}`,
+        scheduleFailureReason: station.scheduleUrl
+          ? sql`CASE WHEN ${stationsTable.scheduleUrl} IS DISTINCT FROM ${station.scheduleUrl} THEN NULL ELSE ${stationsTable.scheduleFailureReason} END`
+          : sql`${stationsTable.scheduleFailureReason}`,
+        scheduleFailureAt: station.scheduleUrl
+          ? sql`CASE WHEN ${stationsTable.scheduleUrl} IS DISTINCT FROM ${station.scheduleUrl} THEN NULL ELSE ${stationsTable.scheduleFailureAt} END`
+          : sql`${stationsTable.scheduleFailureAt}`,
+        city: station.city ?? sql`${stationsTable.city}`,
+        region: station.region ?? sql`${stationsTable.region}`,
+        ianaTimezone: inferredTimezone
+          ? sql`COALESCE(${stationsTable.ianaTimezone}, ${inferredTimezone})`
+          : sql`${stationsTable.ianaTimezone}`,
       })
       .where(eq(stationsTable.slug, station.callsign.toLowerCase()));
   }

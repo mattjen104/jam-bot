@@ -320,6 +320,14 @@ async function bootLore(): Promise<void> {
     await runMigration("applyJobTimestampsMigration", applyJobTimestampsMigration);
     await runMigration("applyPollerHealthMigration", applyPollerHealthMigration);
     await runMigration("applyArtistEventsMigration", applyArtistEventsMigration);
+    // The reviewed Spinitron roster carries city + public-calendar evidence
+    // needed by timezone backfill and schedule attribution. Seed it before
+    // either pass so newly repaired directory stations converge in one boot.
+    try {
+      await seedSpinitronRoster();
+    } catch (err) {
+      console.error("[lore] Spinitron roster seed failed", err);
+    }
     try {
       await backfillStationTimezones();
     } catch (err) {
@@ -327,11 +335,6 @@ async function bootLore(): Promise<void> {
     }
     // After timezone backfill so the spin stamper sees freshly-inferred zones.
     await syncScrapedShows();
-    try {
-      await seedSpinitronRoster();
-    } catch (err) {
-      console.error("[lore] Spinitron roster seed failed", err);
-    }
     await seedPickers();
     let rs500ListInfo: { listId: number; url: string } | null = null;
     try {
