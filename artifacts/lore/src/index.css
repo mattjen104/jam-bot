@@ -16162,17 +16162,20 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   50% { transform: scaleY(1); }
 }
 
-/* ── Set-context deck: 3-cover cluster on Library crate rows ────────────
-   The anchor (crossed/kept track) cover sits on top; the before/after
-   covers peek from behind. Hover or keyboard focus fans all three out so
-   each becomes an inline preview play button. */
+/* ── Set-context deck: 3-cover strip on Library crate rows ──────────────
+   All three covers are visible side by side, in broadcast order
+   (before · kept · after). The kept/crossed cover carries the accent
+   outline; hovering or focusing a cover enlarges it while the others dim.
+   Each cover is an inline preview play button. */
 .library-crate__track-art:has(.set-context-deck) {
   overflow: visible;
 }
 .set-context-deck {
   position: relative;
-  display: block;
-  width: var(--deck-cover, 92px);
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: calc(var(--deck-cover, 92px) * 1.7);
   height: var(--deck-cover, 92px);
 }
 .set-context-deck:hover,
@@ -16180,8 +16183,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   z-index: 6;
 }
 .set-context-deck__cover {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: block;
   padding: 0;
   border: 1px solid hsl(var(--foreground) / .12);
@@ -16190,7 +16194,7 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 8px 18px rgb(0 0 0 / .32);
-  transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease;
+  transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
 }
 .set-context-deck__cover img {
   display: block;
@@ -16198,42 +16202,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   height: 100%;
   object-fit: cover;
 }
-.set-context-deck__cover--before {
-  transform: translateX(-9%) scale(.92);
-  filter: brightness(.55);
-  z-index: 1;
-}
+.set-context-deck__cover--before,
 .set-context-deck__cover--after {
-  transform: translateX(9%) scale(.92);
-  filter: brightness(.55);
-  z-index: 1;
+  filter: brightness(.8);
 }
 .set-context-deck__cover--anchor {
-  z-index: 2;
+  outline: 1px solid hsl(var(--library) / .55);
+  outline-offset: -1px;
 }
-.set-context-deck:hover .set-context-deck__cover,
-.set-context-deck:focus-within .set-context-deck__cover {
+/* Highlight the cover under the pointer/focus; its siblings dim back. */
+.set-context-deck:hover .set-context-deck__cover:not(:hover),
+.set-context-deck:focus-within .set-context-deck__cover:not(:focus-visible) {
+  filter: brightness(.6);
+}
+.set-context-deck__cover:hover,
+.set-context-deck__cover:focus-visible {
+  transform: scale(1.12);
   filter: none;
-}
-/* Fan-out swaps the deck to show all three covers side by side WITHIN the
-   same footprint (scale toward each edge) — nothing overflows the card or
-   stacks beneath the copy column, and it works the same on touch. */
-.set-context-deck:hover .set-context-deck__cover--before,
-.set-context-deck:focus-within .set-context-deck__cover--before {
-  transform: scale(.32);
-  transform-origin: left center;
-  z-index: 3;
-}
-.set-context-deck:hover .set-context-deck__cover--anchor,
-.set-context-deck:focus-within .set-context-deck__cover--anchor {
-  transform: scale(.32);
-  transform-origin: center center;
-  z-index: 3;
-}
-.set-context-deck:hover .set-context-deck__cover--after,
-.set-context-deck:focus-within .set-context-deck__cover--after {
-  transform: scale(.32);
-  transform-origin: right center;
   z-index: 3;
 }
 .set-context-deck__wrap {
