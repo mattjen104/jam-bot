@@ -4,19 +4,26 @@ import {
   pickersTable,
 } from "@workspace/db";
 import { eq, and, isNull, sql } from "drizzle-orm";
-import { eligibleDjName } from "@workspace/lore-attribution";
+import { normalizeAttributionName } from "@workspace/lore-attribution";
+import { parseScheduleDjNames } from "./schedule-name-sanitizer.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * True when a scraped dj_name looks like a real human name (contains a space
- * and no comma — the comma case is a multi-host listing like "Alice, Bob").
- * Excludes single-word usernames/handles like "wizzy", "rduffy", "TK".
- */
-function usableScrapedDj(name: string | null, showName?: string): string | null {
-  return eligibleDjName(name, { showTitle: showName });
+function scrapedDjFields(
+  values: ReadonlyArray<string>,
+  showName: string,
+): { djName: string | null; djNames: string[] | null } {
+  const names = values.flatMap((value) => parseScheduleDjNames(value, showName));
+  const unique = [
+    ...new Map(
+      names.map((name) => [normalizeAttributionName(name), name]),
+    ).values(),
+  ];
+  return unique.length > 1
+    ? { djName: null, djNames: unique }
+    : { djName: unique[0] ?? null, djNames: null };
 }
 
 /**
@@ -41,26 +48,37 @@ function slugifyDjName(name: string): string {
  * gaps. Idempotent.
  */
 async function syncShowRows(): Promise<number> {
-  // Collect unique (stationId, showName, djName) — one representative dj_name
-  // per (station, show) using DISTINCT ON.
+  // Collect every distinct host credit for a show. A weekly schedule can list
+  // different co-host strings on different days, so one representative value
+  // would silently discard identities.
   const rows = await db.execute<{
     station_id: number;
+    station_slug: string;
     show_name: string;
-    dj_name: string | null;
+    dj_names: string[];
   }>(sql`
-    SELECT DISTINCT ON (station_id, show_name)
-      station_id,
-      show_name,
-      dj_name
-    FROM scraped_shows
-    WHERE voided_at IS NULL
-    ORDER BY station_id, show_name, dj_name NULLS LAST
+    SELECT
+      ss.station_id,
+      st.slug AS station_slug,
+      ss.show_name,
+      ARRAY_AGG(DISTINCT ss.dj_name) FILTER (
+        WHERE ss.dj_name IS NOT NULL AND ss.dj_name <> ''
+      ) AS dj_names
+    FROM scraped_shows ss
+    JOIN stations st ON st.id = ss.station_id
+    WHERE ss.voided_at IS NULL
+    GROUP BY ss.station_id, st.slug, ss.show_name
   `);
 
   let created = 0;
   for (const row of rows.rows) {
     const exists = await db
-      .select({ id: showsTable.id })
+      .select({
+        id: showsTable.id,
+        djName: showsTable.djName,
+        djNames: showsTable.djNames,
+        pickerId: showsTable.pickerId,
+      })
       .from(showsTable)
       .where(
         and(
@@ -70,14 +88,68 @@ async function syncShowRows(): Promise<number> {
       )
       .limit(1);
 
-    if (exists.length > 0) continue;
+    const fields = scrapedDjFields(row.dj_names ?? [], row.show_name);
+    const existing = exists[0];
+    if (existing) {
+      const oldNames = parseScheduleDjNames(existing.djName, row.show_name);
+      let generatedPickerId: number | null = null;
+      if (existing.pickerId != null && existing.djName) {
+        const expectedHandle =
+          `show-dj-${row.station_slug}-${slugifyDjName(existing.djName)}`;
+        const [picker] = await db
+          .select({ id: pickersTable.id, handle: pickersTable.handle })
+          .from(pickersTable)
+          .where(eq(pickersTable.id, existing.pickerId))
+          .limit(1);
+        if (picker?.handle === expectedHandle) generatedPickerId = picker.id;
+      }
+
+      const isEmptyLegacyRow =
+        existing.djName == null &&
+        existing.djNames == null &&
+        existing.pickerId == null;
+      const isUnlinkedComposite =
+        existing.pickerId == null && oldNames.length > 1;
+      const isGeneratedComposite =
+        generatedPickerId != null &&
+        (fields.djNames != null ||
+          normalizeAttributionName(existing.djName) !==
+            normalizeAttributionName(fields.djName));
+      if (
+        !isEmptyLegacyRow &&
+        !isUnlinkedComposite &&
+        !isGeneratedComposite
+      ) {
+        continue;
+      }
+
+      await db
+        .update(showsTable)
+        .set({ ...fields, pickerId: null })
+        .where(eq(showsTable.id, existing.id));
+
+      if (generatedPickerId != null) {
+        const [stillLinked] = await db
+          .select({ id: showsTable.id })
+          .from(showsTable)
+          .where(eq(showsTable.pickerId, generatedPickerId))
+          .limit(1);
+        if (!stillLinked) {
+          await db
+            .update(pickersTable)
+            .set({ active: false })
+            .where(eq(pickersTable.id, generatedPickerId));
+        }
+      }
+      continue;
+    }
 
     await db
       .insert(showsTable)
       .values({
         stationId: row.station_id,
         name: row.show_name,
-        djName: usableScrapedDj(row.dj_name, row.show_name),
+        ...fields,
       })
       .onConflictDoNothing();
     created++;
@@ -100,76 +172,90 @@ async function syncDjPickers(): Promise<number> {
   const rows = await db.execute<{
     station_id: number;
     station_slug: string;
+    show_name: string;
     dj_name: string;
   }>(sql`
-    SELECT DISTINCT ON (ss.station_id, ss.dj_name)
+    SELECT DISTINCT ON (ss.station_id, ss.show_name, ss.dj_name)
       ss.station_id,
       st.slug AS station_slug,
+      ss.show_name,
       ss.dj_name
     FROM scraped_shows ss
     JOIN stations st ON st.id = ss.station_id
     WHERE ss.dj_name IS NOT NULL AND ss.dj_name <> ''
       AND ss.voided_at IS NULL
-    ORDER BY ss.station_id, ss.dj_name
+    ORDER BY ss.station_id, ss.show_name, ss.dj_name
   `);
 
   let linked = 0;
   for (const row of rows.rows) {
-    const djName = usableScrapedDj(row.dj_name);
-    if (!djName) continue;
+    const djNames = parseScheduleDjNames(row.dj_name, row.show_name);
+    for (const djName of djNames) {
 
-    const djSlug = slugifyDjName(djName);
-    const handle = `show-dj-${row.station_slug}-${djSlug}`;
+      const djSlug = slugifyDjName(djName);
+      if (!djSlug) continue;
+      const handle = `show-dj-${row.station_slug}-${djSlug}`;
 
-    // Upsert picker
-    const [existing] = await db
-      .select({ id: pickersTable.id })
-      .from(pickersTable)
-      .where(eq(pickersTable.handle, handle))
-      .limit(1);
+      // Upsert picker
+      const [existing] = await db
+        .select({ id: pickersTable.id })
+        .from(pickersTable)
+        .where(eq(pickersTable.handle, handle))
+        .limit(1);
 
-    let pickerId: number;
-    if (existing) {
-      pickerId = existing.id;
-    } else {
-      const [inserted] = await db
-        .insert(pickersTable)
-        .values({
-          pickerType: "dj",
-          name: djName,
-          handle,
-          sourceRef: { stationSlug: row.station_slug, djName },
-          trustTier: 2,
-          active: true,
-        })
-        .onConflictDoNothing()
-        .returning({ id: pickersTable.id });
-      if (!inserted) continue;
-      pickerId = inserted.id;
-    }
+      let pickerId: number;
+      if (existing) {
+        pickerId = existing.id;
+      } else {
+        const [inserted] = await db
+          .insert(pickersTable)
+          .values({
+            pickerType: "dj",
+            name: djName,
+            handle,
+            sourceRef: { stationSlug: row.station_slug, djName },
+            trustTier: 2,
+            active: true,
+          })
+          .onConflictDoNothing()
+          .returning({ id: pickersTable.id });
+        if (!inserted) continue;
+        pickerId = inserted.id;
+      }
 
-    // Link to all matching shows rows at this station
-    const shows = await db
-      .select({ id: showsTable.id })
-      .from(showsTable)
-      .where(
-        and(
-          eq(showsTable.stationId, row.station_id),
-          eq(showsTable.djName, djName),
-          isNull(showsTable.pickerId),
-        ),
-      );
+      // Only single-host shows carry djName, so multi-host shows intentionally
+      // remain unlinked rather than attributing the whole show to one picker.
+      const shows = await db
+        .select({ id: showsTable.id })
+        .from(showsTable)
+        .where(
+          and(
+            eq(showsTable.stationId, row.station_id),
+            eq(showsTable.djName, djName),
+            isNull(showsTable.pickerId),
+          ),
+        );
 
-    for (const show of shows) {
-      await db
-        .update(showsTable)
-        .set({ pickerId })
-        .where(eq(showsTable.id, show.id));
-      linked++;
+      for (const show of shows) {
+        await db
+          .update(showsTable)
+          .set({ pickerId })
+          .where(eq(showsTable.id, show.id));
+        linked++;
+      }
     }
   }
 
   return linked;
+}
+
+export async function syncScrapedShowRowsAndPickers(): Promise<{
+  showsCreated: number;
+  pickersLinked: number;
+}> {
+  const showsCreated = await syncShowRows();
+  const pickersLinked = await syncDjPickers();
+  return { showsCreated, pickersLinked };
 }
 
 // ---------------------------------------------------------------------------
@@ -271,8 +357,8 @@ export function clearAutomationClassCache(stationIds?: number[]): void {
  */
 export async function syncScrapedShows(): Promise<void> {
   try {
-    const showsCreated = await syncShowRows();
-    const pickersLinked = await syncDjPickers();
+    const { showsCreated, pickersLinked } =
+      await syncScrapedShowRowsAndPickers();
     const spinsStamped = await stampSpinShowIds();
     console.info(
       `[scraped-shows-sync] shows created: ${showsCreated}, ` +

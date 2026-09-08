@@ -11,6 +11,7 @@
 import { describe, it, expect } from "vitest";
 import {
   sanitizeScheduleName,
+  parseScheduleDjNames,
   INVISIBLE_CHARS_RE,
   INVISIBLE_CHARS_PG_CLASS,
 } from "../../src/lore/schedule-name-sanitizer.js";
@@ -60,6 +61,38 @@ describe("sanitizeScheduleName", () => {
 
   it("returns empty string for input that is only invisible chars", () => {
     expect(sanitizeScheduleName("\u200B\u00A0\u2060")).toBe("");
+  });
+});
+
+describe("parseScheduleDjNames", () => {
+  it("preserves single-host behavior", () => {
+    expect(parseScheduleDjNames("Diane Kamikaze", "Night Shift")).toEqual([
+      "Diane Kamikaze",
+    ]);
+  });
+
+  it.each([
+    "Alice, Bob",
+    "Alice & Bob",
+    "Alice and Bob",
+    "Alice / Bob",
+  ])("splits a multi-host schedule credit: %s", (value) => {
+    expect(parseScheduleDjNames(value, "Co-Hosted")).toEqual(["Alice", "Bob"]);
+  });
+
+  it("deduplicates hosts and excludes generic or malformed identities", () => {
+    expect(
+      parseScheduleDjNames(
+        "Alice; Automation; ALICE; https://example.com; Unknown DJ; Bob",
+        "Co-Hosted",
+      ),
+    ).toEqual(["Alice", "Bob"]);
+  });
+
+  it("rejects implausibly large host lists", () => {
+    expect(
+      parseScheduleDjNames("A, B, C, D, E, F, G, H, I", "Block"),
+    ).toEqual([]);
   });
 });
 

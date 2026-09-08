@@ -1,3 +1,8 @@
+import {
+  eligibleDjName,
+  normalizeAttributionName,
+} from "@workspace/lore-attribution";
+
 /**
  * Shared normalization for scraped schedule names (show_name / dj_name).
  *
@@ -65,4 +70,53 @@ export const INVISIBLE_CHARS_PG_CLASS = `[${classBody((n) => `\\u${hex4(n)}`)}]`
  */
 export function sanitizeScheduleName(s: string): string {
   return s.replace(INVISIBLE_CHARS_RE, " ").replace(/\s+/g, " ").trim();
+}
+
+const DJ_LIST_SEPARATOR_RE = /\s*(?:,|;)\s*|\s+(?:&|\+|\/|\band\b)\s+/iu;
+const MALFORMED_DJ_NAME_RE = /(?:https?:\/\/|www\.|@)/iu;
+const MAX_DJ_NAMES = 8;
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 0x1f || code === 0x7f;
+  });
+}
+
+/**
+ * Turn a schedule's host credit into validated individual identities.
+ *
+ * Public calendars commonly flatten co-hosts into one string ("Alice & Bob").
+ * Split only explicit list separators, validate every resulting identity with
+ * the shared attribution rule, and preserve first-seen display spelling.
+ */
+export function parseScheduleDjNames(
+  value: string | null | undefined,
+  showTitle?: string | null,
+): string[] {
+  if (!value) return [];
+
+  const parts = sanitizeScheduleName(value).split(DJ_LIST_SEPARATOR_RE);
+  if (parts.length > MAX_DJ_NAMES) return [];
+
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const part of parts) {
+    const candidate = sanitizeScheduleName(part);
+    if (
+      !candidate ||
+      candidate.length > 100 ||
+      MALFORMED_DJ_NAME_RE.test(candidate) ||
+      hasControlCharacter(candidate)
+    ) {
+      continue;
+    }
+    const eligible = eligibleDjName(candidate, { showTitle });
+    if (!eligible) continue;
+    const key = normalizeAttributionName(eligible);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(eligible);
+  }
+  return names;
 }
