@@ -163,6 +163,32 @@ export async function probeStationPublicMetadata(
   deps: ProbeDeps = defaultDeps,
 ): Promise<ProbeResult | null> {
   if (hasHealthyStationWatcher(station.id)) return null;
+  return probeStationPublicMetadataWithoutRuntimeState(station, deps);
+}
+
+/**
+ * Read-only audit seam. Unlike the operational probe, this deliberately does
+ * not consult watcher state: the audit must measure the selected station
+ * consistently without touching pollers, health ledgers, or configuration.
+ * Callers are responsible for daily probe limits and append-only evidence.
+ */
+export async function probeStationPublicMetadataForAudit(
+  station: ProbeStation,
+  deps: ProbeDeps = defaultDeps,
+): Promise<ProbeResult | null> {
+  return probeStationPublicMetadataWithoutRuntimeState(station, {
+    ...deps,
+    // fetchIcyMetadata already performs one bounded, public-IP-pinned redirect
+    // resolution. Operational repair needs the direct URL and resolves again;
+    // the read-only audit does not, avoiding up to three redundant requests.
+    resolveUrl: async (url) => url,
+  });
+}
+
+async function probeStationPublicMetadataWithoutRuntimeState(
+  station: ProbeStation,
+  deps: ProbeDeps,
+): Promise<ProbeResult | null> {
   const budgetMs = deps.budgetMs ?? PROBE_BUDGET_MS;
   let timer: NodeJS.Timeout | undefined;
   const overBudget = new Promise<ProbeResult>((resolve) => {

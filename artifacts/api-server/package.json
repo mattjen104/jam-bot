@@ -8,6 +8,7 @@
     "build": "tsx ./build.ts",
     "audit:soundtap-schedules": "tsx ./src/scripts/audit-soundtap-schedules.ts",
     "audit:schedule-coverage": "tsx ./src/scripts/audit-schedule-coverage.ts",
+    "audit:playlist-coverage": "tsx ./src/scripts/audit-playlist-coverage.ts",
     "audit:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts",
     "cleanup:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts --apply",
     "refresh:soundtap-schedules": "tsx ./src/scripts/refresh-soundtap-schedules.ts",

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   probeStationPublicMetadata,
+  probeStationPublicMetadataForAudit,
   radiojarStreamId,
   type ProbeDeps,
 } from "../src/lore/source-probe.js";
@@ -61,6 +62,22 @@ describe("probeStationPublicMetadata — ICY", () => {
     );
     expect(out?.outcome).toBe("usable_pair");
     expect(out?.resolvedUrl).toBe(direct);
+  });
+
+  it("does not resolve the redirect chain a second time for read-only audits", async () => {
+    let resolveCalls = 0;
+    const out = await probeStationPublicMetadataForAudit(
+      STATION,
+      deps({
+        fetchIcy: async () => icyOk("A - B"),
+        resolveUrl: async (url) => {
+          resolveCalls++;
+          return url;
+        },
+      }),
+    );
+    expect(out?.outcome).toBe("usable_pair");
+    expect(resolveCalls).toBe(0);
   });
 
   it("accepts the verified Chillsynth artist-title metadata shape", async () => {
