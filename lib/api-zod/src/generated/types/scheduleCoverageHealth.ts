@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { StaleScheduleCalendar } from "./staleScheduleCalendar";
 
 export interface ScheduleCoverageHealth {
   /** @minimum 0 */
@@ -12,4 +13,7 @@ export interface ScheduleCoverageHealth {
   running: boolean;
   /** @minimum 1 */
   batchLimit: number;
+  /** @minimum 1 */
+  staleAfterMs: number;
+  staleCalendars: StaleScheduleCalendar[];
 }

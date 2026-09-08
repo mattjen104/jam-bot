@@ -1655,6 +1655,34 @@ export const GetAdminScheduleCoverageHealthResponse = zod.object({
     .min(getAdminScheduleCoverageHealthResponseRemainingMin),
   running: zod.boolean(),
   batchLimit: zod.number().min(1),
+  staleAfterMs: zod.number().min(1),
+  staleCalendars: zod.array(
+    zod.object({
+      stationId: zod.number(),
+      slug: zod.string(),
+      stationName: zod.string(),
+      scheduleUrl: zod.string().url(),
+      lastSuccessfulScrapeAt: zod.string().datetime({}),
+      failureReason: zod
+        .union([
+          zod.literal("policy_blocked"),
+          zod.literal("source_unavailable"),
+          zod.literal("transient_fetch"),
+          zod.literal("missing_schedule_link"),
+          zod.literal("malformed_schedule"),
+          zod.literal("extraction_failed"),
+          zod.literal("persistence_failed"),
+          zod.literal(null),
+        ])
+        .nullable(),
+      failureAt: zod.string().datetime({}).nullable(),
+      status: zod.enum([
+        "awaiting_refresh",
+        "transient_failure",
+        "unavailable",
+      ]),
+    }),
+  ),
 });
 
 /**

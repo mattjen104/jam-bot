@@ -36,13 +36,18 @@ const FETCH_TIMEOUT_MS = 10_000;
 const MAX_PAGE_CHARS = 20_000; // keep the LLM prompt bounded
 // Schedules change week to week — refresh far less often than every tick,
 // but more often than the monthly blurb cadence.
-const RESCRAPE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+export const RESCRAPE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 // Separate, much shorter backoff for stations whose scrape *attempt* failed
 // (dead homepage, robots-blocked, LLM error). Without this, a persistently
 // failing station would be selected again on every single tick forever
 // (scheduleScrapedAt would stay null), starving the small per-tick batch
 // and preventing the scraper from ever reaching the rest of the directory.
-const ATTEMPT_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
+export const ATTEMPT_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
+// Operator health should not call a calendar stale merely because it has just
+// become eligible and is waiting behind the paced crawl queue. Allow one full
+// retry interval beyond the normal weekly refresh cadence.
+export const SCHEDULE_STALE_AFTER_MS =
+  RESCRAPE_AFTER_MS + ATTEMPT_RETRY_AFTER_MS;
 const BATCH_SIZE = 3;
 const TICK_MS = 45_000;
 const WARMUP_MS = 150_000; // start after the homepage scraper's own warmup

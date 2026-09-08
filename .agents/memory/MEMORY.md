@@ -155,3 +155,4 @@
 - [Device-local station follows](device-local-station-follows.md) — listener follows unify curated and personal stations, but never affect editorial favorites, Library, or poller enrollment.
 - [On-air identity phrases](on-air-identity-phrases.md) — capture relational host/show references too; schedule evidence may resolve ASR noise but cannot identify the speaker by implication.
 - [Fleet poller liveness](fleet-poller-liveness.md) — health needs owner-guarded process heartbeats plus full-roster cycle progress from every routing tier, including unchanged observations.
+- [Schedule freshness grace](schedule-freshness-grace.md) — calendar health becomes stale only after weekly cadence plus one retry interval; durable failures distinguish retryable outages from unavailable feeds.

@@ -4725,12 +4725,54 @@ export interface PostEmbedResolutionRequeueResponse {
   requeued: PostEmbedResolutionRequeueResponseRequeuedItem[];
 }
 
+/**
+ * @nullable
+ */
+export type StaleScheduleCalendarFailureReason =
+  | (typeof StaleScheduleCalendarFailureReason)[keyof typeof StaleScheduleCalendarFailureReason]
+  | null;
+
+export const StaleScheduleCalendarFailureReason = {
+  policy_blocked: "policy_blocked",
+  source_unavailable: "source_unavailable",
+  transient_fetch: "transient_fetch",
+  missing_schedule_link: "missing_schedule_link",
+  malformed_schedule: "malformed_schedule",
+  extraction_failed: "extraction_failed",
+  persistence_failed: "persistence_failed",
+} as const;
+
+export type StaleScheduleCalendarStatus =
+  (typeof StaleScheduleCalendarStatus)[keyof typeof StaleScheduleCalendarStatus];
+
+export const StaleScheduleCalendarStatus = {
+  awaiting_refresh: "awaiting_refresh",
+  transient_failure: "transient_failure",
+  unavailable: "unavailable",
+} as const;
+
+export interface StaleScheduleCalendar {
+  stationId: number;
+  slug: string;
+  stationName: string;
+  scheduleUrl: string;
+  lastSuccessfulScrapeAt: string;
+  /** @nullable */
+  failureReason: StaleScheduleCalendarFailureReason;
+  /** @nullable */
+  failureAt: string | null;
+  status: StaleScheduleCalendarStatus;
+}
+
 export interface ScheduleCoverageHealth {
   /** @minimum 0 */
   remaining: number;
   running: boolean;
   /** @minimum 1 */
   batchLimit: number;
+  /** @minimum 1 */
+  staleAfterMs: number;
+  staleCalendars: StaleScheduleCalendar[];
 }
 
 export interface ScheduleCoverageCursorInput {

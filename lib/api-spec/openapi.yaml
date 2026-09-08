@@ -10625,7 +10625,44 @@ components:
         remaining: { type: integer, minimum: 0 }
         running: { type: boolean }
         batchLimit: { type: integer, minimum: 1 }
-      required: [remaining, running, batchLimit]
+        staleAfterMs: { type: integer, minimum: 1 }
+        staleCalendars:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaleScheduleCalendar"
+      required: [remaining, running, batchLimit, staleAfterMs, staleCalendars]
+    StaleScheduleCalendar:
+      type: object
+      properties:
+        stationId: { type: integer }
+        slug: { type: string }
+        stationName: { type: string }
+        scheduleUrl: { type: string, format: uri }
+        lastSuccessfulScrapeAt: { type: string, format: date-time }
+        failureReason:
+          type: ["string", "null"]
+          enum:
+            - policy_blocked
+            - source_unavailable
+            - transient_fetch
+            - missing_schedule_link
+            - malformed_schedule
+            - extraction_failed
+            - persistence_failed
+            - null
+        failureAt: { type: ["string", "null"], format: date-time }
+        status:
+          type: string
+          enum: [awaiting_refresh, transient_failure, unavailable]
+      required:
+        - stationId
+        - slug
+        - stationName
+        - scheduleUrl
+        - lastSuccessfulScrapeAt
+        - failureReason
+        - failureAt
+        - status
     ScheduleCoverageCursorInput:
       type: object
       properties:

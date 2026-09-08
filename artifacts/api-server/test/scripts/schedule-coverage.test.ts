@@ -6,7 +6,10 @@ import {
   parseCoverageArgs,
   selectUnclassifiedRefreshCandidates,
 } from "../../src/scripts/audit-schedule-coverage.js";
-import { summarizeScheduleCoverageBatch } from "../../src/lore/schedule-coverage-backlog.js";
+import {
+  scheduleCalendarFailureStatus,
+  summarizeScheduleCoverageBatch,
+} from "../../src/lore/schedule-coverage-backlog.js";
 
 describe("all-Lore schedule coverage audit", () => {
   it("is read-only by default and validates bounded refresh arguments", () => {
@@ -109,5 +112,16 @@ describe("all-Lore schedule coverage audit", () => {
       transient_fetch: 1,
       unclassified: 1,
     });
+  });
+
+  it("separates retryable calendar failures from unavailable public feeds", () => {
+    expect(scheduleCalendarFailureStatus(null)).toBe("awaiting_refresh");
+    expect(scheduleCalendarFailureStatus("transient_fetch")).toBe("transient_failure");
+    expect(scheduleCalendarFailureStatus("extraction_failed")).toBe("transient_failure");
+    expect(scheduleCalendarFailureStatus("persistence_failed")).toBe("transient_failure");
+    expect(scheduleCalendarFailureStatus("policy_blocked")).toBe("unavailable");
+    expect(scheduleCalendarFailureStatus("source_unavailable")).toBe("unavailable");
+    expect(scheduleCalendarFailureStatus("missing_schedule_link")).toBe("unavailable");
+    expect(scheduleCalendarFailureStatus("malformed_schedule")).toBe("unavailable");
   });
 });

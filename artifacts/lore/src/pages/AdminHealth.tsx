@@ -1702,7 +1702,12 @@ function ScheduleCoverageHealthSection({
   token: string;
   onRunComplete: () => void;
 }) {
-  const { remaining = 0, running: serverRunning = false, batchLimit = 10 } = health;
+  const {
+    remaining = 0,
+    running: serverRunning = false,
+    batchLimit = 10,
+    staleCalendars = [],
+  } = health;
   const [running, setRunning] = useState(false);
   const [afterId, setAfterId] = useState(0);
   const [result, setResult] = useState<ScheduleCoverageBatchResult | string | null>(null);
@@ -1748,9 +1753,66 @@ function ScheduleCoverageHealthSection({
       <SectionHeading
         icon={<Archive className="h-4 w-4" />}
         title="Schedule failure backlog"
-        badge={remaining}
-        description="Classify historical schedule failures in bounded, resumable batches without replacing a healthy saved schedule on weak extraction evidence."
+        badge={remaining + staleCalendars.length}
+        description="Classify historical failures and warn when a previously healthy public calendar has missed its weekly refresh and retry grace period."
       />
+      {staleCalendars.length > 0 && (
+        <div className="mt-4 overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/5">
+          <div className="border-b border-amber-500/20 px-5 py-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+              {staleCalendars.length} stale public calendar{staleCalendars.length === 1 ? "" : "s"}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Weekly refresh plus the retry grace period has elapsed. Saved schedule rows remain available.
+            </p>
+          </div>
+          <ul className="divide-y divide-border/60">
+            {staleCalendars.map((calendar) => {
+              const unavailable = calendar.status === "unavailable";
+              const transient = calendar.status === "transient_failure";
+              const statusLabel = unavailable
+                ? "Feed unavailable"
+                : transient
+                  ? "Transient failure"
+                  : "Awaiting refresh";
+              return (
+                <li key={calendar.stationId} className="grid gap-2 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="min-w-0">
+                    <a
+                      href={calendar.scheduleUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                    >
+                      {calendar.stationName}
+                    </a>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Last successful scrape {new Date(calendar.lastSuccessfulScrapeAt).toLocaleString()}
+                    </div>
+                    {calendar.failureReason && calendar.failureAt && (
+                      <div className="mt-1 font-mono text-xs text-muted-foreground">
+                        {calendar.failureReason.replaceAll("_", " ")} · {new Date(calendar.failureAt).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                  <span
+                    className={`h-fit w-fit rounded-full border px-2 py-0.5 text-xs ${
+                      unavailable
+                        ? "border-destructive/40 bg-destructive/10 text-destructive"
+                        : transient
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                          : "border-border bg-secondary/40 text-muted-foreground"
+                    }`}
+                  >
+                    {statusLabel}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       <div className="mt-4 rounded-xl border border-card-border bg-card px-5 py-4">
         <div className="flex flex-wrap items-center gap-3">
           <div>
