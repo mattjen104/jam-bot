@@ -11,5 +11,5 @@ Library crate rows render a 3-cover deck (before / anchor / after) from `POST /a
 - Artist anchors MUST be scoped to the requesting user's taste universe (taste_seeds + active library artists + unresolved import artists); unowned artists return explicit null. Code review caught the unscoped version.
 - Neighbors are station-scoped and bounded to ±20 minutes of the anchor spin; anything farther is a set/ad boundary and must be omitted, not implied.
 - Fallback contexts carry `anchorKind: "artist-fallback"` and the UI labels them "latest set" — never present a substituted song as the kept broadcast.
-- Deck fan-out scales the three covers into the same footprint (no overflow, no z-index fights, works on touch via focus-within).
+- Deck is a side-by-side strip (before · kept · after, broadcast order) — never stack covers behind each other; collapsed peeks read as "only one cover." Portrait ≤640px: full-width squares via aspect-ratio, text below.
 - Preview audio must stop on host unmount (LibraryCrate cleanup) and never overlap live radio.

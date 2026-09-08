@@ -16304,8 +16304,27 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--library));
 }
 @media (max-width: 640px) {
-  .library-crate__track .set-context-deck {
-    /* Cover the 72px mobile track-art size; !important beats the inline var. */
-    --deck-cover: 72px !important;
+  /* Portrait phone: the three covers span the card width as proportional
+     squares; the copy stacks beneath via the --deck card modifiers. */
+  .library-crate__track--deck .library-crate__track-art,
+  .library-crate__card--deck .library-crate__art-column,
+  .library-crate__track--deck .set-context-deck__wrap,
+  .library-crate__card--deck .set-context-deck__wrap {
+    width: 100%;
+  }
+  .library-crate__track--deck .set-context-deck,
+  .library-crate__card--deck .set-context-deck {
+    width: 100%;
+    height: auto;
+  }
+  .library-crate__track--deck .set-context-deck__cover,
+  .library-crate__card--deck .set-context-deck__cover {
+    aspect-ratio: 1 / 1;
+    height: auto;
+  }
+  .library-crate__track--deck .set-context-deck__glyph,
+  .library-crate__card--deck .set-context-deck__glyph {
+    font-size: 13px;
+    padding: 5px 6px;
   }
 }
