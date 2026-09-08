@@ -645,7 +645,13 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
         ),
       ),
     )
-    .orderBy(sql`${stationsTable.scheduleAttemptedAt} asc nulls first`)
+    // Stations with a known support/store route are the first editorial cohort:
+    // improving their schedule data also improves Lore's path to supporting
+    // the station. Fairness within each cohort remains oldest-attempt-first.
+    .orderBy(
+      sql`(${stationsTable.donateUrl} IS NOT NULL OR ${stationsTable.storeUrl} IS NOT NULL) DESC`,
+      sql`${stationsTable.scheduleAttemptedAt} asc nulls first`,
+    )
     .limit(limit);
 
   return rows

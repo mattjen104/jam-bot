@@ -169,6 +169,44 @@ export function parseQantumSchedule(html: string): StructuredShow[] | null {
   return shows.length ? shows : null;
 }
 
+/**
+ * Parse the server-rendered tabbed schedule used by CKUA. Each day pane
+ * contains ordered time-slot cells: time range, host, programme, and genre.
+ * This is deterministic first-party markup, so prefer it to LLM extraction.
+ */
+export function parseTabbedHostSchedule(html: string): StructuredShow[] | null {
+  if (!/id=["']scheduleContent["']/i.test(html)) return null;
+  const panes = html.split(/<div\b[^>]*class=["'][^"']*\btab-pane\b[^"']*["'][^>]*>/gi);
+  const shows: StructuredShow[] = [];
+
+  for (let i = 1; i < panes.length; i++) {
+    const openingTag = [...html.matchAll(/<div\b[^>]*class=["'][^"']*\btab-pane\b[^"']*["'][^>]*>/gi)][i - 1]?.[0];
+    const dayName = openingTag?.match(/\bid=["'](sunday|monday|tuesday|wednesday|thursday|friday|saturday)["']/i)?.[1];
+    if (!dayName) continue;
+    const dayIndex = DAY_NAMES.findIndex((day) => day.toLowerCase() === dayName.toLowerCase());
+    if (dayIndex < 0) continue;
+
+    const slots = panes[i]!.split(/<div\b[^>]*class=["'][^"']*\btime-slot\b[^"']*["'][^>]*>/gi);
+    for (let j = 1; j < slots.length; j++) {
+      const cells = [...slots[j]!.matchAll(/<div\b[^>]*class=["'][^"']*\bcell\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)]
+        .map((cell) => cell[1]!);
+      if (cells.length < 3) continue;
+      const range = parseTimeRange(decodeHtml(cells[0]!));
+      if (!range) continue;
+      const show = makeShow(
+        cells[2]!,
+        DAYS[dayIndex]!,
+        range.start,
+        range.end,
+        cells[1]!,
+      );
+      if (show) shows.push(show);
+    }
+  }
+
+  return shows.length ? shows : null;
+}
+
 export function parseJsonLdEvents(html: string): StructuredShow[] | null {
   const shows: StructuredShow[] = [];
   for (const script of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
@@ -385,5 +423,8 @@ export function parseCalendarIcs(raw: string): StructuredShow[] | null {
 }
 
 export function parseStructuredScheduleHtml(html: string): StructuredShow[] | null {
-  return parseJsonLdEvents(html) ?? parseWeeklyScheduleTable(html) ?? parseQantumSchedule(html);
+  return parseTabbedHostSchedule(html) ??
+    parseJsonLdEvents(html) ??
+    parseWeeklyScheduleTable(html) ??
+    parseQantumSchedule(html);
 }

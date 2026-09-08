@@ -799,6 +799,8 @@ function canadianCampusStations(): InsertStation[] {
       name: "CJSR 88.5 FM",
       org: "University of Alberta",
       country: "CA",
+      city: "Edmonton",
+      region: "AB",
       // DAS stream — confirmed ICY (icy-metaint:16000) with cdnstream1.com
       // metadata service; StreamTitle is populated during music programming.
       // cjsr.streamon.fm redirects here; using the resolved URL directly.
@@ -2239,6 +2241,8 @@ function spinitronCanadianAdditions(): InsertStation[] {
       name: "CKUA Radio",
       org: "CKUA Radio Network",
       country: "CA",
+      city: "Edmonton",
+      region: "AB",
       // HTTPS audio/mpeg stream confirmed reachable (200) from the Replit
       // container. StreamOn hosts CKUA's official 64kbps MP3 mount.
       streamUrl: "https://ais-sa1.streamon.fm/7000_64k.mp3",
