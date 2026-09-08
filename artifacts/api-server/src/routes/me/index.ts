@@ -29,6 +29,7 @@ import pressCrossingsRouter from "./press-crossings.js";
 import showsRouter from "./shows.js";
 import releaseStatsRouter from "./release-stats.js";
 import pressRouter from "./press.js";
+import setContextsRouter from "./set-contexts.js";
 
 export {
   startPhase3RetryScheduler,
@@ -70,5 +71,6 @@ router.use(pressCrossingsRouter);
 router.use(pressRouter);
 router.use(showsRouter);
 router.use(releaseStatsRouter);
+router.use(setContextsRouter);
 
 export default router;

@@ -4,6 +4,15 @@ import type { LibraryItem } from "../lib/meHooks";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
 import type { CSSProperties } from "react";
+import {
+  anchorKey,
+  useSetContexts,
+  type SetContext,
+  type SetContextAnchor,
+} from "../lib/setContexts";
+import { SetContextDeck } from "./SetContextDeck";
+import { stopInlinePreview } from "../player/inlinePreview";
+import { usePlayer } from "../player/PlayerProvider";
 
 interface ReleaseMetadata {
   title: string;
@@ -324,10 +333,14 @@ function CrateTrackCard({
   position,
   opened,
   onOpened,
+  setContext,
+  onPlayStart,
 }: {
   item: LibraryItem;
   release: CrateRelease;
   metadata: ReleaseMetadata | null;
+  setContext?: SetContext | null;
+  onPlayStart?: () => void;
   position: number;
   opened: boolean;
   onOpened: (key: string) => void;
@@ -358,7 +371,9 @@ function CrateTrackCard({
       data-track-key={openedKey}
     >
       <div className="library-crate__track-art">
-        {releaseHref ? (
+        {setContext ? (
+          <SetContextDeck context={setContext} onPlayStart={onPlayStart} />
+        ) : releaseHref ? (
           <Link
             href={releaseHref}
             className="library-crate__cover-link"
@@ -373,18 +388,46 @@ function CrateTrackCard({
       </div>
       <div className="library-crate__track-copy">
         <div className="library-crate__track-title">{title}</div>
-        <div className="library-crate__track-album">{album}</div>
+        <div className="library-crate__track-album">
+          {releaseHref ? (
+            <Link
+              href={releaseHref}
+              className="library-crate__album-link"
+              onClick={() => onOpened(openedKey)}
+            >
+              {album}
+            </Link>
+          ) : (
+            album
+          )}
+        </div>
         <div className="library-crate__track-artist">{artist}</div>
         <div className="library-crate__provenance">{keepCopy(item)}</div>
+        {setContext?.station.homepageUrl && (
+          <div className="library-crate__station-row">
+            <a
+              href={setContext.station.homepageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="library-crate__station-link"
+              data-testid="crate-station-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {setContext.station.name} ↗
+            </a>
+          </div>
+        )}
       </div>
     </article>
   );
 }
 
-function AddedArtistCard({ artist, position, onOpened }: {
+function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }: {
   artist: AddedArtist;
   position: number;
   onOpened: (key: string) => void;
+  setContext?: SetContext | null;
+  onPlayStart?: () => void;
 }) {
   const [releaseIndex, setReleaseIndex] = useState(0);
   const release = artist.releases.length > 0
@@ -402,6 +445,9 @@ function AddedArtistCard({ artist, position, onOpened }: {
       data-artist-key={artist.key}
     >
       <div className="library-crate__art-column">
+        {setContext ? (
+          <SetContextDeck context={setContext} size={72} onPlayStart={onPlayStart} />
+        ) : (
         <div className="library-crate__artist-stack">
           {artist.releases.slice(1, 3).map((ghost, index) => (
             <Swatch key={ghost.releaseGroupMbid} title={ghost.title ?? artist.name} artworkUrl={ghost.artworkUrl} className={`library-crate__ghost library-crate__ghost--${index + 1}`} />
@@ -419,10 +465,22 @@ function AddedArtistCard({ artist, position, onOpened }: {
             <Swatch title={artist.name} artworkUrl={null} />
           )}
         </div>
+        )}
       </div>
       <div className="library-crate__content">
         <div className="library-crate__scrim" aria-hidden="true" />
         <div className="library-crate__parent">{artist.name}</div>
+        {setContext && release && releaseHref && (
+          <div className="library-crate__track-album">
+            <Link
+              href={releaseHref}
+              className="library-crate__album-link"
+              onClick={() => { rememberOpened(artist.key); onOpened(artist.key); }}
+            >
+              {release.title ?? artist.name}
+            </Link>
+          </div>
+        )}
         <div className="library-crate__caught library-crate__caught--artist">
           <span>Artist catalogue</span>
           {artist.releases.length > 1 && (
@@ -442,6 +500,20 @@ function AddedArtistCard({ artist, position, onOpened }: {
         </div>
         <div className="library-crate__provenance">Added · date unknown</div>
         <div className="library-crate__artist-note">No keep or album choice has been made.</div>
+        {setContext?.station.homepageUrl && (
+          <div className="library-crate__station-row">
+            <a
+              href={setContext.station.homepageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="library-crate__station-link"
+              data-testid="crate-station-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {setContext.station.name} ↗
+            </a>
+          </div>
+        )}
       </div>
     </article>
   );
@@ -520,6 +592,37 @@ export function LibraryCrate({
   const visibleArtists = showAllArtists ? addedArtists : addedArtists.slice(0, 20);
   const hasItems = tracks.length > 0 || addedArtists.length > 0;
 
+  // Set-context anchors: kept tracks anchor by MBID (the server finds the
+  // retained spin); unresolved tracks and artist-file saves anchor by artist
+  // name (most recent resolved set across stations).
+  const contextAnchors = useMemo(() => {
+    const anchors: SetContextAnchor[] = [];
+    for (const { item } of tracks) {
+      if (item.mbid) anchors.push({ kind: "mbid", mbid: item.mbid });
+      else if (item.recording?.artist) anchors.push({ kind: "artist", artist: item.recording.artist });
+    }
+    for (const artist of visibleArtists) {
+      anchors.push({ kind: "artist", artist: artist.name });
+    }
+    return anchors;
+  }, [tracks, visibleArtists]);
+  const setContexts = useSetContexts(contextAnchors);
+
+  // Inline previews share the page's single audio element; stop them when the
+  // crate unmounts (navigation) and yield live radio when one starts.
+  const { radio } = usePlayer();
+  useEffect(() => () => stopInlinePreview(), []);
+  const yieldRadio = () => {
+    if (radio.status === "playing") radio.stop();
+  };
+
+  const contextFor = (item: LibraryItem): SetContext | null | undefined =>
+    item.mbid
+      ? setContexts.get(`mbid:${item.mbid}`)
+      : item.recording?.artist
+        ? setContexts.get(anchorKey({ kind: "artist", artist: item.recording.artist }))
+        : undefined;
+
   if (!hasItems) {
     return (
       <div className="library-crate__empty" data-testid="library-crate-empty" aria-hidden="true" />
@@ -546,6 +649,8 @@ export function LibraryCrate({
                 position={index}
                 opened={opened.has(item.mbid ?? item.spotifyId ?? `${release.key}:${index}`)}
                 onOpened={markOpened}
+                setContext={contextFor(item)}
+                onPlayStart={yieldRadio}
               />
             ))}
           </div>
@@ -568,6 +673,8 @@ export function LibraryCrate({
                 artist={artist}
                 position={index}
                 onOpened={markOpened}
+                setContext={setContexts.get(anchorKey({ kind: "artist", artist: artist.name }))}
+                onPlayStart={yieldRadio}
               />
             ))}
           </div>

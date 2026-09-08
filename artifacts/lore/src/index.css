@@ -16161,3 +16161,143 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   0%, 100% { transform: scaleY(0.3); }
   50% { transform: scaleY(1); }
 }
+
+/* ── Set-context deck: 3-cover cluster on Library crate rows ────────────
+   The anchor (crossed/kept track) cover sits on top; the before/after
+   covers peek from behind. Hover or keyboard focus fans all three out so
+   each becomes an inline preview play button. */
+.library-crate__track-art:has(.set-context-deck) {
+  overflow: visible;
+}
+.set-context-deck {
+  position: relative;
+  display: block;
+  width: var(--deck-cover, 92px);
+  height: var(--deck-cover, 92px);
+}
+.set-context-deck:hover,
+.set-context-deck:focus-within {
+  z-index: 6;
+}
+.set-context-deck__cover {
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+  border: 1px solid hsl(var(--foreground) / .12);
+  border-radius: 3px;
+  background: hsl(270 9% 11%);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgb(0 0 0 / .32);
+  transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease;
+}
+.set-context-deck__cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.set-context-deck__cover--before {
+  transform: translateX(-9%) scale(.92);
+  filter: brightness(.55);
+  z-index: 1;
+}
+.set-context-deck__cover--after {
+  transform: translateX(9%) scale(.92);
+  filter: brightness(.55);
+  z-index: 1;
+}
+.set-context-deck__cover--anchor {
+  z-index: 2;
+}
+.set-context-deck:hover .set-context-deck__cover,
+.set-context-deck:focus-within .set-context-deck__cover {
+  filter: none;
+}
+/* Fan-out swaps the deck to show all three covers side by side WITHIN the
+   same footprint (scale toward each edge) — nothing overflows the card or
+   stacks beneath the copy column, and it works the same on touch. */
+.set-context-deck:hover .set-context-deck__cover--before,
+.set-context-deck:focus-within .set-context-deck__cover--before {
+  transform: scale(.32);
+  transform-origin: left center;
+  z-index: 3;
+}
+.set-context-deck:hover .set-context-deck__cover--anchor,
+.set-context-deck:focus-within .set-context-deck__cover--anchor {
+  transform: scale(.32);
+  transform-origin: center center;
+  z-index: 3;
+}
+.set-context-deck:hover .set-context-deck__cover--after,
+.set-context-deck:focus-within .set-context-deck__cover--after {
+  transform: scale(.32);
+  transform-origin: right center;
+  z-index: 3;
+}
+.set-context-deck__wrap {
+  display: block;
+}
+.set-context-deck__note {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  letter-spacing: .04em;
+  color: hsl(var(--faint));
+  text-transform: uppercase;
+}
+.set-context-deck__cover--empty {
+  border-style: dashed;
+  opacity: .35;
+  cursor: default;
+  box-shadow: none;
+}
+.set-context-deck__glyph {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: #fff;
+  background: rgb(0 0 0 / .62);
+  border-radius: 3px;
+  padding: 3px 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.set-context-deck__cover--playable:hover .set-context-deck__glyph,
+.set-context-deck__cover--playable:focus-visible .set-context-deck__glyph,
+.set-context-deck__cover.is-playing .set-context-deck__glyph {
+  opacity: 1;
+}
+.library-crate__station-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.library-crate__station-link {
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  color: hsl(var(--dim));
+  text-decoration: none;
+}
+.library-crate__station-link:hover {
+  color: hsl(var(--library));
+}
+.library-crate__album-link {
+  color: inherit;
+  text-decoration: none;
+}
+.library-crate__album-link:hover {
+  color: hsl(var(--library));
+}
+@media (max-width: 640px) {
+  .library-crate__track .set-context-deck {
+    /* Cover the 72px mobile track-art size; !important beats the inline var. */
+    --deck-cover: 72px !important;
+  }
+}
