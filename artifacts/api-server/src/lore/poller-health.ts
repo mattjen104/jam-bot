@@ -88,6 +88,7 @@ export function pollerFleetAlertForTransition(
 }
 let ownershipGateForTests: Promise<void> | null = null;
 
+let ownerIdFactory: () => string = randomUUID;
 export function classifyPollerHeartbeat(
   row: Pick<
     DurablePollerHealthRow,
@@ -243,7 +244,12 @@ async function takeOwnership(state: RuntimeState): Promise<void> {
       last_stall_detected_at = EXCLUDED.last_stall_detected_at,
       last_recovered_at = EXCLUDED.last_recovered_at,
       updated_at = now()
-    WHERE lore_poller_health.process_started_at <= EXCLUDED.process_started_at
+    WHERE
+      lore_poller_health.process_started_at < EXCLUDED.process_started_at
+      OR (
+        lore_poller_health.process_started_at = EXCLUDED.process_started_at
+        AND lore_poller_health.owner_id < EXCLUDED.owner_id
+      )
   `);
 }
 
@@ -348,7 +354,7 @@ export async function startPollerHeartbeat(expectedStationIds: number[]): Promis
 
   runtime = {
     healthKey: key,
-    ownerId: randomUUID(),
+    ownerId: ownerIdFactory(),
     processStartedAt: now,
     heartbeatAt: now,
     expectedStationIds: new Set(expectedStationIds),
@@ -486,6 +492,7 @@ export function clearPollerHealthForTests(): void {
   runtime = null;
   persistenceQueue = Promise.resolve();
   ownershipGateForTests = null;
+  ownerIdFactory = randomUUID;
   healthKey = DEFAULT_HEALTH_KEY;
 }
 
@@ -498,6 +505,10 @@ export function setPollerOwnershipGateForTests(gate: Promise<void> | null): void
   ownershipGateForTests = gate;
 }
 
+export function setPollerOwnerIdForTests(ownerId: string): void {
+  if (runtime) throw new Error("Cannot change poller owner ID while heartbeat is active");
+  ownerIdFactory = () => ownerId;
+}
 export function persistPollerHeartbeatForTests(now: Date = new Date()): Promise<void> {
   return queueHeartbeat(now);
 }

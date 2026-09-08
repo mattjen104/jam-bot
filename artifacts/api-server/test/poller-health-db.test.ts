@@ -52,6 +52,46 @@ afterAll(async () => {
 });
 
 describe("poller health rolling restart persistence", () => {
+  it("keeps one deterministic owner when starts share the same timestamp", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-07T10:00:00.000Z"));
+
+    let releaseWinningOwner!: () => void;
+    const winningOwnerGate = new Promise<void>((resolve) => {
+      releaseWinningOwner = resolve;
+    });
+
+    vi.resetModules();
+    const winningOwner = await import("../src/lore/poller-health.js");
+    winningOwner.setPollerHealthKeyForTests(healthKey);
+    winningOwner.setPollerOwnerIdForTests("owner-b");
+    winningOwner.setPollerOwnershipGateForTests(winningOwnerGate);
+    const winningOwnerStart = winningOwner.startPollerHeartbeat([10]);
+
+    vi.resetModules();
+    const losingOwner = await import("../src/lore/poller-health.js");
+    losingOwner.setPollerHealthKeyForTests(healthKey);
+    losingOwner.setPollerOwnerIdForTests("owner-a");
+    await losingOwner.startPollerHeartbeat([10]);
+    expect((await readRow())?.ownerId).toBe("owner-a");
+
+    releaseWinningOwner();
+    await winningOwnerStart;
+    const stableWinner = await readRow();
+    expect(stableWinner?.ownerId).toBe("owner-b");
+
+    await losingOwner.persistPollerHeartbeatForTests(
+      new Date("2026-09-07T10:01:00.000Z"),
+    );
+    await losingOwner.stopPollerHeartbeat();
+    expect(await readRow()).toEqual(stableWinner);
+
+    await winningOwner.stopPollerHeartbeat();
+    await db.execute(sql`DELETE FROM lore_poller_health WHERE key = ${healthKey}`);
+  });
+
   it("rejects an older owner's initial claim when its database write arrives late", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
