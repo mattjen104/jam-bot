@@ -366,7 +366,7 @@ function CrateTrackCard({
 
   return (
     <article
-      className={`library-crate__track${opened ? " library-crate__track--opened" : ""}`}
+      className={`library-crate__track${setContext ? " library-crate__track--deck" : ""}${opened ? " library-crate__track--opened" : ""}`}
       data-testid="library-crate-track"
       data-track-key={openedKey}
     >
@@ -439,7 +439,7 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
     : null;
   return (
     <article
-      className="library-crate__card library-crate__card--artist"
+      className={`library-crate__card library-crate__card--artist${setContext ? " library-crate__card--deck" : ""}`}
       style={{ "--crate-tilt": `${tilt}deg`, "--crate-z": position + 1 } as CSSProperties}
       data-testid="library-crate-added-artist"
       data-artist-key={artist.key}

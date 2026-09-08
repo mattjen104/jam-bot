@@ -3595,6 +3595,29 @@
   overflow: hidden;
   min-width: 0;
 }
+/* Deck rows stack vertically: the three-cover strip sits on top and the
+   track copy flows beneath it instead of beside it. */
+.library-crate__track--deck {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  row-gap: 10px;
+}
+.library-crate__track--deck .library-crate__track-art {
+  width: auto;
+  height: auto;
+}
+.library-crate__track--deck .library-crate__track-copy {
+  width: 100%;
+}
+/* Same vertical treatment for artist-file cards carrying a deck. */
+.library-crate__card--deck {
+  grid-template-columns: minmax(0, 1fr);
+}
+.library-crate__card--deck .library-crate__art-column {
+  min-height: 0;
+  place-items: start;
+  justify-self: start;
+}
 .library-crate__track-title,
 .library-crate__track-album,
 .library-crate__track-artist {
