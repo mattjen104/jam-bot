@@ -1,6 +1,7 @@
 import {
   pgTable,
   pgView,
+  bigserial,
   serial,
   text,
   integer,
@@ -3635,6 +3636,23 @@ export const lorePollerHealthTable = pgTable("lore_poller_health", {
   recoveryState: text("recovery_state").default("healthy").notNull(),
   lastStallDetectedAt: timestamp("last_stall_detected_at", { withTimezone: true }),
   lastRecoveredAt: timestamp("last_recovered_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Durable, retryable operator notifications emitted by health transitions. */
+export const loreOperatorAlertOutboxTable = pgTable("lore_operator_alert_outbox", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  alertKey: text("alert_key").notNull().unique(),
+  ownerId: text("owner_id").notNull(),
+  kind: text("kind").notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").default("pending").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

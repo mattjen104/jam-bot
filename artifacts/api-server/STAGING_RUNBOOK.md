@@ -148,6 +148,7 @@ Before the trial, confirm every item below:
 
 - [ ] `staging-probe.ts` exits 0 (all PASS)
 - [ ] Spotify env vars set (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`)
+- [ ] Fleet outage alerts configured with `POLLER_ALERT_SLACK_WEBHOOK_URL`, or with both `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID`
 - [ ] Test account connected and disconnected cleanly (section 2)
 - [ ] Import completed with ≥ 80 % resolution rate
 - [ ] Spotify rate-limit window (if hit) noted and expired

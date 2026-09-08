@@ -13,6 +13,7 @@ let healthKey = DEFAULT_HEALTH_KEY;
 
 export type PollerRecoveryState = "healthy" | "recovering" | "stalled" | "stopped";
 
+export type PollerFleetAlertKind = "poller_fleet_stalled" | "poller_fleet_recovered";
 interface DurablePollerHealthRow {
   processStartedAt: Date;
   heartbeatAt: Date;
@@ -66,13 +67,25 @@ interface RuntimeState {
   completed: Set<number>;
   successful: Set<number>;
   recoveryState: PollerRecoveryState;
+  persistedRecoveryState: PollerRecoveryState;
   lastStallDetectedAt: Date | null;
   lastRecoveredAt: Date | null;
 }
 
 let runtime: RuntimeState | null = null;
 let heartbeatTimer: NodeJS.Timeout | null = null;
+
+let alertTimer: NodeJS.Timeout | null = null;
 let persistenceQueue: Promise<void> = Promise.resolve();
+
+export function pollerFleetAlertForTransition(
+  previous: PollerRecoveryState,
+  next: PollerRecoveryState,
+): PollerFleetAlertKind | null {
+  if (previous === "healthy" && next === "stalled") return "poller_fleet_stalled";
+  if (previous === "stalled" && next === "healthy") return "poller_fleet_recovered";
+  return null;
+}
 let ownershipGateForTests: Promise<void> | null = null;
 
 export function classifyPollerHeartbeat(
@@ -236,6 +249,7 @@ async function takeOwnership(state: RuntimeState): Promise<void> {
 
 async function persistHeartbeat(state: RuntimeState, now: Date): Promise<void> {
   if (runtime?.ownerId !== state.ownerId) return;
+  const previousRecoveryState = state.persistedRecoveryState;
   state.heartbeatAt = now;
   const liveClassification = classifyPollerHeartbeat(
     {
@@ -260,23 +274,54 @@ async function persistHeartbeat(state: RuntimeState, now: Date): Promise<void> {
     state.recoveryState = "healthy";
     state.lastRecoveredAt = now;
   }
-  await db.execute(sql`
-    UPDATE lore_poller_health
-    SET
-      heartbeat_at = ${state.heartbeatAt},
-      active = true,
-      expected_station_count = ${state.expectedStationIds.size},
-      enrolled_station_count = ${state.enrolledStationIds.size},
-      cycle_started_at = ${state.cycleStartedAt},
-      last_cycle_completed_at = ${state.lastCycleCompletedAt},
-      attempted_station_count = ${state.attemptedStationCount},
-      successful_station_count = ${state.successfulStationCount},
-      recovery_state = ${state.recoveryState},
-      last_stall_detected_at = ${state.lastStallDetectedAt},
-      last_recovered_at = ${state.lastRecoveredAt},
-      updated_at = now()
-    WHERE key = ${state.healthKey} AND owner_id = ${state.ownerId}
+  const alertKind = pollerFleetAlertForTransition(previousRecoveryState, state.recoveryState);
+  const incidentAt =
+    alertKind === "poller_fleet_stalled" ? state.lastStallDetectedAt : state.lastRecoveredAt;
+  const alertKey =
+    alertKind && incidentAt
+      ? `${state.healthKey}:${incidentAt.toISOString()}:${alertKind}`
+      : null;
+  const payload = alertKind
+    ? JSON.stringify({
+        kind: alertKind,
+        occurredAt: now.toISOString(),
+        expectedStationCount: state.expectedStationIds.size,
+        enrolledStationCount: state.enrolledStationIds.size,
+        lastCycleCompletedAt: state.lastCycleCompletedAt?.toISOString() ?? null,
+      })
+    : null;
+  const persisted = await db.execute(sql`
+    WITH persisted AS (
+      UPDATE lore_poller_health
+      SET
+        heartbeat_at = ${state.heartbeatAt},
+        active = true,
+        expected_station_count = ${state.expectedStationIds.size},
+        enrolled_station_count = ${state.enrolledStationIds.size},
+        cycle_started_at = ${state.cycleStartedAt},
+        last_cycle_completed_at = ${state.lastCycleCompletedAt},
+        attempted_station_count = ${state.attemptedStationCount},
+        successful_station_count = ${state.successfulStationCount},
+        recovery_state = ${state.recoveryState},
+        last_stall_detected_at = ${state.lastStallDetectedAt},
+        last_recovered_at = ${state.lastRecoveredAt},
+        updated_at = now()
+      WHERE key = ${state.healthKey} AND owner_id = ${state.ownerId}
+      RETURNING owner_id
+    ), enqueued AS (
+      INSERT INTO lore_operator_alert_outbox (
+        alert_key, owner_id, kind, occurred_at, payload
+      )
+      SELECT ${alertKey}, ${state.ownerId}, ${alertKind}, ${incidentAt}, ${payload}::jsonb
+      FROM persisted
+      WHERE ${alertKind} IS NOT NULL AND ${incidentAt} IS NOT NULL
+      ON CONFLICT (alert_key) DO NOTHING
+      RETURNING id
+    )
+    SELECT owner_id FROM persisted
   `);
+  if (persisted.rowCount === 0) return;
+  state.persistedRecoveryState = state.recoveryState;
 }
 
 function queueHeartbeat(now: Date = new Date()): Promise<void> {
@@ -290,6 +335,9 @@ function queueHeartbeat(now: Date = new Date()): Promise<void> {
   return persistenceQueue;
 }
 
+export function flushPollerHeartbeatForTests(now: Date = new Date()): Promise<void> {
+  return queueHeartbeat(now);
+}
 export async function startPollerHeartbeat(expectedStationIds: number[]): Promise<void> {
   const now = new Date();
   const key = healthKey;
@@ -313,6 +361,7 @@ export async function startPollerHeartbeat(expectedStationIds: number[]): Promis
     completed: new Set(),
     successful: new Set(),
     recoveryState: recovering ? "recovering" : "healthy",
+    persistedRecoveryState: recovering ? "recovering" : "healthy",
     lastStallDetectedAt: previousHealth.stale
       ? now
       : previous?.lastStallDetectedAt ?? null,
@@ -323,6 +372,14 @@ export async function startPollerHeartbeat(expectedStationIds: number[]): Promis
   });
   heartbeatTimer = setInterval(() => void queueHeartbeat(), POLLER_HEARTBEAT_INTERVAL_MS);
   heartbeatTimer.unref?.();
+  alertTimer = setInterval(() => {
+    if (runtime?.ownerId === runtimeState.ownerId) {
+      void deliverPendingFleetAlert(runtimeState).catch(() => undefined);
+    }
+  }, POLLER_HEARTBEAT_INTERVAL_MS);
+  alertTimer.unref?.();
+  const runtimeState = runtime;
+  void deliverPendingFleetAlert(runtimeState).catch(() => undefined);
 }
 
 export function markPollerRosterEnrolled(stationIds: number[]): void {
@@ -363,6 +420,8 @@ export function recordPollerCompletion(stationId: number, successful: boolean): 
 export async function stopPollerHeartbeat(): Promise<void> {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = null;
+  if (alertTimer) clearInterval(alertTimer);
+  alertTimer = null;
   const state = runtime;
   runtime = null;
   if (!state) return;
@@ -422,6 +481,8 @@ export async function getPollerHealth(now: Date = new Date()): Promise<PollerHea
 export function clearPollerHealthForTests(): void {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = null;
+  if (alertTimer) clearInterval(alertTimer);
+  alertTimer = null;
   runtime = null;
   persistenceQueue = Promise.resolve();
   ownershipGateForTests = null;
@@ -439,4 +500,75 @@ export function setPollerOwnershipGateForTests(gate: Promise<void> | null): void
 
 export function persistPollerHeartbeatForTests(now: Date = new Date()): Promise<void> {
   return queueHeartbeat(now);
+}
+
+async function deliverPendingFleetAlert(state: RuntimeState): Promise<void> {
+  const webhookUrl = process.env.POLLER_ALERT_SLACK_WEBHOOK_URL;
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  const channel = process.env.SLACK_CHANNEL_ID;
+  if (!webhookUrl && !(botToken && channel)) return;
+  const claimed = await db.execute(sql`
+    UPDATE lore_operator_alert_outbox
+    SET status = 'delivering', attempts = attempts + 1, updated_at = now()
+    WHERE id = (
+      SELECT id
+      FROM lore_operator_alert_outbox
+      WHERE (
+        (status = 'pending' AND next_attempt_at <= now())
+        OR (status = 'delivering' AND updated_at < now() - interval '15 minutes')
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM lore_poller_health
+        WHERE key = ${state.healthKey} AND owner_id = ${state.ownerId} AND active = true
+      )
+      ORDER BY id
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    )
+    RETURNING id, kind, payload, attempts
+  `);
+  const row = claimed.rows[0] as
+    | { id: number; kind: PollerFleetAlertKind; payload: Record<string, unknown>; attempts: number }
+    | undefined;
+  if (!row) return;
+  const recovered = row.kind === "poller_fleet_recovered";
+  const text = recovered
+    ? `Resolved: Lore radio ingestion has recovered fleet-wide. ${row.payload["enrolledStationCount"] ?? 0}/${row.payload["expectedStationCount"] ?? 0} stations are enrolled.`
+    : `Alert: Lore radio ingestion has stalled fleet-wide. ${row.payload["enrolledStationCount"] ?? 0}/${row.payload["expectedStationCount"] ?? 0} stations are enrolled.`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const usingWebhook = Boolean(webhookUrl);
+    const response = await fetch(webhookUrl ?? "https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(usingWebhook ? {} : { authorization: `Bearer ${botToken}` }),
+      },
+      body: JSON.stringify(usingWebhook ? { text } : { channel, text }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+    if (!response.ok) throw new Error(`webhook returned HTTP ${response.status}`);
+    if (!usingWebhook) {
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!result.ok) throw new Error(`Slack API rejected alert: ${result.error ?? "unknown"}`);
+    }
+    await db.execute(sql`
+      UPDATE lore_operator_alert_outbox
+      SET status = 'delivered', delivered_at = now(), last_error = null, updated_at = now()
+      WHERE id = ${row.id}
+    `);
+  } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 500) : "unknown delivery error";
+    const backoffMinutes = Math.min(60, 2 ** Math.min(row.attempts, 6));
+    await db.execute(sql`
+      UPDATE lore_operator_alert_outbox
+      SET status = 'pending',
+          next_attempt_at = now() + (${backoffMinutes} * interval '1 minute'),
+          last_error = ${message},
+          updated_at = now()
+      WHERE id = ${row.id}
+    `).catch(() => undefined);
+  }
 }

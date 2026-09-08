@@ -36,4 +36,39 @@ export async function applyPollerHealthMigration(): Promise<void> {
     ALTER TABLE lore_poller_health
       ALTER COLUMN owner_id SET NOT NULL
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS lore_operator_alert_outbox (
+      id             bigserial   PRIMARY KEY,
+      alert_key      text        NOT NULL UNIQUE,
+      owner_id       text        NOT NULL,
+      kind           text        NOT NULL,
+      occurred_at    timestamptz NOT NULL,
+      payload        jsonb       NOT NULL,
+      status         text        NOT NULL DEFAULT 'pending',
+      attempts       integer     NOT NULL DEFAULT 0,
+      next_attempt_at timestamptz NOT NULL DEFAULT now(),
+      delivered_at   timestamptz,
+      last_error     text,
+      created_at     timestamptz NOT NULL DEFAULT now(),
+      updated_at     timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await db.execute(sql`
+    ALTER TABLE lore_operator_alert_outbox
+      ADD COLUMN IF NOT EXISTS owner_id text
+  `);
+  await db.execute(sql`
+    UPDATE lore_operator_alert_outbox
+    SET owner_id = 'legacy'
+    WHERE owner_id IS NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE lore_operator_alert_outbox
+      ALTER COLUMN owner_id SET NOT NULL
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS lore_operator_alert_outbox_pending_idx
+    ON lore_operator_alert_outbox (next_attempt_at)
+    WHERE status = 'pending'
+  `);
 }
