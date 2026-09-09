@@ -16247,6 +16247,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .set-context-deck__wrap {
   display: block;
 }
+/* The line under the covers names the selected one. */
+.set-context-deck__caption {
+  display: block;
+  margin-top: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--lore-font-reading);
+  font-size: var(--lore-size-small);
+  color: hsl(var(--foreground) / .85);
+}
+.set-context-deck__cover[data-selected="true"] {
+  outline: 2px solid hsl(var(--library) / .75);
+  outline-offset: -2px;
+  filter: none;
+}
 .set-context-deck__note {
   display: block;
   margin-top: 3px;
@@ -16304,8 +16321,24 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   color: hsl(var(--library));
 }
 @media (max-width: 640px) {
-  /* Portrait phone: the three covers span the card width as proportional
-     squares; the copy stacks beneath via the --deck card modifiers. */
+  /* Portrait phone: the three covers run edge to edge across the card as
+     proportional squares (as large as the card allows); the caption and
+     copy stack beneath. These --deck overrides must live in this LATE media
+     block — the crate's own mobile block (~line 3900) re-pins .library-
+     crate__track to "72px 1fr" and would beat rules declared before it. */
+  .library-crate__track--deck,
+  .library-crate__card--deck {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .library-crate__track--deck .library-crate__track-art {
+    width: 100%;
+    height: auto;
+  }
+  .library-crate__track--deck {
+    padding: 0;
+    row-gap: 0;
+  }
   .library-crate__track--deck .library-crate__track-art,
   .library-crate__card--deck .library-crate__art-column,
   .library-crate__track--deck .set-context-deck__wrap,
@@ -16316,11 +16349,23 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   .library-crate__card--deck .set-context-deck {
     width: 100%;
     height: auto;
+    gap: 2px;
   }
   .library-crate__track--deck .set-context-deck__cover,
   .library-crate__card--deck .set-context-deck__cover {
     aspect-ratio: 1 / 1;
     height: auto;
+    border-radius: 0;
+  }
+  .library-crate__track--deck .set-context-deck__caption,
+  .library-crate__track--deck .set-context-deck__note,
+  .library-crate__card--deck .set-context-deck__caption,
+  .library-crate__card--deck .set-context-deck__note {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .library-crate__track--deck .library-crate__track-copy {
+    padding: 4px 10px 10px;
   }
   .library-crate__track--deck .set-context-deck__glyph,
   .library-crate__card--deck .set-context-deck__glyph {

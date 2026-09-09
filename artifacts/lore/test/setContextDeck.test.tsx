@@ -96,16 +96,31 @@ describe("SetContextDeck", () => {
     expect(screen.getByTestId("set-context-play-after")).toBeTruthy();
   });
 
-  it("renders an unresolved track's cover without a play button", () => {
+  it("renders an unresolved track's cover as selectable but not playable", () => {
     render(
       <SetContextDeck
         context={context({ after: track({ spinId: 9, mbid: null, title: "Mystery", artist: "DJ" }) })}
       />,
     );
-    const slot = screen.getByTestId("set-context-cover-after");
-    expect(slot.tagName).not.toBe("BUTTON");
-    expect(slot.getAttribute("title")).toContain("Mystery");
     expect(screen.queryByTestId("set-context-play-after")).toBeNull();
+    const slot = screen.getByTestId("set-context-cover-after");
+    expect(slot.getAttribute("title")).toContain("Mystery");
+    fireEvent.click(slot);
+    expect(toggleMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("set-context-caption").textContent).toBe("Mystery — DJ");
+  });
+
+  it("names the selected cover in the caption line under the strip", () => {
+    render(<SetContextDeck context={context()} />);
+    // Default selection is the kept (anchor) track.
+    expect(screen.getByTestId("set-context-caption").textContent).toBe("Anchor Song — Anchor Artist");
+    fireEvent.click(screen.getByTestId("set-context-play-before"));
+    expect(screen.getByTestId("set-context-caption").textContent).toBe("Before Song — Before Artist");
+    fireEvent.mouseEnter(screen.getByTestId("set-context-play-after"));
+    expect(screen.getByTestId("set-context-caption").textContent).toBe("After Song — After Artist");
+    expect(
+      screen.getByTestId("set-context-play-after").getAttribute("data-selected"),
+    ).toBe("true");
   });
 
   it("labels artist-fallback contexts as the latest set, not the kept broadcast", () => {
