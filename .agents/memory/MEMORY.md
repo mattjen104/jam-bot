@@ -2,12 +2,10 @@
 - [jam-bot knowledge/insights clock](jam-bot-knowledge-insights-clock.md) — knowledge+timed insights fire in normal Jam too, off Spotify ISRC+progress_ms (no mic/fingerprint); anchor must re-anchor on track change, clear on pause, arm([]) to disarm.
 - [jam-bot live track insights](jam-bot-track-insights.md) — baseline firing INCLUSIVE so 0:00 notes fire (never backfill mid-join); arm off ISRC not recordingId; off-hot-path scheduler reads status() only, hand-curated seed never fabricated.
 - [jam-bot test DB sharing](jam-bot-test-db-sharing.md) — vitest DB is per-file (shared within a file, isolated across files): use unique artist/ISRC per test to avoid cache-key collisions; wrapped.test.ts is order/load-flaky on timestamp ties.
-- [Context tab = blurb + catalogue](jam-bot-context-tab-catalogue.md) — dropped repeating artist bio; per-song fact blurb + queueable Spotify catalogue (buttons 5/row, queue handlers mirror CARD_SESSIONS_ACTION).
 - [track-knowledge (liner-notes) pipeline](track-knowledge-pipeline.md) — enrich confirmed tracks off hot path; canonical MB-recording-id cache; never-fabricate LLM guard; query-on-demand.
 - [Station identity evidence gates](station-identity-evidence-gates.md) — spin count alone overstates coverage; require fresh breadth + sufficient genre enrichment and reject polluted homepage/artist metadata.
 - [Shared-lib seam wiring vs vitest mocks](lib-seam-wiring-vitest-mocks.md) — a host wiring a shared lib's seams in a global vitest setupFile must import a leaf-only entry, never the barrel, or it pre-evaluates subjects and defeats per-file vi.mock.
 - [Odesli links API endpoint](odesli-endpoint.md) — use `api.song.link/v1-alpha.1/links`; old `/v1-links` 404s site-wide via Fastly (looks like a deploy/track bug but is just the wrong path).
-- [Song-to-song relationships shape](song-relationships-shape.md) — typed MB rels (samples/covers/remixes/interpolations) live on TrackKnowledge; required in TS but read defensively (old caches), optional in OpenAPI.
 - [Codegen → project-ref staleness](codegen-project-reference-staleness.md) — after OpenAPI codegen, run `typecheck:libs` to rebuild lib .d.ts; project-ref consumers read stale dist/, so only NEW schema members fail to resolve.
 - [Playhead "One Spine" model](playhead-one-spine-model.md) — unified interface direction (on/off-spine, liquid→crystal, Peek→Card→Dive, Lens, enqueue-never-cut); canonical demo = Fleetwood Mac "Go Your Own Way".
 - [Lore Now/Explore/Library model](lore-feed-stack-migration.md) — Now is live, Explore finds shows through multiple lenses, Library stays intentional music; preserve internal IDs during label migration.
@@ -32,7 +30,6 @@
 - [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
 - [Lore share/paste provenance](lore-share-paste-provenance.md) — jam-bot link-unfurl NEVER writes on paste: spins.mbid→recordings FK means aired⟹already-recorded, so lore-iff-exists else links-only; accept any strong id (text OR spotifyId OR isrc).
 - [Odesli double-call rate-limit](odesli-double-call-rate-limit.md) — jam-bot already calls Odesli once (resolveAnyUrl); API server must NOT call it again for the same track or it hits the free-tier IP rate-limit silently; use platforms pass-through instead.
-- [NowPlaying confidence enum must include all server values](nowplaying-confidence-enum.md) — omitting 'spotify' from the enum crashes every now-playing poll at runtime.
 - [Drizzle raw-SQL array binding](drizzle-raw-sql-array.md) — use ARRAY[${sql.join(ids, sql`, `)}]::integer[] for ANY(); sql.array() absent, bare ${ids} makes a tuple not an array.
 - [Manual radio_browser_icy enrollment](lore-radio-browser-icy-manual-enroll.md) — nowPlayingConfig needs streamUrl (not just radioBrowserId) + source:'curated' or it silently never polls / gets purged; ICY fetcher doesn't follow redirects.
 - [Poller overlapping-tick races](lore-poller-overlap-race.md) — overlapping ticks double-insert the same spin; guard with a per-station in-flight Set, not content dedup.
@@ -66,7 +63,6 @@
 - [Canadian campus radio ICY fix](canadian-stations-icy-fix.md) — CFUV/CHMR/CISM/CJSR/CKCU/CKUT not on Spinitron; need radio_browser_icy + favorite=true (mux reads empty status.xsl; only watcher reads inline ICY metadata).
 - [ICY watcher startup failure limit](icy-watcher-startup-failure.md) — boot-time probe contention must not trigger permanent fallback; limits raised to 12/30min + 15s timeout.
 - [Crossings soft-artist array bottleneck](crossings-soft-artist-query.md) — passing ~1500 unresolved artist names as a SQL literal array to ANY() caused 20s+ query; replace with a SQL subquery so Postgres plans a hash-join.
-- [Library API total count](library-total-count.md) — GET /api/me/library omits total on pages 2+; run COUNT(*) only on first page (cursor IS NULL) and spread into response; client reads keptData.pages[0].total.
 - [Library removed/active state](library-removed-state.md) — removed_at IS NULL = active on both library tables; no central predicate, every taste query filters explicitly; deselect never unsaves on Spotify.
 - [Library artist-to-album navigation](library-artist-album-navigation.md) — tracks remain the source of truth; artist views default to the newest saved track's album and cycle other albums without autoplay or generated playlists.
 - [Dial full-height & spine strip](dial-hero-maximized-layout.md) — album hero removed; feed is full-height, landscape-only decorative 5-pane kept-art strip at left edge; scope strip padding to front door only.
@@ -154,6 +150,6 @@
 - [Fleet poller liveness](fleet-poller-liveness.md) — health needs owner-guarded process heartbeats plus full-roster cycle progress from every routing tier, including unchanged observations.
 - [Schedule freshness grace](schedule-freshness-grace.md) — calendar health becomes stale only after weekly cadence plus one retry interval; durable failures distinguish retryable outages from unavailable feeds.
 - [Support-route schedule priority](support-route-schedule-priority.md) — prioritize structured schedule coverage for stations with a verified support/store route; deterministic first-party grids beat LLM extraction.
-- [Crate release metadata is server-side](crate-release-metadata-server-side.md) — crate never calls musicbrainz.org from the browser; POST /api/me/library/release-metadata serves + persists recording_release_groups.
+- [Library cached-first render](library-cached-first-render.md) — persist only the exact-view first page locally; render it immediately, then always refresh in the background.
 - [api-server vitest pool hang](apivitest-pool-hang.md) — globalSetup pg pools never close; idleTimeout races close timeout → flaky exit 1 with zero test failures; end both pools in teardown.
 - [Append-only ledgers vs station deletion](append-only-ledger-fk.md) — lore_observability_append_only trigger blocks the stations FK ON DELETE SET NULL; station deletes must skip ledger-referenced rows, never weaken the trigger.

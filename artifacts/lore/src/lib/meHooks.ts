@@ -20,6 +20,7 @@ import {
   getMyPressPublications
 } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
+import { readLibrarySnapshot, writeLibrarySnapshot } from "./librarySnapshot";
 
 // ---------------------------------------------------------------------------
 // Recovery hint — shown once after the 3rd Keep to nudge linking a service.
@@ -1076,6 +1077,15 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
   const q = opts.q?.trim() ?? "";
   const sort = opts.sort ?? "added";
   const source = opts.source ?? "";
+  const snapshotKey = [limit, q, sort, source] as const;
+  const initialPage = readLibrarySnapshot<{
+    items: LibraryItem[];
+    nextCursor: string | null;
+    total?: number;
+    softCount?: number;
+    keepCount?: number;
+    criticCount?: number;
+  }>(snapshotKey);
 
   return useInfiniteQuery({
     queryKey: ["me", "library", "infinite", limit, q, sort, source] as const,
@@ -1086,10 +1096,22 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
         ...(q ? { q } : {}),
         ...(sort !== "added" ? { sort } : {}),
         ...(source ? { source } : {}),
-      }, { signal: withApiTimeout(signal) })).then((d) => d ?? { items: [], nextCursor: null });
+      }, { signal: withApiTimeout(signal) })).then((d) => {
+        const page = d ?? { items: [], nextCursor: null };
+        if (pageParam === null) writeLibrarySnapshot(snapshotKey, page);
+        return page;
+      });
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    ...(initialPage
+      ? {
+          initialData: { pages: [initialPage], pageParams: [null] },
+          // Always refresh in the background; the snapshot only removes the
+          // blank first paint and is never treated as fresh server data.
+          initialDataUpdatedAt: 0,
+        }
+      : {}),
     staleTime: 30_000,
     retry: false,
   });
