@@ -199,6 +199,18 @@ describe("SetContextDeck", () => {
     expect(screen.getByTestId("set-context-play-anchor").getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("shows the anchor and both chevrons immediately while context loads", () => {
+    const anchor = context().anchor;
+    render(<SetContextDeck pendingAnchor={anchor} />);
+
+    expect(screen.getByTestId("set-context-play-anchor")).toBeTruthy();
+    expect(screen.getByTestId("set-context-prev").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("set-context-next").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("set-context-prev").getAttribute("aria-label")).toBe(
+      "Loading the earlier song in this set",
+    );
+  });
+
   it("names each chevron's destination, including the way back to the kept track", () => {
     render(<SetContextDeck context={context()} />);
     expect(screen.getByTestId("set-context-prev").getAttribute("aria-label")).toBe(

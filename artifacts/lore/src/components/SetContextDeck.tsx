@@ -133,8 +133,10 @@ function DeckCover({ slot, onPlayStart }: {
 }
 
 export interface SetContextDeckProps {
-  /** Resolved set context; null/undefined callers should render their fallback cover. */
-  context: SetContext;
+  /** Resolved set context; omitted while the neighbors are still loading. */
+  context?: SetContext;
+  /** Kept-track cover shown immediately while context is loading. */
+  pendingAnchor?: SetContextTrack;
   /** Minimum pixel size of the visible cover; kept-track rows grow it to the full card height. */
   size?: number;
   /** Called before a preview starts so the host can yield other audio. */
@@ -143,13 +145,20 @@ export interface SetContextDeckProps {
   onSelectionChange?: (label: string | null, role: "before" | "anchor" | "after") => void;
 }
 
-export function SetContextDeck({ context, size = 92, onPlayStart, onSelectionChange }: SetContextDeckProps) {
+export function SetContextDeck({
+  context,
+  pendingAnchor,
+  size = 92,
+  onPlayStart,
+  onSelectionChange,
+}: SetContextDeckProps) {
   const [selected, setSelected] = useState<DeckRole>("anchor");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const loading = context === undefined;
   const slots: DeckSlot[] = [
-    { role: "before", track: context.before },
-    { role: "anchor", track: context.anchor },
-    { role: "after", track: context.after },
+    { role: "before", track: context?.before ?? null },
+    { role: "anchor", track: context?.anchor ?? pendingAnchor ?? null },
+    { role: "after", track: context?.after ?? null },
   ];
   const index = ROLE_ORDER.indexOf(selected);
   const visible = slots.find((slot) => slot.role === selected) ?? slots[1];
@@ -173,10 +182,10 @@ export function SetContextDeck({ context, size = 92, onPlayStart, onSelectionCha
     setSelected(role);
   };
   const goPrev = () => {
-    if (index > 0) select(ROLE_ORDER[index - 1]);
+    if (!loading && index > 0) select(ROLE_ORDER[index - 1]);
   };
   const goNext = () => {
-    if (index < ROLE_ORDER.length - 1) select(ROLE_ORDER[index + 1]);
+    if (!loading && index < ROLE_ORDER.length - 1) select(ROLE_ORDER[index + 1]);
   };
   /** Chevron labels name the actual destination, including the way back. */
   const destinationLabel = (slot: DeckSlot): string =>
@@ -193,6 +202,7 @@ export function SetContextDeck({ context, size = 92, onPlayStart, onSelectionCha
         role="group"
         aria-label="Songs played around this keep"
         onTouchStart={(e) => {
+          if (loading) return;
           if (e.touches.length !== 1) {
             touchStart.current = null; // multi-touch is a pinch/zoom, not a peek
             return;
@@ -222,10 +232,10 @@ export function SetContextDeck({ context, size = 92, onPlayStart, onSelectionCha
         <button
           type="button"
           className="set-context-deck__chevron"
-          aria-label={index > 0 ? destinationLabel(slots[index - 1]) : "No earlier song in this set"}
+          aria-label={loading ? "Loading the earlier song in this set" : index > 0 ? destinationLabel(slots[index - 1]) : "No earlier song in this set"}
           title="Played before"
           data-testid="set-context-prev"
-          disabled={index === 0}
+          disabled={loading || index === 0}
           onClick={(e) => {
             e.stopPropagation();
             goPrev();
@@ -237,10 +247,10 @@ export function SetContextDeck({ context, size = 92, onPlayStart, onSelectionCha
         <button
           type="button"
           className="set-context-deck__chevron"
-          aria-label={index < ROLE_ORDER.length - 1 ? destinationLabel(slots[index + 1]) : "No later song in this set"}
+          aria-label={loading ? "Loading the later song in this set" : index < ROLE_ORDER.length - 1 ? destinationLabel(slots[index + 1]) : "No later song in this set"}
           title="Played after"
           data-testid="set-context-next"
-          disabled={index === ROLE_ORDER.length - 1}
+          disabled={loading || index === ROLE_ORDER.length - 1}
           onClick={(e) => {
             e.stopPropagation();
             goNext();
@@ -249,7 +259,7 @@ export function SetContextDeck({ context, size = 92, onPlayStart, onSelectionCha
           ›
         </button>
       </span>
-      {context.anchorKind === "artist-fallback" && (
+      {context?.anchorKind === "artist-fallback" && (
         <span className="set-context-deck__note" data-testid="set-context-note">
           latest set
         </span>

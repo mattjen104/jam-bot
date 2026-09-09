@@ -9,6 +9,7 @@ import {
   useSetContexts,
   type SetContext,
   type SetContextAnchor,
+  type SetContextTrack,
 } from "../lib/setContexts";
 import { SetContextDeck } from "./SetContextDeck";
 import { stopInlinePreview } from "../player/inlinePreview";
@@ -113,16 +114,35 @@ function CrateTrackCard({
   const releaseHref = releaseGroupMbid
     ? `/album/${releaseGroupMbid}`
     : null;
+  const deckPending = setContext === undefined;
+  const hasDeck = setContext !== null;
+  const pendingAnchor: SetContextTrack | undefined = rec
+    ? {
+        spinId: 0,
+        mbid: item.mbid,
+        title: rec.title,
+        artist: rec.artist,
+        albumTitle: rec.albumTitle,
+        artworkUrl: cover,
+        releaseGroupMbid,
+        playedAt: item.addedAt,
+      }
+    : undefined;
 
   return (
     <article
-      className={`library-crate__track${setContext ? " library-crate__track--deck" : ""}${opened ? " library-crate__track--opened" : ""}`}
+      className={`library-crate__track${hasDeck ? " library-crate__track--deck" : ""}${opened ? " library-crate__track--opened" : ""}`}
       data-testid="library-crate-track"
       data-track-key={openedKey}
     >
       <div className="library-crate__track-art">
-        {setContext ? (
-          <SetContextDeck context={setContext} onPlayStart={onPlayStart} onSelectionChange={setPeekLabel} />
+        {hasDeck ? (
+          <SetContextDeck
+            context={setContext ?? undefined}
+            pendingAnchor={deckPending ? pendingAnchor : undefined}
+            onPlayStart={onPlayStart}
+            onSelectionChange={setPeekLabel}
+          />
         ) : releaseHref ? (
           <Link
             href={releaseHref}
@@ -139,7 +159,7 @@ function CrateTrackCard({
       <div className="library-crate__track-copy">
         {/* The live region stays mounted between peeks so screen readers
             catch the first announcement; empty while on the kept track. */}
-        {setContext && (
+        {hasDeck && (
           <div className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
             {peekLabel}
           </div>
@@ -196,16 +216,36 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
   const releaseHref = release
     ? `/album/${release.releaseGroupMbid}?tilt=${encodeURIComponent(String(tilt))}`
     : null;
+  const deckPending = setContext === undefined;
+  const hasDeck = setContext !== null;
+  const pendingAnchor: SetContextTrack | undefined = release
+    ? {
+        spinId: 0,
+        mbid: null,
+        title: release.title,
+        artist: artist.name,
+        albumTitle: release.title,
+        artworkUrl: release.artworkUrl,
+        releaseGroupMbid: release.releaseGroupMbid,
+        playedAt: new Date(0).toISOString(),
+      }
+    : undefined;
   return (
     <article
-      className={`library-crate__card library-crate__card--artist${setContext ? " library-crate__card--deck" : ""}`}
+      className={`library-crate__card library-crate__card--artist${hasDeck ? " library-crate__card--deck" : ""}`}
       style={{ "--crate-tilt": `${tilt}deg`, "--crate-z": position + 1 } as CSSProperties}
       data-testid="library-crate-added-artist"
       data-artist-key={artist.key}
     >
       <div className="library-crate__art-column">
-        {setContext ? (
-          <SetContextDeck context={setContext} size={72} onPlayStart={onPlayStart} onSelectionChange={setPeekLabel} />
+        {hasDeck ? (
+          <SetContextDeck
+            context={setContext ?? undefined}
+            pendingAnchor={deckPending ? pendingAnchor : undefined}
+            size={72}
+            onPlayStart={onPlayStart}
+            onSelectionChange={setPeekLabel}
+          />
         ) : (
         <div className="library-crate__artist-stack">
           {artist.releases.slice(1, 3).map((ghost, index) => (
@@ -230,7 +270,7 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
         <div className="library-crate__scrim" aria-hidden="true" />
         <div className="library-crate__parent">{artist.name}</div>
         {/* Persistent live region; empty while on the kept track. */}
-        {setContext && (
+        {hasDeck && (
           <div className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
             {peekLabel}
           </div>
