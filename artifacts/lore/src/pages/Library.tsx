@@ -957,6 +957,16 @@ function DemoMergedLibrary({
     crossingsEnabled: true,
     deferEnrichment: false,
   });
+  const { data: demoLibraryData } = useMyLibraryInfinite({}, 100);
+  const demoLibraryItems = useMemo(
+    () => demoLibraryData?.pages.flatMap((page) => page.items) ?? [],
+    [demoLibraryData],
+  );
+  const songCount = demoLibraryData?.pages[0]?.total ?? demoLibraryItems.length;
+  const artistCount = useMemo(
+    () => buildArtistGroups(demoLibraryItems).length,
+    [demoLibraryItems],
+  );
 
   return (
     <main className="demo-merged-library">
@@ -975,47 +985,41 @@ function DemoMergedLibrary({
             aria-current={view === "songs" ? "page" : undefined}
             data-testid="library-view-songs"
           >
-            Songs
+            {songCount.toLocaleString()} Songs
           </Link>
           <Link
             href="/library?lens=artists"
             aria-current={view === "artists" ? "page" : undefined}
             data-testid="library-view-artists"
           >
-            Artists
+            {artistCount.toLocaleString()} Artists
           </Link>
         </nav>
       </header>
 
       {view === "stations" ? (
         <>
-          <div className="library-artist-editor" data-testid="library-artist-editor">
-            <div className="front-door-artist-onboarding">
-              <button
-                type="button"
-                onClick={() => setArtistDocumentOpen((open) => !open)}
-                aria-expanded={artistDocumentOpen}
-                aria-controls="library-stations-artist-document"
-              >
-                Add artists
-              </button>
+          {artistDocumentOpen ? (
+            <div
+              className="library-artist-editor"
+              id="library-stations-artist-document"
+              data-testid="library-artist-editor"
+            >
+              <ArtistDocument
+                artists={visibleSeeds}
+                onSave={replaceSeeds}
+                onClose={() => setArtistDocumentOpen(false)}
+              />
             </div>
-            {artistDocumentOpen ? (
-              <div id="library-stations-artist-document">
-                <ArtistDocument
-                  artists={visibleSeeds}
-                  onSave={replaceSeeds}
-                  onClose={() => setArtistDocumentOpen(false)}
-                />
-              </div>
-            ) : null}
-          </div>
+          ) : null}
           <RadioSurface
             stations={stations}
             visibleSeeds={visibleSeeds}
             hasSeeds={hasSeeds}
             hasLibrary={hasLibrary}
             showHeader={false}
+            onEditArtists={() => setArtistDocumentOpen((open) => !open)}
+            artistEditorOpen={artistDocumentOpen}
           />
         </>
       ) : (

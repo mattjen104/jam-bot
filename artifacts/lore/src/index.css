@@ -2898,6 +2898,16 @@
   margin-top: 16px;
   border-top: 1px solid hsl(var(--border));
 }
+.demo-radio__artist-count button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .demo-radio__featured {
   overflow: hidden;
   margin-bottom: 10px;
