@@ -1255,6 +1255,9 @@ export function useMutationKeepSpin() {
           return { saved, pending };
         },
       );
+      if (data.keptToLore) {
+        void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
+      }
     },
   });
 }
@@ -1275,6 +1278,7 @@ export function useMutationUnkeepSpin() {
           return { saved, pending };
         },
       );
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
     },
   });
 }
