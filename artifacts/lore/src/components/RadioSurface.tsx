@@ -1,20 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArtistDocument } from "./ArtistDocument";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import type { DialStation } from "../hooks/useDialData";
 import { Play } from "lucide-react";
-import { Link } from "wouter";
-import { useMyLibraryInfinite } from "../lib/meHooks";
-import {
-  getTodaysActiveKeeps,
-  hasCrossedTodaysBoundary,
-  TODAY_KEEPS_LIMIT,
-} from "../lib/todaysKeeps";
 
 const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
-const TODAY_KEEPS_PAGE_SIZE = 25;
 
 export function RadioSurface({ 
   stations, 
@@ -33,39 +25,6 @@ export function RadioSurface({
 }) {
   const { radio } = usePlayer();
   const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
-  const {
-    data: keepsData,
-    isLoading: keepsLoading,
-    hasNextPage: hasMoreKeeps,
-    isFetchingNextPage: isFetchingMoreKeeps,
-    fetchNextPage: fetchMoreKeeps,
-  } = useMyLibraryInfinite(
-    { source: "keep", sort: "added" },
-    TODAY_KEEPS_PAGE_SIZE,
-  );
-  const keepItems = useMemo(
-    () => keepsData?.pages.flatMap((page) => page.items) ?? [],
-    [keepsData],
-  );
-  const todaysKeeps = useMemo(() => {
-    return getTodaysActiveKeeps(keepItems, new Date());
-  }, [keepItems]);
-  useEffect(() => {
-    if (
-      todaysKeeps.length < TODAY_KEEPS_LIMIT
-      && hasMoreKeeps
-      && !isFetchingMoreKeeps
-      && !hasCrossedTodaysBoundary(keepItems, new Date())
-    ) {
-      void fetchMoreKeeps();
-    }
-  }, [
-    fetchMoreKeeps,
-    hasMoreKeeps,
-    isFetchingMoreKeeps,
-    keepItems,
-    todaysKeeps.length,
-  ]);
 
   const allCrossings = useMemo(() => {
     return stations
@@ -165,37 +124,6 @@ export function RadioSurface({
           <time>{localTime}</time>
         </header>
       ) : null}
-
-      <div className="demo-radio__section-label demo-radio__section-label--keeps">
-        <span>Kept today</span>
-        <Link href="/library" data-testid="link-todays-keeps-library">Library</Link>
-      </div>
-      {keepsLoading ? (
-        <p className="demo-radio__keeps-status" data-testid="status-todays-keeps-loading">Checking today’s keeps…</p>
-      ) : todaysKeeps.length > 0 ? (
-        <div className="demo-radio__keeps" data-testid="list-todays-keeps">
-          {todaysKeeps.map((item) => (
-            <div className="demo-radio__keep" key={item.mbid ?? item.spotifyId ?? item.addedAt}>
-              {item.recording?.artworkUrl ? (
-                <img
-                  src={item.recording.artworkUrl}
-                  alt=""
-                  className="demo-radio__keep-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="demo-radio__keep-cover" aria-hidden="true" />
-              )}
-              <div className="demo-radio__keep-copy">
-                <div className="demo-radio__keep-title">{item.recording?.title}</div>
-                <div className="demo-radio__keep-artist">{item.recording?.artist}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="demo-radio__keeps-status" data-testid="status-todays-keeps-empty">Nothing kept yet today.</p>
-      )}
 
       <div className="demo-radio__section-label">
         <span>Plays your music</span>
