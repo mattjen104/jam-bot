@@ -2898,16 +2898,6 @@
   margin-top: 16px;
   border-top: 1px solid hsl(var(--border));
 }
-.demo-radio__artist-count button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: hsl(var(--foreground));
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
 .demo-radio__featured {
   overflow: hidden;
   margin-bottom: 10px;
@@ -3149,6 +3139,27 @@
   gap: 18px;
   overflow-x: auto;
   scrollbar-width: none;
+}
+.demo-merged-library__controls {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+.demo-merged-library__controls .demo-merged-library__views {
+  min-width: 0;
+}
+.demo-merged-library__edit-artists {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
 }
 .demo-merged-library__views::-webkit-scrollbar {
   display: none;

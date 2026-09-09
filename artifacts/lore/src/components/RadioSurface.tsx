@@ -13,16 +13,12 @@ export function RadioSurface({
   hasSeeds,
   hasLibrary,
   showHeader = true,
-  onEditArtists,
-  artistEditorOpen = false,
 }: {
   stations: DialStation[];
   visibleSeeds: string[];
   hasSeeds: boolean;
   hasLibrary: boolean;
   showHeader?: boolean;
-  onEditArtists?: () => void;
-  artistEditorOpen?: boolean;
 }) {
   const { radio } = usePlayer();
 
@@ -127,22 +123,7 @@ export function RadioSurface({
 
       <div className="demo-radio__section-label">
         <span>Plays your music</span>
-        <span className="demo-radio__artist-count">
-          {visibleSeeds.length} artists
-          {hasSeeds && onEditArtists ? (
-            <>
-              {" · "}
-              <button
-                type="button"
-                onClick={onEditArtists}
-                aria-expanded={artistEditorOpen}
-                aria-controls="library-stations-artist-document"
-              >
-                Edit
-              </button>
-            </>
-          ) : null}
-        </span>
+        <span>{visibleSeeds.length} artists</span>
       </div>
 
       {showCrossings ? (
@@ -150,16 +131,6 @@ export function RadioSurface({
       ) : (
         <div className="demo-radio__empty">
           <p>Keep a song, or add artists you love, and the stations that play your music will show up here.</p>
-          {onEditArtists ? (
-            <button
-              type="button"
-              onClick={onEditArtists}
-              aria-expanded={artistEditorOpen}
-              aria-controls="library-stations-artist-document"
-            >
-              Add artists
-            </button>
-          ) : null}
         </div>
       )}
 

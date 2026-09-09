@@ -972,64 +972,78 @@ function DemoMergedLibrary({
     <main className="demo-merged-library">
       <header className="demo-merged-library__header">
         <h1>Library</h1>
-        <nav aria-label="Library views" className="demo-merged-library__views">
-          <Link
-            href="/library"
-            aria-current={view === "stations" ? "page" : undefined}
-            data-testid="library-view-stations"
+        <div className="demo-merged-library__controls">
+          <nav aria-label="Library views" className="demo-merged-library__views">
+            <Link
+              href="/library"
+              aria-current={view === "stations" ? "page" : undefined}
+              data-testid="library-view-stations"
+            >
+              {stations.length.toLocaleString()} Stations
+            </Link>
+            <Link
+              href="/library?view=songs"
+              aria-current={view === "songs" ? "page" : undefined}
+              data-testid="library-view-songs"
+            >
+              {songCount.toLocaleString()} Songs
+            </Link>
+            <Link
+              href="/library?lens=artists"
+              aria-current={view === "artists" ? "page" : undefined}
+              data-testid="library-view-artists"
+            >
+              {artistCount.toLocaleString()} Artists
+            </Link>
+          </nav>
+          <button
+            type="button"
+            className="demo-merged-library__edit-artists"
+            onClick={() => setArtistDocumentOpen((open) => !open)}
+            aria-expanded={artistDocumentOpen}
+            aria-controls="library-demo-artist-document"
           >
-            {stations.length.toLocaleString()} Stations
-          </Link>
-          <Link
-            href="/library?view=songs"
-            aria-current={view === "songs" ? "page" : undefined}
-            data-testid="library-view-songs"
-          >
-            {songCount.toLocaleString()} Songs
-          </Link>
-          <Link
-            href="/library?lens=artists"
-            aria-current={view === "artists" ? "page" : undefined}
-            data-testid="library-view-artists"
-          >
-            {artistCount.toLocaleString()} Artists
-          </Link>
-        </nav>
+            Edit artists
+          </button>
+        </div>
       </header>
 
-      {view === "stations" ? (
-        <>
-          {artistDocumentOpen ? (
-            <div
-              className="library-artist-editor"
-              id="library-stations-artist-document"
-              data-testid="library-artist-editor"
-            >
-              <ArtistDocument
-                artists={visibleSeeds}
-                onSave={replaceSeeds}
-                onClose={() => setArtistDocumentOpen(false)}
-              />
-            </div>
-          ) : null}
-          <RadioSurface
-            stations={stations}
-            visibleSeeds={visibleSeeds}
-            hasSeeds={hasSeeds}
-            hasLibrary={hasLibrary}
-            showHeader={false}
-            onEditArtists={() => setArtistDocumentOpen((open) => !open)}
-            artistEditorOpen={artistDocumentOpen}
+      {artistDocumentOpen ? (
+        <div
+          className="library-artist-editor"
+          id="library-demo-artist-document"
+          data-testid="library-artist-editor"
+        >
+          <ArtistDocument
+            artists={visibleSeeds}
+            onSave={replaceSeeds}
+            onClose={() => setArtistDocumentOpen(false)}
           />
-        </>
+        </div>
+      ) : null}
+
+      {view === "stations" ? (
+        <RadioSurface
+          stations={stations}
+          visibleSeeds={visibleSeeds}
+          hasSeeds={hasSeeds}
+          hasLibrary={hasLibrary}
+          showHeader={false}
+        />
       ) : (
-        <LibraryContent embedded={embedded} />
+        <LibraryContent embedded={embedded} showArtistEditor={false} />
       )}
     </main>
   );
 }
 
-function LibraryContent({ embedded = false }: { embedded?: boolean }) {
+function LibraryContent({
+  embedded = false,
+  showArtistEditor = true,
+}: {
+  embedded?: boolean;
+  showArtistEditor?: boolean;
+}) {
   const [location, setLocation] = useLocation();
   const search = useSearch();
   const { data: appConfig } = useAppConfig();
@@ -1464,7 +1478,7 @@ function LibraryContent({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
       {!isLibraryMode && <AlbumAvatarPicker showCurrent />}
-      {!embedded ? (
+      {!embedded && showArtistEditor ? (
         <div className="library-artist-editor" data-testid="library-artist-editor">
           <div className="front-door-artist-onboarding">
             <button
