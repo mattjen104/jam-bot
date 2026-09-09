@@ -11,7 +11,7 @@
  * without a MusicBrainz id is selectable (its caption works) but not
  * playable — previews resolve by MBID only.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { SetContext, SetContextTrack } from "../lib/setContexts";
 import { useInlinePreview } from "../player/inlinePreview";
 import { proxyArtUrl } from "../lib/proxyArt";
@@ -40,11 +40,14 @@ function trackLabel(track: SetContextTrack | null, role: DeckRole): string {
   return `${title} — ${artist}`;
 }
 
-function DeckCover({ slot, onPlayStart, selected, onSelect }: {
+function DeckCover({ slot, onPlayStart, selected, onSelect, canHoverSelect }: {
   slot: DeckSlot;
   onPlayStart?: () => void;
   selected: boolean;
   onSelect: () => void;
+  /** True only after the pointer has actually moved — a cursor resting over a
+      cover from before render must not hijack the selection. */
+  canHoverSelect: () => boolean;
 }) {
   const { playingMbid, loadingMbid, toggle } = useInlinePreview();
   const [unavailable, setUnavailable] = useState(false);
@@ -93,7 +96,9 @@ function DeckCover({ slot, onPlayStart, selected, onSelect }: {
           e.stopPropagation();
           onSelect();
         }}
-        onMouseEnter={onSelect}
+        onMouseEnter={() => {
+          if (canHoverSelect()) onSelect();
+        }}
         onFocus={onSelect}
       >
         {image}
@@ -106,7 +111,9 @@ function DeckCover({ slot, onPlayStart, selected, onSelect }: {
       type="button"
       className={`set-context-deck__cover set-context-deck__cover--${role} set-context-deck__cover--playable${isPlaying ? " is-playing" : ""}`}
       data-selected={selected ? "true" : undefined}
-      onMouseEnter={onSelect}
+      onMouseEnter={() => {
+        if (canHoverSelect()) onSelect();
+      }}
       onFocus={onSelect}
       title={
         unavailable
@@ -152,6 +159,9 @@ export interface SetContextDeckProps {
 
 export function SetContextDeck({ context, size = 92, onPlayStart }: SetContextDeckProps) {
   const [selected, setSelected] = useState<DeckRole>("anchor");
+  // Hover-select arms only once the pointer MOVES over the deck; otherwise a
+  // cursor left resting on a cover would select it on mount/hot-reload.
+  const hoverArmed = useRef(false);
   const slots: DeckSlot[] = [
     { role: "before", track: context.before },
     { role: "anchor", track: context.anchor },
@@ -166,6 +176,9 @@ export function SetContextDeck({ context, size = 92, onPlayStart }: SetContextDe
         data-testid="set-context-deck"
         role="group"
         aria-label="Songs played around this keep"
+        onMouseMove={() => {
+          hoverArmed.current = true;
+        }}
       >
         {slots.map((slot) => (
           <DeckCover
@@ -174,11 +187,18 @@ export function SetContextDeck({ context, size = 92, onPlayStart }: SetContextDe
             onPlayStart={onPlayStart}
             selected={selected === slot.role}
             onSelect={() => setSelected(slot.role)}
+            canHoverSelect={() => hoverArmed.current}
           />
         ))}
       </span>
-      {/* The line under the covers names the SELECTED one. */}
-      <span className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
+      {/* The line under the covers names the SELECTED one, aligned beneath
+          that cover (centered under the kept middle cover by default). */}
+      <span
+        className="set-context-deck__caption"
+        data-testid="set-context-caption"
+        data-role={selected}
+        aria-live="polite"
+      >
         {selectedTrack ? trackLabel(selectedTrack, selected) : " "}
       </span>
       {context.anchorKind === "artist-fallback" && (

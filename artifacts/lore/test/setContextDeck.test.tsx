@@ -110,14 +110,22 @@ describe("SetContextDeck", () => {
     expect(screen.getByTestId("set-context-caption").textContent).toBe("Mystery — DJ");
   });
 
-  it("names the selected cover in the caption line under the strip", () => {
+  it("names the selected cover in the caption line, aligned beneath that cover", () => {
     render(<SetContextDeck context={context()} />);
-    // Default selection is the kept (anchor) track.
+    // Default selection is the kept (anchor) track, centered under the middle.
     expect(screen.getByTestId("set-context-caption").textContent).toBe("Anchor Song — Anchor Artist");
+    expect(screen.getByTestId("set-context-caption").getAttribute("data-role")).toBe("anchor");
     fireEvent.click(screen.getByTestId("set-context-play-before"));
     expect(screen.getByTestId("set-context-caption").textContent).toBe("Before Song — Before Artist");
+    expect(screen.getByTestId("set-context-caption").getAttribute("data-role")).toBe("before");
+    // Hover selects only after the pointer has moved over the deck — a cursor
+    // resting on a cover from before render must not steal the selection.
+    fireEvent.mouseEnter(screen.getByTestId("set-context-play-after"));
+    expect(screen.getByTestId("set-context-caption").getAttribute("data-role")).toBe("before");
+    fireEvent.mouseMove(screen.getByTestId("set-context-deck"));
     fireEvent.mouseEnter(screen.getByTestId("set-context-play-after"));
     expect(screen.getByTestId("set-context-caption").textContent).toBe("After Song — After Artist");
+    expect(screen.getByTestId("set-context-caption").getAttribute("data-role")).toBe("after");
     expect(
       screen.getByTestId("set-context-play-after").getAttribute("data-selected"),
     ).toBe("true");

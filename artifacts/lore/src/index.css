@@ -16247,7 +16247,9 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
 .set-context-deck__wrap {
   display: block;
 }
-/* The line under the covers names the selected one. */
+/* The line under the covers names the selected one and sits beneath THAT
+   cover: left under "before", centered under the kept middle, right under
+   "after". */
 .set-context-deck__caption {
   display: block;
   margin-top: 5px;
@@ -16258,6 +16260,13 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   font-family: var(--lore-font-reading);
   font-size: var(--lore-size-small);
   color: hsl(var(--foreground) / .85);
+  text-align: left;
+}
+.set-context-deck__caption[data-role="anchor"] {
+  text-align: center;
+}
+.set-context-deck__caption[data-role="after"] {
+  text-align: right;
 }
 .set-context-deck__cover[data-selected="true"] {
   outline: 2px solid hsl(var(--library) / .75);
