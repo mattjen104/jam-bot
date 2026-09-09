@@ -13,5 +13,7 @@ Library crate rows render a 3-cover deck (before / anchor / after) from `POST /a
 - Fallback contexts carry `anchorKind: "artist-fallback"` and the UI labels them "latest set" — never present a substituted song as the kept broadcast.
 - Deck is a side-by-side strip (before · kept · after, broadcast order) — never stack covers behind each other; collapsed peeks read as "only one cover." Portrait ≤640px: full-width edge-to-edge squares via aspect-ratio, caption line names the selected cover (tap/hover/focus selects), text below.
 - The crate's own mobile media block (~line 3911 in index.css) re-pins `.library-crate__track` to "72px 1fr"; any `--deck` card-level override must live in a LATER media block or it silently loses the cascade (this bug made decks render 72px wide on phones).
+- Real listener libraries are ~1.9k keeps, ALL spinless (spin_id NULL) — the artist-fallback path is the hot path, not the exception; it needs the `recordings_artist_lower_trim_idx` functional index (boot migration) or each chunk seq-scans ~300k recordings.
+- set-contexts has a 30-min per-(user, anchor) in-memory cache; `scripts/warm-library-decks.ts` pre-warms all devices ≥50 keeps (run after restarts for instant crates). Cache drops on restart by design.
 - Verify layout changes with the deck-portrait-verify tester flow: seed script `artifacts/api-server/scripts/seed-deck-demo.ts` (device lore_sid=deck-demo, hidden station), then a 402x874 portrait run against /lore/library.
 - Preview audio must stop on host unmount (LibraryCrate cleanup) and never overlap live radio.

@@ -57,6 +57,7 @@ import { applyStationQualityStatusMigration } from "./lore/station-quality-statu
 import { startArtPrewarm } from "./lore/artPrewarm.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
 import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
+import { applyRecordingsArtistLowerMigration } from "./lore/recordings-artist-lower-migration.js";
 import { applyLibraryExportMigration } from "./lore/library-export-migration.js";
 import { applyLibraryRemovedMigration } from "./lore/library-removed-migration.js";
 import { applySpinsPlayedAtIndexMigration } from "./lore/spins-played-at-index-migration.js";
@@ -229,6 +230,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyStationScheduleMigration", applyStationScheduleMigration);
     await runMigration("applyDeviceIdentityMigration", applyDeviceIdentityMigration);
     await runMigration("applyPendingKeepsMigration", applyPendingKeepsMigration);
+    await runMigration("applyRecordingsArtistLowerMigration", applyRecordingsArtistLowerMigration);
     await runMigration("applyLibraryExportMigration", applyLibraryExportMigration);
     await runMigration("applyLibraryRemovedMigration", applyLibraryRemovedMigration);
     await runMigration("applySpinsPlayedAtIndexMigration", applySpinsPlayedAtIndexMigration);

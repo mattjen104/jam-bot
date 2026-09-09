@@ -40,6 +40,38 @@ const router: IRouter = Router();
 
 const MAX_ANCHORS = 100;
 
+/**
+ * Short-TTL per-listener cache. A full crate re-asks for every loaded anchor
+ * on each render burst (infinite pages × chunks), and the artist-fallback
+ * path below is the expensive part — cache hits make repeat loads instant.
+ * Keyed `${userId}:${contextKey}`; entries older than the TTL are re-resolved
+ * (new spins shift "latest set" anchors, so don't hold them long). Same
+ * 30-minute cadence as the crossings cache.
+ */
+const CONTEXT_TTL_MS = 30 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 50_000;
+const contextCache = new Map<string, { at: number; value: SetContext | null }>();
+
+function cacheGet(userId: number, key: string): SetContext | null | undefined {
+  const hit = contextCache.get(`${userId}:${key}`);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > CONTEXT_TTL_MS) {
+    contextCache.delete(`${userId}:${key}`);
+    return undefined;
+  }
+  return hit.value;
+}
+
+function cacheSet(userId: number, key: string, value: SetContext | null): void {
+  if (contextCache.size >= MAX_CACHE_ENTRIES) contextCache.clear();
+  contextCache.set(`${userId}:${key}`, { at: Date.now(), value });
+}
+
+/** Test seam: db tests seed new spins between calls for the same anchors. */
+export function clearSetContextCache(): void {
+  contextCache.clear();
+}
+
 interface SetContextTrack {
   spinId: number;
   mbid: string | null;
@@ -111,8 +143,29 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
   }
 
   const contexts: Record<string, SetContext | null> = {};
-  for (const mbid of mbidAnchors) contexts[`mbid:${mbid}`] = null;
-  for (const artist of artistAnchors) contexts[`artist:${artist.toLowerCase()}`] = null;
+  const pendingMbids: string[] = [];
+  const pendingArtists: string[] = [];
+  for (const mbid of mbidAnchors) {
+    const key = `mbid:${mbid}`;
+    const hit = cacheGet(user.id, key);
+    if (hit !== undefined) contexts[key] = hit;
+    else {
+      contexts[key] = null;
+      pendingMbids.push(mbid);
+    }
+  }
+  for (const artist of artistAnchors) {
+    const key = `artist:${artist.toLowerCase()}`;
+    const hit = cacheGet(user.id, key);
+    if (hit !== undefined) contexts[key] = hit;
+    else {
+      contexts[key] = null;
+      pendingArtists.push(artist);
+    }
+  }
+  if (pendingMbids.length + pendingArtists.length === 0) {
+    return res.json({ contexts });
+  }
 
   // key → anchor spin identity
   const anchorSpins = new Map<string, { spinId: number; stationId: number; playedAt: Date }>();
@@ -122,7 +175,7 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
   const fallbackArtists = new Map<string, string[]>(); // akey → context keys
 
   // ── 1. Spin-backed keeps: library_items.spin_id is the exact broadcast ────
-  if (mbidAnchors.length > 0) {
+  if (pendingMbids.length > 0) {
     const keepRows = await db
       .select({
         mbid: libraryItemsTable.mbid,
@@ -133,7 +186,7 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
       .leftJoin(recordingsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
       .where(and(
         eq(libraryItemsTable.userId, user.id),
-        inArray(libraryItemsTable.mbid, mbidAnchors),
+        inArray(libraryItemsTable.mbid, pendingMbids),
         isNull(libraryItemsTable.removedAt),
       ));
 
@@ -168,7 +221,7 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
   // universe — artist-file seeds, active library tracks, or unresolved
   // imports — otherwise the endpoint would resolve arbitrary artists for
   // anyone. Unowned artists stay an explicit null context.
-  if (artistAnchors.length > 0) {
+  if (pendingArtists.length > 0) {
     const [seedRows, libArtistRows, softArtistRows] = await Promise.all([
       db
         .selectDistinct({ akey: sql<string>`lower(trim(${tasteSeedsTable.artistName}))` })
@@ -190,7 +243,7 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
         )),
     ]);
     const allowed = new Set([...seedRows, ...libArtistRows, ...softArtistRows].map((r) => r.akey));
-    for (const artist of artistAnchors) {
+    for (const artist of pendingArtists) {
       const akey = artist.toLowerCase();
       if (!allowed.has(akey)) continue;
       fallbackArtists.set(akey, [...(fallbackArtists.get(akey) ?? []), `artist:${akey}`]);
@@ -207,6 +260,8 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
       JOIN recordings r ON lower(trim(r.artist)) = v.akey
       JOIN spins s ON s.mbid = r.mbid
       JOIN stations st ON st.id = s.station_id AND st.hidden = false
+      -- A "latest set" older than this is not worth a full spin-history scan.
+      WHERE s.played_at > now() - interval '90 days'
       ORDER BY v.akey, s.played_at DESC, s.id DESC
     `);
     for (const row of latest.rows as Array<{
@@ -303,6 +358,11 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
       after: trackFrom(row, "af"),
     };
   }
+
+  // Fill the cache for every key we resolved this round (nulls included — an
+  // anchor with no set is just as expensive to recompute).
+  for (const mbid of pendingMbids) cacheSet(user.id, `mbid:${mbid}`, contexts[`mbid:${mbid}`] ?? null);
+  for (const artist of pendingArtists) cacheSet(user.id, `artist:${artist.toLowerCase()}`, contexts[`artist:${artist.toLowerCase()}`] ?? null);
 
   return res.json({ contexts });
 }));
