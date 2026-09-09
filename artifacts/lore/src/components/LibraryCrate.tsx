@@ -17,21 +17,18 @@ import { usePlayer } from "../player/PlayerProvider";
 // components — mixed exports break Vite Fast Refresh (split module
 // instances → phantom "invalid hook call" crashes).
 import {
-  attendanceCopy,
   buildAddedArtists,
   buildCrateReleases,
   crateTilt,
   isReleaseMetadataPending,
   keepCopy,
   keepTimestamp,
-  partitionCrateItems,
   queueReleaseMetadata,
   releaseMetadataCache,
   sortCrateReleases,
   type AddedArtist,
   type ArtistCatalogueRelease,
   type CrateRelease,
-  type ReleaseAttendance,
   type ReleaseMetadata,
 } from "../lib/crate";
 
@@ -96,6 +93,8 @@ function CrateTrackCard({
   opened: boolean;
   onOpened: (key: string) => void;
 }) {
+  // Name of the deck cover the listener is peeking at (null = the kept track).
+  const [peekLabel, setPeekLabel] = useState<string | null>(null);
   const rec = item.recording;
   const title = rec?.title ?? "Unresolved recording";
   const album = rec?.albumTitle ?? release.title ?? metadata?.title ?? "Release unknown";
@@ -123,7 +122,7 @@ function CrateTrackCard({
     >
       <div className="library-crate__track-art">
         {setContext ? (
-          <SetContextDeck context={setContext} onPlayStart={onPlayStart} />
+          <SetContextDeck context={setContext} onPlayStart={onPlayStart} onSelectionChange={setPeekLabel} />
         ) : releaseHref ? (
           <Link
             href={releaseHref}
@@ -138,6 +137,13 @@ function CrateTrackCard({
         )}
       </div>
       <div className="library-crate__track-copy">
+        {/* The live region stays mounted between peeks so screen readers
+            catch the first announcement; empty while on the kept track. */}
+        {setContext && (
+          <div className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
+            {peekLabel}
+          </div>
+        )}
         <div className="library-crate__track-title">{title}</div>
         <div className="library-crate__track-album">
           {releaseHref ? (
@@ -181,6 +187,8 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
   onPlayStart?: () => void;
 }) {
   const [releaseIndex, setReleaseIndex] = useState(0);
+  // Name of the deck cover the listener is peeking at (null = the kept track).
+  const [peekLabel, setPeekLabel] = useState<string | null>(null);
   const release = artist.releases.length > 0
     ? artist.releases[releaseIndex % artist.releases.length]
     : null;
@@ -197,7 +205,7 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
     >
       <div className="library-crate__art-column">
         {setContext ? (
-          <SetContextDeck context={setContext} size={72} onPlayStart={onPlayStart} />
+          <SetContextDeck context={setContext} size={72} onPlayStart={onPlayStart} onSelectionChange={setPeekLabel} />
         ) : (
         <div className="library-crate__artist-stack">
           {artist.releases.slice(1, 3).map((ghost, index) => (
@@ -221,6 +229,12 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
       <div className="library-crate__content">
         <div className="library-crate__scrim" aria-hidden="true" />
         <div className="library-crate__parent">{artist.name}</div>
+        {/* Persistent live region; empty while on the kept track. */}
+        {setContext && (
+          <div className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
+            {peekLabel}
+          </div>
+        )}
         {setContext && release && releaseHref && (
           <div className="library-crate__track-album">
             <Link

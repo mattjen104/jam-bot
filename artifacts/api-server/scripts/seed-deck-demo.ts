@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- CLI operator tool; stdout is the interface. */
 /**
  * One-off demo seed for visually verifying the Library set-context deck.
  * Idempotent: deletes any prior demo rows, then inserts a device with one

@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- CLI operator tool; stdout is the interface. */
 /**
  * Warm the set-contexts cache for real listeners' libraries so the crate
  * renders decks instantly on next load. For each active device with a
@@ -10,7 +11,7 @@
  *
  * Run: pnpm --filter @workspace/api-server exec tsx scripts/warm-library-decks.ts
  */
-import { db, libraryItemsTable, loreUsersTable, recordingsTable } from "@workspace/db";
+import { db, libraryItemsTable, recordingsTable } from "@workspace/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 const API = process.env.WARM_API_BASE ?? "http://127.0.0.1:80";

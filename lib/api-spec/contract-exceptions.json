@@ -107,6 +107,7 @@
     { "method": "GET", "path": "/me/library/mbids", "kind": "plain-json", "reason": "Library MBID set read model via hand-written fetch." },
     { "method": "GET", "path": "/me/library/export", "kind": "media", "reason": "File download (library export), not a JSON API response shape." },
     { "method": "GET", "path": "/me/library/investigation-coverage", "kind": "plain-json", "reason": "Investigation-coverage read model via hand-written fetch." },
+    { "method": "POST", "path": "/me/library/set-contexts", "kind": "plain-json", "reason": "Library set-context (deck) read model via hand-written fetch hook; server-cached, intentionally outside generated client types." },
     { "method": "GET", "path": "/me/library/release-stats", "kind": "plain-json", "reason": "Per-listener release attendance read model via hand-written fetch." },
     { "method": "POST", "path": "/me/library/sync", "kind": "plain-json", "reason": "Spotify library sync trigger via hand-written fetch." },
     { "method": "GET", "path": "/me/library/sync", "kind": "plain-json", "reason": "Latest sync job read model via hand-written fetch." },
