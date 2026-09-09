@@ -950,6 +950,7 @@ function DemoMergedLibrary({
   embedded: boolean;
 }) {
   const { visibleSeeds, replaceSeeds } = useSeedManager();
+  const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
     categories: undefined,
     includeAllStations: true,
@@ -987,14 +988,36 @@ function DemoMergedLibrary({
       </header>
 
       {view === "stations" ? (
-        <RadioSurface
-          stations={stations}
-          visibleSeeds={visibleSeeds}
-          replaceSeeds={replaceSeeds}
-          hasSeeds={hasSeeds}
-          hasLibrary={hasLibrary}
-          showHeader={false}
-        />
+        <>
+          <div className="library-artist-editor" data-testid="library-artist-editor">
+            <div className="front-door-artist-onboarding">
+              <button
+                type="button"
+                onClick={() => setArtistDocumentOpen((open) => !open)}
+                aria-expanded={artistDocumentOpen}
+                aria-controls="library-stations-artist-document"
+              >
+                Add artists
+              </button>
+            </div>
+            {artistDocumentOpen ? (
+              <div id="library-stations-artist-document">
+                <ArtistDocument
+                  artists={visibleSeeds}
+                  onSave={replaceSeeds}
+                  onClose={() => setArtistDocumentOpen(false)}
+                />
+              </div>
+            ) : null}
+          </div>
+          <RadioSurface
+            stations={stations}
+            visibleSeeds={visibleSeeds}
+            hasSeeds={hasSeeds}
+            hasLibrary={hasLibrary}
+            showHeader={false}
+          />
+        </>
       ) : (
         <LibraryContent embedded={embedded} />
       )}

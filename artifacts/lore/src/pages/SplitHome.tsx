@@ -136,7 +136,6 @@ export default function SplitHome() {
         <RadioSurface
           stations={stations}
           visibleSeeds={visibleSeeds}
-          replaceSeeds={replaceSeeds}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
         />

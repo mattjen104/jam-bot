@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { usePlayer } from "../player/PlayerProvider";
-import { ArtistDocument } from "./ArtistDocument";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import type { DialStation } from "../hooks/useDialData";
@@ -11,20 +10,17 @@ const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
 export function RadioSurface({ 
   stations, 
   visibleSeeds, 
-  replaceSeeds,
   hasSeeds,
   hasLibrary,
   showHeader = true,
 }: {
   stations: DialStation[];
   visibleSeeds: string[];
-  replaceSeeds: (names: string[]) => void;
   hasSeeds: boolean;
   hasLibrary: boolean;
   showHeader?: boolean;
 }) {
   const { radio } = usePlayer();
-  const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
 
   const allCrossings = useMemo(() => {
     return stations
@@ -135,16 +131,6 @@ export function RadioSurface({
       ) : (
         <div className="demo-radio__empty">
           <p>Keep a song, or add artists you love, and the stations that play your music will show up here.</p>
-          <button type="button" onClick={() => setArtistDocumentOpen(!artistDocumentOpen)}>Add artists</button>
-          {artistDocumentOpen && (
-            <div className="demo-radio__artist-editor">
-              <ArtistDocument
-                artists={visibleSeeds}
-                onSave={(artists) => Promise.resolve(replaceSeeds(artists))}
-                onClose={() => setArtistDocumentOpen(false)}
-              />
-            </div>
-          )}
         </div>
       )}
 
