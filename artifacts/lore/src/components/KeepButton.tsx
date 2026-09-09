@@ -8,6 +8,7 @@ import {
   useMutationUnkeep,
   useMutationUnkeepSpin,
   startSpotifyLibraryConnect,
+  useAppConfig,
   type LibraryProvenance,
 } from "../lib/meHooks";
 import { useMyConnections } from "../lib/meHooks";
@@ -38,6 +39,7 @@ interface KeepButtonProps {
  */
 export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepButtonProps) {
   const { data: connections, isLoading: connLoading } = useMyConnections();
+  const { data: appConfig } = useAppConfig();
   const isAuthenticated = !connLoading && connections !== null;
 
   // MBID path — resolved track
@@ -78,6 +80,7 @@ export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepBu
     if (isPending) return;
 
     if (!isAuthenticated) {
+      if (appConfig?.demoSurface) return;
       setConnectPending(true);
       try {
         await startSpotifyLibraryConnect();
@@ -105,7 +108,9 @@ export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepBu
   if (connLoading) return null;
 
   const title = !isAuthenticated
-    ? "Connect Spotify to keep this track in your Lore library"
+    ? appConfig?.demoSurface
+      ? "Keep is temporarily unavailable on this device"
+      : "Connect Spotify to keep this track in your Lore library"
     : kept
       ? pendingOnly
         ? "Saved — resolving to MusicBrainz; click to remove"
@@ -118,7 +123,7 @@ export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepBu
     <button
       type="button"
       onClick={() => void handleClick()}
-      disabled={isPending}
+      disabled={isPending || (!isAuthenticated && appConfig?.demoSurface === true)}
       title={title}
       aria-label={title}
       aria-pressed={isKept}

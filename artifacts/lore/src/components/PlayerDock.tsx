@@ -15,6 +15,8 @@ import { RideBar } from "./RideBar";
 import { useLiveHandoff } from "../player/useLiveHandoff";
 import { commitLiveHandoff } from "../player/liveHandoff";
 import { useStationFastLane } from "../hooks/useStationFastLane";
+import { eligibleDjNames } from "@workspace/lore-attribution";
+import { useAppConfig } from "../lib/meHooks";
 
 /** Matches the shell's phone-width CSS convention (one-line dock breakpoint). */
 const MOBILE_SHELL_QUERY = "(orientation: portrait), (max-width: 720px)";
@@ -37,6 +39,7 @@ const EMPTY_ON_AIR_ITEMS: WpOnAirItem[] = [];
  */
 export function PlayerDock() {
   const { radio, ride, spotify, scan } = usePlayer();
+  const { data: appConfig } = useAppConfig();
   const [expandedRaw, setExpanded] = useState(false);
   const [location] = useLocation();
   const queryClient = useQueryClient();
@@ -211,6 +214,18 @@ export function PlayerDock() {
     return notice;
   }
   if (radio.station) {
+    const liveShow = onAirItems.find(s => s.station.slug === radio.station?.slug);
+    const djNames = eligibleDjNames({
+      name: liveShow?.show?.name ?? "",
+      djName: liveShow?.show?.djName ?? undefined,
+    }, {
+      artist: provisional?.artist ?? np?.recording?.artist ?? np?.rawArtist,
+      title: provisional?.title ?? np?.recording?.title ?? np?.rawTitle,
+      showTitle: liveShow?.show?.name,
+      stationName: radio.station.name
+    });
+    const djName = djNames.length > 0 ? djNames[0] : null;
+
     return (
       <>
         <PlayerBar
@@ -240,6 +255,8 @@ export function PlayerDock() {
           }}
           handoff={handoff}
           landingConfirmation={landingConfirmation}
+          demoSurface={appConfig?.demoSurface === true}
+          djName={djName}
         />
         {expanded && (
           <PlayerSheet

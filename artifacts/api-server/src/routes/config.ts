@@ -14,18 +14,40 @@ const router: IRouter = Router();
 
 /** Simple TTL cache so every page render doesn't hit the DB. */
 const CONFIG_CACHE_TTL_MS = 30_000;
-let configCache: { spotifyImportEnabled: boolean; listenerArchiveNavEnabled: boolean; expiresAt: number } | null = null;
+interface ConfigSettings {
+  spotifyImportEnabled: boolean;
+  listenerArchiveNavEnabled: boolean;
+  demoSurface: boolean;
+}
 
-async function readConfigSettings(): Promise<{ spotifyImportEnabled: boolean; listenerArchiveNavEnabled: boolean }> {
+let configCache: (ConfigSettings & { expiresAt: number }) | null = null;
+
+async function readConfigSettings(): Promise<ConfigSettings> {
+  // The focused demo is an operator-controlled runtime mode. When explicitly
+  // enabled for an environment, serve it without waiting for the shared DB
+  // pool so route gating cannot expose legacy listener surfaces during load.
+  if (process.env["DEMO_SURFACE"] === "true") {
+    return {
+      spotifyImportEnabled: process.env["SPOTIFY_IMPORT_ENABLED"] === "true",
+      listenerArchiveNavEnabled: false,
+      demoSurface: true,
+    };
+  }
+
   const now = Date.now();
   if (configCache && now < configCache.expiresAt) {
-    return configCache;
+    return {
+      spotifyImportEnabled: configCache.spotifyImportEnabled,
+      listenerArchiveNavEnabled: configCache.listenerArchiveNavEnabled,
+      demoSurface: configCache.demoSurface,
+    };
   }
   const rows = await db.select().from(loreSettingsTable);
   const values = new Map(rows.map((row) => [row.key, row.value]));
   const settings = {
     spotifyImportEnabled: values.get("spotifyImportEnabled") ?? process.env["SPOTIFY_IMPORT_ENABLED"] === "true",
     listenerArchiveNavEnabled: values.get("listenerArchiveNavEnabled") ?? false,
+    demoSurface: values.get("demoSurface") ?? process.env["DEMO_SURFACE"] === "true",
   };
   configCache = { ...settings, expiresAt: now + CONFIG_CACHE_TTL_MS };
   return settings;
@@ -47,6 +69,7 @@ router.get("/config", async (_req, res) => {
     res.json({
       spotifyImportEnabled: process.env["SPOTIFY_IMPORT_ENABLED"] === "true",
       listenerArchiveNavEnabled: false,
+      demoSurface: process.env["DEMO_SURFACE"] === "true",
       appleMusic,
     });
   }

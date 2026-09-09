@@ -646,6 +646,7 @@ export interface AppConfig {
   spotifyImportEnabled: boolean;
   /** Admin-controlled reveal for the temporarily hidden listener destinations. */
   listenerArchiveNavEnabled?: boolean;
+  demoSurface?: boolean;
   appleMusic?: {
     configured: boolean;
     developerToken: string | null;
@@ -661,11 +662,11 @@ export function useAppConfig() {
     queryKey: APP_CONFIG_KEY,
     queryFn: async () => {
       const res = await fetch("/api/config");
-      if (!res.ok) return { spotifyImportEnabled: false };
+      if (!res.ok) throw new Error(`Config request failed (${res.status})`);
       return res.json() as Promise<AppConfig>;
     },
     staleTime: 5 * 60_000,
-    retry: false,
+    retry: 2,
   });
 }
 

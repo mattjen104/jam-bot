@@ -91,7 +91,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* ── Main content — pad for bottom shell (optional player dock) ── */}
       {/* Section nav: [lore] / [my library] corner hyperlinks, pinned to the
           bottom corners on every Lore route including the front door. */}
-      <SlimSectionNav showArchiveNav={appConfig?.listenerArchiveNavEnabled === true} />
+      <SlimSectionNav showArchiveNav={appConfig?.listenerArchiveNavEnabled === true} demoSurface={appConfig?.demoSurface} />
       <div className={isHome ? "" : "content-pad-shell"}>{children}</div>
     </>
   );

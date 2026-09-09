@@ -153,3 +153,4 @@
 - [Library cached-first render](library-cached-first-render.md) — persist only the exact-view first page locally; render it immediately, then always refresh in the background.
 - [api-server vitest pool hang](apivitest-pool-hang.md) — globalSetup pg pools never close; idleTimeout races close timeout → flaky exit 1 with zero test failures; end both pools in teardown.
 - [Append-only ledgers vs station deletion](append-only-ledger-fk.md) — lore_observability_append_only trigger blocks the stations FK ON DELETE SET NULL; station deletes must skip ledger-referenced rows, never weaken the trigger.
+- [Focused Lore demo boundary](lore-focused-demo-boundary.md) — server-controlled and off by default; demo keeps one Radio→Keep→Library loop while preserving full Lore unchanged.

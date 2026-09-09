@@ -15,7 +15,7 @@ import { FirstRunSidebar } from "../components/FirstRunSidebar";
 import { usePlayer } from "../player/PlayerProvider";
 import type { DialStation } from "../hooks/useDialData";
 import { AdaptiveNow } from "../components/AdaptiveNow";
-import { useLatestImportJob } from "../lib/meHooks";
+import { useLatestImportJob, useAppConfig } from "../lib/meHooks";
 import { deriveAdaptiveListeningState } from "../lib/adaptiveListening";
 import {
   DEFAULT_ACTIVE_STATION_CATEGORIES,
@@ -23,6 +23,7 @@ import {
 } from "../lib/dialFilterState";
 import type { StationCategory } from "../lib/dialCategories";
 import { catchNextSong } from "../lib/firstRunCatch";
+import { RadioSurface } from "../components/RadioSurface";
 
 const FIRST_RUN_INTERACTION_KEY = "lore:firstRunStationInteraction";
 
@@ -47,6 +48,7 @@ export default function SplitHome() {
   const { radio } = usePlayer();
   const { visibleSeeds, addSeed, replaceSeeds } = useSeedManager();
   const { data: importJob } = useLatestImportJob();
+  const { data: appConfig } = useAppConfig();
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
     () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
   );
@@ -88,9 +90,7 @@ export default function SplitHome() {
     crossingsEnabled: true,
     deferEnrichment: false,
   });
-  // Picker-name state is the server's settled source of truth for pre-existing
-  // libraries/seeds. Do not include the optimistic seed list here: a first Keep
-  // should leave this orientation surface mounted for the rest of the visit.
+
   const playFirstRunStation = useCallback((station: DialStation) => {
     rememberFirstRunInteraction();
     radio.toggle(station.station);
@@ -129,6 +129,21 @@ export default function SplitHome() {
       }),
     [stations],
   );
+
+  if (appConfig?.demoSurface) {
+    return (
+      <main className="split-home split-home--front-door">
+        <RadioSurface
+          stations={stations}
+          visibleSeeds={visibleSeeds}
+          replaceSeeds={replaceSeeds}
+          hasSeeds={hasSeeds}
+          hasLibrary={hasLibrary}
+        />
+      </main>
+    );
+  }
+
   const coldStartSession = firstRunCandidate && !isCoreLoading && !hasLibrary && !hasSeeds;
   const confirmedLiveCrossings = allRows.filter((row) => {
     const track = row.ds.liveTrack ?? row.show?.currentTrack;

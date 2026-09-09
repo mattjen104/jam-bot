@@ -16,33 +16,40 @@ export function sectionFor(location: string): Section {
   return "now";
 }
 
-/**
- * Section nav — the Now / Explore / Library plain-text hyperlinks.
- *
- * Two placements share one component:
- *  - variant="corner" (default): fixed bottom-corner links layered above the
- *    page content and directly above the bottom shell — the desktop treatment.
- *    CSS hides this variant at phone widths.
- *  - variant="bottom": a Spotify-style nav row rendered *inside* the fixed
- *    bottom shell, below the mini player, at the very bottom of the screen.
- *    CSS shows this variant only at phone widths.
- *
- * The same three jobs are available on every route; only the placement differs.
- *
- * The [lore] wordmark carries an unadvertised gesture: five taps within
- * three seconds toggle Sleep Radio mode (see lib/sleepMode.ts). While the
- * mode is active a small moon glyph renders beside the wordmark; tapping
- * the moon deactivates the mode.
- */
 export function SlimSectionNav({
   variant = "corner",
+  showArchiveNav: _showArchiveNav,
+  demoSurface,
 }: {
   variant?: "corner" | "bottom";
   showArchiveNav?: boolean;
+  demoSurface?: boolean;
 }) {
   const [location] = useLocation();
   const activeSection = sectionFor(location);
   const { enabled: sleepEnabled, toggle: toggleSleep } = useSleepMode();
+
+  if (demoSurface) {
+    const isBottom = variant === "bottom";
+    const navClass = isBottom ? "bottom-nav demo-nav" : "corner-nav demo-nav demo-nav--corner";
+    const linkClass = (active: boolean) =>
+      isBottom
+        ? `bottom-nav__link${active ? " bottom-nav__link--active" : ""}`
+        : `corner-nav__link${active ? " corner-nav__link--active" : ""}`;
+    return (
+      <nav className={navClass} aria-label="Primary">
+        <Link href="/" className={linkClass(activeSection === "now")} data-testid="demo-nav-radio" aria-current={activeSection === "now" ? "page" : undefined}>
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><circle cx="12" cy="13" r="2"/><path d="M4 6l16-3"/></svg>
+          Radio
+        </Link>
+        <Link href="/library" className={linkClass(activeSection === "stack")} data-testid="demo-nav-library" aria-current={activeSection === "stack" ? "page" : undefined}>
+          <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+          Library
+        </Link>
+      </nav>
+    );
+  }
+
   const moon = sleepEnabled ? (
     <button
       type="button"

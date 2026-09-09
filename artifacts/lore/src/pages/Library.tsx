@@ -922,6 +922,8 @@ export function ArtistGroupRow({
 export default function Library({ embedded = false }: { embedded?: boolean }) {
   const [location, setLocation] = useLocation();
   const search = useSearch();
+  const { data: appConfig } = useAppConfig();
+  const demoSurface = appConfig?.demoSurface === true;
   const [searchOpen, setSearchOpen] = useState(false);
   const queryClient = useQueryClient();
   const { radio } = usePlayer();
@@ -929,7 +931,11 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
 
   // Lens — persisted in URL as ?lens=recent|albums|artists|lore|matching|critic
   // (absent = the mixed chronological timeline).
-  const lens = useMemo((): Lens => parseLens(search), [search]);
+  const lens = useMemo((): Lens => {
+    const requested = parseLens(search);
+    if (!demoSurface) return requested;
+    return requested === "artists" ? "artists" : "";
+  }, [demoSurface, search]);
 
   const setLens = (next: Lens) => {
     const p = new URLSearchParams(search);
@@ -976,9 +982,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   // track lenses still render the Songs crate and must not revive dashboard
   // chrome; Artists uses the same surrounding shell.
   const isLibraryMode = isStackView || viewMode === "artist";
-
-  // appConfig retained for other consumers in this file
-  useAppConfig();
 
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
@@ -1314,7 +1317,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
 
   // Reconnect prompt: authenticated, no Spotify, but has kept items
   return (
-    <div className={`dial-root${embedded ? " dial-root--embedded" : ""}`}>
+    <div className={`dial-root${embedded ? " dial-root--embedded" : ""}${demoSurface ? " demo-library" : ""}`}>
       {!isLibraryMode && searchOpen && (
         <SearchOverlay
           dialStations={[]}
@@ -1800,7 +1803,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
           </>
         )}
 
-        {isAuthenticated && hasSpotify && (
+        {!demoSurface && isAuthenticated && hasSpotify && (
           <div data-testid="library-sync-stack">
             <SyncBar
               syncJobData={syncJobData}
@@ -1828,7 +1831,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
               alignItems: "baseline",
             }}
           >
-            <h2>Kept</h2>
+            <h2>{demoSurface ? "Library" : "Kept"}</h2>
             {([
               { value: "" as const, label: "Songs", count: libraryTotal ?? keptItems.length },
               { value: "artists" as const, label: "Artists", count: artistGroups.length },

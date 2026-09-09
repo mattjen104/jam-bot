@@ -26,6 +26,8 @@ import {
   X,
 } from "lucide-react";
 
+import { useInlinePreview } from "../player/inlinePreview";
+
 interface PlayerBarProps {
   station: Station;
   status: PlayerStatus;
@@ -58,6 +60,7 @@ interface PlayerBarProps {
   onExpand?: () => void;
   handoff?: LiveHandoffControls;
   landingConfirmation?: LandingConfirmation | null;
+  demoSurface?: boolean;
 }
 
 export function PlayerBar({
@@ -84,8 +87,73 @@ export function PlayerBar({
   onExpand,
   handoff,
   landingConfirmation = null,
-}: PlayerBarProps) {
+  demoSurface = false,
+  djName,
+}: PlayerBarProps & { djName?: string | null }) {
+  const { playingMbid, stop: stopPreview } = useInlinePreview();
   const isCasting = casting === "casting";
+
+  if (demoSurface) {
+    const isPlaying = status === "playing";
+    const isLoadingDemo = status === "loading" || status === "reconnecting";
+    const title = provisionalNowPlaying?.title ?? nowPlaying?.recording?.title ?? nowPlaying?.rawTitle ?? "—";
+    const artist = provisionalNowPlaying?.artist ?? nowPlaying?.recording?.artist ?? nowPlaying?.rawArtist ?? "—";
+    const isPreviewing = !!playingMbid;
+
+    return (
+      <div className="player-bar-block demo-player" data-testid="player-bar">
+        <div
+          className="demo-player__bar"
+          onClick={
+            onExpand
+              ? (e) => {
+                  const el = e.target as HTMLElement;
+                  if (el.closest("button, input, a, [role='slider']")) return;
+                  onExpand();
+                }
+              : undefined
+          }
+        >
+          <div className="demo-player__cover" style={{ backgroundImage: nowPlaying?.recording?.artworkUrl ? `url(${nowPlaying.recording.artworkUrl})` : undefined }} />
+          <div className="demo-player__body">
+            {isPreviewing ? (
+              <>
+                <div className="demo-player__title">Paused · {station.name}</div>
+                <div className="demo-player__station">Preview playing</div>
+              </>
+            ) : (
+              <>
+                <div className="demo-player__title">{title} · {artist}</div>
+                <div className="demo-player__station"><span className="demo-player__live-dot" />{station.name}{djName ? ` · ${djName}` : ''}</div>
+              </>
+            )}
+          </div>
+          {isPreviewing ? (
+            <button className="demo-player__resume" onClick={(e) => { e.stopPropagation(); stopPreview(); if (status !== "playing") onToggle(station); }}>Resume</button>
+          ) : (
+            <>
+              {nowPlaying && (
+                <KeepButton
+                  mbid={nowPlaying.recording?.mbid}
+                  spinId={nowPlaying.spinId}
+                  compact
+                  provenance={{ kind: "keep", stationSlug: station.slug, stationName: station.name, surface: "demo-bar" }}
+                />
+              )}
+              <button
+                className="demo-player__pause"
+                aria-label={isPlaying ? "Pause" : "Play"}
+                onClick={(e) => { e.stopPropagation(); onToggle(station); }}
+              >
+                {isLoadingDemo ? <Loader2 className="h-4 w-4 animate-spin" /> : isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current ml-0.5" />}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const isPlaying = isCasting ? !castPaused : status === "playing";
   const isLoading =
     !isCasting &&

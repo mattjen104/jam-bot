@@ -2848,6 +2848,273 @@
     margin-right: 12px;
   }
 }
+
+/* Focused Radio → Keep → Library demo surface. Scoped so the full Lore
+   interface remains unchanged when demoSurface is off. */
+.demo-radio {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: 22px 18px 36px;
+  color: hsl(var(--foreground));
+}
+.demo-radio__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px 18px;
+}
+.demo-radio__header h1 {
+  margin: 0;
+  font-family: var(--app-font-display);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.demo-radio__header time,
+.demo-radio__section-label,
+.demo-radio__reason,
+.demo-radio__unavailable {
+  font-family: var(--app-font-mono);
+}
+.demo-radio__header time {
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+.demo-radio__section-label {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 2px 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.demo-radio__section-label span:last-child {
+  color: hsl(var(--library));
+  letter-spacing: 0;
+  text-transform: none;
+}
+.demo-radio__section-label--secondary {
+  margin-top: 16px;
+  border-top: 1px solid hsl(var(--border));
+}
+.demo-radio__featured {
+  overflow: hidden;
+  margin-bottom: 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--muted) / .6);
+}
+.demo-radio__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 10px 12px;
+}
+.demo-radio__row--compact {
+  min-height: 52px;
+  margin: 0 -2px;
+  padding: 8px 4px;
+  border-bottom: 1px solid hsl(var(--border) / .75);
+}
+.demo-radio__cover {
+  width: 52px;
+  height: 52px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 5px;
+  background:
+    linear-gradient(145deg, hsl(var(--muted)), hsl(var(--background)));
+}
+.demo-radio__cover--compact {
+  width: 36px;
+  height: 36px;
+}
+.demo-radio__body {
+  min-width: 0;
+}
+.demo-radio__pill {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border: 1px solid hsl(var(--library) / .35);
+  border-radius: 999px;
+  color: hsl(var(--library));
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+}
+.demo-radio__title,
+.demo-radio__compact-title {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-radio__compact-title {
+  color: hsl(var(--foreground) / .78);
+  font-size: 13px;
+}
+.demo-radio__artist {
+  overflow: hidden;
+  margin-top: 2px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-radio__byline {
+  overflow: hidden;
+  margin-top: 5px;
+  font-family: var(--app-font-voice);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-radio__byline span {
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+}
+.demo-radio__reason {
+  color: hsl(var(--muted-foreground));
+  font-size: 9px;
+  line-height: 1.45;
+}
+.demo-radio__reason--featured {
+  padding: 7px 12px 9px 76px;
+  border-top: 1px solid hsl(var(--border) / .7);
+}
+.demo-radio__play,
+.demo-player__pause {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid hsl(var(--foreground) / .4);
+  border-radius: 999px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+.demo-radio__play--quiet {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+.demo-radio__empty {
+  padding: 20px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 8px;
+}
+.demo-radio__empty p {
+  margin: 0 0 14px;
+  font-family: var(--app-font-voice);
+  font-size: 17px;
+  line-height: 1.45;
+}
+.demo-radio__empty > button,
+.demo-player__resume {
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  padding: 7px 11px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+}
+.demo-radio__artist-editor {
+  margin-top: 12px;
+}
+.demo-radio__unavailable {
+  padding: 18px 2px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+.demo-nav svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+.demo-nav--corner {
+  gap: 18px;
+}
+.demo-nav--corner .corner-nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.demo-player {
+  position: relative;
+  z-index: 10;
+  padding: 0 10px 6px;
+  border: 0;
+  background: transparent;
+}
+.demo-player__bar {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--muted));
+  cursor: pointer;
+}
+.demo-player__cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: hsl(var(--background)) center / cover no-repeat;
+}
+.demo-player__body {
+  min-width: 0;
+}
+.demo-player__title,
+.demo-player__station {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-player__title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.demo-player__station {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+}
+.demo-player__live-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: hsl(var(--destructive));
+}
+.demo-player__pause {
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+@media (min-width: 721px) {
+  .demo-radio {
+    padding-top: 34px;
+  }
+}
 @media (min-width: 641px) and (max-width: 1050px) {
   .explore-station-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

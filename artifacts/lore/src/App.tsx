@@ -83,6 +83,19 @@ function LibraryConnectRedirect() {
 }
 
 function Router() {
+  const [location] = useLocation();
+  const { data: appConfig } = useAppConfig();
+  const demoAllowed =
+    location === "/" ||
+    location.startsWith("/library") ||
+    location.startsWith("/song/") ||
+    location.startsWith("/artist/") ||
+    location.startsWith("/album/") ||
+    location.startsWith("/replay/") ||
+    location.startsWith("/admin");
+
+  if (appConfig?.demoSurface && !demoAllowed) return <Redirect to="/" />;
+
   return (
     <>
       <LibraryConnectRedirect />
@@ -223,6 +236,7 @@ function BottomShell() {
         <SlimSectionNav
           variant="bottom"
           showArchiveNav={appConfig?.listenerArchiveNavEnabled === true}
+          demoSurface={appConfig?.demoSurface}
         />
         {/* RecordPeekNav (record-sleeve tabs) hidden for now — section nav
             moved into the page space as SlimSectionNav (AppLayout/DialView). */}

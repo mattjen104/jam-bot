@@ -212,6 +212,7 @@ LORE_SPEECH_SILERO_VAD_EXECUTABLE = "/home/runner/workspace/artifacts/api-server
 LORE_SPEECH_SILERO_VAD_MODEL = "/home/runner/workspace/artifacts/api-server/scripts/local-speech/model.json"
 LORE_SPEECH_STT_TIMEOUT_MS = "60000"
 LORE_SPEECH_VAD_TIMEOUT_MS = "60000"
+DEMO_SURFACE = "true"
 
 [userenv.production]
 SPOTIFY_LIBRARY_REDIRECT_URI = "https://tune-tribe.replit.app/api/me/connect/spotify/callback"

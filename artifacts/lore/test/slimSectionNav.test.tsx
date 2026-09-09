@@ -177,3 +177,28 @@ describe("SlimSectionNav — bottom nav row variant (mobile shell)", () => {
     expect(screen.getByRole("link", { name: "Now" }).getAttribute("aria-current")).toBeNull();
   });
 });
+
+describe("SlimSectionNav — focused demo surface", () => {
+  afterEach(() => {
+    cleanup();
+    mockLocation.value = "/";
+  });
+
+  it("renders only Radio and Library destinations", () => {
+    render(<SlimSectionNav demoSurface />);
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(Array.from(nav.querySelectorAll("a")).map((link) => link.textContent?.trim())).toEqual([
+      "Radio",
+      "Library",
+    ]);
+    expect(screen.queryByRole("link", { name: "Explore" })).toBeNull();
+  });
+
+  it("uses the mobile shell classes and marks Library active", () => {
+    mockLocation.value = "/library";
+    render(<SlimSectionNav variant="bottom" demoSurface />);
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(nav.className).toContain("bottom-nav");
+    expect(screen.getByRole("link", { name: "Library" }).getAttribute("aria-current")).toBe("page");
+  });
+});
