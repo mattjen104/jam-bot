@@ -94,7 +94,8 @@ function Router() {
     location.startsWith("/replay/") ||
     location.startsWith("/admin");
 
-  if (appConfig?.demoSurface && !demoAllowed) return <Redirect to="/" />;
+  if (appConfig?.demoSurface && location === "/") return <Redirect to="/library" />;
+  if (appConfig?.demoSurface && !demoAllowed) return <Redirect to="/library" />;
 
   return (
     <>
@@ -226,18 +227,19 @@ function BottomShell() {
     };
   }, []);
   return (
-    <div className="bottom-shell-wrap" ref={wrapRef}>
+    <div className={`bottom-shell-wrap${appConfig?.demoSurface ? " bottom-shell-wrap--demo" : ""}`} ref={wrapRef}>
       <div className="bottom-shell">
-        <div className="bottom-shell__strip" aria-hidden="true" />
+        {!appConfig?.demoSurface ? <div className="bottom-shell__strip" aria-hidden="true" /> : null}
         <PlayerDock />
         {/* Mobile Now / Explore / Library nav row at the very
             bottom of the screen, below the mini player. CSS shows this only
             at phone widths; desktop keeps the corner-link treatment. */}
-        <SlimSectionNav
-          variant="bottom"
-          showArchiveNav={appConfig?.listenerArchiveNavEnabled === true}
-          demoSurface={appConfig?.demoSurface}
-        />
+        {!appConfig?.demoSurface ? (
+          <SlimSectionNav
+            variant="bottom"
+            showArchiveNav={appConfig?.listenerArchiveNavEnabled === true}
+          />
+        ) : null}
         {/* RecordPeekNav (record-sleeve tabs) hidden for now — section nav
             moved into the page space as SlimSectionNav (AppLayout/DialView). */}
       </div>

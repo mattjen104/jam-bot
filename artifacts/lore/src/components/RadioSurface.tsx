@@ -22,12 +22,14 @@ export function RadioSurface({
   replaceSeeds,
   hasSeeds,
   hasLibrary,
+  showHeader = true,
 }: {
   stations: DialStation[];
   visibleSeeds: string[];
   replaceSeeds: (names: string[]) => void;
   hasSeeds: boolean;
   hasLibrary: boolean;
+  showHeader?: boolean;
 }) {
   const { radio } = usePlayer();
   const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
@@ -157,10 +159,12 @@ export function RadioSurface({
 
   return (
     <section className="demo-radio" aria-label="Radio">
-      <header className="demo-radio__header">
-        <h1>Radio</h1>
-        <time>{localTime}</time>
-      </header>
+      {showHeader ? (
+        <header className="demo-radio__header">
+          <h1>Radio</h1>
+          <time>{localTime}</time>
+        </header>
+      ) : null}
 
       <div className="demo-radio__section-label demo-radio__section-label--keeps">
         <span>Kept today</span>

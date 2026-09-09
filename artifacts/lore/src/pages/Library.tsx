@@ -55,6 +55,8 @@ import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
 import { LibraryCrate } from "../components/LibraryCrate";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { ArtistDocument } from "../components/ArtistDocument";
+import { RadioSurface } from "../components/RadioSurface";
+import { useDialData } from "../hooks/useDialData";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -920,6 +922,87 @@ export function ArtistGroupRow({
 // Main page
 // ---------------------------------------------------------------------------
 export default function Library({ embedded = false }: { embedded?: boolean }) {
+  const search = useSearch();
+  const { data: appConfig, isLoading } = useAppConfig();
+  const demoSurface = appConfig?.demoSurface === true;
+  const params = new URLSearchParams(search);
+  const demoView: "stations" | "songs" | "artists" =
+    params.get("lens") === "artists"
+      ? "artists"
+      : params.get("view") === "songs"
+        ? "songs"
+        : "stations";
+
+  if (isLoading) {
+    return <main className="demo-merged-library" aria-busy="true" />;
+  }
+
+  if (!demoSurface) return <LibraryContent embedded={embedded} />;
+
+  return <DemoMergedLibrary view={demoView} embedded={embedded} />;
+}
+
+function DemoMergedLibrary({
+  view,
+  embedded,
+}: {
+  view: "stations" | "songs" | "artists";
+  embedded: boolean;
+}) {
+  const { visibleSeeds, replaceSeeds } = useSeedManager();
+  const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
+    categories: undefined,
+    includeAllStations: true,
+    crossingsEnabled: true,
+    deferEnrichment: false,
+  });
+
+  return (
+    <main className="demo-merged-library">
+      <header className="demo-merged-library__header">
+        <h1>Library</h1>
+        <nav aria-label="Library views" className="demo-merged-library__views">
+          <Link
+            href="/library"
+            aria-current={view === "stations" ? "page" : undefined}
+            data-testid="library-view-stations"
+          >
+            {stations.length.toLocaleString()} Stations
+          </Link>
+          <Link
+            href="/library?view=songs"
+            aria-current={view === "songs" ? "page" : undefined}
+            data-testid="library-view-songs"
+          >
+            Songs
+          </Link>
+          <Link
+            href="/library?lens=artists"
+            aria-current={view === "artists" ? "page" : undefined}
+            data-testid="library-view-artists"
+          >
+            Artists
+          </Link>
+        </nav>
+      </header>
+
+      {view === "stations" ? (
+        <RadioSurface
+          stations={stations}
+          visibleSeeds={visibleSeeds}
+          replaceSeeds={replaceSeeds}
+          hasSeeds={hasSeeds}
+          hasLibrary={hasLibrary}
+          showHeader={false}
+        />
+      ) : (
+        <LibraryContent embedded={embedded} />
+      )}
+    </main>
+  );
+}
+
+function LibraryContent({ embedded = false }: { embedded?: boolean }) {
   const [location, setLocation] = useLocation();
   const search = useSearch();
   const { data: appConfig } = useAppConfig();
@@ -1287,6 +1370,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   // modal, but only when they have no library, no seeds, and haven't already
   // chosen an avatar.  Fires once per browser session via sessionStorage.
   useEffect(() => {
+    if (demoSurface) return;
     if (isStackView) return;
     // Wait for library + avatar data to resolve before deciding
     if (keptData === undefined || albumAvatar === undefined) return;
@@ -1301,7 +1385,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     } catch { return; }
     openImportModal();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keptData, albumAvatar, keepCount, visibleSeeds.length]);
+  }, [demoSurface, keptData, albumAvatar, keepCount, visibleSeeds.length]);
   const selectorCount = useMemo(() => {
     const handles = new Set<string>();
     for (const item of keptItems) {
@@ -1820,7 +1904,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
 
-        {!libLoading && keptItems.length > 0 && (
+        {!demoSurface && !libLoading && keptItems.length > 0 && (
           <div
             data-testid="library-view-toggle"
             role="group"
