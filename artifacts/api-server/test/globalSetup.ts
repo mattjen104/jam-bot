@@ -211,6 +211,13 @@ export async function setup(): Promise<() => Promise<void>> {
           `API test suite leaked ${visibleAfter - visibleBefore} active visible station row(s)`,
         );
       }
+
+      // End the pools opened by the migration/cleanup work above: an idle pg
+      // client keeps the event loop alive (idleTimeoutMillis races vitest's
+      // close timeout) and flakes the run with "something prevents Vite server
+      // from exiting" (exit 1 despite all tests passing).
+      const { pool, listenerReadPool } = await import("@workspace/db");
+      await Promise.allSettled([pool.end(), listenerReadPool.end()]);
     };
   }
 }

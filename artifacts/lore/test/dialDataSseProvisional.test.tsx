@@ -26,7 +26,7 @@ import { useDialData } from "../src/hooks/useDialData";
 // ---------------------------------------------------------------------------
 
 const listenerRef = vi.hoisted(() => ({
-  fn: null as ((ev: SpinStreamEvent) => void) | null,
+  fns: new Set<(ev: SpinStreamEvent) => void>(),
 }));
 
 vi.mock("../src/webplayer/nowPlayingStream", async (importOriginal) => {
@@ -35,9 +35,9 @@ vi.mock("../src/webplayer/nowPlayingStream", async (importOriginal) => {
   return {
     ...mod,
     subscribeSpinStream: (fn: (ev: SpinStreamEvent) => void) => {
-      listenerRef.fn = fn;
+      listenerRef.fns.add(fn);
       return () => {
-        listenerRef.fn = null;
+        listenerRef.fns.delete(fn);
       };
     },
   };
@@ -159,12 +159,13 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 /** Push an SSE frame through the captured listener inside act(). */
 function push(ev: Partial<SpinStreamEvent> & { stationSlug: string }) {
   act(() => {
-    listenerRef.fn?.({
+    const event = {
       rawArtist: "",
       rawTitle: "",
       mbid: null,
       ...ev,
-    } as SpinStreamEvent);
+    } as SpinStreamEvent;
+    for (const listener of listenerRef.fns) listener(event);
   });
 }
 
@@ -174,7 +175,7 @@ function push(ev: Partial<SpinStreamEvent> & { stationSlug: string }) {
 
 describe("useDialData — SSE provisional fast path integration", () => {
   beforeEach(() => {
-    listenerRef.fn = null;
+    listenerRef.fns.clear();
   });
 
   it("spin-raw sets resolving:true, forces hit flags false, passes artistMbid+releaseYear", () => {
@@ -184,7 +185,7 @@ describe("useDialData — SSE provisional fast path integration", () => {
     );
 
     // The subscribeSpinStream listener must be registered by the useEffect.
-    expect(listenerRef.fn).not.toBeNull();
+    expect(listenerRef.fns.size).toBeGreaterThan(0);
 
     // Initial state: REST-poll baseline, no resolving flag.
     const before = result.current.stations.find((s) => s.station.slug === SLUG);

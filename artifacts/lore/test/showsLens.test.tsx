@@ -3,7 +3,6 @@
  * Component tests for the Shows lens UI.
  *
  * Covers:
- *   - DialLensBar: shows Radio | Press | Shows toggle with Shows as third option
  *   - ShowsFeedLane: city prompt renders and responds to input
  *   - ShowsFeedLane: "Looking up shows…" computing state
  *   - ShowsFeedLane: "No upcoming shows" settled-empty state
@@ -15,7 +14,6 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 
-import { DialLensBar } from "../src/components/dial/DialLensBar";
 import { ShowsFeedLane } from "../src/components/dial/ShowsFeedLane";
 import { parseDialLens, readShowsCity, writeShowsCity } from "../src/lib/dialLensState";
 import type { ShowsEvent } from "../src/lib/meHooks";
@@ -27,34 +25,7 @@ afterEach(() => {
   try { localStorage.clear(); } catch { /* jsdom may not have it */ }
 });
 
-// ---------------------------------------------------------------------------
-// DialLensBar — Shows option
-// ---------------------------------------------------------------------------
-
-describe("DialLensBar — Shows lens", () => {
-  it("renders Radio | Press | Shows buttons", () => {
-    const onSetLens = vi.fn();
-    render(<DialLensBar lens="radio" onSetLens={onSetLens} />);
-    expect(screen.getByText("Radio")).toBeTruthy();
-    expect(screen.getByText("Press")).toBeTruthy();
-    expect(screen.getByText("Shows")).toBeTruthy();
-  });
-
-  it("marks Shows as aria-pressed when active", () => {
-    render(<DialLensBar lens="shows" onSetLens={vi.fn()} />);
-    const showsBtn = screen.getByText("Shows").closest("button")!;
-    expect(showsBtn.getAttribute("aria-pressed")).toBe("true");
-    const radioBtn = screen.getByText("Radio").closest("button")!;
-    expect(radioBtn.getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("calls onSetLens('shows') when Shows is clicked", () => {
-    const onSetLens = vi.fn();
-    render(<DialLensBar lens="radio" onSetLens={onSetLens} />);
-    fireEvent.click(screen.getByText("Shows"));
-    expect(onSetLens).toHaveBeenCalledWith("shows");
-  });
-});
+// Retired UI: Explore's lens bar now exposes only Stations and Scan.
 
 // ---------------------------------------------------------------------------
 // parseDialLens — "shows" is a valid lens

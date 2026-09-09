@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Unit tests for LibraryRow "Door 1 — Track" Spotify path.
+ * Unit tests for LibraryRow's track-preview / Spotify-device playback door.
  *
  * Covers three cases from the handleTrack branch in DoorStrip:
  *   1. Spotify connected + premium → spotifyPlay called with correct mbid + deviceId.
@@ -145,13 +145,13 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Door 1 — Spotify connected + premium", () => {
+describe("Track playback door — Spotify connected + premium", () => {
   it("calls spotifyPlay with the correct mbid and deviceId when Spotify is eligible", async () => {
     mockSpotifyPlay.mockResolvedValue(undefined);
 
     renderRow(makeSpotify({ connected: true, premium: true, deviceId: DEVICE_ID }));
 
-    fireEvent.click(screen.getByTitle("Play this track"));
+    fireEvent.click(screen.getByTitle("Play this exact track on your Spotify device"));
 
     await waitFor(() => {
       expect(mockSpotifyPlay).toHaveBeenCalledTimes(1);
@@ -168,7 +168,7 @@ describe("Door 1 — Spotify connected + premium", () => {
 
     renderRow(makeSpotify({ connected: true, premium: true, deviceId: DEVICE_ID }));
 
-    fireEvent.click(screen.getByTitle("Play this track"));
+    fireEvent.click(screen.getByTitle("Play this exact track on your Spotify device"));
 
     // Give the promise chain time to settle, then confirm no fallback.
     await waitFor(() => {
@@ -178,13 +178,13 @@ describe("Door 1 — Spotify connected + premium", () => {
   });
 });
 
-describe("Door 1 — spotifyPlay rejects → fallback to ride.startReplay", () => {
+describe("Track playback door — spotifyPlay rejects → fallback to ride.startReplay", () => {
   it("calls ride.startReplay when spotifyPlay rejects", async () => {
     mockSpotifyPlay.mockRejectedValue(new Error("Spotify error"));
 
     renderRow(makeSpotify({ connected: true, premium: true, deviceId: DEVICE_ID }));
 
-    fireEvent.click(screen.getByTitle("Play this track"));
+    fireEvent.click(screen.getByTitle("Play this exact track on your Spotify device"));
 
     await waitFor(() => {
       expect(mockStartReplay).toHaveBeenCalledTimes(1);
@@ -196,7 +196,7 @@ describe("Door 1 — spotifyPlay rejects → fallback to ride.startReplay", () =
 
     renderRow(makeSpotify({ connected: true, premium: true, deviceId: null }));
 
-    fireEvent.click(screen.getByTitle("Play this track"));
+    fireEvent.click(screen.getByTitle("Play this exact track on your Spotify device"));
 
     await waitFor(() => {
       expect(mockStartReplay).toHaveBeenCalledTimes(1);
@@ -208,13 +208,13 @@ describe("Door 1 — spotifyPlay rejects → fallback to ride.startReplay", () =
   });
 });
 
-describe("Door 1 — Spotify not connected → ride.startReplay called directly", () => {
+describe("Track playback door — Spotify not connected → ride.startReplay called directly", () => {
   it("calls ride.startReplay immediately when Spotify is not connected", () => {
     mockSpotifyPlay.mockResolvedValue(undefined);
 
     renderRow(makeSpotify({ connected: false }));
 
-    fireEvent.click(screen.getByTitle("Play this track"));
+    fireEvent.click(screen.getByTitle("Play the best available preview"));
 
     expect(mockStartReplay).toHaveBeenCalledTimes(1);
     expect(mockSpotifyPlay).not.toHaveBeenCalled();
@@ -225,7 +225,7 @@ describe("Door 1 — Spotify not connected → ride.startReplay called directly"
 
     renderRow(makeSpotify({ connected: true, premium: false }));
 
-    fireEvent.click(screen.getByTitle("Play this track"));
+    fireEvent.click(screen.getByTitle("Play the best available preview"));
 
     expect(mockStartReplay).toHaveBeenCalledTimes(1);
     expect(mockSpotifyPlay).not.toHaveBeenCalled();
@@ -234,7 +234,7 @@ describe("Door 1 — Spotify not connected → ride.startReplay called directly"
   it("passes the correct seed to ride.startReplay when falling through directly", () => {
     renderRow(makeSpotify({ connected: false }));
 
-    fireEvent.click(screen.getByTitle("Play this track"));
+    fireEvent.click(screen.getByTitle("Play the best available preview"));
 
     const [seeds] = mockStartReplay.mock.calls[0] as Parameters<typeof mockStartReplay>;
     expect(seeds).toHaveLength(1);

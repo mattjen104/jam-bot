@@ -144,9 +144,8 @@ test.describe("unified Scan session", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/lore/feed");
 
-    const scanLens = page
-      .getByRole("group", { name: "Dial lens" })
-      .getByRole("button", { name: "Scan" });
+    const scanLens = page.getByRole("button", { name: "Scan live" });
+    await expect(scanLens).toBeVisible();
     await scanLens.focus();
     await page.keyboard.press("Enter");
 
@@ -165,9 +164,8 @@ test.describe("unified Scan session", () => {
     await installRoutes(page);
     await page.goto("/lore/feed");
 
-    const scanLens = page
-      .getByRole("group", { name: "Dial lens" })
-      .getByRole("button", { name: "Scan" });
+    const scanLens = page.getByRole("button", { name: "Scan live" });
+    await expect(scanLens).toBeVisible();
     await scanLens.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Scan" });

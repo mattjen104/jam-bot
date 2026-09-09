@@ -91,7 +91,7 @@ for (const row of users.rows as Array<{ id: number; device_key: string; keeps: s
   const elapsed = Date.now() - t0;
   totalAnchors += anchors.length;
   totalMs += elapsed;
-  console.log(`${row.device_key.slice(0, 8)}… keeps=${row.keeps} anchors=${anchors.length} coldChunk=${firstChunkMs}ms total=${elapsed}ms`);
+  process.stdout.write(`${row.device_key.slice(0, 8)}… keeps=${row.keeps} anchors=${anchors.length} coldChunk=${firstChunkMs}ms total=${elapsed}ms\n`);
 }
-console.log(`warmed ${users.rows.length} devices, ${totalAnchors} anchors in ${totalMs}ms`);
+process.stdout.write(`warmed ${users.rows.length} devices, ${totalAnchors} anchors in ${totalMs}ms\n`);
 process.exit(0);

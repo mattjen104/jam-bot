@@ -48,7 +48,7 @@ const STATION = {
   tags: null,
   // Keep this mobile-shell fixture on the direct station-row fallback; the
   // spec is about bottom navigation, not category-card expansion.
-  stationCategories: [],
+  stationCategories: ["anchor"],
   mayHaveAds: false,
   votes: 0,
   clickcount: 0,
@@ -122,17 +122,15 @@ async function installRoutes(page: Page) {
     route.fulfill({ json: { items: [] } }),
   );
   await page.route("**/api/me/picker-names", (route) =>
-    route.fulfill({ json: { names: [], hasLibrary: false, hasSeeds: false } }),
+    route.fulfill({ json: { names: [], hasLibrary: true, hasSeeds: true } }),
   );
   await page.route("**/api/me/pickers/overlap**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );
 
-  // Split home loads the Sleep and Era/Genre pools with query parameters.
-  // Keep those auxiliary pools empty so only the deterministic live fixture
-  // from the bare station endpoint is rendered.
+  // The Now decision surface loads its station pool with query parameters.
   await page.route("**/api/stations?**", (route) =>
-    route.fulfill({ json: { stations: [] } }),
+    route.fulfill({ json: { stations: [STATION] } }),
   );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: [STATION] } }),
@@ -182,18 +180,18 @@ async function installRoutes(page: Page) {
  * player dock (bottom-shell-wrap > bottom-shell > player-bar-block) is shown.
  */
 async function loadWithDock(page: Page) {
-  await page.goto("/lore/feed");
-
-  // Wait for the live station row (compact "Artist · Station" identity).
-  const row = page.getByRole("button", {
-    name: /Some Artist · NTS 1/,
+  await page.addInitScript(() => {
+    localStorage.setItem("lore:firstRunStationInteraction", "1");
   });
-  await expect(row).toBeVisible({ timeout: 15_000 });
+  await page.goto("/lore/");
 
-  // Compact Feed rows use expand-then-keep: first click expands the byline,
-  // second click commits to tune-in (mounts the player bar inside .bottom-shell).
-  await row.click(); // expand
-  await row.click(); // tune in
+  // Tune from the current Now decision surface; the retired compact Feed rows
+  // are no longer part of the front door.
+  const tuneIn = page.getByRole("button", {
+    name: /^(Play now|Tune in to|Tune live)/,
+  }).first();
+  await expect(tuneIn).toBeVisible({ timeout: 15_000 });
+  await tuneIn.click();
 
   // The player bar becomes visible once the station is active.
   await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
@@ -216,8 +214,8 @@ async function readShellNavGeometry(page: Page): Promise<Geometry> {
     const links = Array.from(
       document.querySelectorAll<HTMLElement>(".bottom-nav__link"),
     );
-    const loreLink = links.find((a) => a.dataset.section === "lore");
-    const libraryLink = links.find((a) => a.dataset.section === "library");
+    const loreLink = links.find((a) => a.dataset.section === "now");
+    const libraryLink = links.find((a) => a.dataset.section === "stack");
     const nav = document.querySelector<HTMLElement>(".bottom-nav");
     const shell = document.querySelector<HTMLElement>(".bottom-shell-wrap");
     const playerBar = document.querySelector<HTMLElement>(".player-bar-row");
@@ -311,14 +309,13 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       // After clicking Stack we navigate to /library — confirm the URL changed.
       await page.waitForURL("**/library", { timeout: 5_000 });
 
-      // Navigate back to the dial and re-tune to verify geometry.
-      await page.goto("/lore/feed");
-      const row2 = page.locator("[data-scrub-slug][role='button']").filter({
-        hasText: /Some Artist/,
+      // Navigate back to Now and re-tune to verify geometry.
+      await page.goto("/lore/");
+      const row2 = page.getByRole("button", {
+        name: /^(Play now|Tune in to|Tune live)/,
       }).first();
       await expect(row2).toBeVisible({ timeout: 15_000 });
-      await row2.click(); // expand
-      await row2.click(); // tune in
+      await row2.click();
       await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
 
       // 3. Geometry: Spotify-style stack — mini player above, nav row below,

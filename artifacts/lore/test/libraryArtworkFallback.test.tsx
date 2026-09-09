@@ -4,15 +4,13 @@
  * the Rumours placeholder when an image fails to load, rather than showing a
  * broken-image icon.
  *
- * Two surfaces are covered here (LibraryRow is tested separately in
- * libraryRowArtworkFallback.test.tsx):
- *   1. AlbumGroupRow header image (~line 622 of Library.tsx)
- *   2. ArtistGroupRow sub-album header image (~line 832 of Library.tsx)
+ * AlbumGroupRow is covered here (LibraryRow is tested separately in
+ * libraryRowArtworkFallback.test.tsx).
  */
 
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Stub LibraryRow so AlbumGroupRow/ArtistGroupRow render without deep deps.
@@ -36,9 +34,7 @@ vi.mock("../src/components/LibraryRow", () => ({
 
 import {
   AlbumGroupRow,
-  ArtistGroupRow,
   type AlbumGroup,
-  type ArtistGroup,
 } from "../src/pages/Library";
 import { RUMOURS } from "../src/lib/rumours";
 import type { LibraryItem } from "../src/lib/meHooks";
@@ -71,23 +67,6 @@ function makeAlbumGroup(artworkUrl: string | null = ART_URL): AlbumGroup {
     artist: "Test Artist",
     artworkUrl,
     items: [makeItem()],
-  };
-}
-
-function makeArtistGroup(albumArtworkUrl: string | null = ART_URL): ArtistGroup {
-  return {
-    key: "Test Artist",
-    artist: "Test Artist",
-    items: [makeItem()],
-    albums: [
-      {
-        key: "Test Artist\x1fTest Album",
-        albumTitle: "Test Album",
-        artist: "Test Artist",
-        artworkUrl: albumArtworkUrl,
-        items: [makeItem()],
-      },
-    ],
   };
 }
 
@@ -160,54 +139,4 @@ describe("AlbumGroupRow — artwork fallback on load error", () => {
   });
 });
 
-// ===========================================================================
-// Surface 2 — ArtistGroupRow sub-album header image
-// ===========================================================================
-
-describe("ArtistGroupRow — sub-album artwork fallback on load error", () => {
-  it("shows the sub-album img after expanding and swaps to RUMOURS on error", () => {
-    render(
-      <ArtistGroupRow
-        group={makeArtistGroup(ART_URL)}
-        openDoorMbid={null}
-        setOpenDoorMbid={vi.fn()}
-        openShelfMbid={null}
-        setOpenShelfMbid={vi.fn()}
-      />,
-    );
-
-    // Before expansion: no img (sub-albums are hidden)
-    expect(document.querySelector("img")).toBeNull();
-
-    // Expand the artist group
-    fireEvent.click(screen.getByRole("button"));
-
-    // After expansion: the sub-album header img should appear
-    const albumImg = document.querySelector("img") as HTMLImageElement;
-    expect(albumImg).toBeTruthy();
-    expect(albumImg.src).toContain("example.com");
-
-    // Simulate load failure
-    fireEvent.error(albumImg);
-
-    expect(albumImg.src).toBe(new URL(RUMOURS, document.baseURI).href);
-  });
-
-  it("does not render a sub-album img when artworkUrl is null (gradient span instead)", () => {
-    render(
-      <ArtistGroupRow
-        group={makeArtistGroup(null)}
-        openDoorMbid={null}
-        setOpenDoorMbid={vi.fn()}
-        openShelfMbid={null}
-        setOpenShelfMbid={vi.fn()}
-      />,
-    );
-
-    // Expand
-    fireEvent.click(screen.getByRole("button"));
-
-    // No img; the gradient span is rendered instead
-    expect(document.querySelector("img")).toBeNull();
-  });
-});
+// Retired UI: ArtistGroupRow's expanded artist lens now lists album names only, without sub-album artwork.

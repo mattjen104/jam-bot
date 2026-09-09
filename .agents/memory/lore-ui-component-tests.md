@@ -26,3 +26,15 @@ accumulate across tests AND across vitest retries of the same test, so
 scope assertions to the render result (`const view = render(...)` →
 `view.getByText`) instead of `screen` when a file mixes `renderHook` +
 `render`.
+
+**Gotcha — `bail: 1` + `retry: 1` mask stale specs.** The lore vitest config
+bails the whole suite on the first failure, so a summary like "1 failed |
+5 passed (10)" means the other 4 were SKIPPED, not passing — and one stale
+file hides every stale file behind it.
+**Why:** diagnosing the front-door rework fallout looked like a single
+mixed-case bug until `-t` isolation showed every spec in the describe was
+stale (the UI element no longer existed for any of them).
+**How to apply:** when a suite or describe shows an odd pass/fail split,
+rerun with `--bail=0` (whole suite) or `-t '<name>'` (single test) before
+concluding only the reported test is broken; assume same-file siblings
+sharing the stale selector are broken too.

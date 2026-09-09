@@ -46,7 +46,30 @@ afterAll(async () => {
   // Clear all FK children before removing the station row (no cascade defined).
   await db.delete(spinsTable).where(inArray(spinsTable.stationId, [stationId]));
   await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
-  await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
+  try {
+    await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
+  } catch (err) {
+    // Append-only observability ledgers (broadcast_timeline_events etc.) have a
+    // stations FK with ON DELETE SET NULL, which their append-only trigger
+    // rejects. A ledger row can race in from a concurrent producer; when that
+    // happens, retire the station instead of deleting it so the suite's leak
+    // check (active AND visible) still passes. The trigger message lives on
+    // the pg error, which drizzle wraps — walk the cause chain.
+    let cur: unknown = err;
+    let appendOnly = false;
+    while (cur instanceof Error) {
+      if (cur.message.includes("append-only")) {
+        appendOnly = true;
+        break;
+      }
+      cur = (cur as { cause?: unknown }).cause;
+    }
+    if (!appendOnly) throw err;
+    await db
+      .update(stationsTable)
+      .set({ active: false, hidden: true })
+      .where(inArray(stationsTable.id, [stationId]));
+  }
 });
 
 describe("logSpinIfChanged — near-duplicate dedup", () => {

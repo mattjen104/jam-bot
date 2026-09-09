@@ -7,7 +7,6 @@
 # they carry no live-data dependence.
 #
 # Included specs:
-#   - importPickerEntryPoints.spec.ts  (direct Library import entry points)
 #   - spotifyConnectCallback.spec.ts   (?library=connected callback + /taste-map redirect)
 #   - librarySyncLifecycle.spec.ts     (direct Library sync lifecycle)
 #   - fallbackNotice.spec.ts           (archive-run fallback notice; all API routes
@@ -27,9 +26,13 @@
 #                                       immediately; spin-changed/spin-raw-failed clear it
 #                                       on WebPlayer and Dial rows; rapid station switches
 #                                       cannot let an old landing confirm PlayerDock)
-# Homepage-only specs for the retired multi-row Dial/compact-Stack shell are
-# intentionally not in this gate. Their relevant advanced-Dial behavior lives
-# on /feed and stays covered by the dedicated /feed specs below.
+# Specs for the retired multi-row Dial/compact-Stack shell are intentionally
+# not in this gate:
+#   - dialAgeFilter.spec.ts — retired Dial row feed and age-tier command surface
+#   - dialInfiniteScroll.spec.ts — retired .fdrow/.ghost-row folds and sentinels
+#   - stationAdminRemoval.spec.ts — retired .fdrow context menu
+#   - importPickerEntryPoints.spec.ts — retired Library empty-state/stats/reconnect
+#                                       import buttons
 #
 # Deleted specs (UI intentionally removed; no longer kept for reference):
 #   - libraryPromptVisibility.spec.ts / spotifyConnectButton.spec.ts — targeted the
@@ -92,27 +95,23 @@ free_port() {
 }
 
 RUN_SPECS=(
-  e2e/importPickerEntryPoints.spec.ts
   e2e/spotifyConnectCallback.spec.ts
   e2e/librarySyncLifecycle.spec.ts
   e2e/fallbackNotice.spec.ts
   e2e/cornerNavTappability.spec.ts
   e2e/microDialRemote.spec.ts
   e2e/firstRunSidebarOnboarding.spec.ts
-  e2e/dialInfiniteScroll.spec.ts
-  e2e/dialAgeFilter.spec.ts
   e2e/adminHealthRecovery.spec.ts
   e2e/rotatingScheduleDisplay.spec.ts
   e2e/spinitronDatedCalendarLink.spec.ts
   e2e/liveTrackChange.spec.ts
-  e2e/stationAdminRemoval.spec.ts
   e2e/unifiedScanSession.spec.ts
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
 if url_ok "$APP_URL"; then
   echo "Dev server OK at $APP_URL"
-  exec pnpm exec playwright test --config playwright.config.ts "${RUN_SPECS[@]}"
+  exec pnpm exec playwright test --config playwright.config.ts --project=chromium "${RUN_SPECS[@]}"
 fi
 
 echo "Dev server not reachable at $APP_URL; starting a dedicated one."
@@ -124,7 +123,7 @@ for attempt in 1 2 3; do
   export PLAYWRIGHT_WEB_SERVER_PORT
   echo "Attempt $attempt: dedicated dev server on port $PLAYWRIGHT_WEB_SERVER_PORT"
   out_file="$(mktemp)"
-  if pnpm exec playwright test --config playwright.config.ts "${RUN_SPECS[@]}" 2>&1 | tee "$out_file"; then
+  if pnpm exec playwright test --config playwright.config.ts --project=chromium "${RUN_SPECS[@]}" 2>&1 | tee "$out_file"; then
     rm -f "$out_file"
     exit 0
   fi

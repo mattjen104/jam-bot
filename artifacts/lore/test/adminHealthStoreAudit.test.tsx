@@ -90,6 +90,7 @@ describe("AdminHealth — station store audit", () => {
     render(<AdminHealth />);
 
     const section = await screen.findByTestId("station-store-audit-section");
+    await screen.findByText("Shop FM");
     expect(section.textContent).toContain("Shop FM");
     expect(section.textContent).toContain("Station merch");
     expect(section.textContent).toContain("1 found");

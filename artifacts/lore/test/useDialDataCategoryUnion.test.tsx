@@ -21,7 +21,9 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Station } from "@workspace/api-client-react";
+import type { ReactNode } from "react";
 
 const makeStation = (
   id: number,
@@ -84,9 +86,17 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
 
 import { useDialData, type DialStationCategory } from "../src/hooks/useDialData";
 
+function Wrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 function dialData(categories: Set<DialStationCategory>) {
   const { result } = renderHook(() =>
     useDialData("personal", { categories }),
+    { wrapper: Wrapper },
   );
   return result.current.stations;
 }

@@ -3,12 +3,12 @@
  * Unit tests for LibraryRow "Door 3 — Broadcast" navigation path.
  *
  * Covers three cases from the broadcastHref branch in DoorStrip:
- *   1. Clicking "📻 Broadcast" navigates to /archive/selectors/<handle>
+ *   1. Clicking "Find this on radio" navigates to /archive/selectors/<handle>
  *      when provenance has a pickerHandle.
- *   2. Clicking "📻 Broadcast" navigates to /archive/stations/<slug>
+ *   2. Clicking "Find this on radio" navigates to /archive/stations/<slug>
  *      when provenance has a stationSlug but no pickerHandle.
- *   3. The Broadcast button is disabled when neither pickerHandle nor
- *      stationSlug is present.
+ *   3. When neither pickerHandle nor stationSlug is present, the button
+ *      falls back to the live Feed (/feed).
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -146,7 +146,7 @@ describe("Door 3 — pickerHandle present → navigates to selector page", () =>
 
     renderRow(item);
 
-    fireEvent.click(screen.getByTitle("Go to broadcast context"));
+    fireEvent.click(screen.getByTitle("Find this record in its radio context"));
 
     expect(mockNavigate).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith(`/archive/selectors/${PICKER_HANDLE}`);
@@ -161,7 +161,7 @@ describe("Door 3 — pickerHandle present → navigates to selector page", () =>
 
     renderRow(item);
 
-    fireEvent.click(screen.getByTitle("Go to broadcast context"));
+    fireEvent.click(screen.getByTitle("Find this record in its radio context"));
 
     expect(mockNavigate).toHaveBeenCalledWith(`/archive/selectors/${PICKER_HANDLE}`);
   });
@@ -177,39 +177,31 @@ describe("Door 3 — stationSlug only → navigates to station page", () => {
 
     renderRow(item);
 
-    fireEvent.click(screen.getByTitle("Go to broadcast context"));
+    fireEvent.click(screen.getByTitle("Find this record in its radio context"));
 
     expect(mockNavigate).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith(`/archive/stations/${STATION_SLUG}`);
   });
 });
 
-describe("Door 3 — neither pickerHandle nor stationSlug → button is disabled", () => {
-  it("renders a disabled Broadcast button when provenance kind is keep with no handle or slug", () => {
+describe("Door 3 — neither pickerHandle nor stationSlug → falls back to the live Feed", () => {
+  it("navigates to /feed when provenance kind is keep with no handle or slug", () => {
     const item = makeItem({ kind: "keep" });
 
     renderRow(item);
 
-    const btn = screen.getByTitle("No broadcast history");
-    expect(btn.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByTitle("Look for this record in the live Feed"));
+    expect(mockNavigate).toHaveBeenCalledWith("/feed");
   });
 
-  it("does not call navigate when the disabled button is present", () => {
-    const item = makeItem({ kind: "keep" });
-
-    renderRow(item);
-
-    // The enabled button with "Go to broadcast context" title should not exist
-    expect(screen.queryByTitle("Go to broadcast context")).toBeNull();
-    expect(mockNavigate).not.toHaveBeenCalled();
-  });
-
-  it("renders a disabled Broadcast button when provenance kind is import", () => {
+  it("navigates to /feed when provenance kind is import", () => {
     const item = makeItem({ kind: "import", service: "spotify" });
 
     renderRow(item);
 
-    const btn = screen.getByTitle("No broadcast history");
-    expect(btn.hasAttribute("disabled")).toBe(true);
+    // No radio context button — only the /feed fallback exists.
+    expect(screen.queryByTitle("Find this record in its radio context")).toBeNull();
+    fireEvent.click(screen.getByTitle("Look for this record in the live Feed"));
+    expect(mockNavigate).toHaveBeenCalledWith("/feed");
   });
 });

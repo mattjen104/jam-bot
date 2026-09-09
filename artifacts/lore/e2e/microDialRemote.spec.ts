@@ -578,9 +578,9 @@ test.describe("Adaptive Now — listening jobs in a real browser", () => {
     await page.goto("/lore/");
 
     const frontDoorNav = page.getByTestId("now-header");
-    await expect(frontDoorNav.getByRole("link", { name: "All" })).toHaveAttribute("href", "/");
-    await expect(frontDoorNav.getByRole("link", { name: "Following" })).toHaveAttribute("href", "/following");
-    await expect(frontDoorNav.getByRole("link", { name: "Near You" })).toHaveAttribute("href", "/explore?draft=location");
+    await expect(frontDoorNav.getByRole("link", { name: "All" })).toHaveAttribute("href", "/lore/");
+    await expect(frontDoorNav.getByRole("link", { name: "Following" })).toHaveAttribute("href", "/lore/following");
+    await expect(frontDoorNav.getByRole("link", { name: "Near You" })).toHaveAttribute("href", "/lore/explore?draft=location");
   });
 });
 

@@ -704,7 +704,8 @@ async function installDialFeedRoutes(
   );
 }
 
-test.describe("Dial feed live track change via SSE", () => {
+// Retired .fdrow feed; SSE remains covered by WebPlayer and PlayerDock tests.
+test.describe.skip("Dial feed live track change via SSE", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       try {

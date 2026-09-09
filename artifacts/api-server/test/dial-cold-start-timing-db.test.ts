@@ -48,8 +48,11 @@ import { _testOnly_clearCrossingsCache } from "../src/routes/me/crossings.js";
 
 const run = randomUUID().slice(0, 8);
 
-// ── Session identifier used as deviceKey / cookie for the crossings user ─────
-const SID = `test-timing-${run}`;
+// ── Session identifiers used as deviceKey / cookie for crossings users ───────
+// Keep the two SWR cases on separate cache keys: each stale response schedules
+// a background recompute, which may finish after that test has returned.
+const SID_EMPTY = `test-timing-empty-${run}`;
+const SID_SENTINEL = `test-timing-sentinel-${run}`;
 
 // ── Now-playing fixture ───────────────────────────────────────────────────────
 const SLUG_NP = `test-timing-np-${run}`;
@@ -64,7 +67,8 @@ const MAX_RESPONSE_MS = 2_000;
 let dbAvailable = false;
 let server: Server | undefined;
 let baseUrl = "";
-let userId: number | null = null;
+let emptyUserId: number | null = null;
+let sentinelUserId: number | null = null;
 let stationId: number | null = null;
 
 beforeAll(async () => {
@@ -76,21 +80,37 @@ beforeAll(async () => {
   }
 
   // ── Crossings fixture ─────────────────────────────────────────────────────
-  await db.insert(spotifyConnectionsTable).values({
-    sid: SID,
-    accessToken: "t",
-    refreshToken: "r",
-    expiresAt: new Date(Date.now() + 3_600_000),
-  });
-  const [u] = await db
+  await db.insert(spotifyConnectionsTable).values([
+    {
+      sid: SID_EMPTY,
+      accessToken: "t",
+      refreshToken: "r",
+      expiresAt: new Date(Date.now() + 3_600_000),
+    },
+    {
+      sid: SID_SENTINEL,
+      accessToken: "t",
+      refreshToken: "r",
+      expiresAt: new Date(Date.now() + 3_600_000),
+    },
+  ]);
+  const [emptyUser, sentinelUser] = await db
     .insert(loreUsersTable)
-    .values({
-      spotifyUserId: `timing-user-${run}`,
-      spotifyConnectionId: SID,
-      deviceKey: SID,
-    })
+    .values([
+      {
+        spotifyUserId: `timing-user-empty-${run}`,
+        spotifyConnectionId: SID_EMPTY,
+        deviceKey: SID_EMPTY,
+      },
+      {
+        spotifyUserId: `timing-user-sentinel-${run}`,
+        spotifyConnectionId: SID_SENTINEL,
+        deviceKey: SID_SENTINEL,
+      },
+    ])
     .returning({ id: loreUsersTable.id });
-  userId = u!.id;
+  emptyUserId = emptyUser!.id;
+  sentinelUserId = sentinelUser!.id;
 
   // ── Now-playing fixture ───────────────────────────────────────────────────
   // A single extra station + spin so the test station always appears in the
@@ -134,20 +154,24 @@ afterAll(async () => {
   if (!dbAvailable) return;
 
   // Crossings fixture — FK order: cache row before user.
-  if (userId !== null) {
+  for (const userId of [emptyUserId, sentinelUserId]) {
+    if (userId !== null) {
+      await db
+        .delete(crossingsCacheTable)
+        .where(eq(crossingsCacheTable.userId, userId))
+        .catch(() => {});
+      await db
+        .delete(loreUsersTable)
+        .where(eq(loreUsersTable.id, userId))
+        .catch(() => {});
+    }
+  }
+  for (const sid of [SID_EMPTY, SID_SENTINEL]) {
     await db
-      .delete(crossingsCacheTable)
-      .where(eq(crossingsCacheTable.userId, userId))
-      .catch(() => {});
-    await db
-      .delete(loreUsersTable)
-      .where(eq(loreUsersTable.id, userId))
+      .delete(spotifyConnectionsTable)
+      .where(eq(spotifyConnectionsTable.sid, sid))
       .catch(() => {});
   }
-  await db
-    .delete(spotifyConnectionsTable)
-    .where(eq(spotifyConnectionsTable.sid, SID))
-    .catch(() => {});
 
   // Now-playing fixture — FK order: spins → quality → station → recording.
   if (stationId !== null) {
@@ -292,11 +316,11 @@ describe("GET /api/me/crossings — SWR stale-L2 timing", () => {
 
       // Prepare: empty crossing list (content doesn't matter for the timing
       // assertion — we just need L2 to have a row so the SWR path triggers).
-      await seedStaleL2Row(userId!, []);
+      await seedStaleL2Row(emptyUserId!, []);
 
       const t0 = Date.now();
       const res = await fetch(`${baseUrl}/api/me/crossings`, {
-        headers: { cookie: `lore_sid=${SID}` },
+        headers: { cookie: `lore_sid=${SID_EMPTY}` },
       });
       const elapsed = Date.now() - t0;
 
@@ -330,14 +354,26 @@ describe("GET /api/me/crossings — SWR stale-L2 timing", () => {
           monthArtistCrossings: 3,
           lifetimeCrossings: 42,
           lifetimeArtistCrossings: 11,
+          // Non-zero lifetime crossings require the current cache payload
+          // shape to carry album evidence; otherwise the route intentionally
+          // rejects the L2 row as a legacy cache miss.
+          albumCrossings: [
+            {
+              releaseGroupMbid: null,
+              recordingMbid: `sentinel-recording-${run}`,
+              title: "Sentinel Track",
+              artist: "Sentinel Artist",
+              artworkUrl: null,
+            },
+          ],
         },
       ];
 
-      await seedStaleL2Row(userId!, sentinel);
+      await seedStaleL2Row(sentinelUserId!, sentinel);
 
       const t0 = Date.now();
       const res = await fetch(`${baseUrl}/api/me/crossings`, {
-        headers: { cookie: `lore_sid=${SID}` },
+        headers: { cookie: `lore_sid=${SID_SENTINEL}` },
       });
       const elapsed = Date.now() - t0;
 

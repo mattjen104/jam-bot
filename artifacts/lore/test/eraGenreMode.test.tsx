@@ -149,11 +149,11 @@ describe("SlimSectionNav Specialist visibility", () => {
     (variant) => {
       setEraGenreEnabled(true);
       renderNav(variant);
-      const feed = screen.getByText("Feed");
-      fireEvent.pointerDown(feed);
-      fireEvent.pointerUp(feed);
+      const now = screen.getByText("Now");
+      fireEvent.pointerDown(now);
+      fireEvent.pointerUp(now);
       expect(screen.queryByTestId("era-genre-vinyl")).toBeNull();
-      expect(feed.getAttribute("title")).toBeNull();
+      expect(now.getAttribute("title")).toBeNull();
     },
   );
 

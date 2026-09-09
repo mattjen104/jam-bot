@@ -106,7 +106,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Library crate — matched-count chrome", () => {
-  it("does not render the old matched-count statistic above the crate", async () => {
+  it("renders the live matched count rather than the import job's frozen count", async () => {
     const { useLatestImportJob, useMyImportStats } = await import("../src/lib/meHooks");
 
     // The import job finished with 150 resolved (frozen at import time).
@@ -132,10 +132,12 @@ describe("Library crate — matched-count chrome", () => {
 
     renderLibraryPage();
 
-    expect(screen.queryByText(/from spotify matched/i)).toBeNull();
+    expect(document.querySelector(".lib-hero__stat")?.textContent).toMatch(
+      /190\s+of\s+200\s+from Spotify matched/i,
+    );
   });
 
-  it("keeps the statistic absent when every imported track is matched", async () => {
+  it("renders the completed live count when every imported track is matched", async () => {
     const { useLatestImportJob, useMyImportStats } = await import("../src/lib/meHooks");
 
     vi.mocked(useLatestImportJob).mockReturnValue({
@@ -160,7 +162,9 @@ describe("Library crate — matched-count chrome", () => {
 
     renderLibraryPage();
 
-    expect(screen.queryByText(/from spotify matched/i)).toBeNull();
+    expect(document.querySelector(".lib-hero__stat")?.textContent).toMatch(
+      /100\s+of\s+100\s+from Spotify matched/i,
+    );
   });
 });
 

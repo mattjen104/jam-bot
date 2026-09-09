@@ -30,6 +30,7 @@ import showsRouter from "./shows.js";
 import releaseStatsRouter from "./release-stats.js";
 import pressRouter from "./press.js";
 import setContextsRouter from "./set-contexts.js";
+import releaseMetadataRouter from "./release-metadata.js";
 
 export {
   startPhase3RetryScheduler,
@@ -72,5 +73,6 @@ router.use(pressRouter);
 router.use(showsRouter);
 router.use(releaseStatsRouter);
 router.use(setContextsRouter);
+router.use(releaseMetadataRouter);
 
 export default router;

@@ -38,6 +38,7 @@ class FakeEventSource {
   close() {
     this.closed = true;
   }
+  addEventListener() {}
   static last(): FakeEventSource {
     const inst = FakeEventSource.instances[FakeEventSource.instances.length - 1];
     if (!inst) throw new Error("No FakeEventSource created yet");

@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
 /**
- * Regression tests for the crossings-loading window and Zone 3 DJ-band split.
+ * Regression tests for the crossings-loading window.
  *
  * During crossingsLoading=true the dial suppresses all real station rows and
  * renders only the Zone 1 loading placeholder (Zone1Placeholder). No
- * FrontDoorRow (.fdrow) elements — and in particular no Zone 3 "also on air"
- * rows — may appear until crossing scores resolve, so Zone 3 can never jump
- * above the (not-yet-computed) crossing rows.
+ * FrontDoorRow (.fdrow) elements may appear until crossing scores resolve.
  *
  * Covers:
  *  1. The Zone 1 loading placeholder appears when crossingsLoading=true.
  *  2. No FrontDoorRow (.fdrow) elements exist while crossingsLoading=true.
  *  3. Once crossings resolve with an empty station list, no rows render.
- *  4. Zone 3 DJ band split (djBand / restBand ordering + "DJs on air" label).
+ *
+ * Note: the former Zone 3 DJ-band split specs were removed — the DialView
+ * rework (Now/Explore/Library) retired the unified station row feed from the
+ * front door, so there are no banded .fdrow rows left to assert on.
  */
 
 import React from "react";
@@ -115,9 +116,7 @@ vi.mock("../src/hooks/useStationPresence", () => ({
 // ---------------------------------------------------------------------------
 
 import { useDialData } from "../src/hooks/useDialData";
-import { useMyGhostMissed } from "../src/lib/meHooks";
 import { DialView } from "../src/components/DialView";
-import type { DialStation, DialShow } from "../src/hooks/useDialData";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -235,200 +234,5 @@ describe("Dial front-door zone order — crossingsLoading=false (loaded state)",
     // We only assert no .fdrow exists for an empty station list.
     const rows = document.querySelectorAll(".fdrow");
     expect(rows.length).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Zone 3 DJ slot reservation
-// ---------------------------------------------------------------------------
-
-function makeShow(overrides: Partial<DialShow> = {}): DialShow {
-  return {
-    runId: 1,
-    showName: "Test Show",
-    djName: null,
-    startedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
-    endedAt: new Date(Date.now() + 60 * 60_000).toISOString(),
-    state: "live",
-    spins: [],
-    crossings: 0,
-    artistCrossings: 0,
-    topArtists: [],
-    topArtistNames: [],
-    currentTrack: null,
-    isPickerShow: false,
-    pickerId: null,
-    ...overrides,
-  };
-}
-
-/** Zone 3 attributed station (r=5): live show with djName but no crossings. */
-function makeAttributedZone3Station(slug: string, djName = "DJ Attributed"): DialStation {
-  return {
-    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
-    isLive: true,
-    shows: [makeShow({ djName, crossings: 0, artistCrossings: 0 })],
-    crossings: 0,
-    artistCrossings: 0,
-    lifetimeCrossings: 0,
-    lifetimeArtistCrossings: 0,
-  };
-}
-
-/**
- * Zone 3 unattributed station (r=0): live but no shows.
- * High lifetimeCrossings so sortedRows places it before the attributed row.
- */
-function makeUnattributedZone3Station(slug: string, lifetimeCrossings = 100): DialStation {
-  return {
-    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
-    isLive: true,
-    shows: [],
-    crossings: 0,
-    artistCrossings: 0,
-    lifetimeCrossings,
-    lifetimeArtistCrossings: 0,
-  };
-}
-
-function mockDialDataWithStations(stations: DialStation[]) {
-  (useDialData as ReturnType<typeof vi.fn>).mockReturnValue({
-    stations,
-    isLoading: false,
-    isCoreLoading: false,
-    liveLoading: false,
-    crossingsLoading: false,
-    hasLibrary: true,
-    overlapByPickerId: new Map<number, number>(),
-    pickerNameToId: new Map<string, number>(),
-  });
-}
-
-function mockGhosts(ghosts: unknown[] = []) {
-  (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: ghosts });
-}
-
-describe("Zone 3 DJ band split", () => {
-  // These fixtures are all zero-crossing Zone 3 stations; radio mode
-  // (crossings off) lifts the crossing-positive filter so the band split
-  // itself stays the variable under test.
-  beforeEach(() => {
-    localStorage.setItem("lore:radioMode", "true");
-  });
-
-  it("attributed (r=5) rows appear in the DJ band above all unattributed rows", () => {
-    // Three unattributed stations (r=0) with high lifetime crossings and one
-    // attributed station (r=5). The band split places the attributed row in
-    // the dj band and the three unattributed rows in the rest band; the
-    // unified feed renders all of them.
-    const stations: DialStation[] = [
-      makeUnattributedZone3Station("ua0", 300),
-      makeUnattributedZone3Station("ua1", 200),
-      makeUnattributedZone3Station("ua2", 150),
-      makeAttributedZone3Station("attr0", "DJ Featured"),
-    ];
-    mockDialDataWithStations(stations);
-    mockGhosts([]);
-
-    render(<DialView />);
-
-    const rows = document.querySelectorAll(".fdrow");
-    // dj band: 1 attributed row; rest band: all 3 unattributed rows (the
-    // unified feed has no cap). Total: 4 rows.
-    expect(rows.length).toBe(4);
-
-    // The first row must be the attributed station (dj band comes first).
-    // The compact feed identity no longer surfaces the DJ credit, so the
-    // ordering is proven by the station name and the band attribute.
-    expect(rows[0].textContent).toContain("Station attr0");
-    expect(rows[0].closest("[data-feed-band]")?.getAttribute("data-feed-band")).toBe("dj");
-    // No "See all" button — the unified feed never truncates behind a toggle.
-    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
-  });
-
-  it("restBand sorts by lifetimeCrossings desc when no attributed row exists", () => {
-    // All unattributed (r=0); dj band is empty. The rest band is sorted by
-    // lifetimeCrossings desc; all rows render (no cap in the unified feed).
-    const stations: DialStation[] = [
-      makeUnattributedZone3Station("ua0", 300),
-      makeUnattributedZone3Station("ua1", 200),
-      makeUnattributedZone3Station("ua2", 150),
-      makeUnattributedZone3Station("ua3", 100),
-    ];
-    mockDialDataWithStations(stations);
-    mockGhosts([]);
-
-    render(<DialView />);
-
-    const rows = document.querySelectorAll(".fdrow");
-    expect(rows.length).toBe(4);
-
-    // Rows in lifetimeCrossings desc order.
-    expect(rows[0].textContent).toContain("ua0");
-    expect(rows[1].textContent).toContain("ua1");
-    expect(rows[2].textContent).toContain("ua2");
-    expect(rows[3].textContent).toContain("ua3");
-  });
-
-  it("all-attributed rows render fully in the dj band", () => {
-    // All attributed (r=5) → dj band has both; rest band empty.
-    const stations: DialStation[] = [
-      makeAttributedZone3Station("attr0", "DJ Alpha"),
-      makeAttributedZone3Station("attr1", "DJ Beta"),
-    ];
-    mockDialDataWithStations(stations);
-    mockGhosts([]);
-
-    render(<DialView />);
-
-    const rows = document.querySelectorAll(".fdrow");
-    // Both rows render (djBand, no cap).
-    expect(rows.length).toBe(2);
-    // No empty/ghost slots.
-    expect(rows[0].textContent).toBeTruthy();
-    expect(rows[1].textContent).toBeTruthy();
-    // No "See all" control.
-    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
-  });
-
-  it("r=5 rows render in the dj band with full DJ provenance, no zone sub-label", () => {
-    const stations: DialStation[] = [
-      makeAttributedZone3Station("attr0", "DJ Picker"),
-    ];
-    mockDialDataWithStations(stations);
-    mockGhosts([]);
-
-    render(<DialView />);
-
-    // The unified feed has no zone sub-labels; the compact row shows
-    // only artist · station — no DJ name in the collapsed row.
-    expect(screen.queryByText("DJs on air")).toBeNull();
-    const rows = document.querySelectorAll(".fdrow");
-    expect(rows.length).toBe(1);
-    expect(rows[0].textContent).toContain("Station attr0");
-    expect(rows[0].closest("[data-feed-band]")?.getAttribute("data-feed-band")).toBe("dj");
-  });
-
-  it("does not credit an artist-valued DJ name as a selector", () => {
-    // A djName that collides with the currently-playing artist must be
-    // suppressed (eligibleDjName rejects it), so the row never presents the
-    // artist as a DJ. The station still surfaces as an also-on-air row and the
-    // artist appears in the sentence, but no DJ-credit sentence is produced.
-    const artistCollision = makeAttributedZone3Station("artist-meta", "The Flaming Lips");
-    artistCollision.shows[0]!.currentTrack = {
-      mbid: null, artistMbid: null, title: "Do You Realize??", artist: "the flaming lips",
-      playedAt: new Date().toISOString(), isLibraryHit: false, isArtistHit: false, isFirstSpin: false,
-    };
-    mockDialDataWithStations([artistCollision]);
-    mockGhosts([]);
-
-    render(<DialView />);
-
-    expect(document.querySelectorAll(".fdrow")).toHaveLength(1);
-    const row = document.querySelector(".fdrow")!;
-    // The artist name is shown in the sentence …
-    expect(row.textContent?.toLowerCase()).toContain("the flaming lips");
-    // … but never as a DJ credit (no fdrow__dj node carrying the name).
-    expect(row.querySelector(".fdrow__dj")).toBeNull();
   });
 });

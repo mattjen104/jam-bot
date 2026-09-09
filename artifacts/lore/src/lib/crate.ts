@@ -14,7 +14,6 @@ export interface ReleaseMetadata {
 export const releaseMetadataCache = new Map<string, ReleaseMetadata | null>();
 const releaseMetadataPending = new Set<string>();
 let releaseMetadataRequestChain: Promise<void> = Promise.resolve();
-let lastReleaseMetadataRequestAt = 0;
 
 function releaseDate(release: {
   date?: string;
@@ -57,29 +56,28 @@ export function primaryReleaseMetadata(recording: {
     : null;
 }
 
+/**
+ * Resolve release metadata through the API server, never musicbrainz.org
+ * directly. The server serves its `recording_release_groups` cache and
+ * hydrates misses in paced batches of its own, so opening a large crate
+ * costs one POST per ~100 unresolved rows instead of minutes of throttled
+ * browser-side churn. The local Map still session-caches by MBID so rows
+ * don't re-ask on every render burst.
+ */
 async function fetchReleaseMetadata(mbids: string[]): Promise<void> {
-  const query = mbids.map((mbid) => `rid:${mbid}`).join(" OR ");
-  const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&inc=releases+release-groups&fmt=json&limit=100`;
   try {
-    const waitMs = Math.max(0, 1_100 - (Date.now() - lastReleaseMetadataRequestAt));
-    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
-    lastReleaseMetadataRequestAt = Date.now();
-    const response = await fetch(url, { signal: AbortSignal.timeout(12_000) });
-    if (!response.ok) throw new Error(`MusicBrainz returned ${response.status}`);
+    const response = await fetch("/api/me/library/release-metadata", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mbids }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) throw new Error(`release-metadata returned ${response.status}`);
     const data = await response.json() as {
-      recordings?: Array<{
-        id?: string;
-        releases?: Parameters<typeof primaryReleaseMetadata>[0]["releases"];
-      }>;
+      metadata?: Record<string, ReleaseMetadata | null>;
     };
-    const returned = new Set<string>();
-    for (const recording of data.recordings ?? []) {
-      if (!recording.id || !mbids.includes(recording.id)) continue;
-      returned.add(recording.id);
-      releaseMetadataCache.set(recording.id, primaryReleaseMetadata(recording));
-    }
     for (const mbid of mbids) {
-      if (!returned.has(mbid)) releaseMetadataCache.set(mbid, null);
+      releaseMetadataCache.set(mbid, data.metadata?.[mbid] ?? null);
     }
   } catch {
     for (const mbid of mbids) releaseMetadataCache.set(mbid, null);

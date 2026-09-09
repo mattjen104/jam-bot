@@ -76,13 +76,44 @@ export async function auditStationFixtures(): Promise<StationFixtureAuditRow[]> 
   }));
 }
 
+/**
+ * Tables guarded by the lore_observability_append_only trigger. Deleting a
+ * station referenced by one of these ledgers fires its ON DELETE SET NULL FK,
+ * which the append-only trigger rejects — so such fixtures must be left behind.
+ */
+async function appendOnlyLedgerTables(): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT DISTINCT cls.relname AS table_name
+    FROM pg_trigger trg
+    JOIN pg_class cls ON cls.oid = trg.tgrelid
+    JOIN pg_proc proc ON proc.oid = trg.tgfoid
+    WHERE proc.proname = 'lore_observability_append_only'
+      AND NOT trg.tgisinternal
+  `);
+  return result.rows.map((row) => String(row.table_name));
+}
+
 /** Delete known fixture rows and all station-linked dependents in FK-safe order. */
 export async function cleanupStationFixtures(ids?: readonly number[]): Promise<number> {
   const auditedIds = new Set((await auditStationFixtures()).map((row) => row.id));
-  const fixtureIds = ids
+  const candidateIds = ids
     ? [...new Set(ids)].filter((id) => auditedIds.has(id))
     : [...auditedIds];
-  if (fixtureIds.length === 0) return 0;
+  if (candidateIds.length === 0) return 0;
+
+  // Fixtures referenced by an append-only ledger cannot be deleted: the FK's
+  // ON DELETE SET NULL is rejected by the ledger's append-only trigger.
+  const ledgerTables = await appendOnlyLedgerTables();
+  let fixtureIds = candidateIds;
+  if (ledgerTables.length > 0) {
+    const union = ledgerTables
+      .map((table) => `SELECT station_id AS id FROM ${table} WHERE station_id IS NOT NULL`)
+      .join(" UNION ");
+    const blocked = await db.execute(sql.raw(`SELECT DISTINCT id FROM (${union}) ledgers`));
+    const blockedIds = new Set(blocked.rows.map((row) => Number(row.id)));
+    fixtureIds = candidateIds.filter((id) => !blockedIds.has(id));
+    if (fixtureIds.length === 0) return 0;
+  }
 
   // These station foreign keys are otherwise expensive full-table scans during
   // cleanup (embed_resolution_queue is large in long-running environments).

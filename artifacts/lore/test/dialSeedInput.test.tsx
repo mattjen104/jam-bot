@@ -231,25 +231,5 @@ describe("Minimal front door — no pinned overlay, no set panel", () => {
     expect(screen.queryAllByRole("tab")).toHaveLength(0);
   });
 
-  it("clicking a station row starts playback without pinning it or opening any panel", () => {
-    mockDial();
-    render(<DialView />);
-
-    const row = document.querySelector(".fdrow");
-    expect(row, "station row rendered").toBeTruthy();
-    // Compact Feed rows use expand-then-keep: first click expands (shows byline),
-    // second click commits to playback.
-    fireEvent.click(row!); // expand
-    fireEvent.click(row!); // tune in
-
-    // Row click is the playback interaction…
-    expect(radioToggle).toHaveBeenCalledTimes(1);
-    // …and nothing else: no pinned surface, no tabs, no set panel.
-    expect(document.querySelector(".dial-pinned-row")).toBeNull();
-    expect(document.querySelector(".dial-pinned-set")).toBeNull();
-    expect(document.querySelector(".dial-hero__setpanel")).toBeNull();
-    expect(screen.queryAllByRole("tab")).toHaveLength(0);
-    // The station row itself stays in its lane.
-    expect(document.querySelector(".fdrow")).toBeTruthy();
-  });
+  // Retired UI: front-door .fdrow playback interaction moved to cover rails and Scan.
 });

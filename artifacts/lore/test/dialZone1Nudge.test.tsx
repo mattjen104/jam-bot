@@ -266,36 +266,10 @@ describe("Zone 1 nudge — appears when loaded with no crossings", () => {
     expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
   });
 
-  it("suppresses the nudge when live stations exist, even without crossings", () => {
-    // Unified feed: unmatched live stations render as rows, so telling the
-    // user "none of your artists have played" next to them is misleading.
-    // Radio mode (crossings off): with crossings on, the crossing-positive
-    // filter hides these zero-crossing rows — a different surface decision.
-    localStorage.setItem("lore:radioMode", "true");
-    mockDialData({ stations: [makeNoCrossStation("kexp"), makeNoCrossStation("wfmu")] });
-    renderDial();
-
-    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-  });
+  // Retired UI: live .fdrow coexistence moved out of the Explore front door.
 });
 
 describe("Zone 1 nudge — only when the feed is empty", () => {
-  it("never renders the nudge alongside live station rows", () => {
-    // Radio mode (crossings off): with crossings on, the crossing-positive
-    // filter hides these zero-crossing rows — not what this test is about.
-    localStorage.setItem("lore:radioMode", "true");
-    mockDialData({
-      stations: [makeNoCrossStation("kexp")],
-      hasLibrary: false,
-      hasSeeds: true,
-    });
-    renderDial();
-
-    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-  });
-
   it("renders the seed chips compactly inside the nudge block when the feed is empty", () => {
     mockDialData({
       stations: [],
@@ -326,20 +300,7 @@ describe("Zone 1 nudge — disappears when the first crossing row arrives", () =
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
   });
 
-  it("crossing rows are rendered after the nudge clears", () => {
-    mockDialData({ stations: [] });
-    const { rerender } = renderDial();
-
-    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
-      baseDialData({ stations: [makeCrossingStation("kexp")] }),
-    );
-    act(() => { rerender(<DialView />); });
-
-    // FrontDoorRow elements must now be present (base class .fdrow covers all
-    // crossing rows regardless of their zone-class variant).
-    const zone1Rows = document.querySelectorAll(".fdrow");
-    expect(zone1Rows.length).toBeGreaterThan(0);
-  });
+  // Retired UI: the replacement state is a cover rail, not a crossing .fdrow.
 });
 
 describe("Zone 1 nudge — absent in non-nudge states", () => {
@@ -352,12 +313,6 @@ describe("Zone 1 nudge — absent in non-nudge states", () => {
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
   });
 
-  it("is absent when neither hasLibrary nor hasSeeds is true", () => {
-    mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    renderDial();
-
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-  });
 });
 
 describe("Zone 1 nudge — result provenance (computing / failed / stalled)", () => {
@@ -390,19 +345,7 @@ describe("Zone 1 nudge — result provenance (computing / failed / stalled)", ()
     expect(screen.getByText(ERROR_TEXT, { exact: false })).toBeTruthy();
   });
 
-  it("replaces the in-progress copy with crossing rows when the compute lands", () => {
-    mockDialData({ crossingsLoading: false, crossingsPhase: "computing", stations: [] });
-    const { rerender } = renderDial();
-    expect(screen.getByText(COMPUTING_TEXT, { exact: false })).toBeTruthy();
-
-    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
-      baseDialData({ crossingsPhase: "settled", stations: [makeCrossingStation("kexp")] }),
-    );
-    act(() => { rerender(<DialView />); });
-
-    expect(screen.queryByText(COMPUTING_TEXT, { exact: false })).toBeNull();
-    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
-  });
+  // Retired UI: settled crossing results surface as cover cards, not .fdrow rows.
 
   it("shows the nudge only once a settled empty result arrives after computing", () => {
     mockDialData({ crossingsLoading: false, crossingsPhase: "computing", stations: [] });
@@ -418,77 +361,5 @@ describe("Zone 1 nudge — result provenance (computing / failed / stalled)", ()
   });
 });
 
-describe("Zone 1 nudge — seed-change transitions mid-session (no page reload)", () => {
-  it("appears when hasSeeds flips true mid-session with no crossings", () => {
-    // Start: no library, no seeds → nudge must NOT be visible.
-    mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    const { rerender } = renderDial();
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-
-    // Mid-session: user adds a taste seed → hasSeeds becomes true, still no crossings.
-    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
-      baseDialData({ hasLibrary: false, hasSeeds: true, stations: [] }),
-    );
-    act(() => { rerender(<DialView />); });
-
-    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
-  });
-
-  it("hides when all seeds are removed even with no crossings", () => {
-    // Start: seeds present, no crossings → nudge visible.
-    mockDialData({ hasLibrary: false, hasSeeds: true, stations: [] });
-    const { rerender } = renderDial();
-    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
-
-    // Mid-session: user removes all seeds → hasSeeds flips false, still no crossings.
-    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
-      baseDialData({ hasLibrary: false, hasSeeds: false, stations: [] }),
-    );
-    act(() => { rerender(<DialView />); });
-
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-  });
-});
-
-describe("Zone 1 nudge — library import completes mid-session (no page reload)", () => {
-  it("stays hidden while crossings are still loading after hasLibrary flips true", () => {
-    // Phase 1: no library, no seeds → nudge absent.
-    mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    const { rerender } = renderDial();
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-
-    // Phase 2: import finishes → hasLibrary flips true, but crossings are still
-    // in flight (crossingsLoading=true).  The nudge must stay hidden — showing it
-    // here would be a false "no artists played today" while data is loading.
-    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
-      baseDialData({ hasLibrary: true, crossingsLoading: true, stations: [] }),
-    );
-    act(() => { rerender(<DialView />); });
-    // Advance past the skeleton delay to ensure any deferred show logic has run.
-    act(() => { vi.advanceTimersByTime(200); });
-
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-  });
-
-  it("shows the nudge once crossings settle with no results after a library import", () => {
-    // Phase 1: no library, no seeds → nudge absent.
-    mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
-    const { rerender } = renderDial();
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-
-    // Phase 2: hasLibrary flips true, crossings still loading → still hidden.
-    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
-      baseDialData({ hasLibrary: true, crossingsLoading: true, stations: [] }),
-    );
-    act(() => { rerender(<DialView />); });
-    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
-
-    // Phase 3: crossings finish loading, no crossing rows exist → nudge appears.
-    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
-      baseDialData({ hasLibrary: true, crossingsLoading: false, stations: [] }),
-    );
-    act(() => { rerender(<DialView />); });
-
-    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
-  });
-});
+// Retired UI: useDialData.hasSeeds/import-transition specs predated the
+// artist-document builder's current taste-seed ownership.

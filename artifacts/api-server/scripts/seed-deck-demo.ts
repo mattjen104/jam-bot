@@ -67,5 +67,5 @@ await db.insert(libraryItemsTable).values({
   provenance: { kind: "keep", stationName: "Deck Demo Radio", stationSlug: SLUG },
 });
 
-console.log("seeded deck-demo: sid=deck-demo, station", SLUG, "spin", anchorSpin!.id);
+process.stdout.write(`seeded deck-demo: sid=deck-demo, station ${SLUG} spin ${anchorSpin!.id}\n`);
 process.exit(0);
