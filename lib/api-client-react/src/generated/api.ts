@@ -66,6 +66,7 @@ import type {
   GetMyWeeklyRecapParams,
   GetOembedParams,
   GetPendingKeepStatusParams,
+  GetRecordingAlbumTracksParams,
   GetRecordingSongExploder200,
   GetRecordingsAvailabilityParams,
   GetSongExploderChaptersResponse,
@@ -2559,22 +2560,47 @@ export function useGetRecordingPreview<
 /**
  * @summary All tracks in the same album as this recording
  */
-export const getGetRecordingAlbumTracksUrl = (mbid: string) => {
-  return `/api/recordings/${mbid}/album-tracks`;
+export const getGetRecordingAlbumTracksUrl = (
+  mbid: string,
+  params?: GetRecordingAlbumTracksParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/recordings/${mbid}/album-tracks?${stringifiedParams}`
+    : `/api/recordings/${mbid}/album-tracks`;
 };
 
 export const getRecordingAlbumTracks = async (
   mbid: string,
+  params?: GetRecordingAlbumTracksParams,
   options?: RequestInit,
 ): Promise<AlbumTracksResponse> => {
-  return customFetch<AlbumTracksResponse>(getGetRecordingAlbumTracksUrl(mbid), {
-    ...options,
-    method: "GET",
-  });
+  return customFetch<AlbumTracksResponse>(
+    getGetRecordingAlbumTracksUrl(mbid, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
 };
 
-export const getGetRecordingAlbumTracksQueryKey = (mbid: string) => {
-  return [`/api/recordings/${mbid}/album-tracks`] as const;
+export const getGetRecordingAlbumTracksQueryKey = (
+  mbid: string,
+  params?: GetRecordingAlbumTracksParams,
+) => {
+  return [
+    `/api/recordings/${mbid}/album-tracks`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getGetRecordingAlbumTracksQueryOptions = <
@@ -2582,6 +2608,7 @@ export const getGetRecordingAlbumTracksQueryOptions = <
   TError = ErrorType<void>,
 >(
   mbid: string,
+  params?: GetRecordingAlbumTracksParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getRecordingAlbumTracks>>,
@@ -2594,12 +2621,12 @@ export const getGetRecordingAlbumTracksQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getGetRecordingAlbumTracksQueryKey(mbid);
+    queryOptions?.queryKey ?? getGetRecordingAlbumTracksQueryKey(mbid, params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getRecordingAlbumTracks>>
   > = ({ signal }) =>
-    getRecordingAlbumTracks(mbid, { signal, ...requestOptions });
+    getRecordingAlbumTracks(mbid, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -2627,6 +2654,7 @@ export function useGetRecordingAlbumTracks<
   TError = ErrorType<void>,
 >(
   mbid: string,
+  params?: GetRecordingAlbumTracksParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getRecordingAlbumTracks>>,
@@ -2636,7 +2664,11 @@ export function useGetRecordingAlbumTracks<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetRecordingAlbumTracksQueryOptions(mbid, options);
+  const queryOptions = getGetRecordingAlbumTracksQueryOptions(
+    mbid,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

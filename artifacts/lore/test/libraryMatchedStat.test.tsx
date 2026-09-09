@@ -1,16 +1,14 @@
 // @vitest-environment jsdom
 /**
- * Tests for the "X of Y from Spotify matched" stat in the Library hero section.
+ * Regression coverage for the retired "X of Y from Spotify matched" Library
+ * dashboard stat.
  *
  * The stat reads live library counts from `useMyImportStats` instead of the
  * frozen `resolved` field on the import job, so a retry pass that resolves
  * more tracks is reflected immediately without a re-import.
  *
- * Confirms:
- *  - After a retry pass the displayed resolved count matches the live library
- *    count (importStats.total - importStats.softCount), NOT jobData.resolved.
- *  - The stat is hidden when importStats has not loaded yet (null).
- *  - The stat is hidden when importStats.total is 0.
+ * Songs and Artists now share one compact Library shell, so legacy import-job
+ * chrome must stay hidden regardless of import state.
  */
 import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
@@ -27,10 +25,6 @@ vi.mock("wouter", () => ({
     <a href={href}>{children}</a>
   ),
   useLocation: vi.fn(() => ["/library", vi.fn()]),
-  // The hero (and its matched-count stat) only renders on non-Stack lenses —
-  // the default album Stack is a chrome-free full-screen list. Mount on the
-  // "artists" lens (full mixed feed, so sourceFilter !== "keep") so the hero
-  // and the import stat are present for these assertions.
   useSearch: vi.fn(() => "lens=artists"),
 }));
 
@@ -106,7 +100,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Library crate — matched-count chrome", () => {
-  it("renders the live matched count rather than the import job's frozen count", async () => {
+  it("hides the matched count after a retry resolves more tracks", async () => {
     const { useLatestImportJob, useMyImportStats } = await import("../src/lib/meHooks");
 
     // The import job finished with 150 resolved (frozen at import time).
@@ -132,12 +126,10 @@ describe("Library crate — matched-count chrome", () => {
 
     renderLibraryPage();
 
-    expect(document.querySelector(".lib-hero__stat")?.textContent).toMatch(
-      /190\s+of\s+200\s+from Spotify matched/i,
-    );
+    expect(screen.queryByText(/from spotify matched/i)).toBeNull();
   });
 
-  it("renders the completed live count when every imported track is matched", async () => {
+  it("hides the matched count when every imported track is matched", async () => {
     const { useLatestImportJob, useMyImportStats } = await import("../src/lib/meHooks");
 
     vi.mocked(useLatestImportJob).mockReturnValue({
@@ -162,9 +154,7 @@ describe("Library crate — matched-count chrome", () => {
 
     renderLibraryPage();
 
-    expect(document.querySelector(".lib-hero__stat")?.textContent).toMatch(
-      /100\s+of\s+100\s+from Spotify matched/i,
-    );
+    expect(screen.queryByText(/from spotify matched/i)).toBeNull();
   });
 });
 

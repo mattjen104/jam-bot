@@ -861,6 +861,12 @@ paths:
           schema:
             type: string
             minLength: 1
+        - name: canonicalOrder
+          in: query
+          required: false
+          description: Require canonical MusicBrainz medium and track order; returns 503 rather than guessing.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Album track list
@@ -870,6 +876,8 @@ paths:
                 $ref: "#/components/schemas/AlbumTracksResponse"
         "404":
           description: No album found for this recording
+        "503":
+          description: Canonical album order is temporarily unavailable
   /recordings/{mbid}/list-provenance:
     get:
       operationId: getRecordingListProvenance
@@ -9446,6 +9454,26 @@ components:
           type: string
           nullable: true
       required: [mbid, title, artist, artworkUrl, spinCount, lastSpunAt]
+    ArtistAlbumSummary:
+      type: object
+      description: A MusicBrainz release group grounded by recordings attributed to this artist.
+      properties:
+        releaseGroupMbid:
+          type: string
+        title:
+          type: string
+        releaseYear:
+          type: ["integer", "null"]
+        primaryType:
+          type: ["string", "null"]
+        artworkUrl:
+          type: ["string", "null"]
+        firstRecordingMbid:
+          type: string
+          description: A grounded recording used to resolve the ordered album queue.
+        trackCount:
+          type: integer
+      required: [releaseGroupMbid, title, releaseYear, primaryType, artworkUrl, firstRecordingMbid, trackCount]
     ArtistResult:
       type: object
       description: Artist page data — Lore top tracks plus optional Spotify catalogue.
@@ -9458,11 +9486,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ArtistTopTrack"
+        albums:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtistAlbumSummary"
         catalogue:
           anyOf:
             - $ref: "#/components/schemas/ArtistCatalogue"
             - type: "null"
-      required: [mbid, name, topTracks, catalogue]
+      required: [mbid, name, topTracks, albums, catalogue]
     ScrapedStation:
       type: object
       description: One station entry in the all-scraped-shows response.

@@ -55,6 +55,7 @@ import { h } from "../../middlewares/asyncHandler.js";
 import { getTrackById, getAlbumTracks, spotifyAppConfigured } from "../../spotify/appClient.js";
 import { loadSupportLadder } from "../../lore/support-ladder.js";
 import { getUserFromSession } from "../../lore/userSession.js";
+import { orderAlbumTracksCanonically } from "../../lore/album-track-order.js";
 
 wireSongEnrichment();
 
@@ -889,6 +890,17 @@ router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
 
   // Album artwork: prefer any recording that has artwork stored
   const artworkUrl = tracks.find(t => t.artworkUrl)?.artworkUrl ?? null;
+  const canonicalOrderRequired = req.query["canonicalOrder"] === "true";
+  const orderedTracks = canonicalOrderRequired
+    ? await orderAlbumTracksCanonically(
+        releaseGroupMbid,
+        tracks,
+      )
+    : tracks.map((track, index) => ({ track, position: index + 1 }));
+
+  if (!orderedTracks) {
+    return res.status(503).json({ error: "canonical_order_unavailable" });
+  }
 
   return res.json({
     rgMbid: releaseGroupMbid,
@@ -896,12 +908,12 @@ router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
     rgType: primaryType ?? null,
     releaseYear: releaseYear ?? null,
     artworkUrl,
-    tracks: tracks.map((t, idx) => ({
+    tracks: orderedTracks.map(({ track: t, position }) => ({
       mbid: t.mbid,
       title: t.title ?? t.mbid,
       artist: t.artist ?? "",
       durationMs: t.durationMs ?? null,
-      position: idx + 1,
+      position,
       appleMusicId: t.appleMusicId ?? null,
     })),
   });

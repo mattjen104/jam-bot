@@ -433,7 +433,7 @@ describe("ArtistGroupRow", () => {
     ]);
     render(<ArtistGroupRow group={group} />);
     expect(screen.getByText(/2 albums/)).toBeTruthy();
-    expect(screen.getByText(/3 tracks/)).toBeTruthy();
+    expect(screen.getByText(/3 songs/)).toBeTruthy();
   });
 
   it("does not show album sub-rows before the group is expanded", () => {
@@ -445,7 +445,7 @@ describe("ArtistGroupRow", () => {
     expect(screen.queryByText("Album 1")).toBeNull();
   });
 
-  it("shows album names but no tracks or artwork when expanded", () => {
+  it("never expands to show album names, tracks, or artwork", () => {
     const group = makeArtistGroup([
       {
         title: "Album 1",
@@ -457,20 +457,14 @@ describe("ArtistGroupRow", () => {
       },
     ]);
     render(<ArtistGroupRow group={group} />);
-    fireEvent.click(screen.getByTestId("library-artist-group").querySelector("[role='button']")!);
-    expect(screen.getByText("Album 1")).toBeTruthy();
-    expect(screen.getByText("Album 2")).toBeTruthy();
+    expect(screen.getByTestId("library-artist-group").querySelector("[role='button']")).toBeNull();
+    expect(screen.queryByText("Album 1")).toBeNull();
+    expect(screen.queryByText("Album 2")).toBeNull();
     expect(screen.queryByTestId("library-row")).toBeNull();
     expect(screen.getByTestId("library-artist-group").querySelector("img")).toBeNull();
   });
 
-  it("removes only the un-kept album's sub-row when its tracks are removed mid-session", () => {
-    /**
-     * Simulates un-keeping all tracks from Album 1.
-     * The parent recomputes buildArtistGroups([remaining items]) and passes
-     * a new group prop with albums: [album2Only].
-     * Verify Album 1's sub-header and tracks disappear while Album 2 stays.
-     */
+  it("updates inline counts when an album is un-kept mid-session", () => {
     const album1Item = makeItem({ mbid: "a1t1", title: "A1 Song", artist: "The Band", albumTitle: "Album 1" });
     const album2Item = makeItem({ mbid: "a2t1", title: "A2 Song", artist: "The Band", albumTitle: "Album 2" });
 
@@ -495,25 +489,15 @@ describe("ArtistGroupRow", () => {
 
     render(<Wrapper />);
 
-    // Expand the artist group
-    fireEvent.click(screen.getByTestId("library-artist-group").querySelector("[role='button']")!);
+    expect(screen.getByText(/2 albums · 2 songs/)).toBeTruthy();
 
-    // Both albums visible before toggle
-    expect(screen.getByText("Album 1")).toBeTruthy();
-    expect(screen.getByText("Album 2")).toBeTruthy();
-    expect(screen.queryByTestId("library-row")).toBeNull();
-
-    // Un-keep all Album 1 tracks → parent re-renders with updated group
     fireEvent.click(screen.getByTestId("unkept-album1"));
 
     expect(screen.queryByText("Album 1")).toBeNull();
-    expect(screen.getByText("Album 2")).toBeTruthy();
-    expect(screen.queryByTestId("library-row")).toBeNull();
-    expect(screen.queryByText("A1 Song")).toBeNull();
-    expect(screen.queryByText("A2 Song")).toBeNull();
+    expect(screen.getByText(/1 album · 1 song/)).toBeTruthy();
   });
 
-  it("collapses to a single album row when one of two albums has all its tracks removed", () => {
+  it("stays a single compact row when one of two albums is removed", () => {
     const a1 = makeItem({ mbid: "x1", title: "First", artist: "The Band", albumTitle: "First Album" });
     const a2 = makeItem({ mbid: "x2", title: "Second", artist: "The Band", albumTitle: "Second Album" });
 
@@ -535,19 +519,26 @@ describe("ArtistGroupRow", () => {
     }
 
     render(<Wrapper />);
-    // Expand
-    fireEvent.click(screen.getByTestId("library-artist-group").querySelector("[role='button']")!);
-    expect(screen.queryByTestId("library-row")).toBeNull();
+    expect(screen.getAllByTestId("library-artist-group")).toHaveLength(1);
+    expect(screen.getByText(/2 albums · 2 songs/)).toBeTruthy();
 
-    // Remove First Album's track
     fireEvent.click(screen.getByTestId("remove-first"));
     expect(screen.queryByText("First Album")).toBeNull();
-    expect(screen.getByText("Second Album")).toBeTruthy();
-    expect(screen.queryByTestId("library-row")).toBeNull();
-
-    // Confirm header counts update too
+    expect(screen.getAllByTestId("library-artist-group")).toHaveLength(1);
     expect(screen.getByText(/1 album/)).toBeTruthy();
-    expect(screen.getByText(/1 track/)).toBeTruthy();
+    expect(screen.getByText(/1 song/)).toBeTruthy();
+  });
+
+  it("links only grounded artist identities to the artist page", () => {
+    const grounded = makeArtistGroup([
+      { title: "Album 1", items: [makeItem({ mbid: "t1", artist: "The Band" })] },
+    ]);
+    grounded.artistMbid = "artist-mbid";
+    const { rerender } = render(<ArtistGroupRow group={grounded} />);
+    expect(screen.getByTestId("link-library-artist").getAttribute("href")).toBe("/artist/artist-mbid");
+
+    rerender(<ArtistGroupRow group={{ ...grounded, artistMbid: null }} />);
+    expect(screen.queryByTestId("link-library-artist")).toBeNull();
   });
 });
 

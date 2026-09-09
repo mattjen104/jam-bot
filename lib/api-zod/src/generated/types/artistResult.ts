@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ArtistAlbumSummary } from "./artistAlbumSummary";
 import type { ArtistCatalogue } from "./artistCatalogue";
 import type { ArtistTopTrack } from "./artistTopTrack";
 
@@ -15,5 +16,6 @@ export interface ArtistResult {
   mbid: string;
   name: string;
   topTracks: ArtistTopTrack[];
+  albums: ArtistAlbumSummary[];
   catalogue: ArtistCatalogue | null;
 }

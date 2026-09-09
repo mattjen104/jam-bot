@@ -1,6 +1,6 @@
 ---
 name: Orval pitfalls (codegen collisions, duplicates, drift, non-200 schemas)
-description: Four recurring orval/OpenAPI codegen traps in lib/api-spec — check here before adding or editing endpoints.
+description: Recurring orval/OpenAPI codegen traps in lib/api-spec — check here before adding or editing endpoints.
 ---
 
 # Orval / OpenAPI codegen pitfalls
@@ -14,10 +14,10 @@ path validator) and in `generated/types/` (query-params TS type). The api-zod
 barrel's `export *` from both collides: `TS2308: already exported a member`.
 **Why:** orval derives both symbol names from the operationId with no
 cross-folder disambiguation.
-**How to apply:** don't add a query param to an op that already has path
-params — resolve the value server-side, or make the identifying param
-query-only (`GET /stations/spins?slug=...` — no path param means only one
-`<Op>Params` is emitted), or use a distinct operationId.
+**How to apply:** after adding a query param to an op with path params, run
+codegen and both generated-package typechecks immediately. If the current
+generator emits a collision, resolve the value server-side, make the
+identifying param query-only, or use a distinct operationId.
 
 ## 2. Duplicate schema names fail opaquely
 Python's `yaml.safe_load` silently keeps the LAST duplicate key, so the YAML
@@ -40,3 +40,14 @@ not a runtime Zod parser. Typecheck passes while a server import of the
 expected parser fails after regeneration.
 **How to apply:** verify generated/api.ts exports the runtime parser before
 importing it; otherwise keep the response typed by the spec.
+
+## 5. Adding query params shifts generated client arguments
+An imperative fetcher changes from `(pathParam, requestOptions?)` to
+`(pathParam, queryParams?, requestOptions?)`; the React hook similarly inserts
+query params before hook options.
+**Why:** existing second-argument object literals may still look reasonable but
+become type errors, or can be interpreted as URL query values if structurally
+compatible.
+**How to apply:** grep every generated fetcher and hook call site after adding
+the first query parameter. Shift request/hook options to the new final argument
+and pass `undefined` for query params when the caller does not set them.

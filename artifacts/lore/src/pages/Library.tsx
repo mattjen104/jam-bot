@@ -48,7 +48,6 @@ import {
   Radio,
   Search,
   Upload,
-  X,
   XCircle,
 } from "lucide-react";
 import { YourWeekCard } from "../components/YourWeekCard";
@@ -854,115 +853,64 @@ export function AlbumGroupRow({
 }
 
 // ---------------------------------------------------------------------------
-// ArtistGroupRow — collapsible artist bucket with album sub-rows
+// ArtistGroupRow — compact, non-expanding kept-artist index row
 // ---------------------------------------------------------------------------
 export function ArtistGroupRow({
   group,
 }: {
   group: ArtistGroup;
 }) {
-  const [open, setOpen] = useState(false);
-  const canExpand = group.albums.length > 0;
-  const isOpen = canExpand && open;
+  const counts = `${group.albums.length} album${group.albums.length === 1 ? "" : "s"} · ${group.items.length} song${group.items.length === 1 ? "" : "s"}`;
   return (
-    <div data-testid="library-artist-group">
-      {/* Artist header */}
-      <div
-        role={canExpand ? "button" : undefined}
-        tabIndex={canExpand ? 0 : undefined}
-        onClick={() => { if (canExpand) setOpen((v) => !v); }}
-        onKeyDown={(e) => {
-          if (canExpand && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            setOpen((v) => !v);
-          }
-        }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "9px 15px",
-          cursor: canExpand ? "pointer" : "default",
-          borderBottom: "1px solid hsl(var(--border) / 0.5)",
-          background: isOpen ? "hsl(var(--secondary) / 0.6)" : "transparent",
-          transition: "background 0.15s",
-        }}
-        aria-expanded={canExpand ? isOpen : undefined}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
+    <div
+      data-testid="library-artist-group"
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: 10,
+        minWidth: 0,
+        padding: "9px 15px",
+        borderBottom: "1px solid hsl(var(--border) / 0.5)",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {group.artistMbid ? (
+          <Link
+            href={`/artist/${encodeURIComponent(group.artistMbid)}`}
+            aria-label={`${group.artist}, ${counts}`}
             style={{
-              fontFamily: "var(--app-font-display)",
-              fontSize: 14,
-              fontWeight: 400,
-              color: "hsl(var(--foreground))",
+              display: "block",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              color: "hsl(var(--foreground))",
+              fontFamily: "var(--app-font-display)",
+              fontSize: 14,
+              textDecoration: "none",
+            }}
+            data-testid="link-library-artist"
+          >
+            {group.artist}
+          </Link>
+        ) : (
+          <span
+            style={{
+              display: "block",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              color: "hsl(var(--foreground))",
+              fontFamily: "var(--app-font-display)",
+              fontSize: 14,
             }}
           >
             {group.artist}
-          </div>
-          {group.items.length > 0 && <div
-            style={{
-              fontFamily: "var(--app-font-mono)",
-              fontSize: 10,
-              color: "hsl(var(--faint))",
-              marginTop: 2,
-            }}
-          >
-            {group.albums.length} album{group.albums.length === 1 ? "" : "s"}
-            {" · "}
-            {group.items.length} track{group.items.length === 1 ? "" : "s"}
-          </div>}
-        </div>
-        {group.artistMbid && (
-          <Link
-            href={`/index?section=artists&artistMbid=${encodeURIComponent(group.artistMbid)}`}
-            onClick={(event) => event.stopPropagation()}
-            aria-label={`Browse the Index for ${group.artist}`}
-            style={{
-              position: "relative",
-              zIndex: 2,
-              flexShrink: 0,
-              color: "hsl(var(--dim))",
-              fontFamily: "var(--app-font-mono)",
-              fontSize: 10,
-              textDecoration: "underline",
-              textUnderlineOffset: 3,
-            }}
-            data-testid="link-library-artist-index"
-          >
-            Index
-          </Link>
+          </span>
         )}
-        {canExpand && (isOpen ? (
-          <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
-        ) : (
-          <ChevronDown style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
-        ))}
       </div>
-
-      {/* Expanded: album names only. Artist mode never displays tracks or art. */}
-      {isOpen && (
-        <div style={{ borderLeft: "2px solid hsl(var(--library) / 0.2)" }}>
-          {group.albums.map((album) => (
-            <div
-              key={album.key}
-              style={{
-                padding: "7px 15px 7px 24px",
-                borderBottom: "1px solid hsl(var(--border) / 0.3)",
-                background: "hsl(var(--card) / 0.5)",
-                fontFamily: "var(--app-font-reading)",
-                fontSize: 13,
-                color: "hsl(var(--dim))",
-              }}
-            >
-              {album.albumTitle}
-            </div>
-          ))}
-        </div>
-      )}
+      <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--faint))" }}>
+        {counts}
+      </span>
     </div>
   );
 }
@@ -1024,6 +972,10 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   // scope the server query, while the crate remains the single visual shell
   // instead of reviving the retired dashboard/list presentation.
   const isStackView = viewMode !== "artist";
+  // Every current Library route uses the compact crate/index shell. Legacy
+  // track lenses still render the Songs crate and must not revive dashboard
+  // chrome; Artists uses the same surrounding shell.
+  const isLibraryMode = isStackView || viewMode === "artist";
 
   // appConfig retained for other consumers in this file
   useAppConfig();
@@ -1113,14 +1065,14 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   // deep-linked track lens from quietly stopping at the first page.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (isStackView && hasNextPage && !isFetchingNextPage) {
+    if (isLibraryMode && hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
     }
-  }, [isStackView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [isLibraryMode, hasNextPage, isFetchingNextPage, fetchNextPage]);
   useEffect(() => {
     // The legacy track/artist list no longer renders, so its scroll sentinel
     // must not start a second pagination loop.
-    if (isStackView) return;
+    if (isLibraryMode) return;
     const el = sentinelRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -1131,7 +1083,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [viewMode, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [viewMode, isLibraryMode, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Import job
   const { data: jobData } = useLatestImportJob();
@@ -1288,8 +1240,8 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     [viewMode, keptItems],
   );
   const artistGroups = useMemo(
-    () => (viewMode === "artist" ? buildArtistGroups(keptItems, visibleSeeds) : []),
-    [viewMode, keptItems, visibleSeeds],
+    () => buildArtistGroups(keptItems),
+    [keptItems],
   );
 
   // Per-album hide preference — shared with the compact Stack on the front door
@@ -1319,32 +1271,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
     return () => clearTimeout(t);
 
   }, [openAlbumKey, albumGroups.length]);
-
-  // Inline group filter (album / artist views only)
-  const [groupFilter, setGroupFilter] = useState("");
-  // Reset filter when the view mode changes so album-filter doesn't persist
-  // into artist view. Use React's render-phase "store previous value" reset so
-  // the filter clears synchronously with the view change (no effect needed).
-  const [prevViewMode, setPrevViewMode] = useState(viewMode);
-  if (viewMode !== prevViewMode) {
-    setPrevViewMode(viewMode);
-    setGroupFilter("");
-  }
-  const groupFilterQ = groupFilter.trim().toLowerCase();
-
-  // Note: the album (Stack) view is a chrome-free full-screen list with no
-  // inline group filter, so only artist groups are filterable now.
-  const filteredArtistGroups = useMemo(() => {
-    if (!groupFilterQ) return artistGroups;
-    return artistGroups.filter((g) =>
-      g.artist.toLowerCase().includes(groupFilterQ) ||
-      g.items.some(
-        (item) =>
-          (item.recording?.title ?? "").toLowerCase().includes(groupFilterQ) ||
-          (item.recording?.albumTitle ?? "").toLowerCase().includes(groupFilterQ),
-      ),
-    );
-  }, [artistGroups, groupFilterQ]);
 
   // Hero stats
   // keepCount comes from the server's page-1 COUNT — accurate across the full
@@ -1389,7 +1315,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   // Reconnect prompt: authenticated, no Spotify, but has kept items
   return (
     <div className={`dial-root${embedded ? " dial-root--embedded" : ""}`}>
-      {!isStackView && searchOpen && (
+      {!isLibraryMode && searchOpen && (
         <SearchOverlay
           dialStations={[]}
           libraryItems={keptItems}
@@ -1403,7 +1329,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {/* The Library Stack is intentionally chrome-free. */}
-      {!isStackView && (
+      {!isLibraryMode && (
         <div className="dial-topbar">
           <span className="dial-topbar__wordmark">Lore</span>
           <span className="dial-topbar__title dial-topbar__title--active">Library</span>
@@ -1423,7 +1349,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
           </button>
         </div>
       )}
-      {!isStackView && <AlbumAvatarPicker showCurrent />}
+      {!isLibraryMode && <AlbumAvatarPicker showCurrent />}
       {!embedded ? (
         <div className="library-artist-editor" data-testid="library-artist-editor">
           <div className="front-door-artist-onboarding">
@@ -1449,7 +1375,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
       ) : null}
 
       {/* Import banner — shown while import is running and for 60s after done */}
-      {!isStackView && showImportBanner && jobData && (
+      {!isLibraryMode && showImportBanner && jobData && (
         <LibraryImportBanner
           job={jobData}
           onDismiss={() => setBannerDismissed(true)}
@@ -1457,7 +1383,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {/* Unresolved review section — shown after import when some tracks couldn't be matched */}
-      {!isStackView && showReviewSection && jobData && (
+      {!isLibraryMode && showReviewSection && jobData && (
         <div
           style={{
             borderBottom: "1px solid hsl(var(--border))",
@@ -1583,7 +1509,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
       <div className="dial-body">
 
         {/* ── Hero ── (non-Stack lenses only) */}
-        {!isStackView && (
+        {!isLibraryMode && (
           <div className="lib-hero">
             <div className="lib-hero__kicker">◆ Your library</div>
             <div className="lib-hero__headline">
@@ -1656,7 +1582,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         )}
 
         {/* ── Your Week ── (non-Stack lenses only) */}
-        {!isStackView && <YourWeekCard />}
+        {!isLibraryMode && <YourWeekCard />}
 
         {/* ── Live strip (stub — wired when /me/library/live endpoint ships) ── */}
         {/* TODO: replace false with liveItems.length > 0 */}
@@ -1670,7 +1596,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         )}
 
         {/* ── Ledger consent ── (transient consent prompt; kept in Stack too) */}
-        {!isStackView && ledgerPromptVisible && !ledgerEnabled && (
+        {!isLibraryMode && ledgerPromptVisible && !ledgerEnabled && (
           <div
             style={{ borderBottom: "1px solid hsl(var(--border))", padding: "12px 15px", background: "hsl(var(--card))" }}
             data-testid="ledger-consent-prompt"
@@ -1723,7 +1649,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         )}
 
         {/* ── Lens controls remain available above the crate on deep links. ── */}
-        {!isStackView && lens !== "" && (
+        {!isLibraryMode && lens !== "" && (
           <>
             <div
               style={{
@@ -1846,57 +1772,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
               )}
             </div>
 
-            {/* ── Inline group filter (artist view) ── */}
-            {viewMode === "artist" && !libLoading && keptItems.length > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "7px 15px",
-                  borderBottom: "1px solid hsl(var(--border) / 0.5)",
-                }}
-                data-testid="library-group-filter-bar"
-              >
-                <Search style={{ width: 11, height: 11, color: "hsl(var(--faint))", flexShrink: 0 }} aria-hidden="true" />
-                <input
-                  type="search"
-                  value={groupFilter}
-                  onChange={(e) => setGroupFilter(e.target.value)}
-                  placeholder="Filter artists…"
-                  style={{
-                    flex: 1,
-                    background: "none",
-                    border: "none",
-                    outline: "none",
-                    fontFamily: "var(--app-font-mono)",
-                    fontSize: 13,
-                    color: "hsl(var(--foreground))",
-                  }}
-                  aria-label="Filter artists"
-                  data-testid="library-group-filter"
-                />
-                {groupFilter && (
-                  <button
-                    type="button"
-                    onClick={() => setGroupFilter("")}
-                    aria-label="Clear filter"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      display: "flex",
-                      color: "hsl(var(--faint))",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <X style={{ width: 11, height: 11 }} />
-                  </button>
-                )}
-              </div>
-            )}
-
             {/* ── Kept tracks section header ── */}
             <TierHd
               label={
@@ -1914,11 +1789,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
               }
               count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
               hint={
-                viewMode === "artist"
-                  ? groupFilterQ
-                    ? `${filteredArtistGroups.length} of ${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
-                    : `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
-                  : sortFilter === "artist"
+                sortFilter === "artist"
                   ? "A → Z by artist"
                   : sortFilter === "title"
                   ? "A → Z by title"
@@ -1926,39 +1797,6 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
               }
             />
 
-            {/* ── Grouped-view partial-load notice (artist view) ── */}
-            {viewMode === "artist" && hasNextPage && (
-              <div
-                data-testid="library-grouped-partial-notice"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "6px 15px",
-                  borderBottom: "1px solid hsl(var(--border) / 0.5)",
-                  background: "hsl(var(--secondary) / 0.4)",
-                }}
-              >
-                <Loader2
-                  style={{
-                    width: 9,
-                    height: 9,
-                    flexShrink: 0,
-                    color: "hsl(var(--faint))",
-                    animation: "lore-eq 1s linear infinite",
-                  }}
-                />
-                <span
-                  style={{
-                    fontFamily: "var(--app-font-mono)",
-                    fontSize: 10,
-                    color: "hsl(var(--faint))",
-                  }}
-                >
-                  Groups based on loaded tracks — scroll to load more
-                </span>
-              </div>
-            )}
           </>
         )}
 
@@ -1982,17 +1820,19 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         {!libLoading && keptItems.length > 0 && (
           <div
             data-testid="library-view-toggle"
+            role="group"
+            aria-label="Library view"
+            className="library-crate__section-heading"
             style={{
               display: "flex",
-              gap: 4,
-              padding: "8px 15px",
-              borderBottom: "1px solid hsl(var(--border) / 0.5)",
+              alignItems: "baseline",
             }}
           >
+            <h2>Kept</h2>
             {([
-              { value: "" as const, label: "Albums" },
-              { value: "artists" as const, label: "Artists" },
-            ]).map(({ value, label }) => {
+              { value: "" as const, label: "Songs", count: libraryTotal ?? keptItems.length },
+              { value: "artists" as const, label: "Artists", count: artistGroups.length },
+            ]).map(({ value, label, count }) => {
               const active = value === "artists" ? viewMode === "artist" : viewMode !== "artist";
               return (
                 <button
@@ -2000,22 +1840,26 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
                   type="button"
                   onClick={() => setLens(value)}
                   aria-pressed={active}
-                  className="dial-ctabtn"
-                  style={active ? {
-                    color: "hsl(var(--library))",
-                    borderColor: "hsl(var(--library))",
-                    background: "hsl(var(--library) / 0.12)",
-                  } : undefined}
+                  style={{
+                    border: 0,
+                    padding: 0,
+                    background: "transparent",
+                    color: active ? "hsl(var(--library))" : "hsl(var(--faint))",
+                    font: "inherit",
+                    cursor: "pointer",
+                    textDecoration: active ? "underline" : "none",
+                    textUnderlineOffset: 3,
+                  }}
                   data-testid={`library-view-${label.toLowerCase()}`}
                 >
-                  {label}
+                  {count.toLocaleString()} {label}
                 </button>
               );
             })}
           </div>
         )}
 
-        {!isStackView &&
+        {!isLibraryMode &&
           jobData?.status === "done" &&
           sourceFilter !== "keep" &&
           importStats != null &&
@@ -2049,6 +1893,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
             seedArtists={visibleSeeds}
             catalogue={seedCatalogue}
             sort={sortFilter}
+            showKeptHeading={false}
           />
         ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (
           /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */
@@ -2155,27 +2000,12 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         ) : (viewMode === "artist" && artistGroups.length > 0) ? (
           <>
             <div data-testid="library-artist-view">
-              {filteredArtistGroups.length > 0 ? (
-                filteredArtistGroups.map((group) => (
+              {artistGroups.map((group) => (
                   <ArtistGroupRow
                     key={group.key}
                     group={group}
                   />
-                ))
-              ) : (
-                <div
-                  style={{
-                    padding: "20px 15px",
-                    textAlign: "center",
-                    fontFamily: "var(--app-font-mono)",
-                    fontSize: 13,
-                    color: "hsl(var(--faint))",
-                  }}
-                  data-testid="library-group-filter-empty"
-                >
-                  No artists match <em>"{groupFilter.trim()}"</em>
-                </div>
-              )}
+                ))}
             </div>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
             {isFetchingNextPage && (
@@ -2197,9 +2027,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
                   color: "hsl(var(--faint))",
                 }}
               >
-                {groupFilterQ
-                  ? `${filteredArtistGroups.length} of ${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
-                  : `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"} · ${keptItems.length} track${keptItems.length === 1 ? "" : "s"}`}
+                {`${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"} · ${keptItems.length} song${keptItems.length === 1 ? "" : "s"}`}
               </div>
             )}
           </>
@@ -2361,7 +2189,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
 
 
         {/* ── In critics' lists (non-Stack only) ── */}
-        {!isStackView && criticsCovItems.length > 0 && (
+        {!isLibraryMode && criticsCovItems.length > 0 && (
           <>
             <div
               role="button"
@@ -2474,7 +2302,7 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
         )}
 
         {/* ── Sync & export receipts (legacy lens-only shell) ── */}
-        {!isStackView && (
+        {!isLibraryMode && (
           <>
             <TierHd label="Sync & export" hint="receipts, not content" />
 

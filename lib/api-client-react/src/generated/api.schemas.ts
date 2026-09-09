@@ -3822,12 +3822,30 @@ export interface ArtistTopTrack {
 }
 
 /**
+ * A MusicBrainz release group grounded by recordings attributed to this artist.
+ */
+export interface ArtistAlbumSummary {
+  releaseGroupMbid: string;
+  title: string;
+  /** @nullable */
+  releaseYear: number | null;
+  /** @nullable */
+  primaryType: string | null;
+  /** @nullable */
+  artworkUrl: string | null;
+  /** A grounded recording used to resolve the ordered album queue. */
+  firstRecordingMbid: string;
+  trackCount: number;
+}
+
+/**
  * Artist page data — Lore top tracks plus optional Spotify catalogue.
  */
 export interface ArtistResult {
   mbid: string;
   name: string;
   topTracks: ArtistTopTrack[];
+  albums: ArtistAlbumSummary[];
   catalogue: ArtistCatalogue | null;
 }
 
@@ -4944,6 +4962,13 @@ export type GetRecordingsAvailabilityParams = {
    * Comma-separated recording MBIDs (max 100).
    */
   mbids: string;
+};
+
+export type GetRecordingAlbumTracksParams = {
+  /**
+   * Require canonical MusicBrainz medium and track order; returns 503 rather than guessing.
+   */
+  canonicalOrder?: boolean;
 };
 
 export type ListPickersParams = {

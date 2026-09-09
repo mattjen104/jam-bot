@@ -264,7 +264,7 @@ describe("Lens tabs are only rendered in non-default views", () => {
     expect(screen.getByText("First song")).toBeTruthy();
     expect(screen.getByText("Second song")).toBeTruthy();
     expect(screen.getAllByText("Shared Album")).toHaveLength(2);
-    expect(container.querySelectorAll(".library-crate__track-swatch img")).toHaveLength(2);
+    expect(container.querySelectorAll(".set-context-deck__cover img")).toHaveLength(2);
   });
 
   it("does not revive lens controls from a legacy deep link", async () => {

@@ -339,6 +339,7 @@ export interface LibraryCrateProps {
   catalogue?: Record<string, { artistMbid: string | null; releases: ArtistCatalogueRelease[] }>;
   sort: "added" | "artist" | "title";
   unopenedOnly?: boolean;
+  showKeptHeading?: boolean;
 }
 
 export function LibraryCrate({
@@ -347,6 +348,7 @@ export function LibraryCrate({
   catalogue = {},
   sort,
   unopenedOnly = false,
+  showKeptHeading = true,
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -437,12 +439,14 @@ export function LibraryCrate({
   return (
     <div className="library-crate" data-testid="library-crate">
       <section className="library-crate__section" data-testid="library-crate-kept">
-        <header className="library-crate__section-heading">
-          <h2>Kept</h2>
-          <span>
-            {tracks.length} {tracks.length === 1 ? "song" : "songs"}
-          </span>
-        </header>
+        {showKeptHeading ? (
+          <header className="library-crate__section-heading">
+            <h2>Kept</h2>
+            <span>
+              {tracks.length} {tracks.length === 1 ? "song" : "songs"}
+            </span>
+          </header>
+        ) : null}
         {tracks.length > 0 ? (
           <div className="library-crate__track-list">
             {tracks.map(({ item, release }, index) => (

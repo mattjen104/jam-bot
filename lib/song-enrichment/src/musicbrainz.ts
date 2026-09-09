@@ -1321,6 +1321,33 @@ export function parseReleaseSearch(body: unknown): string | null {
   return ranked[0]!.id!.trim();
 }
 
+/** Pure: pick the earliest official concrete release in a release group. */
+export function parseReleaseGroupRelease(body: unknown): string | null {
+  const b = body as {
+    releases?: Array<{
+      id?: string;
+      status?: string;
+      date?: string;
+    }>;
+  };
+  const releases = (b?.releases ?? []).filter((release) => release.id?.trim());
+  if (releases.length === 0) return null;
+  const ranked = [...releases].sort((a, b) => {
+    const officialA = a.status === "Official" ? 1 : 0;
+    const officialB = b.status === "Official" ? 1 : 0;
+    if (officialA !== officialB) return officialB - officialA;
+    const dateA = /^\d{4}(?:-\d{2})?(?:-\d{2})?$/.test(a.date ?? "")
+      ? a.date!
+      : "9999";
+    const dateB = /^\d{4}(?:-\d{2})?(?:-\d{2})?$/.test(b.date ?? "")
+      ? b.date!
+      : "9999";
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    return a.id!.localeCompare(b.id!);
+  });
+  return ranked[0]!.id!.trim();
+}
+
 /**
  * Pure: flatten a `/release/{id}?inc=recordings+artist-credits` lookup body
  * into an ordered AlbumTracklist. Multi-disc releases keep global ordering
@@ -1336,7 +1363,9 @@ export function parseReleaseTracklist(body: unknown): AlbumTracklist | null {
       artist?: { id?: string; name?: string };
     }>;
     media?: Array<{
+      position?: number;
       tracks?: Array<{
+        position?: number;
         length?: number;
         recording?: {
           id?: string;
@@ -1358,8 +1387,14 @@ export function parseReleaseTracklist(body: unknown): AlbumTracklist | null {
   const relAc = b["artist-credit"]?.[0];
   const tracks: AlbumTrack[] = [];
   let position = 0;
-  for (const medium of b.media ?? []) {
-    for (const track of medium.tracks ?? []) {
+  const media = [...(b.media ?? [])].sort(
+    (a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER),
+  );
+  for (const medium of media) {
+    const mediumTracks = [...(medium.tracks ?? [])].sort(
+      (a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER),
+    );
+    for (const track of mediumTracks) {
       const rec = track.recording;
       const recordingId = rec?.id?.trim();
       const title = rec?.title?.trim();
@@ -1411,6 +1446,34 @@ export async function fetchAlbumTracklist(
     logger.warn("MusicBrainz album tracklist fetch failed", {
       artist,
       album,
+      error: String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Resolve an exact release group to its earliest official concrete release and
+ * ordered tracklist. This avoids the same-title ambiguity of text search.
+ */
+export async function fetchReleaseGroupTracklist(
+  releaseGroupMbid: string,
+): Promise<AlbumTracklist | null> {
+  const mbid = releaseGroupMbid.trim();
+  if (!musicbrainzEnabled() || !/^[0-9a-f-]{36}$/i.test(mbid)) return null;
+  try {
+    const groupBody = await mbFetch(
+      `/release-group/${encodeURIComponent(mbid)}?inc=releases&fmt=json`,
+    );
+    const releaseId = parseReleaseGroupRelease(groupBody);
+    if (!releaseId) return null;
+    const lookupBody = await mbFetch(
+      `/release/${encodeURIComponent(releaseId)}?inc=recordings+artist-credits&fmt=json`,
+    );
+    return parseReleaseTracklist(lookupBody);
+  } catch (err) {
+    logger.warn("MusicBrainz release-group tracklist fetch failed", {
+      releaseGroupMbid: mbid,
       error: String(err),
     });
     return null;

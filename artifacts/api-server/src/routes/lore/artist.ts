@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, recordingsTable, spinsTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { db, recordingsTable, recordingReleaseGroupsTable, spinsTable } from "@workspace/db";
+import { and, eq, desc, sql } from "drizzle-orm";
 import {
   cataloguePort,
   spotifyAppConfigured,
@@ -61,6 +61,45 @@ router.get("/artist/:mbid", h(async (req, res) => {
     lastSpunAt: r.lastSpunAt ? new Date(r.lastSpunAt).toISOString() : null,
   }));
 
+  const albumRows = await db
+    .select({
+      releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+      title: recordingReleaseGroupsTable.title,
+      releaseYear: recordingReleaseGroupsTable.releaseYear,
+      primaryType: recordingReleaseGroupsTable.primaryType,
+      firstRecordingMbid: sql<string>`min(${recordingsTable.mbid})`,
+      artworkUrl: sql<string | null>`max(${recordingsTable.artworkUrl})`,
+      trackCount: sql<number>`count(distinct ${recordingsTable.mbid})::int`,
+    })
+    .from(recordingReleaseGroupsTable)
+    .innerJoin(
+      recordingsTable,
+      eq(recordingsTable.mbid, recordingReleaseGroupsTable.recordingMbid),
+    )
+    .where(and(
+      eq(recordingsTable.artistMbid, artistMbid),
+      eq(recordingReleaseGroupsTable.isPrimary, true),
+    ))
+    .groupBy(
+      recordingReleaseGroupsTable.releaseGroupMbid,
+      recordingReleaseGroupsTable.title,
+      recordingReleaseGroupsTable.releaseYear,
+      recordingReleaseGroupsTable.primaryType,
+    )
+    .orderBy(desc(recordingReleaseGroupsTable.releaseYear), recordingReleaseGroupsTable.title);
+
+  const albums = albumRows
+    .filter((row) => row.title != null)
+    .map((row) => ({
+      releaseGroupMbid: row.releaseGroupMbid,
+      title: row.title!,
+      releaseYear: row.releaseYear ?? null,
+      primaryType: row.primaryType ?? null,
+      artworkUrl: row.artworkUrl ?? null,
+      firstRecordingMbid: row.firstRecordingMbid,
+      trackCount: row.trackCount,
+    }));
+
   // Spotify catalogue — search by artist name, then pull top tracks + albums.
   // Gracefully absent when Spotify is not configured.
   let catalogue: {
@@ -96,6 +135,7 @@ router.get("/artist/:mbid", h(async (req, res) => {
     mbid: artistMbid,
     name: nameRow.artist,
     topTracks,
+    albums,
     catalogue,
   });
 }));

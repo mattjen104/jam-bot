@@ -2223,6 +2223,15 @@ export const GetRecordingAlbumTracksParams = zod.object({
   mbid: zod.coerce.string().min(1),
 });
 
+export const GetRecordingAlbumTracksQueryParams = zod.object({
+  canonicalOrder: zod.coerce
+    .boolean()
+    .optional()
+    .describe(
+      "Require canonical MusicBrainz medium and track order; returns 503 rather than guessing.",
+    ),
+});
+
 export const GetRecordingAlbumTracksResponse = zod.object({
   rgMbid: zod.string(),
   rgTitle: zod.string().nullable(),
@@ -4141,6 +4150,25 @@ export const GetArtistResponse = zod
           lastSpunAt: zod.string().nullable(),
         })
         .describe("A recording by this artist, ranked by Lore spin count."),
+    ),
+    albums: zod.array(
+      zod
+        .object({
+          releaseGroupMbid: zod.string(),
+          title: zod.string(),
+          releaseYear: zod.number().nullable(),
+          primaryType: zod.string().nullable(),
+          artworkUrl: zod.string().nullable(),
+          firstRecordingMbid: zod
+            .string()
+            .describe(
+              "A grounded recording used to resolve the ordered album queue.",
+            ),
+          trackCount: zod.number(),
+        })
+        .describe(
+          "A MusicBrainz release group grounded by recordings attributed to this artist.",
+        ),
     ),
     catalogue: zod.union([
       zod.object({

@@ -74,7 +74,7 @@ export function AlbumShelf({ mbid, artistName }: AlbumShelfProps) {
     data: primaryAlbumRaw,
     isLoading: primaryLoading,
     isError: primaryError,
-  } = useGetRecordingAlbumTracks(mbid, {
+  } = useGetRecordingAlbumTracks(mbid, undefined, {
     query: {
       queryKey: getGetRecordingAlbumTracksQueryKey(mbid),
       staleTime: 10 * 60_000,

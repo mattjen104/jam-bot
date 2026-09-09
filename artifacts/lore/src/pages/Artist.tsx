@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Link, useParams } from "wouter";
 import { proxyArtUrl } from "../lib/proxyArt";
 import {
+  getRecordingAlbumTracks,
   useGetArtist,
+  type ArtistAlbumSummary,
   type ArtistTopTrack,
 } from "@workspace/api-client-react";
 import {
@@ -12,6 +15,7 @@ import {
   Radio,
 } from "lucide-react";
 import { timeAgo } from "../lib/format";
+import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 
 function SectionHeading({
   icon,
@@ -77,6 +81,93 @@ function TopTrackCard({ track }: { track: ArtistTopTrack }) {
   );
 }
 
+function ArtistAlbumCard({ album }: { album: ArtistAlbumSummary }) {
+  const { ride } = usePlayer();
+  const [state, setState] = useState<"idle" | "loading" | "unavailable">("idle");
+
+  const playAlbum = async () => {
+    if (state !== "idle") return;
+    setState("loading");
+    try {
+      const data = await getRecordingAlbumTracks(album.firstRecordingMbid, {
+        canonicalOrder: true,
+      });
+      const seeds: RideSeed[] = data.tracks
+        .filter((track) => Boolean(track.mbid && track.title && track.artist))
+        .map((track) => ({
+          mbid: track.mbid,
+          title: track.title,
+          artist: track.artist,
+          artworkUrl: album.artworkUrl,
+          links: [],
+        }));
+      if (seeds.length === 0) {
+        setState("unavailable");
+        return;
+      }
+      ride.startReplay(seeds, data.rgTitle ?? album.title, {
+        timeOrientation: "curated",
+        context: "library",
+      });
+      setState("idle");
+    } catch {
+      setState("unavailable");
+    }
+  };
+
+  const unavailable = state === "unavailable";
+  return (
+    <li className="overflow-hidden rounded-2xl border border-card-border bg-card" data-testid="artist-album">
+      <Link href={`/album/${album.releaseGroupMbid}`} className="block bg-muted">
+        {album.artworkUrl ? (
+          <div className="relative flex aspect-square w-full items-center justify-center">
+            <Disc3 className="h-12 w-12 text-muted-foreground/30" aria-hidden="true" />
+            <img
+              src={proxyArtUrl(album.artworkUrl) ?? album.artworkUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={(event) => event.currentTarget.remove()}
+            />
+          </div>
+        ) : (
+          <div className="flex aspect-square w-full items-center justify-center">
+            <Disc3 className="h-12 w-12 text-muted-foreground/30" />
+          </div>
+        )}
+      </Link>
+      <div className="p-4">
+        <Link
+          href={`/album/${album.releaseGroupMbid}`}
+          className="block truncate font-serif text-xl text-foreground hover:text-primary"
+        >
+          {album.title}
+        </Link>
+        <p className="mt-1 font-mono text-[12px] text-muted-foreground">
+          {[album.releaseYear, `${album.trackCount} track${album.trackCount === 1 ? "" : "s"}`]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+        <button
+          type="button"
+          onClick={() => void playAlbum()}
+          disabled={state !== "idle"}
+          aria-label={unavailable ? `${album.title} is unavailable to play` : `Play ${album.title}`}
+          className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-primary/40 px-3 font-mono text-[12px] uppercase tracking-wider text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground"
+          data-testid="artist-album-play"
+        >
+          <Play className="h-4 w-4" />
+          {state === "loading" ? "Loading…" : unavailable ? "Unavailable" : "Play album"}
+        </button>
+        {unavailable ? (
+          <p className="mt-2 text-sm text-muted-foreground" role="status">
+            No playable tracks are available for this album yet.
+          </p>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
 function ArtistSkeleton() {
   return (
     <div className="mt-6 animate-pulse space-y-4">
@@ -134,7 +225,8 @@ export default function Artist() {
     );
   }
 
-  const albums = artist.catalogue?.albums ?? [];
+  const albums = artist.albums;
+  const spotifyAlbums = artist.catalogue?.albums ?? [];
   const spotifyTopTracks = artist.catalogue?.topTracks ?? [];
 
   return (
@@ -168,6 +260,21 @@ export default function Artist() {
       </header>
 
       <div className="mt-10 space-y-10">
+        {albums.length > 0 && (
+          <section data-testid="artist-discography">
+            <SectionHeading
+              icon={<Disc3 className="h-5 w-5" />}
+              title="Albums"
+              hint={`${albums.length} release${albums.length === 1 ? "" : "s"}`}
+            />
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {albums.map((album) => (
+                <ArtistAlbumCard key={album.releaseGroupMbid} album={album} />
+              ))}
+            </ul>
+          </section>
+        )}
+
         {artist.topTracks.length > 0 && (
           <section data-testid="artist-top-tracks">
             <SectionHeading
@@ -178,41 +285,6 @@ export default function Artist() {
             <ul className="flex flex-col gap-2">
               {artist.topTracks.map((track) => (
                 <TopTrackCard key={track.mbid} track={track} />
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {albums.length > 0 && (
-          <section data-testid="artist-discography">
-            <SectionHeading
-              icon={<Disc3 className="h-5 w-5" />}
-              title="Discography"
-              hint={`${albums.length} release${albums.length === 1 ? "" : "s"}`}
-            />
-            <ul className="flex flex-col gap-2">
-              {albums.map((album) => (
-                <li key={album.id}>
-                  <a
-                    href={album.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group flex items-center justify-between rounded-xl border border-card-border bg-card p-3 transition-colors hover:border-primary/30"
-                    data-testid="artist-album"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-normal text-foreground group-hover:text-primary">
-                        {album.name}
-                      </p>
-                      {album.year != null && (
-                        <p className="text-sm text-muted-foreground">{album.year}</p>
-                      )}
-                    </div>
-                    <span className="ml-3 shrink-0 font-mono text-[13px] text-muted-foreground/60">
-                      Spotify →
-                    </span>
-                  </a>
-                </li>
               ))}
             </ul>
           </section>
@@ -233,6 +305,31 @@ export default function Artist() {
                 >
                   <Music4 className="h-4 w-4 shrink-0 text-muted-foreground/40" />
                   <span className="truncate">{t.title}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {spotifyAlbums.length > 0 && albums.length === 0 && (
+          <section data-testid="artist-spotify-albums">
+            <SectionHeading
+              icon={<Disc3 className="h-5 w-5" />}
+              title="Albums on Spotify"
+              hint={`${spotifyAlbums.length} release${spotifyAlbums.length === 1 ? "" : "s"}`}
+            />
+            <ul className="flex flex-col gap-2">
+              {spotifyAlbums.map((album) => (
+                <li key={album.id}>
+                  <a
+                    href={album.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between rounded-xl border border-card-border bg-card p-3 text-foreground hover:border-primary/30"
+                  >
+                    <span className="truncate">{album.name}</span>
+                    <span className="ml-3 shrink-0 font-mono text-[12px] text-muted-foreground">Spotify →</span>
+                  </a>
                 </li>
               ))}
             </ul>
