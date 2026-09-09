@@ -16198,17 +16198,20 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   display: flex;
   align-items: stretch;
   flex: 1 1 auto;
+  width: var(--deck-cover, 92px);
   height: var(--deck-cover, 92px);
   min-height: var(--deck-cover, 92px);
 }
-/* Kept-track rows: the deck fills the full card height so the cover is
-   vertically flush. Height is definite here (grid stretch), so no sizing
-   loop. */
+/* Kept-track rows keep the same fixed square while their copy grows. */
 .library-crate__track--deck .set-context-deck {
-  height: auto;
+  height: var(--deck-cover, 92px);
+  align-self: start;
 }
 .set-context-deck__chevron {
-  flex: 0 0 auto;
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  height: var(--deck-cover, 92px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -16221,6 +16224,12 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   line-height: 1;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
+}
+.set-context-deck__chevron:first-child {
+  left: 0;
+}
+.set-context-deck__chevron:last-child {
+  right: 0;
 }
 .set-context-deck__chevron:hover:not(:disabled),
 .set-context-deck__chevron:focus-visible {
@@ -16235,10 +16244,10 @@ button.dial-crumbs__crumb:hover { color: hsl(var(--foreground)); }
   position: relative;
   flex: 0 0 auto;
   display: block;
-  /* Width is the definite dimension (never derived from the row height, or
-     the grid's auto column and the cover's height chase each other and the
-     copy column collapses to 0px); height comes from flex stretch. */
+  /* Both dimensions are definite: neither the flanking controls nor a
+     changing peek caption may resize the album art. */
   width: var(--deck-cover, 92px);
+  height: var(--deck-cover, 92px);
   padding: 0;
   border: none;
   background: hsl(270 9% 11%);
