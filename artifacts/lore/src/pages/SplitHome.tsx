@@ -137,6 +137,18 @@ export default function SplitHome() {
           stations={stations}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
+          visibleSeeds={visibleSeeds}
+          onAddArtist={addSeed}
+          onFocusArtist={(artist) => {
+            const params = new URLSearchParams();
+            params.set("focus", artist);
+            navigate(`/library?${params.toString()}`);
+          }}
+          onOpenStationCrossings={(stationSlug) => {
+            const params = new URLSearchParams();
+            params.set("stationCrossings", stationSlug);
+            navigate(`/library?${params.toString()}`);
+          }}
         />
       </main>
     );

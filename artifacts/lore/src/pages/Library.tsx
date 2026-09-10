@@ -1315,7 +1315,7 @@ function DemoMergedLibrary({
   const sortParam = params.get("sort");
   const songSort = parseDemoSongSort(sortParam);
 
-  const { visibleSeeds, replaceSeeds } = useSeedManager();
+  const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
     categories: undefined,
     includeAllStations: true,
@@ -1455,12 +1455,10 @@ function DemoMergedLibrary({
               next.delete("openAlbum");
             })}
             onAddSeed={(artist) => {
-              if (!visibleSeeds.some(s => s.toLocaleLowerCase() === artist.toLocaleLowerCase())) {
-                replaceSeeds([...visibleSeeds, artist]);
-              }
+              void addSeed(artist);
             }}
             onRemoveSeed={(artist) => {
-              replaceSeeds(visibleSeeds.filter(s => s.toLocaleLowerCase() !== artist.toLocaleLowerCase()));
+              void removeSeed(artist);
             }}
             onViewStations={() => {
               const p = new URLSearchParams(search);
@@ -1526,10 +1524,16 @@ function DemoMergedLibrary({
           stations={filteredStations}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
+          visibleSeeds={visibleSeeds}
           showHeader={false}
           sort={stationSort}
           focusedArtist={focusedArtist}
           selectedStationSlug={selectedStationSlug}
+          onAddArtist={addSeed}
+          onFocusArtist={(artist) => updateSearch((next) => {
+            next.set("focus", artist);
+            next.delete("openAlbum");
+          })}
           onOpenStationCrossings={(stationSlug) => updateSearch((next) => {
             next.set("stationCrossings", stationSlug);
           })}

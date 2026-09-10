@@ -1,33 +1,206 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
+import * as Popover from "@radix-ui/react-popover";
 import { usePlayer } from "../player/PlayerProvider";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import { StationMark } from "./StationMark";
+import { KeepButton } from "./KeepButton";
 import type { DialStation } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ArrowLeft, Play } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  LibraryBig,
+  MoreHorizontal,
+  Play,
+  RadioTower,
+  UserRoundPlus,
+} from "lucide-react";
 
 const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
+
+function usableArtistName(rawArtist: string | null | undefined): string | null {
+  const artist = rawArtist?.trim();
+  if (!artist) return null;
+  const normalized = artist.toLocaleLowerCase();
+  if (
+    normalized === "unknown artist"
+    || normalized === "artist unknown"
+    || normalized === "unknown"
+    || normalized === "—"
+    || normalized === "-"
+  ) return null;
+  return artist;
+}
+
+function RadioCardMenu({
+  stationSlug,
+  artist,
+  title,
+  mbid,
+  artistAdded,
+  onAddArtist,
+  onFocusArtist,
+  onOpenStationCrossings,
+}: {
+  stationSlug: string;
+  artist: string | null;
+  title: string | null;
+  mbid: string | null;
+  artistAdded: boolean;
+  onAddArtist?: (artist: string) => Promise<unknown> | void;
+  onFocusArtist?: (artist: string) => void;
+  onOpenStationCrossings?: (stationSlug: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [addPending, setAddPending] = useState(false);
+  const [addError, setAddError] = useState(false);
+  const hasArtistActions = Boolean(artist && (onAddArtist || onFocusArtist));
+  const hasSongActions = Boolean(mbid);
+  const hasStationActions = Boolean(onOpenStationCrossings);
+
+  if (!hasArtistActions && !hasSongActions && !hasStationActions) return null;
+
+  const addArtist = async () => {
+    if (!artist || !onAddArtist || artistAdded || addPending) return;
+    setAddError(false);
+    setAddPending(true);
+    try {
+      await onAddArtist(artist);
+    } catch {
+      setAddError(true);
+    } finally {
+      setAddPending(false);
+    }
+  };
+
+  return (
+    <Popover.Root open={open} onOpenChange={(next) => {
+      setOpen(next);
+      if (!next) setAddError(false);
+    }}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="demo-radio__overflow-trigger"
+          aria-label={`More options for ${title ?? artist ?? "this station"}`}
+          data-testid={`radio-card-menu-${stationSlug}`}
+        >
+          <MoreHorizontal size={17} aria-hidden="true" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          sideOffset={6}
+          className="demo-radio__overflow"
+          data-testid="radio-card-menu-content"
+        >
+          {hasArtistActions ? (
+            <section className="demo-radio__overflow-section" aria-label="Artist actions">
+              <div className="demo-radio__overflow-label">Artist</div>
+              {onAddArtist ? (
+                <button
+                  type="button"
+                  className="demo-radio__overflow-item"
+                  disabled={artistAdded || addPending}
+                  aria-pressed={artistAdded}
+                  onClick={() => void addArtist()}
+                >
+                  {artistAdded ? <Check size={15} /> : <UserRoundPlus size={15} />}
+                  {artistAdded ? "Added to my artists" : addPending ? "Adding artist…" : "Add to my artists"}
+                </button>
+              ) : null}
+              {onFocusArtist && artist ? (
+                <button
+                  type="button"
+                  className="demo-radio__overflow-item"
+                  onClick={() => {
+                    setOpen(false);
+                    onFocusArtist(artist);
+                  }}
+                >
+                  <LibraryBig size={15} />
+                  Open artist lens
+                </button>
+              ) : null}
+              {addError ? (
+                <div className="demo-radio__overflow-error" role="alert">
+                  Artist wasn’t added. Try again.
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {hasSongActions ? (
+            <section className="demo-radio__overflow-section" aria-label="Song actions">
+              <div className="demo-radio__overflow-label">Song</div>
+              <KeepButton
+                mbid={mbid}
+                provenance={{ kind: "keep", stationSlug, surface: "radio-card-menu" }}
+                compact
+                className="demo-radio__overflow-item"
+              />
+              <Link
+                href={`/song/${encodeURIComponent(mbid!)}`}
+                className="demo-radio__overflow-item"
+                onClick={() => setOpen(false)}
+              >
+                <LibraryBig size={15} />
+                Open song details
+              </Link>
+            </section>
+          ) : null}
+
+          {hasStationActions ? (
+            <section className="demo-radio__overflow-section" aria-label="Station actions">
+              <div className="demo-radio__overflow-label">Station</div>
+              <button
+                type="button"
+                className="demo-radio__overflow-item"
+                onClick={() => {
+                  setOpen(false);
+                  onOpenStationCrossings?.(stationSlug);
+                }}
+              >
+                <RadioTower size={15} />
+                View station crossings
+              </button>
+            </section>
+          ) : null}
+          <Popover.Arrow className="demo-radio__overflow-arrow" />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
 
 export function RadioSurface({ 
   stations, 
   hasSeeds,
   hasLibrary,
+  visibleSeeds = [],
   showHeader = true,
   sort = "overlap",
   focusedArtist = null,
   selectedStationSlug = null,
+  onAddArtist,
+  onFocusArtist,
   onOpenStationCrossings,
   onCloseStationCrossings,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
   hasLibrary: boolean;
+  visibleSeeds?: string[];
   showHeader?: boolean;
   sort?: "overlap" | "live" | "discovery" | "name";
   focusedArtist?: string | null;
   selectedStationSlug?: string | null;
+  onAddArtist?: (artist: string) => Promise<unknown> | void;
+  onFocusArtist?: (artist: string) => void;
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
 }) {
@@ -84,6 +257,22 @@ export function RadioSurface({
     const rawArtist = track?.artist;
     const title = rawTitle || "—";
     const artist = rawArtist || (rawTitle ? "Unknown artist" : "Artist unknown");
+    const actionableArtist = usableArtistName(rawArtist);
+    const artistAdded = actionableArtist
+      ? visibleSeeds.some(seed => seed.trim().toLocaleLowerCase() === actionableArtist.toLocaleLowerCase())
+      : false;
+    const cardMenu = (
+      <RadioCardMenu
+        stationSlug={ds.station.slug}
+        artist={actionableArtist}
+        title={rawTitle ?? null}
+        mbid={track?.mbid ?? null}
+        artistAdded={artistAdded}
+        onAddArtist={onAddArtist}
+        onFocusArtist={onFocusArtist}
+        onOpenStationCrossings={onOpenStationCrossings}
+      />
+    );
 
     const liveShow = ds.shows.find(s => s.state === 'live');
     const djNames = eligibleDjNames({
@@ -107,14 +296,27 @@ export function RadioSurface({
           />
           <div className="demo-radio__body">
             <div className="demo-radio__station-name">{ds.station.name}</div>
-            <div className="demo-radio__compact-title">{artist}</div>
+            {actionableArtist && onFocusArtist ? (
+              <button
+                type="button"
+                className="demo-radio__compact-title demo-radio__artist-focus"
+                onClick={() => onFocusArtist(actionableArtist)}
+              >
+                {artist}
+              </button>
+            ) : (
+              <div className="demo-radio__compact-title">{artist}</div>
+            )}
             <div className="demo-radio__reason">
               {selectorLine ? `${selectorLine} · no overlap yet` : "No overlap yet"}
             </div>
           </div>
-          <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
-            <Play size={14} fill="currentColor" />
-          </button>
+          <div className="demo-radio__actions">
+            {cardMenu}
+            <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
+              <Play size={14} fill="currentColor" />
+            </button>
+          </div>
         </div>
       );
     }
@@ -140,13 +342,26 @@ export function RadioSurface({
               {ds.station.city ? <span>{ds.station.city}</span> : null}
             </div>
             {isLive && <span className="demo-radio__pill">Library match · on air</span>}
-            <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
+            {actionableArtist && onFocusArtist ? (
+              <button
+                type="button"
+                className="demo-radio__artist demo-radio__artist--primary demo-radio__artist-focus"
+                onClick={() => onFocusArtist(actionableArtist)}
+              >
+                {artist}
+              </button>
+            ) : (
+              <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
+            )}
             {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
           </div>
-          <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
-            <Play size={16} fill="currentColor" />
-            {radio.station?.slug === ds.station.slug ? <StationChangeCountdown track={track} /> : null}
-          </button>
+          <div className="demo-radio__actions">
+            {cardMenu}
+            <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
+              <Play size={16} fill="currentColor" />
+              {radio.station?.slug === ds.station.slug ? <StationChangeCountdown track={track} /> : null}
+            </button>
+          </div>
         </div>
         {reasonLine && (
           <button

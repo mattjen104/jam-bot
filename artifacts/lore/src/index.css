@@ -3014,6 +3014,26 @@
   font-weight: 500;
   line-height: 1.2;
 }
+.demo-radio__artist-focus {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.demo-radio__artist-focus:hover,
+.demo-radio__artist-focus:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.demo-radio__artist-focus:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid hsl(var(--accent) / .75);
+  outline-offset: 2px;
+}
 .demo-radio__byline {
   overflow: hidden;
   margin-top: 5px;
@@ -3169,6 +3189,95 @@
   height: 32px;
   background: transparent;
   color: hsl(var(--foreground));
+}
+.demo-radio__actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.demo-radio__overflow-trigger {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+.demo-radio__overflow-trigger:hover,
+.demo-radio__overflow-trigger:focus-visible,
+.demo-radio__overflow-trigger[data-state="open"] {
+  background: hsl(var(--background) / .8);
+  color: hsl(var(--foreground));
+}
+.demo-radio__overflow-trigger:focus-visible {
+  outline: 2px solid hsl(var(--accent) / .75);
+  outline-offset: 1px;
+}
+.demo-radio__overflow {
+  z-index: 70;
+  width: min(250px, calc(100vw - 24px));
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--muted));
+  box-shadow: 0 14px 34px hsl(var(--background) / .72);
+}
+.demo-radio__overflow-section + .demo-radio__overflow-section {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid hsl(var(--border) / .8);
+}
+.demo-radio__overflow-label {
+  padding: 4px 9px 3px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.demo-radio__overflow-item {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  font-family: var(--app-font-sans);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+}
+.demo-radio__overflow-item:hover,
+.demo-radio__overflow-item:focus-visible {
+  background: hsl(var(--background) / .72);
+}
+.demo-radio__overflow-item:focus-visible {
+  outline: 2px solid hsl(var(--accent) / .75);
+  outline-offset: -2px;
+}
+.demo-radio__overflow-item:disabled,
+.demo-radio__overflow-item[aria-pressed="true"] {
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+}
+.demo-radio__overflow-error {
+  padding: 4px 9px 7px;
+  color: hsl(var(--destructive));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+}
+.demo-radio__overflow-arrow {
+  fill: hsl(var(--muted));
 }
 .demo-radio__empty {
   padding: 20px;
