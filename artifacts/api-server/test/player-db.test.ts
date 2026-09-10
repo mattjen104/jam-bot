@@ -7,6 +7,8 @@ import {
   pool,
   loreUsersTable,
   libraryItemsTable,
+  spotifyLibraryItemsTable,
+  tasteSeedsTable,
   recordingReleaseGroupsTable,
   stationsTable,
   showsTable,
@@ -296,7 +298,10 @@ describe("GET /api/player/history", () => {
     const albumSpinMbid = `test-wp-cross-album-spin-${run}`;
     const artistLibraryMbid = `test-wp-cross-artist-library-${run}`;
     const artistSpinMbid = `test-wp-cross-artist-spin-${run}`;
+    const importedArtistMbid = `test-wp-cross-imported-artist-${run}`;
+    const seededArtistMbid = `test-wp-cross-seeded-artist-${run}`;
     const unrelatedMbid = `test-wp-cross-unrelated-${run}`;
+    const junkArtistMbid = `test-wp-cross-junk-artist-${run}`;
     const releaseGroupMbid = `test-wp-cross-rg-${run}`;
     const artistMbid = `test-wp-cross-artist-${run}`;
     const fixtureMbids = [
@@ -305,7 +310,10 @@ describe("GET /api/player/history", () => {
       albumSpinMbid,
       artistLibraryMbid,
       artistSpinMbid,
+      importedArtistMbid,
+      seededArtistMbid,
       unrelatedMbid,
+      junkArtistMbid,
     ];
     let userId: number | null = null;
 
@@ -322,7 +330,10 @@ describe("GET /api/player/history", () => {
         { mbid: albumSpinMbid, title: "Other album track", artist: `Album Crossing ${run}` },
         { mbid: artistLibraryMbid, title: "Kept artist track", artist: `Artist Crossing ${run}`, artistMbid },
         { mbid: artistSpinMbid, title: "Other artist track", artist: `Artist Crossing ${run}`, artistMbid },
+        { mbid: importedArtistMbid, title: "Imported artist track", artist: `The Soft.Imported Artist ${run}` },
+        { mbid: seededArtistMbid, title: "Seeded artist track", artist: `The Seeded-Artist ${run}` },
         { mbid: unrelatedMbid, title: "Unrelated track", artist: `Unrelated Artist ${run}` },
+        { mbid: junkArtistMbid, title: "Junk artist track", artist: `https://radio.example.com/${run}` },
       ]);
       await db.insert(recordingReleaseGroupsTable).values([
         { recordingMbid: albumLibraryMbid, releaseGroupMbid, isPrimary: true, title: `Crossing Album ${run}` },
@@ -333,13 +344,27 @@ describe("GET /api/player/history", () => {
         { userId, mbid: albumLibraryMbid, provenance: { kind: "keep" } },
         { userId, mbid: artistLibraryMbid, provenance: { kind: "keep" } },
       ]);
+      await db.insert(spotifyLibraryItemsTable).values({
+        userId,
+        spotifyId: `test-wp-soft-${run}`,
+        title: "Unresolved imported track",
+        artist: `soft imported artist ${run}`,
+        addedAt: new Date(),
+      });
+      await db.insert(tasteSeedsTable).values({
+        userId,
+        artistName: `seeded artist ${run}`,
+      });
 
       const playedAt = new Date(base - 10 * MIN);
       const inserted = await db.insert(spinsTable).values([
         { stationId: stationIds[0]!, mbid: exactMbid, confidence: "text", rawArtist: "exact", rawTitle: "exact", playedAt },
         { stationId: stationIds[0]!, mbid: albumSpinMbid, confidence: "text", rawArtist: "album", rawTitle: "album", playedAt },
         { stationId: stationIds[0]!, mbid: artistSpinMbid, confidence: "text", rawArtist: "artist", rawTitle: "artist", playedAt: new Date(playedAt.getTime() + MIN) },
-        { stationId: stationIds[0]!, mbid: unrelatedMbid, confidence: "text", rawArtist: "unrelated", rawTitle: "unrelated", playedAt: new Date(playedAt.getTime() + 2 * MIN) },
+        { stationId: stationIds[0]!, mbid: importedArtistMbid, confidence: "text", rawArtist: "imported", rawTitle: "imported", playedAt: new Date(playedAt.getTime() + 2 * MIN) },
+        { stationId: stationIds[0]!, mbid: seededArtistMbid, confidence: "text", rawArtist: "seeded", rawTitle: "seeded", playedAt: new Date(playedAt.getTime() + 3 * MIN) },
+        { stationId: stationIds[0]!, mbid: unrelatedMbid, confidence: "text", rawArtist: "unrelated", rawTitle: "unrelated", playedAt: new Date(playedAt.getTime() + 4 * MIN) },
+        { stationId: stationIds[0]!, mbid: junkArtistMbid, confidence: "text", rawArtist: "junk", rawTitle: "junk", playedAt: new Date(playedAt.getTime() + 5 * MIN) },
       ]).returning({ id: spinsTable.id, mbid: spinsTable.mbid, playedAt: spinsTable.playedAt });
 
       const response = await fetch(
@@ -353,16 +378,19 @@ describe("GET /api/player/history", () => {
       };
       const fixtureItems = body.items.filter((item) => fixtureMbids.includes(item.mbid));
       const expected = inserted
-        .filter((item) => item.mbid !== unrelatedMbid)
+        .filter((item) => item.mbid !== unrelatedMbid && item.mbid !== junkArtistMbid)
         .sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime() || a.id - b.id)
         .map((item) => ({ id: item.id, mbid: item.mbid }));
 
       expect(body.authenticated).toBe(true);
       expect(fixtureItems.map(({ id, mbid }) => ({ id, mbid }))).toEqual(expected);
       expect(fixtureItems.map((item) => item.mbid)).not.toContain(unrelatedMbid);
+      expect(fixtureItems.map((item) => item.mbid)).not.toContain(junkArtistMbid);
     } finally {
       await db.delete(spinsTable).where(inArray(spinsTable.mbid, fixtureMbids));
       if (userId != null) await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
+      if (userId != null) await db.delete(spotifyLibraryItemsTable).where(eq(spotifyLibraryItemsTable.userId, userId));
+      if (userId != null) await db.delete(tasteSeedsTable).where(eq(tasteSeedsTable.userId, userId));
       await db.delete(recordingReleaseGroupsTable).where(inArray(recordingReleaseGroupsTable.recordingMbid, fixtureMbids));
       await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, fixtureMbids));
       if (userId != null) await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
