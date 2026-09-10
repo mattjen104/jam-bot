@@ -54,6 +54,7 @@ import {
   Loader2,
   Radio,
   Search,
+  SlidersHorizontal,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -67,6 +68,11 @@ import { useDialData } from "../hooks/useDialData";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
+import { FilterDropdownMenu } from "../components/dial/FilterDropdownMenu";
+import {
+  STATION_CATEGORY_DEFINITIONS,
+  type StationCategory,
+} from "../lib/dialCategories";
 import {
   buildFocusedLibraryUrl,
   getArtistFromLibraryAlbumKey,
@@ -77,6 +83,12 @@ import {
 // ---------------------------------------------------------------------------
 const LEDGER_PROMPT_DISMISSED_KEY = "lore:ledger_prompt_dismissed_until";
 const LEDGER_PROMPT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const DEMO_STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
+  ({ cat, label, title }) => ({ value: cat, label, title }),
+);
+const DEMO_STATION_CATEGORY_KEYS = new Set<StationCategory>(
+  STATION_CATEGORY_DEFINITIONS.map(({ cat }) => cat),
+);
 
 /**
  * Whether the ledger prompt's dismissal TTL has elapsed. Reads localStorage and
@@ -1373,10 +1385,19 @@ function DemoMergedLibrary({
       : "overlap";
   const sortParam = params.get("sort");
   const songSort = parseDemoSongSort(sortParam);
+  const activeCategories = useMemo(() => {
+    const selected = new Set<StationCategory>();
+    for (const value of new URLSearchParams(search).get("categories")?.split(",") ?? []) {
+      if (DEMO_STATION_CATEGORY_KEYS.has(value as StationCategory)) {
+        selected.add(value as StationCategory);
+      }
+    }
+    return selected;
+  }, [search]);
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
-    categories: undefined,
+    categories: activeCategories,
     includeAllStations: true,
     crossingsEnabled: true,
     deferEnrichment: false,
@@ -1570,22 +1591,45 @@ function DemoMergedLibrary({
           />
 
           {view === "stations" && (
-            <select
-              style={selectStyle}
-              aria-label="Sort stations"
-              value={stationSort}
-              onChange={e => {
-                updateSearch((next) => {
-                  if (e.target.value !== "overlap") next.set("stationSort", e.target.value);
-                  else next.delete("stationSort");
-                });
-              }}
-            >
-              <option value="overlap">For you</option>
-              <option value="live">Live now</option>
-              <option value="discovery">Discovery</option>
-              <option value="name">A–Z</option>
-            </select>
+            <>
+              <FilterDropdownMenu
+                label="Categories"
+                ariaLabel="Station categories"
+                options={DEMO_STATION_CATEGORY_OPTIONS}
+                active={activeCategories}
+                onToggle={(category) => updateSearch((next) => {
+                  const selected = new Set(activeCategories);
+                  if (selected.has(category)) selected.delete(category);
+                  else selected.add(category);
+                  const ordered = STATION_CATEGORY_DEFINITIONS
+                    .map(({ cat }) => cat)
+                    .filter(cat => selected.has(cat));
+                  if (ordered.length > 0) next.set("categories", ordered.join(","));
+                  else next.delete("categories");
+                })}
+                onClear={() => updateSearch(next => next.delete("categories"))}
+                clearLabel="All stations"
+                variant="chips"
+                leadingIcon={<SlidersHorizontal size={14} strokeWidth={2} />}
+                className="demo-merged-library__category-filter"
+              />
+              <select
+                style={selectStyle}
+                aria-label="Sort stations"
+                value={stationSort}
+                onChange={e => {
+                  updateSearch((next) => {
+                    if (e.target.value !== "overlap") next.set("stationSort", e.target.value);
+                    else next.delete("stationSort");
+                  });
+                }}
+              >
+                <option value="overlap">For you</option>
+                <option value="live">Live now</option>
+                <option value="discovery">Discovery</option>
+                <option value="name">A–Z</option>
+              </select>
+            </>
           )}
 
           {view === "songs" && (

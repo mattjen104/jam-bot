@@ -3759,6 +3759,28 @@
   user-select: none;
   -webkit-user-select: none;
 }
+.filter-dropdown__clear {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border) / 0.55);
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.filter-dropdown__clear:hover:not(:disabled),
+.filter-dropdown__clear:focus-visible {
+  background: hsl(var(--secondary));
+}
+.filter-dropdown__clear:disabled {
+  color: hsl(var(--faint));
+  cursor: default;
+}
 .filter-dropdown__option:hover {
   background: hsl(var(--muted));
 }

@@ -10,6 +10,7 @@ const {
   mockUseLocation,
   mockUseAppConfig,
   mockUseMyLibraryInfinite,
+  mockUseDialData,
   mockAddSeed,
 } = vi.hoisted(() => {
   const mockSetLocation = vi.fn();
@@ -20,6 +21,7 @@ const {
     mockUseLocation: vi.fn(() => ["/library", mockSetLocation] as const),
     mockUseAppConfig: vi.fn(() => ({ data: { demoSurface: true }, isLoading: false })),
     mockUseMyLibraryInfinite: vi.fn(),
+    mockUseDialData: vi.fn(() => ({ stations: [], hasLibrary: true, hasSeeds: false })),
     mockAddSeed,
   };
 });
@@ -80,7 +82,7 @@ vi.mock("../src/hooks/useSeedManager", () => ({
   }),
 }));
 vi.mock("../src/hooks/useDialData", () => ({
-  useDialData: () => ({ stations: [], hasLibrary: true, hasSeeds: false }),
+  useDialData: mockUseDialData,
 }));
 vi.mock("../src/lib/local", () => ({ useFollows: () => [] }));
 vi.mock("../src/components/SearchOverlay", () => ({ SearchOverlay: () => null }));
@@ -177,6 +179,7 @@ beforeEach(() => {
   mockUseLocation.mockReturnValue(["/library?view=songs&sort=artist", mockSetLocation]);
   mockUseAppConfig.mockReturnValue({ data: { demoSurface: true }, isLoading: false });
   mockUseMyLibraryInfinite.mockReturnValue(queryResult());
+  mockUseDialData.mockClear();
 });
 
 afterEach(() => {
@@ -263,6 +266,49 @@ describe("focused Library URL navigation", () => {
     expect(url.searchParams.get("lens")).toBeNull();
     expect(url.searchParams.get("station")).toBeNull();
     expect(url.searchParams.get("stationSort")).toBe("live");
+  });
+
+  it("restores additive station categories from the URL and preserves other filters", async () => {
+    mockUseSearch.mockReturnValue("?categories=campus,anchor&focus=Broadcast&stationSort=live");
+    mockUseLocation.mockReturnValue([
+      "/library?categories=campus,anchor&focus=Broadcast&stationSort=live",
+      mockSetLocation,
+    ]);
+    await renderLibrary();
+
+    expect(mockUseDialData).toHaveBeenCalledWith(
+      "personal",
+      expect.objectContaining({
+        categories: new Set(["campus", "anchor"]),
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Categories/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Public & Community/ }));
+
+    let url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.searchParams.get("categories")).toBe("campus,anchor,public");
+    expect(url.searchParams.get("focus")).toBe("Broadcast");
+    expect(url.searchParams.get("stationSort")).toBe("live");
+
+    fireEvent.click(screen.getByRole("button", { name: "All stations" }));
+    url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.searchParams.has("categories")).toBe(false);
+    expect(url.searchParams.get("focus")).toBe("Broadcast");
+    expect(url.searchParams.get("stationSort")).toBe("live");
+  });
+
+  it("keeps station categories when temporarily viewing Songs without showing the control", async () => {
+    mockUseSearch.mockReturnValue("?view=songs&categories=campus,public");
+    mockUseLocation.mockReturnValue([
+      "/library?view=songs&categories=campus,public",
+      mockSetLocation,
+    ]);
+    await renderLibrary();
+
+    expect(screen.queryByRole("button", { name: /Categories/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /Stations/ }).getAttribute("href"))
+      .toBe("/library?categories=campus%2Cpublic");
   });
 
   it("focuses a grouped song artist and clears the previous album in demo mode", async () => {

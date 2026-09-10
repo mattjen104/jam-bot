@@ -52,6 +52,9 @@ export interface FilterDropdownMenuProps<V extends string> {
   variant: "bar" | "chips";
   leadingIcon?: ReactNode;
   className?: string;
+  /** Optional reset action shown above the option list. */
+  onClear?: () => void;
+  clearLabel?: string;
 }
 
 export function FilterDropdownMenu<V extends string>({
@@ -63,6 +66,8 @@ export function FilterDropdownMenu<V extends string>({
   variant,
   leadingIcon,
   className,
+  onClear,
+  clearLabel = "Clear all",
 }: FilterDropdownMenuProps<V>) {
   const [open, setOpen] = useState(false);
   // Fixed-position anchor for the panel, captured from the trigger rect when
@@ -174,6 +179,16 @@ export function FilterDropdownMenu<V extends string>({
           onKeyDown={onKeyDown}
           style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
         >
+          {onClear ? (
+            <button
+              type="button"
+              className="filter-dropdown__clear"
+              disabled={count === 0}
+              onClick={onClear}
+            >
+              {clearLabel}
+            </button>
+          ) : null}
           {options.map(({ value, label: optionLabel, title }) => (
             <label key={value} className="filter-dropdown__option" title={title}>
               <input
