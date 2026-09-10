@@ -5,6 +5,9 @@ import { eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   pool,
+  loreUsersTable,
+  libraryItemsTable,
+  recordingReleaseGroupsTable,
   stationsTable,
   showsTable,
   recordingsTable,
@@ -284,6 +287,88 @@ describe("GET /api/player/run/:slug", () => {
 });
 
 describe("GET /api/player/history", () => {
+  it("includes exact, album, and artist crossings in station chronology", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const sid = `test-wp-crossings-${run}`;
+    const exactMbid = `test-wp-cross-exact-${run}`;
+    const albumLibraryMbid = `test-wp-cross-album-library-${run}`;
+    const albumSpinMbid = `test-wp-cross-album-spin-${run}`;
+    const artistLibraryMbid = `test-wp-cross-artist-library-${run}`;
+    const artistSpinMbid = `test-wp-cross-artist-spin-${run}`;
+    const unrelatedMbid = `test-wp-cross-unrelated-${run}`;
+    const releaseGroupMbid = `test-wp-cross-rg-${run}`;
+    const artistMbid = `test-wp-cross-artist-${run}`;
+    const fixtureMbids = [
+      exactMbid,
+      albumLibraryMbid,
+      albumSpinMbid,
+      artistLibraryMbid,
+      artistSpinMbid,
+      unrelatedMbid,
+    ];
+    let userId: number | null = null;
+
+    try {
+      const [user] = await db.insert(loreUsersTable).values({
+        spotifyUserId: `test-wp-crossings-${run}`,
+        deviceKey: sid,
+      }).returning({ id: loreUsersTable.id });
+      userId = user!.id;
+
+      await db.insert(recordingsTable).values([
+        { mbid: exactMbid, title: "Exact kept track", artist: `Exact Crossing ${run}` },
+        { mbid: albumLibraryMbid, title: "Kept album track", artist: `Album Crossing ${run}` },
+        { mbid: albumSpinMbid, title: "Other album track", artist: `Album Crossing ${run}` },
+        { mbid: artistLibraryMbid, title: "Kept artist track", artist: `Artist Crossing ${run}`, artistMbid },
+        { mbid: artistSpinMbid, title: "Other artist track", artist: `Artist Crossing ${run}`, artistMbid },
+        { mbid: unrelatedMbid, title: "Unrelated track", artist: `Unrelated Artist ${run}` },
+      ]);
+      await db.insert(recordingReleaseGroupsTable).values([
+        { recordingMbid: albumLibraryMbid, releaseGroupMbid, isPrimary: true, title: `Crossing Album ${run}` },
+        { recordingMbid: albumSpinMbid, releaseGroupMbid, isPrimary: true, title: `Crossing Album ${run}` },
+      ]);
+      await db.insert(libraryItemsTable).values([
+        { userId, mbid: exactMbid, provenance: { kind: "keep" } },
+        { userId, mbid: albumLibraryMbid, provenance: { kind: "keep" } },
+        { userId, mbid: artistLibraryMbid, provenance: { kind: "keep" } },
+      ]);
+
+      const playedAt = new Date(base - 10 * MIN);
+      const inserted = await db.insert(spinsTable).values([
+        { stationId: stationIds[0]!, mbid: exactMbid, confidence: "text", rawArtist: "exact", rawTitle: "exact", playedAt },
+        { stationId: stationIds[0]!, mbid: albumSpinMbid, confidence: "text", rawArtist: "album", rawTitle: "album", playedAt },
+        { stationId: stationIds[0]!, mbid: artistSpinMbid, confidence: "text", rawArtist: "artist", rawTitle: "artist", playedAt: new Date(playedAt.getTime() + MIN) },
+        { stationId: stationIds[0]!, mbid: unrelatedMbid, confidence: "text", rawArtist: "unrelated", rawTitle: "unrelated", playedAt: new Date(playedAt.getTime() + 2 * MIN) },
+      ]).returning({ id: spinsTable.id, mbid: spinsTable.mbid, playedAt: spinsTable.playedAt });
+
+      const response = await fetch(
+        `${baseUrl}/api/player/history?scope=lifetime&filter=crossings&station=${slug}&snapshot=${encodeURIComponent(new Date(base + 3 * MIN).toISOString())}`,
+        { headers: { cookie: `lore_sid=${sid}` } },
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        authenticated: boolean;
+        items: Array<{ id: number; mbid: string; playedAt: string }>;
+      };
+      const fixtureItems = body.items.filter((item) => fixtureMbids.includes(item.mbid));
+      const expected = inserted
+        .filter((item) => item.mbid !== unrelatedMbid)
+        .sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime() || a.id - b.id)
+        .map((item) => ({ id: item.id, mbid: item.mbid }));
+
+      expect(body.authenticated).toBe(true);
+      expect(fixtureItems.map(({ id, mbid }) => ({ id, mbid }))).toEqual(expected);
+      expect(fixtureItems.map((item) => item.mbid)).not.toContain(unrelatedMbid);
+    } finally {
+      await db.delete(spinsTable).where(inArray(spinsTable.mbid, fixtureMbids));
+      if (userId != null) await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
+      await db.delete(recordingReleaseGroupsTable).where(inArray(recordingReleaseGroupsTable.recordingMbid, fixtureMbids));
+      await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, fixtureMbids));
+      if (userId != null) await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
+    }
+  });
+
   it("keeps a lifetime first-play scan stable when a newer station spin is inserted", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
