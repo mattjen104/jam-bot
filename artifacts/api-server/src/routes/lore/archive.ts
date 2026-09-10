@@ -12,6 +12,8 @@ import {
   GetPickerRunInsightsResponse,
   SearchArtistRunsQueryParams,
   SearchArtistRunsResponse,
+  SearchArtistStationsQueryParams,
+  SearchArtistStationsResponse,
   SuggestArchiveArtistsQueryParams,
   SuggestArchiveArtistsResponse,
 } from "@workspace/api-zod";
@@ -39,6 +41,53 @@ import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-i
 import { isJunkArtistValue } from "../../lore/icy.js";
 
 const router: IRouter = Router();
+
+// GET /api/archive/artist-stations?q=… — fast exact-name station membership
+// for the focused Library lens. This intentionally does not build archive run
+// summaries; common artists can have thousands of those.
+router.get("/archive/artist-stations", h(async (req, res) => {
+  if (typeof req.query.q !== "string" || req.query.q.trim().length === 0) {
+    return res.status(400).json({ error: "Missing search query" });
+  }
+  const parsed = SearchArtistStationsQueryParams.safeParse({ q: req.query.q });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Missing search query" });
+  }
+  const q = parsed.data.q.trim();
+  const result = await db.execute<{
+    slug: string;
+    name: string;
+    stationClass: string;
+    playCount: number;
+  }>(sql`
+    WITH matching_station_plays AS MATERIALIZED (
+      SELECT sp.station_id
+      FROM recordings r
+      JOIN spins sp ON sp.mbid = r.mbid
+      WHERE lower(trim(r.artist)) = lower(${q})
+
+      UNION ALL
+
+      SELECT sp.station_id
+      FROM spins sp
+      WHERE sp.mbid IS NULL
+        AND lower(trim(sp.raw_artist)) = lower(${q})
+    )
+    SELECT
+      st.slug,
+      st.name,
+      st.station_class AS "stationClass",
+      count(*)::int AS "playCount"
+    FROM matching_station_plays matched
+    JOIN stations st ON st.id = matched.station_id
+    WHERE st.hidden = false
+    GROUP BY st.id, st.slug, st.name, st.station_class
+    ORDER BY count(*) DESC, st.name
+  `);
+  const stations = result.rows;
+
+  return res.json(SearchArtistStationsResponse.parse({ query: q, stations }));
+}));
 
 // GET /api/archive/station-runs/:runId — one run's tracklist, as it aired.
 router.get("/archive/station-runs/:runId", h(async (req, res) => {
@@ -534,7 +583,6 @@ router.get("/archive/artist-runs", h(async (req, res) => {
     sql`${spinsTable.rawArtist} ilike ${pattern}`,
     sql`${recordingsTable.artist} ilike ${pattern}`,
   )!;
-
   // 1. Which station-run groups contain the artist, and how many hits each?
   const spinGroups = await db
     .select({

@@ -68,8 +68,8 @@ vi.mock("../src/lib/local", () => ({ useFollows: () => [] }));
 vi.mock("../src/components/SearchOverlay", () => ({ SearchOverlay: () => null }));
 vi.mock("../src/components/KeepButton", () => ({ KeepButton: () => null }));
 vi.mock("../src/components/RadioSurface", () => ({
-  RadioSurface: ({ onOpenCrossings }: { onOpenCrossings?: (stationSlug: string) => void }) => (
-    <button onClick={() => onOpenCrossings?.("kexp")}>Has played your artists 12 times</button>
+  RadioSurface: ({ onOpenStationCrossings }: { onOpenStationCrossings?: (stationSlug: string) => void }) => (
+    <button onClick={() => onOpenStationCrossings?.("kexp")}>Has played your artists 12 times</button>
   ),
 }));
 vi.mock("../src/components/AlbumAvatarPicker", () => ({ AlbumAvatarPicker: () => null }));
@@ -167,8 +167,9 @@ describe("focused Library URL navigation", () => {
 
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.pathname).toBe("/library");
-    expect(url.searchParams.get("lens")).toBe("crossings");
-    expect(url.searchParams.get("station")).toBe("kexp");
+    expect(url.searchParams.get("stationCrossings")).toBe("kexp");
+    expect(url.searchParams.get("lens")).toBeNull();
+    expect(url.searchParams.get("station")).toBeNull();
     expect(url.searchParams.get("stationSort")).toBe("live");
   });
 

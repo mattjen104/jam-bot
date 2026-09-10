@@ -258,6 +258,24 @@ describe("GET /api/archive/artist-runs", () => {
   });
 });
 
+describe("GET /api/archive/artist-stations", () => {
+  it("returns exact station membership from resolved and raw artist metadata", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(
+      `${baseUrl}/api/archive/artist-stations?q=${encodeURIComponent(`zqartist ${run}`)}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      stations: { slug: string; playCount: number }[];
+    };
+    const station = body.stations.find(
+      (candidate) => candidate.slug === `test-ars-${run}`,
+    );
+    expect(station).toBeDefined();
+    expect(station!.playCount).toBe(2);
+  });
+});
+
 describe("GET /api/archive/artist-suggestions", () => {
   it("returns canonical played artists and excludes raw station labels and junk artists", async (ctx) => {
     if (!dbAvailable) return ctx.skip();

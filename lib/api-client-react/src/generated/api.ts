@@ -28,6 +28,7 @@ import type {
   ArchiveRecentRuns,
   ArtistResult,
   ArtistRunSearch,
+  ArtistStationSearch,
   ArtistSuggestions,
   BlogIngestRequest,
   BookDraftList,
@@ -175,6 +176,7 @@ import type {
   ScrapeListResponse,
   ScrapedStationList,
   SearchArtistRunsParams,
+  SearchArtistStationsParams,
   SeedBlogPickersBody,
   SeedBlogPickersResponse,
   SegueNextList,
@@ -4921,6 +4923,108 @@ export function useSearchArtistRuns<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getSearchArtistRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Exact, case-insensitive artist-name lookup across resolved recordings and raw unresolved spin metadata. Returns each visible station once, ordered by all-time play count.
+
+ * @summary Find every station that has played an artist
+ */
+export const getSearchArtistStationsUrl = (
+  params: SearchArtistStationsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/archive/artist-stations?${stringifiedParams}`
+    : `/api/archive/artist-stations`;
+};
+
+export const searchArtistStations = async (
+  params: SearchArtistStationsParams,
+  options?: RequestInit,
+): Promise<ArtistStationSearch> => {
+  return customFetch<ArtistStationSearch>(getSearchArtistStationsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchArtistStationsQueryKey = (
+  params?: SearchArtistStationsParams,
+) => {
+  return [`/api/archive/artist-stations`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchArtistStationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchArtistStations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: SearchArtistStationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchArtistStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getSearchArtistStationsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof searchArtistStations>>
+  > = ({ signal }) =>
+    searchArtistStations(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchArtistStations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchArtistStationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchArtistStations>>
+>;
+export type SearchArtistStationsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Find every station that has played an artist
+ */
+
+export function useSearchArtistStations<
+  TData = Awaited<ReturnType<typeof searchArtistStations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: SearchArtistStationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchArtistStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchArtistStationsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

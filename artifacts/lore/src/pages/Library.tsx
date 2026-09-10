@@ -35,7 +35,11 @@ import {
   type SyncJobStatus,
   type TasteSeedCatalogue,
 } from "../lib/meHooks";
-import { ApiError } from "@workspace/api-client-react";
+import {
+  ApiError,
+  getSearchArtistStationsQueryKey,
+  useSearchArtistStations,
+} from "@workspace/api-client-react";
 import { LibraryRow } from "../components/LibraryRow";
 import { StackRow } from "../components/StackRow";
 import { useStackSkipped } from "../lib/dialFilterState";
@@ -1323,6 +1327,17 @@ function DemoMergedLibrary({
     deferEnrichment: false,
   });
   const { data: demoLibraryData } = useMyLibraryInfinite({}, 100);
+  const artistStationQuery = useSearchArtistStations(
+    { q: focusedArtist ?? "" },
+    {
+      query: {
+        queryKey: getSearchArtistStationsQueryKey({ q: focusedArtist ?? "" }),
+        enabled: Boolean(focusedArtist?.trim()),
+        staleTime: 5 * 60_000,
+        retry: 1,
+      },
+    },
+  );
   const demoLibraryItems = useMemo(
     () => demoLibraryData?.pages.flatMap((page) => page.items) ?? [],
     [demoLibraryData],
@@ -1332,6 +1347,12 @@ function DemoMergedLibrary({
     let list = stations;
     const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
     if (normalizedFocus) {
+      if (artistStationQuery.data) {
+        const matchingSlugs = new Set(
+          artistStationQuery.data.stations.map(station => station.slug),
+        );
+        return list.filter(ds => matchingSlugs.has(ds.station.slug));
+      }
       list = list.filter(ds => {
         const matches = (artist: string | null | undefined) =>
           artist?.trim().toLocaleLowerCase() === normalizedFocus;
@@ -1346,7 +1367,7 @@ function DemoMergedLibrary({
       });
     }
     return list;
-  }, [stations, focusedArtist]);
+  }, [stations, focusedArtist, artistStationQuery.data]);
 
   const filteredDemoItems = useMemo(() => {
     if (!focusedArtist) return demoLibraryItems;
@@ -1524,12 +1545,10 @@ function DemoMergedLibrary({
           stations={filteredStations}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
-          visibleSeeds={visibleSeeds}
           showHeader={false}
           sort={stationSort}
           focusedArtist={focusedArtist}
           selectedStationSlug={selectedStationSlug}
-          onAddArtist={addSeed}
           onFocusArtist={(artist) => updateSearch((next) => {
             next.set("focus", artist);
             next.delete("openAlbum");

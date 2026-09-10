@@ -137,8 +137,6 @@ export default function SplitHome() {
           stations={stations}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
-          visibleSeeds={visibleSeeds}
-          onAddArtist={addSeed}
           onFocusArtist={(artist) => {
             const params = new URLSearchParams();
             params.set("focus", artist);

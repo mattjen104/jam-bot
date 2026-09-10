@@ -2724,6 +2724,18 @@ export interface ArtistRunSearch {
   pickerRuns: ArtistPickerRunMatch[];
 }
 
+export type ArtistStationSearchStationsItem = {
+  slug: string;
+  name: string;
+  stationClass: string;
+  playCount: number;
+};
+
+export interface ArtistStationSearch {
+  query: string;
+  stations: ArtistStationSearchStationsItem[];
+}
+
 export interface ArtistSuggestion {
   name: string;
   playCount: number;
@@ -5064,6 +5076,14 @@ export type GetArchiveRecentRunsParams = {
 export type SearchArtistRunsParams = {
   /**
    * Artist name (or fragment) to search for.
+   * @minLength 1
+   */
+  q: string;
+};
+
+export type SearchArtistStationsParams = {
+  /**
+   * Exact artist name to find.
    * @minLength 1
    */
   q: string;

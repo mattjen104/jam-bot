@@ -4044,6 +4044,28 @@ export const SearchArtistRunsResponse = zod.object({
 });
 
 /**
+ * Exact, case-insensitive artist-name lookup across resolved recordings and raw unresolved spin metadata. Returns each visible station once, ordered by all-time play count.
+
+ * @summary Find every station that has played an artist
+ */
+
+export const SearchArtistStationsQueryParams = zod.object({
+  q: zod.coerce.string().min(1).describe("Exact artist name to find."),
+});
+
+export const SearchArtistStationsResponse = zod.object({
+  query: zod.string(),
+  stations: zod.array(
+    zod.object({
+      slug: zod.string(),
+      name: zod.string(),
+      stationClass: zod.string(),
+      playCount: zod.number(),
+    }),
+  ),
+});
+
+/**
  * Case-insensitive typeahead over canonical recording artists attached to real station spins. Results are deduplicated by normalized artist name, exclude non-musical metadata labels, and rank prefix matches before contains matches, then by play count and recency.
 
  * @summary Suggest canonical artists Lore has played

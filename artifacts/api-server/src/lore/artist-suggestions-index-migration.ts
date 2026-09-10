@@ -21,4 +21,9 @@ export async function applyArtistSuggestionsIndexMigration(): Promise<void> {
       )
       WHERE artist_mbid IS NULL
   `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS spins_raw_artist_lower_trim_idx
+      ON spins (lower(trim(raw_artist)))
+      WHERE raw_artist IS NOT NULL
+  `);
 }

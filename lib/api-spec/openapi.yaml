@@ -1631,6 +1631,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /archive/artist-stations:
+    get:
+      operationId: searchArtistStations
+      tags: [archive]
+      summary: Find every station that has played an artist
+      description: >
+        Exact, case-insensitive artist-name lookup across resolved recordings
+        and raw unresolved spin metadata. Returns each visible station once,
+        ordered by all-time play count.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Exact artist name to find.
+      responses:
+        "200":
+          description: Stations that have played the exact artist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistStationSearch"
+        "400":
+          description: Missing or empty search query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /archive/artist-suggestions:
     get:
       operationId: suggestArchiveArtists
@@ -8011,6 +8041,32 @@ components:
         - query
         - stationRuns
         - pickerRuns
+    ArtistStationSearch:
+      type: object
+      properties:
+        query:
+          type: string
+        stations:
+          type: array
+          items:
+            type: object
+            properties:
+              slug:
+                type: string
+              name:
+                type: string
+              stationClass:
+                type: string
+              playCount:
+                type: integer
+            required:
+              - slug
+              - name
+              - stationClass
+              - playCount
+      required:
+        - query
+        - stations
     ArtistSuggestion:
       type: object
       properties:

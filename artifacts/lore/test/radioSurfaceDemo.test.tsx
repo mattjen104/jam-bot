@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { DialStation } from "../src/hooks/useDialData";
 
@@ -13,10 +13,6 @@ vi.mock("../src/player/PlayerProvider", () => ({
       toggle,
     },
   }),
-}));
-
-vi.mock("../src/components/KeepButton", () => ({
-  KeepButton: () => <button type="button">Keep</button>,
 }));
 
 import { RadioSurface } from "../src/components/RadioSurface";
@@ -61,7 +57,6 @@ describe("demo Radio station cards", () => {
     render(
       <RadioSurface
         stations={[matchingStation()]}
-        visibleSeeds={["Stereolab"]}
         hasSeeds
         hasLibrary
         showHeader={false}
@@ -87,76 +82,24 @@ describe("demo Radio station cards", () => {
     expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
   });
 
-  test("groups artist, song, and station actions in one row menu", async () => {
-    const onAddArtist = vi.fn().mockResolvedValue(undefined);
-    const onFocusArtist = vi.fn();
-    const onOpenCrossings = vi.fn();
+  test("does not make placeholder artist metadata interactive", () => {
     render(
       <RadioSurface
-        stations={[matchingStation()]}
-        visibleSeeds={[]}
+        stations={[{
+          ...matchingStation(),
+          liveTrack: {
+            ...matchingStation().liveTrack!,
+            artist: "",
+            artistMbid: null,
+          },
+        }]}
         hasSeeds={false}
         hasLibrary={false}
         showHeader={false}
-        onAddArtist={onAddArtist}
-        onFocusArtist={onFocusArtist}
-        onOpenStationCrossings={onOpenCrossings}
-      />,
-    );
-
-    expect(screen.queryByText("Add to my artists")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "More options for French Disko" }));
-
-    expect(screen.getByLabelText("Artist actions")).toBeTruthy();
-    expect(screen.getByLabelText("Song actions")).toBeTruthy();
-    expect(screen.getByLabelText("Station actions")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add to my artists" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open song details" }).getAttribute("href"))
-      .toBe("/song/recording-1");
-    expect(screen.queryByText("+")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Add to my artists" }));
-    await waitFor(() => expect(onAddArtist).toHaveBeenCalledWith("Stereolab"));
-  });
-
-  test("shows an honest added state and suppresses placeholder artist actions", () => {
-    render(
-      <RadioSurface
-        stations={[matchingStation()]}
-        visibleSeeds={["stereolab"]}
-        hasSeeds
-        hasLibrary={false}
-        showHeader={false}
-        onAddArtist={vi.fn()}
         onFocusArtist={vi.fn()}
       />,
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "More options for French Disko" }));
-    const added = screen.getByRole("button", { name: "Added to my artists" });
-    expect(added.getAttribute("aria-pressed")).toBe("true");
-    expect(added.hasAttribute("disabled")).toBe(true);
-
-    cleanup();
-    const placeholder = matchingStation();
-    placeholder.liveTrack = {
-      ...placeholder.liveTrack!,
-      artist: "",
-      artistMbid: null,
-    };
-    render(
-      <RadioSurface
-        stations={[placeholder]}
-        visibleSeeds={[]}
-        hasSeeds={false}
-        hasLibrary={false}
-        showHeader={false}
-        onAddArtist={vi.fn()}
-        onFocusArtist={vi.fn()}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "More options for French Disko" }));
-    expect(screen.queryByLabelText("Artist actions")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add to my artists" })).toBeNull();
+    expect(screen.getByText("Unknown artist").tagName).toBe("DIV");
+    expect(screen.queryByRole("button", { name: "Unknown artist" })).toBeNull();
   });
 });
