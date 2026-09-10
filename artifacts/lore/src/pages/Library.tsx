@@ -1511,6 +1511,7 @@ function DemoMergedLibrary({
           hasLibrary={hasLibrary}
           showHeader={false}
           sort={stationSort}
+              focusedArtist={focusedArtist}
         />
       ) : (
         <LibraryContent embedded={embedded} showArtistEditor={false} />

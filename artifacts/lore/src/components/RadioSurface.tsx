@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { usePlayer } from "../player/PlayerProvider";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
+import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
 import { Play } from "lucide-react";
 
@@ -14,6 +15,7 @@ export function RadioSurface({
   hasLibrary,
   showHeader = true,
   sort = "overlap",
+  focusedArtist = null,
 }: {
   stations: DialStation[];
   visibleSeeds: string[];
@@ -21,11 +23,14 @@ export function RadioSurface({
   hasLibrary: boolean;
   showHeader?: boolean;
   sort?: "overlap" | "live" | "discovery" | "name";
+  focusedArtist?: string | null;
 }) {
   const { radio } = usePlayer();
 
   const allCrossings = useMemo(() => {
-    const list = stations.filter(ds => ds.lifetimeCrossings + ds.lifetimeArtistCrossings > 0);
+    const list = focusedArtist
+      ? [...stations]
+      : stations.filter(ds => ds.lifetimeCrossings + ds.lifetimeArtistCrossings > 0);
     if (sort === "name") {
       return list.sort((a, b) => a.station.name.localeCompare(b.station.name));
     }
@@ -47,7 +52,7 @@ export function RadioSurface({
       const bTotal = b.lifetimeCrossings + b.lifetimeArtistCrossings;
       return bTotal - aTotal;
     });
-  }, [stations, sort]);
+  }, [stations, sort, focusedArtist]);
 
   const hasData = hasSeeds || hasLibrary;
   const showCrossings = hasData && allCrossings.length > 0;
@@ -88,15 +93,18 @@ export function RadioSurface({
     const bylineHuman = djNames.length === 1
       ? `Selected by ${djNames[0]}`
       : `${ds.station.name} †`;
-    const bylineCite = [ds.station.name, ds.station.city].filter(Boolean).join(" · ");
-
     if (demoted) {
       const citeText = djNames.length > 0 ? djNames[0] : `${ds.station.name} †`;
       return (
         <div className="demo-radio__row demo-radio__row--compact" key={ds.station.slug}>
-          <div className="demo-radio__cover demo-radio__cover--compact" aria-hidden="true" />
+          <StationMark
+            name={ds.station.name}
+            logoUrl={ds.station.logoUrl}
+            className="demo-radio__station-mark demo-radio__station-mark--compact"
+          />
           <div className="demo-radio__body">
-            <div className="demo-radio__compact-title">{ds.station.name} · {title}, {artist}</div>
+            <div className="demo-radio__station-name">{ds.station.name}</div>
+            <div className="demo-radio__compact-title">{title} · {artist}</div>
             <div className="demo-radio__reason">{citeText} · no overlap yet</div>
           </div>
           <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
@@ -107,20 +115,30 @@ export function RadioSurface({
     }
 
     const lifetimeTotal = ds.lifetimeCrossings + ds.lifetimeArtistCrossings;
-    const reasonLine = ds.topArtistNamesLifetime.length > 0
+    const reasonLine = focusedArtist
+      ? `Has played ${focusedArtist} from your music`
+      : ds.topArtistNamesLifetime.length > 0
       ? `Has played your artists ${lifetimeTotal} times · ${ds.topArtistNamesLifetime.length === 1 ? `mostly ${ds.topArtistNamesLifetime[0]}` : ds.topArtistNamesLifetime.slice(0,2).join(", ")}`
       : "";
 
     return (
       <div key={ds.station.slug} className="demo-radio__featured">
         <div className="demo-radio__row demo-radio__row--featured">
-          <div className="demo-radio__cover" aria-hidden="true" />
+          <StationMark
+            name={ds.station.name}
+            logoUrl={ds.station.logoUrl}
+            className="demo-radio__station-mark"
+          />
           <div className="demo-radio__body">
+            <div className="demo-radio__station-identity">
+              <strong>{ds.station.name}</strong>
+              {ds.station.city ? <span>{ds.station.city}</span> : null}
+            </div>
             {isLive && <span className="demo-radio__pill">Playing {rawArtist} now</span>}
             <div className="demo-radio__title">{title}</div>
             <div className="demo-radio__artist">{artist}</div>
             <div className="demo-radio__byline">
-              {bylineHuman} <span>· {bylineCite}</span>
+              {bylineHuman}
             </div>
           </div>
           <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
@@ -143,8 +161,12 @@ export function RadioSurface({
       ) : null}
 
       <div className="demo-radio__section-label">
-        <span>Plays your music</span>
-        <span>{visibleSeeds.length} artists</span>
+        <span>{focusedArtist ? `Stations that play ${focusedArtist}` : "Plays your music"}</span>
+        <span>
+          {focusedArtist
+            ? `${allCrossings.length} match${allCrossings.length === 1 ? "" : "es"}`
+            : `${visibleSeeds.length} artists`}
+        </span>
       </div>
 
       {showCrossings ? (

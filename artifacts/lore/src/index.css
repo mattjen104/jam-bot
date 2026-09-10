@@ -2919,17 +2919,17 @@
   padding: 8px 4px;
   border-bottom: 1px solid hsl(var(--border) / .75);
 }
-.demo-radio__cover {
-  width: 52px;
-  height: 52px;
+.demo-radio__station-mark {
+  width: 30px;
+  height: 30px;
   border: 1px solid hsl(var(--border));
   border-radius: 5px;
-  background:
-    linear-gradient(145deg, hsl(var(--muted)), hsl(var(--background)));
+  background: hsl(var(--background));
+  object-fit: contain;
 }
-.demo-radio__cover--compact {
-  width: 36px;
-  height: 36px;
+.demo-radio__station-mark--compact {
+  width: 24px;
+  height: 24px;
 }
 .demo-radio__body {
   min-width: 0;
@@ -2943,6 +2943,34 @@
   color: hsl(var(--library));
   font-family: var(--app-font-mono);
   font-size: 9px;
+}
+.demo-radio__station-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  margin-bottom: 5px;
+  font-family: var(--app-font-mono);
+}
+.demo-radio__station-identity strong,
+.demo-radio__station-name {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-radio__station-identity span {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-radio__station-name {
+  margin-bottom: 3px;
 }
 .demo-radio__title,
 .demo-radio__compact-title {
@@ -2985,7 +3013,7 @@
   line-height: 1.45;
 }
 .demo-radio__reason--featured {
-  padding: 7px 12px 9px 76px;
+  padding: 7px 12px 9px;
   border-top: 1px solid hsl(var(--border) / .7);
 }
 .demo-radio__play,
