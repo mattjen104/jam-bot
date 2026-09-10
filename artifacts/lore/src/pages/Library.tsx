@@ -985,6 +985,10 @@ function ArtistLensControl({
   const [search, setSearch] = useState("");
 
   const isSeed = focusedArtist ? visibleSeeds.some(s => s.toLocaleLowerCase() === focusedArtist.toLocaleLowerCase()) : false;
+  const isAddedArtist = focusedArtist
+    ? allArtists.some(a => a.toLocaleLowerCase() === focusedArtist.toLocaleLowerCase())
+    : false;
+  const isLibraryArtist = isAddedArtist && !isSeed;
 
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const exactMatch = allArtists.some(a => a.toLocaleLowerCase() === normalizedSearch);
@@ -1038,15 +1042,17 @@ function ArtistLensControl({
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button
                 type="button"
-                aria-pressed={isSeed}
+                aria-pressed={isAddedArtist}
+                disabled={isLibraryArtist}
+                title={isLibraryArtist ? "Already in your Library" : undefined}
                 onClick={() => {
                   if (isSeed) onRemoveSeed(focusedArtist);
-                  else onAddSeed(focusedArtist);
+                  else if (!isAddedArtist) onAddSeed(focusedArtist);
                 }}
                 className="library-artist-lens__seed-toggle"
               >
-                <span aria-hidden="true">{isSeed ? "✓" : "+"}</span>
-                {isSeed ? "Added to my artists" : "Add to my artists"}
+                <span aria-hidden="true">{isAddedArtist ? "✓" : "+"}</span>
+                {isAddedArtist ? "Added to my artists" : "Add to my artists"}
               </button>
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 <button
@@ -1079,7 +1085,7 @@ function ArtistLensControl({
               </div>
             )}
             {matches.map(a => {
-              const isASeed = visibleSeeds.some(s => s.toLocaleLowerCase() === a.toLocaleLowerCase());
+              const isAdded = allArtists.some(saved => saved.toLocaleLowerCase() === a.toLocaleLowerCase());
               return (
                 <CommandItem
                   key={a}
@@ -1088,7 +1094,7 @@ function ArtistLensControl({
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--app-font-sans)", fontSize: 13 }}
                 >
                   <span>{a}</span>
-                  {isASeed && <span style={{ fontFamily: "var(--app-font-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "hsl(var(--accent))", border: "1px solid hsl(var(--accent)/0.3)", borderRadius: 3, padding: "1px 4px" }}>Seed</span>}
+                  {isAdded && <span style={{ fontFamily: "var(--app-font-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "hsl(var(--accent))", border: "1px solid hsl(var(--accent)/0.3)", borderRadius: 3, padding: "1px 4px" }}>Added</span>}
                 </CommandItem>
               );
             })}

@@ -141,6 +141,15 @@ async function renderLibrary() {
 
 beforeEach(() => {
   localStorage.clear();
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value: vi.fn(),
+  });
   vi.stubGlobal("fetch", vi.fn(async () => ({
     ok: true,
     json: async () => ({ releases: [] }),
@@ -159,6 +168,19 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
+  it("shows a Library-backed focused artist as already added", async () => {
+    mockUseSearch.mockReturnValue("?focus=Broadcast");
+    mockUseLocation.mockReturnValue(["/library?focus=Broadcast", mockSetLocation]);
+    await renderLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
+
+    const added = screen.getByRole("button", { name: "Added to my artists" });
+    expect(added.getAttribute("aria-pressed")).toBe("true");
+    expect((added as HTMLButtonElement).disabled).toBe(true);
+    expect(added.getAttribute("title")).toBe("Already in your Library");
+  });
+
   it("clears artist focus directly from the Library heading", async () => {
     mockUseSearch.mockReturnValue("?focus=Broadcast&stationSort=live&openAlbum=Tender+Buttons%1FBroadcast");
     mockUseLocation.mockReturnValue([

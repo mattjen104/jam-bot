@@ -3603,6 +3603,10 @@
 .library-artist-lens__seed-toggle[aria-pressed="true"] {
   color: hsl(var(--keep));
 }
+.library-artist-lens__seed-toggle:disabled {
+  cursor: default;
+  opacity: 1;
+}
 .library-discography__heading {
   padding: 14px 15px 7px;
   border-bottom: 1px solid hsl(var(--border) / 0.4);
