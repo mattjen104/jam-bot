@@ -1850,6 +1850,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationsRollingGenresResult"
+  /stations/{slug}/recent-spins:
+    get:
+      operationId: getStationRecentSpins
+      tags: [stations]
+      summary: Recent spins for one station
+      description: >
+        Returns the current play and up to two prior plays for a visible
+        station, ordered newest first.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Station slug.
+      responses:
+        "200":
+          description: Up to three recent spins for the station
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationsRecentSpinsResult"
+        "404":
+          description: Station not found or has no spins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/recent-spins:
     get:
       operationId: getStationsRecentSpins
@@ -8943,6 +8972,9 @@ components:
       type: object
       description: One deduped spin chip for a station on a given day.
       properties:
+        spinId:
+          type: integer
+          description: Spin identifier. Present on station-specific recent-spin responses.
         mbid:
           type: string
           nullable: true

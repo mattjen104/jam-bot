@@ -4472,6 +4472,102 @@ export const GetStationsRollingGenresResponse = zod
   );
 
 /**
+ * Returns the current play and up to two prior plays for a visible station, ordered newest first.
+
+ * @summary Recent spins for one station
+ */
+
+export const GetStationRecentSpinsParams = zod.object({
+  slug: zod.coerce.string().min(1).describe("Station slug."),
+});
+
+export const getStationRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMin = 0;
+export const getStationRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMax = 23;
+
+export const GetStationRecentSpinsResponse = zod
+  .object({
+    items: zod.array(
+      zod.object({
+        stationSlug: zod.string(),
+        spins: zod.array(
+          zod
+            .object({
+              spinId: zod
+                .number()
+                .optional()
+                .describe(
+                  "Spin identifier. Present on station-specific recent-spin responses.",
+                ),
+              mbid: zod.string().nullable(),
+              artistMbid: zod.string().nullable(),
+              releaseGroupMbid: zod
+                .string()
+                .nullable()
+                .describe(
+                  "Primary release-group MBID for the recording, used for album-level library crossing detection.",
+                ),
+              title: zod.string(),
+              artist: zod.string(),
+              playedAt: zod.string(),
+              releaseYear: zod
+                .number()
+                .nullish()
+                .describe(
+                  "MusicBrainz first-release year for the recording, used by the Dial age-tier (Current\/Catalog\/Deep) filter. Null when unknown or unresolved.",
+                ),
+              releaseDate: zod
+                .string()
+                .nullish()
+                .describe(
+                  "MusicBrainz first-release date in partial-ISO form (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`). Used by the Dial First (premiere) tier. Null when unknown or unresolved.",
+                ),
+              isFirstSpin: zod
+                .boolean()
+                .describe(
+                  "True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved).",
+                ),
+              isLibraryHit: zod
+                .boolean()
+                .describe(
+                  "True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests.",
+                ),
+              isArtistHit: zod
+                .boolean()
+                .describe(
+                  "True when the spin's artist is in the listener's library but the exact track\/album is not. Always false for unauthenticated requests.",
+                ),
+              playedAtHour: zod
+                .number()
+                .min(
+                  getStationRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMin,
+                )
+                .max(
+                  getStationRecentSpinsResponseItemsItemSpinsItemPlayedAtHourMax,
+                )
+                .describe(
+                  'UTC hour of day (0-23) the spin aired. Discovery metadata for the station new-music scan (e.g. \"WKCR plays new jazz 2-4 PM\").',
+                ),
+              djName: zod
+                .string()
+                .nullable()
+                .describe(
+                  "DJ attribution for the show airing when this spin played, when a valid schedule join exists. Null when unattributed.",
+                ),
+              showName: zod
+                .string()
+                .nullable()
+                .describe(
+                  "Name of the show airing when this spin played, when a valid schedule join exists. Null when unattributed.",
+                ),
+            })
+            .describe("One deduped spin chip for a station on a given day."),
+        ),
+      }),
+    ),
+  })
+  .describe("Per-station recent spins for a given calendar day.");
+
+/**
  * Returns recently-played distinct tracks per station, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Two window modes: `date` selects one UTC calendar day (powers track-chip timelines on showless station cards); `hours` selects a rolling window ending now (powers the station new-music scan). Exactly one of `date` or `hours` should be provided; `hours` wins when both are present.
 
  * @summary Recent spins per station (calendar day or rolling window)
@@ -4508,6 +4604,12 @@ export const GetStationsRecentSpinsResponse = zod
         spins: zod.array(
           zod
             .object({
+              spinId: zod
+                .number()
+                .optional()
+                .describe(
+                  "Spin identifier. Present on station-specific recent-spin responses.",
+                ),
               mbid: zod.string().nullable(),
               artistMbid: zod.string().nullable(),
               releaseGroupMbid: zod

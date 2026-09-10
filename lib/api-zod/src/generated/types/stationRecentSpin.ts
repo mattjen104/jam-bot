@@ -10,6 +10,8 @@
  * One deduped spin chip for a station on a given day.
  */
 export interface StationRecentSpin {
+  /** Spin identifier. Present on station-specific recent-spin responses. */
+  spinId?: number;
   mbid: string | null;
   artistMbid: string | null;
   /** Primary release-group MBID for the recording, used for album-level library crossing detection. */

@@ -5656,6 +5656,100 @@ export function useGetStationsRollingGenres<
 }
 
 /**
+ * Returns the current play and up to two prior plays for a visible station, ordered newest first.
+
+ * @summary Recent spins for one station
+ */
+export const getGetStationRecentSpinsUrl = (slug: string) => {
+  return `/api/stations/${slug}/recent-spins`;
+};
+
+export const getStationRecentSpins = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationsRecentSpinsResult> => {
+  return customFetch<StationsRecentSpinsResult>(
+    getGetStationRecentSpinsUrl(slug),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationRecentSpinsQueryKey = (slug: string) => {
+  return [`/api/stations/${slug}/recent-spins`] as const;
+};
+
+export const getGetStationRecentSpinsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationRecentSpins>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationRecentSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationRecentSpinsQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationRecentSpins>>
+  > = ({ signal }) =>
+    getStationRecentSpins(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationRecentSpins>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationRecentSpinsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationRecentSpins>>
+>;
+export type GetStationRecentSpinsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Recent spins for one station
+ */
+
+export function useGetStationRecentSpins<
+  TData = Awaited<ReturnType<typeof getStationRecentSpins>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationRecentSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationRecentSpinsQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * Returns recently-played distinct tracks per station, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Two window modes: `date` selects one UTC calendar day (powers track-chip timelines on showless station cards); `hours` selects a rolling window ending now (powers the station new-music scan). Exactly one of `date` or `hours` should be provided; `hours` wins when both are present.
 
  * @summary Recent spins per station (calendar day or rolling window)
