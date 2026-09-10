@@ -1412,7 +1412,7 @@ function DemoMergedLibrary({
     <main className="demo-merged-library">
       <header className="demo-merged-library__header">
         <h1>
-          Library
+          LORE
           {focusedArtist ? (
             <span className="demo-merged-library__focus-title"> / {focusedArtist}</span>
           ) : null}

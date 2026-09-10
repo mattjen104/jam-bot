@@ -3182,7 +3182,7 @@
 }
 .demo-merged-library__header h1 {
   margin: 0 0 14px;
-  font-family: var(--app-font-display);
+  font-family: var(--lore-font-wordmark);
   font-size: 22px;
   font-weight: 500;
   line-height: 1.2;
