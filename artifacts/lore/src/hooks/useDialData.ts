@@ -154,6 +154,11 @@ export interface DialStation {
   /** true when the station is airing right now */
   isLive: boolean;
   shows: DialShow[];
+  /**
+   * Current host/show metadata that must not be offered as an artist action.
+   * These are source-backed attribution values, not inferred artist labels.
+   */
+  artistActionExclusions?: string[];
   /** rolling 24h exact-MBID/release-group crossings (used for Zone 1 eligibility threshold) */
   crossings: number;
   /** rolling 24h artist-level crossings (exact track not in library) */
@@ -1917,11 +1922,23 @@ export function useDialData(
         displayMode !== "blended" ? (serverCx?.topArtistNamesLifetime ?? []) : [];
       const albumCrossings =
         displayMode !== "blended" ? (serverCx?.albumCrossings ?? []) : [];
+      const artistActionExclusions = [
+        ...sortedRuns
+          .filter((run) => showState(run, isLive) === "live")
+          .flatMap((run) => [
+            run.show?.name,
+            run.show?.djName,
+            ...(run.show?.djNames ?? []),
+          ]),
+        liveAttribution?.showName,
+        liveAttribution?.djName,
+      ].filter((value): value is string => Boolean(value?.trim()));
 
       return {
         station,
         isLive,
         shows,
+        artistActionExclusions,
         crossings,
         artistCrossings,
         firstPlayCrossings,

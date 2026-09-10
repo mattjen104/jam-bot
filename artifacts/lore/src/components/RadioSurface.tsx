@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { usePlayer } from "../player/PlayerProvider";
-import { eligibleDjNames } from "@workspace/lore-attribution";
+import { eligibleDjNames, normalizeAttributionName } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
@@ -10,7 +10,11 @@ import { ArrowLeft, Play } from "lucide-react";
 
 const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
 
-function usableArtistName(rawArtist: string | null | undefined): string | null {
+function usableArtistName(
+  rawArtist: string | null | undefined,
+  artistMbid: string | null | undefined,
+  attributionExclusions: string[],
+): string | null {
   const artist = rawArtist?.trim();
   if (!artist) return null;
   const normalized = artist.toLocaleLowerCase();
@@ -20,6 +24,14 @@ function usableArtistName(rawArtist: string | null | undefined): string | null {
     || normalized === "unknown"
     || normalized === "—"
     || normalized === "-"
+  ) return null;
+  if (artistMbid) return artist;
+  const attributionName = normalizeAttributionName(artist);
+  if (
+    attributionName
+    && attributionExclusions.some(
+      (candidate) => normalizeAttributionName(candidate) === attributionName,
+    )
   ) return null;
   return artist;
 }
@@ -100,7 +112,11 @@ export function RadioSurface({
     const rawArtist = track?.artist;
     const title = rawTitle || "—";
     const artist = rawArtist || (rawTitle ? "Unknown artist" : "Artist unknown");
-    const actionableArtist = usableArtistName(rawArtist);
+    const actionableArtist = usableArtistName(
+      rawArtist,
+      track?.artistMbid,
+      ds.artistActionExclusions ?? [],
+    );
 
     const liveShow = ds.shows.find(s => s.state === 'live');
     const djNames = eligibleDjNames({

@@ -102,4 +102,72 @@ describe("demo Radio station cards", () => {
     expect(screen.getByText("Unknown artist").tagName).toBe("DIV");
     expect(screen.queryByRole("button", { name: "Unknown artist" })).toBeNull();
   });
+
+  test.each([
+    ["host", "Cheryl Waters", ["Cheryl Waters"]],
+    ["show", "The Midday Show", ["The Midday Show"]],
+  ])("keeps source-backed %s metadata plain text", (_kind, artist, artistActionExclusions) => {
+    render(
+      <RadioSurface
+        stations={[{
+          ...matchingStation(),
+          artistActionExclusions,
+          liveTrack: {
+            ...matchingStation().liveTrack!,
+            artist,
+            artistMbid: null,
+          },
+        }]}
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+        onFocusArtist={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(artist).tagName).toBe("DIV");
+    expect(screen.queryByRole("button", { name: artist })).toBeNull();
+  });
+
+  test("keeps unresolved but otherwise usable artist metadata actionable", () => {
+    const onFocusArtist = vi.fn();
+    render(
+      <RadioSurface
+        stations={[{
+          ...matchingStation(),
+          liveTrack: {
+            ...matchingStation().liveTrack!,
+            artist: "Broadcast",
+            artistMbid: null,
+          },
+        }]}
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+        onFocusArtist={onFocusArtist}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Broadcast" }));
+    expect(onFocusArtist).toHaveBeenCalledWith("Broadcast");
+  });
+
+  test("keeps a grounded artist actionable despite matching attribution text", () => {
+    const onFocusArtist = vi.fn();
+    render(
+      <RadioSurface
+        stations={[{
+          ...matchingStation(),
+          artistActionExclusions: ["Stereolab"],
+        }]}
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+        onFocusArtist={onFocusArtist}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Stereolab" }));
+    expect(onFocusArtist).toHaveBeenCalledWith("Stereolab");
+  });
 });
