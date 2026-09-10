@@ -3718,6 +3718,43 @@ export interface MeCrossingsResult {
   failed?: boolean;
 }
 
+/**
+ * @nullable
+ */
+export type StationCrossingMomentExactMatchKind =
+  | (typeof StationCrossingMomentExactMatchKind)[keyof typeof StationCrossingMomentExactMatchKind]
+  | null;
+
+export const StationCrossingMomentExactMatchKind = {
+  song: "song",
+  album: "album",
+} as const;
+
+export interface StationCrossingMoment {
+  spinId: number;
+  recordingMbid: string;
+  /** @nullable */
+  releaseGroupMbid: string | null;
+  /** @nullable */
+  albumTitle: string | null;
+  /** @nullable */
+  exactMatchKind: StationCrossingMomentExactMatchKind;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artworkUrl: string | null;
+  playedAt: string;
+}
+
+export interface MeStationCrossingsResult {
+  stationSlug: string;
+  generatedAt: string;
+  exact: StationCrossingMoment[];
+  artistOnly: StationCrossingMoment[];
+  /** @nullable */
+  nextCursor: string | null;
+}
+
 export type StationsScheduleResultItemsItem = {
   stationSlug: string;
   runs: StationScheduleRun[];
@@ -5099,6 +5136,18 @@ export type GetSpotifySavedParams = {
    * @minLength 1
    */
   mbid: string;
+};
+
+export type GetMyStationCrossingsParams = {
+  /**
+   * Opaque cursor from the previous page.
+   */
+  cursor?: string;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
 };
 
 export type GetMyPressCrossingsParams = {

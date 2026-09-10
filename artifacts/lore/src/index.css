@@ -3041,6 +3041,19 @@
   text-align: left;
   padding: 7px 12px 9px;
   border-top: 1px solid hsl(var(--border) / .7);
+  cursor: pointer;
+}
+.demo-radio__reason--featured:hover,
+.demo-radio__reason--featured:focus-visible {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / .8);
+}
+.demo-radio__reason--featured:focus-visible {
+  outline: 2px solid hsl(var(--accent) / .75);
+  outline-offset: -2px;
+}
+.demo-radio__reason--featured:disabled {
+  cursor: default;
 }
 .demo-radio__crossings-link {
   cursor: pointer;
@@ -3185,6 +3198,163 @@
   padding: 18px 2px;
   color: hsl(var(--muted-foreground));
   font-size: 11px;
+}
+.demo-radio-crossings {
+  padding-top: 12px;
+}
+.demo-radio-crossings__header {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.demo-radio-crossings__back {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font: 600 10px/1 var(--app-font-mono);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.demo-radio-crossings__back:hover,
+.demo-radio-crossings__back:focus-visible {
+  color: hsl(var(--foreground));
+}
+.demo-radio-crossings__header h2,
+.demo-radio-crossings__header p,
+.demo-radio-crossings__section h3,
+.demo-radio-crossings__section p {
+  margin: 0;
+}
+.demo-radio-crossings__header h2 {
+  font: 500 24px/1.2 var(--app-font-display);
+}
+.demo-radio-crossings__header p {
+  margin-top: 5px;
+  color: hsl(var(--muted-foreground));
+  font: 15px/1.4 var(--app-font-voice);
+}
+.demo-radio-crossings__state {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 8px;
+  color: hsl(var(--muted-foreground));
+  font: 15px/1.45 var(--app-font-voice);
+}
+.demo-radio-crossings__state button {
+  display: block;
+  margin-top: 12px;
+  padding: 6px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 5px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font: 600 10px/1 var(--app-font-mono);
+  cursor: pointer;
+}
+.demo-radio-crossings__freshness {
+  padding: 12px 0 4px;
+  color: hsl(var(--muted-foreground));
+  font: 9px/1.4 var(--app-font-mono);
+}
+.demo-radio-crossings__section {
+  margin-top: 16px;
+}
+.demo-radio-crossings__section > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 2px 9px;
+}
+.demo-radio-crossings__section h3 {
+  font: 600 12px/1.25 var(--app-font-mono);
+}
+.demo-radio-crossings__section header p {
+  margin-top: 3px;
+  color: hsl(var(--muted-foreground));
+  font: 12px/1.35 var(--app-font-voice);
+}
+.demo-radio-crossings__section header > span {
+  color: hsl(var(--library));
+  font: 11px/1.25 var(--app-font-mono);
+}
+.demo-radio-crossings__section ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid hsl(var(--border));
+}
+.demo-radio-crossings__section li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 2px;
+  border-bottom: 1px solid hsl(var(--border) / .75);
+}
+.demo-radio-crossings__section li div {
+  min-width: 0;
+}
+.demo-radio-crossings__section li strong,
+.demo-radio-crossings__section li span,
+.demo-radio-crossings__section li small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-radio-crossings__section li strong {
+  font: 500 14px/1.25 var(--app-font-display);
+}
+.demo-radio-crossings__section li span {
+  margin-top: 3px;
+  color: hsl(var(--muted-foreground));
+  font: 10px/1.25 var(--app-font-mono);
+}
+.demo-radio-crossings__section li small {
+  margin-top: 3px;
+  color: hsl(var(--library));
+  font: 9px/1.25 var(--app-font-mono);
+}
+.demo-radio-crossings__section time {
+  flex: 0 0 auto;
+  color: hsl(var(--muted-foreground));
+  font: 9px/1.25 var(--app-font-mono);
+}
+.demo-radio-crossings__none {
+  padding: 12px 2px;
+  color: hsl(var(--muted-foreground));
+  font: 12px/1.4 var(--app-font-voice);
+}
+.demo-radio-crossings__more {
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font: 600 10px/1 var(--app-font-mono);
+  cursor: pointer;
+}
+.demo-radio-crossings__more:disabled {
+  color: hsl(var(--muted-foreground));
+  cursor: wait;
+}
+@media (max-width: 560px) {
+  .demo-radio-crossings__section li {
+    align-items: start;
+    flex-direction: column;
+    gap: 5px;
+  }
 }
 .demo-nav svg {
   width: 18px;

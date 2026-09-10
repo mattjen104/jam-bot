@@ -6000,6 +6000,67 @@ export const GetMyCrossingsResponse = zod.object({
 });
 
 /**
+ * Returns every resolved spin from the station that crosses the listener's active library or taste artists. Exact saved-recording and saved-album matches are listed separately from artist-only matches. Both lists are ordered newest-first.
+
+ * @summary Every listener crossing for one station
+ */
+
+export const GetMyStationCrossingsParams = zod.object({
+  stationSlug: zod.coerce.string().min(1),
+});
+
+export const getMyStationCrossingsQueryLimitDefault = 50;
+export const getMyStationCrossingsQueryLimitMax = 100;
+
+export const GetMyStationCrossingsQueryParams = zod.object({
+  cursor: zod.coerce
+    .string()
+    .optional()
+    .describe("Opaque cursor from the previous page."),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getMyStationCrossingsQueryLimitMax)
+    .default(getMyStationCrossingsQueryLimitDefault),
+});
+
+export const GetMyStationCrossingsResponse = zod.object({
+  stationSlug: zod.string(),
+  generatedAt: zod.string().datetime({}),
+  exact: zod.array(
+    zod.object({
+      spinId: zod.number(),
+      recordingMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      albumTitle: zod.string().nullable(),
+      exactMatchKind: zod
+        .union([zod.literal("song"), zod.literal("album"), zod.literal(null)])
+        .nullable(),
+      title: zod.string(),
+      artist: zod.string(),
+      artworkUrl: zod.string().nullable(),
+      playedAt: zod.string().datetime({}),
+    }),
+  ),
+  artistOnly: zod.array(
+    zod.object({
+      spinId: zod.number(),
+      recordingMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      albumTitle: zod.string().nullable(),
+      exactMatchKind: zod
+        .union([zod.literal("song"), zod.literal("album"), zod.literal(null)])
+        .nullable(),
+      title: zod.string(),
+      artist: zod.string(),
+      artworkUrl: zod.string().nullable(),
+      playedAt: zod.string().datetime({}),
+    }),
+  ),
+  nextCursor: zod.string().nullable(),
+});
+
+/**
  * Returns scraped-metadata mentions of the listener's taste set (library items, taste seeds, unresolved Spotify artists) from picks (blog posts, curated lists), list entries (year-end / best-of lists), and published track claims. Ordered newest-first. Cursor-based pagination via `cursor`; 30 items per page. Returns `hasTaste: false` when the listener has no library or seeds, so the client can show a taste-seeding nudge instead of an empty state. Returns `computing: true` during cold-cache computes (rare; Press is cheap). Returns `failed: true` when the compute crashes.
 
  * @summary Press lens — listener taste × scraped-metadata mentions

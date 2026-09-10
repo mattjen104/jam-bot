@@ -135,7 +135,6 @@ export default function SplitHome() {
       <main className="split-home split-home--front-door">
         <RadioSurface
           stations={stations}
-          visibleSeeds={visibleSeeds}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
         />

@@ -154,3 +154,4 @@
 - [api-server vitest pool hang](apivitest-pool-hang.md) — globalSetup pg pools never close; idleTimeout races close timeout → flaky exit 1 with zero test failures; end both pools in teardown.
 - [Append-only ledgers vs station deletion](append-only-ledger-fk.md) — lore_observability_append_only trigger blocks the stations FK ON DELETE SET NULL; station deletes must skip ledger-referenced rows, never weaken the trigger.
 - [Focused Lore demo boundary](lore-focused-demo-boundary.md) — server-controlled and off by default; demo is one Library surface toggling Stations, Songs, and Artists.
+- [Categorized pagination honesty](categorized-pagination-honesty.md) — combined pages cannot prove a category is empty until the final page; label partial counts and empties as loaded-so-far.

@@ -4,28 +4,32 @@ import { eligibleDjNames } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
-import { Play } from "lucide-react";
+import { getMyStationCrossings } from "@workspace/api-client-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { ArrowLeft, Play } from "lucide-react";
 
 const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
 
 export function RadioSurface({ 
   stations, 
-  visibleSeeds, 
   hasSeeds,
   hasLibrary,
   showHeader = true,
   sort = "overlap",
   focusedArtist = null,
-  onOpenCrossings,
+  selectedStationSlug = null,
+  onOpenStationCrossings,
+  onCloseStationCrossings,
 }: {
   stations: DialStation[];
-  visibleSeeds: string[];
   hasSeeds: boolean;
   hasLibrary: boolean;
   showHeader?: boolean;
   sort?: "overlap" | "live" | "discovery" | "name";
   focusedArtist?: string | null;
-  onOpenCrossings?: (stationSlug: string) => void;
+  selectedStationSlug?: string | null;
+  onOpenStationCrossings?: (stationSlug: string) => void;
+  onCloseStationCrossings?: () => void;
 }) {
   const { radio } = usePlayer();
 
@@ -148,7 +152,9 @@ export function RadioSurface({
           <button
             type="button"
             className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
-            onClick={() => onOpenCrossings?.(ds.station.slug)}
+            onClick={() => onOpenStationCrossings?.(ds.station.slug)}
+            disabled={!onOpenStationCrossings}
+            aria-label={`Open every crossing for ${ds.station.name}`}
           >
             {reasonLine}
           </button>
@@ -156,6 +162,17 @@ export function RadioSurface({
       </div>
     );
   };
+
+  if (selectedStationSlug) {
+    const selected = stations.find((ds) => ds.station.slug === selectedStationSlug) ?? null;
+    return (
+      <StationCrossingsView
+        station={selected}
+        stationSlug={selectedStationSlug}
+        onBack={onCloseStationCrossings}
+      />
+    );
+  }
 
   return (
     <section className="demo-radio" aria-label="Radio">
@@ -166,14 +183,12 @@ export function RadioSurface({
         </header>
       ) : null}
 
-      <div className="demo-radio__section-label">
-        <span>{focusedArtist ? `Stations that play ${focusedArtist}` : "Plays your music"}</span>
-        <span>
-          {focusedArtist
-            ? `${allCrossings.length} match${allCrossings.length === 1 ? "" : "es"}`
-            : `${visibleSeeds.length} artists`}
-        </span>
-      </div>
+      {focusedArtist ? (
+        <div className="demo-radio__section-label">
+          <span>{`Stations that play ${focusedArtist}`}</span>
+          <span>{`${allCrossings.length} match${allCrossings.length === 1 ? "" : "es"}`}</span>
+        </div>
+      ) : null}
 
       {showCrossings ? (
         allCrossings.map(ds => renderRow(ds, false))
@@ -191,6 +206,177 @@ export function RadioSurface({
       {rosterStations.length === 0 ? (
         <p className="demo-radio__unavailable">The editorial stations are temporarily unavailable.</p>
       ) : null}
+    </section>
+  );
+}
+
+function crossingDateLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Airtime unavailable";
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function StationCrossingsView({
+  station,
+  stationSlug,
+  onBack,
+}: {
+  station: DialStation | null;
+  stationSlug: string;
+  onBack?: () => void;
+}) {
+  const query = useInfiniteQuery({
+    queryKey: ["me", "station-crossings", stationSlug],
+    queryFn: ({ pageParam }) => getMyStationCrossings(stationSlug, {
+      cursor: pageParam,
+      limit: 50,
+    }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    staleTime: 2 * 60_000,
+    retry: false,
+  });
+  const pages = query.data?.pages ?? [];
+  const exact = pages.flatMap((page) => page.exact);
+  const artistOnly = pages.flatMap((page) => page.artistOnly);
+  const latestPage = pages.at(-1);
+  const stationName = station?.station.name ?? stationSlug;
+  const hasItems = exact.length + artistOnly.length > 0;
+  const hasLoadedData = pages.length > 0;
+  const refreshFailed = query.isError && hasLoadedData;
+
+  return (
+    <section className="demo-radio demo-radio-crossings" aria-label={`Crossings for ${stationName}`}>
+      <header className="demo-radio-crossings__header">
+        <button type="button" onClick={onBack} className="demo-radio-crossings__back">
+          <ArrowLeft size={15} aria-hidden="true" />
+          Back to Radio
+        </button>
+        <div>
+          <h2>{stationName}</h2>
+          <p>Every time this station played your saved music or artists.</p>
+        </div>
+      </header>
+
+      {query.isLoading ? (
+        <div className="demo-radio-crossings__state" aria-live="polite">
+          Loading this station’s crossings…
+        </div>
+      ) : query.isError && !hasLoadedData ? (
+        <div className="demo-radio-crossings__state" role="alert">
+          These crossings could not be checked right now.
+          <button type="button" onClick={() => void query.refetch()}>Try again</button>
+        </div>
+      ) : (
+        <>
+          <div className="demo-radio-crossings__freshness" aria-live="polite">
+            {refreshFailed
+              ? "Showing the last loaded evidence; the refresh failed."
+              : query.isFetching
+                ? "Refreshing crossing evidence…"
+                : latestPage
+                  ? `Checked ${crossingDateLabel(latestPage.generatedAt)}`
+                  : "Crossing evidence unavailable"}
+          </div>
+          {!hasItems ? (
+            <div className="demo-radio-crossings__state">
+              No current crossings were found. The Radio card’s cached evidence may be older than the latest library or station history.
+              {refreshFailed ? (
+                <button type="button" onClick={() => void query.refetch()}>Try again</button>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <CrossingMomentSection
+                title="Saved songs & albums"
+                description="Exact saved recordings and tracks from saved albums."
+                items={exact}
+                partial={query.hasNextPage}
+              />
+              <CrossingMomentSection
+                title="Artist-only crossings"
+                description="Other tracks by artists in your music."
+                items={artistOnly}
+                partial={query.hasNextPage}
+              />
+              {query.hasNextPage ? (
+                <button
+                  type="button"
+                  className="demo-radio-crossings__more"
+                  disabled={query.isFetchingNextPage}
+                  onClick={() => void query.fetchNextPage()}
+                >
+                  {query.isFetchingNextPage ? "Loading more crossings…" : "Load more crossings"}
+                </button>
+              ) : null}
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function CrossingMomentSection({
+  title,
+  description,
+  items,
+  partial,
+}: {
+  title: string;
+  description: string;
+  items: Array<{
+    spinId: number;
+    title: string;
+    artist: string;
+    albumTitle: string | null;
+    exactMatchKind: "song" | "album" | null;
+    playedAt: string;
+  }>;
+  partial: boolean;
+}) {
+  return (
+    <section className="demo-radio-crossings__section">
+      <header>
+        <div>
+          <h3>{title}</h3>
+          <p>{description}</p>
+        </div>
+        <span>
+          {items.length.toLocaleString()}
+          {partial ? " loaded" : ""}
+        </span>
+      </header>
+      {items.length === 0 ? (
+        <p className="demo-radio-crossings__none">
+          {partial ? "None loaded yet. Older crossings may appear below." : "None for this station."}
+        </p>
+      ) : (
+        <ol>
+          {items.map((item) => (
+            <li key={item.spinId}>
+              <div>
+                <strong>{item.title}</strong>
+                <span>{item.artist}</span>
+                {item.exactMatchKind ? (
+                  <small>
+                    {item.exactMatchKind === "album" ? "Saved album" : "Saved song"}
+                    {item.albumTitle ? ` · ${item.albumTitle}` : ""}
+                  </small>
+                ) : item.albumTitle ? <small>{item.albumTitle}</small> : null}
+              </div>
+              <time dateTime={item.playedAt}>{crossingDateLabel(item.playedAt)}</time>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }

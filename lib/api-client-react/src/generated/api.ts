@@ -63,6 +63,7 @@ import type {
   GetMyRecentSetsParams,
   GetMySavedPressParams,
   GetMyShowsParams,
+  GetMyStationCrossingsParams,
   GetMyWeeklyRecapParams,
   GetOembedParams,
   GetPendingKeepStatusParams,
@@ -121,6 +122,7 @@ import type {
   MePressCrossingsResponse,
   MeRecentSetsResponse,
   MeShowsResponse,
+  MeStationCrossingsResult,
   NearbyStationsResponse,
   OEmbed,
   OverlapSpineResponse,
@@ -9386,6 +9388,129 @@ export function useGetMyCrossings<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyCrossingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns every resolved spin from the station that crosses the listener's active library or taste artists. Exact saved-recording and saved-album matches are listed separately from artist-only matches. Both lists are ordered newest-first.
+
+ * @summary Every listener crossing for one station
+ */
+export const getGetMyStationCrossingsUrl = (
+  stationSlug: string,
+  params?: GetMyStationCrossingsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/stations/${stationSlug}/crossings?${stringifiedParams}`
+    : `/api/me/stations/${stationSlug}/crossings`;
+};
+
+export const getMyStationCrossings = async (
+  stationSlug: string,
+  params?: GetMyStationCrossingsParams,
+  options?: RequestInit,
+): Promise<MeStationCrossingsResult> => {
+  return customFetch<MeStationCrossingsResult>(
+    getGetMyStationCrossingsUrl(stationSlug, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyStationCrossingsQueryKey = (
+  stationSlug: string,
+  params?: GetMyStationCrossingsParams,
+) => {
+  return [
+    `/api/me/stations/${stationSlug}/crossings`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetMyStationCrossingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyStationCrossings>>,
+  TError = ErrorType<void>,
+>(
+  stationSlug: string,
+  params?: GetMyStationCrossingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyStationCrossings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetMyStationCrossingsQueryKey(stationSlug, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyStationCrossings>>
+  > = ({ signal }) =>
+    getMyStationCrossings(stationSlug, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!stationSlug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyStationCrossings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyStationCrossingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyStationCrossings>>
+>;
+export type GetMyStationCrossingsQueryError = ErrorType<void>;
+
+/**
+ * @summary Every listener crossing for one station
+ */
+
+export function useGetMyStationCrossings<
+  TData = Awaited<ReturnType<typeof getMyStationCrossings>>,
+  TError = ErrorType<void>,
+>(
+  stationSlug: string,
+  params?: GetMyStationCrossingsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyStationCrossings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyStationCrossingsQueryOptions(
+    stationSlug,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

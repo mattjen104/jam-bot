@@ -601,6 +601,59 @@ describe("GET /api/me/crossings — artist MBID crossing", () => {
   }, TEST_TIMEOUT);
 });
 
+describe("GET /api/me/stations/:stationSlug/crossings — complete station history", () => {
+  it("separates saved-album moments from artist-only moments and includes every airtime", async () => {
+    if (!dbAvailable) return;
+
+    const exactResult = await get(`/api/me/stations/${STATION_SLUG}/crossings`, SID_RG);
+    expect(exactResult.status).toBe(200);
+    expect(exactResult.body.stationSlug).toBe(STATION_SLUG);
+    expect(exactResult.body.exact).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        recordingMbid: MBID_SPIN_RG,
+        releaseGroupMbid: RG_MBID,
+        albumTitle: `Test Album ${run}`,
+        exactMatchKind: "album",
+      }),
+    ]));
+    expect(exactResult.body.artistOnly).toHaveLength(0);
+    expect(exactResult.body.exact.every((item: { playedAt: string }) =>
+      !Number.isNaN(Date.parse(item.playedAt)),
+    )).toBe(true);
+
+    const artistResult = await get(`/api/me/stations/${STATION_SLUG}/crossings?limit=1`, SID_ART);
+    expect(artistResult.status).toBe(200);
+    expect(artistResult.body.exact).toHaveLength(0);
+    expect(artistResult.body.artistOnly).toHaveLength(1);
+    expect(typeof artistResult.body.nextCursor).toBe("string");
+    const artistNext = await get(
+      `/api/me/stations/${STATION_SLUG}/crossings?limit=1&cursor=${encodeURIComponent(artistResult.body.nextCursor)}`,
+      SID_ART,
+    );
+    expect(artistNext.status).toBe(200);
+    expect(artistNext.body.artistOnly).toHaveLength(1);
+    expect(artistNext.body.nextCursor).toBeNull();
+    const artistMoments = [...artistResult.body.artistOnly, ...artistNext.body.artistOnly];
+    expect(artistMoments.every((item: { recordingMbid: string }) =>
+      item.recordingMbid === MBID_SPIN_ART,
+    )).toBe(true);
+    expect(new Date(artistMoments[0].playedAt).getTime())
+      .toBeGreaterThan(new Date(artistMoments[1].playedAt).getTime());
+  }, TEST_TIMEOUT);
+
+  it("returns an honest empty result and rejects unavailable stations", async () => {
+    if (!dbAvailable) return;
+    const empty = await get(`/api/me/stations/${STATION_SLUG}/crossings`, SID_EMPTY);
+    expect(empty.status).toBe(200);
+    expect(empty.body.exact).toEqual([]);
+    expect(empty.body.artistOnly).toEqual([]);
+    expect(empty.body.nextCursor).toBeNull();
+
+    const missing = await get("/api/me/stations/not-a-station/crossings", SID_RG);
+    expect(missing.status).toBe(404);
+  }, TEST_TIMEOUT);
+});
+
 describe("GET /api/me/crossings — soft artist name fallback", () => {
   it("counts artistCrossings when artist name matches an unresolved spotify_library_items row", async () => {
     if (!dbAvailable || !softTableAvailable) return;

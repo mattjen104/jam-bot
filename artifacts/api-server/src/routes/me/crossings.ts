@@ -13,9 +13,14 @@ import {
   tasteSeedsTable,
   type CrossingsRow,
 } from "@workspace/db";
-import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { eq, and, desc, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
+import {
+  GetMyStationCrossingsParams,
+  GetMyStationCrossingsQueryParams,
+  GetMyStationCrossingsResponse,
+} from "@workspace/api-zod";
 import {
   scheduleLifetimeCrossingsRefresh,
 } from "../../lore/lifetime-crossings-job.js";
@@ -690,6 +695,214 @@ export function schedulePersonalCrossingsRecompute(userId: number): void {
 // ---------------------------------------------------------------------------
 // Personal crossings endpoint
 // ---------------------------------------------------------------------------
+
+const STATION_CROSSINGS_PAGE_SIZE = 50;
+
+function encodeStationCrossingsCursor(playedAt: Date, spinId: number): string {
+  return Buffer.from(JSON.stringify([playedAt.toISOString(), spinId])).toString("base64url");
+}
+
+function decodeStationCrossingsCursor(cursor: string | undefined): { playedAt: Date; spinId: number } | null {
+  if (!cursor) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (!Array.isArray(parsed) || parsed.length !== 2) return null;
+    const playedAt = new Date(parsed[0] as string);
+    const spinId = Number(parsed[1]);
+    if (Number.isNaN(playedAt.getTime()) || !Number.isInteger(spinId) || spinId < 1) return null;
+    return { playedAt, spinId };
+  } catch {
+    return null;
+  }
+}
+
+export async function computeStationCrossings(
+  userId: number,
+  stationSlug: string,
+  options: { cursor?: string; limit?: number } = {},
+) {
+  const cursor = decodeStationCrossingsCursor(options.cursor);
+  if (options.cursor && !cursor) throw new Error("Invalid station crossings cursor");
+  const limit = Math.min(100, Math.max(1, options.limit ?? STATION_CROSSINGS_PAGE_SIZE));
+  const userLibMbids = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
+  const userLibRgs = db
+    .select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+    .from(recordingReleaseGroupsTable)
+    .innerJoin(libraryItemsTable, eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid))
+    .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt)));
+  const userLibArtists = db
+    .select({ artistMbid: recordingsTable.artistMbid })
+    .from(recordingsTable)
+    .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
+    .where(and(
+      eq(libraryItemsTable.userId, userId),
+      isNull(libraryItemsTable.removedAt),
+      isNotNull(recordingsTable.artistMbid),
+    ));
+  const userSoftArtists = db
+    .selectDistinct({ artistNorm: sql<string>`${normArtistNameSql(spotifyLibraryItemsTable.artist)}` })
+    .from(spotifyLibraryItemsTable)
+    .where(and(
+      eq(spotifyLibraryItemsTable.userId, userId),
+      isNull(spotifyLibraryItemsTable.mbid),
+      isNull(spotifyLibraryItemsTable.removedAt),
+      ne(spotifyLibraryItemsTable.artist, ""),
+    ));
+  const userSeedArtists = db
+    .selectDistinct({ artistNorm: sql<string>`${normArtistNameSql(tasteSeedsTable.artistName)}` })
+    .from(tasteSeedsTable)
+    .where(eq(tasteSeedsTable.userId, userId));
+
+  const libHit = sql`(
+    ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
+    and (
+      ${spinsTable.mbid} in (${userLibMbids})
+      or (
+        ${recordingReleaseGroupsTable.releaseGroupMbid} is not null
+        and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
+      )
+    )
+  )`;
+  const notLibHit = sql`(
+    ${spinsTable.mbid} not in (${userLibMbids})
+    and (
+      ${recordingReleaseGroupsTable.releaseGroupMbid} is null
+      or ${recordingReleaseGroupsTable.releaseGroupMbid} not in (${userLibRgs})
+    )
+  )`;
+  const artistMatch = sql`(
+    ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
+    and (
+      ${recordingsTable.artistMbid} in (${userLibArtists})
+      or ${normArtistNameSql(recordingsTable.artist)} in (${userSoftArtists})
+      or ${normArtistNameSql(recordingsTable.artist)} in (${userSeedArtists})
+    )
+  )`;
+  const fields = {
+    spinId: spinsTable.id,
+    recordingMbid: recordingsTable.mbid,
+    releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+    albumTitle: recordingReleaseGroupsTable.title,
+    exactMatchKind: sql<"song" | "album" | null>`case
+      when ${spinsTable.mbid} in (${userLibMbids}) then 'song'
+      when ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs}) then 'album'
+      else null
+    end`,
+    title: recordingsTable.title,
+    artist: recordingsTable.artist,
+    artworkUrl: recordingsTable.artworkUrl,
+    playedAt: spinsTable.playedAt,
+  };
+  const cursorPredicate = cursor
+    ? sql`(
+        ${spinsTable.playedAt} < ${cursor.playedAt}
+        or (
+          ${spinsTable.playedAt} = ${cursor.playedAt}
+          and ${spinsTable.id} < ${cursor.spinId}
+        )
+      )`
+    : undefined;
+  const rows = await db
+    .selectDistinct(fields)
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+    .leftJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+        eq(recordingReleaseGroupsTable.isPrimary, true),
+      ),
+    )
+    .where(and(
+    eq(stationsTable.slug, stationSlug),
+    eq(stationsTable.hidden, false),
+    isNotNull(spinsTable.mbid),
+    cursorPredicate,
+    sql`(${libHit} or (${notLibHit} and ${artistMatch}))`,
+  ))
+    .orderBy(desc(spinsTable.playedAt), desc(spinsTable.id))
+    .limit(limit + 1);
+
+  const page = rows.slice(0, limit);
+  const serialize = (row: (typeof page)[number]) => ({
+    ...row,
+    playedAt: row.playedAt.toISOString(),
+  });
+  const exact = page.filter((row) => row.exactMatchKind !== null).map(serialize);
+  const artistOnly = page.filter((row) => row.exactMatchKind === null).map(serialize);
+  const last = page.at(-1);
+  return {
+    stationSlug,
+    generatedAt: new Date().toISOString(),
+    exact,
+    artistOnly,
+    nextCursor: rows.length > limit && last
+      ? encodeStationCrossingsCursor(last.playedAt, last.spinId)
+      : null,
+  };
+}
+
+router.get("/me/stations/:stationSlug/crossings", h(async (req, res) => {
+  const parsed = GetMyStationCrossingsParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const query = GetMyStationCrossingsQueryParams.safeParse(req.query);
+  if (!query.success || (query.data.cursor && !decodeStationCrossingsCursor(query.data.cursor))) {
+    res.status(400).json({ error: "Invalid station crossings query" });
+    return;
+  }
+  const station = await db
+    .select({ id: stationsTable.id })
+    .from(stationsTable)
+    .where(and(
+      eq(stationsTable.slug, parsed.data.stationSlug),
+      eq(stationsTable.hidden, false),
+    ))
+    .limit(1);
+  if (station.length === 0) {
+    res.status(404).json({ error: "Station not found" });
+    return;
+  }
+  const user = (req as AuthedRequest).loreUser;
+  const [hasLib, hasSeeds, hasSoft] = await Promise.all([
+    db
+      .select({ id: libraryItemsTable.id })
+      .from(libraryItemsTable)
+      .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)))
+      .limit(1),
+    db
+      .select({ id: tasteSeedsTable.id })
+      .from(tasteSeedsTable)
+      .where(eq(tasteSeedsTable.userId, user.id))
+      .limit(1),
+    db
+      .select({ id: spotifyLibraryItemsTable.id })
+      .from(spotifyLibraryItemsTable)
+      .where(and(
+        eq(spotifyLibraryItemsTable.userId, user.id),
+        isNull(spotifyLibraryItemsTable.removedAt),
+      ))
+      .limit(1),
+  ]);
+  if (hasLib.length === 0 && hasSeeds.length === 0 && hasSoft.length === 0) {
+    res.json(GetMyStationCrossingsResponse.parse({
+      stationSlug: parsed.data.stationSlug,
+      generatedAt: new Date().toISOString(),
+      exact: [],
+      artistOnly: [],
+      nextCursor: null,
+    }));
+    return;
+  }
+  const result = await computeStationCrossings(user.id, parsed.data.stationSlug, query.data);
+  res.json(GetMyStationCrossingsResponse.parse(result));
+}));
 
 /**
  * GET /api/me/crossings?date=YYYY-MM-DD — rolling 24-hour station crossing

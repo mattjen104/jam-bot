@@ -3399,6 +3399,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MeCrossingsResult"
+  /me/stations/{stationSlug}/crossings:
+    get:
+      operationId: getMyStationCrossings
+      tags: [me]
+      summary: Every listener crossing for one station
+      description: >
+        Returns every resolved spin from the station that crosses the listener's
+        active library or taste artists. Exact saved-recording and saved-album
+        matches are listed separately from artist-only matches. Both lists are
+        ordered newest-first.
+      parameters:
+        - name: stationSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque cursor from the previous page.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Station-scoped crossing history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeStationCrossingsResult"
+        "404":
+          description: Station not found or unavailable
   /me/press-crossings:
     get:
       operationId: getMyPressCrossings
@@ -9198,6 +9238,49 @@ components:
         failed:
           type: boolean
       required: [items]
+    StationCrossingMoment:
+      type: object
+      properties:
+        spinId:
+          type: integer
+        recordingMbid:
+          type: string
+        releaseGroupMbid:
+          type: ["string", "null"]
+        albumTitle:
+          type: ["string", "null"]
+        exactMatchKind:
+          type: ["string", "null"]
+          enum: [song, album, null]
+        title:
+          type: string
+        artist:
+          type: string
+        artworkUrl:
+          type: ["string", "null"]
+        playedAt:
+          type: string
+          format: date-time
+      required: [spinId, recordingMbid, releaseGroupMbid, albumTitle, exactMatchKind, title, artist, artworkUrl, playedAt]
+    MeStationCrossingsResult:
+      type: object
+      properties:
+        stationSlug:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        exact:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationCrossingMoment"
+        artistOnly:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationCrossingMoment"
+        nextCursor:
+          type: ["string", "null"]
+      required: [stationSlug, generatedAt, exact, artistOnly, nextCursor]
     DialCrossingItem:
       type: object
       properties:
