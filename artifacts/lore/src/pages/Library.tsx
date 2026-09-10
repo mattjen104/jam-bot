@@ -1122,7 +1122,28 @@ function ArtistLensControl({
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--app-font-sans)", fontSize: 13 }}
                 >
                   <span>{a}</span>
-                  {isAdded && <span style={{ fontFamily: "var(--app-font-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "hsl(var(--accent))", border: "1px solid hsl(var(--accent)/0.3)", borderRadius: 3, padding: "1px 4px" }}>Added</span>}
+                  {isAdded ? (
+                    <span className="library-artist-lens__result-action library-artist-lens__result-action--added">
+                      <span aria-hidden="true">✓</span> Added
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="library-artist-lens__result-action library-artist-lens__result-action--add"
+                      aria-label={`Add ${a} to my artists`}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onAddSeed(a);
+                      }}
+                    >
+                      <span aria-hidden="true">+</span> Add
+                    </button>
+                  )}
                 </CommandItem>
               );
             })}

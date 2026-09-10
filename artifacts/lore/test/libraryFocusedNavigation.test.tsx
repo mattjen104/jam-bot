@@ -10,14 +10,17 @@ const {
   mockUseLocation,
   mockUseAppConfig,
   mockUseMyLibraryInfinite,
+  mockAddSeed,
 } = vi.hoisted(() => {
   const mockSetLocation = vi.fn();
+  const mockAddSeed = vi.fn();
   return {
     mockSetLocation,
     mockUseSearch: vi.fn(() => ""),
     mockUseLocation: vi.fn(() => ["/library", mockSetLocation] as const),
     mockUseAppConfig: vi.fn(() => ({ data: { demoSurface: true }, isLoading: false })),
     mockUseMyLibraryInfinite: vi.fn(),
+    mockAddSeed,
   };
 });
 
@@ -59,14 +62,22 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
     useSuggestArchiveArtists: vi.fn(() => ({
       data: {
         query: "king gizzard",
-        suggestions: [{ name: "King Gizzard & The Lizard Wizard", playCount: 584 }],
+        suggestions: [
+          { name: "King Gizzard & The Lizard Wizard", playCount: 584 },
+          { name: "King Gizzard & The Lizard Wizard with Mild High Club", playCount: 11 },
+        ],
       },
     })),
   });
 });
 
 vi.mock("../src/hooks/useSeedManager", () => ({
-  useSeedManager: () => ({ visibleSeeds: [], replaceSeeds: vi.fn() }),
+  useSeedManager: () => ({
+    visibleSeeds: [],
+    addSeed: mockAddSeed,
+    removeSeed: vi.fn(),
+    replaceSeeds: vi.fn(),
+  }),
 }));
 vi.mock("../src/hooks/useDialData", () => ({
   useDialData: () => ({ stations: [], hasLibrary: true, hasSeeds: false }),
@@ -161,6 +172,7 @@ beforeEach(() => {
     json: async () => ({ releases: [] }),
   })));
   mockSetLocation.mockReset();
+  mockAddSeed.mockReset();
   mockUseSearch.mockReturnValue("?view=songs&sort=artist");
   mockUseLocation.mockReturnValue(["/library?view=songs&sort=artist", mockSetLocation]);
   mockUseAppConfig.mockReturnValue({ data: { demoSurface: true }, isLoading: false });
@@ -174,6 +186,28 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
+  it("adds several autocomplete matches without closing or clearing the search", async () => {
+    await renderLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
+    const input = screen.getByPlaceholderText("Search or add artist...");
+    fireEvent.change(input, { target: { value: "king gizzard" } });
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Add King Gizzard & The Lizard Wizard to my artists",
+    }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Add King Gizzard & The Lizard Wizard with Mild High Club to my artists",
+    }));
+
+    expect(mockAddSeed).toHaveBeenNthCalledWith(1, "King Gizzard & The Lizard Wizard");
+    expect(mockAddSeed).toHaveBeenNthCalledWith(2, "King Gizzard & The Lizard Wizard with Mild High Club");
+    expect((input as HTMLInputElement).value).toBe("king gizzard");
+    expect(screen.getByRole("button", {
+      name: "Add King Gizzard & The Lizard Wizard to my artists",
+    })).toBeTruthy();
+  });
+
   it("uses the best canonical artist completion when Enter is pressed", async () => {
     await renderLibrary();
 
