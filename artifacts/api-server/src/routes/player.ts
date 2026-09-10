@@ -8,6 +8,8 @@ import {
   showsTable,
   recordingsTable,
   libraryItemsTable,
+  spotifyLibraryItemsTable,
+  tasteSeedsTable,
   trackClaimsTable,
   songExploderEpisodesTable,
   recordingReleaseGroupsTable,
@@ -56,6 +58,12 @@ const HISTORY_SCOPES = new Set<HistoryScope>(["now", "set", "24h", "7d", "lifeti
 const HISTORY_FILTERS = new Set<HistoryFilter>(["all", "crossings", "firstPlays"]);
 const HISTORY_CATEGORIES = new Set(["ambient", "campus", "specialist", "anchor", "public", "indie", "discovery"]);
 const HISTORY_PAGE_MAX = 60;
+const JUNK_CROSSING_ARTIST_SQL_RE =
+  String.raw`(^https?://|[.](com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)([/?#[:space:]]|$))`;
+
+function normalizedCrossingArtist(col: unknown): ReturnType<typeof sql> {
+  return sql`nullif(regexp_replace(regexp_replace(lower(${col}), '^the[[:space:]]+', ''), '[[:space:][:punct:]]+', '', 'g'), '')`;
+}
 
 /**
  * Bounded, stable archive read model for both Dial surfaces. This deliberately
@@ -115,6 +123,33 @@ router.get("/player/history", h(async (req, res) => {
         .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
         .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt), isNotNull(recordingsTable.artistMbid)))
     : null;
+  const userReleaseGroups = user
+    ? db.select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+        .from(recordingReleaseGroupsTable)
+        .innerJoin(libraryItemsTable, eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid))
+        .where(and(
+          eq(libraryItemsTable.userId, user.id),
+          isNull(libraryItemsTable.removedAt),
+          eq(recordingReleaseGroupsTable.isPrimary, true),
+        ))
+    : null;
+  const userSoftArtists = user
+    ? db.selectDistinct({
+        artistNorm: normalizedCrossingArtist(spotifyLibraryItemsTable.artist),
+      }).from(spotifyLibraryItemsTable)
+        .where(and(
+          eq(spotifyLibraryItemsTable.userId, user.id),
+          isNull(spotifyLibraryItemsTable.mbid),
+          isNull(spotifyLibraryItemsTable.removedAt),
+          sql`${spotifyLibraryItemsTable.artist} <> ''`,
+        ))
+    : null;
+  const userSeedArtists = user
+    ? db.selectDistinct({
+        artistNorm: normalizedCrossingArtist(tasteSeedsTable.artistName),
+      }).from(tasteSeedsTable)
+        .where(eq(tasteSeedsTable.userId, user.id))
+    : null;
 
   let stationIds: number[] | null = null;
   if (!useHomeFastLane || categories.length > 0) {
@@ -153,8 +188,25 @@ router.get("/player/history", h(async (req, res) => {
           : sql`${spinsTable.playedAt} > ${before}`)
       : undefined,
   ].filter((p): p is NonNullable<typeof p> => p != null);
-  const libraryHit = userLibrary
-    ? sql`(${spinsTable.mbid} in (${userLibrary}) OR ${recordingsTable.artistMbid} in (${userArtists}))`
+  // Keep this definition aligned with the Radio crossing aggregate: exact
+  // tracks, kept albums, and every track by a library/imported/seed artist.
+  const libraryHit = userLibrary && userReleaseGroups && userArtists && userSoftArtists && userSeedArtists
+    ? sql`(
+        ${recordingsTable.artist} !~* ${JUNK_CROSSING_ARTIST_SQL_RE}
+        AND (
+          ${spinsTable.mbid} IN (${userLibrary})
+          OR EXISTS (
+            SELECT 1
+            FROM ${recordingReleaseGroupsTable} history_rg
+            WHERE history_rg.recording_mbid = ${spinsTable.mbid}
+              AND history_rg.is_primary = true
+              AND history_rg.release_group_mbid IN (${userReleaseGroups})
+          )
+          OR ${recordingsTable.artistMbid} IN (${userArtists})
+          OR ${normalizedCrossingArtist(recordingsTable.artist)} IN (${userSoftArtists})
+          OR ${normalizedCrossingArtist(recordingsTable.artist)} IN (${userSeedArtists})
+        )
+      )`
     : sql`false`;
   if (filter === "crossings") predicates.push(libraryHit);
   if (filter === "firstPlays") {
