@@ -51,6 +51,8 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Grid2X2,
+  List,
   Loader2,
   Radio,
   Search,
@@ -64,6 +66,10 @@ import { LibraryCrate } from "../components/LibraryCrate";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
+import {
+  DemoSongRemote,
+  DemoStationRemote,
+} from "../components/DemoLibraryRemote";
 import { useDialData } from "../hooks/useDialData";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -1374,6 +1380,7 @@ function DemoMergedLibrary({
   const selectedStationSlug =
     params.get("stationCrossings")
     ?? (params.get("lens") === "crossings" ? params.get("station") : null);
+  const remoteLayout = params.get("layout") === "grid";
   const focusedArtist = useMemo(
     () => new URLSearchParams(search).get("focus"),
     [search],
@@ -1402,7 +1409,14 @@ function DemoMergedLibrary({
     crossingsEnabled: true,
     deferEnrichment: false,
   });
-  const { data: demoLibraryData } = useMyLibraryInfinite({}, 100);
+  const {
+    data: demoLibraryData,
+    hasNextPage: demoLibraryHasNextPage,
+    isFetchingNextPage: demoLibraryFetchingNextPage,
+    fetchNextPage: fetchNextDemoLibraryPage,
+  } = useMyLibraryInfinite({
+    sort: songSort === "artist" || songSort === "title" ? songSort : "added",
+  }, 100);
   const artistStationQuery = useSearchArtistStations(
     { q: focusedArtist ?? "" },
     {
@@ -1418,6 +1432,21 @@ function DemoMergedLibrary({
     () => demoLibraryData?.pages.flatMap((page) => page.items) ?? [],
     [demoLibraryData],
   );
+  useEffect(() => {
+    if (
+      view !== "songs"
+      || !remoteLayout
+      || !demoLibraryHasNextPage
+      || demoLibraryFetchingNextPage
+    ) return;
+    void fetchNextDemoLibraryPage();
+  }, [
+    demoLibraryFetchingNextPage,
+    demoLibraryHasNextPage,
+    fetchNextDemoLibraryPage,
+    remoteLayout,
+    view,
+  ]);
 
   const filteredStations = useMemo(() => {
     let list = stations;
@@ -1551,6 +1580,19 @@ function DemoMergedLibrary({
               {songCount.toLocaleString()} Songs
               {keepCount > 0 && <span className="demo-merged-library__activity"> · {keepCount} from radio</span>}
             </Link>
+            <button
+              type="button"
+              className="demo-merged-library__layout-toggle"
+              aria-label={remoteLayout ? "Show detailed list" : "Show visual grid"}
+              aria-pressed={remoteLayout}
+              title={remoteLayout ? "Show detailed list" : "Show visual grid"}
+              onClick={() => updateSearch((next) => {
+                if (remoteLayout) next.delete("layout");
+                else next.set("layout", "grid");
+              })}
+            >
+              {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
+            </button>
           </nav>
         </div>
         <div className="demo-merged-library__filters">
@@ -1654,7 +1696,14 @@ function DemoMergedLibrary({
         </div>
       </header>
 
-      {view === "stations" ? (
+      {view === "stations" && remoteLayout && !selectedStationSlug ? (
+        <DemoStationRemote
+          stations={filteredStations}
+          hasData={hasSeeds || hasLibrary}
+          focusedArtist={focusedArtist}
+          sort={stationSort}
+        />
+      ) : view === "stations" ? (
         <RadioSurface
           stations={filteredStations}
           hasSeeds={hasSeeds}
@@ -1676,6 +1725,8 @@ function DemoMergedLibrary({
             next.delete("station");
           })}
         />
+      ) : remoteLayout ? (
+        <DemoSongRemote items={filteredDemoItems} sort={songSort} />
       ) : (
         <LibraryContent embedded={embedded} showArtistEditor={false} />
       )}

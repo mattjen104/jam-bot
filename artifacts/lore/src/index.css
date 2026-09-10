@@ -3681,6 +3681,162 @@
   color: hsl(var(--foreground));
   text-decoration-thickness: 2px;
 }
+.demo-merged-library__layout-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+.demo-merged-library__layout-toggle:hover,
+.demo-merged-library__layout-toggle:focus-visible,
+.demo-merged-library__layout-toggle[aria-pressed="true"] {
+  border-color: hsl(var(--foreground) / 0.6);
+  color: hsl(var(--foreground));
+}
+.demo-merged-library__layout-toggle:focus-visible {
+  outline: 1px solid hsl(var(--foreground));
+  outline-offset: 2px;
+}
+.demo-merged-library__layout-toggle svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.7;
+}
+.demo-library-remote {
+  padding: 14px 0 0;
+}
+.demo-library-remote__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+  gap: 8px;
+}
+.demo-library-remote__tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid hsl(var(--border) / 0.75);
+  border-radius: 7px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  box-shadow: none;
+  transition: border-color 120ms ease, opacity 120ms ease, transform 120ms ease;
+}
+.demo-library-remote__tile:hover:not(:disabled),
+.demo-library-remote__tile:focus-visible:not(:disabled) {
+  border-color: hsl(var(--foreground) / 0.8);
+  transform: translateY(-1px);
+}
+.demo-library-remote__tile:focus-visible {
+  outline: 2px solid hsl(var(--foreground));
+  outline-offset: 2px;
+}
+.demo-library-remote__tile.is-selected {
+  border-color: hsl(var(--keep));
+  box-shadow: inset 0 0 0 2px hsl(var(--keep));
+}
+.demo-library-remote__tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.demo-library-remote__station {
+  padding: 8px;
+}
+.demo-library-remote__station-mark {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background: hsl(var(--background));
+  font-size: clamp(34px, 5vw, 54px);
+}
+.demo-library-remote__station-mark.station-mark--fallback {
+  border: 0;
+}
+.demo-library-remote__song img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.demo-library-remote__fallback {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  background:
+    linear-gradient(145deg, hsl(var(--secondary)), hsl(var(--card)));
+  text-align: left;
+}
+.demo-library-remote__fallback strong,
+.demo-library-remote__fallback span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+.demo-library-remote__fallback strong {
+  -webkit-line-clamp: 3;
+  font-family: var(--lore-font-home-heading);
+  font-size: 11px;
+  line-height: 1.1;
+}
+.demo-library-remote__fallback span {
+  margin-top: 4px;
+  -webkit-line-clamp: 2;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  line-height: 1.2;
+}
+.demo-library-remote__status {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: hsl(var(--background) / 0.88);
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+}
+.demo-library-remote__song.is-unavailable {
+  opacity: 0.6;
+}
+.demo-library-remote__empty {
+  margin: 0;
+  padding: 28px 0;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+}
+@media (max-width: 480px) {
+  .demo-library-remote__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .demo-library-remote__station {
+    padding: 6px;
+  }
+  .demo-library-remote__fallback {
+    padding: 6px;
+  }
+}
 .demo-merged-library > .demo-radio {
   padding: 8px 0 0;
 }

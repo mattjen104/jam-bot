@@ -92,6 +92,10 @@ vi.mock("../src/components/RadioSurface", () => ({
     <button onClick={() => onOpenStationCrossings?.("kexp")}>Has played your artists 12 times</button>
   ),
 }));
+vi.mock("../src/components/DemoLibraryRemote", () => ({
+  DemoStationRemote: () => <div>Station remote</div>,
+  DemoSongRemote: () => <div>Song remote</div>,
+}));
 vi.mock("../src/components/AlbumAvatarPicker", () => ({ AlbumAvatarPicker: () => null }));
 vi.mock("../src/components/YourWeekCard", () => ({ YourWeekCard: () => null }));
 vi.mock("../src/components/ArtistDocument", () => ({ ArtistDocument: () => null }));
@@ -309,6 +313,53 @@ describe("focused Library URL navigation", () => {
     expect(screen.queryByRole("button", { name: /Categories/ })).toBeNull();
     expect(screen.getByRole("link", { name: /Stations/ }).getAttribute("href"))
       .toBe("/library?categories=campus%2Cpublic");
+  });
+
+  it("keeps one URL-backed visual layout across Stations and Songs", async () => {
+    mockUseSearch.mockReturnValue("?categories=campus&focus=Broadcast");
+    mockUseLocation.mockReturnValue([
+      "/library?categories=campus&focus=Broadcast",
+      mockSetLocation,
+    ]);
+    await renderLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show visual grid" }));
+
+    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.searchParams.get("layout")).toBe("grid");
+    expect(url.searchParams.get("categories")).toBe("campus");
+    expect(url.searchParams.get("focus")).toBe("Broadcast");
+
+    mockUseSearch.mockReturnValue("?layout=grid&categories=campus&focus=Broadcast");
+    mockUseLocation.mockReturnValue([
+      "/library?layout=grid&categories=campus&focus=Broadcast",
+      mockSetLocation,
+    ]);
+    cleanup();
+    await renderLibrary();
+
+    expect(screen.getByText("Station remote")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Songs/ }).getAttribute("href"))
+      .toContain("layout=grid");
+  });
+
+  it("loads every Songs page for a direct visual-grid URL with the matching server sort", async () => {
+    const fetchNextPage = vi.fn(async () => undefined);
+    mockUseSearch.mockReturnValue("?view=songs&layout=grid&sort=title");
+    mockUseLocation.mockReturnValue([
+      "/library?view=songs&layout=grid&sort=title",
+      mockSetLocation,
+    ]);
+    mockUseMyLibraryInfinite.mockReturnValue({
+      ...queryResult(),
+      hasNextPage: true,
+      fetchNextPage,
+    });
+
+    await renderLibrary();
+
+    await waitFor(() => expect(fetchNextPage).toHaveBeenCalledOnce());
+    expect(mockUseMyLibraryInfinite).toHaveBeenCalledWith({ sort: "title" }, 100);
   });
 
   it("focuses a grouped song artist and clears the previous album in demo mode", async () => {

@@ -7,8 +7,7 @@ import type { DialStation } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft, Play } from "lucide-react";
-
-const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
+import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
 
 function usableArtistName(
   rawArtist: string | null | undefined,
@@ -61,45 +60,20 @@ export function RadioSurface({
 }) {
   const { radio } = usePlayer();
 
-  const allCrossings = useMemo(() => {
-    const list = focusedArtist
-      ? [...stations]
-      : stations.filter(ds => ds.lifetimeCrossings + ds.lifetimeArtistCrossings > 0);
-    if (sort === "name") {
-      return list.sort((a, b) => a.station.name.localeCompare(b.station.name));
-    }
-    if (sort === "live") {
-      return list.sort((a, b) =>
-        Number(b.isLive) - Number(a.isLive)
-        || (b.lifetimeCrossings + b.lifetimeArtistCrossings)
-          - (a.lifetimeCrossings + a.lifetimeArtistCrossings),
-      );
-    }
-    if (sort === "discovery") {
-      return list.sort((a, b) =>
-        (a.lifetimeCrossings + a.lifetimeArtistCrossings)
-          - (b.lifetimeCrossings + b.lifetimeArtistCrossings),
-      );
-    }
-    return list.sort((a, b) => {
-      const aTotal = a.lifetimeCrossings + a.lifetimeArtistCrossings;
-      const bTotal = b.lifetimeCrossings + b.lifetimeArtistCrossings;
-      return bTotal - aTotal;
-    });
-  }, [stations, sort, focusedArtist]);
-
   const hasData = hasSeeds || hasLibrary;
-  const showCrossings = hasData && allCrossings.length > 0;
-
-  const rosterStations = useMemo(() => {
-    const excludedSlugs = showCrossings ? new Set(allCrossings.map(ds => ds.station.slug)) : new Set<string>();
-    const mapped = ROSTER_SLUGS.map(slug => stations.find(s => s.station.slug === slug)).filter(Boolean) as DialStation[];
-    const list = mapped.filter(ds => !excludedSlugs.has(ds.station.slug));
-    if (sort === "name") {
-      return list.sort((a, b) => a.station.name.localeCompare(b.station.name));
-    }
-    return list;
-  }, [stations, showCrossings, allCrossings, sort]);
+  const {
+    crossingStations: allCrossings,
+    rosterStations,
+    showCrossings,
+  } = useMemo(
+    () => buildDemoRadioSections({
+      stations,
+      hasData,
+      focusedArtist,
+      sort,
+    }),
+    [focusedArtist, hasData, sort, stations],
+  );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
 
