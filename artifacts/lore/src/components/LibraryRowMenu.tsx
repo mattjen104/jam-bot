@@ -65,7 +65,7 @@ export function LibraryRowMenu({
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger asChild>
           <button 
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground data-[state=open]:bg-background data-[state=open]:text-foreground"
+            className="library-row-menu__trigger w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground data-[state=open]:bg-background data-[state=open]:text-foreground"
             aria-label="More options"
           >
             <MoreHorizontal className="w-4 h-4" />

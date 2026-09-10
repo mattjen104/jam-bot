@@ -4393,6 +4393,88 @@
   font-family: var(--lore-font-display);
   font-size: var(--lore-size-small);
 }
+
+/* Focused demo: compact Spotify-like song rows. Keep the full crate treatment
+   for the regular Library surface and leave artist cards on their own rail. */
+.demo-library .library-crate__track-list {
+  gap: 0;
+  padding: 4px 16px 96px;
+}
+.demo-library .demo-library__song-row {
+  position: relative;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  min-height: 76px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border) / .65);
+  border-radius: 0;
+  background: transparent;
+}
+.demo-library .demo-library__song-row:first-child {
+  border-top: 1px solid hsl(var(--border) / .65);
+}
+.demo-library .demo-library__song-row .library-crate__track-art,
+.demo-library .demo-library__song-row .library-crate__track-swatch,
+.demo-library .demo-library__song-row .library-crate__cover-link {
+  width: 56px;
+  height: 56px;
+}
+.demo-library .demo-library__song-row .library-crate__track-swatch {
+  border-radius: 2px;
+  box-shadow: none;
+}
+.demo-library .demo-library__song-row .library-crate__track-copy {
+  align-self: center;
+  padding: 1px 0;
+}
+.demo-library .demo-library__song-row .library-crate__track-title {
+  font-family: var(--lore-font-reading);
+  font-size: 16px;
+  line-height: 1.25;
+}
+.demo-library .demo-library__song-subline {
+  display: block;
+  overflow: hidden;
+  margin-top: 5px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--lore-font-reading);
+  font-size: 14px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-library .demo-library__song-subline button {
+  max-width: calc(100% - 38px);
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.demo-library .demo-library__song-subline button:hover,
+.demo-library .demo-library__song-subline button:focus-visible {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+}
+.demo-library .demo-library__song-row .library-row-menu__trigger {
+  align-self: start;
+  width: 32px;
+  height: 32px;
+  margin-top: -1px;
+  padding: 0;
+  border-radius: 999px;
+}
+.demo-library .demo-library__song-row .library-row-menu__trigger svg {
+  width: 18px;
+  height: 18px;
+}
 .library-crate__rail {
   position: relative;
   isolation: isolate;

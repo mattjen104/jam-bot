@@ -116,7 +116,7 @@ function CrateTrackCard({
 
   return (
     <article
-      className={`library-crate__track${opened ? " library-crate__track--opened" : ""}`}
+      className={`library-crate__track${demoSurface ? " demo-library__song-row" : ""}${opened ? " library-crate__track--opened" : ""}`}
       data-testid="library-crate-track"
       data-track-key={openedKey}
     >
@@ -148,58 +148,77 @@ function CrateTrackCard({
       </div>
       <div className="library-crate__track-copy">
         <div className="library-crate__track-title">{title}</div>
-        <div className="library-crate__track-album">
-          {releaseHref ? (
-            onAlbumFocus ? (
+        {demoSurface ? (
+          <div className="demo-library__song-subline">
+            <span>Song</span>
+            <span aria-hidden="true"> · </span>
+            {onArtistFocus ? (
               <button
                 type="button"
-                className="library-crate__album-link hover:underline"
-                style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
-                onClick={(e) => { e.stopPropagation(); onOpened(openedKey); onAlbumFocus(`${album}\x1f${artist}`); }}
+                onClick={(e) => { e.stopPropagation(); onArtistFocus(artist); }}
               >
-                {album}
+                {artist}
               </button>
             ) : (
-              <Link
-                href={releaseHref}
-                className="library-crate__album-link"
-                onClick={() => onOpened(openedKey)}
-              >
-                {album}
-              </Link>
-            )
-          ) : (
-            album
-          )}
-        </div>
-        <div className="library-crate__track-artist">
-          {onArtistFocus ? (
-            <button
-              type="button"
-              className="hover:underline"
-              style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
-              onClick={(e) => { e.stopPropagation(); onArtistFocus(artist); }}
-            >
-              {artist}
-            </button>
-          ) : (
-            artist
-          )}
-        </div>
-        <div className="library-crate__provenance">{keepCopy(item)}</div>
-        {setContext?.station.homepageUrl && (
-          <div className="library-crate__station-row">
-            <a
-              href={setContext.station.homepageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="library-crate__station-link"
-              data-testid="crate-station-link"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {setContext.station.name} ↗
-            </a>
+              artist
+            )}
           </div>
+        ) : (
+          <>
+            <div className="library-crate__track-album">
+              {releaseHref ? (
+                onAlbumFocus ? (
+                  <button
+                    type="button"
+                    className="library-crate__album-link hover:underline"
+                    style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+                    onClick={(e) => { e.stopPropagation(); onOpened(openedKey); onAlbumFocus(`${album}\x1f${artist}`); }}
+                  >
+                    {album}
+                  </button>
+                ) : (
+                  <Link
+                    href={releaseHref}
+                    className="library-crate__album-link"
+                    onClick={() => onOpened(openedKey)}
+                  >
+                    {album}
+                  </Link>
+                )
+              ) : (
+                album
+              )}
+            </div>
+            <div className="library-crate__track-artist">
+              {onArtistFocus ? (
+                <button
+                  type="button"
+                  className="hover:underline"
+                  style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+                  onClick={(e) => { e.stopPropagation(); onArtistFocus(artist); }}
+                >
+                  {artist}
+                </button>
+              ) : (
+                artist
+              )}
+            </div>
+            <div className="library-crate__provenance">{keepCopy(item)}</div>
+            {setContext?.station.homepageUrl && (
+              <div className="library-crate__station-row">
+                <a
+                  href={setContext.station.homepageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="library-crate__station-link"
+                  data-testid="crate-station-link"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {setContext.station.name} ↗
+                </a>
+              </div>
+            )}
+          </>
         )}
       </div>
       {demoSurface ? (
