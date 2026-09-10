@@ -29,6 +29,7 @@ export function RadioSurface({
 }) {
   const { radio } = usePlayer();
   const [sheetAnchorId, setSheetAnchorId] = useState<number | null>(null);
+  const [openingSetSlug, setOpeningSetSlug] = useState<string | null>(null);
   const sheetAnchors = useMemo(
     () => sheetAnchorId == null ? [] : [{ kind: "spin" as const, spinId: sheetAnchorId }],
     [sheetAnchorId],
@@ -38,18 +39,28 @@ export function RadioSurface({
     ? null
     : sheetContexts.get(anchorKey({ kind: "spin", spinId: sheetAnchorId }));
 
-  const openCurrentSet = async (stationSlug: string, title: string, artist: string) => {
+  const openCurrentSet = async (stationSlug: string, title: string, artist: string, mbid?: string | null) => {
+    setOpeningSetSlug(stationSlug);
     try {
       const response = await fetch(`/api/stations/${encodeURIComponent(stationSlug)}/recent-spins`);
       if (!response.ok) return;
       const data = await response.json() as {
         items?: Array<{ spins?: Array<{ spinId: number; title: string; artist: string }> }>;
       };
-      const current = data.items?.[0]?.spins?.[0];
-      if (!current || current.title !== title || current.artist !== artist) return;
+      const current = data.items?.[0]?.spins?.[0] as
+        | { spinId: number; mbid?: string | null; title: string; artist: string }
+        | undefined;
+      const normalize = (value: string) => value.trim().toLocaleLowerCase();
+      const sameTrack = current && (
+        (mbid != null && current.mbid === mbid)
+        || (normalize(current.title) === normalize(title) && normalize(current.artist) === normalize(artist))
+      );
+      if (!current || !sameTrack) return;
       setSheetAnchorId(current.spinId);
     } catch {
       // Keep the explanation non-destructive when current history is unavailable.
+    } finally {
+      setOpeningSetSlug(null);
     }
   };
 
@@ -162,6 +173,16 @@ export function RadioSurface({
             {isLive && <span className="demo-radio__pill">Library match · on air</span>}
             <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
             {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
+            {isLive ? (
+              <button
+                type="button"
+                className="demo-radio__reason demo-radio__reason--featured"
+                onClick={() => void openCurrentSet(ds.station.slug, title, artist, track?.mbid)}
+                disabled={openingSetSlug === ds.station.slug}
+              >
+                {openingSetSlug === ds.station.slug ? "Opening set…" : "Open this set"}
+              </button>
+            ) : null}
           </div>
           <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={16} fill="currentColor" />
@@ -169,18 +190,7 @@ export function RadioSurface({
           </button>
         </div>
         {reasonLine && (
-          isLive ? (
-            <button
-              type="button"
-              className="demo-radio__reason demo-radio__reason--featured"
-              onClick={() => void openCurrentSet(ds.station.slug, title, artist)}
-              aria-label={`${reasonLine}. Open this set`}
-            >
-              {reasonLine}
-            </button>
-          ) : (
-            <div className="demo-radio__reason demo-radio__reason--featured">{reasonLine}</div>
-          )
+          <div className="demo-radio__reason demo-radio__reason--featured">{reasonLine}</div>
         )}
       </div>
     );
