@@ -60,6 +60,10 @@ import { RadioSurface } from "../components/RadioSurface";
 import { useDialData } from "../hooks/useDialData";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
+import {
+  buildFocusedLibraryUrl,
+  getArtistFromLibraryAlbumKey,
+} from "../lib/libraryFocusedNavigation";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -1701,6 +1705,14 @@ function LibraryContent({
     const query = params.toString();
     setLocation(query ? `${location.split("?")[0]}?${query}` : location.split("?")[0]!);
   };
+  const focusLibraryArtist = (artist: string) => {
+    setLocation(buildFocusedLibraryUrl(search, { artist }));
+  };
+  const focusLibraryAlbum = (albumKey: string) => {
+    const artist = getArtistFromLibraryAlbumKey(albumKey);
+    if (!artist) return;
+    setLocation(buildFocusedLibraryUrl(search, { artist, albumKey }));
+  };
 
 
   // The crate is the only Library surface now, so every lens must receive the
@@ -2547,23 +2559,8 @@ function LibraryContent({
             showKeptHeading={false}
             hideAddedRail={demoSurface}
             demoSurface={demoSurface}
-            onArtistFocus={demoSurface ? (artistName) => {
-              const params = new URLSearchParams(search);
-              params.set("view", "songs");
-              params.set("focus", artistName);
-              params.set("sort", "album");
-              params.delete("openAlbum");
-              setLocation(`/library?${params.toString()}`);
-            } : undefined}
-            onAlbumFocus={demoSurface ? (albumKey) => {
-              const params = new URLSearchParams(search);
-              const artistName = albumKey.split("\x1f")[1];
-              params.set("view", "songs");
-              params.set("sort", "album");
-              if (artistName) params.set("focus", artistName);
-              params.set("openAlbum", albumKey);
-              setLocation(`/library?${params.toString()}`);
-            } : undefined}
+            onArtistFocus={demoSurface ? focusLibraryArtist : undefined}
+            onAlbumFocus={demoSurface ? focusLibraryAlbum : undefined}
           />
         ) : (viewMode === "album" && (albumGroups.length > 0 || focusedArtist)) ? (
           /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */
@@ -2690,23 +2687,8 @@ function LibraryContent({
                   <DemoArtistSongGroup
                     key={group.key}
                     group={group}
-                    onArtistFocus={(artistName) => {
-                      const params = new URLSearchParams(search);
-                      params.set("view", "songs");
-                      params.set("focus", artistName);
-                      params.set("sort", "album");
-                      params.delete("openAlbum");
-                      setLocation(`/library?${params.toString()}`);
-                    }}
-                    onAlbumFocus={(albumKey) => {
-                      const params = new URLSearchParams(search);
-                      const artistName = albumKey.split("\x1f")[1];
-                      params.set("view", "songs");
-                      params.set("sort", "album");
-                      if (artistName) params.set("focus", artistName);
-                      params.set("openAlbum", albumKey);
-                      setLocation(`/library?${params.toString()}`);
-                    }}
+                    onArtistFocus={focusLibraryArtist}
+                    onAlbumFocus={focusLibraryAlbum}
                   />
                 ) : (
                   <ArtistGroupRow key={group.key} group={group} />

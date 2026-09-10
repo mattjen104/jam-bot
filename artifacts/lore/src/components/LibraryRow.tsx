@@ -8,6 +8,7 @@ import { AlbumShelf } from "./AlbumShelf";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { buildLibraryAlbumKey } from "../lib/libraryFocusedNavigation";
 
 interface LibraryRowProps {
   item: LibraryItem;
@@ -403,7 +404,7 @@ export function LibraryRow({
                 e.preventDefault();
                 e.stopPropagation();
                 if (onAlbumFocus && rec?.albumTitle) {
-                  onAlbumFocus(`${rec.albumTitle}\x1f${artist}`);
+                  onAlbumFocus(buildLibraryAlbumKey(rec.albumTitle, artist));
                 } else {
                   onShelfToggle?.();
                 }
