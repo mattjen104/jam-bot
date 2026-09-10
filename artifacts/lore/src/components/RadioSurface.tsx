@@ -4,7 +4,7 @@ import { eligibleDjNames } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
-import { Play } from "lucide-react";
+import { ListMusic, Play } from "lucide-react";
 import { SetContextSheet } from "./SetContextSheet";
 import { anchorKey, useSetContexts } from "../lib/setContexts";
 
@@ -39,7 +39,7 @@ export function RadioSurface({
     ? null
     : sheetContexts.get(anchorKey({ kind: "spin", spinId: sheetAnchorId }));
 
-  const openCurrentSet = async (stationSlug: string, title: string, artist: string, mbid?: string | null) => {
+  const openCurrentSet = async (stationSlug: string) => {
     setOpeningSetSlug(stationSlug);
     try {
       const response = await fetch(`/api/stations/${encodeURIComponent(stationSlug)}/recent-spins`);
@@ -47,15 +47,8 @@ export function RadioSurface({
       const data = await response.json() as {
         items?: Array<{ spins?: Array<{ spinId: number; title: string; artist: string }> }>;
       };
-      const current = data.items?.[0]?.spins?.[0] as
-        | { spinId: number; mbid?: string | null; title: string; artist: string }
-        | undefined;
-      const normalize = (value: string) => value.trim().toLocaleLowerCase();
-      const sameTrack = current && (
-        (mbid != null && current.mbid === mbid)
-        || (normalize(current.title) === normalize(title) && normalize(current.artist) === normalize(artist))
-      );
-      if (!current || !sameTrack) return;
+      const current = data.items?.[0]?.spins?.[0];
+      if (!current) return;
       setSheetAnchorId(current.spinId);
     } catch {
       // Keep the explanation non-destructive when current history is unavailable.
@@ -143,6 +136,16 @@ export function RadioSurface({
               {selectorLine ? `${selectorLine} · no overlap yet` : "No overlap yet"}
             </div>
           </div>
+          <button
+            type="button"
+            className="demo-radio__set"
+            aria-label={`Open ${ds.station.name} set`}
+            onClick={() => void openCurrentSet(ds.station.slug)}
+            disabled={openingSetSlug === ds.station.slug}
+          >
+            <ListMusic size={14} aria-hidden="true" />
+            <span>{openingSetSlug === ds.station.slug ? "Opening…" : "Open set"}</span>
+          </button>
           <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={14} fill="currentColor" />
           </button>
@@ -173,17 +176,17 @@ export function RadioSurface({
             {isLive && <span className="demo-radio__pill">Library match · on air</span>}
             <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
             {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
-            {isLive ? (
-              <button
-                type="button"
-                className="demo-radio__reason demo-radio__reason--featured"
-                onClick={() => void openCurrentSet(ds.station.slug, title, artist, track?.mbid)}
-                disabled={openingSetSlug === ds.station.slug}
-              >
-                {openingSetSlug === ds.station.slug ? "Opening set…" : "Open this set"}
-              </button>
-            ) : null}
           </div>
+          <button
+            type="button"
+            className="demo-radio__set"
+            aria-label={`Open ${ds.station.name} set`}
+            onClick={() => void openCurrentSet(ds.station.slug)}
+            disabled={openingSetSlug === ds.station.slug}
+          >
+            <ListMusic size={14} aria-hidden="true" />
+            <span>{openingSetSlug === ds.station.slug ? "Opening…" : "Open set"}</span>
+          </button>
           <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={16} fill="currentColor" />
             {radio.station?.slug === ds.station.slug ? <StationChangeCountdown track={track} /> : null}

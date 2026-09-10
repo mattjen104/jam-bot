@@ -3042,12 +3042,29 @@
   padding: 7px 12px 9px;
   border-top: 1px solid hsl(var(--border) / .7);
 }
-button.demo-radio__reason--featured {
+.demo-radio__set {
+  display: grid;
+  flex: 0 0 48px;
+  place-items: center;
+  align-self: stretch;
+  border: 0;
+  border-left: 1px solid hsl(var(--border) / .7);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  line-height: 1.1;
 }
-button.demo-radio__reason--featured:disabled {
+.demo-radio__set span {
+  margin-top: -8px;
+}
+.demo-radio__set:hover,
+.demo-radio__set:focus-visible {
+  background: hsl(var(--foreground) / .06);
+  color: hsl(var(--foreground));
+}
+.demo-radio__set:disabled {
   cursor: wait;
   opacity: .65;
 }
