@@ -56,6 +56,12 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   return makeApiClientMock(importOriginal, {
     useGetPickersDial: vi.fn(() => ({ data: null })),
     useSearchArtistStations: vi.fn(() => ({ data: { query: "", stations: [] } })),
+    useSuggestArchiveArtists: vi.fn(() => ({
+      data: {
+        query: "king gizzard",
+        suggestions: [{ name: "King Gizzard & The Lizard Wizard", playCount: 584 }],
+      },
+    })),
   });
 });
 
@@ -168,6 +174,18 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
+  it("uses the best canonical artist completion when Enter is pressed", async () => {
+    await renderLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
+    const input = screen.getByPlaceholderText("Search or add artist...");
+    fireEvent.change(input, { target: { value: "king gizzard" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.searchParams.get("focus")).toBe("King Gizzard & The Lizard Wizard");
+  });
+
   it("shows a Library-backed focused artist as already added", async () => {
     mockUseSearch.mockReturnValue("?focus=Broadcast");
     mockUseLocation.mockReturnValue(["/library?focus=Broadcast", mockSetLocation]);

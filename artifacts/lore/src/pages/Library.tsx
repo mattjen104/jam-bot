@@ -38,7 +38,9 @@ import {
 import {
   ApiError,
   getSearchArtistStationsQueryKey,
+  getSuggestArchiveArtistsQueryKey,
   useSearchArtistStations,
+  useSuggestArchiveArtists,
 } from "@workspace/api-client-react";
 import { LibraryRow } from "../components/LibraryRow";
 import { StackRow } from "../components/StackRow";
@@ -62,6 +64,7 @@ import { useSeedManager } from "../hooks/useSeedManager";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
 import { useDialData } from "../hooks/useDialData";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import {
@@ -991,11 +994,29 @@ function ArtistLensControl({
   const isLibraryArtist = isAddedArtist && !isSeed;
 
   const normalizedSearch = search.trim().toLocaleLowerCase();
-  const exactMatch = allArtists.some(a => a.toLocaleLowerCase() === normalizedSearch);
+  const debouncedSearch = useDebouncedValue(search.trim(), 150);
+  const suggestionsEnabled = open && debouncedSearch.length >= 2;
+  const artistSuggestions = useSuggestArchiveArtists(
+    { q: debouncedSearch },
+    {
+      query: {
+        queryKey: getSuggestArchiveArtistsQueryKey({ q: debouncedSearch }),
+        enabled: suggestionsEnabled,
+        staleTime: 5 * 60_000,
+      },
+    },
+  );
   const matches = useMemo(() => {
     if (!normalizedSearch) return allArtists.slice(0, 50);
-    return allArtists.filter(a => a.toLocaleLowerCase().includes(normalizedSearch)).slice(0, 50);
-  }, [allArtists, normalizedSearch]);
+    const merged = [
+      ...(artistSuggestions.data?.suggestions.map(suggestion => suggestion.name) ?? []),
+      ...allArtists.filter(a => a.toLocaleLowerCase().includes(normalizedSearch)),
+    ];
+    return Array.from(
+      new Map(merged.map(artist => [artist.toLocaleLowerCase(), artist])).values(),
+    ).slice(0, 50);
+  }, [allArtists, artistSuggestions.data, normalizedSearch]);
+  const exactMatch = matches.some(a => a.toLocaleLowerCase() === normalizedSearch);
 
   const selectStyle: React.CSSProperties = {
     appearance: "none",
@@ -1076,6 +1097,13 @@ function ArtistLensControl({
             placeholder={focusedArtist ? "Switch focus to..." : "Search or add artist..."}
             value={search}
             onValueChange={setSearch}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && normalizedSearch && matches[0]) {
+                event.preventDefault();
+                onFocus(matches[0]);
+                setSearch("");
+              }
+            }}
             style={{ fontSize: 13 }}
           />
           <CommandList style={{ maxHeight: 240, overflowY: "auto" }}>
