@@ -57,6 +57,7 @@ import { LibraryCrate } from "../components/LibraryCrate";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
+import { HistoryScanner } from "../components/dial/HistoryScanner";
 import { useDialData } from "../hooks/useDialData";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
@@ -1304,6 +1305,8 @@ function DemoMergedLibrary({
     () => new URLSearchParams(search).get("focus"),
     [search],
   );
+  const crossingStationSlug =
+    params.get("lens") === "crossings" ? params.get("station") : null;
   const stationSortParam = params.get("stationSort");
   const stationSort: "overlap" | "live" | "discovery" | "name" =
     stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name"
@@ -1352,6 +1355,9 @@ function DemoMergedLibrary({
       i => i.recording?.artist.trim().toLocaleLowerCase() === normalizedFocus,
     );
   }, [demoLibraryItems, focusedArtist]);
+  const crossingStation = crossingStationSlug
+    ? stations.find((item) => item.station.slug === crossingStationSlug) ?? null
+    : null;
 
   const allArtists = useMemo(() => {
     const set = new Set<string>();
@@ -1382,9 +1388,11 @@ function DemoMergedLibrary({
     if (targetView === "stations") {
       p.delete("view");
       p.delete("lens");
+      p.delete("station");
     } else if (targetView === "songs") {
       p.set("view", "songs");
       p.delete("lens");
+      p.delete("station");
       p.delete("sort");
       if (songSort !== "added") p.set("sort", songSort);
     }
@@ -1415,6 +1423,8 @@ function DemoMergedLibrary({
           LORE
           {focusedArtist ? (
             <span className="demo-merged-library__focus-title"> / {focusedArtist}</span>
+          ) : crossingStation ? (
+            <span className="demo-merged-library__focus-title"> / {crossingStation.station.name}</span>
           ) : null}
         </h1>
         <div className="demo-merged-library__controls">
@@ -1518,15 +1528,44 @@ function DemoMergedLibrary({
       </header>
 
       {view === "stations" ? (
-        <RadioSurface
-          stations={filteredStations}
-          visibleSeeds={visibleSeeds}
-          hasSeeds={hasSeeds}
-          hasLibrary={hasLibrary}
-          showHeader={false}
-          sort={stationSort}
-              focusedArtist={focusedArtist}
-        />
+        crossingStationSlug ? (
+          <section className="demo-station-crossings" aria-label="Station crossings">
+            <button
+              type="button"
+              className="demo-station-crossings__back"
+              onClick={() => updateSearch((next) => {
+                next.delete("lens");
+                next.delete("station");
+              })}
+            >
+              ← Stations
+            </button>
+            <h2>{crossingStation?.station.name ?? crossingStationSlug} crossings</h2>
+            <p>Saved songs, albums, and artists this station has played.</p>
+            <HistoryScanner
+              scope="lifetime"
+              categories={[]}
+              stationSlug={crossingStationSlug}
+              initialFilter="crossings"
+              defaultOpen
+              emptyLabel="No saved-song or artist crossings are recorded for this station yet."
+            />
+          </section>
+        ) : (
+          <RadioSurface
+            stations={filteredStations}
+            visibleSeeds={visibleSeeds}
+            hasSeeds={hasSeeds}
+            hasLibrary={hasLibrary}
+            showHeader={false}
+            sort={stationSort}
+            focusedArtist={focusedArtist}
+            onOpenCrossings={(stationSlug) => updateSearch((next) => {
+              next.set("lens", "crossings");
+              next.set("station", stationSlug);
+            })}
+          />
+        )
       ) : (
         <LibraryContent embedded={embedded} showArtistEditor={false} />
       )}

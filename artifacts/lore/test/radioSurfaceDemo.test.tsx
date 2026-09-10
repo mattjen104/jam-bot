@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { DialStation } from "../src/hooks/useDialData";
 
@@ -49,6 +49,7 @@ describe("demo Radio station cards", () => {
   beforeEach(() => toggle.mockClear());
 
   test("leads with station identity and makes artist-lens copy specific", () => {
+    const onOpenCrossings = vi.fn();
     render(
       <RadioSurface
         stations={[matchingStation()]}
@@ -57,6 +58,7 @@ describe("demo Radio station cards", () => {
         hasLibrary
         showHeader={false}
         focusedArtist="Stereolab"
+        onOpenCrossings={onOpenCrossings}
       />,
     );
 
@@ -68,6 +70,8 @@ describe("demo Radio station cards", () => {
     expect(screen.queryByText("Open set")).toBeNull();
     expect(screen.getByText("Stereolab")).toBeTruthy();
     expect(screen.getByText("Has played Stereolab from your music")).toBeTruthy();
+    fireEvent.click(screen.getByText("Has played Stereolab from your music"));
+    expect(onOpenCrossings).toHaveBeenCalledWith("kexp");
     expect(screen.queryByText(/Has played your artists 6 times/)).toBeNull();
     expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
   });

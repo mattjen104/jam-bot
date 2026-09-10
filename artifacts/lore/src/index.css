@@ -3042,6 +3042,104 @@
   padding: 7px 12px 9px;
   border-top: 1px solid hsl(var(--border) / .7);
 }
+.demo-radio__crossings-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--muted-foreground) / .55);
+  text-underline-offset: 3px;
+}
+.demo-radio__crossings-link:hover,
+.demo-radio__crossings-link:focus-visible {
+  color: hsl(var(--foreground));
+  text-decoration-color: currentColor;
+}
+.demo-station-crossings {
+  padding: 18px 0 40px;
+}
+.demo-station-crossings__back {
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  padding: 0 0 16px;
+}
+.demo-station-crossings h2 {
+  margin: 0;
+  font-family: var(--app-font-display);
+  font-size: 20px;
+  font-weight: 500;
+}
+.demo-station-crossings > p {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  margin: 4px 0 16px;
+}
+.demo-station-crossings .dial-history {
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 12px;
+}
+.demo-station-crossings .dial-history__header,
+.demo-station-crossings .dial-history__filters,
+.demo-station-crossings .dial-history__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.demo-station-crossings .dial-history__header {
+  justify-content: space-between;
+}
+.demo-station-crossings .dial-history button {
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  padding: 5px 8px;
+}
+.demo-station-crossings .dial-history__header > button {
+  border: 0;
+  padding-left: 0;
+}
+.demo-station-crossings .dial-history__filters {
+  margin: 12px 0;
+}
+.demo-station-crossings .dial-history__filters button[aria-pressed="true"] {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+.demo-station-crossings .dial-history > p {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  margin: 18px 0;
+}
+.demo-station-crossings .dial-history__current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 12px 0;
+}
+.demo-station-crossings .dial-history__current > div {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+}
+.demo-station-crossings .dial-history__current small {
+  display: block;
+  margin-top: 4px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+}
+.demo-station-crossings .dial-history__controls {
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
 .demo-radio__play,
 .demo-player__pause {
   display: grid;

@@ -67,7 +67,11 @@ vi.mock("../src/hooks/useDialData", () => ({
 vi.mock("../src/lib/local", () => ({ useFollows: () => [] }));
 vi.mock("../src/components/SearchOverlay", () => ({ SearchOverlay: () => null }));
 vi.mock("../src/components/KeepButton", () => ({ KeepButton: () => null }));
-vi.mock("../src/components/RadioSurface", () => ({ RadioSurface: () => null }));
+vi.mock("../src/components/RadioSurface", () => ({
+  RadioSurface: ({ onOpenCrossings }: { onOpenCrossings?: (stationSlug: string) => void }) => (
+    <button onClick={() => onOpenCrossings?.("kexp")}>Has played your artists 12 times</button>
+  ),
+}));
 vi.mock("../src/components/AlbumAvatarPicker", () => ({ AlbumAvatarPicker: () => null }));
 vi.mock("../src/components/YourWeekCard", () => ({ YourWeekCard: () => null }));
 vi.mock("../src/components/ArtistDocument", () => ({ ArtistDocument: () => null }));
@@ -154,6 +158,20 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
+  it("opens station crossings from the Radio byline without losing station filters", async () => {
+    mockUseSearch.mockReturnValue("?stationSort=live");
+    mockUseLocation.mockReturnValue(["/library?stationSort=live", mockSetLocation]);
+    await renderLibrary();
+
+    fireEvent.click(screen.getByText("Has played your artists 12 times"));
+
+    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.pathname).toBe("/library");
+    expect(url.searchParams.get("lens")).toBe("crossings");
+    expect(url.searchParams.get("station")).toBe("kexp");
+    expect(url.searchParams.get("stationSort")).toBe("live");
+  });
+
   it("focuses a grouped song artist and clears the previous album in demo mode", async () => {
     mockUseSearch.mockReturnValue("?view=songs&sort=artist&openAlbum=Dots+and+Loops%1FStereolab");
     await renderLibrary();

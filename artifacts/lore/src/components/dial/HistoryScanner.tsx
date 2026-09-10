@@ -56,17 +56,21 @@ export function HistoryScanner({
   categories,
   stationSlug = null,
   initialFilter = "all",
+  defaultOpen = false,
+  emptyLabel = "No archived spins in this selection.",
   onFilterChange,
 }: {
   scope: CrossingScope;
   categories: readonly StationCategory[];
   stationSlug?: string | null;
   initialFilter?: HistoryFilter;
+  defaultOpen?: boolean;
+  emptyLabel?: string;
   onFilterChange?: (filter: HistoryFilter) => void;
 }) {
   const { ride } = usePlayer();
   const [filter, setFilter] = useState<HistoryFilter>(initialFilter);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -203,6 +207,7 @@ export function HistoryScanner({
           </div>
           {loading && <p>Loading archived spins…</p>}
           {error && <p role="status">{error}</p>}
+           {!loading && !error && items.length === 0 && <p>{emptyLabel}</p>}
           {current && (
             <article className="dial-history__current">
               {current.artworkUrl && <img src={current.artworkUrl} alt="" width={48} height={48} />}
@@ -212,7 +217,7 @@ export function HistoryScanner({
               <KeepButton mbid={current.mbid} spinId={current.id} provenance={{ stationSlug: current.station.slug }} compact />
             </article>
           )}
-          <div className="dial-history__controls">
+          {items.length > 0 && <div className="dial-history__controls">
              <button type="button" onClick={() => playAt(Math.max(0, (ride.replayLabel === historyLabel ? ride.index : index) - 1))} aria-label="Previous scan track"><SkipBack size={14} /></button>
              <button type="button" onClick={() => playing ? togglePause() : start()} aria-label={playing ? (paused ? "Resume scan" : "Pause scan") : "Start history scan"}>
               {playing && !paused ? <Pause size={14} /> : <Play size={14} />}
@@ -220,7 +225,7 @@ export function HistoryScanner({
              <button type="button" onClick={() => playAt((ride.replayLabel === historyLabel ? ride.index : index) + 1)} aria-label="Next scan track"><SkipForward size={14} /></button>
             <button type="button" onClick={stop} aria-label="Stop history scan"><Square size={14} /></button>
             {DWELLS.map((d) => <button key={d} type="button" aria-pressed={dwellMs === d} onClick={() => setDwellMs(d)}>{d / 1000}s</button>)}
-          </div>
+          </div>}
           {cursor && <button type="button" onClick={() => void loadPage()} disabled={loading}>Load more history</button>}
         </>
       )}

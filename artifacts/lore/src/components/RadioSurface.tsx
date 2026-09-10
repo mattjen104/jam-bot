@@ -16,6 +16,7 @@ export function RadioSurface({
   showHeader = true,
   sort = "overlap",
   focusedArtist = null,
+  onOpenCrossings,
 }: {
   stations: DialStation[];
   visibleSeeds: string[];
@@ -24,6 +25,7 @@ export function RadioSurface({
   showHeader?: boolean;
   sort?: "overlap" | "live" | "discovery" | "name";
   focusedArtist?: string | null;
+  onOpenCrossings?: (stationSlug: string) => void;
 }) {
   const { radio } = usePlayer();
 
@@ -143,7 +145,13 @@ export function RadioSurface({
           </button>
         </div>
         {reasonLine && (
-          <div className="demo-radio__reason demo-radio__reason--featured">{reasonLine}</div>
+          <button
+            type="button"
+            className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
+            onClick={() => onOpenCrossings?.(ds.station.slug)}
+          >
+            {reasonLine}
+          </button>
         )}
       </div>
     );
