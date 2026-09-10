@@ -925,9 +925,11 @@ export function ArtistGroupRow({
 function DemoArtistSongGroup({
   group,
   onArtistFocus,
+  onAlbumFocus,
 }: {
   group: ArtistGroup;
   onArtistFocus: (artist: string) => void;
+  onAlbumFocus: (albumKey: string) => void;
 }) {
   return (
     <section className="library-demo-artist-group">
@@ -937,6 +939,8 @@ function DemoArtistSongGroup({
           <LibraryRow
             key={item.mbid ?? `soft:${item.spotifyId ?? item.addedAt}`}
             item={item}
+            onArtistFocus={onArtistFocus}
+            onAlbumFocus={onAlbumFocus}
           />
         ))}
       </ul>
@@ -1434,8 +1438,14 @@ function DemoMergedLibrary({
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
             focusedArtist={focusedArtist}
-            onFocus={(artist) => updateSearch(next => next.set("focus", artist))}
-            onClear={() => updateSearch(next => next.delete("focus"))}
+            onFocus={(artist) => updateSearch(next => {
+              next.set("focus", artist);
+              next.delete("openAlbum");
+            })}
+            onClear={() => updateSearch(next => {
+              next.delete("focus");
+              next.delete("openAlbum");
+            })}
             onAddSeed={(artist) => {
               if (!visibleSeeds.some(s => s.toLocaleLowerCase() === artist.toLocaleLowerCase())) {
                 replaceSeeds([...visibleSeeds, artist]);
@@ -1680,9 +1690,17 @@ function LibraryContent({
   // Single-open Stack album row (album key from buildAlbumGroups).
   // Seeded from the ?openAlbum= URL param so CompactStack rows can deep-link
   // straight to a specific album without a separate routing layer.
-  const [openAlbumKey, setOpenAlbumKey] = useState<string | null>(
+  const openAlbumKey = useMemo(
     () => new URLSearchParams(search).get("openAlbum"),
+    [search],
   );
+  const setOpenAlbum = (albumKey: string | null) => {
+    const params = new URLSearchParams(search);
+    if (albumKey) params.set("openAlbum", albumKey);
+    else params.delete("openAlbum");
+    const query = params.toString();
+    setLocation(query ? `${location.split("?")[0]}?${query}` : location.split("?")[0]!);
+  };
 
 
   // The crate is the only Library surface now, so every lens must receive the
@@ -2544,7 +2562,6 @@ function LibraryContent({
               if (artistName) params.set("focus", artistName);
               params.set("openAlbum", albumKey);
               setLocation(`/library?${params.toString()}`);
-              setOpenAlbumKey(albumKey);
             } : undefined}
           />
         ) : (viewMode === "album" && (albumGroups.length > 0 || focusedArtist)) ? (
@@ -2557,7 +2574,7 @@ function LibraryContent({
                   savedGroups={activeAlbumGroups}
                   investigationCoveredMbids={investigationCoveredMbids}
                   openAlbumKey={openAlbumKey}
-                  setOpenAlbumKey={setOpenAlbumKey}
+                  setOpenAlbumKey={setOpenAlbum}
                   catalogueReleases={
                     Object.entries(seedCatalogue).find(
                       ([name]) => name.toLocaleLowerCase() === focusedArtist.toLocaleLowerCase(),
@@ -2574,7 +2591,7 @@ function LibraryContent({
                       )}
                       isOpen={openAlbumKey === group.key}
                       onToggle={() =>
-                        setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
+                        setOpenAlbum(openAlbumKey === group.key ? null : group.key)
                       }
                       onToggleSkip={toggleStackSkip}
                     />
@@ -2645,7 +2662,7 @@ function LibraryContent({
                         )}
                         isOpen={openAlbumKey === group.key}
                         onToggle={() =>
-                          setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
+                          setOpenAlbum(openAlbumKey === group.key ? null : group.key)
                         }
                         isSkipped
                         onToggleSkip={toggleStackSkip}
@@ -2678,6 +2695,15 @@ function LibraryContent({
                       params.set("focus", artistName);
                       params.set("sort", "album");
                       params.delete("openAlbum");
+                      setLocation(`/library?${params.toString()}`);
+                    }}
+                    onAlbumFocus={(albumKey) => {
+                      const params = new URLSearchParams(search);
+                      const artistName = albumKey.split("\x1f")[1];
+                      params.set("view", "songs");
+                      params.set("sort", "album");
+                      if (artistName) params.set("focus", artistName);
+                      params.set("openAlbum", albumKey);
                       setLocation(`/library?${params.toString()}`);
                     }}
                   />

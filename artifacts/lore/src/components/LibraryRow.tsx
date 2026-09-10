@@ -21,6 +21,10 @@ interface LibraryRowProps {
   isShelfOpen?: boolean;
   /** Called when the shelf chevron is tapped — parent coordinates single-open */
   onShelfToggle?: () => void;
+  /** Demo-only artist focus; ordinary Library rows keep their existing text. */
+  onArtistFocus?: (artist: string) => void;
+  /** Demo-only album focus; ordinary Library rows keep their existing shelf. */
+  onAlbumFocus?: (albumKey: string) => void;
 }
 
 /**
@@ -227,6 +231,8 @@ export function LibraryRow({
   onToggle,
   isShelfOpen = false,
   onShelfToggle,
+  onArtistFocus,
+  onAlbumFocus,
 }: LibraryRowProps) {
   const rec = item.recording;
   const title = rec?.title ?? (item.mbid ? item.mbid.slice(0, 8) : "Unknown track");
@@ -306,7 +312,19 @@ export function LibraryRow({
         ) : (
           <span className="lrow__tr lrow__tr--soft">{title}</span>
         )}
-        {artist && <p className="lrow__ar">{artist}</p>}
+        {artist && (
+          <p className="lrow__ar">
+            {onArtistFocus ? (
+              <button
+                type="button"
+                className="library-demo-artist-group__focus"
+                onClick={() => onArtistFocus(artist)}
+              >
+                {artist}
+              </button>
+            ) : artist}
+          </p>
+        )}
         <Byline prov={prov} soft={isSoft} dualSource={item.dualSource} />
         {item.fuzzyMatch && (
           <p className="lrow__badge lrow__badge--fuzzy" title="Matched by MusicBrainz text search — verify if unexpected">
@@ -373,7 +391,15 @@ export function LibraryRow({
               className={`lrow__shelf-btn${isShelfOpen ? " lrow__shelf-btn--open" : ""}`}
               aria-label={isShelfOpen ? "Close album browser" : `Browse album for ${title}`}
               aria-expanded={isShelfOpen}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShelfToggle?.(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onAlbumFocus && rec?.albumTitle) {
+                  onAlbumFocus(`${rec.albumTitle}\x1f${artist}`);
+                } else {
+                  onShelfToggle?.();
+                }
+              }}
               title={isShelfOpen ? "Close album browser" : "Browse album & discography"}
             >
               {isShelfOpen
