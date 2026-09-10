@@ -61,8 +61,9 @@ describe("LibraryCrate demo song rows", () => {
 
     const demoRow = screen.getByTestId("library-crate-track");
     expect(demoRow.classList.contains("demo-library__song-row")).toBe(true);
-    expect(within(demoRow).getByText("French Disko")).toBeTruthy();
-    expect(within(demoRow).getByText("Song")).toBeTruthy();
+    expect(within(demoRow).queryByText("Song")).toBeNull();
+    expect(within(demoRow).getByRole("link", { name: "French Disko" }).getAttribute("href"))
+      .toBe("/song/demo-track");
     expect(within(demoRow).getByText("Stereolab")).toBeTruthy();
     expect(within(demoRow).queryByText("Oscillons from the Anti-Sun")).toBeNull();
     expect(within(demoRow).getAllByRole("button", { name: "More options" })).toHaveLength(1);

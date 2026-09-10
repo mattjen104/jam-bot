@@ -147,11 +147,21 @@ function CrateTrackCard({
         )}
       </div>
       <div className="library-crate__track-copy">
-        <div className="library-crate__track-title">{title}</div>
+        <div className="library-crate__track-title">
+          {demoSurface && item.mbid ? (
+            <Link
+              href={`/song/${encodeURIComponent(item.mbid)}`}
+              className="demo-library__song-title-link"
+              onClick={() => onOpened(openedKey)}
+            >
+              {title}
+            </Link>
+          ) : (
+            title
+          )}
+        </div>
         {demoSurface ? (
           <div className="demo-library__song-subline">
-            <span>Song</span>
-            <span aria-hidden="true"> · </span>
             {onArtistFocus ? (
               <button
                 type="button"
@@ -159,6 +169,10 @@ function CrateTrackCard({
               >
                 {artist}
               </button>
+            ) : rec?.artistMbid ? (
+              <Link href={`/artist/${encodeURIComponent(rec.artistMbid)}`}>
+                {artist}
+              </Link>
             ) : (
               artist
             )}

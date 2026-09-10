@@ -72,76 +72,78 @@ export function LibraryRowMenu({
           </button>
         </Popover.Trigger>
         <Popover.Portal>
-          {open ? (
-            <button
-              type="button"
-              aria-label="Close menu"
-              className="fixed inset-0 z-40 border-0 bg-black/55"
-              onClick={() => setOpen(false)}
-            />
-          ) : null}
-          <Popover.Content 
-            align="end" 
-            sideOffset={4}
-            className="w-56 p-1.5 rounded-xl bg-muted border border-border shadow-lg animate-in zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 z-50"
-          >
-            {setContext && (
-              <button 
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-foreground hover:bg-background transition-colors"
-                onClick={() => {
-                  setOpen(false);
-                  setSheetOpen(true);
-                }}
-              >
-                <ListVideo className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
-                From the set
-              </button>
-            )}
-            
-            {rec?.releaseGroupMbid && (
+          <>
+            {open ? (
               <button
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-foreground hover:bg-background transition-colors"
-                onClick={() => {
-                  if (onAlbumFocus) onAlbumFocus();
-                  else navigate(`/album/${rec.releaseGroupMbid}`);
-                  onNavigateAction?.();
-                  setOpen(false);
-                }}
-              >
-                <Disc className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
-                Open album
-              </button>
-            )}
-            
-            {rec?.artistMbid && (
-              <button
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-foreground hover:bg-background transition-colors"
-                onClick={() => {
-                  if (onArtistFocus && rec.artist) onArtistFocus(rec.artist);
-                  else navigate(`/artist/${rec.artistMbid}`);
-                  onNavigateAction?.();
-                  setOpen(false);
-                }}
-              >
-                <User className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
-                Open artist
-              </button>
-            )}
-            
-            {!isRemoved && (
-              <button
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-dim hover:bg-background hover:text-destructive transition-colors"
-                onClick={handleRemove}
-              >
-                {isImport ? (
-                  <MinusCircle className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
-                ) : (
-                  <History className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
-                )}
-                {isImport ? "Hide from library" : "Remove keep"}
-              </button>
-            )}
-          </Popover.Content>
+                type="button"
+                aria-label="Close menu"
+                className="fixed inset-0 z-40 border-0 bg-black/55"
+                onClick={() => setOpen(false)}
+              />
+            ) : null}
+            <Popover.Content
+              align="end"
+              sideOffset={4}
+              className="w-56 p-1.5 rounded-xl bg-muted border border-border shadow-lg animate-in zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 z-50"
+            >
+              {setContext && (
+                <button
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-foreground hover:bg-background transition-colors"
+                  onClick={() => {
+                    setOpen(false);
+                    setSheetOpen(true);
+                  }}
+                >
+                  <ListVideo className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
+                  From the set
+                </button>
+              )}
+
+              {rec?.releaseGroupMbid && (
+                <button
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-foreground hover:bg-background transition-colors"
+                  onClick={() => {
+                    if (onAlbumFocus) onAlbumFocus();
+                    else navigate(`/album/${rec.releaseGroupMbid}`);
+                    onNavigateAction?.();
+                    setOpen(false);
+                  }}
+                >
+                  <Disc className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
+                  Open album
+                </button>
+              )}
+
+              {rec?.artistMbid && (
+                <button
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-foreground hover:bg-background transition-colors"
+                  onClick={() => {
+                    if (onArtistFocus && rec.artist) onArtistFocus(rec.artist);
+                    else navigate(`/artist/${rec.artistMbid}`);
+                    onNavigateAction?.();
+                    setOpen(false);
+                  }}
+                >
+                  <User className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
+                  Open artist
+                </button>
+              )}
+
+              {!isRemoved && (
+                <button
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[14px] text-dim hover:bg-background hover:text-destructive transition-colors"
+                  onClick={handleRemove}
+                >
+                  {isImport ? (
+                    <MinusCircle className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
+                  ) : (
+                    <History className="w-[17px] h-[17px] text-muted-foreground stroke-[1.5]" />
+                  )}
+                  {isImport ? "Hide from library" : "Remove keep"}
+                </button>
+              )}
+            </Popover.Content>
+          </>
         </Popover.Portal>
       </Popover.Root>
       

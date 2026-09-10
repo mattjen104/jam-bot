@@ -4434,6 +4434,14 @@
   font-size: 16px;
   line-height: 1.25;
 }
+.demo-library .demo-library__song-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.demo-library .demo-library__song-title-link:hover,
+.demo-library .demo-library__song-title-link:focus-visible {
+  text-decoration: underline;
+}
 .demo-library .demo-library__song-subline {
   display: block;
   overflow: hidden;
@@ -4445,8 +4453,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.demo-library .demo-library__song-subline button {
-  max-width: calc(100% - 38px);
+.demo-library .demo-library__song-subline button,
+.demo-library .demo-library__song-subline a {
+  max-width: 100%;
+  display: inline-block;
   overflow: hidden;
   padding: 0;
   border: 0;
@@ -4459,7 +4469,9 @@
   white-space: nowrap;
 }
 .demo-library .demo-library__song-subline button:hover,
-.demo-library .demo-library__song-subline button:focus-visible {
+.demo-library .demo-library__song-subline button:focus-visible,
+.demo-library .demo-library__song-subline a:hover,
+.demo-library .demo-library__song-subline a:focus-visible {
   color: hsl(var(--foreground));
   text-decoration: underline;
 }
