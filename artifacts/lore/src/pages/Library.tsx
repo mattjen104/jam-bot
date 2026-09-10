@@ -1439,7 +1439,22 @@ function DemoMergedLibrary({
         <h1>
           LORE
           {focusedArtist ? (
-            <span className="demo-merged-library__focus-title"> / {focusedArtist}</span>
+            <span className="demo-merged-library__focus-title">
+              {" / "}
+              <button
+                type="button"
+                className="demo-merged-library__focus-clear"
+                aria-label={`Clear artist focus: ${focusedArtist}`}
+                title="Clear artist focus"
+                onClick={() => updateSearch(next => {
+                  next.delete("focus");
+                  next.delete("openAlbum");
+                })}
+              >
+                <span>{focusedArtist}</span>
+                <span aria-hidden="true" className="demo-merged-library__focus-clear-mark">×</span>
+              </button>
+            </span>
           ) : null}
         </h1>
         <div className="demo-merged-library__controls">

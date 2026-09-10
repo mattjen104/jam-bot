@@ -3479,6 +3479,35 @@
   color: hsl(var(--muted-foreground));
   font-weight: 400;
 }
+.demo-merged-library__focus-clear {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.demo-merged-library__focus-clear-mark {
+  font-family: var(--app-font-mono);
+  font-size: 14px;
+  opacity: 0.6;
+}
+.demo-merged-library__focus-clear:hover,
+.demo-merged-library__focus-clear:focus-visible {
+  color: hsl(var(--foreground));
+}
+.demo-merged-library__focus-clear:hover > span:first-child,
+.demo-merged-library__focus-clear:focus-visible > span:first-child {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.demo-merged-library__focus-clear:focus-visible {
+  outline: 1px solid hsl(var(--foreground) / 0.7);
+  outline-offset: 4px;
+}
 .demo-merged-library__views {
   display: flex;
   align-items: baseline;

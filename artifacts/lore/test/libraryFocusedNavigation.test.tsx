@@ -55,6 +55,7 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const { makeApiClientMock } = await import("./helpers/apiClientMock");
   return makeApiClientMock(importOriginal, {
     useGetPickersDial: vi.fn(() => ({ data: null })),
+    useSearchArtistStations: vi.fn(() => ({ data: { query: "", stations: [] } })),
   });
 });
 
@@ -158,6 +159,23 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
+  it("clears artist focus directly from the Library heading", async () => {
+    mockUseSearch.mockReturnValue("?focus=Broadcast&stationSort=live&openAlbum=Tender+Buttons%1FBroadcast");
+    mockUseLocation.mockReturnValue([
+      "/library?focus=Broadcast&stationSort=live&openAlbum=Tender+Buttons%1FBroadcast",
+      mockSetLocation,
+    ]);
+    await renderLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear artist focus: Broadcast" }));
+
+    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.pathname).toBe("/library");
+    expect(url.searchParams.has("focus")).toBe(false);
+    expect(url.searchParams.has("openAlbum")).toBe(false);
+    expect(url.searchParams.get("stationSort")).toBe("live");
+  });
+
   it("opens station crossings from the Radio byline without losing station filters", async () => {
     mockUseSearch.mockReturnValue("?stationSort=live");
     mockUseLocation.mockReturnValue(["/library?stationSort=live", mockSetLocation]);
