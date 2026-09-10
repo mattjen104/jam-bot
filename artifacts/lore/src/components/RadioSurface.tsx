@@ -13,24 +13,41 @@ export function RadioSurface({
   hasSeeds,
   hasLibrary,
   showHeader = true,
+  sort = "overlap",
 }: {
   stations: DialStation[];
   visibleSeeds: string[];
   hasSeeds: boolean;
   hasLibrary: boolean;
   showHeader?: boolean;
+  sort?: "overlap" | "live" | "discovery" | "name";
 }) {
   const { radio } = usePlayer();
 
   const allCrossings = useMemo(() => {
-    return stations
-      .filter(ds => ds.lifetimeCrossings + ds.lifetimeArtistCrossings > 0)
-      .sort((a, b) => {
-        const aTotal = a.lifetimeCrossings + a.lifetimeArtistCrossings;
-        const bTotal = b.lifetimeCrossings + b.lifetimeArtistCrossings;
-        return bTotal - aTotal;
-      });
-  }, [stations]);
+    const list = stations.filter(ds => ds.lifetimeCrossings + ds.lifetimeArtistCrossings > 0);
+    if (sort === "name") {
+      return list.sort((a, b) => a.station.name.localeCompare(b.station.name));
+    }
+    if (sort === "live") {
+      return list.sort((a, b) =>
+        Number(b.isLive) - Number(a.isLive)
+        || (b.lifetimeCrossings + b.lifetimeArtistCrossings)
+          - (a.lifetimeCrossings + a.lifetimeArtistCrossings),
+      );
+    }
+    if (sort === "discovery") {
+      return list.sort((a, b) =>
+        (a.lifetimeCrossings + a.lifetimeArtistCrossings)
+          - (b.lifetimeCrossings + b.lifetimeArtistCrossings),
+      );
+    }
+    return list.sort((a, b) => {
+      const aTotal = a.lifetimeCrossings + a.lifetimeArtistCrossings;
+      const bTotal = b.lifetimeCrossings + b.lifetimeArtistCrossings;
+      return bTotal - aTotal;
+    });
+  }, [stations, sort]);
 
   const hasData = hasSeeds || hasLibrary;
   const showCrossings = hasData && allCrossings.length > 0;
@@ -38,8 +55,12 @@ export function RadioSurface({
   const rosterStations = useMemo(() => {
     const excludedSlugs = showCrossings ? new Set(allCrossings.map(ds => ds.station.slug)) : new Set<string>();
     const mapped = ROSTER_SLUGS.map(slug => stations.find(s => s.station.slug === slug)).filter(Boolean) as DialStation[];
-    return mapped.filter(ds => !excludedSlugs.has(ds.station.slug));
-  }, [stations, showCrossings, allCrossings]);
+    const list = mapped.filter(ds => !excludedSlugs.has(ds.station.slug));
+    if (sort === "name") {
+      return list.sort((a, b) => a.station.name.localeCompare(b.station.name));
+    }
+    return list;
+  }, [stations, showCrossings, allCrossings, sort]);
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
 

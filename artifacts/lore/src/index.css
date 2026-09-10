@@ -3133,6 +3133,10 @@
   font-weight: 500;
   line-height: 1.2;
 }
+.demo-merged-library__focus-title {
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
 .demo-merged-library__views {
   display: flex;
   align-items: baseline;
@@ -3159,6 +3163,28 @@
   font-size: 11px;
   text-decoration: underline;
   text-underline-offset: 4px;
+  cursor: pointer;
+}
+.demo-merged-library__activity {
+  color: hsl(var(--dim));
+  font-size: 10px;
+  font-weight: 400;
+}
+.demo-merged-library__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0 0;
+}
+.demo-merged-library__clear-focus {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 .demo-merged-library__views::-webkit-scrollbar {

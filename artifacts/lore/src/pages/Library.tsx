@@ -949,6 +949,23 @@ function DemoMergedLibrary({
   view: "stations" | "songs" | "artists";
   embedded: boolean;
 }) {
+  const [, setLocation] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const focusedArtist = useMemo(
+    () => new URLSearchParams(search).get("focus"),
+    [search],
+  );
+  const stationSortParam = params.get("stationSort");
+  const stationSort: "overlap" | "live" | "discovery" | "name" =
+    stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name"
+      ? stationSortParam
+      : "overlap";
+  const sortParam = params.get("sort");
+  const songSort: "added" | "artist" | "title" =
+    sortParam === "artist" || sortParam === "title" ? sortParam : "added";
+  const artistSort: "name" | "count" = sortParam === "count" ? "count" : "name";
+
   const { visibleSeeds, replaceSeeds } = useSeedManager();
   const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
@@ -962,38 +979,134 @@ function DemoMergedLibrary({
     () => demoLibraryData?.pages.flatMap((page) => page.items) ?? [],
     [demoLibraryData],
   );
-  const songCount = demoLibraryData?.pages[0]?.total ?? demoLibraryItems.length;
-  const artistCount = useMemo(
-    () => buildArtistGroups(demoLibraryItems).length,
-    [demoLibraryItems],
-  );
+
+  const filteredStations = useMemo(() => {
+    let list = stations;
+    const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
+    if (normalizedFocus) {
+      list = list.filter(ds => {
+        const matches = (artist: string | null | undefined) =>
+          artist?.trim().toLocaleLowerCase() === normalizedFocus;
+        if (matches(ds.liveTrack?.artist)) return true;
+        if (ds.shows.some(s => matches(s.currentTrack?.artist))) return true;
+        if (ds.topArtistNames.some(matches)) return true;
+        if (ds.topArtistNames24h.some(matches)) return true;
+        if (ds.topArtistNames7d.some(matches)) return true;
+        if (ds.topArtistNamesLifetime.some(matches)) return true;
+        if (ds.albumCrossings.some(ac => matches(ac.artist))) return true;
+        return false;
+      });
+    }
+    return list;
+  }, [stations, focusedArtist]);
+
+  const filteredDemoItems = useMemo(() => {
+    if (!focusedArtist) return demoLibraryItems;
+    const normalizedFocus = focusedArtist.trim().toLocaleLowerCase();
+    return demoLibraryItems.filter(
+      i => i.recording?.artist.trim().toLocaleLowerCase() === normalizedFocus,
+    );
+  }, [demoLibraryItems, focusedArtist]);
+
+  const filteredArtistCount = useMemo(() => {
+    return buildArtistGroups(filteredDemoItems).length;
+  }, [filteredDemoItems]);
+
+  const allArtists = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of demoLibraryItems) {
+      if (item.recording?.artist) set.add(item.recording.artist);
+    }
+    for (const s of visibleSeeds) set.add(s);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [demoLibraryItems, visibleSeeds]);
+
+  const liveStationCount = filteredStations.filter(s => s.isLive).length;
+  const songCount = focusedArtist
+    ? filteredDemoItems.length
+    : demoLibraryData?.pages[0]?.total ?? demoLibraryItems.length;
+  const keepCount = focusedArtist
+    ? filteredDemoItems.filter(i => i.provenance.kind === "keep").length
+    : demoLibraryData?.pages[0]?.keepCount ?? 0;
+  const seedCount = visibleSeeds.length;
+
+  const updateSearch = (mutate: (next: URLSearchParams) => void) => {
+    const next = new URLSearchParams(search);
+    mutate(next);
+    const query = next.toString();
+    setLocation(query ? `/library?${query}` : "/library");
+  };
+
+  const buildTabHref = (targetView: "stations" | "songs" | "artists") => {
+    const p = new URLSearchParams(search);
+    if (targetView === "stations") {
+      p.delete("view");
+      p.delete("lens");
+    } else if (targetView === "songs") {
+      p.set("view", "songs");
+      p.delete("lens");
+      p.delete("sort");
+      if (songSort !== "added") p.set("sort", songSort);
+    } else if (targetView === "artists") {
+      p.delete("view");
+      p.set("lens", "artists");
+      p.delete("sort");
+      if (artistSort !== "name") p.set("sort", artistSort);
+    }
+    const qs = p.toString();
+    return `/library${qs ? `?${qs}` : ""}`;
+  };
+
+  const selectStyle: React.CSSProperties = {
+    appearance: "none",
+    background: "transparent",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: 4,
+    padding: "4px 20px 4px 8px",
+    fontFamily: "var(--app-font-mono)",
+    fontSize: 11,
+    color: "hsl(var(--foreground))",
+    cursor: "pointer",
+    backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>')`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 4px center",
+    backgroundSize: "10px",
+  };
 
   return (
     <main className="demo-merged-library">
       <header className="demo-merged-library__header">
-        <h1>Library</h1>
+        <h1>
+          Library
+          {focusedArtist ? (
+            <span className="demo-merged-library__focus-title"> / {focusedArtist}</span>
+          ) : null}
+        </h1>
         <div className="demo-merged-library__controls">
           <nav aria-label="Library views" className="demo-merged-library__views">
             <Link
-              href="/library"
+              href={buildTabHref("stations")}
               aria-current={view === "stations" ? "page" : undefined}
               data-testid="library-view-stations"
             >
-              {stations.length.toLocaleString()} Stations
+              {filteredStations.length.toLocaleString()} Stations
+              {liveStationCount > 0 && <span className="demo-merged-library__activity"> · {liveStationCount} live</span>}
             </Link>
             <Link
-              href="/library?view=songs"
+              href={buildTabHref("songs")}
               aria-current={view === "songs" ? "page" : undefined}
               data-testid="library-view-songs"
             >
               {songCount.toLocaleString()} Songs
+              {keepCount > 0 && <span className="demo-merged-library__activity"> · {keepCount} from radio</span>}
             </Link>
             <Link
-              href="/library?lens=artists"
+              href={buildTabHref("artists")}
               aria-current={view === "artists" ? "page" : undefined}
               data-testid="library-view-artists"
             >
-              {artistCount.toLocaleString()} Artists
+              {filteredArtistCount.toLocaleString()} Artists
+              {seedCount > 0 && <span className="demo-merged-library__activity"> · {seedCount} seeded</span>}
             </Link>
           </nav>
           <button
@@ -1005,6 +1118,87 @@ function DemoMergedLibrary({
           >
             Edit artists
           </button>
+        </div>
+        <div className="demo-merged-library__filters">
+          <select
+            style={selectStyle}
+            aria-label="Focus on an artist"
+            value={focusedArtist ?? ""}
+            onChange={e => {
+              updateSearch((next) => {
+                if (e.target.value) next.set("focus", e.target.value);
+                else next.delete("focus");
+              });
+            }}
+          >
+            <option value="">All artists</option>
+            {allArtists.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          {focusedArtist && (
+            <button
+              type="button"
+              onClick={() => {
+                updateSearch((next) => next.delete("focus"));
+              }}
+              className="demo-merged-library__clear-focus"
+            >
+              Clear
+            </button>
+          )}
+
+          {view === "stations" && (
+            <select
+              style={selectStyle}
+              aria-label="Sort stations"
+              value={stationSort}
+              onChange={e => {
+                updateSearch((next) => {
+                  if (e.target.value !== "overlap") next.set("stationSort", e.target.value);
+                  else next.delete("stationSort");
+                });
+              }}
+            >
+              <option value="overlap">For you</option>
+              <option value="live">Live now</option>
+              <option value="discovery">Discovery</option>
+              <option value="name">A–Z</option>
+            </select>
+          )}
+
+          {view === "songs" && (
+            <select
+              style={selectStyle}
+              aria-label="Sort songs"
+              value={songSort}
+              onChange={e => {
+                updateSearch((next) => {
+                  if (e.target.value !== "added") next.set("sort", e.target.value);
+                  else next.delete("sort");
+                });
+              }}
+            >
+              <option value="added">Recently kept</option>
+              <option value="artist">Artist</option>
+              <option value="title">Title</option>
+            </select>
+          )}
+
+          {view === "artists" && (
+            <select
+              style={selectStyle}
+              aria-label="Sort artists"
+              value={artistSort}
+              onChange={e => {
+                updateSearch((next) => {
+                  if (e.target.value !== "name") next.set("sort", e.target.value);
+                  else next.delete("sort");
+                });
+              }}
+            >
+              <option value="name">A–Z</option>
+              <option value="count">Most kept</option>
+            </select>
+          )}
         </div>
       </header>
 
@@ -1024,11 +1218,12 @@ function DemoMergedLibrary({
 
       {view === "stations" ? (
         <RadioSurface
-          stations={stations}
+          stations={filteredStations}
           visibleSeeds={visibleSeeds}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
           showHeader={false}
+          sort={stationSort}
         />
       ) : (
         <LibraryContent embedded={embedded} showArtistEditor={false} />
@@ -1076,13 +1271,13 @@ function LibraryContent({
   const sourceFilter = LENS_SOURCE[lens];
 
   // Sort — persisted in URL as ?sort=artist|title (default = "added", omitted from URL)
-  const sortFilter = useMemo((): "added" | "artist" | "title" => {
+  const sortFilter = useMemo((): "added" | "artist" | "title" | "count" => {
     const v = new URLSearchParams(search).get("sort");
-    if (v === "artist" || v === "title") return v;
+    if (v === "artist" || v === "title" || v === "count") return v;
     return "added";
   }, [search]);
 
-  const setSortFilter = (sort: "added" | "artist" | "title") => {
+  const setSortFilter = (sort: "added" | "artist" | "title" | "count") => {
     const p = new URLSearchParams(search);
     if (sort !== "added") p.set("sort", sort);
     else p.delete("sort");
@@ -1143,11 +1338,28 @@ function LibraryContent({
     // libraryTotal is populated from the first-page COUNT query (no cursor).
     // Subsequent pages omit it; we keep the first-page value for display.
     hasNextPage,
-  } = useMyLibraryInfinite({ source: sourceFilter || undefined, sort: sortFilter }, 100);
+  } = useMyLibraryInfinite({
+    source: sourceFilter || undefined,
+    sort: sortFilter === "count" ? "added" : sortFilter,
+  }, 100);
   // Every lens is fully server-scoped (including From Lore via source=lore),
   // so rows arrive deduplicated, dual-source-labeled, and pre-filtered —
   // pagination and totals always describe exactly the visible feed.
-  const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
+  const rawKeptItems = useMemo(
+    () => keptData?.pages.flatMap((p) => p.items) ?? [],
+    [keptData],
+  );
+  const focusedArtist = demoSurface
+    ? new URLSearchParams(search).get("focus")
+    : null;
+  const keptItems = useMemo(() => {
+    if (!focusedArtist) return rawKeptItems;
+    const normalizedFocus = focusedArtist.trim().toLocaleLowerCase();
+    return rawKeptItems.filter(
+      i => i.recording?.artist.trim().toLocaleLowerCase() === normalizedFocus,
+    );
+  }, [rawKeptItems, focusedArtist]);
+
   useEffect(() => {
     const latest = keptItems.find((item) => item.mbid && item.recording);
     if (!latest?.mbid || !latest.recording) return;
@@ -1170,6 +1382,7 @@ function LibraryContent({
   // Total count from the server's first-page COUNT query — reflects the real
   // library size even before all pages are loaded.
   const libraryTotal: number | undefined = keptData?.pages[0]?.total;
+  const effectiveLibraryTotal = focusedArtist ? keptItems.length : (libraryTotal ?? keptItems.length);
 
   // Stable import-scoped counts for the "X of Y matched" stat.
   // Always scoped to source=import so numbers are unaffected by sourceFilter.
@@ -1366,10 +1579,13 @@ function LibraryContent({
     () => (viewMode === "album" ? buildAlbumGroups(keptItems) : []),
     [viewMode, keptItems],
   );
-  const artistGroups = useMemo(
-    () => buildArtistGroups(keptItems),
-    [keptItems],
-  );
+  const artistGroups = useMemo(() => {
+    const groups = buildArtistGroups(keptItems);
+    if (sortFilter === "count") {
+      groups.sort((a, b) => b.items.length - a.items.length || a.artist.localeCompare(b.artist));
+    }
+    return groups;
+  }, [keptItems, sortFilter]);
 
   // Per-album hide preference — shared with the compact Stack on the front door
   // so a homepage skip is honoured here too.
@@ -1404,8 +1620,12 @@ function LibraryContent({
   // library regardless of how many items are loaded client-side.  Falls back to
   // a client-side count from loaded items so the stat is available immediately
   // before the first fetch resolves (typically 0, updates once data arrives).
-  const keepCount: number = keptData?.pages[0]?.keepCount ?? 0;
-  const criticCount: number = keptData?.pages[0]?.criticCount ?? 0;
+  const keepCount: number = focusedArtist
+    ? keptItems.filter((i) => i.provenance.kind === "keep").length
+    : keptData?.pages[0]?.keepCount ?? 0;
+  const criticCount: number = focusedArtist
+    ? keptItems.filter((i) => i.provenance.kind === "critic").length
+    : keptData?.pages[0]?.criticCount ?? 0;
 
   // First-run auto-open: prompt new users to seed their taste via the import
   // modal, but only when they have no library, no seeds, and haven't already
@@ -1461,10 +1681,10 @@ function LibraryContent({
         <div className="dial-topbar">
           <span className="dial-topbar__wordmark">Lore</span>
           <span className="dial-topbar__title dial-topbar__title--active">Library</span>
-          {(libraryTotal ?? keptItems.length) > 0 ? (
+          {effectiveLibraryTotal > 0 ? (
             <span className="dial-topbar__sort-chip">
               {sourceFilter === "keep" ? "📻" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
-              {(libraryTotal ?? keptItems.length).toLocaleString()}
+              {effectiveLibraryTotal.toLocaleString()}
             </span>
           ) : null}
           <button
@@ -1641,7 +1861,7 @@ function LibraryContent({
           <div className="lib-hero">
             <div className="lib-hero__kicker">◆ Your library</div>
             <div className="lib-hero__headline">
-              <b>{(libraryTotal ?? keptItems.length).toLocaleString()} tracks</b>
+              <b>{effectiveLibraryTotal.toLocaleString()} tracks</b>
               {keepCount > 0 && `, ${keepCount} of them found on air`}
             </div>
             <div className="lib-hero__stats">
@@ -1958,7 +2178,7 @@ function LibraryContent({
           >
             <h2>{demoSurface ? "Library" : "Kept"}</h2>
             {([
-              { value: "" as const, label: "Songs", count: libraryTotal ?? keptItems.length },
+              { value: "" as const, label: "Songs", count: effectiveLibraryTotal },
               { value: "artists" as const, label: "Artists", count: artistGroups.length },
             ]).map(({ value, label, count }) => {
               const active = value === "artists" ? viewMode === "artist" : viewMode !== "artist";
@@ -2020,7 +2240,7 @@ function LibraryContent({
             items={keptItems}
             seedArtists={visibleSeeds}
             catalogue={seedCatalogue}
-            sort={sortFilter}
+            sort={sortFilter === "count" ? "added" : sortFilter}
             showKeptHeading={false}
           />
         ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (
