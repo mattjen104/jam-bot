@@ -35,7 +35,32 @@ const onAirState = vi.hoisted(() => ({
           earlier: string[];
           matchCount: null;
         }>;
-        authenticated: false;
+        authenticated: boolean;
+      }
+    | undefined,
+}));
+
+const scheduleState = vi.hoisted(() => ({
+  data: undefined as
+    | {
+        items: Array<{
+          stationSlug: string;
+          stationName: string;
+          ianaTimezone: string | null;
+          runs: Array<{
+            runId: number;
+            show: {
+              name: string;
+              djName: string | null;
+              pickerId: number | null;
+            };
+            spinCount: number;
+            resolvedCount: number;
+            startedAt: string;
+            endedAt: string;
+            ianaTimezone: string | null;
+          }>;
+        }>;
       }
     | undefined,
 }));
@@ -74,6 +99,10 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     })),
+    useGetStationsSchedule: vi.fn(() => ({
+      data: scheduleState.data,
+      isLoading: false,
+    })),
   });
 });
 
@@ -106,6 +135,7 @@ function slugsFor(opts: {
 describe("useDialData includeAllStations", () => {
   beforeEach(() => {
     onAirState.data = undefined;
+    scheduleState.data = undefined;
   });
 
   it("default filter drops off-air non-flagship stations without a named show", () => {
@@ -194,6 +224,74 @@ describe("useDialData includeAllStations", () => {
       showName: "Artist Takeover",
       djName: null,
       currentTrack: { mbid: "same-live-track", title: "Shared Track" },
+    });
+  });
+
+  it("carries only current schedule and provider attribution into artist-action exclusions", () => {
+    const now = Date.now();
+    const iso = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    scheduleState.data = {
+      items: [{
+        stationSlug: "kexp",
+        stationName: "KEXP",
+        ianaTimezone: "America/Los_Angeles",
+        runs: [
+          {
+            runId: 1,
+            show: { name: "Current Affairs", djName: "DJ Current", pickerId: null },
+            spinCount: 0,
+            resolvedCount: 0,
+            startedAt: iso(-30 * 60_000),
+            endedAt: iso(30 * 60_000),
+            ianaTimezone: "America/Los_Angeles",
+          },
+          {
+            runId: 2,
+            show: { name: "Grounded Artist", djName: "Past Host", pickerId: null },
+            spinCount: 0,
+            resolvedCount: 0,
+            startedAt: iso(-4 * 60 * 60_000),
+            endedAt: iso(-3 * 60 * 60_000),
+            ianaTimezone: "America/Los_Angeles",
+          },
+        ],
+      }],
+    };
+    onAirState.data = {
+      authenticated: true,
+      items: [{
+        station: { slug: "kexp", name: "KEXP" },
+        show: { name: "Provider Hour", djName: "Provider Host" },
+        now: {
+          mbid: "grounded-recording",
+          title: "Grounded Track",
+          artist: "Grounded Artist",
+          artworkUrl: null,
+          playedAt: iso(-5_000),
+          freshness: "fresh",
+          resolved: true,
+        },
+        earlier: [],
+        matchCount: null,
+      }],
+    };
+
+    const { result } = renderHook(() =>
+      useDialData("personal", { includeAllStations: true }),
+    );
+    const station = result.current.stations.find((item) => item.station.slug === "kexp")!;
+
+    expect(station.artistActionExclusions).toEqual(expect.arrayContaining([
+      "Current Affairs",
+      "DJ Current",
+      "Provider Hour",
+      "Provider Host",
+    ]));
+    expect(station.artistActionExclusions).not.toContain("Grounded Artist");
+    expect(station.artistActionExclusions).not.toContain("Past Host");
+    expect(station.liveTrack).toMatchObject({
+      mbid: "grounded-recording",
+      artist: "Grounded Artist",
     });
   });
 });
