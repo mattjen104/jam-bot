@@ -1563,6 +1563,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.srch-row__artist {
+  align-self: flex-start;
+  position: relative;
+  color: hsl(var(--dim));
+  text-decoration: none;
+}
+.srch-row__artist:hover,
+.srch-row__artist:focus-visible {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .srch-row__badge {
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);

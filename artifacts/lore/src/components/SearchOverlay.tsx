@@ -12,7 +12,7 @@
  * and filterable via chips. Navigation closes the overlay automatically.
  */
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useListPickers, useListStations } from "@workspace/api-client-react";
 import type { DialStation, DialShow } from "../hooks/useDialData";
 import { useMyLibrarySearch, useIsAuthenticated, type LibraryItem } from "../lib/meHooks";
@@ -28,6 +28,7 @@ interface SearchResult {
   kind: "station" | "selector" | "show" | "track" | "library";
   label: string;
   sub: string;
+  artistHref?: string;
   badge?: string;
   onTap?: () => void;
 }
@@ -241,6 +242,9 @@ export function SearchOverlay({
         kind: "library" as const,
         label: title,
         sub: artist,
+        artistHref: item.recording?.artistMbid
+          ? `/artist/${encodeURIComponent(item.recording.artistMbid)}`
+          : undefined,
         badge: "◆ kept",
         onTap: () => item.mbid ? goAndClose(`/song/${item.mbid}`) : undefined,
       };
@@ -335,26 +339,47 @@ export function SearchOverlay({
           <div key={kind} className="srch-group">
             <div className="srch-grp-lbl">{KIND_LABEL[kind]}</div>
             {items.map((r, i) => (
-              <button
+              <div
                 key={i}
-                type="button"
                 className={`srch-row${!r.onTap ? " srch-row--muted" : ""}`}
                 onClick={r.onTap}
-                disabled={!r.onTap}
+                onKeyDown={r.onTap ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    r.onTap?.();
+                  }
+                } : undefined}
+                role={r.onTap ? "button" : undefined}
+                tabIndex={r.onTap ? 0 : undefined}
               >
                 <span className="srch-row__icon" aria-hidden="true">
                   {KIND_ICON[kind]}
                 </span>
                 <div className="srch-row__body">
                   <span className="srch-row__label">{r.label}</span>
-                  {r.sub && <span className="srch-row__sub">{r.sub}</span>}
+                  {r.sub && (
+                    r.artistHref ? (
+                      <Link
+                        href={r.artistHref}
+                        className="srch-row__sub srch-row__artist"
+                        data-testid="link-search-result-artist"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onClose();
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        {r.sub}
+                      </Link>
+                    ) : <span className="srch-row__sub">{r.sub}</span>
+                  )}
                 </div>
                 {r.badge && (
                   <span className={`srch-row__badge${r.badge.startsWith("◆") ? " srch-row__badge--sel" : ""}`}>
                     {r.badge}
                   </span>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         ))}

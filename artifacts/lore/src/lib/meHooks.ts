@@ -1028,7 +1028,7 @@ export function useMyLibrarySearch(
 ) {
   const { enabled = true, limit = 6 } = options;
   const trimmed = q.trim();
-  return useQuery({
+  return useQuery<LibraryItem[]>({
     queryKey: ["me", "library", "search", trimmed, limit] as const,
     queryFn: () => {
       return generatedOrNull(listMyLibrary({ q: trimmed, source: "keep", limit })).then(
