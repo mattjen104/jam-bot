@@ -3187,6 +3187,84 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
+.library-demo-artist-group__focus {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-display);
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.library-demo-artist-group__focus:hover,
+.library-demo-artist-group__focus:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.library-demo-artist-group__songs {
+  margin: 0;
+  padding: 0 0 8px 12px;
+  list-style: none;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+.library-demo-artist-group__songs .lrow {
+  border-bottom-color: hsl(var(--border) / 0.3);
+}
+.library-artist-lens__seed-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-sans);
+  font-size: 13px;
+  cursor: pointer;
+}
+.library-artist-lens__seed-toggle[aria-pressed="true"] {
+  color: hsl(var(--keep));
+}
+.library-discography__heading {
+  padding: 14px 15px 7px;
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  color: hsl(var(--faint));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.library-discography__saved-count {
+  padding: 2px 5px;
+  border: 1px solid hsl(var(--keep) / 0.3);
+  border-radius: 3px;
+  background: hsl(var(--card));
+  color: hsl(var(--keep));
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.library-discography__other-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  color: inherit;
+  text-decoration: none;
+  transition: background 120ms ease;
+}
+.library-discography__other-row:hover,
+.library-discography__other-row:focus-visible {
+  background: hsl(var(--secondary) / 0.6);
+}
 .demo-merged-library__views::-webkit-scrollbar {
   display: none;
 }

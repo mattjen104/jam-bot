@@ -84,6 +84,8 @@ function CrateTrackCard({
   onOpened,
   setContext,
   onPlayStart,
+  onArtistFocus,
+  onAlbumFocus,
 }: {
   item: LibraryItem;
   release: CrateRelease;
@@ -93,6 +95,8 @@ function CrateTrackCard({
   position: number;
   opened: boolean;
   onOpened: (key: string) => void;
+  onArtistFocus?: (artistName: string) => void;
+  onAlbumFocus?: (albumKey: string) => void;
 }) {
   // Name of the deck cover the listener is peeking at (null = the kept track).
   const [peekLabel, setPeekLabel] = useState<string | null>(null);
@@ -144,14 +148,26 @@ function CrateTrackCard({
             onSelectionChange={setPeekLabel}
           />
         ) : releaseHref ? (
-          <Link
-            href={releaseHref}
-            className="library-crate__cover-link"
-            onClick={() => onOpened(openedKey)}
-            aria-label={`Open ${album}`}
-          >
-            <Swatch title={album} artworkUrl={cover} className="library-crate__track-swatch" />
-          </Link>
+          onAlbumFocus ? (
+            <button
+              type="button"
+              className="library-crate__cover-link hover:opacity-80"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              onClick={(e) => { e.stopPropagation(); onOpened(openedKey); onAlbumFocus(`${album}\x1f${artist}`); }}
+              aria-label={`Open ${album}`}
+            >
+              <Swatch title={album} artworkUrl={cover} className="library-crate__track-swatch" />
+            </button>
+          ) : (
+            <Link
+              href={releaseHref}
+              className="library-crate__cover-link"
+              onClick={() => onOpened(openedKey)}
+              aria-label={`Open ${album}`}
+            >
+              <Swatch title={album} artworkUrl={cover} className="library-crate__track-swatch" />
+            </Link>
+          )
         ) : (
           <Swatch title={album} artworkUrl={cover} className="library-crate__track-swatch" />
         )}
@@ -167,18 +183,42 @@ function CrateTrackCard({
         <div className="library-crate__track-title">{title}</div>
         <div className="library-crate__track-album">
           {releaseHref ? (
-            <Link
-              href={releaseHref}
-              className="library-crate__album-link"
-              onClick={() => onOpened(openedKey)}
-            >
-              {album}
-            </Link>
+            onAlbumFocus ? (
+              <button
+                type="button"
+                className="library-crate__album-link hover:underline"
+                style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+                onClick={(e) => { e.stopPropagation(); onOpened(openedKey); onAlbumFocus(`${album}\x1f${artist}`); }}
+              >
+                {album}
+              </button>
+            ) : (
+              <Link
+                href={releaseHref}
+                className="library-crate__album-link"
+                onClick={() => onOpened(openedKey)}
+              >
+                {album}
+              </Link>
+            )
           ) : (
             album
           )}
         </div>
-        <div className="library-crate__track-artist">{artist}</div>
+        <div className="library-crate__track-artist">
+          {onArtistFocus ? (
+            <button
+              type="button"
+              className="hover:underline"
+              style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+              onClick={(e) => { e.stopPropagation(); onArtistFocus(artist); }}
+            >
+              {artist}
+            </button>
+          ) : (
+            artist
+          )}
+        </div>
         <div className="library-crate__provenance">{keepCopy(item)}</div>
         {setContext?.station.homepageUrl && (
           <div className="library-crate__station-row">
@@ -199,12 +239,22 @@ function CrateTrackCard({
   );
 }
 
-function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }: {
+function AddedArtistCard({
+  artist,
+  position,
+  onOpened,
+  setContext,
+  onPlayStart,
+  onArtistFocus,
+  onAlbumFocus,
+}: {
   artist: AddedArtist;
   position: number;
   onOpened: (key: string) => void;
   setContext?: SetContext | null;
   onPlayStart?: () => void;
+  onArtistFocus?: (artistName: string) => void;
+  onAlbumFocus?: (albumKey: string) => void;
 }) {
   const [releaseIndex, setReleaseIndex] = useState(0);
   // Name of the deck cover the listener is peeking at (null = the kept track).
@@ -252,14 +302,26 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
             <Swatch key={ghost.releaseGroupMbid} title={ghost.title ?? artist.name} artworkUrl={ghost.artworkUrl} className={`library-crate__ghost library-crate__ghost--${index + 1}`} />
           ))}
           {release && releaseHref ? (
-            <Link
-              href={releaseHref}
-              className="library-crate__cover-link"
-              onClick={() => { rememberOpened(artist.key); onOpened(artist.key); }}
-              aria-label={`Browse ${release.title ?? "release"} by ${artist.name}`}
-            >
-              <Swatch title={release.title ?? artist.name} artworkUrl={release.artworkUrl} />
-            </Link>
+            onAlbumFocus ? (
+              <button
+                type="button"
+                className="library-crate__cover-link hover:opacity-80"
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                onClick={(e) => { e.stopPropagation(); rememberOpened(artist.key); onOpened(artist.key); onAlbumFocus(`${release.title ?? "release"}\x1f${artist.name}`); }}
+                aria-label={`Browse ${release.title ?? "release"} by ${artist.name}`}
+              >
+                <Swatch title={release.title ?? artist.name} artworkUrl={release.artworkUrl} />
+              </button>
+            ) : (
+              <Link
+                href={releaseHref}
+                className="library-crate__cover-link"
+                onClick={() => { rememberOpened(artist.key); onOpened(artist.key); }}
+                aria-label={`Browse ${release.title ?? "release"} by ${artist.name}`}
+              >
+                <Swatch title={release.title ?? artist.name} artworkUrl={release.artworkUrl} />
+              </Link>
+            )
           ) : (
             <Swatch title={artist.name} artworkUrl={null} />
           )}
@@ -268,7 +330,20 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
       </div>
       <div className="library-crate__content">
         <div className="library-crate__scrim" aria-hidden="true" />
-        <div className="library-crate__parent">{artist.name}</div>
+        <div className="library-crate__parent">
+          {onArtistFocus ? (
+            <button
+              type="button"
+              className="hover:underline"
+              style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+              onClick={(e) => { e.stopPropagation(); onArtistFocus(artist.name); }}
+            >
+              {artist.name}
+            </button>
+          ) : (
+            artist.name
+          )}
+        </div>
         {/* Persistent live region; empty while on the kept track. */}
         {hasDeck && (
           <div className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
@@ -277,13 +352,24 @@ function AddedArtistCard({ artist, position, onOpened, setContext, onPlayStart }
         )}
         {setContext && release && releaseHref && (
           <div className="library-crate__track-album">
-            <Link
-              href={releaseHref}
-              className="library-crate__album-link"
-              onClick={() => { rememberOpened(artist.key); onOpened(artist.key); }}
-            >
-              {release.title ?? artist.name}
-            </Link>
+            {onAlbumFocus ? (
+              <button
+                type="button"
+                className="library-crate__album-link hover:underline"
+                style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+                onClick={(e) => { e.stopPropagation(); rememberOpened(artist.key); onOpened(artist.key); onAlbumFocus(`${release.title ?? "release"}\x1f${artist.name}`); }}
+              >
+                {release.title ?? artist.name}
+              </button>
+            ) : (
+              <Link
+                href={releaseHref}
+                className="library-crate__album-link"
+                onClick={() => { rememberOpened(artist.key); onOpened(artist.key); }}
+              >
+                {release.title ?? artist.name}
+              </Link>
+            )}
           </div>
         )}
         <div className="library-crate__caught library-crate__caught--artist">
@@ -340,6 +426,9 @@ export interface LibraryCrateProps {
   sort: "added" | "artist" | "title";
   unopenedOnly?: boolean;
   showKeptHeading?: boolean;
+  hideAddedRail?: boolean;
+  onArtistFocus?: (artistName: string) => void;
+  onAlbumFocus?: (albumKey: string) => void;
 }
 
 export function LibraryCrate({
@@ -349,6 +438,9 @@ export function LibraryCrate({
   sort,
   unopenedOnly = false,
   showKeptHeading = true,
+  hideAddedRail = false,
+  onArtistFocus,
+  onAlbumFocus,
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -460,6 +552,8 @@ export function LibraryCrate({
                 onOpened={markOpened}
                 setContext={contextFor(item)}
                 onPlayStart={yieldRadio}
+                onArtistFocus={onArtistFocus}
+                onAlbumFocus={onAlbumFocus}
               />
             ))}
           </div>
@@ -467,7 +561,7 @@ export function LibraryCrate({
           <p className="library-crate__section-empty">No songs in this view.</p>
         )}
       </section>
-      {addedArtists.length > 0 ? (
+      {!hideAddedRail && addedArtists.length > 0 ? (
         <section className="library-crate__section" data-testid="library-crate-added">
           <header className="library-crate__section-heading">
             <h2>Added</h2>
@@ -484,6 +578,8 @@ export function LibraryCrate({
                 onOpened={markOpened}
                 setContext={setContexts.get(anchorKey({ kind: "artist", artist: artist.name }))}
                 onPlayStart={yieldRadio}
+                onArtistFocus={onArtistFocus}
+                onAlbumFocus={onAlbumFocus}
               />
             ))}
           </div>

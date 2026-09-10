@@ -33,6 +33,7 @@ import {
   type FileImportSummary,
   type LibraryItem,
   type SyncJobStatus,
+  type TasteSeedCatalogue,
 } from "../lib/meHooks";
 import { ApiError } from "@workspace/api-client-react";
 import { LibraryRow } from "../components/LibraryRow";
@@ -57,6 +58,8 @@ import { useSeedManager } from "../hooks/useSeedManager";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
 import { useDialData } from "../hooks/useDialData";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -578,6 +581,17 @@ export interface ArtistGroup {
   albums: AlbumGroup[];
 }
 
+export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
+
+export function parseDemoSongSort(value: string | null): DemoSongSort {
+  return value === "artist"
+    || value === "album"
+    || value === "title"
+    || value === "count"
+    ? value
+    : "added";
+}
+
 export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
   const map = new Map<string, AlbumGroup>();
   for (const item of items) {
@@ -859,8 +873,10 @@ export function AlbumGroupRow({
 // ---------------------------------------------------------------------------
 export function ArtistGroupRow({
   group,
+  onArtistFocus,
 }: {
   group: ArtistGroup;
+  onArtistFocus?: (artist: string) => void;
 }) {
   const counts = `${group.albums.length} album${group.albums.length === 1 ? "" : "s"} · ${group.items.length} song${group.items.length === 1 ? "" : "s"}`;
   return (
@@ -876,38 +892,27 @@ export function ArtistGroupRow({
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        {group.artistMbid ? (
+        {onArtistFocus ? (
+          <button
+            type="button"
+            onClick={() => onArtistFocus(group.artist)}
+            aria-label={`${group.artist}, ${counts}`}
+            className="library-demo-artist-group__focus"
+            data-testid="link-library-artist"
+          >
+            {group.artist}
+          </button>
+        ) : group.artistMbid ? (
           <Link
             href={`/artist/${encodeURIComponent(group.artistMbid)}`}
             aria-label={`${group.artist}, ${counts}`}
-            style={{
-              display: "block",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              color: "hsl(var(--foreground))",
-              fontFamily: "var(--app-font-display)",
-              fontSize: 14,
-              textDecoration: "none",
-            }}
+            className="library-demo-artist-group__focus"
             data-testid="link-library-artist"
           >
             {group.artist}
           </Link>
         ) : (
-          <span
-            style={{
-              display: "block",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              color: "hsl(var(--foreground))",
-              fontFamily: "var(--app-font-display)",
-              fontSize: 14,
-            }}
-          >
-            {group.artist}
-          </span>
+          <span className="library-demo-artist-group__focus">{group.artist}</span>
         )}
       </div>
       <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--faint))" }}>
@@ -917,6 +922,345 @@ export function ArtistGroupRow({
   );
 }
 
+function DemoArtistSongGroup({
+  group,
+  onArtistFocus,
+}: {
+  group: ArtistGroup;
+  onArtistFocus: (artist: string) => void;
+}) {
+  return (
+    <section className="library-demo-artist-group">
+      <ArtistGroupRow group={group} onArtistFocus={onArtistFocus} />
+      <ul className="library-demo-artist-group__songs">
+        {group.items.map((item) => (
+          <LibraryRow
+            key={item.mbid ?? `soft:${item.spotifyId ?? item.addedAt}`}
+            item={item}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Artist Lens Control (Combobox + Focus Panel)
+// ---------------------------------------------------------------------------
+function ArtistLensControl({
+  allArtists,
+  visibleSeeds,
+  focusedArtist,
+  onFocus,
+  onClear,
+  onAddSeed,
+  onRemoveSeed,
+  onViewStations,
+  onViewAlbums,
+}: {
+  allArtists: string[];
+  visibleSeeds: string[];
+  focusedArtist: string | null;
+  onFocus: (artist: string) => void;
+  onClear: () => void;
+  onAddSeed: (artist: string) => void;
+  onRemoveSeed: (artist: string) => void;
+  onViewStations: () => void;
+  onViewAlbums: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const isSeed = focusedArtist ? visibleSeeds.some(s => s.toLocaleLowerCase() === focusedArtist.toLocaleLowerCase()) : false;
+
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const exactMatch = allArtists.some(a => a.toLocaleLowerCase() === normalizedSearch);
+  const matches = useMemo(() => {
+    if (!normalizedSearch) return allArtists.slice(0, 50);
+    return allArtists.filter(a => a.toLocaleLowerCase().includes(normalizedSearch)).slice(0, 50);
+  }, [allArtists, normalizedSearch]);
+
+  const selectStyle: React.CSSProperties = {
+    appearance: "none",
+    background: "transparent",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: 4,
+    padding: "4px 24px 4px 10px",
+    fontFamily: "var(--app-font-mono)",
+    fontSize: 11,
+    color: "hsl(var(--foreground))",
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    height: 26,
+    position: "relative",
+    whiteSpace: "nowrap",
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button style={selectStyle} aria-label="Find or focus artist">
+          {focusedArtist ? (
+            <span style={{ color: "hsl(var(--foreground))" }}>{focusedArtist}</span>
+          ) : (
+            <span style={{ color: "hsl(var(--dim))" }}>Find artist...</span>
+          )}
+          <ChevronDown style={{ width: 12, height: 12, opacity: 0.5, position: "absolute", right: 8 }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-80" align="start" style={{ borderRadius: 8, overflow: "hidden", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", boxShadow: "0 10px 24px -5px hsl(var(--background)/0.5)" }}>
+        {focusedArtist ? (
+          <div style={{ padding: "12px 14px", borderBottom: "1px solid hsl(var(--border)/0.5)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <strong style={{ fontFamily: "var(--app-font-display)", fontSize: 15 }}>{focusedArtist}</strong>
+              <button
+                onClick={() => { onClear(); setOpen(false); }}
+                style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "hsl(var(--faint))", background: "none", border: "none", cursor: "pointer" }}
+              >
+                Clear focus
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                type="button"
+                aria-pressed={isSeed}
+                onClick={() => {
+                  if (isSeed) onRemoveSeed(focusedArtist);
+                  else onAddSeed(focusedArtist);
+                }}
+                className="library-artist-lens__seed-toggle"
+              >
+                <span aria-hidden="true">{isSeed ? "✓" : "+"}</span>
+                {isSeed ? "Added to my artists" : "Add to my artists"}
+              </button>
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <button
+                  onClick={() => { onViewStations(); setOpen(false); }}
+                  style={{ flex: 1, padding: "5px 0", borderRadius: 4, background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border)/0.5)", fontFamily: "var(--app-font-mono)", fontSize: 11, cursor: "pointer" }}
+                >
+                  Stations
+                </button>
+                <button
+                  onClick={() => { onViewAlbums(); setOpen(false); }}
+                  style={{ flex: 1, padding: "5px 0", borderRadius: 4, background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border)/0.5)", fontFamily: "var(--app-font-mono)", fontSize: 11, cursor: "pointer" }}
+                >
+                  Albums
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <Command shouldFilter={false} style={{ background: "transparent" }}>
+          <CommandInput
+            placeholder={focusedArtist ? "Switch focus to..." : "Search or add artist..."}
+            value={search}
+            onValueChange={setSearch}
+            style={{ fontSize: 13 }}
+          />
+          <CommandList style={{ maxHeight: 240, overflowY: "auto" }}>
+            {matches.length === 0 && !normalizedSearch && !focusedArtist && (
+              <div style={{ padding: "16px", textAlign: "center", fontFamily: "var(--app-font-sans)", fontSize: 13, color: "hsl(var(--faint))" }}>
+                Type an artist name
+              </div>
+            )}
+            {matches.map(a => {
+              const isASeed = visibleSeeds.some(s => s.toLocaleLowerCase() === a.toLocaleLowerCase());
+              return (
+                <CommandItem
+                  key={a}
+                  value={a}
+                  onSelect={() => { onFocus(a); setSearch(""); }}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--app-font-sans)", fontSize: 13 }}
+                >
+                  <span>{a}</span>
+                  {isASeed && <span style={{ fontFamily: "var(--app-font-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "hsl(var(--accent))", border: "1px solid hsl(var(--accent)/0.3)", borderRadius: 3, padding: "1px 4px" }}>Seed</span>}
+                </CommandItem>
+              );
+            })}
+            {normalizedSearch && !exactMatch && (
+              <CommandItem
+                value={search}
+                onSelect={() => {
+                  onAddSeed(search.trim());
+                  onFocus(search.trim());
+                  setSearch("");
+                }}
+                style={{ fontFamily: "var(--app-font-sans)", fontSize: 13, color: "hsl(var(--primary))" }}
+              >
+                Add "{search.trim()}" to Radio
+              </CommandItem>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+type ArtistRelease = TasteSeedCatalogue["releases"][number];
+
+// ---------------------------------------------------------------------------
+// Artist Discography View
+// ---------------------------------------------------------------------------
+function ArtistDiscographyView({
+  artist,
+  savedGroups,
+  investigationCoveredMbids,
+  openAlbumKey,
+  setOpenAlbumKey,
+  catalogueReleases,
+}: {
+  artist: string;
+  savedGroups: AlbumGroup[];
+  investigationCoveredMbids: Set<string>;
+  openAlbumKey: string | null;
+  setOpenAlbumKey: (key: string | null) => void;
+  catalogueReleases: ArtistRelease[];
+}) {
+  // Find a valid recording MBID to fetch discography
+  const recordingMbid = useMemo(() => {
+    for (const group of savedGroups) {
+      for (const item of group.items) {
+        if (item.mbid && item.recording?.artist.toLocaleLowerCase() === artist.toLocaleLowerCase()) {
+          return item.mbid;
+        }
+      }
+    }
+    return null;
+  }, [artist, savedGroups]);
+
+  const [fetchedReleases, setFetchedReleases] = useState<ArtistRelease[] | null>(null);
+  const [loading, setLoading] = useState(recordingMbid != null);
+  const [previousRecordingMbid, setPreviousRecordingMbid] = useState(recordingMbid);
+  if (recordingMbid !== previousRecordingMbid) {
+    setPreviousRecordingMbid(recordingMbid);
+    setFetchedReleases(null);
+    setLoading(recordingMbid != null);
+  }
+
+  useEffect(() => {
+    if (!recordingMbid) return;
+    let cancelled = false;
+    fetch(`/api/recordings/${recordingMbid}/artist-releases`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
+      .then((data: { releases?: ArtistRelease[] }) => {
+        if (!cancelled) {
+          setFetchedReleases(data.releases ?? []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFetchedReleases(null);
+          setLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [recordingMbid]);
+
+  const releases = useMemo(() => {
+    const byId = new Map<string, ArtistRelease>();
+    for (const release of catalogueReleases) byId.set(release.releaseGroupMbid, release);
+    for (const release of fetchedReleases ?? []) byId.set(release.releaseGroupMbid, release);
+    return [...byId.values()];
+  }, [catalogueReleases, fetchedReleases]);
+
+  const { savedRows, otherRows } = useMemo(() => {
+    const savedRgMbids = new Set<string>();
+    for (const group of savedGroups) {
+      const rgMbid = group.items.find((item) => item.recording?.releaseGroupMbid)
+        ?.recording?.releaseGroupMbid;
+      if (rgMbid) savedRgMbids.add(rgMbid);
+    }
+    return {
+      savedRows: savedGroups,
+      otherRows: releases
+        .filter((release) => !savedRgMbids.has(release.releaseGroupMbid))
+        .sort((a, b) => (b.releaseYear ?? -Infinity) - (a.releaseYear ?? -Infinity)),
+    };
+  }, [savedGroups, releases]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+        <Loader2 style={{ width: 16, height: 16, animation: "lore-eq 1s linear infinite", color: "hsl(var(--muted-foreground))" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="library-artist-discography">
+      {savedRows.length > 0 ? (
+        <section aria-labelledby="library-saved-albums-heading">
+          <div className="library-discography__heading" id="library-saved-albums-heading">
+            Saved from radio
+          </div>
+          {savedRows.map((group) => (
+            <div key={group.key} data-album-key={group.key} style={{ position: "relative" }}>
+              <div style={{ position: "absolute", top: 8, right: 15, zIndex: 10, pointerEvents: "none" }}>
+                <span className="library-discography__saved-count">
+                  {group.items.length} saved
+                </span>
+              </div>
+              <StackRow
+                group={group}
+                hasInvestigation={group.items.some(
+                  (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid)
+                )}
+                isOpen={openAlbumKey === group.key}
+                onToggle={() => setOpenAlbumKey(openAlbumKey === group.key ? null : group.key)}
+              />
+            </div>
+          ))}
+        </section>
+      ) : null}
+
+      {otherRows.length > 0 ? (
+        <section aria-labelledby="library-other-albums-heading">
+          <div className="library-discography__heading" id="library-other-albums-heading">
+            Other albums
+          </div>
+          {otherRows.map((release) => (
+            <Link
+              key={release.releaseGroupMbid}
+              href={`/album/${encodeURIComponent(release.releaseGroupMbid)}`}
+              className="library-discography__other-row"
+              aria-label={`Explore ${release.title ?? "this album"}`}
+            >
+              <div style={{ width: 44, height: 44, borderRadius: 4, background: "hsl(var(--secondary))", overflow: "hidden", flexShrink: 0 }}>
+                {release.artworkUrl ? (
+                  <img src={proxyArtUrl(release.artworkUrl) ?? release.artworkUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={onArtError} />
+                ) : null}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--app-font-display)", fontSize: 15, color: "hsl(var(--foreground))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {release.title || "Unknown Release"}
+                </div>
+                <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 11, color: "hsl(var(--dim))", marginTop: 2 }}>
+                  {release.releaseYear ?? "Unknown year"}
+                </div>
+              </div>
+            </Link>
+          ))}
+        </section>
+      ) : null}
+
+      {releases.length === 0 && savedGroups.length > 0 && (
+        <div style={{ padding: "24px 15px", textAlign: "center", fontFamily: "var(--app-font-sans)", fontSize: 13, color: "hsl(var(--faint))" }}>
+          Discography unavailable. Showing saved albums only.
+        </div>
+      )}
+      {savedRows.length === 0 && otherRows.length === 0 && (
+        <div style={{ padding: "40px 15px", textAlign: "center", fontFamily: "var(--app-font-sans)", fontSize: 13, color: "hsl(var(--faint))" }}>
+          No album information is available yet.
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Main page
@@ -926,12 +1270,8 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   const { data: appConfig, isLoading } = useAppConfig();
   const demoSurface = appConfig?.demoSurface === true;
   const params = new URLSearchParams(search);
-  const demoView: "stations" | "songs" | "artists" =
-    params.get("lens") === "artists"
-      ? "artists"
-      : params.get("view") === "songs"
-        ? "songs"
-        : "stations";
+  const demoView: "stations" | "songs" =
+    params.get("view") === "songs" ? "songs" : "stations";
 
   if (isLoading) {
     return <main className="demo-merged-library" aria-busy="true" />;
@@ -946,7 +1286,7 @@ function DemoMergedLibrary({
   view,
   embedded,
 }: {
-  view: "stations" | "songs" | "artists";
+  view: "stations" | "songs";
   embedded: boolean;
 }) {
   const [, setLocation] = useLocation();
@@ -962,12 +1302,9 @@ function DemoMergedLibrary({
       ? stationSortParam
       : "overlap";
   const sortParam = params.get("sort");
-  const songSort: "added" | "artist" | "title" =
-    sortParam === "artist" || sortParam === "title" ? sortParam : "added";
-  const artistSort: "name" | "count" = sortParam === "count" ? "count" : "name";
+  const songSort = parseDemoSongSort(sortParam);
 
   const { visibleSeeds, replaceSeeds } = useSeedManager();
-  const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
     categories: undefined,
     includeAllStations: true,
@@ -1008,10 +1345,6 @@ function DemoMergedLibrary({
     );
   }, [demoLibraryItems, focusedArtist]);
 
-  const filteredArtistCount = useMemo(() => {
-    return buildArtistGroups(filteredDemoItems).length;
-  }, [filteredDemoItems]);
-
   const allArtists = useMemo(() => {
     const set = new Set<string>();
     for (const item of demoLibraryItems) {
@@ -1028,7 +1361,6 @@ function DemoMergedLibrary({
   const keepCount = focusedArtist
     ? filteredDemoItems.filter(i => i.provenance.kind === "keep").length
     : demoLibraryData?.pages[0]?.keepCount ?? 0;
-  const seedCount = visibleSeeds.length;
 
   const updateSearch = (mutate: (next: URLSearchParams) => void) => {
     const next = new URLSearchParams(search);
@@ -1037,7 +1369,7 @@ function DemoMergedLibrary({
     setLocation(query ? `/library?${query}` : "/library");
   };
 
-  const buildTabHref = (targetView: "stations" | "songs" | "artists") => {
+  const buildTabHref = (targetView: "stations" | "songs") => {
     const p = new URLSearchParams(search);
     if (targetView === "stations") {
       p.delete("view");
@@ -1047,11 +1379,6 @@ function DemoMergedLibrary({
       p.delete("lens");
       p.delete("sort");
       if (songSort !== "added") p.set("sort", songSort);
-    } else if (targetView === "artists") {
-      p.delete("view");
-      p.set("lens", "artists");
-      p.delete("sort");
-      if (artistSort !== "name") p.set("sort", artistSort);
     }
     const qs = p.toString();
     return `/library${qs ? `?${qs}` : ""}`;
@@ -1100,51 +1427,40 @@ function DemoMergedLibrary({
               {songCount.toLocaleString()} Songs
               {keepCount > 0 && <span className="demo-merged-library__activity"> · {keepCount} from radio</span>}
             </Link>
-            <Link
-              href={buildTabHref("artists")}
-              aria-current={view === "artists" ? "page" : undefined}
-              data-testid="library-view-artists"
-            >
-              {filteredArtistCount.toLocaleString()} Artists
-              {seedCount > 0 && <span className="demo-merged-library__activity"> · {seedCount} seeded</span>}
-            </Link>
           </nav>
-          <button
-            type="button"
-            className="demo-merged-library__edit-artists"
-            onClick={() => setArtistDocumentOpen((open) => !open)}
-            aria-expanded={artistDocumentOpen}
-            aria-controls="library-demo-artist-document"
-          >
-            Edit artists
-          </button>
         </div>
         <div className="demo-merged-library__filters">
-          <select
-            style={selectStyle}
-            aria-label="Focus on an artist"
-            value={focusedArtist ?? ""}
-            onChange={e => {
-              updateSearch((next) => {
-                if (e.target.value) next.set("focus", e.target.value);
-                else next.delete("focus");
-              });
+          <ArtistLensControl
+            allArtists={allArtists}
+            visibleSeeds={visibleSeeds}
+            focusedArtist={focusedArtist}
+            onFocus={(artist) => updateSearch(next => next.set("focus", artist))}
+            onClear={() => updateSearch(next => next.delete("focus"))}
+            onAddSeed={(artist) => {
+              if (!visibleSeeds.some(s => s.toLocaleLowerCase() === artist.toLocaleLowerCase())) {
+                replaceSeeds([...visibleSeeds, artist]);
+              }
             }}
-          >
-            <option value="">All artists</option>
-            {allArtists.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-          {focusedArtist && (
-            <button
-              type="button"
-              onClick={() => {
-                updateSearch((next) => next.delete("focus"));
-              }}
-              className="demo-merged-library__clear-focus"
-            >
-              Clear
-            </button>
-          )}
+            onRemoveSeed={(artist) => {
+              replaceSeeds(visibleSeeds.filter(s => s.toLocaleLowerCase() !== artist.toLocaleLowerCase()));
+            }}
+            onViewStations={() => {
+              const p = new URLSearchParams(search);
+              p.delete("view");
+              p.delete("lens");
+              p.delete("sort");
+              const qs = p.toString();
+              setLocation(qs ? `/library?${qs}` : "/library");
+            }}
+            onViewAlbums={() => {
+              const p = new URLSearchParams(search);
+              p.set("view", "songs");
+              p.set("sort", "album");
+              p.delete("lens");
+              const qs = p.toString();
+              setLocation(qs ? `/library?${qs}` : "/library");
+            }}
+          />
 
           {view === "stations" && (
             <select
@@ -1179,42 +1495,13 @@ function DemoMergedLibrary({
             >
               <option value="added">Recently kept</option>
               <option value="artist">Artist</option>
+              <option value="album">Album</option>
               <option value="title">Title</option>
-            </select>
-          )}
-
-          {view === "artists" && (
-            <select
-              style={selectStyle}
-              aria-label="Sort artists"
-              value={artistSort}
-              onChange={e => {
-                updateSearch((next) => {
-                  if (e.target.value !== "name") next.set("sort", e.target.value);
-                  else next.delete("sort");
-                });
-              }}
-            >
-              <option value="name">A–Z</option>
               <option value="count">Most kept</option>
             </select>
           )}
         </div>
       </header>
-
-      {artistDocumentOpen ? (
-        <div
-          className="library-artist-editor"
-          id="library-demo-artist-document"
-          data-testid="library-artist-editor"
-        >
-          <ArtistDocument
-            artists={visibleSeeds}
-            onSave={replaceSeeds}
-            onClose={() => setArtistDocumentOpen(false)}
-          />
-        </div>
-      ) : null}
 
       {view === "stations" ? (
         <RadioSurface
@@ -1270,14 +1557,14 @@ function LibraryContent({
   // Needs-matching scopes to unresolved soft rows.
   const sourceFilter = LENS_SOURCE[lens];
 
-  // Sort — persisted in URL as ?sort=artist|title (default = "added", omitted from URL)
-  const sortFilter = useMemo((): "added" | "artist" | "title" | "count" => {
+  // Sort — persisted in URL as ?sort=artist|title|album|count (default = "added", omitted from URL)
+  const sortFilter = useMemo((): "added" | "artist" | "title" | "count" | "album" => {
     const v = new URLSearchParams(search).get("sort");
-    if (v === "artist" || v === "title" || v === "count") return v;
+    if (v === "artist" || v === "title" || v === "count" || v === "album") return v;
     return "added";
   }, [search]);
 
-  const setSortFilter = (sort: "added" | "artist" | "title" | "count") => {
+  const setSortFilter = (sort: "added" | "artist" | "title" | "count" | "album") => {
     const p = new URLSearchParams(search);
     if (sort !== "added") p.set("sort", sort);
     else p.delete("sort");
@@ -1285,22 +1572,19 @@ function LibraryContent({
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
-  // View mode is derived from the lens.
-  // Default (no lens) and "albums" both render the album-first Stack view.
-  // Lenses that scope a specific source subset ("recent", "lore", "matching",
-  // "critic") fall back to the flat track list so pagination stays meaningful.
-  const viewMode: "track" | "album" | "artist" =
-    lens === "artists" ? "artist" :
-    (lens === "recent" || lens === "lore" || lens === "matching" || lens === "critic") ? "track" :
-    "album"; // default (lens="") and lens="albums"
-  // Every reachable Library URL is the same fanned crate. URL lenses still
-  // scope the server query, while the crate remains the single visual shell
-  // instead of reviving the retired dashboard/list presentation.
-  const isStackView = viewMode !== "artist";
+  // View mode is derived from the lens, or sortFilter in demo mode.
+  const viewMode: "track" | "album" | "artist" = demoSurface
+    ? (sortFilter === "artist" || sortFilter === "count" ? "artist" : sortFilter === "album" ? "album" : "track")
+    : lens === "artists" ? "artist" :
+      (lens === "recent" || lens === "lore" || lens === "matching" || lens === "critic") ? "track" :
+      "album";
+
+  // In demo mode, track lists (added/title) use the Crate. Otherwise, only track/album mode does.
+  const isStackView = demoSurface ? (viewMode === "track") : viewMode !== "artist";
   // Every current Library route uses the compact crate/index shell. Legacy
   // track lenses still render the Songs crate and must not revive dashboard
   // chrome; Artists uses the same surrounding shell.
-  const isLibraryMode = isStackView || viewMode === "artist";
+  const isLibraryMode = demoSurface || isStackView || viewMode === "artist";
 
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
@@ -1340,7 +1624,7 @@ function LibraryContent({
     hasNextPage,
   } = useMyLibraryInfinite({
     source: sourceFilter || undefined,
-    sort: sortFilter === "count" ? "added" : sortFilter,
+    sort: (sortFilter === "count" || sortFilter === "album") ? "added" : sortFilter,
   }, 100);
   // Every lens is fully server-scoped (including From Lore via source=lore),
   // so rows arrive deduplicated, dual-source-labeled, and pre-filtered —
@@ -2240,30 +2524,64 @@ function LibraryContent({
             items={keptItems}
             seedArtists={visibleSeeds}
             catalogue={seedCatalogue}
-            sort={sortFilter === "count" ? "added" : sortFilter}
+            sort={(sortFilter === "count" || sortFilter === "album") ? "added" : sortFilter}
             showKeptHeading={false}
+            hideAddedRail={demoSurface}
+            onArtistFocus={demoSurface ? (artistName) => {
+              const params = new URLSearchParams(search);
+              params.set("view", "songs");
+              params.set("focus", artistName);
+              params.set("sort", "album");
+              params.delete("openAlbum");
+              setLocation(`/library?${params.toString()}`);
+            } : undefined}
+            onAlbumFocus={demoSurface ? (albumKey) => {
+              const params = new URLSearchParams(search);
+              const artistName = albumKey.split("\x1f")[1];
+              params.set("view", "songs");
+              params.set("sort", "album");
+              if (artistName) params.set("focus", artistName);
+              params.set("openAlbum", albumKey);
+              setLocation(`/library?${params.toString()}`);
+              setOpenAlbumKey(albumKey);
+            } : undefined}
           />
-        ) : ((viewMode as string) === "album" && albumGroups.length > 0) ? (
+        ) : (viewMode === "album" && (albumGroups.length > 0 || focusedArtist)) ? (
           /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */
           <>
             <div data-testid="library-album-view">
-              {activeAlbumGroups.map((group) => (
-                <div key={group.key} data-album-key={group.key}>
-                  <StackRow
-                    group={group}
-                    hasInvestigation={group.items.some(
-                      (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
-                    )}
-                    isOpen={openAlbumKey === group.key}
-                    onToggle={() =>
-                      setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
-                    }
-                    onToggleSkip={toggleStackSkip}
-                  />
-                </div>
-              ))}
+              {focusedArtist ? (
+                <ArtistDiscographyView
+                  artist={focusedArtist}
+                  savedGroups={activeAlbumGroups}
+                  investigationCoveredMbids={investigationCoveredMbids}
+                  openAlbumKey={openAlbumKey}
+                  setOpenAlbumKey={setOpenAlbumKey}
+                  catalogueReleases={
+                    Object.entries(seedCatalogue).find(
+                      ([name]) => name.toLocaleLowerCase() === focusedArtist.toLocaleLowerCase(),
+                    )?.[1].releases ?? []
+                  }
+                />
+              ) : (
+                activeAlbumGroups.map((group) => (
+                  <div key={group.key} data-album-key={group.key}>
+                    <StackRow
+                      group={group}
+                      hasInvestigation={group.items.some(
+                        (item) => item.mbid != null && investigationCoveredMbids.has(item.mbid),
+                      )}
+                      isOpen={openAlbumKey === group.key}
+                      onToggle={() =>
+                        setOpenAlbumKey((prev) => (prev === group.key ? null : group.key))
+                      }
+                      onToggleSkip={toggleStackSkip}
+                    />
+                  </div>
+                ))
+              )}
 
-              {/* Hidden section — collapsed by default, expands to show skipped albums */}
+            {/* Hidden section — collapsed by default, expands to show skipped albums */}
               {skippedAlbumGroups.length > 0 && (
                 <div data-testid="library-stack-hidden-section">
                   {/* Section toggle header */}
@@ -2349,11 +2667,23 @@ function LibraryContent({
           <>
             <div data-testid="library-artist-view">
               {artistGroups.map((group) => (
-                  <ArtistGroupRow
+                demoSurface ? (
+                  <DemoArtistSongGroup
                     key={group.key}
                     group={group}
+                    onArtistFocus={(artistName) => {
+                      const params = new URLSearchParams(search);
+                      params.set("view", "songs");
+                      params.set("focus", artistName);
+                      params.set("sort", "album");
+                      params.delete("openAlbum");
+                      setLocation(`/library?${params.toString()}`);
+                    }}
                   />
-                ))}
+                ) : (
+                  <ArtistGroupRow key={group.key} group={group} />
+                )
+              ))}
             </div>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
             {isFetchingNextPage && (
