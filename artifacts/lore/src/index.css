@@ -2910,26 +2910,26 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 72px;
-  padding: 10px 12px;
+  min-height: 64px;
+  padding: 9px 12px;
 }
 .demo-radio__row--compact {
-  min-height: 52px;
+  min-height: 48px;
   margin: 0 -2px;
   padding: 8px 4px;
   border-bottom: 1px solid hsl(var(--border) / .75);
 }
 .demo-radio__station-mark {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: 1px solid hsl(var(--border));
   border-radius: 5px;
   background: hsl(var(--background));
   object-fit: contain;
 }
 .demo-radio__station-mark--compact {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 .demo-radio__body {
   min-width: 0;
@@ -2993,6 +2993,14 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.demo-radio__artist--primary {
+  margin-top: 1px;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-display);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.2;
 }
 .demo-radio__byline {
   overflow: hidden;

@@ -63,9 +63,11 @@ describe("demo Radio station cards", () => {
     expect(screen.getByText("Stations that play Stereolab")).toBeTruthy();
     expect(screen.getByText("KEXP 90.3 FM")).toBeTruthy();
     expect(screen.getByText("Seattle")).toBeTruthy();
-    expect(screen.getByText("French Disko")).toBeTruthy();
-    expect(screen.getByText("Playing Stereolab now")).toBeTruthy();
+    expect(screen.queryByText("French Disko")).toBeNull();
+    expect(screen.getByText("Library match · on air")).toBeTruthy();
+    expect(screen.getByText("Stereolab")).toBeTruthy();
     expect(screen.getByText("Has played Stereolab from your music")).toBeTruthy();
     expect(screen.queryByText(/Has played your artists 6 times/)).toBeNull();
+    expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
   });
 });

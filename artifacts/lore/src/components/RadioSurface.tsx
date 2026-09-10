@@ -77,7 +77,7 @@ export function RadioSurface({
     const rawTitle = track?.title;
     const rawArtist = track?.artist;
     const title = rawTitle || "—";
-    const artist = rawArtist || (rawTitle ? "Unknown" : "Now: unknown");
+    const artist = rawArtist || (rawTitle ? "Unknown artist" : "Artist unknown");
 
     const liveShow = ds.shows.find(s => s.state === 'live');
     const djNames = eligibleDjNames({
@@ -90,11 +90,8 @@ export function RadioSurface({
       showTitle: liveShow?.showName,
       stationName: ds.station.name
     });
-    const bylineHuman = djNames.length === 1
-      ? `Selected by ${djNames[0]}`
-      : `${ds.station.name} †`;
+    const selectorLine = djNames.length === 1 ? `Selected by ${djNames[0]}` : null;
     if (demoted) {
-      const citeText = djNames.length > 0 ? djNames[0] : `${ds.station.name} †`;
       return (
         <div className="demo-radio__row demo-radio__row--compact" key={ds.station.slug}>
           <StationMark
@@ -104,8 +101,10 @@ export function RadioSurface({
           />
           <div className="demo-radio__body">
             <div className="demo-radio__station-name">{ds.station.name}</div>
-            <div className="demo-radio__compact-title">{title} · {artist}</div>
-            <div className="demo-radio__reason">{citeText} · no overlap yet</div>
+            <div className="demo-radio__compact-title">{artist}</div>
+            <div className="demo-radio__reason">
+              {selectorLine ? `${selectorLine} · no overlap yet` : "No overlap yet"}
+            </div>
           </div>
           <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={14} fill="currentColor" />
@@ -134,12 +133,9 @@ export function RadioSurface({
               <strong>{ds.station.name}</strong>
               {ds.station.city ? <span>{ds.station.city}</span> : null}
             </div>
-            {isLive && <span className="demo-radio__pill">Playing {rawArtist} now</span>}
-            <div className="demo-radio__title">{title}</div>
-            <div className="demo-radio__artist">{artist}</div>
-            <div className="demo-radio__byline">
-              {bylineHuman}
-            </div>
+            {isLive && <span className="demo-radio__pill">Library match · on air</span>}
+            <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
+            {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
           </div>
           <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={16} fill="currentColor" />
