@@ -18,16 +18,22 @@ export interface SetContextTrack {
   mbid: string | null;
   title: string | null;
   artist: string | null;
+  artistMbid?: string | null;
   albumTitle: string | null;
   artworkUrl: string | null;
   releaseGroupMbid: string | null;
   playedAt: string;
+  previewUrl: string | null;
+  isKept: boolean;
+  show: { name: string; djName: string | null } | null;
 }
 
 export interface SetContextStation {
   slug: string;
   name: string;
+  city: string | null;
   homepageUrl: string | null;
+  donateUrl: string | null;
 }
 
 export interface SetContext {
@@ -37,20 +43,27 @@ export interface SetContext {
    * "artist-fallback": the anchor is the artist's most recent resolved spin —
    * a different song than any kept track; label it honestly ("latest set").
    */
-  anchorKind: "kept-spin" | "artist-fallback";
+  anchorKind: "kept-spin" | "artist-fallback" | "spin";
+  anchorIsLive: boolean;
   anchor: SetContextTrack;
   before: SetContextTrack | null;
   after: SetContextTrack | null;
+  claim?: {
+    kind: "selected_by" | "unnameable" | "automation";
+    dj?: string;
+    show?: string;
+  };
 }
 
 export type SetContextAnchor =
   | { kind: "mbid"; mbid: string }
-  | { kind: "artist"; artist: string };
+  | { kind: "artist"; artist: string }
+  | { kind: "spin"; spinId: number };
 
 export function anchorKey(anchor: SetContextAnchor): string {
-  return anchor.kind === "mbid"
-    ? `mbid:${anchor.mbid}`
-    : `artist:${anchor.artist.trim().toLowerCase()}`;
+  if (anchor.kind === "mbid") return `mbid:${anchor.mbid}`;
+  if (anchor.kind === "spin") return `spin:${anchor.spinId}`;
+  return `artist:${anchor.artist.trim().toLowerCase()}`;
 }
 
 const CHUNK_SIZE = 60;
@@ -64,7 +77,11 @@ async function postSetContexts(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       anchors: anchors.map((a) =>
-        a.kind === "mbid" ? { mbid: a.mbid } : { artist: a.artist }
+        a.kind === "mbid"
+          ? { mbid: a.mbid }
+          : a.kind === "spin"
+            ? { spinId: a.spinId }
+            : { artist: a.artist }
       ),
     }),
   });

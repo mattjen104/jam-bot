@@ -1927,6 +1927,71 @@ router.get("/stations/:slug/overlaps/pickers", h(async (req, res) => {
   );
 }));
 
+// GET /api/stations/:slug/recent-spins
+// The Set sheet only needs the current play and two prior plays. Keep this
+// route deliberately bounded and return the same { items: [{ stationSlug,
+// spins }] } envelope as the wider recent-spins route.
+router.get("/stations/:slug/recent-spins", h(async (req, res) => {
+  const slug = String(req.params.slug).trim();
+  if (!slug) return res.status(400).json({ error: "station slug required" });
+  const rows = await db.execute<{
+    spin_id: number;
+    station_slug: string;
+    station_name: string;
+    mbid: string | null;
+    artist_mbid: string | null;
+    release_group_mbid: string | null;
+    title: string | null;
+    artist: string | null;
+    raw_title: string | null;
+    raw_artist: string | null;
+    played_at: string;
+    show_name: string | null;
+    dj_name: string | null;
+  }>(sql`
+    SELECT sp.id AS spin_id, st.slug AS station_slug, st.name AS station_name,
+      sp.mbid, r.artist_mbid,
+      (SELECT release_group_mbid FROM recording_release_groups
+       WHERE recording_mbid = sp.mbid AND is_primary = true LIMIT 1) AS release_group_mbid,
+      r.title, r.artist, sp.raw_title, sp.raw_artist, sp.played_at,
+      sh.name AS show_name, sh.dj_name
+    FROM spins sp
+    JOIN stations st ON st.id = sp.station_id AND st.hidden = false
+    LEFT JOIN recordings r ON r.mbid = sp.mbid
+    LEFT JOIN shows sh ON sh.id = sp.show_id
+    WHERE st.slug = ${slug}
+    ORDER BY sp.played_at DESC, sp.id DESC
+    LIMIT 3
+  `);
+  if (rows.rows.length === 0) return res.status(404).json({ error: "Station not found or has no spins" });
+  const user = await getUserFromSession(req).catch(() => null);
+  const hitCtx = user
+    ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
+    : EMPTY_HIT_CONTEXT;
+  const spins = rows.rows.map((row) => {
+    const title = row.title ?? row.raw_title ?? "";
+    const artist = row.artist ?? row.raw_artist ?? "";
+    const hitFlags = user
+      ? checkLibraryHit(hitCtx, { mbid: row.mbid, releaseGroupMbid: row.release_group_mbid, artistMbid: row.artist_mbid, artist })
+      : { isLibraryHit: false as const, isArtistHit: false as const };
+    return {
+      spinId: Number(row.spin_id),
+      mbid: row.mbid,
+      artistMbid: row.artist_mbid,
+      releaseGroupMbid: row.release_group_mbid,
+      title,
+      artist,
+      playedAt: new Date(row.played_at).toISOString(),
+      playedAtHour: new Date(row.played_at).getUTCHours(),
+      showName: row.show_name,
+      djName: eligibleDjName(row.dj_name, { showTitle: row.show_name ?? undefined, title, artist }),
+      isFirstSpin: false,
+      ...hitFlags,
+    };
+  });
+  return res.json({ items: [{ stationSlug: rows.rows[0]!.station_slug, spins }] });
+}));
+
 // GET /api/stations/recent-spins?date=YYYY-MM-DD  (calendar-day window)
 // GET /api/stations/recent-spins?hours=48         (rolling window ending now)
 // Recent spins per station ordered newest first.

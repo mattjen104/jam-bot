@@ -273,6 +273,8 @@ export function PlayerDock() {
             onCollapse={() => setExpanded(false)}
             handoff={handoff}
             landingConfirmation={landingConfirmation}
+            demoSurface={appConfig?.demoSurface === true}
+            djName={djName}
           />
         )}
       </>

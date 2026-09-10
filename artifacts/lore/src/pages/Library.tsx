@@ -2546,6 +2546,7 @@ function LibraryContent({
             sort={(sortFilter === "count" || sortFilter === "album") ? "added" : sortFilter}
             showKeptHeading={false}
             hideAddedRail={demoSurface}
+            demoSurface={demoSurface}
             onArtistFocus={demoSurface ? (artistName) => {
               const params = new URLSearchParams(search);
               params.set("view", "songs");

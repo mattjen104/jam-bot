@@ -149,6 +149,19 @@ type SpinItem = {
 type StationItem = { stationSlug: string; spins: SpinItem[] };
 
 describe("GET /api/stations/recent-spins?hours=48 — rolling window", () => {
+  it("supports a bounded station set of current plus two prior spins", async () => {
+    if (!dbAvailable) return;
+    const { status, body } = await get(`/api/stations/${STATION_SLUG}/recent-spins`);
+    expect(status).toBe(200);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].stationSlug).toBe(STATION_SLUG);
+    expect(body.items[0].spins.length).toBeLessThanOrEqual(3);
+    expect(body.items[0].spins.map((spin: { spinId: number }) => spin.spinId)).toEqual(
+      [...body.items[0].spins.map((spin: { spinId: number }) => spin.spinId)].sort((a: number, b: number) => b - a),
+    );
+    expect(body.items[0].spins[0]).toHaveProperty("spinId");
+  });
+
   it("returns in-window spins with playedAtHour and excludes out-of-window spins", async () => {
     if (!dbAvailable) return;
 

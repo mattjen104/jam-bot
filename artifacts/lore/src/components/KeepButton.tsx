@@ -21,6 +21,7 @@ interface KeepButtonProps {
   provenance?: Partial<LibraryProvenance>;
   /** compact mode: just icon + minimal text, used on inflow cards */
   compact?: boolean;
+  className?: string;
 }
 
 /**
@@ -37,7 +38,7 @@ interface KeepButtonProps {
  * - Saved but unresolved → amber "Saved" (unresolved badge)
  * - Pending → spinner
  */
-export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepButtonProps) {
+export function KeepButton({ mbid, spinId, provenance, compact = false, className }: KeepButtonProps) {
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const { data: appConfig } = useAppConfig();
   const isAuthenticated = !connLoading && connections !== null;
@@ -128,7 +129,7 @@ export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepBu
       aria-label={title}
       aria-pressed={isKept}
       data-testid="keep-button"
-      className={`hover-elevate inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide transition-colors ${
+      className={className ?? `hover-elevate inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide transition-colors ${
         isKept
           ? pendingOnly
             ? "border-zinc-400/30 bg-zinc-400/10 text-zinc-400/60"

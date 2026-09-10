@@ -58,6 +58,7 @@ export function stopInlinePreview(): void {
  */
 export async function toggleInlinePreview(
   mbid: string,
+  previewUrl?: string | null,
 ): Promise<"playing" | "stopped" | "unavailable"> {
   if (playingMbid === mbid || loadingMbid === mbid) {
     stopInlinePreview();
@@ -67,12 +68,12 @@ export async function toggleInlinePreview(
   loadingMbid = mbid;
   emit();
   try {
-    const result = await getPreviewCached(mbid);
-    if (!result.previewUrl) return "unavailable";
+    const resolvedUrl = previewUrl ?? (await getPreviewCached(mbid)).previewUrl;
+    if (!resolvedUrl) return "unavailable";
     // A newer toggle may have taken over while the lookup was in flight.
     if (loadingMbid !== mbid) return "stopped";
     const el = ensureAudio();
-    el.src = result.previewUrl;
+    el.src = resolvedUrl;
     await el.play();
     playingMbid = mbid;
     return "playing";

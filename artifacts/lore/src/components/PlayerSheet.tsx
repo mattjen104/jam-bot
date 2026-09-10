@@ -4,6 +4,7 @@ import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
 import { NowPlaying } from "./NowPlaying";
+import { DemoPlayerSheet } from "./DemoPlayerSheet";
 import { LiveHandoffPanel, type LiveHandoffControls } from "./LiveHandoffPanel";
 import { LandingConfirmationNote } from "./dial/LandingConfirmationNote";
 import type { LandingConfirmation } from "../hooks/useStationFastLane";
@@ -34,6 +35,8 @@ interface PlayerSheetProps {
   onCollapse: () => void;
   handoff?: LiveHandoffControls;
   landingConfirmation?: LandingConfirmation | null;
+  demoSurface?: boolean;
+  djName?: string | null;
 }
 
 /**
@@ -57,14 +60,9 @@ export function PlayerSheet({
   onCollapse,
   handoff,
   landingConfirmation = null,
+  demoSurface = false,
+  djName,
 }: PlayerSheetProps) {
-  const isPlaying = status === "playing";
-  const isLoading =
-    status === "loading" ||
-    status === "reconnecting" ||
-    status === "recovering";
-  const homepageUrl = safeHttpUrl(station.homepageUrl);
-
   // Escape collapses, matching the sheet convention elsewhere in the app.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -73,6 +71,26 @@ export function PlayerSheet({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCollapse]);
+
+  if (demoSurface) {
+    return (
+      <DemoPlayerSheet
+        station={station}
+        nowPlayingData={nowPlayingData}
+        status={status}
+        onToggle={onToggle}
+        onCollapse={onCollapse}
+        djName={djName}
+      />
+    );
+  }
+
+  const isPlaying = status === "playing";
+  const isLoading =
+    status === "loading" ||
+    status === "reconnecting" ||
+    status === "recovering";
+  const homepageUrl = safeHttpUrl(station.homepageUrl);
 
   return (
     <div

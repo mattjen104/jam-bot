@@ -9,6 +9,7 @@
  *   { artist } — an Artist Document / artist-file save with no kept tracks.
  *                The set is the most recent RESOLVED spin of that artist on
  *                any visible station.
+ *   { spinId } — an exact visible-station broadcast, used by Just played.
  *
  * For every resolved anchor we return the spins immediately before and after
  * the anchor spin on the same station (keyset on (played_at, id)), plus the
@@ -35,6 +36,7 @@ import {
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
+import { resolvePreview } from "../../lore/preview.js";
 
 const router: IRouter = Router();
 
@@ -81,22 +83,32 @@ interface SetContextTrack {
   artworkUrl: string | null;
   releaseGroupMbid: string | null;
   playedAt: string;
+  previewUrl: string | null;
+  isKept: boolean;
+  show: { name: string; djName: string | null } | null;
 }
 
 interface SetContext {
-  station: { slug: string; name: string; homepageUrl: string | null };
+  station: {
+    slug: string;
+    name: string;
+    city: string | null;
+    homepageUrl: string | null;
+    donateUrl: string | null;
+  };
   /**
    * "kept-spin": the anchor is the exact broadcast the keep came from.
    * "artist-fallback": the anchor is the artist's most recent resolved spin —
    * a DIFFERENT song than any kept track. Clients must label this honestly.
    */
-  anchorKind: "kept-spin" | "artist-fallback";
+  anchorKind: "kept-spin" | "artist-fallback" | "spin";
+  anchorIsLive: boolean;
   anchor: SetContextTrack;
   before: SetContextTrack | null;
   after: SetContextTrack | null;
 }
 
-type AnchorInput = { mbid?: unknown; artist?: unknown };
+type AnchorInput = { mbid?: unknown; artist?: unknown; spinId?: unknown };
 
 /** One neighbor/anchor track sub-select against spins + recordings. */
 function trackColumns(alias: string, out: string) {
@@ -114,7 +126,9 @@ function trackColumns(alias: string, out: string) {
     (
       SELECT release_group_mbid FROM recording_release_groups
       WHERE recording_mbid = ${sql.raw(alias)}.mbid AND is_primary = true LIMIT 1
-    ) AS ${sql.raw(out)}_release_group_mbid
+     ) AS ${sql.raw(out)}_release_group_mbid,
+     (SELECT name FROM shows WHERE id = ${sql.raw(alias)}.show_id) AS ${sql.raw(out)}_show_name,
+     (SELECT dj_name FROM shows WHERE id = ${sql.raw(alias)}.show_id) AS ${sql.raw(out)}_dj_name
   `;
 }
 
@@ -129,6 +143,7 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
 
   const mbidAnchors: string[] = [];
   const artistAnchors: string[] = [];
+  const spinAnchors: number[] = [];
   for (const raw of body.anchors as AnchorInput[]) {
     if (typeof raw !== "object" || raw === null) {
       return res.status(400).json({ error: "each anchor must be an object" });
@@ -137,14 +152,17 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
       mbidAnchors.push(raw.mbid.trim());
     } else if (typeof raw.artist === "string" && raw.artist.trim()) {
       artistAnchors.push(raw.artist.trim());
+    } else if (Number.isSafeInteger(raw.spinId) && Number(raw.spinId) > 0) {
+      spinAnchors.push(Number(raw.spinId));
     } else {
-      return res.status(400).json({ error: "each anchor needs an mbid or artist" });
+      return res.status(400).json({ error: "each anchor needs an mbid, artist, or positive spinId" });
     }
   }
 
   const contexts: Record<string, SetContext | null> = {};
   const pendingMbids: string[] = [];
   const pendingArtists: string[] = [];
+  const pendingSpins: number[] = [];
   for (const mbid of mbidAnchors) {
     const key = `mbid:${mbid}`;
     const hit = cacheGet(user.id, key);
@@ -163,7 +181,16 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
       pendingArtists.push(artist);
     }
   }
-  if (pendingMbids.length + pendingArtists.length === 0) {
+  for (const spinId of spinAnchors) {
+    const key = `spin:${spinId}`;
+    const hit = cacheGet(user.id, key);
+    if (hit !== undefined) contexts[key] = hit;
+    else {
+      contexts[key] = null;
+      pendingSpins.push(spinId);
+    }
+  }
+  if (pendingMbids.length + pendingArtists.length + pendingSpins.length === 0) {
     return res.json({ contexts });
   }
 
@@ -171,6 +198,7 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
   const anchorSpins = new Map<string, { spinId: number; stationId: number; playedAt: Date }>();
   // context keys resolved from the keep's own retained spin
   const spinBackedKeys = new Set<string>();
+  const directSpinKeys = new Set<string>();
   // artist keys (lower(trim)) still needing a fallback set lookup
   const fallbackArtists = new Map<string, string[]>(); // akey → context keys
 
@@ -213,6 +241,29 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
         const akey = row.artist.trim().toLowerCase();
         fallbackArtists.set(akey, [...(fallbackArtists.get(akey) ?? []), key]);
       }
+    }
+  }
+
+  // Exact public-history anchors are allowed only on listener-visible stations.
+  if (pendingSpins.length > 0) {
+    const rows = await db.execute<{
+      id: number;
+      station_id: number;
+      played_at: string;
+    }>(sql`
+      SELECT s.id, s.station_id, s.played_at
+      FROM spins s
+      JOIN stations st ON st.id = s.station_id AND st.hidden = false
+      WHERE s.id IN (${sql.join(pendingSpins.map((id) => sql`${id}`), sql`, `)})
+    `);
+    for (const row of rows.rows) {
+      const key = `spin:${Number(row.id)}`;
+      anchorSpins.set(key, {
+        spinId: Number(row.id),
+        stationId: Number(row.station_id),
+        playedAt: new Date(row.played_at),
+      });
+      directSpinKeys.add(key);
     }
   }
 
@@ -293,10 +344,20 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
       a.key,
       st.slug AS station_slug,
       st.name AS station_name,
+      st.city AS station_city,
       st.homepage_url AS station_homepage_url,
+      st.donate_url AS station_donate_url,
       ${trackColumns("s", "a")},
-      b.b_spin_id, b.b_mbid, b.b_played_at, b.b_title, b.b_artist, b.b_artwork_url, b.b_album_title, b.b_release_group_mbid,
-      af.af_spin_id, af.af_mbid, af.af_played_at, af.af_title, af.af_artist, af.af_artwork_url, af.af_album_title, af.af_release_group_mbid
+      b.b_spin_id, b.b_mbid, b.b_played_at, b.b_title, b.b_artist, b.b_artwork_url, b.b_album_title, b.b_release_group_mbid, b.b_show_name, b.b_dj_name,
+      af.af_spin_id, af.af_mbid, af.af_played_at, af.af_title, af.af_artist, af.af_artwork_url, af.af_album_title, af.af_release_group_mbid, af.af_show_name, af.af_dj_name,
+      (
+        NOT EXISTS (
+          SELECT 1 FROM spins latest
+          WHERE latest.station_id = a.station_id
+            AND (latest.played_at, latest.id) > (a.played_at, a.spin_id)
+        )
+        AND a.played_at > now() - interval '15 minutes'
+      ) AS anchor_is_live
     FROM (VALUES ${anchorValues}) AS a(key, spin_id, station_id, played_at)
     JOIN stations st ON st.id = a.station_id
     JOIN spins s ON s.id = a.spin_id
@@ -339,30 +400,73 @@ router.post("/me/library/set-contexts", h(async (req, res) => {
       artworkUrl: (row[`${p}_artwork_url`] as string | null) ?? null,
       releaseGroupMbid: (row[`${p}_release_group_mbid`] as string | null) ?? null,
       playedAt: new Date(row[`${p}_played_at`] as string).toISOString(),
+      previewUrl: null,
+      isKept: false,
+      show: row[`${p}_show_name`]
+        ? {
+            name: String(row[`${p}_show_name`]),
+            djName: (row[`${p}_dj_name`] as string | null) ?? null,
+          }
+        : null,
     };
   };
 
+  const keptMbids = new Set<string>();
+  const keptRows = await db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
+  for (const row of keptRows) keptMbids.add(row.mbid);
+  const tracks: SetContextTrack[] = [];
   for (const row of result.rows as Row[]) {
     const anchor = trackFrom(row, "a");
     if (!anchor) continue;
+    const before = trackFrom(row, "b");
+    const after = trackFrom(row, "af");
+    for (const track of [anchor, before, after]) {
+      if (track) {
+        track.isKept = track.mbid != null && keptMbids.has(track.mbid);
+        tracks.push(track);
+      }
+    }
     const key = String(row.key);
     contexts[key] = {
-      anchorKind: spinBackedKeys.has(key) ? "kept-spin" : "artist-fallback",
+      anchorKind: directSpinKeys.has(key) ? "spin" : spinBackedKeys.has(key) ? "kept-spin" : "artist-fallback",
+      anchorIsLive: row.anchor_is_live === true,
       station: {
         slug: String(row.station_slug),
         name: String(row.station_name),
+        city: (row.station_city as string | null) ?? null,
         homepageUrl: (row.station_homepage_url as string | null) ?? null,
+        donateUrl: (row.station_donate_url as string | null) ?? null,
       },
       anchor,
-      before: trackFrom(row, "b"),
-      after: trackFrom(row, "af"),
+      before,
+      after,
     };
+  }
+
+  // Preview resolution is already cached and explicitly returns null when the
+  // provider has no verified clip. Resolve only the bounded 3-track contexts.
+  const previewByMbid = new Map<string, string | null>();
+  await Promise.all([...new Set(tracks.map((t) => t.mbid).filter((m): m is string => !!m))].map(async (mbid) => {
+    const track = tracks.find((t) => t.mbid === mbid);
+    if (!track) return;
+    const preview = await resolvePreview(mbid, track.artist ?? "", track.title ?? "");
+    previewByMbid.set(mbid, preview.previewUrl);
+  }));
+  for (const context of Object.values(contexts)) {
+    if (!context) continue;
+    for (const track of [context.anchor, context.before, context.after]) {
+      if (track?.mbid) track.previewUrl = previewByMbid.get(track.mbid) ?? null;
+    }
   }
 
   // Fill the cache for every key we resolved this round (nulls included — an
   // anchor with no set is just as expensive to recompute).
   for (const mbid of pendingMbids) cacheSet(user.id, `mbid:${mbid}`, contexts[`mbid:${mbid}`] ?? null);
   for (const artist of pendingArtists) cacheSet(user.id, `artist:${artist.toLowerCase()}`, contexts[`artist:${artist.toLowerCase()}`] ?? null);
+  for (const spinId of pendingSpins) cacheSet(user.id, `spin:${spinId}`, contexts[`spin:${spinId}`] ?? null);
 
   return res.json({ contexts });
 }));

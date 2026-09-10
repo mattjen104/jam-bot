@@ -6,14 +6,11 @@ import { onArtError } from "../lib/rumours";
 import type { CSSProperties } from "react";
 import {
   anchorKey,
+  SetContextAnchor,
   useSetContexts,
   type SetContext,
-  type SetContextAnchor,
-  type SetContextTrack,
 } from "../lib/setContexts";
-import { SetContextDeck } from "./SetContextDeck";
-import { stopInlinePreview } from "../player/inlinePreview";
-import { usePlayer } from "../player/PlayerProvider";
+import { LibraryRowMenu } from "./LibraryRowMenu";
 // Read-model helpers live in ../lib/crate so this file exports only
 // components — mixed exports break Vite Fast Refresh (split module
 // instances → phantom "invalid hook call" crashes).
@@ -83,23 +80,21 @@ function CrateTrackCard({
   opened,
   onOpened,
   setContext,
-  onPlayStart,
   onArtistFocus,
   onAlbumFocus,
+  demoSurface,
 }: {
   item: LibraryItem;
   release: CrateRelease;
   metadata: ReleaseMetadata | null;
   setContext?: SetContext | null;
-  onPlayStart?: () => void;
   position: number;
   opened: boolean;
   onOpened: (key: string) => void;
   onArtistFocus?: (artistName: string) => void;
   onAlbumFocus?: (albumKey: string) => void;
+  demoSurface: boolean;
 }) {
-  // Name of the deck cover the listener is peeking at (null = the kept track).
-  const [peekLabel, setPeekLabel] = useState<string | null>(null);
   const rec = item.recording;
   const title = rec?.title ?? "Unresolved recording";
   const album = rec?.albumTitle ?? release.title ?? metadata?.title ?? "Release unknown";
@@ -118,36 +113,15 @@ function CrateTrackCard({
   const releaseHref = releaseGroupMbid
     ? `/album/${releaseGroupMbid}`
     : null;
-  const deckPending = setContext === undefined;
-  const hasDeck = setContext !== null;
-  const pendingAnchor: SetContextTrack | undefined = rec
-    ? {
-        spinId: 0,
-        mbid: item.mbid,
-        title: rec.title,
-        artist: rec.artist,
-        albumTitle: rec.albumTitle,
-        artworkUrl: cover,
-        releaseGroupMbid,
-        playedAt: item.addedAt,
-      }
-    : undefined;
 
   return (
     <article
-      className={`library-crate__track${hasDeck ? " library-crate__track--deck" : ""}${opened ? " library-crate__track--opened" : ""}`}
+      className={`library-crate__track${opened ? " library-crate__track--opened" : ""}`}
       data-testid="library-crate-track"
       data-track-key={openedKey}
     >
       <div className="library-crate__track-art">
-        {hasDeck ? (
-          <SetContextDeck
-            context={setContext ?? undefined}
-            pendingAnchor={deckPending ? pendingAnchor : undefined}
-            onPlayStart={onPlayStart}
-            onSelectionChange={setPeekLabel}
-          />
-        ) : releaseHref ? (
+        {releaseHref ? (
           onAlbumFocus ? (
             <button
               type="button"
@@ -173,13 +147,6 @@ function CrateTrackCard({
         )}
       </div>
       <div className="library-crate__track-copy">
-        {/* The live region stays mounted between peeks so screen readers
-            catch the first announcement; empty while on the kept track. */}
-        {hasDeck && (
-          <div className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
-            {peekLabel}
-          </div>
-        )}
         <div className="library-crate__track-title">{title}</div>
         <div className="library-crate__track-album">
           {releaseHref ? (
@@ -235,6 +202,14 @@ function CrateTrackCard({
           </div>
         )}
       </div>
+      {demoSurface ? (
+        <LibraryRowMenu
+          item={item}
+          setContext={setContext}
+          onArtistFocus={onArtistFocus}
+          onAlbumFocus={onAlbumFocus ? () => onAlbumFocus(`${album}\x1f${artist}`) : undefined}
+        />
+      ) : null}
     </article>
   );
 }
@@ -244,7 +219,6 @@ function AddedArtistCard({
   position,
   onOpened,
   setContext,
-  onPlayStart,
   onArtistFocus,
   onAlbumFocus,
 }: {
@@ -252,13 +226,11 @@ function AddedArtistCard({
   position: number;
   onOpened: (key: string) => void;
   setContext?: SetContext | null;
-  onPlayStart?: () => void;
   onArtistFocus?: (artistName: string) => void;
   onAlbumFocus?: (albumKey: string) => void;
+  demoSurface?: boolean;
 }) {
   const [releaseIndex, setReleaseIndex] = useState(0);
-  // Name of the deck cover the listener is peeking at (null = the kept track).
-  const [peekLabel, setPeekLabel] = useState<string | null>(null);
   const release = artist.releases.length > 0
     ? artist.releases[releaseIndex % artist.releases.length]
     : null;
@@ -266,37 +238,15 @@ function AddedArtistCard({
   const releaseHref = release
     ? `/album/${release.releaseGroupMbid}?tilt=${encodeURIComponent(String(tilt))}`
     : null;
-  const deckPending = setContext === undefined;
-  const hasDeck = setContext !== null;
-  const pendingAnchor: SetContextTrack | undefined = release
-    ? {
-        spinId: 0,
-        mbid: null,
-        title: release.title,
-        artist: artist.name,
-        albumTitle: release.title,
-        artworkUrl: release.artworkUrl,
-        releaseGroupMbid: release.releaseGroupMbid,
-        playedAt: new Date(0).toISOString(),
-      }
-    : undefined;
+
   return (
     <article
-      className={`library-crate__card library-crate__card--artist${hasDeck ? " library-crate__card--deck" : ""}`}
+      className={`library-crate__card library-crate__card--artist`}
       style={{ "--crate-tilt": `${tilt}deg`, "--crate-z": position + 1 } as CSSProperties}
       data-testid="library-crate-added-artist"
       data-artist-key={artist.key}
     >
       <div className="library-crate__art-column">
-        {hasDeck ? (
-          <SetContextDeck
-            context={setContext ?? undefined}
-            pendingAnchor={deckPending ? pendingAnchor : undefined}
-            size={72}
-            onPlayStart={onPlayStart}
-            onSelectionChange={setPeekLabel}
-          />
-        ) : (
         <div className="library-crate__artist-stack">
           {artist.releases.slice(1, 3).map((ghost, index) => (
             <Swatch key={ghost.releaseGroupMbid} title={ghost.title ?? artist.name} artworkUrl={ghost.artworkUrl} className={`library-crate__ghost library-crate__ghost--${index + 1}`} />
@@ -326,7 +276,6 @@ function AddedArtistCard({
             <Swatch title={artist.name} artworkUrl={null} />
           )}
         </div>
-        )}
       </div>
       <div className="library-crate__content">
         <div className="library-crate__scrim" aria-hidden="true" />
@@ -344,12 +293,6 @@ function AddedArtistCard({
             artist.name
           )}
         </div>
-        {/* Persistent live region; empty while on the kept track. */}
-        {hasDeck && (
-          <div className="set-context-deck__caption" data-testid="set-context-caption" aria-live="polite">
-            {peekLabel}
-          </div>
-        )}
         {setContext && release && releaseHref && (
           <div className="library-crate__track-album">
             {onAlbumFocus ? (
@@ -427,6 +370,7 @@ export interface LibraryCrateProps {
   unopenedOnly?: boolean;
   showKeptHeading?: boolean;
   hideAddedRail?: boolean;
+  demoSurface?: boolean;
   onArtistFocus?: (artistName: string) => void;
   onAlbumFocus?: (albumKey: string) => void;
 }
@@ -441,6 +385,7 @@ export function LibraryCrate({
   hideAddedRail = false,
   onArtistFocus,
   onAlbumFocus,
+  demoSurface = false,
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -509,12 +454,6 @@ export function LibraryCrate({
 
   // Inline previews share the page's single audio element; stop them when the
   // crate unmounts (navigation) and yield live radio when one starts.
-  const { radio } = usePlayer();
-  useEffect(() => () => stopInlinePreview(), []);
-  const yieldRadio = () => {
-    if (radio.status === "playing") radio.stop();
-  };
-
   const contextFor = (item: LibraryItem): SetContext | null | undefined =>
     item.mbid
       ? setContexts.get(`mbid:${item.mbid}`)
@@ -551,9 +490,9 @@ export function LibraryCrate({
                 opened={opened.has(item.mbid ?? item.spotifyId ?? `${release.key}:${index}`)}
                 onOpened={markOpened}
                 setContext={contextFor(item)}
-                onPlayStart={yieldRadio}
                 onArtistFocus={onArtistFocus}
                 onAlbumFocus={onAlbumFocus}
+                demoSurface={demoSurface}
               />
             ))}
           </div>
@@ -577,7 +516,6 @@ export function LibraryCrate({
                 position={index}
                 onOpened={markOpened}
                 setContext={setContexts.get(anchorKey({ kind: "artist", artist: artist.name }))}
-                onPlayStart={yieldRadio}
                 onArtistFocus={onArtistFocus}
                 onAlbumFocus={onAlbumFocus}
               />

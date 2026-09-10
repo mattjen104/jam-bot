@@ -260,6 +260,21 @@ describe("POST /api/me/library/set-contexts", () => {
     expect(ctx.after.mbid).toBe(MBID_AFTER);
   });
 
+  it("anchors Just played context on the exact requested visible spin", async () => {
+    if (!dbAvailable || anchorSpinId == null) return;
+    const { status, body } = await apiPost("/api/me/library/set-contexts", SID, {
+      anchors: [{ spinId: anchorSpinId }],
+    });
+    expect(status).toBe(200);
+    const ctx = (body.contexts as Record<string, any>)[`spin:${anchorSpinId}`];
+    expect(ctx.anchorKind).toBe("spin");
+    expect(ctx.anchor.spinId).toBe(anchorSpinId);
+    expect(ctx.anchor.mbid).toBe(MBID_ANCHOR);
+    expect(ctx.before.mbid).toBe(MBID_BEFORE);
+    expect(ctx.after.mbid).toBe(MBID_AFTER);
+    expect(typeof ctx.anchorIsLive).toBe("boolean");
+  });
+
   it("omits neighbors across the 20-minute set boundary", async () => {
     if (!dbAvailable) return;
     const { status, body } = await apiPost("/api/me/library/set-contexts", SID, {
@@ -321,6 +336,7 @@ describe("POST /api/me/library/set-contexts", () => {
     if (!dbAvailable) return;
     expect((await apiPost("/api/me/library/set-contexts", SID, {})).status).toBe(400);
     expect((await apiPost("/api/me/library/set-contexts", SID, { anchors: [{}] })).status).toBe(400);
+    expect((await apiPost("/api/me/library/set-contexts", SID, { anchors: [{ spinId: -1 }] })).status).toBe(400);
     expect((await apiPost("/api/me/library/set-contexts", SID, { anchors: ["x"] })).status).toBe(400);
   });
 });

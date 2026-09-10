@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePlayer } from "../player/PlayerProvider";
 import { eligibleDjNames } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
 import { Play } from "lucide-react";
+import { SetContextSheet } from "./SetContextSheet";
+import { anchorKey, useSetContexts } from "../lib/setContexts";
 
 const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
 
@@ -26,6 +28,30 @@ export function RadioSurface({
   focusedArtist?: string | null;
 }) {
   const { radio } = usePlayer();
+  const [sheetAnchorId, setSheetAnchorId] = useState<number | null>(null);
+  const sheetAnchors = useMemo(
+    () => sheetAnchorId == null ? [] : [{ kind: "spin" as const, spinId: sheetAnchorId }],
+    [sheetAnchorId],
+  );
+  const sheetContexts = useSetContexts(sheetAnchors);
+  const sheetContext = sheetAnchorId == null
+    ? null
+    : sheetContexts.get(anchorKey({ kind: "spin", spinId: sheetAnchorId }));
+
+  const openCurrentSet = async (stationSlug: string, title: string, artist: string) => {
+    try {
+      const response = await fetch(`/api/stations/${encodeURIComponent(stationSlug)}/recent-spins`);
+      if (!response.ok) return;
+      const data = await response.json() as {
+        items?: Array<{ spins?: Array<{ spinId: number; title: string; artist: string }> }>;
+      };
+      const current = data.items?.[0]?.spins?.[0];
+      if (!current || current.title !== title || current.artist !== artist) return;
+      setSheetAnchorId(current.spinId);
+    } catch {
+      // Keep the explanation non-destructive when current history is unavailable.
+    }
+  };
 
   const allCrossings = useMemo(() => {
     const list = focusedArtist
@@ -142,7 +168,20 @@ export function RadioSurface({
             {radio.station?.slug === ds.station.slug ? <StationChangeCountdown track={track} /> : null}
           </button>
         </div>
-        {reasonLine && <div className="demo-radio__reason demo-radio__reason--featured">{reasonLine}</div>}
+        {reasonLine && (
+          isLive ? (
+            <button
+              type="button"
+              className="demo-radio__reason demo-radio__reason--featured"
+              onClick={() => void openCurrentSet(ds.station.slug, title, artist)}
+              aria-label={`${reasonLine}. Open this set`}
+            >
+              {reasonLine}
+            </button>
+          ) : (
+            <div className="demo-radio__reason demo-radio__reason--featured">{reasonLine}</div>
+          )
+        )}
       </div>
     );
   };
@@ -181,6 +220,11 @@ export function RadioSurface({
       {rosterStations.length === 0 ? (
         <p className="demo-radio__unavailable">The editorial stations are temporarily unavailable.</p>
       ) : null}
+      <SetContextSheet
+        open={sheetAnchorId !== null && sheetContext !== undefined}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setSheetAnchorId(null); }}
+        context={sheetContext ?? null}
+      />
     </section>
   );
 }

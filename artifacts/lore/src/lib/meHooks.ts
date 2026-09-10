@@ -86,6 +86,8 @@ export interface LibraryProvenance {
   surface?: string;
   /** Entry point within the surface, when finer-grained than `surface`. */
   entryPoint?: string;
+  source?: string;
+  anchorSpinId?: number;
 }
 
 export interface LibraryItem {
