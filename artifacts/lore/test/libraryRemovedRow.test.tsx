@@ -52,7 +52,12 @@ const baseItem: LibraryItem = {
   mbid: "mbid-1",
   provenance: { kind: "keep" } as LibraryItem["provenance"],
   addedAt: "2026-08-01T00:00:00.000Z",
-  recording: { mbid: "mbid-1", title: "Go Your Own Way", artist: "Fleetwood Mac" },
+  recording: {
+    mbid: "mbid-1",
+    title: "Go Your Own Way",
+    artist: "Fleetwood Mac",
+    artistMbid: "artist/mbid",
+  },
 } as LibraryItem;
 
 afterEach(() => {
@@ -61,6 +66,29 @@ afterEach(() => {
 });
 
 describe("LibraryRow removed state", () => {
+  it("links a grounded artist identity from an ordinary saved-song row", () => {
+    render(<ul><LibraryRow item={baseItem} /></ul>);
+    expect(screen.getByTestId("link-library-row-artist").getAttribute("href")).toBe("/artist/artist%2Fmbid");
+  });
+
+  it("leaves an artist without a grounded identity as plain text", () => {
+    const item = {
+      ...baseItem,
+      recording: { ...baseItem.recording!, artistMbid: null },
+    };
+    render(<ul><LibraryRow item={item} /></ul>);
+    expect(screen.getByText("Fleetwood Mac").tagName).toBe("P");
+    expect(screen.queryByTestId("link-library-row-artist")).toBeNull();
+  });
+
+  it("keeps demo artist navigation focused inside the Library", () => {
+    const onArtistFocus = vi.fn();
+    render(<ul><LibraryRow item={baseItem} onArtistFocus={onArtistFocus} /></ul>);
+    expect(screen.queryByTestId("link-library-row-artist")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Fleetwood Mac" }));
+    expect(onArtistFocus).toHaveBeenCalledWith("Fleetwood Mac");
+  });
+
   it("renders removed rows gray, labeled, still listed, with a Restore control", () => {
     const { container } = render(
       <ul>

@@ -322,6 +322,14 @@ export function LibraryRow({
               >
                 {artist}
               </button>
+            ) : rec?.artistMbid ? (
+              <Link
+                href={`/artist/${encodeURIComponent(rec.artistMbid)}`}
+                className="library-demo-artist-group__focus"
+                data-testid="link-library-row-artist"
+              >
+                {artist}
+              </Link>
             ) : artist}
           </p>
         )}
