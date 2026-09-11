@@ -33,6 +33,7 @@ const run = randomUUID().slice(0, 8);
 const SLUG = `test-sched-dml-${run}`;
 const LEDGER_KEY = "applyStationScheduleMigration";
 const RECEIPT_LEDGER_KEY = "applyExtractionReceiptMigration";
+const HOST_RECOVERY_LEDGER_KEY = "flagLegacyCommaHostCredits";
 
 let dbAvailable = false;
 let stationId: number | undefined;
@@ -75,6 +76,7 @@ afterAll(async () => {
   await db.execute(sql`DELETE FROM stations WHERE id = ${stationId}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`);
+  await db.execute(sql`DELETE FROM migration_completions WHERE name = ${HOST_RECOVERY_LEDGER_KEY}`);
 }, 300_000);
 
 beforeEach(async () => {
@@ -86,6 +88,7 @@ beforeEach(async () => {
   );
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`);
+  await db.execute(sql`DELETE FROM migration_completions WHERE name = ${HOST_RECOVERY_LEDGER_KEY}`);
 }, 60_000);
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -262,6 +265,40 @@ describe("applyStationScheduleMigration — extraction receipt migration", () =>
         sql`SELECT name FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`,
       );
       expect(ledger.rows).toHaveLength(1);
+    },
+  );
+});
+
+describe("applyStationScheduleMigration — legacy comma host recovery", () => {
+  it(
+    "flags ambiguous credits and queues their station for receipt-backed re-scrape",
+    { timeout: 420_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      const rowId = await insertScrapedShow(`Comma host ${run}`, "Smith, Jr.");
+      await db.execute(sql`
+        UPDATE stations
+        SET schedule_scraped_at = now(), schedule_attempted_at = now()
+        WHERE id = ${stationId}
+      `);
+
+      await applyStationScheduleMigration();
+
+      const result = await db.execute(sql`
+        SELECT ss.dj_name, ss.dj_names, ss.host_identity_review_needed,
+               st.schedule_scraped_at, st.schedule_attempted_at
+        FROM scraped_shows ss
+        JOIN stations st ON st.id = ss.station_id
+        WHERE ss.id = ${rowId}
+      `);
+      expect(result.rows[0]).toMatchObject({
+        dj_name: "Smith, Jr.",
+        dj_names: null,
+        host_identity_review_needed: true,
+        schedule_scraped_at: null,
+        schedule_attempted_at: null,
+      });
     },
   );
 });

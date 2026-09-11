@@ -54,7 +54,7 @@ function slugifyDjName(name: string): string {
  * curated shows (e.g. KEXP via the API harvester) are left alone — we only fill
  * gaps. Idempotent.
  */
-async function syncShowRows(): Promise<number> {
+async function syncShowRows(stationId?: number): Promise<number> {
   // Collect every distinct host credit for a show. A weekly schedule can list
   // different co-host strings on different days, so one representative value
   // would silently discard identities.
@@ -64,21 +64,35 @@ async function syncShowRows(): Promise<number> {
     show_name: string;
     legacy_dj_names: string[];
     structured_dj_names: string[];
+    has_ambiguous_host_credit: boolean;
+    was_host_recovery: boolean;
+    recovery_legacy_credits: string[];
   }>(sql`
     SELECT
       ss.station_id,
       st.slug AS station_slug,
       ss.show_name,
       ARRAY_AGG(DISTINCT ss.dj_name) FILTER (
-        WHERE ss.dj_name IS NOT NULL AND ss.dj_name <> ''
+        WHERE ss.dj_name IS NOT NULL
+          AND ss.dj_name <> ''
+          AND ss.host_identity_review_needed = false
       ) AS legacy_dj_names,
       ARRAY_AGG(DISTINCT host.name) FILTER (
         WHERE host.name IS NOT NULL AND host.name <> ''
-      ) AS structured_dj_names
+      ) AS structured_dj_names,
+      BOOL_OR(ss.host_identity_review_needed) AS has_ambiguous_host_credit,
+      BOOL_OR(
+        ss.host_identity_checked_at IS NOT NULL
+        AND ss.host_identity_review_needed = false
+      ) AS was_host_recovery,
+      ARRAY_AGG(DISTINCT ss.host_identity_legacy_credit) FILTER (
+        WHERE ss.host_identity_legacy_credit IS NOT NULL
+      ) AS recovery_legacy_credits
     FROM scraped_shows ss
     JOIN stations st ON st.id = ss.station_id
     LEFT JOIN LATERAL unnest(COALESCE(ss.dj_names, ARRAY[]::text[])) AS host(name) ON true
     WHERE ss.voided_at IS NULL
+      ${stationId == null ? sql`` : sql`AND ss.station_id = ${stationId}`}
     GROUP BY ss.station_id, st.slug, ss.show_name
   `);
 
@@ -107,7 +121,65 @@ async function syncShowRows(): Promise<number> {
     );
     const existing = exists[0];
     if (existing) {
+      // A flagged legacy comma credit is deliberately absent from `fields`:
+      // it may be one punctuated identity or several flattened identities.
+      // Do not erase or rewrite an existing derived attribution until a
+      // source-backed re-scrape or explicit review supplies atomic names.
+      if (row.has_ambiguous_host_credit) continue;
       const oldNames = parseScheduleDjNames(existing.djName, row.show_name);
+      const normalizedExistingNames = (existing.djNames ?? [])
+        .map(normalizeAttributionName)
+        .sort();
+      const matchesLegacySplit = (row.recovery_legacy_credits ?? []).some(
+        (credit) => {
+          const split = parseScheduleDjNames(credit, row.show_name)
+            .map(normalizeAttributionName)
+            .sort();
+          return (
+            split.length === normalizedExistingNames.length &&
+            split.every((name, index) => name === normalizedExistingNames[index])
+          );
+        },
+      );
+      const isRecoveredLegacyArray =
+        row.was_host_recovery &&
+        existing.pickerId == null &&
+        existing.djNames != null &&
+        matchesLegacySplit;
+      if (isRecoveredLegacyArray) {
+        const staleNames = existing.djNames ?? [];
+        const confirmedNames = new Set(
+          [...(fields.djNames ?? []), ...(fields.djName ? [fields.djName] : [])]
+            .map(normalizeAttributionName),
+        );
+        await db
+          .update(showsTable)
+          .set({ ...fields, pickerId: null })
+          .where(eq(showsTable.id, existing.id));
+        for (const staleName of staleNames) {
+          if (confirmedNames.has(normalizeAttributionName(staleName))) continue;
+          const handle =
+            `show-dj-${row.station_slug}-${slugifyDjName(staleName)}`;
+          const [picker] = await db
+            .select({ id: pickersTable.id })
+            .from(pickersTable)
+            .where(eq(pickersTable.handle, handle))
+            .limit(1);
+          if (!picker) continue;
+          const [stillLinked] = await db
+            .select({ id: showsTable.id })
+            .from(showsTable)
+            .where(eq(showsTable.pickerId, picker.id))
+            .limit(1);
+          if (!stillLinked) {
+            await db
+              .update(pickersTable)
+              .set({ active: false })
+              .where(eq(pickersTable.id, picker.id));
+          }
+        }
+        continue;
+      }
       let generatedPickerId: number | null = null;
       if (existing.pickerId != null && existing.djName) {
         const expectedHandle =
@@ -184,7 +256,7 @@ async function syncShowRows(): Promise<number> {
  * shows rows at that station. Picker handle is "show-dj-<station-slug>-<dj-slug>"
  * to avoid collisions with KEXP and other source-specific handles.
  */
-async function syncDjPickers(): Promise<number> {
+async function syncDjPickers(stationId?: number): Promise<number> {
   const rows = await db.execute<{
     station_id: number;
     station_slug: string;
@@ -214,6 +286,19 @@ async function syncDjPickers(): Promise<number> {
     ) AS host(name)
     WHERE host.name <> ''
       AND ss.voided_at IS NULL
+      ${stationId == null ? sql`` : sql`AND ss.station_id = ${stationId}`}
+      AND (
+        ss.dj_names IS NOT NULL
+        OR ss.host_identity_review_needed = false
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM scraped_shows ambiguous
+        WHERE ambiguous.station_id = ss.station_id
+          AND ambiguous.show_name = ss.show_name
+          AND ambiguous.voided_at IS NULL
+          AND ambiguous.host_identity_review_needed = true
+      )
     ORDER BY ss.station_id, ss.show_name, host.name, ss.dj_names IS NOT NULL
   `);
 
@@ -238,6 +323,10 @@ async function syncDjPickers(): Promise<number> {
       let pickerId: number;
       if (existing) {
         pickerId = existing.id;
+        await db
+          .update(pickersTable)
+          .set({ active: true })
+          .where(eq(pickersTable.id, pickerId));
       } else {
         const [inserted] = await db
           .insert(pickersTable)
@@ -281,12 +370,12 @@ async function syncDjPickers(): Promise<number> {
   return linked;
 }
 
-export async function syncScrapedShowRowsAndPickers(): Promise<{
+export async function syncScrapedShowRowsAndPickers(stationId?: number): Promise<{
   showsCreated: number;
   pickersLinked: number;
 }> {
-  const showsCreated = await syncShowRows();
-  const pickersLinked = await syncDjPickers();
+  const showsCreated = await syncShowRows(stationId);
+  const pickersLinked = await syncDjPickers(stationId);
   return { showsCreated, pickersLinked };
 }
 

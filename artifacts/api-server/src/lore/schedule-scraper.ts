@@ -13,6 +13,7 @@ import {
   sanitizeScheduleName,
 } from "./schedule-name-sanitizer.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
+import { syncScrapedShowRowsAndPickers } from "./scraped-shows-sync.js";
 import {
   cadenceScheduleSource,
   googleCalendarIcsUrl,
@@ -963,6 +964,15 @@ export async function scrapeStationSchedule(
         scheduleFailureAt: now,
       })
       .where(eq(stationsTable.id, target.id));
+    await db
+      .update(scrapedShowsTable)
+      .set({ hostIdentityCheckedAt: now })
+      .where(
+        and(
+          eq(scrapedShowsTable.stationId, target.id),
+          eq(scrapedShowsTable.hostIdentityReviewNeeded, true),
+        ),
+      );
     return { scraped: false, showCount: 0 };
   };
 
@@ -1386,8 +1396,78 @@ export async function scrapeStationSchedule(
   }
 
   const now = new Date();
+  let hadLegacyHostCandidates: boolean;
   try {
     const receiptSourceUrl = requireSourceUrl(sourceUrl);
+    const legacyHostCandidates = await db
+      .select({
+        showName: scrapedShowsTable.showName,
+        dayOfWeek: scrapedShowsTable.dayOfWeek,
+        startTime: scrapedShowsTable.startTime,
+        djName: scrapedShowsTable.djName,
+      })
+      .from(scrapedShowsTable)
+      .where(
+        and(
+          eq(scrapedShowsTable.stationId, target.id),
+          eq(scrapedShowsTable.hostIdentityReviewNeeded, true),
+        ),
+      );
+    hadLegacyHostCandidates = legacyHostCandidates.length > 0;
+    const candidateBySlot = new Map(
+      legacyHostCandidates.map((candidate) => [
+        `${candidate.dayOfWeek}|${candidate.startTime}|${candidate.showName.toLowerCase()}`,
+        candidate,
+      ]),
+    );
+    const recoveredHostFields = (show: ExtractedShow) => {
+      const candidate = candidateBySlot.get(
+        `${show.dayOfWeek}|${show.startTime}|${show.showName.toLowerCase()}`,
+      );
+      if (!candidate) {
+        if (candidateBySlot.size > 0 && show.djName?.includes(",")) {
+          return {
+            djName: show.djName,
+            djNames: null,
+            hostIdentityReviewNeeded: true,
+            hostIdentityCheckedAt: now,
+            hostIdentityLegacyCredit: null,
+          };
+        }
+        return {
+          djName: show.djName,
+          djNames: show.djNames,
+          hostIdentityReviewNeeded: false,
+          hostIdentityCheckedAt: null,
+          hostIdentityLegacyCredit: null,
+        };
+      }
+      if (show.djNames != null && show.djNames.length > 0) {
+        return {
+          djName: null,
+          djNames: show.djNames,
+          hostIdentityReviewNeeded: false,
+          hostIdentityCheckedAt: now,
+          hostIdentityLegacyCredit: candidate.djName,
+        };
+      }
+      if (show.djName && !show.djName.includes(",")) {
+        return {
+          djName: null,
+          djNames: [show.djName],
+          hostIdentityReviewNeeded: false,
+          hostIdentityCheckedAt: now,
+          hostIdentityLegacyCredit: candidate.djName,
+        };
+      }
+      return {
+        djName: candidate.djName,
+        djNames: null,
+        hostIdentityReviewNeeded: true,
+        hostIdentityCheckedAt: now,
+        hostIdentityLegacyCredit: candidate.djName,
+      };
+    };
     await db.transaction(async (tx) => {
       await tx.delete(scrapedShowsTable).where(eq(scrapedShowsTable.stationId, target.id));
       await tx
@@ -1403,8 +1483,7 @@ export async function scrapeStationSchedule(
               dayOfWeek: s.dayOfWeek,
               startTime: s.startTime,
               endTime: s.endTime,
-              djName: s.djName,
-              djNames: s.djNames,
+              ...recoveredHostFields(s),
               sourceUrl: receiptSourceUrl,
               scrapedAt: now,
                extraction,
@@ -1453,6 +1532,17 @@ export async function scrapeStationSchedule(
   } catch (err) {
     console.warn(`[schedule-scraper] write failed for ${target.slug}`, err);
     return fail("persistence_failed");
+  }
+
+  if (hadLegacyHostCandidates) {
+    try {
+      await syncScrapedShowRowsAndPickers(target.id);
+    } catch (err) {
+      console.warn(
+        `[schedule-scraper] host recovery sync failed for ${target.slug}`,
+        err,
+      );
+    }
   }
 
   // Backfill iana_timezone for stations that gained scraped_shows but have no

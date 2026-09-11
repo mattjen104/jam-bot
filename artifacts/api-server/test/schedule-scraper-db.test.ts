@@ -16,7 +16,13 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { db, stationsTable, scrapedShowsTable } from "@workspace/db";
+import {
+  db,
+  pickersTable,
+  showsTable,
+  stationsTable,
+  scrapedShowsTable,
+} from "@workspace/db";
 import { scrapeStationSchedule } from "../src/lore/schedule-scraper.js";
 import {
   configureScheduleExtractor,
@@ -136,6 +142,11 @@ afterEach(async () => {
 
   // Wipe scraped rows and reset freshness stamps so tests start clean.
   if (dbAvailable && stationId !== undefined) {
+    await db.delete(showsTable).where(eq(showsTable.stationId, stationId));
+    await db.execute(sql`
+      DELETE FROM pickers
+      WHERE handle LIKE ${`show-dj-test-sched-${run}-%`}
+    `);
     await db
       .delete(scrapedShowsTable)
       .where(eq(scrapedShowsTable.stationId, stationId));
@@ -272,6 +283,8 @@ describe("scrapeStationSchedule — scheduleUrl direct-fetch path", () => {
       dayOfWeek: "Mon",
       startTime: "09:00",
       endTime: "10:00",
+      djName: "Smith, Jr.",
+      hostIdentityReviewNeeded: true,
       sourceUrl: SCHEDULE_URL,
       extraction: "llm",
     });
@@ -287,7 +300,14 @@ describe("scrapeStationSchedule — scheduleUrl direct-fetch path", () => {
     }, { fetchFn });
 
     expect(result).toEqual({ scraped: false, showCount: 0 });
-    expect(await fetchScrapedShows()).toHaveLength(1);
+    const preserved = await fetchScrapedShows();
+    expect(preserved).toHaveLength(1);
+    expect(preserved[0]).toMatchObject({
+      djName: "Smith, Jr.",
+      djNames: null,
+      hostIdentityReviewNeeded: true,
+    });
+    expect(preserved[0]!.hostIdentityCheckedAt).toBeInstanceOf(Date);
     const station = await fetchStationRow();
     expect(station?.scheduleFailureReason).toBe("policy_blocked");
     expect(station?.scheduleFailureAt).toBeInstanceOf(Date);
@@ -1350,6 +1370,117 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
 // ---------------------------------------------------------------------------
 
 describe("scrapeStationSchedule — empty extraction authority", () => {
+  it("replaces flagged comma credits only with explicit atomic identities", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    await db.insert(scrapedShowsTable).values([
+      {
+        stationId: stationId!,
+        showName: "Punctuation Host",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+        endTime: "10:00",
+        djName: "Smith, Jr.",
+        hostIdentityReviewNeeded: true,
+        sourceUrl: SCHEDULE_URL,
+        extraction: "llm",
+      },
+      {
+        stationId: stationId!,
+        showName: "Co-Hosts",
+        dayOfWeek: "Tue",
+        startTime: "09:00",
+        endTime: "10:00",
+        djName: "Alice, Bob",
+        hostIdentityReviewNeeded: true,
+        sourceUrl: SCHEDULE_URL,
+        extraction: "llm",
+      },
+    ]);
+    configureScheduleExtractor(async () => JSON.stringify([
+      {
+        showName: "Punctuation Host",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+        endTime: "10:00",
+        djName: null,
+        djNames: ["Smith, Jr."],
+      },
+      {
+        showName: "Co-Hosts",
+        dayOfWeek: "Tue",
+        startTime: "09:00",
+        endTime: "10:00",
+        djName: null,
+        djNames: ["Alice", "Bob"],
+      },
+    ]));
+
+    const result = await scrapeStationSchedule(
+      {
+        id: stationId!,
+        slug: `test-sched-${run}`,
+        homepageUrl: HOMEPAGE,
+        scheduleUrl: SCHEDULE_URL,
+        city: null,
+        country: null,
+        ianaTimezone: null,
+      },
+      {
+        fetchFn: makeFetch([
+          { pattern: "robots.txt", body: "User-agent: *\nDisallow:\n" },
+          { pattern: "/schedule", body: "<html><body>Schedule</body></html>" },
+        ]),
+      },
+    );
+
+    expect(result).toEqual({ scraped: true, showCount: 2 });
+    const rows = (await fetchScrapedShows()).sort((a, b) =>
+      a.showName.localeCompare(b.showName));
+    expect(rows.map((row) => ({
+      showName: row.showName,
+      djName: row.djName,
+      djNames: row.djNames,
+      review: row.hostIdentityReviewNeeded,
+    }))).toEqual([
+      {
+        showName: "Co-Hosts",
+        djName: null,
+        djNames: ["Alice", "Bob"],
+        review: false,
+      },
+      {
+        showName: "Punctuation Host",
+        djName: null,
+        djNames: ["Smith, Jr."],
+        review: false,
+      },
+    ]);
+    const derived = await db
+      .select({
+        name: showsTable.name,
+        djName: showsTable.djName,
+        djNames: showsTable.djNames,
+      })
+      .from(showsTable)
+      .where(eq(showsTable.stationId, stationId!));
+    expect(derived.sort((a, b) => a.name.localeCompare(b.name))).toMatchObject([
+      { name: "Co-Hosts", djName: null, djNames: ["Alice", "Bob"] },
+      { name: "Punctuation Host", djName: "Smith, Jr.", djNames: null },
+    ]);
+    const recoveredPickers = await db
+      .select({ name: pickersTable.name, active: pickersTable.active })
+      .from(pickersTable)
+      .where(sql`${pickersTable.handle} LIKE ${`show-dj-test-sched-${run}-%`}`);
+    expect(recoveredPickers).toEqual(
+      expect.arrayContaining([
+        { name: "Alice", active: true },
+        { name: "Bob", active: true },
+        { name: "Smith, Jr.", active: true },
+      ]),
+    );
+  });
+
   it("preserves existing rows when an LLM returns an empty array", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 

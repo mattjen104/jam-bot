@@ -138,6 +138,18 @@ export async function applyStationScheduleMigration(): Promise<void> {
     ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS dj_names text[]
   `);
   await db.execute(sql`
+    ALTER TABLE scraped_shows
+      ADD COLUMN IF NOT EXISTS host_identity_review_needed boolean NOT NULL DEFAULT false
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_shows
+      ADD COLUMN IF NOT EXISTS host_identity_checked_at timestamptz
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_shows
+      ADD COLUMN IF NOT EXISTS host_identity_legacy_credit text
+  `);
+  await db.execute(sql`
     ALTER TABLE scraped_show_exceptions ADD COLUMN IF NOT EXISTS dj_names text[]
   `);
   await db.execute(sql`
@@ -152,6 +164,50 @@ export async function applyStationScheduleMigration(): Promise<void> {
   await db.execute(sql`
     ALTER TABLE list_entries ADD COLUMN IF NOT EXISTS extraction text
   `);
+  await db.execute(sql`
+    UPDATE scraped_shows
+    SET host_identity_legacy_credit = dj_name
+    WHERE host_identity_review_needed = true
+      AND host_identity_legacy_credit IS NULL
+      AND dj_name IS NOT NULL
+  `);
+
+  // Rows written before atomic host arrays existed may contain either a
+  // punctuation-bearing single name or a flattened list. That ambiguity is
+  // not recoverable from the value itself. Flag it and make its station
+  // immediately eligible for a receipt-backed re-scrape; failed re-checks
+  // retain the original value for explicit operator review.
+  const hostRecoveryCompletion = await db.execute(
+    sql`SELECT 1 FROM migration_completions WHERE name = 'flagLegacyCommaHostCredits' LIMIT 1`,
+  );
+  if ((hostRecoveryCompletion.rows?.length ?? 0) === 0) {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE scraped_shows
+        SET host_identity_review_needed = true,
+            host_identity_legacy_credit = dj_name
+        WHERE dj_names IS NULL
+          AND dj_name IS NOT NULL
+          AND position(',' in dj_name) > 0
+      `);
+      await tx.execute(sql`
+        UPDATE stations st
+        SET schedule_scraped_at = NULL,
+            schedule_attempted_at = NULL
+        WHERE EXISTS (
+          SELECT 1
+          FROM scraped_shows ss
+          WHERE ss.station_id = st.id
+            AND ss.host_identity_review_needed = true
+        )
+      `);
+      await tx.execute(sql`
+        INSERT INTO migration_completions (name)
+        VALUES ('flagLegacyCommaHostCredits')
+        ON CONFLICT (name) DO NOTHING
+      `);
+    });
+  }
 
   // This receipt backfill has its own ledger key: the older schedule migration
   // may already be marked complete in a deployed database.

@@ -642,6 +642,16 @@ export const scrapedShowsTable = pgTable(
     djName: text("dj_name"),
     /** Source-provided atomic host identities; commas within names are preserved. */
     djNames: text("dj_names").array(),
+    /** Legacy flattened comma-bearing credit awaiting source re-check or review. */
+    hostIdentityReviewNeeded: boolean("host_identity_review_needed")
+      .default(false)
+      .notNull(),
+    /** Last unsuccessful source re-check for a flagged legacy host credit. */
+    hostIdentityCheckedAt: timestamp("host_identity_checked_at", {
+      withTimezone: true,
+    }),
+    /** Original flattened credit retained to prove a derived repair is safe. */
+    hostIdentityLegacyCredit: text("host_identity_legacy_credit"),
     /** URL of the station schedule page (or homepage when the grid is inline). */
     sourceUrl: text("source_url").notNull(),
     /** When this row was (re)written by the schedule scraper. */
