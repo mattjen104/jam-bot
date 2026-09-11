@@ -2573,6 +2573,16 @@
   pointer-events: none;
 }
 
+/* The full-Dial command layer is fixed and otherwise non-interactive. Keep the
+   range control in its own top-right slot so it never sits on the page title. */
+.dial-cli-overlay:not(.dial-cli-overlay--strip) > .crossing-scope-pill {
+  position: absolute;
+  top: 8px;
+  right: 15px;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 /* ── Portrait ────────────────────────────────────────────────────────────── */
 /* Full-height Dial — the overlay covers the whole feed region below the
    app header. The wordmark stays bottom-anchored. */
@@ -9100,8 +9110,7 @@
   white-space: nowrap;
   margin-left: auto;
 }
-/* Crossing scope pill — sits next to the crossings toggle; cycles
-   now → this set → 24h → 7d → lifetime. Grayed/inert when crossings off. */
+/* Crossing range chip — compact, keyboard-accessible native menu. */
 .crossing-scope-pill {
   background: none;
   border: 1px solid hsl(var(--border));
@@ -9112,6 +9121,29 @@
   color: hsl(var(--foreground) / 0.85);
   cursor: pointer;
   white-space: nowrap;
+}
+.crossing-scope-pill--menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+.crossing-scope-pill--menu select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0 12px 0 0;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 7px) 50%, calc(100% - 3px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.crossing-scope-pill--menu select:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 .crossing-scope-pill:hover:not(:disabled) {
   border-color: hsl(var(--foreground) / 0.4);

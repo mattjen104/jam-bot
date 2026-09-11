@@ -26,6 +26,7 @@ import {
   _testOnly_setColdComputeDeadline,
   _testOnly_setComputeOverride,
   SOCIAL_PRESENCE_TTL_MS,
+  computeBlendedCrossings,
 } from "../src/routes/me/crossings.js";
 
 /**
@@ -920,6 +921,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
   const BMBID_LIB   = `tc-blend-lib-${brun}`;   // in active user's library; aired 23h ago
   const BMBID_OLD   = `tc-blend-old-${brun}`;   // in active user's library; aired 25h ago
   const BMBID_AGED  = `tc-blend-aged-${brun}`;  // in active user's library; aired 200 days ago
+  const BMBID_EXPOSURE = `tc-blend-exposure-${brun}`; // resolved, aired, not in any active library
 
   const BSLUG      = `tc-blend-station-${brun}`;
   const BSLUG_AGED = `tc-blend-aged-station-${brun}`; // station whose ONLY spin is 200 days old
@@ -964,6 +966,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
       { mbid: BMBID_LIB,  title: "Recent Blend Track", artist: `Blend Artist ${brun}` },
       { mbid: BMBID_OLD,  title: "Old Blend Track",    artist: `Blend Artist ${brun}` },
       { mbid: BMBID_AGED, title: "Aged Blend Track",   artist: `Aged Blend Artist ${brun}` },
+      { mbid: BMBID_EXPOSURE, title: "Exposure Only Track", artist: `Unmatched Exposure Artist ${brun}` },
     ]);
 
     const [bSt] = await db.insert(stationsTable).values({
@@ -986,6 +989,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     await db.insert(spinsTable).values([
       { stationId: bStationId!, mbid: BMBID_LIB, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago23h },
       { stationId: bStationId!, mbid: BMBID_OLD, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25h },
+      { stationId: bStationId!, mbid: BMBID_EXPOSURE, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25h },
       // 200 days old — outside any rolling window and outside the old 180-day bound
       { stationId: bStationAgedId!, mbid: BMBID_AGED, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago200d },
     ]);
@@ -1013,7 +1017,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
         await db.delete(loreUsersTable).where(eq(loreUsersTable.id, uid));
       }
     }
-    for (const mbid of [BMBID_LIB, BMBID_OLD, BMBID_AGED]) {
+    for (const mbid of [BMBID_LIB, BMBID_OLD, BMBID_AGED, BMBID_EXPOSURE]) {
       await db.delete(recordingReleaseGroupsTable).where(eq(recordingReleaseGroupsTable.recordingMbid, mbid));
       await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
     }
@@ -1081,6 +1085,25 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     expect(row!.monthCrossings).toBe(0);
     expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(1);
     expect(row!.topArtistNames).toEqual([]);
+  }, TEST_TIMEOUT);
+
+  it("uses all resolved lifetime MBIDs as exposure, not only crossing candidates", async () => {
+    if (!dbAvailable) return;
+    const rows = await computeBlendedCrossings({ includeLifetime: true });
+    const station = rows.find((row) => row.stationSlug === BSLUG);
+    const aged = rows.find((row) => row.stationSlug === BSLUG_AGED);
+    expect(station).toBeDefined();
+    expect(aged).toBeDefined();
+    // LIB + OLD are crossing candidates; EXPOSURE is resolved airplay but is
+    // absent from every active listener's library. It must still be in the
+    // station's lifetime denominator.
+    expect(station!.resolvedTracksLifetime).toBe(3);
+    expect(station!.lifetimeCrossings).toBe(2);
+    expect(aged!.resolvedTracksLifetime).toBe(1);
+    // With the candidate-only denominator B would tie the aged station at a
+    // saturated rate. Full exposure makes the smoothed pooled score/order
+    // distinguish them deterministically.
+    expect(station!.scoreLifetime).toBeLessThan(aged!.scoreLifetime);
   }, TEST_TIMEOUT);
 
   it("excludes a user whose lastSeenAt exceeds SOCIAL_PRESENCE_TTL_MS", async () => {

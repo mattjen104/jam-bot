@@ -9,6 +9,7 @@
 import { type ReactNode } from "react";
 import { eligibleDjNames, type ShowAttributionLike } from "@workspace/lore-attribution";
 import { type DialShow, type DialDisplayMode } from "../hooks/useDialData";
+import type { CrossingScope, CrossingScopeDetail } from "../lib/crossingScope";
 
 // ---------------------------------------------------------------------------
 // Adapter: DialShow → ShowAttributionLike
@@ -332,6 +333,8 @@ export function crossingSentence(
   displayMode: DialDisplayMode = "personal",
   also?: AlsoToggle & { node: ReactNode },
   past?: PastContext,
+  scope?: CrossingScope,
+  scopeDetail?: CrossingScopeDetail | null,
 ): {
   node: ReactNode;
   hasTrack: boolean;
@@ -346,13 +349,20 @@ export function crossingSentence(
 
   const station = cleanLiveValue(stationName);
   const current = show.currentTrack;
-  const hasExactCrossing = current?.isLibraryHit === true || show.crossings > 0;
-  const hasArtistCrossing = current?.isArtistHit === true || show.artistCrossings > 0;
+  const rangeDetail = scopeDetail ?? null;
+  const hasExactCrossing = scope == null || scope === "now" || scope === "set"
+    ? current?.isLibraryHit === true || show.crossings > 0
+    : (rangeDetail?.count ?? 0) > 0;
+  const hasArtistCrossing = scope == null || scope === "now" || scope === "set"
+    ? current?.isArtistHit === true || show.artistCrossings > 0
+    : false;
   if (!hasExactCrossing && !hasArtistCrossing) return null;
 
   const currentArtist = cleanLiveValue(current?.artist);
-  const sourceArtists = hasExactCrossing ? show.topArtists : show.topArtistNames;
-  const candidateArtists = currentArtist && (
+  const sourceArtists = rangeDetail
+    ? rangeDetail.artists
+    : hasExactCrossing ? show.topArtists : show.topArtistNames;
+  const candidateArtists = !rangeDetail && currentArtist && (
     current?.isLibraryHit || (!hasExactCrossing && current?.isArtistHit)
   ) ? [currentArtist] : sourceArtists;
   const artists = candidateArtists
@@ -360,10 +370,14 @@ export function crossingSentence(
     .filter((artist): artist is string => artist != null)
     .filter((artist) => !sameLiveValue(artist, station))
     .filter((artist, index, all) => all.findIndex((other) => sameLiveValue(other, artist)) === index);
-  const artistNodes = nameNodes(artists);
-  const count = hasExactCrossing
+  const count = rangeDetail
+    ? rangeDetail.count
+    : hasExactCrossing
     ? Math.max(show.crossings, current?.isLibraryHit ? 1 : 0)
     : Math.max(show.artistCrossings, current?.isArtistHit ? 1 : 0);
+  const artistNodes = rangeDetail
+    ? <>{nameNodes(artists)}{" "}(<b>{count} {count === 1 ? "crossing" : "crossings"}</b>)</>
+    : nameNodes(artists);
 
   const djList = eligibleDjNames(dialShowAsAttribution(show), {
     artist: current?.artist,
@@ -389,7 +403,9 @@ export function crossingSentence(
     activeAlso = undefined;
   } else {
     const isLive = !!(current?.isLibraryHit || current?.isArtistHit);
-    timing = isLive ? "now" : "in the current set";
+    timing = rangeDetail && scope !== "now" && scope !== "set"
+      ? (scope === "lifetime" ? "all time" : `in the last ${rangeDetail.scopeLabel}`)
+      : isLive ? "now" : "in the current set";
     // Only wire the toggle for the current-set sentence.
     activeAlso = !isLive ? also : undefined;
   }

@@ -113,8 +113,15 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
   const rows = await db
     .select({
       stationSlug: stationsTable.slug,
+      resolvedTracksLifetime: sql<number>`count(distinct ${spinsTable.mbid})::int`,
       lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
       lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
+      lifetimeFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where (${libHit} or (${notLibHit} and ${artistMatch})) and not exists (
+        select 1 from spins prior where prior.mbid = ${spinsTable.mbid}
+          and (prior.played_at < ${spinsTable.playedAt}
+            or (prior.played_at = ${spinsTable.playedAt} and prior.id < ${spinsTable.id}))
+      ))::int`,
+      topArtistNamesRawLifetime: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${libHit} or (${notLibHit} and ${artistMatch}))`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -140,8 +147,11 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
 
   const data = rows.map((r) => ({
     stationSlug: r.stationSlug,
+    resolvedTracksLifetime: r.resolvedTracksLifetime,
     lifetimeCrossings: r.lifetimeCrossings,
     lifetimeArtistCrossings: r.lifetimeArtistCrossings,
+    lifetimeFirstPlayCrossings: r.lifetimeFirstPlayCrossings,
+    topArtistNamesLifetime: topArtistsFromRaw(r.topArtistNamesRawLifetime),
   }));
 
   await db
@@ -151,6 +161,16 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
       target: lifetimeCrossingsCacheTable.userId,
       set: { data, builtAt: new Date() },
     });
+}
+
+function topArtistsFromRaw(raw: string[] | null, limit = 3): string[] {
+  if (!raw?.length) return [];
+  const counts = new Map<string, number>();
+  for (const name of raw) {
+    const value = name?.trim();
+    if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([name]) => name);
 }
 
 /**

@@ -20,18 +20,17 @@
 
 import type { DialStation, DialShow, DialSpin } from "../hooks/useDialData";
 
-export type CrossingScope = "now" | "set" | "24h" | "7d" | "lifetime";
+export type CrossingScope = "now" | "set" | "24h" | "7d" | "30d" | "lifetime";
 
 /** Cycle order for the scope pill: now → this set → 24h → 7d → lifetime → now. */
 export const CROSSING_SCOPE_ORDER: readonly CrossingScope[] = [
-  "now",
-  "set",
   "24h",
   "7d",
+  "30d",
   "lifetime",
 ];
 
-export const DEFAULT_CROSSING_SCOPE: CrossingScope = "lifetime";
+export const DEFAULT_CROSSING_SCOPE: CrossingScope = "7d";
 
 /** Short pill/detail label for each scope. */
 export function crossingScopeLabel(scope: CrossingScope): string {
@@ -40,11 +39,12 @@ export function crossingScopeLabel(scope: CrossingScope): string {
     case "set": return "this set";
     case "24h": return "24h";
     case "7d": return "7d";
-    case "lifetime": return "lifetime";
+    case "30d": return "30d";
+    case "lifetime": return "All time";
   }
 }
 
-/** The next scope in the cycle (wraps from lifetime back to now). */
+/** The next ranking range (wraps from All time back to 24h). */
 export function nextCrossingScope(scope: CrossingScope): CrossingScope {
   const i = CROSSING_SCOPE_ORDER.indexOf(scope);
   return CROSSING_SCOPE_ORDER[(i + 1) % CROSSING_SCOPE_ORDER.length];
@@ -226,6 +226,8 @@ export function hasAnyCrossing(ds: DialStation, scope: CrossingScope): boolean {
       return (ds.crossings + ds.artistCrossings) > 0;
     case "7d":
       return ((ds.weekCrossings ?? 0) + (ds.weekArtistCrossings ?? 0)) > 0;
+    case "30d":
+      return ((ds.monthCrossings ?? 0) + (ds.monthArtistCrossings ?? 0)) > 0;
     case "lifetime":
       return ((ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0)) > 0;
   }
@@ -246,6 +248,8 @@ export function crossingCountForScope(ds: DialStation, scope: CrossingScope): nu
       return ds.crossings + ds.artistCrossings;
     case "7d":
       return (ds.weekCrossings ?? 0) + (ds.weekArtistCrossings ?? 0);
+    case "30d":
+      return (ds.monthCrossings ?? 0) + (ds.monthArtistCrossings ?? 0);
     case "lifetime":
       return (ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0);
   }
@@ -279,6 +283,7 @@ export function firstPlayCountForScope(ds: DialStation, scope: CrossingScope): n
   }
   if (scope === "24h") return ds.firstPlayCrossings ?? 0;
   if (scope === "7d") return ds.weekFirstPlayCrossings ?? 0;
+  if (scope === "30d") return ds.monthFirstPlayCrossings ?? 0;
   return ds.lifetimeFirstPlayCrossings ?? 0;
 }
 
@@ -290,9 +295,16 @@ export function stationSortCount(
   scope: CrossingScope,
   metric: StationSortMetric,
 ): number {
-  return metric === "crossings"
-    ? crossingCountForScope(ds, scope)
-    : firstPlayCountForScope(ds, scope);
+  if (metric !== "crossings") return firstPlayCountForScope(ds, scope);
+  // The API's exposure-adjusted score is deliberately consulted only at this
+  // existing crossing metric stage; all precedence bands and raw UI counts
+  // remain unchanged.
+  const adjusted = scope === "24h" ? ds.score24h
+    : scope === "7d" ? ds.score7d
+      : scope === "30d" ? ds.score30d
+        : scope === "lifetime" ? ds.scoreLifetime
+          : undefined;
+  return adjusted ?? crossingCountForScope(ds, scope);
 }
 
 export interface CrossingScopeDetail {
@@ -345,6 +357,10 @@ export function crossingScopeDetail(ds: DialStation, scope: CrossingScope): Cros
     case "7d":
       count = (ds.weekCrossings ?? 0) + (ds.weekArtistCrossings ?? 0);
       source = ds.topArtistNames7d ?? [];
+      break;
+    case "30d":
+      count = (ds.monthCrossings ?? 0) + (ds.monthArtistCrossings ?? 0);
+      source = ds.topArtistNames30d ?? [];
       break;
     case "lifetime":
       count = (ds.lifetimeCrossings ?? 0) + (ds.lifetimeArtistCrossings ?? 0);

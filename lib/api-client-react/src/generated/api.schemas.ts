@@ -3752,6 +3752,24 @@ export interface DialCrossingItem {
   monthFirstPlayCrossings?: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
+  /** Top crossing artist names in the rolling 30-day window. */
+  topArtistNames30d?: string[];
+  /** Distinct resolved recording MBIDs aired in the rolling 24-hour window. */
+  resolvedTracks24h: number;
+  /** Distinct resolved recording MBIDs aired in the rolling 7-day window. */
+  resolvedTracks7d: number;
+  /** Distinct resolved recording MBIDs aired in the rolling 30-day window. */
+  resolvedTracks30d: number;
+  /** Distinct resolved recording MBIDs aired over the full archive. */
+  resolvedTracksLifetime: number;
+  /** Empirical-Bayes crossing rate using same-window resolved-track exposure. */
+  score24h: number;
+  /** Empirical-Bayes crossing rate using same-window resolved-track exposure. */
+  score7d: number;
+  /** Empirical-Bayes crossing rate using same-window resolved-track exposure. */
+  score30d: number;
+  /** Empirical-Bayes crossing rate using lifetime resolved-track exposure. */
+  scoreLifetime: number;
   /** First-ever Lore plays that are also crossings over the full archive. */
   lifetimeFirstPlayCrossings?: number;
   /** Up to five exact crate albums aired by this station, newest crossing first. */
@@ -3760,6 +3778,7 @@ export interface DialCrossingItem {
 
 export interface MeBlendedCrossingsResult {
   items: DialCrossingItem[];
+  computing?: boolean;
 }
 
 export interface MeCrossingsResult {

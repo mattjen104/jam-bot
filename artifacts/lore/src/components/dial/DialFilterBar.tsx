@@ -54,6 +54,7 @@ export interface DialFilterBarProps {
   crossingScope?: CrossingScope;
   /** Cycles the scope: now → this set → 24h → 7d → lifetime. */
   onCycleCrossingScope?: () => void;
+  onSelectCrossingScope?: (scope: CrossingScope) => void;
   /** Sort metric for the selected crossing scope. */
   sortMetric?: StationSortMetric;
   onSortMetric?: (metric: StationSortMetric) => void;
@@ -69,6 +70,7 @@ export function DialFilterBar({
   onToggleCrossings,
   crossingScope,
   onCycleCrossingScope,
+  onSelectCrossingScope,
   sortMetric,
   onSortMetric,
   className,
@@ -84,11 +86,12 @@ export function DialFilterBar({
         variant="bar"
       />
       {/* Scope pill — sits next to the crossings toggle; grayed when off. */}
-      {crossingScope && onCycleCrossingScope && (
+      {crossingScope && (onCycleCrossingScope || onSelectCrossingScope) && (
         <CrossingScopePill
           scope={crossingScope}
           enabled={crossingsActive}
           onCycle={onCycleCrossingScope}
+          onSelect={onSelectCrossingScope}
         />
       )}
       {sortMetric && onSortMetric && (

@@ -6160,6 +6160,50 @@ export const GetMyCrossingsResponse = zod.object({
         ),
       lifetimeCrossings: zod.number(),
       lifetimeArtistCrossings: zod.number(),
+      topArtistNames30d: zod
+        .array(zod.string())
+        .optional()
+        .describe("Top crossing artist names in the rolling 30-day window."),
+      resolvedTracks24h: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired in the rolling 24-hour window.",
+        ),
+      resolvedTracks7d: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired in the rolling 7-day window.",
+        ),
+      resolvedTracks30d: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired in the rolling 30-day window.",
+        ),
+      resolvedTracksLifetime: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired over the full archive.",
+        ),
+      score24h: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using same-window resolved-track exposure.",
+        ),
+      score7d: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using same-window resolved-track exposure.",
+        ),
+      score30d: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using same-window resolved-track exposure.",
+        ),
+      scoreLifetime: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using lifetime resolved-track exposure.",
+        ),
       lifetimeFirstPlayCrossings: zod
         .number()
         .optional()
@@ -6687,6 +6731,50 @@ export const GetMyBlendedCrossingsResponse = zod.object({
         ),
       lifetimeCrossings: zod.number(),
       lifetimeArtistCrossings: zod.number(),
+      topArtistNames30d: zod
+        .array(zod.string())
+        .optional()
+        .describe("Top crossing artist names in the rolling 30-day window."),
+      resolvedTracks24h: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired in the rolling 24-hour window.",
+        ),
+      resolvedTracks7d: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired in the rolling 7-day window.",
+        ),
+      resolvedTracks30d: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired in the rolling 30-day window.",
+        ),
+      resolvedTracksLifetime: zod
+        .number()
+        .describe(
+          "Distinct resolved recording MBIDs aired over the full archive.",
+        ),
+      score24h: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using same-window resolved-track exposure.",
+        ),
+      score7d: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using same-window resolved-track exposure.",
+        ),
+      score30d: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using same-window resolved-track exposure.",
+        ),
+      scoreLifetime: zod
+        .number()
+        .describe(
+          "Empirical-Bayes crossing rate using lifetime resolved-track exposure.",
+        ),
       lifetimeFirstPlayCrossings: zod
         .number()
         .optional()
@@ -6709,6 +6797,7 @@ export const GetMyBlendedCrossingsResponse = zod.object({
         ),
     }),
   ),
+  computing: zod.boolean().optional(),
 });
 
 /**

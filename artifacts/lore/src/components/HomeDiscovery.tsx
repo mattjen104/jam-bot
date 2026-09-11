@@ -386,6 +386,7 @@ export function HomeDiscovery({
   libraryItems,
   crossingScope,
   onCycleCrossingScope,
+  onSelectCrossingScope,
   onSelectLens,
 }: {
   rows: DialLaneRow[];
@@ -395,6 +396,7 @@ export function HomeDiscovery({
   libraryItems: LibraryItem[];
   crossingScope: CrossingScope;
   onCycleCrossingScope: () => void;
+  onSelectCrossingScope?: (scope: CrossingScope) => void;
   onSelectLens: (lens: "radio" | "firstPlays" | "press") => void;
 }) {
   const stableDisplayRef = useRef<StableDiscoveryState>({
@@ -484,6 +486,7 @@ export function HomeDiscovery({
             scope={crossingScope}
             enabled
             onCycle={onCycleCrossingScope}
+            onSelect={onSelectCrossingScope}
           />
         </div>
         <div className="home-discovery__list">

@@ -40,6 +40,19 @@ describe("CrossingScopePill", () => {
       labels.push(container.querySelector(".crossing-scope-pill")!.textContent!.trim());
       unmount();
     }
-    expect(labels).toEqual(["now ▾", "this set ▾", "24h ▾", "7d ▾", "lifetime ▾"]);
+    expect(labels).toEqual(["now ▾", "this set ▾", "24h ▾", "7d ▾", "All time ▾"]);
+  });
+
+  it("renders only the four direct range choices and selects without cycling", () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <CrossingScopePill scope="7d" enabled onSelect={onSelect} />,
+    );
+    expect(container.textContent).toContain("Crossings ·");
+    expect([...container.querySelectorAll("option")].map((o) => o.textContent)).toEqual([
+      "24h", "7d", "30d", "All time",
+    ]);
+    fireEvent.change(container.querySelector("select")!, { target: { value: "30d" } });
+    expect(onSelect).toHaveBeenCalledWith("30d");
   });
 });

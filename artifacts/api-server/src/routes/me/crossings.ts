@@ -10,6 +10,7 @@ import {
   spotifyLibraryItemsTable,
   crossingsCacheTable,
   blendedCrossingsCacheTable,
+  lifetimeCrossingsCacheTable,
   tasteSeedsTable,
   type CrossingsRow,
 } from "@workspace/db";
@@ -23,6 +24,7 @@ import {
 } from "@workspace/api-zod";
 import {
   scheduleLifetimeCrossingsRefresh,
+  computeLifetimeCrossingsForUser,
 } from "../../lore/lifetime-crossings-job.js";
 import { bustPressCache } from "./press-crossings.js";
 
@@ -62,6 +64,56 @@ const router: IRouter = Router();
 const CROSSINGS_CACHE_TTL_MS = 30 * 60 * 1000;
 const MAX_ALBUM_CROSSINGS_PER_STATION = 24;
 
+/**
+ * Deterministic empirical-Bayes rate used for crossing ranking.
+ *
+ * A station with one crossing from one resolved track should not outrank a
+ * station with ten crossings from one hundred resolved tracks merely because
+ * its raw count is smaller. We use a pooled empirical Beta prior (strength 10)
+ * and the same-window distinct-resolved-MBID exposure as the denominator;
+ * 5% is only the documented fallback when no rows have exposure.
+ * Keeping this function free of clocks, database access, and rounding makes
+ * personal and blended results exactly comparable.
+ */
+export const CROSSING_SCORE_PRIOR_MEAN = 0.05;
+export const CROSSING_SCORE_PRIOR_STRENGTH = 10;
+export interface CrossingScorePrior {
+  mean: number;
+  strength: number;
+}
+/** Pooled empirical prior for a comparable set of station/window rows. */
+export function pooledCrossingScorePrior(
+  rows: ReadonlyArray<{ crossings: number; artistCrossings: number; resolvedExposure: number }>,
+): CrossingScorePrior {
+  const exposure = rows.reduce((sum, row) => sum + Math.max(0, row.resolvedExposure || 0), 0);
+  const crossings = rows.reduce(
+    (sum, row) => sum + Math.max(0, (row.crossings || 0) + (row.artistCrossings || 0)),
+    0,
+  );
+  return {
+    // With no resolved exposure there is no empirical evidence; this fallback
+    // is intentionally deterministic and only affects completely empty sets.
+    mean: exposure > 0
+      ? Math.min(1, Math.max(0, crossings / exposure))
+      : CROSSING_SCORE_PRIOR_MEAN,
+    strength: CROSSING_SCORE_PRIOR_STRENGTH,
+  };
+}
+export function empiricalBayesCrossingScore(
+  crossings: number,
+  resolvedExposure: number,
+  prior: CrossingScorePrior = {
+    mean: CROSSING_SCORE_PRIOR_MEAN,
+    strength: CROSSING_SCORE_PRIOR_STRENGTH,
+  },
+): number {
+  const n = Number.isFinite(resolvedExposure) ? Math.max(0, Math.floor(resolvedExposure)) : 0;
+  const k = Number.isFinite(crossings) ? Math.min(n, Math.max(0, Math.floor(crossings))) : 0;
+  const strength = Number.isFinite(prior.strength) && prior.strength > 0 ? prior.strength : CROSSING_SCORE_PRIOR_STRENGTH;
+  const mean = Number.isFinite(prior.mean) ? Math.min(1, Math.max(0, prior.mean)) : CROSSING_SCORE_PRIOR_MEAN;
+  return (k + mean * strength) / (n + strength);
+}
+
 // Empty results expire much sooner: an empty crossings result is usually a
 // user waiting for their first match, and a fresh qualifying spin (e.g. their
 // seed artist starts playing) must surface without waiting out the full
@@ -85,6 +137,20 @@ function hasAlbumCrossingShape(data: CrossingsRow[]): boolean {
   return data.every((row) =>
     row.lifetimeCrossings === 0
     || (Array.isArray(row.albumCrossings) && row.albumCrossings.length > 0),
+  );
+}
+
+/** Reject pre-score/partial cache rows rather than serving incomparable data. */
+export function hasCrossingScoreShape(data: CrossingsRow[]): boolean {
+  return data.every((row) =>
+    typeof row.resolvedTracks24h === "number" && Number.isFinite(row.resolvedTracks24h) && row.resolvedTracks24h >= 0
+    && typeof row.resolvedTracks7d === "number" && Number.isFinite(row.resolvedTracks7d) && row.resolvedTracks7d >= 0
+    && typeof row.resolvedTracks30d === "number" && Number.isFinite(row.resolvedTracks30d) && row.resolvedTracks30d >= 0
+    && typeof row.resolvedTracksLifetime === "number" && Number.isFinite(row.resolvedTracksLifetime) && row.resolvedTracksLifetime >= 0
+    && typeof row.score24h === "number" && Number.isFinite(row.score24h) && row.score24h >= 0 && row.score24h <= 1
+    && typeof row.score7d === "number" && Number.isFinite(row.score7d) && row.score7d >= 0 && row.score7d <= 1
+    && typeof row.score30d === "number" && Number.isFinite(row.score30d) && row.score30d >= 0 && row.score30d <= 1
+    && typeof row.scoreLifetime === "number" && Number.isFinite(row.scoreLifetime) && row.scoreLifetime >= 0 && row.scoreLifetime <= 1
   );
 }
 
@@ -219,7 +285,7 @@ async function _readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
     if (rows.length === 0) return null;
     const row = rows[0]!;
     if (Date.now() - row.builtAt.getTime() >= cacheTtlMs(row.data)) return null;
-    if (!hasAlbumCrossingShape(row.data)) return null;
+    if (!hasAlbumCrossingShape(row.data) || !hasCrossingScoreShape(row.data)) return null;
     // `data` is typed CrossingsRow[] via the schema's $type — no cast needed.
     return row.data;
   } catch {
@@ -242,7 +308,7 @@ async function readL2CacheAny(userId: number): Promise<{ data: CrossingsRow[]; i
       .limit(1);
     if (rows.length === 0) return null;
     const row = rows[0]!;
-    if (!hasAlbumCrossingShape(row.data)) return null;
+    if (!hasAlbumCrossingShape(row.data) || !hasCrossingScoreShape(row.data)) return null;
     const isStale = Date.now() - row.builtAt.getTime() >= cacheTtlMs(row.data);
     return { data: row.data, isStale };
   } catch {
@@ -272,6 +338,70 @@ async function writeL2Cache(userId: number, data: CrossingsRow[], builtAt: Date)
 // Personal crossings — extracted compute logic
 // ---------------------------------------------------------------------------
 
+/** Apply the same pooled prior semantics to personal and blended rows. */
+export function applyPooledCrossingScores<T extends CrossingsRow>(rows: T[]): T[] {
+  const prior = (crossings: (keyof T)[], exposure: keyof T) => pooledCrossingScorePrior(
+    rows.map((row) => ({
+      crossings: Number(row[crossings[0]]) + Number(row[crossings[1]]),
+      artistCrossings: 0,
+      resolvedExposure: Number(row[exposure]),
+    })),
+  );
+  const p24 = prior(["crossings", "artistCrossings"], "resolvedTracks24h");
+  const p7 = prior(["weekCrossings", "weekArtistCrossings"], "resolvedTracks7d");
+  const p30 = prior(["monthCrossings", "monthArtistCrossings"], "resolvedTracks30d");
+  const pLife = prior(["lifetimeCrossings", "lifetimeArtistCrossings"], "resolvedTracksLifetime");
+  return rows.map((row) => ({
+    ...row,
+    score24h: empiricalBayesCrossingScore(row.crossings + row.artistCrossings, row.resolvedTracks24h ?? 0, p24),
+    score7d: empiricalBayesCrossingScore(row.weekCrossings + row.weekArtistCrossings, row.resolvedTracks7d ?? 0, p7),
+    score30d: empiricalBayesCrossingScore(row.monthCrossings + row.monthArtistCrossings, row.resolvedTracks30d ?? 0, p30),
+    scoreLifetime: empiricalBayesCrossingScore(
+      row.lifetimeCrossings + row.lifetimeArtistCrossings,
+      row.resolvedTracksLifetime ?? 0,
+      pLife,
+    ),
+  }));
+}
+
+type LifetimeFact = {
+  stationSlug: string;
+  lifetimeCrossings: number;
+  lifetimeArtistCrossings: number;
+  lifetimeFirstPlayCrossings: number;
+  resolvedTracksLifetime: number;
+  topArtistNamesLifetime: string[];
+};
+function validLifetimeFacts(data: unknown): data is LifetimeFact[] {
+  return Array.isArray(data) && data.every((row) => {
+    if (!row || typeof row !== "object") return false;
+    const value = row as LifetimeFact;
+    return typeof value.stationSlug === "string"
+      && [value.lifetimeCrossings, value.lifetimeArtistCrossings, value.lifetimeFirstPlayCrossings, value.resolvedTracksLifetime]
+        .every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)
+      && Array.isArray(value.topArtistNamesLifetime)
+      && value.topArtistNamesLifetime.every((name) => typeof name === "string");
+  });
+}
+
+async function readValidLifetimeFacts(userId: number): Promise<LifetimeFact[]> {
+  const read = async () => {
+    const rows = await db.select({ data: lifetimeCrossingsCacheTable.data })
+      .from(lifetimeCrossingsCacheTable)
+      .where(eq(lifetimeCrossingsCacheTable.userId, userId)).limit(1);
+    return rows[0]?.data;
+  };
+  let data = await read();
+  if (!validLifetimeFacts(data)) {
+    await computeLifetimeCrossingsForUser(userId);
+    data = await read();
+  }
+  if (!validLifetimeFacts(data)) {
+    throw new Error("Lifetime crossings cache unavailable or incompatible");
+  }
+  return data;
+}
+
 /**
  * Run the two heavy aggregate queries that produce personal crossing scores.
  * Pure computation — reads from DB, no cache reads or writes.
@@ -282,9 +412,9 @@ async function writeL2Cache(userId: number, data: CrossingsRow[], builtAt: Date)
 export async function computePersonalCrossings(userId: number): Promise<CrossingsRow[]> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   // The bounded query only needs to cover the longest rolling window
-  // (30 days for monthCrossings).  Lifetime counts come from the pre-built
-  // `lifetime_crossings_cache` table written by the background job, so they
-  // never require a full-table scan here.
+  // (30 days for monthCrossings). Lifetime counts, first-play facts, exposure,
+  // and artist context come from the pre-built lifetime cache; incompatible
+  // legacy rows are rebuilt by the background lifetime job.
   const scanCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
@@ -424,12 +554,16 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         )
   )`;
 
-  const [rows, lifetimeRows, albumRows] = await Promise.all([
+  const lifetimeFacts = await readValidLifetimeFacts(userId);
+  const [rows, albumRows] = await Promise.all([
     // ── Bounded rolling query (scanCutoff = 30 days) ─────────────────────────
     // Uses spins_station_played_at_idx; computes 24h / 7d / 30d rolling counts.
     db
       .select({
         stationSlug: stationsTable.slug,
+        resolvedTracks24h:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow})::int`,
+        resolvedTracks7d:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek})::int`,
+        resolvedTracks30d:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth})::int`,
         crossings:            sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
         artistCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
         firstPlayCrossings:   sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${crossingHit} and ${firstEverPlay})::int`,
@@ -443,6 +577,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         // can rank by frequency in JS.  FILTER keeps only crossing spins.
         topArtistNamesRaw24h: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${libHit} or (${notLibHit} and ${artistMatch})))`,
         topArtistNamesRaw7d:  sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWeek}   and (${libHit} or (${notLibHit} and ${artistMatch})))`,
+        topArtistNamesRaw30d: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inMonth}  and (${libHit} or (${notLibHit} and ${artistMatch})))`,
       })
       .from(spinsTable)
       .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -467,44 +602,6 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
          or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
       ),
 
-    // ── Lifetime query — mbid-driven, NOT date-driven ─────────────────────────
-    // Lifetime counts must include matching spins of ANY age (a listener absent
-    // >1 year still sees their scores).  An unbounded date scan takes 10–16 s on
-    // ~1M spin rows, so instead the scan is driven by the user's own relevant
-    // recording MBIDs: Postgres probes spins_mbid_played_at_idx per matching
-    // MBID (nested-loop semi-join), which measures in tens of milliseconds for
-    // library-sized MBID sets regardless of total spins-table growth.
-    db
-      .select({
-        stationSlug: stationsTable.slug,
-        lifetimeCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
-        lifetimeArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
-        lifetimeFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${crossingHit} and ${firstEverPlay})::int`,
-        // Collect all matching artist names so we can rank by frequency in JS.
-        topArtistNamesRawLifetime:  sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${libHit} or (${notLibHit} and ${artistMatch}))`,
-      })
-      .from(spinsTable)
-      .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-      .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
-      .leftJoin(
-        recordingReleaseGroupsTable,
-        and(
-          eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
-          eq(recordingReleaseGroupsTable.isPrimary, true),
-        ),
-      )
-      .where(
-        and(
-          isNotNull(spinsTable.mbid),
-          eq(stationsTable.hidden, false),
-          sql`${spinsTable.mbid} in ${relevantMbids}`,
-        ),
-      )
-      .groupBy(stationsTable.id, stationsTable.slug)
-      .having(
-        sql`count(*) filter (where ${libHit}) > 0
-         or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
-      ),
     db
       .select({
         stationSlug: stationsTable.slug,
@@ -548,7 +645,8 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
   // A station can appear in either set — long-absent listeners may only have
   // lifetime rows; freshly-active stations may only have rolling rows.
-  const lifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
+  const lifetimeMap = new Map(lifetimeFacts.map((r) => [r.stationSlug, r]));
+  const lifetimeExposureMap = new Map(lifetimeFacts.map((r) => [r.stationSlug, r.resolvedTracksLifetime]));
   const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
   const albumsBySlug = new Map<string, CrossingsRow["albumCrossings"]>();
   for (const album of albumRows) {
@@ -569,7 +667,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   }
   const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
 
-  return [...allSlugs].map((slug) => {
+  const result = [...allSlugs].map((slug) => {
     const r = rollingMap.get(slug);
     const l = lifetimeMap.get(slug);
     return {
@@ -585,13 +683,22 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       monthFirstPlayCrossings: r?.monthFirstPlayCrossings ?? 0,
       lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+      resolvedTracks24h:       r?.resolvedTracks24h         ?? 0,
+      resolvedTracks7d:        r?.resolvedTracks7d          ?? 0,
+      resolvedTracks30d:       r?.resolvedTracks30d         ?? 0,
+      // Lifetime exposure is supplied by the background cache, never inferred
+      // from the MBID-filtered crossing query (which is not a denominator).
+      resolvedTracksLifetime:  lifetimeExposureMap.get(slug) ?? 0,
+      score24h: 0, score7d: 0, score30d: 0, scoreLifetime: 0,
       lifetimeFirstPlayCrossings: l?.lifetimeFirstPlayCrossings ?? 0,
       topArtistNames24h:       topArtistsFromRaw(r?.topArtistNamesRaw24h ?? null),
       topArtistNames7d:        topArtistsFromRaw(r?.topArtistNamesRaw7d  ?? null),
-      topArtistNamesLifetime:  topArtistsFromRaw(l?.topArtistNamesRawLifetime ?? null),
+      topArtistNames30d:       topArtistsFromRaw(r?.topArtistNamesRaw30d ?? null),
+      topArtistNamesLifetime:  l?.topArtistNamesLifetime ?? [],
       albumCrossings:          albumsBySlug.get(slug) ?? [],
     };
   });
+  return applyPooledCrossingScores(result);
 }
 
 /**
@@ -936,7 +1043,7 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // ── L1: in-process Map ────────────────────────────────────────────────────
   const cached = crossingsCache.get(user.id);
-  if (cached && Date.now() - cached.builtAt < cacheTtlMs(cached.data)) {
+  if (cached && hasCrossingScoreShape(cached.data) && Date.now() - cached.builtAt < cacheTtlMs(cached.data)) {
     return res.json({ items: cached.data });
   }
 
@@ -1052,7 +1159,7 @@ router.get("/me/crossings", h(async (req, res) => {
  *                             personal crossings so ranking is comparable
  */
 
-type BlendedCrossingsRow = CrossingsRow & { topArtistNames: string[] };
+export type BlendedCrossingsRow = CrossingsRow & { topArtistNames: string[] };
 
 /**
  * Deduplicate and rank artist names from a Postgres array_agg result.
@@ -1085,11 +1192,15 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
     blendedCrossingsCache
     && Date.now() - blendedCrossingsCache.builtAt < BLENDED_CROSSINGS_CACHE_TTL_MS
     && hasBlendedFirstPlayFields(blendedCrossingsCache.data)
+    && hasCrossingScoreShape(blendedCrossingsCache.data)
   ) {
     return res.json({ items: blendedCrossingsCache.data });
   }
   // A hot-reloaded process can retain the legacy L1 shape, too.
-  if (blendedCrossingsCache && !hasBlendedFirstPlayFields(blendedCrossingsCache.data)) {
+  if (blendedCrossingsCache && (
+    !hasBlendedFirstPlayFields(blendedCrossingsCache.data)
+    || !hasCrossingScoreShape(blendedCrossingsCache.data)
+  )) {
     blendedCrossingsCache = null;
   }
 
@@ -1101,15 +1212,22 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
     return res.json({ items: l2data });
   }
 
-  const blendedData = await computeBlendedCrossings();
-  const builtAt = new Date();
-  blendedCrossingsCache = { builtAt: builtAt.getTime(), data: blendedData };
-  // Fire-and-forget, but keep a handle so test-only cleanup can await any
-  // in-flight write before deleting the L2 row (prevents a write landing
-  // after a clear and repopulating the cache nondeterministically).
-  blendedL2WriteInFlight = writeBlendedL2Cache(blendedData, builtAt);
-  void blendedL2WriteInFlight;
-  return res.json({ items: blendedData });
+  // A cold request never serves a rolling-only payload with lifetime zeroes.
+  // The warm job owns the unbounded lifetime lane; this bounded wait merely
+  // gives an already-started/full refresh a chance to publish a complete row.
+  scheduleBlendedCrossingsRefresh();
+  const inFlight = blendedRefreshInFlight!;
+  const winner = await Promise.race([
+    inFlight.then(() => "done" as const),
+    new Promise<"timeout">((resolve) => {
+      const timer = setTimeout(() => resolve("timeout"), BLENDED_COLD_DEADLINE_MS);
+      timer.unref?.();
+    }),
+  ]);
+  if (winner === "done" && blendedCrossingsCache && hasCompleteBlendedShape(blendedCrossingsCache.data)) {
+    return res.json({ items: blendedCrossingsCache.data });
+  }
+  return res.json({ items: [], computing: true });
 }));
 
 /** Last blended L2 upsert still (possibly) in flight — awaited by test cleanup. */
@@ -1138,6 +1256,8 @@ export function _testOnly_getBlendedCrossingsCache(): { builtAt: number; data: B
 }
 
 let blendedCrossingsCache: { builtAt: number; data: BlendedCrossingsRow[] } | null = null;
+let blendedRefreshInFlight: Promise<void> | null = null;
+const BLENDED_COLD_DEADLINE_MS = 2_500;
 
 const BLENDED_CROSSINGS_CACHE_TTL_MS = 60 * 1000;
 
@@ -1155,7 +1275,7 @@ async function readBlendedL2Cache(): Promise<BlendedCrossingsRow[] | null> {
     if (rows.length === 0) return null;
     const row = rows[0]!;
     if (Date.now() - row.builtAt.getTime() >= BLENDED_CROSSINGS_CACHE_TTL_MS) return null;
-    if (!hasBlendedFirstPlayFields(row.data)) return null;
+    if (!hasBlendedFirstPlayFields(row.data) || !hasCrossingScoreShape(row.data)) return null;
     return row.data;
   } catch {
     // L2 read errors are non-fatal: fall through to full compute.
@@ -1174,6 +1294,27 @@ function hasBlendedFirstPlayFields(rows: BlendedCrossingsRow[]): boolean {
     && typeof row.monthFirstPlayCrossings === "number"
     && typeof row.lifetimeFirstPlayCrossings === "number",
   );
+}
+
+function hasCompleteBlendedShape(rows: BlendedCrossingsRow[]): boolean {
+  return hasBlendedFirstPlayFields(rows) && hasCrossingScoreShape(rows);
+}
+
+function scheduleBlendedCrossingsRefresh(): void {
+  if (blendedRefreshInFlight) return;
+  blendedRefreshInFlight = (async () => {
+    try {
+      const data = await computeBlendedCrossings();
+      const builtAt = new Date();
+      blendedCrossingsCache = { builtAt: builtAt.getTime(), data };
+      blendedL2WriteInFlight = writeBlendedL2Cache(data, builtAt);
+      await blendedL2WriteInFlight;
+    } catch (err) {
+      console.error("[crossings] blended cold refresh failed", err);
+    } finally {
+      blendedRefreshInFlight = null;
+    }
+  })();
 }
 
 /**
@@ -1205,7 +1346,10 @@ async function writeBlendedL2Cache(data: BlendedCrossingsRow[], builtAt: Date): 
  * This is separated from the route handler so the background warm job can call
  * it without going through the HTTP layer.
  */
-export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> {
+export async function computeBlendedCrossings(
+  options: { includeLifetime?: boolean } = {},
+): Promise<BlendedCrossingsRow[]> {
+  const includeLifetime = options.includeLifetime !== false;
   const presenceCutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
   const spinCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   // Name the active audience and each taste slice once per aggregate query.
@@ -1301,6 +1445,9 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
     )
     .select({
       stationSlug:         stationsTable.slug,
+      resolvedTracks24h:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow})::int`,
+      resolvedTracks7d:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek})::int`,
+      resolvedTracks30d:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth})::int`,
       crossings:           sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
       artistCrossings:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       firstPlayCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateCrossingHit} and ${firstEverPlay})::int`,
@@ -1312,6 +1459,7 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
       monthFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateCrossingHit} and ${firstEverPlay})::int`,
       // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
       topArtistNamesRaw:   sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
+      topArtistNamesRaw30d: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inMonth} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -1364,6 +1512,7 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
     )
     .select({
       stationSlug: stationsTable.slug,
+      resolvedTracksLifetime:    sql<number>`count(distinct ${spinsTable.mbid})::int`,
       lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
       lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       lifetimeFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateCrossingHit} and ${firstEverPlay})::int`,
@@ -1388,22 +1537,46 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
       sql`count(*) filter (where ${aggregateLibHit}) > 0
        or count(*) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch}) > 0`,
     );
+  // Background-only denominator lane. Unlike lifetimeRowsQuery, this is not
+  // restricted to candidate crossing MBIDs: every resolved recording aired by
+  // a station contributes exposure, including stations with zero crossings.
+  const lifetimeExposureRowsQuery = db
+    .select({
+      stationSlug: stationsTable.slug,
+      resolvedTracksLifetime: sql<number>`count(distinct ${spinsTable.mbid})::int`,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+    .where(and(
+      isNotNull(spinsTable.mbid),
+      eq(stationsTable.hidden, false),
+    ))
+    .groupBy(stationsTable.id, stationsTable.slug);
   // These lanes have no dependency on one another. A cold refresh should wait
   // for the slower index-backed lane, never the sum of rolling and lifetime
   // aggregate time.
-  const [blendedRows, lifetimeRows] = await Promise.all([
+  const [blendedRows, lifetimeRows, lifetimeExposureRows] = await Promise.all([
     blendedRowsQuery,
-    lifetimeRowsQuery,
+    includeLifetime ? lifetimeRowsQuery : Promise.resolve([]),
+    includeLifetime ? lifetimeExposureRowsQuery : Promise.resolve([]),
   ]);
 
   // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
   // A station whose only matching spins are old (>30 days) appears via the
   // lifetime map only — rolling counts 0, topArtistNames empty.
   const blendedLifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
+  const blendedLifetimeExposureMap = new Map(
+    lifetimeExposureRows.map((r) => [r.stationSlug, r.resolvedTracksLifetime]),
+  );
   const blendedRollingMap  = new Map(blendedRows.map((r) => [r.stationSlug, r]));
-  const blendedSlugs = new Set([...blendedRollingMap.keys(), ...blendedLifetimeMap.keys()]);
+  const blendedSlugs = new Set([
+    ...blendedRollingMap.keys(),
+    ...blendedLifetimeMap.keys(),
+    ...blendedLifetimeExposureMap.keys(),
+  ]);
 
-  return [...blendedSlugs].map((slug) => {
+  const result = [...blendedSlugs].map((slug) => {
     const r = blendedRollingMap.get(slug);
     const l = blendedLifetimeMap.get(slug);
     return {
@@ -1419,10 +1592,17 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
       monthFirstPlayCrossings: r?.monthFirstPlayCrossings ?? 0,
       lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+      resolvedTracks24h:       r?.resolvedTracks24h      ?? 0,
+      resolvedTracks7d:        r?.resolvedTracks7d       ?? 0,
+      resolvedTracks30d:       r?.resolvedTracks30d      ?? 0,
+      resolvedTracksLifetime:  blendedLifetimeExposureMap.get(slug) ?? 0,
+      score24h: 0, score7d: 0, score30d: 0, scoreLifetime: 0,
       lifetimeFirstPlayCrossings: l?.lifetimeFirstPlayCrossings ?? 0,
       topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
+      topArtistNames30d:       blendedTopArtists(r?.topArtistNamesRaw30d ?? null),
     };
   });
+  return applyPooledCrossingScores(result);
 }
 
 /**
@@ -1433,16 +1613,8 @@ export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> 
  * cannot crash the scheduler.
  */
 export async function refreshBlendedCrossingsCache(): Promise<void> {
-  try {
-    const data = await computeBlendedCrossings();
-    const builtAt = new Date();
-    // Write L1 immediately so the next in-process request is served instantly.
-    blendedCrossingsCache = { builtAt: builtAt.getTime(), data };
-    // Write L2 fire-and-forget (errors already logged inside writeBlendedL2Cache).
-    void writeBlendedL2Cache(data, builtAt);
-  } catch (err) {
-    console.error("[crossings] blended background refresh failed", err);
-  }
+  scheduleBlendedCrossingsRefresh();
+  await blendedRefreshInFlight;
 }
 
 /**

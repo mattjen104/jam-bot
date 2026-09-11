@@ -7,11 +7,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   CROSSING_SCOPE_ORDER,
-  DEFAULT_CROSSING_SCOPE,
   crossingCountForScope,
   crossingScopeDetail,
   crossingScopeLabel,
   crossingSpinsForScope,
+  stationSortCount,
   firstPlayCountForScope,
   hasAnyCrossing,
   nextCrossingScope,
@@ -61,16 +61,16 @@ function makeDs(overrides: Partial<DialStation> = {}): DialStation {
 }
 
 describe("scope cycle & labels", () => {
-  it("cycles now → this set → 24h → 7d → lifetime → now", () => {
-    let s: CrossingScope = "now";
+  it("cycles 24h → 7d → 30d → all time → 24h", () => {
+    let s: CrossingScope = "24h";
     const seen = [s];
     for (let i = 0; i < 5; i++) { s = nextCrossingScope(s); seen.push(s); }
-    expect(seen).toEqual(["now", "set", "24h", "7d", "lifetime", "now"]);
+    expect(seen).toEqual(["24h", "7d", "30d", "lifetime", "24h", "7d"]);
   });
 
   it("labels each scope for the pill", () => {
     expect(CROSSING_SCOPE_ORDER.map(crossingScopeLabel)).toEqual(
-      ["now", "this set", "24h", "7d", "lifetime"],
+      ["24h", "7d", "30d", "All time"],
     );
   });
 });
@@ -78,17 +78,17 @@ describe("scope cycle & labels", () => {
 describe("persistence", () => {
   beforeEach(() => localStorage.clear());
 
-  it("defaults to 'lifetime' and round-trips through localStorage", () => {
-    expect(readCrossingScope()).toBe(DEFAULT_CROSSING_SCOPE);
+  it("defaults to '7d' and round-trips through localStorage", () => {
+    expect(readCrossingScope()).toBe("7d");
     writeCrossingScope("7d");
     expect(readCrossingScope()).toBe("7d");
   });
 
   it("falls back to the default on corrupt values", () => {
-    expect(parseCrossingScope("!!junk!!")).toBe("lifetime");
-    expect(parseCrossingScope(null)).toBe("lifetime");
+    expect(parseCrossingScope("!!junk!!")).toBe("7d");
+    expect(parseCrossingScope(null)).toBe("7d");
     localStorage.setItem("lore:crossingScope", "yesteryear");
-    expect(readCrossingScope()).toBe("lifetime");
+    expect(readCrossingScope()).toBe("7d");
   });
 });
 
@@ -134,6 +134,12 @@ describe("hasAnyCrossing", () => {
 });
 
 describe("scope count helpers", () => {
+  it("uses adjusted score for sorting while raw crossing count stays visible", () => {
+    const ds = makeDs({ crossings: 9, score24h: 0.25 });
+    expect(crossingCountForScope(ds, "24h")).toBe(9);
+    expect(stationSortCount(ds, "24h", "crossings")).toBe(0.25);
+  });
+
   it("keeps crossing and first-play counts aligned with every scope", () => {
     const firstLive = makeSpin({ mbid: "first-live", isLibraryHit: true, isFirstSpin: true });
     const firstSet = makeSpin({ mbid: "first-set", isArtistHit: true, isFirstSpin: true });

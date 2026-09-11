@@ -40,6 +40,7 @@ import { readDialLens, writeDialLens, type DialLens } from "../lib/dialLensState
 import { readRadioMode, writeRadioMode } from "../lib/dialRadioMode";
 import {
   readCrossingScope,
+  writeCrossingScope,
   stationSortCount,
   type CrossingScope,
   type StationSortMetric,
@@ -1525,7 +1526,11 @@ export function DialView() {
   // Crossing scope (persisted, shared with SplitHome via localStorage): what
   // a ⬤ dot means and which window the crossing-positive filter uses. Only
   // meaningful while crossings are on (i.e. not radio mode).
-  const [crossingScope] = useState<CrossingScope>(() => readCrossingScope());
+  const [crossingScope, setCrossingScope] = useState<CrossingScope>(() => readCrossingScope());
+  const selectCrossingScope = useCallback((scope: CrossingScope) => {
+    setCrossingScope(scope);
+    writeCrossingScope(scope);
+  }, []);
   const [stationSortMetric] = useState<StationSortMetric>("crossings");
 
   const {
@@ -2616,6 +2621,8 @@ export function DialView() {
           onRadioMode={setRadioMode}
           mattPending={mattStarterMutation.isPending}
           mattStatus={mattCliStatus}
+           crossingScope={crossingScope}
+           onSelectCrossingScope={selectCrossingScope}
         />
       )}
 

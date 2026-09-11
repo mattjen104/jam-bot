@@ -435,7 +435,8 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
   // actually something to reveal. crossingSentence is pure, so the double call
   // is cheap.
   const [alsoExpanded, setAlsoExpanded] = useState(false);
-  const probe = crossingSentence(ds.station.name, safeShow, displayMode);
+  const selectedScopeDetail = crossingScopeDetail(ds, crossingScope);
+  const probe = crossingSentence(ds.station.name, safeShow, displayMode, undefined, undefined, crossingScope, selectedScopeDetail);
   const remainingSet = useMemo(() => {
     if (!probe || !setArtists || !seedsLower || !onAddArtist) return [];
     return setArtists.filter((a) =>
@@ -450,7 +451,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
           ? onSetExpand
           : () => setAlsoExpanded((v) => !v),
         node: null, // expanded content rendered as fdrow__also-block below tier1
-      })
+      }, undefined, crossingScope, selectedScopeDetail)
     : probe;
   // In blended mode: live sentence is a secondary attribution line shown below rz.node
   // (the community count). It uses only public DJ/track metadata — no personal flags.

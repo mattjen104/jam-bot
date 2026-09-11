@@ -185,6 +185,11 @@ export interface DialStation {
   lifetimeArtistCrossings: number;
   /** First-ever Lore plays that are also crossings, over the full archive. */
   lifetimeFirstPlayCrossings: number;
+  /** Server-adjusted crossing scores used only for ordering. */
+  score24h?: number;
+  score7d?: number;
+  score30d?: number;
+  scoreLifetime?: number;
   /** Current track from the live pulse, even when schedule data is unavailable. */
   liveTrack?: DialSpin | null;
   /**
@@ -203,6 +208,8 @@ export interface DialStation {
    * Top crossing artist names for the 7d window (personal mode only; up to 3).
    */
   topArtistNames7d: string[];
+  /** Top crossing artist names for the 30d window. */
+  topArtistNames30d: string[];
   /**
    * Top crossing artist names over all time (personal mode only; up to 3).
    */
@@ -1268,23 +1275,27 @@ export function useDialData(
     withinStall: withinStallBound,
   });
   const {
-    data: blendedCrossings,
+    data: blendedResult,
     isLoading: _blendedLoading,
     isError: blendedError,
   } = useMyBlendedCrossings(displayMode === "blended");
+  const blendedCrossings = blendedResult?.items;
+  const blendedComputing = blendedResult?.computing === true;
   const selectedCrossings: DialCrossing[] | undefined =
     displayMode === "blended"
-      ? blendedCrossings ?? (blendedError ? serverCrossings : undefined)
+      ? (!blendedComputing && blendedCrossings != null)
+        ? blendedCrossings
+        : (blendedError || blendedComputing ? serverCrossings : undefined)
       : serverCrossings;
   const crossingSourceMode: DialDisplayMode =
-    displayMode === "blended" && blendedCrossings == null ? "personal" : displayMode;
+    displayMode === "blended" && (blendedCrossings == null || blendedComputing) ? "personal" : displayMode;
   const selectedCrossingsLoading =
-    displayMode === "blended" ? blendedCrossings == null && !blendedError : crossingsLoading;
+    displayMode === "blended" ? (blendedCrossings == null || blendedComputing) && !blendedError : crossingsLoading;
   // In blended mode a loaded blend is settled; on blend error we fall back to
   // the personal crossings, so their phase governs what Zone 1 may claim.
   const selectedCrossingsPhase: CrossingsPhase =
     displayMode === "blended"
-      ? blendedCrossings != null
+      ? blendedCrossings != null && !blendedComputing
         ? "settled"
         : blendedError
           ? crossingsPhase
@@ -1305,9 +1316,14 @@ export function useDialData(
       lifetimeCrossings: number;
       lifetimeArtistCrossings: number;
       lifetimeFirstPlayCrossings: number;
+      score24h?: number;
+      score7d?: number;
+      score30d?: number;
+      scoreLifetime?: number;
       topArtistNames: string[];
       topArtistNames24h: string[];
       topArtistNames7d: string[];
+      topArtistNames30d: string[];
       topArtistNamesLifetime: string[];
       albumCrossings: Array<{
         releaseGroupMbid: string | null;
@@ -1331,9 +1347,14 @@ export function useDialData(
         lifetimeCrossings: cx.lifetimeCrossings,
         lifetimeArtistCrossings: cx.lifetimeArtistCrossings,
         lifetimeFirstPlayCrossings: cx.lifetimeFirstPlayCrossings ?? 0,
+        score24h: (cx as DialCrossing).score24h,
+        score7d: (cx as DialCrossing).score7d,
+        score30d: (cx as DialCrossing).score30d,
+        scoreLifetime: (cx as DialCrossing).scoreLifetime,
         topArtistNames: cx.topArtistNames ?? [],
         topArtistNames24h: cx.topArtistNames24h ?? [],
         topArtistNames7d: cx.topArtistNames7d ?? [],
+        topArtistNames30d: (cx as DialCrossing & { topArtistNames30d?: string[] }).topArtistNames30d ?? [],
         topArtistNamesLifetime: cx.topArtistNamesLifetime ?? [],
         albumCrossings: cx.albumCrossings ?? [],
       });
@@ -1889,7 +1910,9 @@ export function useDialData(
       // consistent across clients); fall back to client-computed reduction if
       // the server endpoint hasn't resolved yet.
       const serverCx = serverCrossingsBySlug.get(station.slug);
-      const scoresUnavailable = displayMode === "blended" && blendedCrossings == null && !blendedError;
+      const scoresUnavailable = displayMode === "blended"
+        && (blendedCrossings == null || blendedComputing)
+        && !blendedError;
       const crossings =
         serverCx !== undefined
           ? serverCx.crossings
@@ -1940,6 +1963,8 @@ export function useDialData(
         displayMode !== "blended" ? (serverCx?.topArtistNames24h ?? []) : [];
       const topArtistNames7d: string[] =
         displayMode !== "blended" ? (serverCx?.topArtistNames7d ?? []) : [];
+      const topArtistNames30d: string[] =
+        displayMode !== "blended" ? (serverCx?.topArtistNames30d ?? []) : [];
       const topArtistNamesLifetime: string[] =
         displayMode !== "blended" ? (serverCx?.topArtistNamesLifetime ?? []) : [];
       const albumCrossings =
@@ -1973,9 +1998,14 @@ export function useDialData(
         lifetimeCrossings,
         lifetimeArtistCrossings,
         lifetimeFirstPlayCrossings,
+        score24h: serverCx?.score24h,
+        score7d: serverCx?.score7d,
+        score30d: serverCx?.score30d,
+        scoreLifetime: serverCx?.scoreLifetime,
         topArtistNames,
         topArtistNames24h,
         topArtistNames7d,
+        topArtistNames30d,
         topArtistNamesLifetime,
         albumCrossings,
         recentReleaseYears,
@@ -2006,7 +2036,7 @@ export function useDialData(
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, wantNormalList, metaCategories, personalStations, liveBySlug, liveAttributionBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError, sleepMode, eraGenreMode, includeAllStations]);
+  }, [stationsData, ambientData, specialistData, categories, wantAmbient, wantSpecialist, wantNormalList, metaCategories, personalStations, liveBySlug, liveAttributionBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedComputing, blendedError, sleepMode, eraGenreMode, includeAllStations]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading
     || (categories != null && wantAmbient && ambientLoading)

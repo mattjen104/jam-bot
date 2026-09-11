@@ -2733,6 +2733,20 @@ export interface CrossingsRow {
   monthFirstPlayCrossings?: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
+  /**
+   * Number of distinct resolved recording MBIDs aired by this station in the
+   * corresponding window.  Exposure is deliberately window-local (and never
+   * a spin-event count), so crossing rates remain comparable across stations.
+   */
+  resolvedTracks24h?: number;
+  resolvedTracks7d?: number;
+  resolvedTracks30d?: number;
+  resolvedTracksLifetime?: number;
+  /** Smoothed crossing rates; raw count fields above remain the source facts. */
+  score24h?: number;
+  score7d?: number;
+  score30d?: number;
+  scoreLifetime?: number;
   /** First-ever Lore plays that are also crossings, over the full archive. */
   lifetimeFirstPlayCrossings?: number;
   /**
@@ -2746,6 +2760,8 @@ export interface CrossingsRow {
    * Optional for the same backward-compat reason as topArtistNames24h.
    */
   topArtistNames7d?: string[];
+  /** Top crossing artist names for the rolling 30-day window (up to 3). */
+  topArtistNames30d?: string[];
   /**
    * Top crossing artist names over all time (up to 3).
    * Optional for the same backward-compat reason as topArtistNames24h.
@@ -2815,6 +2831,9 @@ export const lifetimeCrossingsCacheTable = pgTable("lifetime_crossings_cache", {
       stationSlug: string;
       lifetimeCrossings: number;
       lifetimeArtistCrossings: number;
+      lifetimeFirstPlayCrossings: number;
+      resolvedTracksLifetime: number;
+      topArtistNamesLifetime: string[];
     }>
   >(),
   /** When the data was last computed (informational; not used for TTL — background job is the authority). */

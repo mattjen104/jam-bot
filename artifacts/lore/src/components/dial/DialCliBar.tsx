@@ -46,6 +46,8 @@ import {
   type RefObject,
 } from "react";
 import type { DialFilterBarProps } from "./DialFilterBar";
+import { CrossingScopePill } from "./CrossingScopePill";
+import type { CrossingScope } from "../../lib/crossingScope";
 import { AGE_TIER_DEFINITIONS, type AgeTier } from "../../lib/dialAgeFilter";
 import {
   STATION_CATEGORY_DEFINITIONS,
@@ -79,6 +81,8 @@ export function parseAddArtists(remainder: string): string[] {
 
 export interface DialCliBarProps extends Pick<DialFilterBarProps,
   "activeTiers" | "activeCategories" | "onToggleTier" | "onToggleCategory" | "className"> {
+  crossingScope?: CrossingScope;
+  onSelectCrossingScope?: (scope: CrossingScope) => void;
   /** Visual skin: front-door ambient overlay (default) or SplitHome strip. */
   variant?: "overlay" | "strip";
   /**
@@ -148,6 +152,8 @@ export function DialCliBar({
   mattStatus = null,
   inputRef: externalInputRef,
   prefill,
+  crossingScope,
+  onSelectCrossingScope,
 }: DialCliBarProps) {
   const [value, setValue] = useState("");
   const internalInputRef = useRef<HTMLInputElement>(null);
@@ -263,6 +269,14 @@ export function DialCliBar({
       role="search"
       aria-label="Dial commands"
     >
+        {crossingScope && onSelectCrossingScope && (
+          <CrossingScopePill
+            scope={crossingScope}
+            enabled
+            onCycle={() => undefined}
+            onSelect={onSelectCrossingScope}
+          />
+        )}
       {/* Overlay: wordmark appears only while typing (ambient layer stays
           clean when idle). Strip: a left-aligned `>_` prompt fills the idle
           state, replaced by the typed command text. */}

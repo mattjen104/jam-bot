@@ -80,6 +80,7 @@ export interface HomeCliStripProps extends Pick<DialCliBarProps,
   crossingsOn?: boolean;
   /** Cycles the scope: now → this set → 24h → 7d → lifetime. */
   onCycleCrossingScope?: () => void;
+  onSelectCrossingScope?: (scope: CrossingScope) => void;
   /**
    * Total number of active (scan-included) stations in the filtered list —
    * always shown on the scan remote, at every density.
@@ -113,6 +114,7 @@ export function HomeCliStrip({
   crossingScope,
   crossingsOn = false,
   onCycleCrossingScope,
+  onSelectCrossingScope,
   totalActiveCount,
   density,
   onCycleDensity,
@@ -222,11 +224,12 @@ export function HomeCliStrip({
             </button>
             {/* Crossing scope pill — cycles now → this set → 24h → 7d →
                 lifetime. Grayed/inert when crossings are off. */}
-            {crossingScope && onCycleCrossingScope && (
+            {crossingScope && (onCycleCrossingScope || onSelectCrossingScope) && (
               <CrossingScopePill
                 scope={crossingScope}
                 enabled={crossingsOn}
                 onCycle={onCycleCrossingScope}
+                onSelect={onSelectCrossingScope}
               />
             )}
           </div>

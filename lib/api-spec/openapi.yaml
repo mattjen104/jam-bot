@@ -9384,6 +9384,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DialCrossingItem"
+        computing:
+          type: boolean
       required: [items]
     MeCrossingsResult:
       type: object
@@ -9470,6 +9472,35 @@ components:
           type: integer
         lifetimeArtistCrossings:
           type: integer
+        topArtistNames30d:
+          type: array
+          description: Top crossing artist names in the rolling 30-day window.
+          items:
+            type: string
+        resolvedTracks24h:
+          type: integer
+          description: Distinct resolved recording MBIDs aired in the rolling 24-hour window.
+        resolvedTracks7d:
+          type: integer
+          description: Distinct resolved recording MBIDs aired in the rolling 7-day window.
+        resolvedTracks30d:
+          type: integer
+          description: Distinct resolved recording MBIDs aired in the rolling 30-day window.
+        resolvedTracksLifetime:
+          type: integer
+          description: Distinct resolved recording MBIDs aired over the full archive.
+        score24h:
+          type: number
+          description: Empirical-Bayes crossing rate using same-window resolved-track exposure.
+        score7d:
+          type: number
+          description: Empirical-Bayes crossing rate using same-window resolved-track exposure.
+        score30d:
+          type: number
+          description: Empirical-Bayes crossing rate using same-window resolved-track exposure.
+        scoreLifetime:
+          type: number
+          description: Empirical-Bayes crossing rate using lifetime resolved-track exposure.
         lifetimeFirstPlayCrossings:
           type: integer
           description: First-ever Lore plays that are also crossings over the full archive.
@@ -9492,7 +9523,7 @@ components:
                 type: string
                 nullable: true
             required: [releaseGroupMbid, recordingMbid, title, artist, artworkUrl]
-      required: [stationSlug, crossings, artistCrossings, weekCrossings, weekArtistCrossings, monthCrossings, monthArtistCrossings, lifetimeCrossings, lifetimeArtistCrossings]
+      required: [stationSlug, crossings, artistCrossings, weekCrossings, weekArtistCrossings, monthCrossings, monthArtistCrossings, lifetimeCrossings, lifetimeArtistCrossings, resolvedTracks24h, resolvedTracks7d, resolvedTracks30d, resolvedTracksLifetime, score24h, score7d, score30d, scoreLifetime]
     StationsScheduleResult:
       type: object
       description: Per-station show-run timeline for a given calendar day.

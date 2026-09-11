@@ -601,18 +601,26 @@ export interface DialCrossing {
   weekCrossings: number;
   weekArtistCrossings: number;
   weekFirstPlayCrossings?: number;
+  /** Rolling 30-day exact crossing count. */
   monthCrossings: number;
   monthArtistCrossings: number;
   monthFirstPlayCrossings?: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
   lifetimeFirstPlayCrossings?: number;
+  /** Adjusted (exposure-normalized) ranking scores from the crossings payload. */
+  score24h?: number;
+  score7d?: number;
+  score30d?: number;
+  scoreLifetime?: number;
   /** Top 5 crossing artist names by frequency. Only populated by the blended endpoint. */
   topArtistNames?: string[];
   /** Top crossing artist names for the 24h window (personal mode; up to 3). */
   topArtistNames24h?: string[];
   /** Top crossing artist names for the 7d window (personal mode; up to 3). */
   topArtistNames7d?: string[];
+  /** Top crossing artist names for the 30d window (newer payloads). */
+  topArtistNames30d?: string[];
   /** Top crossing artist names over all time (personal mode; up to 3). */
   topArtistNamesLifetime?: string[];
   albumCrossings?: Array<{
@@ -2185,11 +2193,16 @@ export function useMyBlendedCrossings(enabled = true) {
   return useQuery({
     queryKey: ME_BLENDED_CROSSINGS_KEY,
     queryFn: () =>
-      fetchOrNull<{ items: DialCrossing[] }>("/api/me/crossings/blended")
-        .then((d) => d?.items ?? []),
+        fetchOrNull<{ items: DialCrossing[]; computing?: boolean }>("/api/me/crossings/blended")
+         .then((d) => ({
+           items: d?.items ?? [],
+           computing: d?.computing === true,
+         })),
     enabled,
     staleTime: 45_000,
-    refetchInterval: 60_000,
+    // Cold blended aggregates are computed asynchronously; poll quickly until
+    // the server gives us an honest settled result.
+    refetchInterval: (query) => query.state.data?.computing ? 2_000 : 60_000,
     retry: false,
   });
 }

@@ -9,4 +9,5 @@ import type { DialCrossingItem } from "./dialCrossingItem";
 
 export interface MeBlendedCrossingsResult {
   items: DialCrossingItem[];
+  computing?: boolean;
 }

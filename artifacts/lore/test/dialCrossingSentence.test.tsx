@@ -21,6 +21,7 @@ import {
   usableShowName,
 } from "../src/components/dialViewHelpers";
 import type { DialShow, DialSpin } from "../src/hooks/useDialData";
+import type { CrossingScopeDetail } from "../src/lib/crossingScope";
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -725,6 +726,55 @@ describe("usableShowName — single-DJ-via-djNames suppression", () => {
 // and useDialData (usableDjName / isPickerShow) that previously read show.djName
 // directly and now go through eligibleDjNames.
 // ---------------------------------------------------------------------------
+
+describe("crossing sentence selected range", () => {
+  it("changes count, artists, and timing while preserving the raw selected count", () => {
+    const show = makeShow({ crossings: 2, topArtists: ["Raw artist"] });
+    const detail7d: CrossingScopeDetail = {
+      scopeLabel: "7d", count: 4, artists: ["Seven Day Artist"],
+    };
+    const detail30d: CrossingScopeDetail = {
+      scopeLabel: "30d", count: 9, artists: ["Thirty Day Artist"],
+    };
+    const sentence7d = crossingSentence(
+      "Station", show, "personal", undefined, undefined, "7d", detail7d,
+    )!;
+    const sentence30d = crossingSentence(
+      "Station", show, "personal", undefined, undefined, "30d", detail30d,
+    )!;
+    const seven = text(sentence7d.node);
+    const thirty = text(sentence30d.node);
+    expect(seven).toContain("Seven Day Artist");
+    expect(seven).toContain("4 crossings");
+    expect(seven).toContain("in the last 7d");
+    expect(thirty).toContain("Thirty Day Artist");
+    expect(thirty).toContain("9 crossings");
+    expect(thirty).toContain("in the last 30d");
+    expect(thirty).not.toContain("Raw artist");
+  });
+
+  it("prefers selected-range artists over a currently playing library hit", () => {
+    const show = makeShow({
+      currentTrack: makeSpin({ artist: "Currently Playing", isLibraryHit: true }),
+      crossings: 1,
+      topArtists: ["Currently Playing"],
+    });
+    const sentence = crossingSentence(
+      "Station",
+      show,
+      "personal",
+      undefined,
+      undefined,
+      "30d",
+      { scopeLabel: "30d", count: 6, artists: ["Thirty Day Artist"] },
+    )!;
+    const rendered = text(sentence.node);
+    expect(rendered).toContain("Thirty Day Artist");
+    expect(rendered).not.toContain("Currently Playing");
+    expect(rendered).toContain("6 crossings");
+    expect(rendered).toContain("in the last 30d");
+  });
+});
 
 describe("reason — single DJ via djNames (djName=null): DJ is credited", () => {
   it("r=5 and credits the DJ when djName is null but djNames has exactly one eligible entry", () => {
