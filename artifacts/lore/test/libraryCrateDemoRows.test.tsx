@@ -84,4 +84,44 @@ describe("LibraryCrate demo song rows", () => {
     expect(within(regularRow).getByText("Oscillons from the Anti-Sun")).toBeTruthy();
     expect(within(regularRow).queryByRole("button", { name: "More options" })).toBeNull();
   });
+
+  it("shows known genre and era evidence in compact rows and omits unknown evidence", async () => {
+    const { LibraryCrate } = await import("../src/components/LibraryCrate");
+    render(
+      <LibraryCrate
+        items={[
+          {
+            ...item,
+            recording: {
+              ...item.recording,
+              genres: ["electronic", "experimental"],
+              releaseYear: 1996,
+            },
+          } as LibraryItem,
+          {
+            ...item,
+            mbid: "unknown-track",
+            recording: {
+              ...item.recording,
+              title: "Unknown Facts",
+              genres: null,
+              releaseYear: null,
+            },
+          } as LibraryItem,
+        ]}
+        seedArtists={[]}
+        sort="added"
+        hideAddedRail
+        demoSurface
+        matchFilters={{
+          genres: ["experimental", "electronic"],
+          ages: ["deep"],
+          decade: 1990,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Matches · Electronic / Experimental · 1990s")).toBeTruthy();
+    expect(within(screen.getByText("Unknown Facts").closest("article")!).queryByText(/Matches/)).toBeNull();
+  });
 });

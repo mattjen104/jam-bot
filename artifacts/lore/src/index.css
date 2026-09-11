@@ -3954,20 +3954,22 @@
   right: 3px;
   bottom: 3px;
   left: 3px;
+  display: -webkit-box;
   overflow: hidden;
   padding: 3px 4px;
   border-radius: 3px;
   background: hsl(var(--background) / 0.9);
   color: hsl(var(--library));
   font-family: var(--app-font-mono);
-  font-size: 7px;
-  line-height: 1.15;
+  font-size: 8px;
+  line-height: 1.2;
   text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .demo-library-remote__status--with-evidence {
-  bottom: 20px;
+  bottom: 31px;
 }
 .demo-library-remote__song.is-unavailable {
   opacity: 0.6;
@@ -3991,7 +3993,7 @@
     padding: 6px;
   }
   .demo-library-remote__evidence {
-    font-size: 6px;
+    font-size: 7px;
   }
 }
 .demo-merged-library > .demo-radio {

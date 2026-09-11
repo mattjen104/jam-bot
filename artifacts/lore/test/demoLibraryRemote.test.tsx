@@ -57,7 +57,12 @@ function dialStation(
   slug: string,
   name: string,
   crossings: number,
-  options: { logoUrl?: string | null; isLive?: boolean } = {},
+  options: {
+    logoUrl?: string | null;
+    isLive?: boolean;
+    genres?: string[];
+    releaseYear?: number | null;
+  } = {},
 ): DialStation {
   return {
     station: {
@@ -69,7 +74,14 @@ function dialStation(
       logoUrl: options.logoUrl ?? null,
     },
     isLive: options.isLive ?? false,
-    liveTrack: null,
+    liveTrack: options.genres || options.releaseYear
+      ? {
+          title: "A long-running broadcast selection",
+          artist: "A known artist",
+          genres: options.genres ?? null,
+          releaseYear: options.releaseYear ?? null,
+        }
+      : null,
     shows: [],
     lifetimeCrossings: crossings,
     lifetimeArtistCrossings: 0,
@@ -87,6 +99,7 @@ function libraryItem(
   artist: string,
   addedAt: string,
   artworkUrl: string | null = null,
+  metadata: { genres?: string[]; releaseYear?: number | null } = {},
 ): LibraryItem {
   return {
     mbid,
@@ -101,6 +114,8 @@ function libraryItem(
       releaseGroupMbid: null,
       artworkUrl,
       spotifyUrl: null,
+      genres: metadata.genres ?? null,
+      releaseYear: metadata.releaseYear ?? null,
     },
   };
 }
@@ -194,6 +209,52 @@ describe("demo Library visual remotes", () => {
     expect((screen.getByRole("button", {
       name: "Preview Unresolved Song by Artist",
     }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("shows combined known filter evidence and omits explanations for unknown metadata", () => {
+    const filters = {
+      genres: ["experimental", "electronic"],
+      ages: ["deep" as const],
+      decade: 1990,
+    };
+    const knownStation = dialStation("known", "Known FM", 2, {
+      genres: ["experimental", "electronic"],
+      releaseYear: 1996,
+    });
+    const unknownStation = dialStation("unknown", "Unknown FM", 1);
+    const { rerender } = render(
+      <DemoStationRemote
+        stations={[knownStation, unknownStation]}
+        hasData
+        focusedArtist={null}
+        sort="overlap"
+        matchFilters={filters}
+      />,
+    );
+
+    const stationTiles = screen.getAllByTestId("demo-station-remote-tile");
+    expect(stationTiles[0]?.textContent).toContain("Matches · Experimental / Electronic · 1990s");
+    expect(stationTiles[1]?.textContent).not.toContain("Matches");
+
+    playerState.playingMbid = "known-song";
+    rerender(
+      <DemoSongRemote
+        items={[
+          libraryItem("known-song", "Known Song", "Known Artist", "2026-09-09T00:00:00Z", null, {
+            genres: ["experimental", "electronic"],
+            releaseYear: 1996,
+          }),
+          libraryItem("unknown-song", "Unknown Song", "Unknown Artist", "2026-09-08T00:00:00Z"),
+        ]}
+        sort="added"
+        matchFilters={filters}
+      />,
+    );
+
+    const songTiles = screen.getAllByTestId("demo-song-remote-tile");
+    expect(songTiles[0]?.textContent).toContain("Matches · Experimental / Electronic · 1990s");
+    expect(songTiles[0]?.querySelector(".demo-library-remote__status--with-evidence")).toBeTruthy();
+    expect(songTiles[1]?.textContent).not.toContain("Matches");
   });
 
   test("turns a failed preview into an honest unavailable control", async () => {
