@@ -1416,6 +1416,10 @@ function DemoMergedLibrary({
       .filter((v): v is LibraryAge => LIBRARY_AGES.includes(v as LibraryAge));
     return decade != null && !ages.includes("deep") ? [...ages, "deep" as const] : ages;
   }, [decade, search]);
+  const matchFilters = useMemo(
+    () => ({ genres: selectedGenres, ages: selectedAges, decade }),
+    [decade, selectedAges, selectedGenres],
+  );
   const activeCategories = useMemo(() => {
     const selected = new Set<StationCategory>();
     for (const value of new URLSearchParams(search).get("categories")?.split(",") ?? []) {
@@ -1871,6 +1875,7 @@ function DemoMergedLibrary({
           hasData={hasSeeds || hasLibrary}
           focusedArtist={focusedArtist}
           sort={stationSort}
+          matchFilters={matchFilters}
         />
       ) : view === "stations" ? (
         <RadioSurface
@@ -1879,6 +1884,7 @@ function DemoMergedLibrary({
           hasLibrary={hasLibrary}
           showHeader={false}
           sort={stationSort}
+          matchFilters={matchFilters}
           focusedArtist={focusedArtist}
           selectedStationSlug={selectedStationSlug}
           onFocusArtist={(artist) => updateSearch((next) => {
@@ -1895,7 +1901,7 @@ function DemoMergedLibrary({
           })}
         />
       ) : remoteLayout ? (
-        <DemoSongRemote items={filteredDemoItems} sort={songSort} />
+        <DemoSongRemote items={filteredDemoItems} sort={songSort} matchFilters={matchFilters} />
       ) : (
         <LibraryContent embedded={embedded} showArtistEditor={false} />
       )}
@@ -2941,6 +2947,11 @@ function LibraryContent({
             showKeptHeading={false}
             hideAddedRail={demoSurface}
             demoSurface={demoSurface}
+            matchFilters={demoSurface ? {
+              genres: focusedMusicGenres,
+              ages: focusedMusicAges,
+              decade: focusedDecade,
+            } : undefined}
             onArtistFocus={demoSurface ? focusLibraryArtist : undefined}
             onAlbumFocus={demoSurface ? focusLibraryAlbum : undefined}
           />

@@ -30,6 +30,7 @@ import {
   type ReleaseMetadata,
 } from "../lib/crate";
 import { compareLibrarySongs } from "../lib/librarySongOrdering";
+import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 
 const OPENED_STORAGE_KEY = "lore:library-opened";
 
@@ -84,6 +85,7 @@ function CrateTrackCard({
   onArtistFocus,
   onAlbumFocus,
   demoSurface,
+  matchFilters,
 }: {
   item: LibraryItem;
   release: CrateRelease;
@@ -95,6 +97,7 @@ function CrateTrackCard({
   onArtistFocus?: (artistName: string) => void;
   onAlbumFocus?: (albumKey: string) => void;
   demoSurface: boolean;
+  matchFilters?: LibraryMatchFilters;
 }) {
   const rec = item.recording;
   const title = rec?.title ?? "Unresolved recording";
@@ -114,6 +117,7 @@ function CrateTrackCard({
   const releaseHref = releaseGroupMbid
     ? `/album/${releaseGroupMbid}`
     : null;
+  const matchEvidence = matchFilters ? libraryMatchEvidence(rec, matchFilters) : [];
 
   return (
     <article
@@ -162,22 +166,27 @@ function CrateTrackCard({
           )}
         </div>
         {demoSurface ? (
-          <div className="demo-library__song-subline">
-            {onArtistFocus ? (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onArtistFocus(artist); }}
-              >
-                {artist}
-              </button>
-            ) : rec?.artistMbid ? (
-              <Link href={`/artist/${encodeURIComponent(rec.artistMbid)}`}>
-                {artist}
-              </Link>
-            ) : (
-              artist
-            )}
-          </div>
+          <>
+            <div className="demo-library__song-subline">
+              {onArtistFocus ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onArtistFocus(artist); }}
+                >
+                  {artist}
+                </button>
+              ) : rec?.artistMbid ? (
+                <Link href={`/artist/${encodeURIComponent(rec.artistMbid)}`}>
+                  {artist}
+                </Link>
+              ) : (
+                artist
+              )}
+            </div>
+            {matchEvidence.length > 0 ? (
+              <div className="library-match-evidence">Matches · {matchEvidence.join(" · ")}</div>
+            ) : null}
+          </>
         ) : (
           <>
             <div className="library-crate__track-album">
@@ -407,6 +416,7 @@ export interface LibraryCrateProps {
   demoSurface?: boolean;
   onArtistFocus?: (artistName: string) => void;
   onAlbumFocus?: (albumKey: string) => void;
+  matchFilters?: LibraryMatchFilters;
 }
 
 export function LibraryCrate({
@@ -420,6 +430,7 @@ export function LibraryCrate({
   onArtistFocus,
   onAlbumFocus,
   demoSurface = false,
+  matchFilters,
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -530,6 +541,7 @@ export function LibraryCrate({
                 onArtistFocus={onArtistFocus}
                 onAlbumFocus={onAlbumFocus}
                 demoSurface={demoSurface}
+                matchFilters={matchFilters}
               />
             ))}
           </div>

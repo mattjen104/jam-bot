@@ -3086,6 +3086,16 @@
   font-size: 9px;
   line-height: 1.45;
 }
+.library-match-evidence {
+  overflow: hidden;
+  margin-top: 4px;
+  color: hsl(var(--library));
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .demo-radio__reason--featured {
   width: 100%;
   border-right: 0;
@@ -3849,6 +3859,26 @@
   font-family: var(--app-font-mono);
   font-size: 9px;
 }
+.demo-library-remote__evidence {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  left: 3px;
+  overflow: hidden;
+  padding: 3px 4px;
+  border-radius: 3px;
+  background: hsl(var(--background) / 0.9);
+  color: hsl(var(--library));
+  font-family: var(--app-font-mono);
+  font-size: 7px;
+  line-height: 1.15;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-library-remote__status--with-evidence {
+  bottom: 20px;
+}
 .demo-library-remote__song.is-unavailable {
   opacity: 0.6;
 }
@@ -3869,6 +3899,9 @@
   }
   .demo-library-remote__fallback {
     padding: 6px;
+  }
+  .demo-library-remote__evidence {
+    font-size: 6px;
   }
 }
 .demo-merged-library > .demo-radio {

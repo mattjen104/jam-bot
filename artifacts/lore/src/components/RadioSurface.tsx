@@ -8,6 +8,7 @@ import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft, Play } from "lucide-react";
 import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
+import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 
 function usableArtistName(
   rawArtist: string | null | undefined,
@@ -46,6 +47,7 @@ export function RadioSurface({
   onFocusArtist,
   onOpenStationCrossings,
   onCloseStationCrossings,
+  matchFilters,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
@@ -57,6 +59,7 @@ export function RadioSurface({
   onFocusArtist?: (artist: string) => void;
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
+  matchFilters?: LibraryMatchFilters;
 }) {
   const { radio } = usePlayer();
 
@@ -104,6 +107,7 @@ export function RadioSurface({
       stationName: ds.station.name
     });
     const selectorLine = djNames.length === 1 ? `Selected by ${djNames[0]}` : null;
+    const matchEvidence = matchFilters ? libraryMatchEvidence(track, matchFilters) : [];
     if (demoted) {
       return (
         <div className="demo-radio__row demo-radio__row--compact" key={ds.station.slug}>
@@ -128,6 +132,9 @@ export function RadioSurface({
             <div className="demo-radio__reason">
               {selectorLine ? `${selectorLine} · no overlap yet` : "No overlap yet"}
             </div>
+            {matchEvidence.length > 0 ? (
+              <div className="library-match-evidence">Matches · {matchEvidence.join(" · ")}</div>
+            ) : null}
           </div>
           <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={14} fill="currentColor" />
@@ -169,6 +176,9 @@ export function RadioSurface({
               <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
             )}
             {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
+            {matchEvidence.length > 0 ? (
+              <div className="library-match-evidence">Matches · {matchEvidence.join(" · ")}</div>
+            ) : null}
           </div>
           <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={16} fill="currentColor" />
