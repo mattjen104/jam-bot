@@ -3098,6 +3098,10 @@
   margin-bottom: 5px;
   font-family: var(--app-font-mono);
 }
+.demo-radio__station-identity--meta {
+  margin-top: 4px;
+  margin-bottom: 0;
+}
 .demo-radio__station-identity strong,
 .demo-radio__station-name {
   overflow: hidden;
@@ -3131,6 +3135,15 @@
 .demo-radio__compact-title {
   color: hsl(var(--foreground) / .78);
   font-size: 13px;
+}
+.demo-radio__compact-song {
+  overflow: hidden;
+  margin-top: 1px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .demo-radio__artist {
   overflow: hidden;

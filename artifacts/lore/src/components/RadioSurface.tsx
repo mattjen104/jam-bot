@@ -124,7 +124,6 @@ export function RadioSurface({
             className="demo-radio__station-mark demo-radio__station-mark--compact"
           />
           <div className="demo-radio__body">
-            <div className="demo-radio__station-name">{ds.station.name}</div>
             {actionableArtist && onFocusArtist ? (
               <button
                 type="button"
@@ -136,6 +135,11 @@ export function RadioSurface({
             ) : (
               <div className="demo-radio__compact-title">{artist}</div>
             )}
+            <div className="demo-radio__compact-song">{title}</div>
+            <div className="demo-radio__station-identity demo-radio__station-identity--meta">
+              <strong>{ds.station.name}</strong>
+              {ds.station.city ? <span>{ds.station.city}</span> : null}
+            </div>
             <div className="demo-radio__reason">
               {selectorLine ? `${selectorLine} · no overlap yet` : "No overlap yet"}
             </div>
@@ -164,11 +168,6 @@ export function RadioSurface({
             className="demo-radio__station-mark"
           />
           <div className="demo-radio__body">
-            <div className="demo-radio__station-identity">
-              <strong>{ds.station.name}</strong>
-              {ds.station.city ? <span>{ds.station.city}</span> : null}
-            </div>
-            {isLive && <span className="demo-radio__pill">Library match · on air</span>}
             {actionableArtist && onFocusArtist ? (
               <button
                 type="button"
@@ -180,6 +179,12 @@ export function RadioSurface({
             ) : (
               <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
             )}
+            <div className="demo-radio__title">{title}</div>
+            <div className="demo-radio__station-identity demo-radio__station-identity--meta">
+              <strong>{ds.station.name}</strong>
+              {ds.station.city ? <span>{ds.station.city}</span> : null}
+            </div>
+            {isLive && <span className="demo-radio__pill">Library match · on air</span>}
             {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
             <LibraryMatchEvidence facts={matchEvidence} onRemove={onRemoveMatchFilter} />
           </div>
