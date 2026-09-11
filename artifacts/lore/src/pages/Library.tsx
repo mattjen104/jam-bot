@@ -48,6 +48,7 @@ import { useStackSkipped } from "../lib/dialFilterState";
 import { AlbumAvatarPicker } from "../components/AlbumAvatarPicker";
 import {
   CheckCircle2,
+  ArrowUpDown,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -1083,6 +1084,7 @@ function ArtistLensControl({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button style={selectStyle} aria-label="Find or focus artist">
+          <Search aria-hidden="true" style={{ width: 12, height: 12, flex: "0 0 auto", opacity: 0.7 }} />
           {focusedArtist ? (
             <span style={{ color: "hsl(var(--foreground))" }}>{focusedArtist}</span>
           ) : (
@@ -1638,22 +1640,22 @@ function DemoMergedLibrary({
               {songCount.toLocaleString()} Songs
               {keepCount > 0 && <span className="demo-merged-library__activity"> · {keepCount} from radio</span>}
             </Link>
-            <button
-              type="button"
-              className="demo-merged-library__layout-toggle"
-              aria-label={remoteLayout ? "Show detailed list" : "Show visual grid"}
-              aria-pressed={remoteLayout}
-              title={remoteLayout ? "Show detailed list" : "Show visual grid"}
-              onClick={() => updateSearch((next) => {
-                if (remoteLayout) next.delete("layout");
-                else next.set("layout", "grid");
-              })}
-            >
-              {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
-            </button>
           </nav>
         </div>
         <div className="demo-merged-library__filters">
+          <button
+            type="button"
+            className="demo-merged-library__layout-toggle"
+            aria-label={remoteLayout ? "Show detailed list" : "Show visual grid"}
+            aria-pressed={remoteLayout}
+            title={remoteLayout ? "Show detailed list" : "Show visual grid"}
+            onClick={() => updateSearch((next) => {
+              if (remoteLayout) next.delete("layout");
+              else next.set("layout", "grid");
+            })}
+          >
+            {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
+          </button>
           {libraryLens === "artist" && <ArtistLensControl
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
@@ -1734,23 +1736,26 @@ function DemoMergedLibrary({
                   writeBroZoneState(next, false, new Set());
                 })}
               />
-              <select
-                style={selectStyle}
-                aria-label="Sort stations"
-                value={stationSort}
-                onChange={e => {
-                  updateSearch((next) => {
-                    if (e.target.value !== "overlap") next.set("stationSort", e.target.value);
-                    else next.delete("stationSort");
-                  });
-                }}
-              >
-                <option value="overlap">For you</option>
-                <option value="live">Live now</option>
-                <option value="discovery">Discovery</option>
-                <option value="name">A–Z</option>
-                <option value="newest">Newest music first</option>
-              </select>
+              <span className="demo-merged-library__sort-control">
+                <ArrowUpDown aria-hidden="true" />
+                <select
+                  style={selectStyle}
+                  aria-label="Sort stations"
+                  value={stationSort}
+                  onChange={e => {
+                    updateSearch((next) => {
+                      if (e.target.value !== "overlap") next.set("stationSort", e.target.value);
+                      else next.delete("stationSort");
+                    });
+                  }}
+                >
+                  <option value="overlap">For you</option>
+                  <option value="live">Live now</option>
+                  <option value="discovery">Discovery</option>
+                  <option value="name">A–Z</option>
+                  <option value="newest">Newest music first</option>
+                </select>
+              </span>
             </>
           )}
 
