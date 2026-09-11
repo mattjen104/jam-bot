@@ -5,17 +5,24 @@ import {
 } from "@workspace/db";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { normalizeAttributionName } from "@workspace/lore-attribution";
-import { parseScheduleDjNames } from "./schedule-name-sanitizer.js";
+import {
+  parseScheduleDjNames,
+  parseStructuredScheduleDjNames,
+} from "./schedule-name-sanitizer.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function scrapedDjFields(
-  values: ReadonlyArray<string>,
+  legacyValues: ReadonlyArray<string>,
+  structuredValues: ReadonlyArray<string>,
   showName: string,
 ): { djName: string | null; djNames: string[] | null } {
-  const names = values.flatMap((value) => parseScheduleDjNames(value, showName));
+  const names = [
+    ...legacyValues.flatMap((value) => parseScheduleDjNames(value, showName)),
+    ...parseStructuredScheduleDjNames(structuredValues, showName),
+  ];
   const unique = [
     ...new Map(
       names.map((name) => [normalizeAttributionName(name), name]),
@@ -55,7 +62,8 @@ async function syncShowRows(): Promise<number> {
     station_id: number;
     station_slug: string;
     show_name: string;
-    dj_names: string[];
+    legacy_dj_names: string[];
+    structured_dj_names: string[];
   }>(sql`
     SELECT
       ss.station_id,
@@ -63,9 +71,13 @@ async function syncShowRows(): Promise<number> {
       ss.show_name,
       ARRAY_AGG(DISTINCT ss.dj_name) FILTER (
         WHERE ss.dj_name IS NOT NULL AND ss.dj_name <> ''
-      ) AS dj_names
+      ) AS legacy_dj_names,
+      ARRAY_AGG(DISTINCT host.name) FILTER (
+        WHERE host.name IS NOT NULL AND host.name <> ''
+      ) AS structured_dj_names
     FROM scraped_shows ss
     JOIN stations st ON st.id = ss.station_id
+    LEFT JOIN LATERAL unnest(COALESCE(ss.dj_names, ARRAY[]::text[])) AS host(name) ON true
     WHERE ss.voided_at IS NULL
     GROUP BY ss.station_id, st.slug, ss.show_name
   `);
@@ -88,7 +100,11 @@ async function syncShowRows(): Promise<number> {
       )
       .limit(1);
 
-    const fields = scrapedDjFields(row.dj_names ?? [], row.show_name);
+    const fields = scrapedDjFields(
+      row.legacy_dj_names ?? [],
+      row.structured_dj_names ?? [],
+      row.show_name,
+    );
     const existing = exists[0];
     if (existing) {
       const oldNames = parseScheduleDjNames(existing.djName, row.show_name);
@@ -174,22 +190,38 @@ async function syncDjPickers(): Promise<number> {
     station_slug: string;
     show_name: string;
     dj_name: string;
+    is_structured: boolean;
   }>(sql`
-    SELECT DISTINCT ON (ss.station_id, ss.show_name, ss.dj_name)
+    SELECT DISTINCT ON (
+      ss.station_id,
+      ss.show_name,
+      host.name,
+      ss.dj_names IS NOT NULL
+    )
       ss.station_id,
       st.slug AS station_slug,
       ss.show_name,
-      ss.dj_name
+      host.name AS dj_name,
+      ss.dj_names IS NOT NULL AS is_structured
     FROM scraped_shows ss
     JOIN stations st ON st.id = ss.station_id
-    WHERE ss.dj_name IS NOT NULL AND ss.dj_name <> ''
+    CROSS JOIN LATERAL unnest(
+      CASE
+        WHEN ss.dj_names IS NOT NULL THEN ss.dj_names
+        WHEN ss.dj_name IS NOT NULL THEN ARRAY[ss.dj_name]
+        ELSE ARRAY[]::text[]
+      END
+    ) AS host(name)
+    WHERE host.name <> ''
       AND ss.voided_at IS NULL
-    ORDER BY ss.station_id, ss.show_name, ss.dj_name
+    ORDER BY ss.station_id, ss.show_name, host.name, ss.dj_names IS NOT NULL
   `);
 
   let linked = 0;
   for (const row of rows.rows) {
-    const djNames = parseScheduleDjNames(row.dj_name, row.show_name);
+    const djNames = row.is_structured
+      ? parseStructuredScheduleDjNames([row.dj_name], row.show_name)
+      : parseScheduleDjNames(row.dj_name, row.show_name);
     for (const djName of djNames) {
 
       const djSlug = slugifyDjName(djName);

@@ -8,7 +8,10 @@ import { and, eq, isNotNull, lt, or, isNull, sql } from "drizzle-orm";
 import { isCrawlBlocked } from "./blog-crossref.js";
 import { extractScheduleRaw } from "./schedule-llm.js";
 import { inferTimezone } from "./timezone.js";
-import { sanitizeScheduleName } from "./schedule-name-sanitizer.js";
+import {
+  parseStructuredScheduleDjNames,
+  sanitizeScheduleName,
+} from "./schedule-name-sanitizer.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
 import {
   cadenceScheduleSource,
@@ -179,6 +182,7 @@ export interface ExtractedShow {
   startTime: string;
   endTime: string;
   djName: string | null;
+  djNames?: string[] | null;
 }
 
 export interface DatedExtractedShow extends ExtractedShow {
@@ -317,9 +321,15 @@ export function parseKzsuSchedule(raw: string): SpinitronScheduleExtraction | nu
         dayOfWeek: date.dayOfWeek,
         startTime: time.startTime,
         endTime: time.endTime,
-        djName: typeof show.dj_name === "string"
-          ? eligibleDjName(show.dj_name, { showTitle: showName }) ?? null
-          : null,
+        djName: null,
+        ...(typeof show.dj_name === "string"
+          ? {
+              djNames: parseStructuredScheduleDjNames(
+                [show.dj_name],
+                showName,
+              ),
+            }
+          : {}),
       };
       if (isKzsuDateSpecific(show)) {
         datedExceptions.push({ ...extracted, airDate: date.airDate });
@@ -860,6 +870,11 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     // equal to the show title is a person. Keep the source-backed show and
     // drop only unusable attribution; sync applies the same rule again.
     const djName = eligibleDjName(djNameRaw, { showTitle: showName }) ?? null;
+    const structuredDjNamesRaw = e["djNames"];
+    const hasStructuredDjNames = Array.isArray(structuredDjNamesRaw);
+    const djNames = hasStructuredDjNames
+      ? parseStructuredScheduleDjNames(structuredDjNamesRaw, showName)
+      : null;
 
     if (!showName || showName.length > 200) continue;
     if (!DAY_TOKENS.has(dayOfWeek)) continue;
@@ -871,7 +886,14 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     if (seenSlots.has(slotKey)) continue;
     seenSlots.add(slotKey);
 
-    out.push({ showName, dayOfWeek, startTime, endTime, djName });
+    out.push({
+      showName,
+      dayOfWeek,
+      startTime,
+      endTime,
+      djName: hasStructuredDjNames ? null : djName,
+      ...(hasStructuredDjNames ? { djNames } : {}),
+    });
   }
 
   // Unlike a malformed individual row, an overlap makes the whole extracted
@@ -889,7 +911,7 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
 const EXTRACTION_PROMPT = `You are extracting a radio station's upcoming weekly show schedule from
 the raw text of its website below. Return ONLY a JSON array (no prose, no
 markdown fences) of objects shaped exactly like:
-{"showName": string, "dayOfWeek": "Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat"|"Sun", "startTime": "HH:MM" (24h), "endTime": "HH:MM" (24h), "djName": string|null}
+{"showName": string, "dayOfWeek": "Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat"|"Sun", "startTime": "HH:MM" (24h), "endTime": "HH:MM" (24h), "djName": string|null, "djNames": string[]|null}
 
 Times MUST be in 24-hour HH:MM format (two-digit hour, colon, two-digit
 minute). Rejected formats — do NOT use these:
@@ -903,6 +925,9 @@ Rules:
 - If the page does not contain a real schedule (e.g. it's just a homepage
   with no programming grid), return an empty JSON array: []
 - Do not include duplicate entries for the same show/day/time.
+- When the page exposes hosts as separate structured values, return those exact
+  identities in djNames and set djName to null. Do not split or rewrite names.
+- Otherwise keep the source's single host credit in djName and set djNames to null.
 
 Page text:
 `;
@@ -1379,6 +1404,7 @@ export async function scrapeStationSchedule(
               startTime: s.startTime,
               endTime: s.endTime,
               djName: s.djName,
+              djNames: s.djNames,
               sourceUrl: receiptSourceUrl,
               scrapedAt: now,
                extraction,
@@ -1401,6 +1427,7 @@ export async function scrapeStationSchedule(
               startTime: s.startTime,
               endTime: s.endTime,
               djName: s.djName,
+              djNames: s.djNames,
               sourceUrl: receiptSourceUrl,
               scrapedAt: now,
               extraction: "api",

@@ -11,6 +11,7 @@ import {
   stationsTable,
 } from "@workspace/db";
 import { syncScrapedShowRowsAndPickers } from "../src/lore/scraped-shows-sync.js";
+import { parseKzsuSchedule } from "../src/lore/schedule-scraper.js";
 
 describe("scraped show multi-DJ sync", () => {
   const suffix = randomUUID().slice(0, 8);
@@ -20,6 +21,18 @@ describe("scraped show multi-DJ sync", () => {
   let compositePickerId = 0;
 
   beforeAll(async () => {
+    const commaNameShow = parseKzsuSchedule(JSON.stringify({
+      days: [{
+        date: "2025-01-09",
+        shows: [{
+          title: "Comma Name",
+          dj_name: "Smith, Jr.",
+          start_time: "0900",
+          duration: 60,
+          special: false,
+        }],
+      }],
+    }))!.recurringShows[0]!;
     const [station] = await db
       .insert(stationsTable)
       .values({
@@ -68,6 +81,12 @@ describe("scraped show multi-DJ sync", () => {
         startTime: "09:00",
         endTime: "10:00",
         djName: "Diane Kamikaze",
+        sourceUrl: "https://example.com/schedule",
+        extraction: "manual",
+      },
+      {
+        stationId,
+        ...commaNameShow,
         sourceUrl: "https://example.com/schedule",
         extraction: "manual",
       },
@@ -126,11 +145,16 @@ describe("scraped show multi-DJ sync", () => {
       djNames: null,
       pickerId: null,
     });
+    expect(shows.find((show) => show.name === "Comma Name")).toMatchObject({
+      djName: "Smith, Jr.",
+      djNames: null,
+    });
 
     const pickerHandles = [
       `show-dj-${stationSlug}-alice`,
       `show-dj-${stationSlug}-bob`,
       `show-dj-${stationSlug}-diane-kamikaze`,
+      `show-dj-${stationSlug}-smith-jr`,
     ];
     const pickers = await db
       .select({

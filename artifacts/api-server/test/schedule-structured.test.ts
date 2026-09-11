@@ -21,7 +21,8 @@ describe("parseTabbedHostSchedule", () => {
         dayOfWeek: "Sun",
         startTime: "06:00",
         endTime: "08:00",
-        djName: "Joe Hartfeil",
+        djName: null,
+        djNames: ["Joe Hartfeil"],
       },
     ]);
   });

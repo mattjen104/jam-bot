@@ -39,6 +39,7 @@ export async function applyStationScheduleMigration(): Promise<void> {
       start_time    text NOT NULL,
       end_time      text NOT NULL,
       dj_name       text,
+      dj_names      text[],
       source_url    text,
       scraped_at    timestamptz NOT NULL DEFAULT now(),
       extraction    text,
@@ -64,6 +65,7 @@ export async function applyStationScheduleMigration(): Promise<void> {
       start_time    text NOT NULL,
       end_time      text NOT NULL,
       dj_name       text,
+      dj_names      text[],
       source_url    text NOT NULL,
       scraped_at    timestamptz NOT NULL DEFAULT now(),
       extraction    text NOT NULL,
@@ -131,6 +133,12 @@ export async function applyStationScheduleMigration(): Promise<void> {
   `);
   await db.execute(sql`
     ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS void_reason text
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS dj_names text[]
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_show_exceptions ADD COLUMN IF NOT EXISTS dj_names text[]
   `);
   await db.execute(sql`
     ALTER TABLE list_entries ADD COLUMN IF NOT EXISTS source_url text

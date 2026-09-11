@@ -143,6 +143,25 @@ describe("parseKzsuSchedule", () => {
     });
   });
 
+  it("treats a dedicated API host field as one atomic identity", () => {
+    const result = parseKzsuSchedule(JSON.stringify({
+      days: [{
+        date: "2025-01-06",
+        shows: [{
+          title: "Night Shift",
+          dj_name: "Smith, Jr.",
+          start_time: "2000",
+          duration: 120,
+          special: false,
+        }],
+      }],
+    }));
+    expect(result?.recurringShows[0]).toMatchObject({
+      djName: null,
+      djNames: ["Smith, Jr."],
+    });
+  });
+
   it("skips malformed KZSU rows but accepts an empty valid payload", () => {
     expect(parseKzsuSchedule(JSON.stringify({
       days: [{ date: "2025-01-06", shows: [
@@ -1053,7 +1072,14 @@ describe("official CMS schedule adapters", () => {
     </table>`);
     expect(result).toEqual([
       { showName: "Sunday Soul", dayOfWeek: "Sun", startTime: "10:00", endTime: "12:00", djName: null },
-      { showName: "Morning Mix", dayOfWeek: "Mon", startTime: "10:00", endTime: "12:00", djName: "DJ Jules" },
+      {
+        showName: "Morning Mix",
+        dayOfWeek: "Mon",
+        startTime: "10:00",
+        endTime: "12:00",
+        djName: null,
+        djNames: ["DJ Jules"],
+      },
     ]);
   });
 

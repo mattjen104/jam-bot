@@ -640,6 +640,8 @@ export const scrapedShowsTable = pgTable(
     startTime: text("start_time").notNull(),
     endTime: text("end_time").notNull(),
     djName: text("dj_name"),
+    /** Source-provided atomic host identities; commas within names are preserved. */
+    djNames: text("dj_names").array(),
     /** URL of the station schedule page (or homepage when the grid is inline). */
     sourceUrl: text("source_url").notNull(),
     /** When this row was (re)written by the schedule scraper. */
@@ -691,6 +693,8 @@ export const scrapedShowExceptionsTable = pgTable(
     startTime: text("start_time").notNull(),
     endTime: text("end_time").notNull(),
     djName: text("dj_name"),
+    /** Source-provided atomic host identities; commas within names are preserved. */
+    djNames: text("dj_names").array(),
     sourceUrl: text("source_url").notNull(),
     scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
     extraction: text("extraction").notNull(),

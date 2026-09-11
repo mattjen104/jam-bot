@@ -1,5 +1,7 @@
-import { eligibleDjName } from "@workspace/lore-attribution";
-import { sanitizeScheduleName } from "./schedule-name-sanitizer.js";
+import {
+  parseStructuredScheduleDjNames,
+  sanitizeScheduleName,
+} from "./schedule-name-sanitizer.js";
 
 export interface StructuredShow {
   showName: string;
@@ -7,6 +9,7 @@ export interface StructuredShow {
   startTime: string;
   endTime: string;
   djName: string | null;
+  djNames?: string[] | null;
 }
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -63,12 +66,17 @@ function makeShow(
 ): StructuredShow | null {
   const showName = sanitizeScheduleName(decodeHtml(showNameRaw));
   if (!showName || !DAYS.includes(day as (typeof DAYS)[number]) || !startTime || !endTime) return null;
+  const djNames = parseStructuredScheduleDjNames(
+    djRaw ? [decodeHtml(djRaw)] : [],
+    showName,
+  );
   return {
     showName,
     dayOfWeek: day,
     startTime,
     endTime,
-    djName: eligibleDjName(decodeHtml(djRaw), { showTitle: showName }) ?? null,
+    djName: null,
+    ...(djNames.length > 0 ? { djNames } : {}),
   };
 }
 

@@ -83,6 +83,22 @@ function hasControlCharacter(value: string): boolean {
   });
 }
 
+function eligibleScheduleDjName(
+  value: string,
+  showTitle?: string | null,
+): string | null {
+  const candidate = sanitizeScheduleName(value);
+  if (
+    !candidate ||
+    candidate.length > 100 ||
+    MALFORMED_DJ_NAME_RE.test(candidate) ||
+    hasControlCharacter(candidate)
+  ) {
+    return null;
+  }
+  return eligibleDjName(candidate, { showTitle }) ?? null;
+}
+
 /**
  * Turn a schedule's host credit into validated individual identities.
  *
@@ -102,16 +118,32 @@ export function parseScheduleDjNames(
   const seen = new Set<string>();
   const names: string[] = [];
   for (const part of parts) {
-    const candidate = sanitizeScheduleName(part);
-    if (
-      !candidate ||
-      candidate.length > 100 ||
-      MALFORMED_DJ_NAME_RE.test(candidate) ||
-      hasControlCharacter(candidate)
-    ) {
-      continue;
-    }
-    const eligible = eligibleDjName(candidate, { showTitle });
+    const eligible = eligibleScheduleDjName(part, showTitle);
+    if (!eligible) continue;
+    const key = normalizeAttributionName(eligible);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(eligible);
+  }
+  return names;
+}
+
+/**
+ * Validate host identities that a source supplied as separate array elements.
+ * Unlike legacy flattened credits, each element is atomic: punctuation such as
+ * a comma may be part of the display name and must never be treated as a list
+ * separator.
+ */
+export function parseStructuredScheduleDjNames(
+  values: readonly unknown[],
+  showTitle?: string | null,
+): string[] {
+  if (values.length > MAX_DJ_NAMES) return [];
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const eligible = eligibleScheduleDjName(value, showTitle);
     if (!eligible) continue;
     const key = normalizeAttributionName(eligible);
     if (seen.has(key)) continue;

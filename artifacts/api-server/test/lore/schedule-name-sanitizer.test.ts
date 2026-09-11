@@ -12,6 +12,7 @@ import { describe, it, expect } from "vitest";
 import {
   sanitizeScheduleName,
   parseScheduleDjNames,
+  parseStructuredScheduleDjNames,
   INVISIBLE_CHARS_RE,
   INVISIBLE_CHARS_PG_CLASS,
 } from "../../src/lore/schedule-name-sanitizer.js";
@@ -96,6 +97,26 @@ describe("parseScheduleDjNames", () => {
   });
 });
 
+describe("parseStructuredScheduleDjNames", () => {
+  it("preserves commas inside atomic source-provided identities", () => {
+    expect(
+      parseStructuredScheduleDjNames(
+        ["Smith, Jr.", "Diane Kamikaze"],
+        "Night Shift",
+      ),
+    ).toEqual(["Smith, Jr.", "Diane Kamikaze"]);
+  });
+
+  it("uses the shared eligibility gate for generic and malformed elements", () => {
+    expect(
+      parseStructuredScheduleDjNames(
+        ["Smith, Jr.", "Automation", "https://example.com", 42],
+        "Night Shift",
+      ),
+    ).toEqual(["Smith, Jr."]);
+  });
+});
+
 describe("JS regex ↔ Postgres pattern lockstep", () => {
   // Rebuild a JS regex from the Postgres class string. Postgres AREs use the
   // same \uXXXX escapes, so a faithful translation is direct construction.
@@ -149,5 +170,20 @@ describe("parseExtractedSchedule uses the shared sanitizer", () => {
     expect(out).toHaveLength(1);
     expect(out![0]!.showName).toBe("Morning Jazz");
     expect(out![0]!.djName).toBe("DJ Rey nolds");
+  });
+
+  it("keeps structured host arrays separate from the legacy string path", () => {
+    const [show] = parseExtractedSchedule(JSON.stringify([{
+      showName: "Night Shift",
+      dayOfWeek: "Tue",
+      startTime: "20:00",
+      endTime: "22:00",
+      djName: "must not win",
+      djNames: ["Smith, Jr.", "Automation", "Diane Kamikaze"],
+    }]))!;
+    expect(show).toMatchObject({
+      djName: null,
+      djNames: ["Smith, Jr.", "Diane Kamikaze"],
+    });
   });
 });
