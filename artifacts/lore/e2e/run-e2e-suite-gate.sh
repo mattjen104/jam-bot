@@ -11,6 +11,7 @@
 #   - librarySyncLifecycle.spec.ts     (direct Library sync lifecycle)
 #   - largeLibraryRemote.spec.ts       (thousands of visual Songs tiles retain
 #                                       offscreen rendering containment)
+#   - libraryStackFilter.spec.ts       (Stack filter, clear, no-match, and eager paging)
 #   - fallbackNotice.spec.ts           (archive-run fallback notice; all API routes
 #                                       intercepted with fixtures)
 #   - cornerNavTappability.spec.ts     (mobile shell navigation and player dock)
@@ -100,6 +101,7 @@ RUN_SPECS=(
   e2e/spotifyConnectCallback.spec.ts
   e2e/librarySyncLifecycle.spec.ts
   e2e/largeLibraryRemote.spec.ts
+  e2e/libraryStackFilter.spec.ts
   e2e/fallbackNotice.spec.ts
   e2e/cornerNavTappability.spec.ts
   e2e/microDialRemote.spec.ts
