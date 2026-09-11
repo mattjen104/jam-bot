@@ -133,6 +133,9 @@ export type AppleLibrarySong = {
   albumName: string | null;
   artworkUrl: string | null;
   isrc: string | null;
+  releaseId: string | null;
+  releaseDate: string | null;
+  releaseDatePrecision: "year" | "month" | "day" | null;
 };
 
 export type AppleMusicImportProgress = {
@@ -181,6 +184,14 @@ function extractLibrarySongs(value: unknown): { songs: AppleLibrarySong[]; hasNe
     const url = typeof artwork?.url === "string"
       ? artwork.url.replace("{w}", "600").replace("{h}", "600")
       : null;
+    const releaseDatePrecision: AppleLibrarySong["releaseDatePrecision"] =
+      typeof attrs.releaseDate === "string"
+        ? attrs.releaseDate.length === 4
+          ? "year"
+          : attrs.releaseDate.length === 7
+            ? "month"
+            : "day"
+        : null;
     return [{
       appleId: id,
       title,
@@ -188,6 +199,14 @@ function extractLibrarySongs(value: unknown): { songs: AppleLibrarySong[]; hasNe
       albumName: album,
       artworkUrl: url,
       isrc: typeof attrs.isrc === "string" ? attrs.isrc : null,
+      releaseId: typeof attrs.albumId === "string"
+        ? attrs.albumId
+        : typeof attrs.playParams === "object" && attrs.playParams &&
+            typeof (attrs.playParams as Record<string, unknown>).catalogId === "string"
+          ? (attrs.playParams as Record<string, unknown>).catalogId as string
+          : null,
+      releaseDate: typeof attrs.releaseDate === "string" ? attrs.releaseDate : null,
+      releaseDatePrecision,
     }];
   });
   const next = root.next ?? data.next;

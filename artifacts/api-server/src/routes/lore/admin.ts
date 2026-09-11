@@ -70,6 +70,8 @@ import {
   listsTable,
   listEntriesTable,
   recordingReleaseGroupsTable,
+  recordingReleaseEvidenceTable,
+  libraryItemsTable,
   stationQualityTable,
   blogListCandidatesTable,
   criCandidatesTable,
@@ -2059,6 +2061,47 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
       dateLastCheckedAt: sql<string | null>`max(${recordingsTable.releaseDateCheckedAt}) filter (
         where ${recordingsTable.releaseYear} >= extract(year from now())::int - 1
       )::text`,
+      canonicalFound: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseEnrichmentStatus} = 'canonical_found'
+      )::int`,
+      canonicalMiss: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseEnrichmentStatus} = 'canonical_miss'
+      )::int`,
+      canonicalPending: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseEnrichmentStatus} = 'pending'
+          and ${recordingsTable.mbid} not like 'sp:%'
+          and (
+            exists (
+              select 1 from ${spinsTable}
+              where ${spinsTable.mbid} = ${recordingsTable.mbid}
+            )
+            or exists (
+              select 1 from ${libraryItemsTable}
+              where ${libraryItemsTable.mbid} = ${recordingsTable.mbid}
+                and ${libraryItemsTable.removedAt} is null
+            )
+          )
+      )::int`,
+      canonicalTransientFailures: sql<number>`count(*) filter (
+        where ${recordingsTable.releaseEnrichmentStatus} = 'transient_failure'
+      )::int`,
+      provisionalProviderCoverage: sql<number>`(
+        select count(*)::int
+        from ${recordingReleaseEvidenceTable}
+        where ${recordingReleaseEvidenceTable.recordingMbid} is null
+          and ${recordingReleaseEvidenceTable.status} = 'provisional'
+      )`,
+      linkedProviderCoverage: sql<number>`(
+        select count(*)::int
+        from ${recordingReleaseEvidenceTable}
+        where ${recordingReleaseEvidenceTable.recordingMbid} is not null
+          and ${recordingReleaseEvidenceTable.status} = 'linked'
+      )`,
+      providerTransientFailures: sql<number>`(
+        select count(*)::int
+        from ${recordingReleaseEvidenceTable}
+        where ${recordingReleaseEvidenceTable.status} = 'transient_failure'
+      )`,
     })
     .from(recordingsTable);
   // Unmatched spins are tracked by normalized artist/title identity in the
@@ -2076,6 +2119,13 @@ router.get("/admin/release-year-health", h(async (_req, res) => {
     dateInQueue: totals?.dateInQueue ?? 0,
     datePermMiss: totals?.datePermMiss ?? 0,
     dateLastCheckedAt: totals?.dateLastCheckedAt ?? null,
+    provisionalProviderCoverage: totals?.provisionalProviderCoverage ?? 0,
+    linkedProviderCoverage: totals?.linkedProviderCoverage ?? 0,
+    providerTransientFailures: totals?.providerTransientFailures ?? 0,
+    canonicalPending: totals?.canonicalPending ?? 0,
+    canonicalFound: totals?.canonicalFound ?? 0,
+    canonicalMiss: totals?.canonicalMiss ?? 0,
+    canonicalTransientFailures: totals?.canonicalTransientFailures ?? 0,
     unmatchedCandidates: unmatched.candidates,
     unmatchedResolved: unmatched.resolved,
     unmatchedDeferred: unmatched.deferred,

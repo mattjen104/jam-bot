@@ -45,7 +45,10 @@ export async function applyAppleLibraryItemsMigration(): Promise<void> {
   `);
   await db.execute(sql`
     ALTER TABLE apple_library_items
-      ADD COLUMN IF NOT EXISTS removed_at timestamp
+      ADD COLUMN IF NOT EXISTS removed_at timestamp,
+      ADD COLUMN IF NOT EXISTS provider_release_id text,
+      ADD COLUMN IF NOT EXISTS provider_release_date text,
+      ADD COLUMN IF NOT EXISTS provider_release_precision text
   `);
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS apple_library_items_user_mbid_idx

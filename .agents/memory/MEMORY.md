@@ -5,14 +5,12 @@
 - [track-knowledge (liner-notes) pipeline](track-knowledge-pipeline.md) — enrich confirmed tracks off hot path; canonical MB-recording-id cache; never-fabricate LLM guard; query-on-demand.
 - [Station identity evidence gates](station-identity-evidence-gates.md) — spin count alone overstates coverage; require fresh breadth + sufficient genre enrichment and reject polluted homepage/artist metadata.
 - [Shared-lib seam wiring vs vitest mocks](lib-seam-wiring-vitest-mocks.md) — a host wiring a shared lib's seams in a global vitest setupFile must import a leaf-only entry, never the barrel, or it pre-evaluates subjects and defeats per-file vi.mock.
-- [Odesli links API endpoint](odesli-endpoint.md) — use `api.song.link/v1-alpha.1/links`; old `/v1-links` 404s site-wide via Fastly (looks like a deploy/track bug but is just the wrong path).
 - [Codegen → project-ref staleness](codegen-project-reference-staleness.md) — after OpenAPI codegen, run `typecheck:libs` to rebuild lib .d.ts; project-ref consumers read stale dist/, so only NEW schema members fail to resolve.
 - [Playhead "One Spine" model](playhead-one-spine-model.md) — unified interface direction (on/off-spine, liquid→crystal, Peek→Card→Dive, Lens, enqueue-never-cut); canonical demo = Fleetwood Mac "Go Your Own Way".
 - [Lore Now/Explore/Library model](lore-feed-stack-migration.md) — Now is live, Explore finds shows through multiple lenses, Library stays intentional music; preserve internal IDs during label migration.
 - [Lore now-playing contract](lore-nowplaying-contract.md) — confidence tiers (recording_id>isrc>text>unresolved); artwork+exact links are best-effort/often absent, so UI must degrade and tests must not assert their presence.
 - [Postgres NUL in text columns](postgres-nul-in-text.md) — NUL (U+0000) is illegal in Postgres text (err 22021); never use it as a DB key separator, use U+001F. Silently-empty table + try/catch = swallowed DB error.
 - [Lore resolution ordering & cursor ingestion](lore-resolution-ordering.md) — resolve strongest-id-first with per-identifier cache namespaces; history pollers page back to lastSeenCursor.
-- [drizzle-kit + NULLS NOT DISTINCT drift](drizzle-kit-nulls-not-distinct.md) — drizzle-kit 0.31 can't introspect indnullsnotdistinct; nullsNotDistinct() unique keys cause permanent push drift.
 - [drizzle push post-merge failures](drizzle-push-post-merge-failures.md) — 3 modes: view-blocked type drift (declare withTimezone), boot-only tables get DROP'd (mirror in schema), FK re-add hits orphans (prune loop).
 - [Orval pitfalls](orval-pitfalls.md) — path+query ops collide on `<Op>Params`; duplicate schema names fail opaquely; hand-patched generated files die on regen; non-200 responses may be type-only.
 - [Pickers/picks generalization](lore-pickers-picks-model.md) — generalize DJ spins to any taste source; ladder stops at artist (never algorithmic), ordered picks are rideable segues, unresolved always logged.
@@ -22,14 +20,12 @@
 - [Share-card SSRF guard](share-card-ssrf-guard.md) — server-side artwork fetch off DB URLs is attacker-influenced: https-only + private-IP block, re-validate every redirect hop (CAA 307s, so redirect:"error" kills artwork).
 - [Lore local-first listener layer](lore-local-first-listener-layer.md) — journal/follows are localStorage-only by design (no accounts); logger trigger key must be ≥ dedup identity or listens drop.
 - [Song Exploder is knowledge, not a picker](se-knowledge-layer.md) — SE + Wikipedia live on the knowledge layer (parallel to lyrics), never in Curated/picker pages; panel toggle in NowPlaying corner cluster, not a dismissable signpost.
-- [zod.coerce missing query param](zod-coerce-missing-query-param.md) — generated `zod.coerce.string().min(1)` turns an absent query param into the string "undefined"; add explicit presence guards on required params.
 - [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.
 - [Lore UI component tests](lore-ui-component-tests.md) — per-file jsdom pragma + barrel mock + media stubs; wouter searchPath must NOT start with "?"; vitest bail:1+retry:1 mask stale tests (skipped ≠ passed — rerun with --bail=0 or -t).
 - [Lore admin router catch-all](lore-admin-router-catchall.md) — admin router has rate-limit + auth middleware for ALL paths; new /api/* routers must be mounted before loreRouter in routes/index.ts or they get 503 "Admin entry not configured".
 - [Spotify import fetch timeout](spotify-import-fetch-timeout.md) — Node fetch has no default timeout; Spotify silently hangs TCP under rate-limit, leaving import worker frozen forever; fix: AbortController with 20s timeout on every page fetch.
 - [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
 - [Lore share/paste provenance](lore-share-paste-provenance.md) — jam-bot link-unfurl NEVER writes on paste: spins.mbid→recordings FK means aired⟹already-recorded, so lore-iff-exists else links-only; accept any strong id (text OR spotifyId OR isrc).
-- [Odesli double-call rate-limit](odesli-double-call-rate-limit.md) — jam-bot already calls Odesli once (resolveAnyUrl); API server must NOT call it again for the same track or it hits the free-tier IP rate-limit silently; use platforms pass-through instead.
 - [Drizzle raw-SQL array binding](drizzle-raw-sql-array.md) — use ARRAY[${sql.join(ids, sql`, `)}]::integer[] for ANY(); sql.array() absent, bare ${ids} makes a tuple not an array.
 - [Manual radio_browser_icy enrollment](lore-radio-browser-icy-manual-enroll.md) — nowPlayingConfig needs streamUrl (not just radioBrowserId) + source:'curated' or it silently never polls / gets purged; ICY fetcher doesn't follow redirects.
 - [Poller overlapping-tick races](lore-poller-overlap-race.md) — overlapping ticks double-insert the same spin; guard with a per-station in-flight Set, not content dedup.
@@ -54,12 +50,10 @@
 - [Taste seeds — zero-friction onboarding](taste-seeds-pattern.md) — artist names → crossing pipeline (soft-artist path); bust both crossings + library-hit caches on PUT; drizzle push-force still hangs on lore_users drift, create table via direct SQL.
 - [Pending keeps — spin-based saves](pending-keeps-pattern.md) — pending_keeps table for pre-resolution saves; spinId on NowPlaying; hand-patch BOTH api-client-react AND api-zod types and rebuild dist.
 - [Preferred-service fallback pattern](preferred-service-fallback.md) — altDriversAllFailed set in YouTube .catch() (not exhausted branch); retryService must call tryAltDriverRef directly, not rely on effect re-fire.
-- [MB ISRC endpoint parameter bug](mb-isrc-endpoint.md) — `/isrc/{isrc}?fmt=json` only; `inc=recordings` is invalid and silently returns null on every call.
 - [Radio front-door attribution ladder](radio-attribution-ladder.md) — sort: live crossing → named selector → unattributed; show-level rows replace station rows in live tier only.
 - [Crossings result provenance](crossings-result-provenance.md) — "nothing matched" UI must gate on a settled (non-computing, non-failed) result; crashed computes answer failed:true and retry on next poll.
 - [Front-door progressive render & bounded crossings](front-door-progressive-render.md) — zone1Settled gates on stations only; crossings return computing:true past a 2.5s cold deadline; DB tests must pin the deadline; soft Spotify items count as taste.
 - [isCoreLoading live-gate hang](icore-loading-hang.md) — gating the offline section AND spinner on liveLoading causes blank/infinite hang; only gate spinner on stationsLoading.
-- [Import Phase 3 negative cache on MB 503](import-negative-cache-503.md) — MB 503 errors must not write negative cache; use resolveErrored flag to guard the else-if branch.
 - [Canadian campus radio ICY fix](canadian-stations-icy-fix.md) — CFUV/CHMR/CISM/CJSR/CKCU/CKUT not on Spinitron; need radio_browser_icy + favorite=true (mux reads empty status.xsl; only watcher reads inline ICY metadata).
 - [ICY watcher startup failure limit](icy-watcher-startup-failure.md) — boot-time probe contention must not trigger permanent fallback; limits raised to 12/30min + 15s timeout.
 - [Crossings soft-artist array bottleneck](crossings-soft-artist-query.md) — passing ~1500 unresolved artist names as a SQL literal array to ANY() caused 20s+ query; replace with a SQL subquery so Postgres plans a hash-join.
@@ -95,8 +89,6 @@
 - [attendance_rollups FK cleanup](attendance-rollups-fk-cleanup.md) — DB tests must delete attendance_rollups (by test userIds) before recordings, or afterAll 23503s; rollup rows can appear via concurrent global passes.
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).
 - [Completion review vs pre-existing tree](task-review-preexisting-tree.md) — checkpoint auto-commits bundle stale working-tree changes into your task's review range; prove scope via diff against mainline tip + drift_reason, don't blind-revert.
-- [Icecast 400-on-HEAD probing](icecast-probe-400.md) — bare HEAD/curl -I gets 400 from healthy Icecast servers; probe with GET + Icy-MetaData:1, and try the https:// variant before assuming a stream is HTTP-only.
-- [CREATE IF NOT EXISTS PK drift](create-if-not-exists-pk-drift.md) — boot migrations never repair missing PKs on pre-existing tables; 42P10 on upserts means \d the live table and ALTER ADD PRIMARY KEY.
 - [Dial filter menus](dial-filter-menus.md) — age tiers additive (unknown year passes); categories = 7 exclusive editorial labels, single-select, EMPTY default (never default a category or the front door empties).
 - [Background recompute pool saturation](crossings-recompute-pool-saturation.md) — per-user heavy computes need a global execution concurrency cap; healthz-ok + health-hang = pg Pool exhausted, not server down.
 - [Listener read-pool isolation](listener-read-pool-isolation.md) — public radio reads need reserved, bounded DB capacity and must treat identity/personalization as optional.
@@ -157,3 +149,4 @@
 - [Categorized pagination honesty](categorized-pagination-honesty.md) — combined pages cannot prove a category is empty until the final page; label partial counts and empties as loaded-so-far.
 - [Artist lens station membership](artist-lens-station-membership.md) — focused artists use exact all-history station membership; never filter bounded crossing summaries or wait for run-detail search.
 - [HLS pointer warmup safety](hls-pointer-warmup-safety.md) — never preload HLS by assigning its URL directly when the browser lacks native HLS; let hls.js attach to a clean audio element.
+- [Provider release evidence trust](provider-release-evidence-trust.md) — shared track-age facts require server-verified provider identity; rejected canonical links must leave the entire evidence packet immutable.

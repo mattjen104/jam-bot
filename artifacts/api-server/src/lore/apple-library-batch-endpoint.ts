@@ -23,6 +23,9 @@ interface AppleSong {
   albumName?: string | null;
   artworkUrl?: string | null;
   isrc?: string | null;
+  releaseId?: string | null;
+  releaseDate?: string | null;
+  releaseDatePrecision?: "year" | "month" | "day" | null;
 }
 
 /**
@@ -70,7 +73,10 @@ export function mountAppleLibraryImport(router: Router): void {
 
       try {
         await db.execute(sql`
-          INSERT INTO apple_library_items (user_id, apple_id, title, artist, album_name, artwork_url, isrc)
+          INSERT INTO apple_library_items (
+            user_id, apple_id, title, artist, album_name, artwork_url, isrc,
+            provider_release_id, provider_release_date, provider_release_precision
+          )
           VALUES (
             ${user.id},
             ${song.appleId.trim()},
@@ -78,14 +84,20 @@ export function mountAppleLibraryImport(router: Router): void {
             ${song.artist.trim()},
             ${song.albumName?.trim() ?? null},
             ${song.artworkUrl?.trim() ?? null},
-            ${song.isrc?.trim().toUpperCase() ?? null}
+            ${song.isrc?.trim().toUpperCase() ?? null},
+            ${song.releaseId?.trim() ?? null},
+            ${song.releaseDate?.trim() ?? null},
+            ${song.releaseDatePrecision ?? null}
           )
           ON CONFLICT (user_id, apple_id) DO UPDATE SET
             title      = EXCLUDED.title,
             artist     = EXCLUDED.artist,
             album_name = EXCLUDED.album_name,
              artwork_url = COALESCE(EXCLUDED.artwork_url, apple_library_items.artwork_url),
-            isrc       = COALESCE(EXCLUDED.isrc, apple_library_items.isrc)
+            isrc       = COALESCE(EXCLUDED.isrc, apple_library_items.isrc),
+            provider_release_id = COALESCE(EXCLUDED.provider_release_id, apple_library_items.provider_release_id),
+            provider_release_date = COALESCE(EXCLUDED.provider_release_date, apple_library_items.provider_release_date),
+            provider_release_precision = COALESCE(EXCLUDED.provider_release_precision, apple_library_items.provider_release_precision)
         `);
         inserted++;
       } catch (error) {

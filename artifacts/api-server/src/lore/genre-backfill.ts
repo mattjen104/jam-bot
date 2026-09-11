@@ -57,10 +57,20 @@ export async function backfillGenreBatch(batchSize = 25): Promise<{
         .update(recordingsTable)
         .set({
           ...(g.genres.length ? { genres: g.genres } : {}),
+          // MusicBrainz is canonical and supersedes provisional provider facts.
           ...(g.year != null ? { releaseYear: g.year } : {}),
           // Store the full partial-ISO date alongside the year so premiere
           // (First-tier) detection isn't limited to whole-year comparisons.
           ...(g.releaseDate != null ? { releaseDate: g.releaseDate } : {}),
+          ...(g.year != null || g.releaseDate != null
+            ? {
+                releaseEnrichmentStatus: "canonical_found",
+                yearCheckedAt: attemptedAt,
+                releaseDateCheckedAt: attemptedAt,
+                releaseEnrichmentAttemptedAt: attemptedAt,
+                releaseEnrichmentError: null,
+              }
+            : {}),
           genreEnrichmentStatus: outcome,
           genreEnrichmentAttemptedAt: attemptedAt,
           genreEnrichmentError:

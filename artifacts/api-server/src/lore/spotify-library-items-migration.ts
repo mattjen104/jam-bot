@@ -40,4 +40,11 @@ export async function applySpotifyLibraryItemsMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS spotify_library_items_isrc_idx
       ON spotify_library_items (isrc)
   `);
+  await db.execute(sql`
+    ALTER TABLE spotify_library_items
+      ADD COLUMN IF NOT EXISTS provider_release_id text,
+      ADD COLUMN IF NOT EXISTS provider_release_date text,
+      ADD COLUMN IF NOT EXISTS provider_release_precision text,
+      ADD COLUMN IF NOT EXISTS removed_at timestamp
+  `);
 }

@@ -126,6 +126,12 @@ describe("GET /admin/release-year-health", () => {
         permMiss: 1,         // Row C only (null year, checked_at set)
         ineligible: 0,
         lastCheckedAt: null,
+        provisionalProviderCoverage: 4,
+        linkedProviderCoverage: 3,
+        canonicalPending: 2,
+        canonicalFound: 8,
+        canonicalMiss: 1,
+        canonicalTransientFailures: 1,
       },
     ]);
 
@@ -143,6 +149,12 @@ describe("GET /admin/release-year-health", () => {
     expect(body.permMiss).toBe(1);
     expect(body.ineligible).toBe(0);
     expect(body.lastCheckedAt).toBeNull();
+    expect(body.provisionalProviderCoverage).toBe(4);
+    expect(body.linkedProviderCoverage).toBe(3);
+    expect(body.canonicalPending).toBe(2);
+    expect(body.canonicalFound).toBe(8);
+    expect(body.canonicalMiss).toBe(1);
+    expect(body.canonicalTransientFailures).toBe(1);
   });
 
   it("exposes lastCheckedAt when the backfill has run at least once", async () => {
@@ -379,7 +391,7 @@ describe("GET /admin/genre-enrichment-health", () => {
 // ===========================================================================
 
 describe("backfillReleaseYearBatch — MB transient error does not advance sentinel", () => {
-  it("does NOT call db.update when MB resolver throws a 5xx error", async () => {
+  it("records a retryable 5xx without advancing canonical sentinels", async () => {
     const { backfillReleaseYearBatch } = await import(
       "../src/lore/release-year-backfill.js"
     );
@@ -408,15 +420,18 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
     mockFetchReleaseDateInfo.mockRejectedValueOnce(
       new Error("MusicBrainz 503 Service Unavailable"),
     );
+    const mockSet = vi.fn().mockReturnValue({ where: () => Promise.resolve() });
+    mockDbUpdate.mockReturnValue({ set: mockSet });
 
     await backfillReleaseYearBatch(10);
 
-    // The catch block must swallow the error and skip db.update entirely,
-    // leaving year_checked_at NULL so the row is retried on the next tick.
-    expect(mockDbUpdate).not.toHaveBeenCalled();
+    const payload = mockSet.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.releaseEnrichmentStatus).toBe("transient_failure");
+    expect(payload).not.toHaveProperty("yearCheckedAt");
+    expect(payload).not.toHaveProperty("releaseDateCheckedAt");
   });
 
-  it("does NOT call db.update when MB resolver throws a network error", async () => {
+  it("records a retryable network failure without advancing canonical sentinels", async () => {
     const { backfillReleaseYearBatch } = await import(
       "../src/lore/release-year-backfill.js"
     );
@@ -438,10 +453,15 @@ describe("backfillReleaseYearBatch — MB transient error does not advance senti
       });
 
     mockFetchReleaseDateInfo.mockRejectedValueOnce(new Error("fetch failed: ECONNRESET"));
+    const mockSet = vi.fn().mockReturnValue({ where: () => Promise.resolve() });
+    mockDbUpdate.mockReturnValue({ set: mockSet });
 
     await backfillReleaseYearBatch(10);
 
-    expect(mockDbUpdate).not.toHaveBeenCalled();
+    const payload = mockSet.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.releaseEnrichmentStatus).toBe("transient_failure");
+    expect(payload).not.toHaveProperty("yearCheckedAt");
+    expect(payload).not.toHaveProperty("releaseDateCheckedAt");
   });
 
   it("DOES call db.update with yearCheckedAt (but no releaseYear) when MB returns null (genuine no-date)", async () => {

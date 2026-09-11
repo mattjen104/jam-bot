@@ -1,5 +1,5 @@
 import { db, recordingsTable, spinsTable } from "@workspace/db";
-import { isNull, and, sql, notLike, gte } from "drizzle-orm";
+import { isNull, and, sql, notLike, gte, or, eq } from "drizzle-orm";
 import { createMbResolver, musicbrainzEnabled } from "@workspace/song-enrichment";
 
 /**
@@ -62,9 +62,15 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
   )`;
   const isListenerFacing = sql`(${hasSpins}) OR (${isActivelySaved})`;
 
-  const yearTarget = and(
-    isNull(recordingsTable.releaseYear),
+  const canonicalTarget = and(
     isNull(recordingsTable.yearCheckedAt),
+    or(
+      eq(recordingsTable.releaseEnrichmentStatus, "pending"),
+      and(
+        eq(recordingsTable.releaseEnrichmentStatus, "transient_failure"),
+        sql`${recordingsTable.releaseEnrichmentAttemptedAt} <= now() - interval '15 minutes'`,
+      ),
+    ),
     notSynthetic,
     isListenerFacing,
   );
@@ -77,11 +83,18 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
     gte(recordingsTable.releaseYear, new Date().getFullYear() - 1),
     isNull(recordingsTable.releaseDate),
     isNull(recordingsTable.releaseDateCheckedAt),
+    or(
+      eq(recordingsTable.releaseEnrichmentStatus, "pending"),
+      and(
+        eq(recordingsTable.releaseEnrichmentStatus, "transient_failure"),
+        sql`${recordingsTable.releaseEnrichmentAttemptedAt} <= now() - interval '15 minutes'`,
+      ),
+    ),
     notSynthetic,
     isListenerFacing,
   );
 
-  const targetWhere = sql`(${yearTarget}) OR (${dateTarget})`;
+  const targetWhere = sql`(${canonicalTarget}) OR (${dateTarget})`;
 
   // Current station tracks remain first; saved-only rows follow newest-save
   // order. Both paths stay off the request path and within the same batch cap.
@@ -104,6 +117,7 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
       break;
     }
     try {
+      const attemptedAt = new Date();
       const info = await resolver.fetchReleaseDateInfo(
         row.mbid,
         AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
@@ -119,6 +133,12 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
           ...(info?.releaseDate != null ? { releaseDate: info.releaseDate } : {}),
           yearCheckedAt: sql`now()`,
           releaseDateCheckedAt: sql`now()`,
+          releaseEnrichmentStatus:
+            info?.year != null || info?.releaseDate != null
+              ? "canonical_found"
+              : "canonical_miss",
+          releaseEnrichmentAttemptedAt: attemptedAt,
+          releaseEnrichmentError: null,
           updatedAt: sql`now()`,
         })
         .where(sql`${recordingsTable.mbid} = ${row.mbid}`);
@@ -127,6 +147,16 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
       // retried on the next tick. Log and continue so one bad row doesn't
       // wedge the whole batch.
       console.error("[lore] release-year backfill row failed", row.mbid, err);
+      await db
+        .update(recordingsTable)
+        .set({
+          releaseEnrichmentStatus: "transient_failure",
+          releaseEnrichmentAttemptedAt: new Date(),
+          releaseEnrichmentError:
+            err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+          updatedAt: sql`now()`,
+        })
+        .where(sql`${recordingsTable.mbid} = ${row.mbid}`);
     }
   }
 

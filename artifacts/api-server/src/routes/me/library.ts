@@ -49,6 +49,10 @@ import { extractImageRaw, normalizeImageRows } from "../../lore/image-llm.js";
 import { bustCrossingsCache } from "./crossings.js";
 import { bustPickerOverlapCache } from "./overlaps.js";
 import { bustLibraryHitCache } from "../../lore/library-hits.js";
+import {
+  recordProviderReleaseEvidence,
+  recordProviderReleaseFailure,
+} from "../../lore/release-evidence.js";
 
 const router: IRouter = Router();
 
@@ -834,7 +838,14 @@ export async function seedSpotifySoftRows(
   if (entries.length === 0) return;
 
   // Map spotifyId → { albumName, artworkUrl, isrc } from the Spotify API.
-  const metaMap = new Map<string, { albumName: string | null; artworkUrl: string | null; isrc: string | null }>();
+  const metaMap = new Map<string, {
+    albumName: string | null;
+    artworkUrl: string | null;
+    isrc: string | null;
+    releaseId: string | null;
+    releaseDate: string | null;
+    releasePrecision: "year" | "month" | "day" | null;
+  }>();
 
   // Only call the API for entries whose externalId looks like a real Spotify
   // track ID (22 alphanumeric chars). Synthesised fallback keys are skipped.
@@ -855,7 +866,13 @@ export async function seedSpotifySoftRows(
         const data = await res.json() as {
           tracks: Array<{
             id: string;
-            album: { name: string; images: Array<{ url: string; height: number | null }> };
+            album: {
+              id?: string;
+              name: string;
+              images: Array<{ url: string; height: number | null }>;
+              release_date?: string;
+              release_date_precision?: "year" | "month" | "day";
+            };
             external_ids?: { isrc?: string };
           } | null>;
         };
@@ -869,11 +886,29 @@ export async function seedSpotifySoftRows(
             albumName: track.album.name ?? null,
             artworkUrl: img?.url ?? null,
             isrc: track.external_ids?.isrc ?? null,
+            releaseId: track.album.id ?? null,
+            releaseDate: track.album.release_date ?? null,
+            releasePrecision: track.album.release_date_precision ?? null,
           });
         }
+      } else {
+        await Promise.all(batch.map((track) =>
+          recordProviderReleaseFailure({
+            provider: "spotify",
+            providerTrackId: track.externalId,
+            error: `Spotify track metadata returned HTTP ${res.status}; retry on the next import`,
+          }).catch(() => undefined),
+        ));
       }
     } catch {
       // Network error or timeout — continue without artwork for this batch.
+      await Promise.all(batch.map((track) =>
+        recordProviderReleaseFailure({
+          provider: "spotify",
+          providerTrackId: track.externalId,
+          error: "Spotify track metadata request failed; retry on the next import",
+        }).catch(() => undefined),
+      ));
     } finally {
       clearTimeout(timer);
     }
@@ -924,6 +959,9 @@ export async function seedSpotifySoftRows(
         albumName: meta?.albumName ?? null,
         artworkUrl: meta?.artworkUrl ?? null,
         isrc: meta?.isrc ?? t.isrc ?? null,
+        providerReleaseId: meta?.releaseId ?? null,
+        providerReleaseDate: meta?.releaseDate ?? null,
+        providerReleasePrecision: meta?.releasePrecision ?? null,
         addedAt,
         mbid: null,
       })
@@ -935,10 +973,25 @@ export async function seedSpotifySoftRows(
           albumName: meta?.albumName ?? null,
           artworkUrl: meta?.artworkUrl ?? null,
           isrc: meta?.isrc ?? t.isrc ?? null,
+          providerReleaseId: meta?.releaseId ?? null,
+          providerReleaseDate: meta?.releaseDate ?? null,
+          providerReleasePrecision: meta?.releasePrecision ?? null,
           addedAt,
         },
       })
       .catch(() => {}); // Silently skip FK or other errors.
+    if (isRealSpotifyId && meta?.releaseDate) {
+      await recordProviderReleaseEvidence({
+        provider: "spotify",
+        providerTrackId: t.externalId,
+        providerReleaseId: meta.releaseId,
+        isrc: meta.isrc ?? t.isrc ?? null,
+        releaseDate: meta.releaseDate,
+        precision: meta.releasePrecision,
+      }).catch((err) => {
+        console.warn("[me/import] Spotify release evidence write failed", err);
+      });
+    }
   }
 
   console.log(`[me/import] seeded ${entries.length} soft rows into spotify_library_items`);
@@ -3145,6 +3198,7 @@ router.get("/me/library", h(async (req, res) => {
     artist: string;
     artworkUrl: string | null;
     albumName: string | null;
+    releaseYear: number | null;
     sortKey: string;
   };
   let softRows: SoftRow[] = [];
@@ -3159,6 +3213,11 @@ router.get("/me/library", h(async (req, res) => {
         artist: spotifyLibraryItemsTable.artist,
         artworkUrl: spotifyLibraryItemsTable.artworkUrl,
         albumName: spotifyLibraryItemsTable.albumName,
+        releaseYear: sql<number | null>`CASE
+          WHEN ${spotifyLibraryItemsTable.providerReleaseDate} ~ '^\\d{4}(-\\d{2})?(-\\d{2})?$'
+          THEN substring(${spotifyLibraryItemsTable.providerReleaseDate} from 1 for 4)::int
+          ELSE NULL
+        END`,
         sortKey: softSortKeyExpr.as("soft_sort_key"),
       })
       .from(spotifyLibraryItemsTable)
@@ -3182,6 +3241,11 @@ router.get("/me/library", h(async (req, res) => {
         artist: appleLibraryItemsTable.artist,
         artworkUrl: appleLibraryItemsTable.artworkUrl,
         albumName: appleLibraryItemsTable.albumName,
+        releaseYear: sql<number | null>`CASE
+          WHEN ${appleLibraryItemsTable.providerReleaseDate} ~ '^\\d{4}(-\\d{2})?(-\\d{2})?$'
+          THEN substring(${appleLibraryItemsTable.providerReleaseDate} from 1 for 4)::int
+          ELSE NULL
+        END`,
         sortKey: appleSoftSortKeyExpr.as("apple_soft_sort_key"),
       })
       .from(appleLibraryItemsTable)
@@ -3277,7 +3341,7 @@ router.get("/me/library", h(async (req, res) => {
       links: null as Array<{ url: string }> | null,
       albumTitle: s.albumName,
       releaseGroupMbid: null as string | null,
-      releaseYear: null as number | null,
+      releaseYear: s.releaseYear,
        genres: null as string[] | null,
       sortKey: s.sortKey,
     })),

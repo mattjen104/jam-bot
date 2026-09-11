@@ -41,6 +41,7 @@ import { recordBoundaryTiming } from "./live-timing-health.js";
 import { timingFromRaw } from "./timing.js";
 import { recordConfirmedSpinTimeline } from "./broadcast-timeline.js";
 import { scheduleSpeechTransitionCandidate } from "./speech-shadow-orchestrator.js";
+import { reconcileProviderReleaseEvidence } from "./release-evidence.js";
 
 export {
   RESOLUTION_CACHE_VERSION,
@@ -455,6 +456,9 @@ export async function upsertRecording(
       genreEnrichmentStatus: recordingsTable.genreEnrichmentStatus,
       genreEnrichmentAttemptedAt: recordingsTable.genreEnrichmentAttemptedAt,
       genreEnrichmentError: recordingsTable.genreEnrichmentError,
+      releaseEnrichmentStatus: recordingsTable.releaseEnrichmentStatus,
+      yearCheckedAt: recordingsTable.yearCheckedAt,
+      releaseDateCheckedAt: recordingsTable.releaseDateCheckedAt,
     })
     .from(recordingsTable)
     .where(eq(recordingsTable.mbid, r.mbid as string))
@@ -483,6 +487,10 @@ export async function upsertRecording(
   let genreEnrichmentAttemptedAt =
     existing?.genreEnrichmentAttemptedAt ?? null;
   let genreEnrichmentError = existing?.genreEnrichmentError ?? null;
+  let releaseEnrichmentStatus =
+    existing?.releaseEnrichmentStatus ?? "pending";
+  let yearCheckedAt = existing?.yearCheckedAt ?? null;
+  let releaseDateCheckedAt = existing?.releaseDateCheckedAt ?? null;
 
   // Spotify-only synthetic identities are useful for playback/library display,
   // but have no MusicBrainz recording to enrich. Mark them explicitly instead
@@ -501,8 +509,14 @@ export async function upsertRecording(
       const outcome =
         g.status ?? (g.genres.length > 0 ? "found" : "no_result");
       if (genres == null && g.genres.length) genres = g.genres;
-      if (releaseYear == null && g.year != null) releaseYear = g.year;
-      if (releaseDate == null && g.releaseDate != null) releaseDate = g.releaseDate;
+      // MusicBrainz metadata is canonical and supersedes provider fallback.
+      if (g.year != null) releaseYear = g.year;
+      if (g.releaseDate != null) releaseDate = g.releaseDate;
+      if (g.year != null || g.releaseDate != null) {
+        releaseEnrichmentStatus = "canonical_found";
+        yearCheckedAt = genreEnrichmentAttemptedAt;
+        releaseDateCheckedAt = genreEnrichmentAttemptedAt;
+      }
       genreEnrichmentStatus = outcome;
       genreEnrichmentError =
         outcome === "transient_failure"
@@ -573,6 +587,9 @@ export async function upsertRecording(
       genreEnrichmentStatus,
       genreEnrichmentAttemptedAt,
       genreEnrichmentError,
+      releaseEnrichmentStatus,
+      yearCheckedAt,
+      releaseDateCheckedAt,
     })
     .onConflictDoUpdate({
       target: recordingsTable.mbid,
@@ -593,6 +610,9 @@ export async function upsertRecording(
         genreEnrichmentStatus,
         genreEnrichmentAttemptedAt,
         genreEnrichmentError,
+        releaseEnrichmentStatus,
+        ...(yearCheckedAt ? { yearCheckedAt } : {}),
+        ...(releaseDateCheckedAt ? { releaseDateCheckedAt } : {}),
         ...(r.isrc
           ? {
               isrc: preserveExistingMetadata
@@ -605,6 +625,16 @@ export async function upsertRecording(
         updatedAt: sql`now()`,
       },
     });
+
+  if (r.isrc && !syntheticProviderIdentity) {
+    // The evidence ledger is auxiliary and must never delay spin ingestion.
+    void reconcileProviderReleaseEvidence({
+      recordingMbid: r.mbid as string,
+      isrc: r.isrc,
+    }).catch((err) =>
+      console.warn("[lore] provider release evidence reconcile failed", err),
+    );
+  }
 
   return newArtwork ?? existing?.artworkUrl ?? null;
 }

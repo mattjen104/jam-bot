@@ -89,6 +89,12 @@ export const recordingsTable = pgTable("recordings", {
    * Mirrors `yearCheckedAt` semantics.
    */
   releaseDateCheckedAt: timestamp("release_date_checked_at"),
+  /** Canonical MusicBrainz release-check funnel; provider facts stay separate. */
+  releaseEnrichmentStatus: text("release_enrichment_status")
+    .notNull()
+    .default("pending"),
+  releaseEnrichmentAttemptedAt: timestamp("release_enrichment_attempted_at"),
+  releaseEnrichmentError: text("release_enrichment_error"),
   /**
    * When genre/year enrichment was last attempted for this recording (set
    * regardless of whether MusicBrainz/Last.fm actually returned data). Null
@@ -156,6 +162,46 @@ export const recordingsTable = pgTable("recordings", {
 
 export type Recording = typeof recordingsTable.$inferSelect;
 export type InsertRecording = typeof recordingsTable.$inferInsert;
+
+/**
+ * Provider-scoped release-date facts captured from exact track identities.
+ * These rows remain separate from MusicBrainz canonical metadata and can be
+ * linked before or after a recording resolves.
+ */
+export const recordingReleaseEvidenceTable = pgTable(
+  "recording_release_evidence",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    provider: text("provider").notNull(),
+    providerTrackId: text("provider_track_id").notNull(),
+    providerReleaseId: text("provider_release_id"),
+    isrc: text("isrc"),
+    releaseDate: text("release_date"),
+    precision: text("precision").notNull(),
+    confidence: text("confidence").notNull().default("exact_provider_track"),
+    recordingMbid: text("recording_mbid").references(() => recordingsTable.mbid, {
+      onDelete: "set null",
+    }),
+    observedAt: timestamp("observed_at").defaultNow().notNull(),
+    linkedAt: timestamp("linked_at"),
+    status: text("status").notNull().default("provisional"),
+    lastError: text("last_error"),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("recording_release_evidence_provider_track_idx").on(
+      t.provider,
+      t.providerTrackId,
+    ),
+    index("recording_release_evidence_recording_idx").on(t.recordingMbid),
+    index("recording_release_evidence_isrc_idx").on(t.isrc),
+  ],
+);
+
+export type RecordingReleaseEvidence =
+  typeof recordingReleaseEvidenceTable.$inferSelect;
+export type InsertRecordingReleaseEvidence =
+  typeof recordingReleaseEvidenceTable.$inferInsert;
 
 /**
  * A curated, high-quality radio station. `nowPlayingSource` selects the metadata
@@ -2570,6 +2616,9 @@ export const spotifyLibraryItemsTable = pgTable(
     title: text("title").notNull(),
     artist: text("artist").notNull(),
     albumName: text("album_name"),
+    providerReleaseId: text("provider_release_id"),
+    providerReleaseDate: text("provider_release_date"),
+    providerReleasePrecision: text("provider_release_precision"),
     /** 300 px album artwork URL from the Spotify CDN. */
     artworkUrl: text("artwork_url"),
     isrc: text("isrc"),
@@ -2620,6 +2669,9 @@ export const appleLibraryItemsTable = pgTable(
     title: text("title").notNull(),
     artist: text("artist").notNull(),
     albumName: text("album_name"),
+    providerReleaseId: text("provider_release_id"),
+    providerReleaseDate: text("provider_release_date"),
+    providerReleasePrecision: text("provider_release_precision"),
     artworkUrl: text("artwork_url"),
     isrc: text("isrc"),
     addedAt: timestamp("added_at").defaultNow().notNull(),
