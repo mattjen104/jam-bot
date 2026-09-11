@@ -56,7 +56,6 @@ import {
   Loader2,
   Radio,
   Search,
-  SlidersHorizontal,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -74,19 +73,24 @@ import { useDialData } from "../hooks/useDialData";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
-import { FilterDropdownMenu } from "../components/dial/FilterDropdownMenu";
-import { LibraryMetadataFilters, LIBRARY_AGES, type LibraryAge } from "../components/LibraryMetadataFilters";
+import {
+  LibraryMetadataFilters,
+  LibraryStationFilters,
+  LIBRARY_AGES,
+  deriveLibraryLens,
+  writeLibraryLens,
+  type LibraryAge,
+  type LibraryLens,
+} from "../components/LibraryMetadataFilters";
 import {
   STATION_CATEGORY_DEFINITIONS,
   type StationCategory,
 } from "../lib/dialCategories";
 import {
-  BRO_ZONE_DEFINITIONS,
   countBroZones,
   filterBroZoneCollection,
   parseBroZoneState,
   writeBroZoneState,
-  type BroZone,
 } from "../lib/broZones";
 import {
   buildFocusedLibraryUrl,
@@ -99,9 +103,6 @@ import { canonicalGenres, releaseEra } from "@workspace/song-enrichment";
 // ---------------------------------------------------------------------------
 const LEDGER_PROMPT_DISMISSED_KEY = "lore:ledger_prompt_dismissed_until";
 const LEDGER_PROMPT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const DEMO_STATION_CATEGORY_OPTIONS = STATION_CATEGORY_DEFINITIONS.map(
-  ({ cat, label, title }) => ({ value: cat, label, title }),
-);
 const DEMO_STATION_CATEGORY_KEYS = new Set<StationCategory>(
   STATION_CATEGORY_DEFINITIONS.map(({ cat }) => cat),
 );
@@ -631,6 +632,15 @@ export function parseDemoSongSort(value: string | null): DemoSongSort {
     || value === "era"
     ? value
     : "added";
+}
+
+export function effectiveDemoSongSort(lens: LibraryLens, sort: DemoSongSort): DemoSongSort {
+  if (lens === "artist") {
+    return sort === "artist" || sort === "title" || sort === "album" ? sort : "added";
+  }
+  if (lens === "genre") return sort === "genre" || sort === "title" ? sort : "added";
+  if (lens === "era") return sort === "era" || sort === "title" ? sort : "added";
+  return sort;
 }
 
 export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
@@ -1389,33 +1399,33 @@ function DemoMergedLibrary({
   const [, setLocation] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
+  const libraryLens = deriveLibraryLens(search);
   const selectedStationSlug =
     params.get("stationCrossings")
     ?? (params.get("lens") === "crossings" ? params.get("station") : null);
   const remoteLayout = params.get("layout") === "grid";
-  const focusedArtist = useMemo(
-    () => new URLSearchParams(search).get("focus"),
-    [search],
-  );
+  const focusedArtist = libraryLens === "artist" ? params.get("focus") : null;
   const stationSortParam = params.get("stationSort");
   const stationSort: "overlap" | "live" | "discovery" | "name" =
     stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name"
       ? stationSortParam
       : "overlap";
   const sortParam = params.get("sort");
-  const songSort = parseDemoSongSort(sortParam);
-  const selectedGenres = useMemo(
-    () => canonicalGenres((params.get("genre") ?? "").split(",")),
-    [search],
-  );
+  const songSort = effectiveDemoSongSort(libraryLens, parseDemoSongSort(sortParam));
+  const selectedGenres = libraryLens === "genre"
+    ? canonicalGenres((params.get("genre") ?? "").split(","))
+    : [];
   const selectedDecade = Number(params.get("decade"));
-  const decade = Number.isFinite(selectedDecade) && selectedDecade > 0 ? selectedDecade : undefined;
+  const decade = libraryLens === "era" && Number.isFinite(selectedDecade) && selectedDecade > 0
+    ? selectedDecade
+    : undefined;
   const selectedAges = useMemo<LibraryAge[]>(() => {
+    if (libraryLens !== "era") return [];
     const ages = (params.get("age") ?? "")
       .split(",")
       .filter((v): v is LibraryAge => LIBRARY_AGES.includes(v as LibraryAge));
     return decade != null && !ages.includes("deep") ? [...ages, "deep" as const] : ages;
-  }, [decade, search]);
+  }, [decade, libraryLens, search]);
   const matchFilters = useMemo(
     () => ({ genres: selectedGenres, ages: selectedAges, decade }),
     [decade, selectedAges, selectedGenres],
@@ -1569,7 +1579,10 @@ function DemoMergedLibrary({
       releaseYearKnown: tracks.filter((track) => track.releaseYear != null).length,
     };
   }, [stations]);
-  const songMetadataCoverage = demoLibraryData?.pages[0]?.metadataCoverage;
+  const firstDemoLibraryPage = demoLibraryData?.pages[0];
+  const songMetadataCoverage = firstDemoLibraryPage && "metadataCoverage" in firstDemoLibraryPage
+    ? firstDemoLibraryPage.metadataCoverage
+    : undefined;
 
   const allArtists = useMemo(() => {
     const set = new Set<string>();
@@ -1595,6 +1608,18 @@ function DemoMergedLibrary({
     setLocation(query ? `/library?${query}` : "/library");
   };
   const updateMetadata = (mutate: (next: URLSearchParams) => void) => updateSearch(mutate);
+  const selectLens = (lens: LibraryLens) => updateSearch(next => {
+    writeLibraryLens(next, lens);
+    const currentSort = parseDemoSongSort(next.get("sort"));
+    const compatible = lens === "artist"
+      ? currentSort === "added" || currentSort === "artist" || currentSort === "title"
+      : lens === "genre"
+        ? currentSort === "added" || currentSort === "genre" || currentSort === "title"
+        : lens === "era"
+          ? currentSort === "added" || currentSort === "era" || currentSort === "title"
+          : true;
+    if (!compatible) next.delete("sort");
+  });
 
   const buildTabHref = (targetView: "stations" | "songs") => {
     const p = new URLSearchParams(search);
@@ -1686,11 +1711,25 @@ function DemoMergedLibrary({
           </nav>
         </div>
         <div className="demo-merged-library__filters">
-          <ArtistLensControl
+          <label className="library-lens-select">
+            <span className="sr-only">Lens</span>
+            <select
+              aria-label="Lens"
+              value={libraryLens}
+              onChange={(event) => selectLens(event.target.value as LibraryLens)}
+            >
+              <option value="all">All</option>
+              <option value="artist">Artist</option>
+              <option value="genre">Genre</option>
+              <option value="era">Era</option>
+            </select>
+          </label>
+          {libraryLens === "artist" && <ArtistLensControl
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
             focusedArtist={focusedArtist}
             onFocus={(artist) => updateSearch(next => {
+              writeLibraryLens(next, "artist");
               next.set("focus", artist);
               next.delete("openAlbum");
             })}
@@ -1720,13 +1759,23 @@ function DemoMergedLibrary({
               const qs = p.toString();
               setLocation(qs ? `/library?${qs}` : "/library");
             }}
-          />
-          <LibraryMetadataFilters
+          />}
+          {libraryLens === "genre" && <LibraryMetadataFilters
+            mode="genre"
             genres={selectedGenres}
+            ages={[]}
+            onGenresChange={(values) => updateMetadata(next => values.length ? next.set("genre", values.join(",")) : next.delete("genre"))}
+            onAgesChange={() => undefined}
+            onDecadeChange={() => undefined}
+            onReset={() => updateMetadata(next => next.delete("genre"))}
+          />}
+          {libraryLens === "era" && <LibraryMetadataFilters
+            mode="era"
+            genres={[]}
             ages={selectedAges}
             decade={decade}
             decadeOptions={decadeOptions}
-            onGenresChange={(values) => updateMetadata(next => values.length ? next.set("genre", values.join(",")) : next.delete("genre"))}
+            onGenresChange={() => undefined}
             onAgesChange={(values) => updateMetadata(next => {
               if (values.some(value => value === "current" || value === "catalog")
                 || (decade != null && !values.includes("deep"))) next.delete("decade");
@@ -1734,28 +1783,26 @@ function DemoMergedLibrary({
               else next.delete("age");
             })}
             onDecadeChange={(value) => updateMetadata(next => {
-              if (value == null) {
-                next.delete("decade");
-                return;
+              if (value == null) next.delete("decade");
+              else {
+                next.set("decade", String(value));
+                next.set("age", "deep");
               }
-              next.set("decade", String(value));
-              next.set("age", "deep");
             })}
             onReset={() => updateMetadata(next => {
-              next.delete("genre");
               next.delete("age");
               next.delete("decade");
             })}
-          />
+          />}
 
           {view === "stations" && (
             <>
-              <FilterDropdownMenu
-                label="Categories"
-                ariaLabel="Station categories"
-                options={DEMO_STATION_CATEGORY_OPTIONS}
-                active={activeCategories}
-                onToggle={(category) => updateSearch((next) => {
+              <LibraryStationFilters
+                categories={activeCategories}
+                broZonesActive={broZoneState.active}
+                broZones={activeBroZones}
+                broZoneCounts={broZoneCounts}
+                onToggleCategory={(category) => updateSearch((next) => {
                   const selected = new Set(activeCategories);
                   if (selected.has(category)) selected.delete(category);
                   else selected.add(category);
@@ -1765,47 +1812,19 @@ function DemoMergedLibrary({
                   if (ordered.length > 0) next.set("categories", ordered.join(","));
                   else next.delete("categories");
                 })}
-                onClear={() => updateSearch(next => next.delete("categories"))}
-                clearLabel="All stations"
-                variant="chips"
-                leadingIcon={<SlidersHorizontal size={14} strokeWidth={2} />}
-                className="demo-merged-library__category-filter"
-              />
-              <FilterDropdownMenu<BroZone | "__all">
-                label={`Bro Zones · ${broZoneCounts.combined}`}
-                ariaLabel="Bro Zones regions"
-                options={[
-                  {
-                    value: "__all",
-                    label: `All Bro Zones · ${broZoneCounts.combined}`,
-                    title: "All reviewed Bro Zones stations",
-                  },
-                  ...BRO_ZONE_DEFINITIONS.map(({ key, label }) => ({
-                    value: key,
-                    label: `${label} · ${broZoneCounts.byZone[key]}`,
-                    title: `Reviewed ${label} station membership`,
-                  })),
-                ]}
-                active={
-                  broZoneState.active && activeBroZones.size === 0
-                    ? new Set(["__all" as const])
-                    : activeBroZones
-                }
-                onToggle={(zone) => updateSearch((next) => {
-                  if (zone === "__all") {
-                    writeBroZoneState(next, !broZoneState.active || activeBroZones.size > 0, new Set());
-                    return;
-                  }
+                onToggleBroZonesCollection={() => updateSearch((next) => {
+                  writeBroZoneState(next, !broZoneState.active || activeBroZones.size > 0, new Set());
+                })}
+                onToggleBroZone={(zone) => updateSearch((next) => {
                   const selected = new Set(activeBroZones);
                   if (selected.has(zone)) selected.delete(zone);
                   else selected.add(zone);
                   writeBroZoneState(next, selected.size > 0, selected);
                 })}
-                onClear={() => updateSearch(next => writeBroZoneState(next, false, new Set()))}
-                clearLabel="All stations"
-                variant="chips"
-                leadingIcon={<Radio size={14} strokeWidth={2} />}
-                className="demo-merged-library__bro-zone-filter"
+                onClear={() => updateSearch(next => {
+                  next.delete("categories");
+                  writeBroZoneState(next, false, new Set());
+                })}
               />
               <select
                 style={selectStyle}
@@ -1840,12 +1859,22 @@ function DemoMergedLibrary({
                 }}
               >
                 <option value="added">Recently kept</option>
-                <option value="artist">Artist</option>
-                <option value="album">Album</option>
+                {libraryLens === "artist" && <option value="artist">Artist name</option>}
+                {libraryLens === "genre" && <option value="genre">Genre relevance</option>}
+                {libraryLens === "era" && <option value="era">Era relevance</option>}
+                {libraryLens === "all" && <option value="artist">Artist</option>}
                 <option value="title">Title</option>
-                <option value="genre">Genre</option>
-                <option value="era">Era</option>
-                <option value="count">Most kept</option>
+                {libraryLens === "all" && (
+                  <optgroup label="Group">
+                    <option value="album">Album grouping</option>
+                    <option value="count">Most kept grouping</option>
+                  </optgroup>
+                )}
+                {libraryLens === "artist" && songSort === "album" && (
+                  <optgroup label="Presentation">
+                    <option value="album">Album grouping</option>
+                  </optgroup>
+                )}
               </select>
             </>
           )}
@@ -1888,6 +1917,7 @@ function DemoMergedLibrary({
           focusedArtist={focusedArtist}
           selectedStationSlug={selectedStationSlug}
           onFocusArtist={(artist) => updateSearch((next) => {
+            writeLibraryLens(next, "artist");
             next.set("focus", artist);
             next.delete("openAlbum");
           })}
@@ -1903,7 +1933,17 @@ function DemoMergedLibrary({
       ) : remoteLayout ? (
         <DemoSongRemote items={filteredDemoItems} sort={songSort} matchFilters={matchFilters} />
       ) : (
-        <LibraryContent embedded={embedded} showArtistEditor={false} />
+        <LibraryContent
+          embedded={embedded}
+          showArtistEditor={false}
+          focusedState={{
+            artist: focusedArtist,
+            genres: selectedGenres,
+            ages: selectedAges,
+            decade,
+            sort: songSort,
+          }}
+        />
       )}
     </main>
   );
@@ -1912,9 +1952,17 @@ function DemoMergedLibrary({
 function LibraryContent({
   embedded = false,
   showArtistEditor = true,
+  focusedState,
 }: {
   embedded?: boolean;
   showArtistEditor?: boolean;
+  focusedState?: {
+    artist: string | null;
+    genres: string[];
+    ages: LibraryAge[];
+    decade?: number;
+    sort: DemoSongSort;
+  };
 }) {
   const [location, setLocation] = useLocation();
   const search = useSearch();
@@ -1949,9 +1997,10 @@ function LibraryContent({
 
   // Sort — persisted in URL as ?sort=artist|title|album|count (default = "added", omitted from URL)
   const sortFilter = useMemo((): DemoSongSort => {
+    if (demoSurface && focusedState) return focusedState.sort;
     const v = new URLSearchParams(search).get("sort");
     return parseDemoSongSort(v);
-  }, [search]);
+  }, [demoSurface, focusedState, search]);
 
   const setSortFilter = (sort: DemoSongSort) => {
     const p = new URLSearchParams(search);
@@ -2002,18 +2051,9 @@ function LibraryContent({
   };
   const handleDismissLedgerPrompt = () => { dismissLedgerPrompt(); setLedgerPromptHidden(true); };
 
-  const focusedMusicGenres = demoSurface
-    ? canonicalGenres((new URLSearchParams(search).get("genre") ?? "").split(","))
-    : [];
-  const focusedMusicAges = demoSurface
-    ? (new URLSearchParams(search).get("age") ?? "")
-      .split(",")
-      .filter((value): value is LibraryAge => LIBRARY_AGES.includes(value as LibraryAge))
-    : [];
-  const focusedDecadeRaw = demoSurface ? Number(new URLSearchParams(search).get("decade")) : NaN;
-  const focusedDecade = Number.isFinite(focusedDecadeRaw) && focusedDecadeRaw > 0
-    ? focusedDecadeRaw
-    : undefined;
+  const focusedMusicGenres = demoSurface ? (focusedState?.genres ?? []) : [];
+  const focusedMusicAges = demoSurface ? (focusedState?.ages ?? []) : [];
+  const focusedDecade = demoSurface ? focusedState?.decade : undefined;
   // Kept list (infinite scroll)
   const {
     data: keptData,
@@ -2037,9 +2077,7 @@ function LibraryContent({
     () => keptData?.pages.flatMap((p) => p.items) ?? [],
     [keptData],
   );
-  const focusedArtist = demoSurface
-    ? new URLSearchParams(search).get("focus")
-    : null;
+  const focusedArtist = demoSurface ? (focusedState?.artist ?? null) : null;
   const keptItems = useMemo(() => {
     if (!focusedArtist) return rawKeptItems;
     const normalizedFocus = focusedArtist.trim().toLocaleLowerCase();
@@ -2095,12 +2133,16 @@ function LibraryContent({
     setLocation(query ? `${location.split("?")[0]}?${query}` : location.split("?")[0]!);
   };
   const focusLibraryArtist = (artist: string) => {
-    setLocation(buildFocusedLibraryUrl(search, { artist }));
+    const url = new URL(buildFocusedLibraryUrl(search, { artist }), "https://lore.local");
+    writeLibraryLens(url.searchParams, "artist");
+    setLocation(`${url.pathname}?${url.searchParams.toString()}`);
   };
   const focusLibraryAlbum = (albumKey: string) => {
     const artist = getArtistFromLibraryAlbumKey(albumKey);
     if (!artist) return;
-    setLocation(buildFocusedLibraryUrl(search, { artist, albumKey }));
+    const url = new URL(buildFocusedLibraryUrl(search, { artist, albumKey }), "https://lore.local");
+    writeLibraryLens(url.searchParams, "artist");
+    setLocation(`${url.pathname}?${url.searchParams.toString()}`);
   };
 
 

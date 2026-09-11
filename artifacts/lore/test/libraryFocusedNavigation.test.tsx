@@ -205,7 +205,7 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
-  it("intersects historical artist station membership with current-track music filters", async () => {
+  it("treats an old contradictory artist-plus-genre link as the Artist lens", async () => {
     mockUseSearch.mockReturnValue("?view=stations&focus=Broadcast&genre=electronic&age=deep");
     mockUseLocation.mockReturnValue([
       "/library?view=stations&focus=Broadcast&genre=electronic&age=deep",
@@ -239,12 +239,18 @@ describe("focused Library URL navigation", () => {
     await renderLibrary();
 
     expect(screen.getByText("historical-match")).toBeTruthy();
-    expect(screen.queryByText("wrong-genre")).toBeNull();
+    expect(screen.getByText("wrong-genre")).toBeTruthy();
+    expect((screen.getByRole("combobox", { name: "Lens" }) as HTMLSelectElement).value).toBe("artist");
   });
 
   it("adds several autocomplete matches without closing or clearing the search", async () => {
     await renderLibrary();
 
+    fireEvent.change(screen.getByRole("combobox", { name: "Lens" }), { target: { value: "artist" } });
+    mockUseSearch.mockReturnValue("?libraryLens=artist");
+    mockUseLocation.mockReturnValue(["/library?libraryLens=artist", mockSetLocation]);
+    cleanup();
+    await renderLibrary();
     fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
     const input = screen.getByPlaceholderText("Search or add artist...");
     fireEvent.change(input, { target: { value: "king gizzard" } });
@@ -265,6 +271,8 @@ describe("focused Library URL navigation", () => {
   });
 
   it("uses the best canonical artist completion when Enter is pressed", async () => {
+    mockUseSearch.mockReturnValue("?libraryLens=artist");
+    mockUseLocation.mockReturnValue(["/library?libraryLens=artist", mockSetLocation]);
     await renderLibrary();
 
     fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
@@ -336,7 +344,7 @@ describe("focused Library URL navigation", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Categories/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Public & Community/ }));
 
     let url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
@@ -344,7 +352,7 @@ describe("focused Library URL navigation", () => {
     expect(url.searchParams.get("focus")).toBe("Broadcast");
     expect(url.searchParams.get("stationSort")).toBe("live");
 
-    fireEvent.click(screen.getByRole("button", { name: "All stations" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
     url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.searchParams.has("categories")).toBe(false);
     expect(url.searchParams.get("focus")).toBe("Broadcast");
@@ -359,7 +367,7 @@ describe("focused Library URL navigation", () => {
     ]);
     await renderLibrary();
 
-    expect(screen.queryByRole("button", { name: /Categories/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Filters/ })).toBeNull();
     expect(screen.getByRole("link", { name: /Stations/ }).getAttribute("href"))
       .toBe("/library?categories=campus%2Cpublic");
   });
@@ -412,15 +420,19 @@ describe("focused Library URL navigation", () => {
   });
 
   it("focuses a grouped song artist and clears the previous album in demo mode", async () => {
-    mockUseSearch.mockReturnValue("?view=songs&sort=artist&openAlbum=Dots+and+Loops%1FStereolab");
+    mockUseSearch.mockReturnValue("?view=songs&libraryLens=genre&genre=electronic&sort=artist&openAlbum=Dots+and+Loops%1FStereolab");
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Broadcast, 1 album · 1 song" }));
+    expect((screen.getByRole("combobox", { name: "Sort songs" }) as HTMLSelectElement).value).toBe("added");
+    expect(screen.queryByTestId("library-artist-group")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Broadcast" }));
 
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.pathname).toBe("/library");
     expect(url.searchParams.get("view")).toBe("songs");
     expect(url.searchParams.get("focus")).toBe("Broadcast");
+    expect(url.searchParams.get("libraryLens")).toBe("artist");
+    expect(url.searchParams.has("genre")).toBe(false);
     expect(url.searchParams.get("sort")).toBe("album");
     expect(url.searchParams.has("openAlbum")).toBe(false);
   });
@@ -432,6 +444,7 @@ describe("focused Library URL navigation", () => {
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.searchParams.get("view")).toBe("songs");
     expect(url.searchParams.get("focus")).toBe("Broadcast");
+    expect(url.searchParams.get("libraryLens")).toBe("artist");
     expect(url.searchParams.get("sort")).toBe("album");
     expect(url.searchParams.get("openAlbum")).toBe("Tender Buttons\x1fBroadcast");
 
