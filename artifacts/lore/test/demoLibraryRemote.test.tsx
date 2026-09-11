@@ -158,6 +158,23 @@ describe("demo Library visual remotes", () => {
     expect(toggleRadio).toHaveBeenCalledWith(frequent.station);
   });
 
+  test("opens the same station crossing lens as the detailed list", () => {
+    const onOpenStationCrossings = vi.fn();
+    render(
+      <DemoStationRemote
+        stations={[dialStation("kexp", "KEXP", 4)]}
+        hasData
+        focusedArtist={null}
+        sort="overlap"
+        onOpenStationCrossings={onOpenStationCrossings}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("demo-station-remote-crossings"));
+    expect(onOpenStationCrossings).toHaveBeenCalledWith("kexp");
+    expect(toggleRadio).not.toHaveBeenCalled();
+  });
+
   test("shows station initials when a logo is missing and marks the tuned tile", () => {
     playerState.station = { slug: "kexp" };
     render(

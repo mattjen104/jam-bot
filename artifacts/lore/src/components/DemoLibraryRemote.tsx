@@ -18,13 +18,13 @@ import { crossingSentence } from "./dialViewHelpers";
 
 export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
 
-function stationTrack(station: DialStation) {
-  return station.liveTrack
-    ?? station.shows.find((show) => show.state === "live")?.currentTrack
-    ?? null;
-}
-
-function StationRemoteTile({ station }: { station: DialStation }) {
+function StationRemoteTile({
+  station,
+  onOpenCrossings,
+}: {
+  station: DialStation;
+  onOpenCrossings?: (stationSlug: string) => void;
+}) {
   const { radio } = usePlayer();
   const playable = resolvePlaybackSource(station.station) !== null;
   const selected = radio.station?.slug === station.station.slug;
@@ -57,9 +57,12 @@ function StationRemoteTile({ station }: { station: DialStation }) {
   const label = `${station.station.name}`;
 
   return (
+    <div
+      className={`demo-library-remote__tile demo-library-remote__station${selected ? " is-selected" : ""}`}
+    >
     <button
       type="button"
-      className={`demo-library-remote__tile demo-library-remote__station${selected ? " is-selected" : ""}`}
+      className="demo-library-remote__station-tune"
       aria-label={`Tune in to ${label}`}
       aria-pressed={selected}
       title={label}
@@ -84,8 +87,18 @@ function StationRemoteTile({ station }: { station: DialStation }) {
         className="demo-library-remote__station-mark"
       />
       <span className="demo-library-remote__station-name">{station.station.name}</span>
-      <span className="demo-library-remote__evidence">{evidenceNode}</span>
     </button>
+      <button
+        type="button"
+        className="demo-library-remote__evidence demo-library-remote__crossings-link"
+        onClick={() => onOpenCrossings?.(station.station.slug)}
+        disabled={!onOpenCrossings}
+        aria-label={`Open every crossing for ${station.station.name}`}
+        data-testid="demo-station-remote-crossings"
+      >
+        {evidenceNode}
+      </button>
+    </div>
   );
 }
 
@@ -203,14 +216,14 @@ export function DemoStationRemote({
   focusedArtist,
   sort,
   forceAllStations = false,
-  matchFilters,
+  onOpenStationCrossings,
 }: {
   stations: DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
   sort: DemoStationSort;
   forceAllStations?: boolean;
-  matchFilters?: LibraryMatchFilters;
+  onOpenStationCrossings?: (stationSlug: string) => void;
 }) {
   const orderedStations = useMemo(
     () => buildDemoRadioSections({
@@ -228,7 +241,11 @@ export function DemoStationRemote({
       {orderedStations.length > 0 ? (
         <div className="demo-library-remote__grid">
           {orderedStations.map((station) => (
-              <StationRemoteTile key={station.station.slug} station={station} />
+            <StationRemoteTile
+              key={station.station.slug}
+              station={station}
+              onOpenCrossings={onOpenStationCrossings}
+            />
           ))}
         </div>
       ) : (

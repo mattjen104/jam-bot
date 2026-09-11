@@ -3952,6 +3952,26 @@
 .demo-library-remote__station {
   padding: 8px;
 }
+.demo-library-remote__station-tune {
+  position: absolute;
+  inset: 8px;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.demo-library-remote__station-tune:focus-visible {
+  outline: 2px solid hsl(var(--foreground));
+  outline-offset: -2px;
+}
+.demo-library-remote__station-tune:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
 .demo-library-remote__station-mark {
   width: 100%;
   height: 100%;
@@ -4060,6 +4080,18 @@
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+.demo-library-remote__crossings-link {
+  z-index: 2;
+  border: 0;
+  cursor: pointer;
+}
+.demo-library-remote__crossings-link:focus-visible {
+  outline: 2px solid hsl(var(--foreground));
+  outline-offset: 1px;
+}
+.demo-library-remote__crossings-link:disabled {
+  cursor: default;
 }
 .demo-library-remote__status--with-evidence {
   bottom: 31px;

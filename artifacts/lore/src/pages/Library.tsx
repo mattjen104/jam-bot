@@ -1793,7 +1793,9 @@ function DemoMergedLibrary({
           focusedArtist={focusedArtist}
           sort={stationSort}
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
-          matchFilters={matchFilters}
+          onOpenStationCrossings={(stationSlug) => updateSearch((next) => {
+            next.set("stationCrossings", stationSlug);
+          })}
         />
       ) : view === "stations" ? (
         <RadioSurface
