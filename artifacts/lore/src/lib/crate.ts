@@ -12,6 +12,29 @@ export interface ReleaseMetadata {
   releaseGroupMbid: string;
 }
 
+export function filterCrateReleases(
+  releases: CrateRelease[],
+  query: string,
+): CrateRelease[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return releases;
+
+  return releases.filter((release) => {
+    const searchable = [
+      release.title,
+      release.artist,
+      ...release.items.flatMap((item) => [
+        item.recording?.title,
+        item.recording?.artist,
+        item.recording?.albumTitle,
+      ]),
+    ];
+    return searchable.some((value) =>
+      value?.toLocaleLowerCase().includes(normalizedQuery),
+    );
+  });
+}
+
 export const releaseMetadataCache = new Map<string, ReleaseMetadata | null>();
 const releaseMetadataPending = new Set<string>();
 let releaseMetadataRequestChain: Promise<void> = Promise.resolve();

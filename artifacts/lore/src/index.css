@@ -4708,6 +4708,35 @@
   color: hsl(var(--foreground));
   font-family: var(--lore-font-body);
 }
+
+.library-stack-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 7px 9px;
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--faint));
+}
+.library-stack-filter input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-interface);
+}
+.library-stack-filter input::placeholder { color: hsl(var(--faint)); }
+.library-stack-filter button {
+  border: 0;
+  background: transparent;
+  color: hsl(var(--dim));
+  cursor: pointer;
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-interface);
+}
 .library-crate__toolbar,
 .library-crate__section-heading {
   display: flex;

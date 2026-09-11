@@ -18,6 +18,7 @@ import {
   buildAddedArtists,
   buildCrateReleases,
   crateTilt,
+  filterCrateReleases,
   isReleaseMetadataPending,
   keepCopy,
   keepTimestamp,
@@ -420,6 +421,7 @@ export interface LibraryCrateProps {
   onAlbumFocus?: (albumKey: string) => void;
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
+  filterQuery?: string;
 }
 
 export function LibraryCrate({
@@ -435,6 +437,7 @@ export function LibraryCrate({
   demoSurface = false,
   matchFilters,
   onRemoveMatchFilter,
+  filterQuery = "",
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -464,7 +467,13 @@ export function LibraryCrate({
     return () => { active = false; };
   }, [items, metadataVersion]);
 
-  const visibleReleases = unopenedOnly ? releases.filter((release) => !opened.has(release.releaseGroupMbid ?? release.key)) : releases;
+  const matchingReleases = useMemo(
+    () => filterCrateReleases(releases, filterQuery),
+    [filterQuery, releases],
+  );
+  const visibleReleases = unopenedOnly
+    ? matchingReleases.filter((release) => !opened.has(release.releaseGroupMbid ?? release.key))
+    : matchingReleases;
   const tracks = useMemo(
     () => visibleReleases.flatMap((release) =>
       release.items.map((item) => ({ item, release })),
@@ -486,7 +495,7 @@ export function LibraryCrate({
     [sort, visibleReleases],
   );
   const visibleArtists = showAllArtists ? addedArtists : addedArtists.slice(0, 20);
-  const hasItems = tracks.length > 0 || addedArtists.length > 0;
+  const hasItems = releases.length > 0 || addedArtists.length > 0;
 
   // Set-context anchors: kept tracks anchor by MBID (the server finds the
   // retained spin); unresolved tracks and artist-file saves anchor by artist
@@ -551,7 +560,9 @@ export function LibraryCrate({
             ))}
           </div>
         ) : (
-          <p className="library-crate__section-empty">No songs in this view.</p>
+          <p className="library-crate__section-empty">
+            {filterQuery.trim() ? `No albums match “${filterQuery.trim()}”.` : "No songs in this view."}
+          </p>
         )}
       </section>
       {!hideAddedRail && addedArtists.length > 0 ? (

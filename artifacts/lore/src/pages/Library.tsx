@@ -1855,6 +1855,7 @@ function LibraryContent({
   const { data: appConfig } = useAppConfig();
   const demoSurface = appConfig?.demoSurface === true;
   const [searchOpen, setSearchOpen] = useState(false);
+  const [stackFilter, setStackFilter] = useState("");
   const queryClient = useQueryClient();
   const { radio } = usePlayer();
   const { data: albumAvatar } = useMyAlbumAvatar();
@@ -2867,28 +2868,56 @@ function LibraryContent({
             ))}
           </div>
         ) : isStackView ? (
-          <LibraryCrate
-            items={keptItems}
-            seedArtists={visibleSeeds}
-            catalogue={seedCatalogue}
-            sort={(sortFilter === "count" || sortFilter === "album") ? "added" : sortFilter}
-            showKeptHeading={false}
-            hideAddedRail={demoSurface}
-            demoSurface={demoSurface}
-            matchFilters={demoSurface ? {
-              genres: focusedMusicGenres,
-              ages: focusedMusicAges,
-              decade: focusedDecade,
-            } : undefined}
-            onRemoveMatchFilter={demoSurface ? (fact) => {
-              const next = new URLSearchParams(search);
-              removeLibraryMatchFilter(next, fact);
-              const qs = next.toString();
-              setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
-            } : undefined}
-            onArtistFocus={demoSurface ? focusLibraryArtist : undefined}
-            onAlbumFocus={demoSurface ? focusLibraryAlbum : undefined}
-          />
+          <>
+            {viewMode === "album" && !demoSurface ? (
+              <div className="library-stack-filter" role="search">
+                <Search size={14} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={stackFilter}
+                  onChange={(event) => setStackFilter(event.target.value)}
+                  placeholder="Find an album, artist, or song"
+                  aria-label="Filter Stack albums"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  data-testid="library-stack-filter"
+                />
+                {stackFilter ? (
+                  <button
+                    type="button"
+                    onClick={() => setStackFilter("")}
+                    aria-label="Clear Stack filter"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            <LibraryCrate
+              items={keptItems}
+              seedArtists={visibleSeeds}
+              catalogue={seedCatalogue}
+              sort={(sortFilter === "count" || sortFilter === "album") ? "added" : sortFilter}
+              showKeptHeading={false}
+              hideAddedRail={demoSurface}
+              demoSurface={demoSurface}
+              filterQuery={viewMode === "album" && !demoSurface ? stackFilter : ""}
+              matchFilters={demoSurface ? {
+                genres: focusedMusicGenres,
+                ages: focusedMusicAges,
+                decade: focusedDecade,
+              } : undefined}
+              onRemoveMatchFilter={demoSurface ? (fact) => {
+                const next = new URLSearchParams(search);
+                removeLibraryMatchFilter(next, fact);
+                const qs = next.toString();
+                setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
+              } : undefined}
+              onArtistFocus={demoSurface ? focusLibraryArtist : undefined}
+              onAlbumFocus={demoSurface ? focusLibraryAlbum : undefined}
+            />
+          </>
         ) : (viewMode === "album" && (albumGroups.length > 0 || focusedArtist)) ? (
           /* ── Full-screen Stack: one scrollable album-row list, no dashboard chrome ── */
           <>

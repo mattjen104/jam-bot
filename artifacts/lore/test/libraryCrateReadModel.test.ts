@@ -4,6 +4,7 @@ import {
   buildAddedArtists,
   buildCrateReleases,
   crateTilt,
+  filterCrateReleases,
   hasGenuineKeepDate,
   keepCopy,
   partitionCrateItems,
@@ -47,6 +48,35 @@ function item(overrides: Partial<LibraryItem> & {
 }
 
 describe("Library crate read model", () => {
+  it("filters whole albums by album, artist, or track title", () => {
+    const releases = buildCrateReleases([
+      item({
+        mbid: "blue-1",
+        title: "Blue in Green",
+        artist: "Miles Davis",
+        album: "Kind of Blue",
+        release: "rg-blue",
+        date: "2026-01-01T00:00:00.000Z",
+      }),
+      item({
+        mbid: "dreams-1",
+        title: "Dreams",
+        artist: "Fleetwood Mac",
+        album: "Rumours",
+        release: "rg-rumours",
+        date: "2026-01-02T00:00:00.000Z",
+      }),
+    ]);
+
+    expect(filterCrateReleases(releases, "kind").map((release) => release.title))
+      .toEqual(["Kind of Blue"]);
+    expect(filterCrateReleases(releases, "fleetwood").map((release) => release.title))
+      .toEqual(["Rumours"]);
+    expect(filterCrateReleases(releases, "blue in").map((release) => release.title))
+      .toEqual(["Kind of Blue"]);
+    expect(filterCrateReleases(releases, "  ")).toBe(releases);
+  });
+
   it("selects the earliest plain album from MusicBrainz release metadata", () => {
     expect(primaryReleaseMetadata({
       releases: [
