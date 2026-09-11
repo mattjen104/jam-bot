@@ -95,10 +95,14 @@ export function PlayerBar({
 
   if (demoSurface) {
     const isPlaying = status === "playing";
-    const isLoadingDemo = status === "loading" || status === "reconnecting";
+    const isLoadingDemo =
+      status === "loading" ||
+      status === "reconnecting" ||
+      status === "recovering";
     const title = provisionalNowPlaying?.title ?? nowPlaying?.recording?.title ?? nowPlaying?.rawTitle ?? "—";
     const artist = provisionalNowPlaying?.artist ?? nowPlaying?.recording?.artist ?? nowPlaying?.rawArtist ?? "—";
     const isPreviewing = !!playingMbid;
+    const homepageUrl = safeHttpUrl(station.homepageUrl);
 
     return (
       <div className="player-bar-block demo-player" data-testid="player-bar">
@@ -124,7 +128,12 @@ export function PlayerBar({
             ) : (
               <>
                 <div className="demo-player__title">{title} · {artist}</div>
-                <div className="demo-player__station"><span className="demo-player__live-dot" />{station.name}{djName ? ` · ${djName}` : ''}</div>
+                <div className="demo-player__station">
+                  <span className="demo-player__live-dot" />
+                  {status === "error" && error
+                    ? error
+                    : `${station.name}${djName ? ` · ${djName}` : ""}`}
+                </div>
               </>
             )}
           </div>
@@ -140,9 +149,43 @@ export function PlayerBar({
                   provenance={{ kind: "keep", stationSlug: station.slug, stationName: station.name, surface: "demo-bar" }}
                 />
               )}
+                {status === "error" && onRetry ? (
+                  <button
+                    className="demo-player__pause"
+                    aria-label="Retry live stream"
+                    title="Retry live stream"
+                    data-testid="player-retry"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRetry();
+                    }}
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </button>
+                ) : null}
+                {status === "error" && homepageUrl ? (
+                  <a
+                    href={homepageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="demo-player__pause"
+                    aria-label={`Listen on ${station.name} site`}
+                    title={`Listen on ${station.name} site`}
+                    data-testid="player-error-site-link"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                  </a>
+                ) : null}
               <button
                 className="demo-player__pause"
-                aria-label={isPlaying ? "Pause" : "Play"}
+                  aria-label={
+                    isPlaying
+                      ? "Pause"
+                      : isLoadingDemo
+                        ? "Cancel loading"
+                        : "Play"
+                  }
                 onClick={(e) => { e.stopPropagation(); onToggle(station); }}
               >
                 {isLoadingDemo ? <Loader2 className="h-4 w-4 animate-spin" /> : isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current ml-0.5" />}

@@ -2,7 +2,16 @@ import type { DialStation } from "../hooks/useDialData";
 
 export type DemoStationSort = "overlap" | "live" | "discovery" | "name";
 
-const ROSTER_SLUGS = ["kcrw", "kexp", "wfmu", "worldwide-fm", "wxyc"];
+const ROSTER_SLUGS = [
+  "kcrw",
+  "kexp",
+  "wfmu",
+  "worldwide-fm",
+  "wxyc",
+  "xray-fm",
+  "kuvo",
+  "wruw",
+];
 
 function crossingTotal(station: DialStation): number {
   return station.lifetimeCrossings + station.lifetimeArtistCrossings;

@@ -202,6 +202,15 @@ export function useRadioPlayer() {
 
       closeWarmAudio();
       const el = new Audio();
+      const isHls =
+        candidate.format === "hls" ||
+        candidate.url.toLowerCase().includes(".m3u8");
+      if (
+        isHls &&
+        el.canPlayType("application/vnd.apple.mpegurl") === ""
+      ) {
+        return;
+      }
       el.preload = "auto";
       warmAudioRef.current = { el, stationSlug: station.slug, candidate };
       el.src = candidate.url;
