@@ -78,12 +78,10 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import {
-  LibraryMetadataFilters,
   LibraryStationFilters,
-  LIBRARY_AGES,
   deriveLibraryLens,
+  hasLegacyLibraryMetadata,
   writeLibraryLens,
-  type LibraryAge,
   type LibraryLens,
 } from "../components/LibraryMetadataFilters";
 import {
@@ -100,7 +98,11 @@ import {
   buildFocusedLibraryUrl,
   getArtistFromLibraryAlbumKey,
 } from "../lib/libraryFocusedNavigation";
-import { canonicalGenres, releaseEra } from "@workspace/song-enrichment";
+import {
+  SPECIALIST_SUBCATEGORY_DEFINITIONS,
+  specialistSubcategoryForStation,
+  type SpecialistSubcategory,
+} from "../lib/specialistCategories";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -625,15 +627,13 @@ export interface ArtistGroup {
   albums: AlbumGroup[];
 }
 
-export type DemoSongSort = "added" | "artist" | "album" | "title" | "count" | "genre" | "era";
+export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
 
 export function parseDemoSongSort(value: string | null): DemoSongSort {
   return value === "artist"
     || value === "album"
     || value === "title"
     || value === "count"
-    || value === "genre"
-    || value === "era"
     ? value
     : "added";
 }
@@ -642,8 +642,7 @@ export function effectiveDemoSongSort(lens: LibraryLens, sort: DemoSongSort): De
   if (lens === "artist") {
     return sort === "artist" || sort === "title" || sort === "album" ? sort : "added";
   }
-  if (lens === "genre") return sort === "genre" || sort === "title" ? sort : "added";
-  if (lens === "era") return sort === "era" || sort === "title" ? sort : "added";
+  if (lens === "genre" || lens === "era") return sort === "title" ? sort : "added";
   return sort;
 }
 
@@ -1410,30 +1409,23 @@ function DemoMergedLibrary({
   const remoteLayout = params.get("layout") === "grid";
   const focusedArtist = libraryLens === "artist" ? params.get("focus") : null;
   const stationSortParam = params.get("stationSort");
-  const stationSort: "overlap" | "live" | "discovery" | "name" =
-    stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name"
+  const stationSort: "overlap" | "live" | "discovery" | "name" | "newest" =
+    stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name" || stationSortParam === "newest"
       ? stationSortParam
       : "overlap";
   const sortParam = params.get("sort");
   const songSort = effectiveDemoSongSort(libraryLens, parseDemoSongSort(sortParam));
-  const selectedGenres = libraryLens === "genre"
-    ? canonicalGenres((params.get("genre") ?? "").split(","))
-    : [];
-  const selectedDecade = Number(params.get("decade"));
-  const decade = libraryLens === "era" && Number.isFinite(selectedDecade) && selectedDecade > 0
-    ? selectedDecade
-    : undefined;
-  const selectedAges = useMemo<LibraryAge[]>(() => {
-    if (libraryLens !== "era") return [];
-    const ages = (params.get("age") ?? "")
-      .split(",")
-      .filter((v): v is LibraryAge => LIBRARY_AGES.includes(v as LibraryAge));
-    return decade != null && !ages.includes("deep") ? [...ages, "deep" as const] : ages;
-  }, [decade, libraryLens, search]);
-  const matchFilters = useMemo(
-    () => ({ genres: selectedGenres, ages: selectedAges, decade }),
-    [decade, selectedAges, selectedGenres],
+  const matchFilters = undefined;
+  const specialistSubcategoryIds = useMemo(
+    () => new Set(SPECIALIST_SUBCATEGORY_DEFINITIONS.map(({ id }) => id)),
+    [],
   );
+  const specialistSubcategories = useMemo(() => new Set<SpecialistSubcategory>(
+    (new URLSearchParams(search).get("specialistCategories") ?? "")
+      .split(",")
+      .filter((value): value is SpecialistSubcategory =>
+        specialistSubcategoryIds.has(value as SpecialistSubcategory)),
+  ), [search, specialistSubcategoryIds]);
   const activeCategories = useMemo(() => {
     const selected = new Set<StationCategory>();
     for (const value of new URLSearchParams(search).get("categories")?.split(",") ?? []) {
@@ -1445,6 +1437,14 @@ function DemoMergedLibrary({
   }, [search]);
   const broZoneState = useMemo(() => parseBroZoneState(search), [search]);
   const activeBroZones = broZoneState.regions;
+
+  useEffect(() => {
+    if (!hasLegacyLibraryMetadata(search)) return;
+    const migrated = new URLSearchParams(search);
+    writeLibraryLens(migrated, "artist");
+    const query = migrated.toString();
+    setLocation(query ? `/library?${query}` : "/library", { replace: true });
+  }, [search, setLocation]);
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
@@ -1459,10 +1459,7 @@ function DemoMergedLibrary({
     isFetchingNextPage: demoLibraryFetchingNextPage,
     fetchNextPage: fetchNextDemoLibraryPage,
   } = useMyLibraryInfinite({
-    sort: songSort === "artist" || songSort === "title" || songSort === "genre" || songSort === "era" ? songSort : "added",
-    genre: selectedGenres.join(",") || undefined,
-    age: selectedAges.join(",") || undefined,
-    decade,
+    sort: songSort === "artist" || songSort === "title" ? songSort : "added",
   }, 100);
   const artistStationQuery = useSearchArtistStations(
     { q: focusedArtist ?? "" },
@@ -1498,19 +1495,8 @@ function DemoMergedLibrary({
 
   const filteredStations = useMemo(() => {
     let list = filterBroZoneCollection(stations, broZoneState.active, activeBroZones);
-    if (selectedGenres.length || selectedAges.length || decade != null) {
-      list = list.filter(ds => {
-        const track = ds.liveTrack ?? ds.shows.find(show => show.state === "live")?.currentTrack;
-        if (!track) return false;
-        const trackGenres = canonicalGenres(track.genres);
-        if (selectedGenres.length && !trackGenres.some(genre => selectedGenres.includes(genre))) return false;
-        const trackEra = releaseEra(track.releaseYear);
-        if (selectedAges.length && (trackEra == null || !selectedAges.includes(trackEra))) return false;
-        if (decade != null && (track.releaseYear == null
-          || releaseEra(track.releaseYear) !== "deep"
-          || Math.floor(track.releaseYear / 10) * 10 !== decade)) return false;
-        return true;
-      });
+    if (activeCategories.has("specialist") && specialistSubcategories.size > 0) {
+      list = list.filter(ds => specialistSubcategories.has(specialistSubcategoryForStation(ds.station)));
     }
     const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
     if (normalizedFocus) {
@@ -1541,53 +1527,17 @@ function DemoMergedLibrary({
     activeBroZones,
     focusedArtist,
     artistStationQuery.data,
-    selectedGenres,
-    selectedAges,
-    decade,
+    activeCategories,
+    specialistSubcategories,
   ]);
 
   const filteredDemoItems = useMemo(() => {
     const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
     return demoLibraryItems.filter((item) => {
       if (normalizedFocus && item.recording?.artist.trim().toLocaleLowerCase() !== normalizedFocus) return false;
-      if (selectedGenres.length && !canonicalGenres(item.recording?.genres).some(genre => selectedGenres.includes(genre))) return false;
-      if (decade != null && (item.recording?.releaseYear == null
-        || releaseEra(item.recording.releaseYear) !== "deep"
-        || Math.floor(item.recording.releaseYear / 10) * 10 !== decade)) return false;
       return true;
     });
-  }, [demoLibraryItems, focusedArtist, selectedGenres, decade]);
-  const decadeOptions = useMemo(() => {
-    const years: number[] = [];
-    for (const item of demoLibraryItems) {
-      if (item.recording?.releaseYear != null
-        && item.recording.releaseYear <= new Date().getUTCFullYear() - 5) {
-        years.push(item.recording.releaseYear);
-      }
-    }
-    for (const station of stations) {
-      const track = station.liveTrack ?? station.shows.find(show => show.state === "live")?.currentTrack;
-      if (track?.releaseYear != null && track.releaseYear <= new Date().getUTCFullYear() - 5) years.push(track.releaseYear);
-    }
-    return [...new Set(years.map(year => Math.floor(year / 10) * 10))]
-      .filter(year => year > 0 && releaseEra(year) === "deep")
-      .sort((a, b) => b - a);
-  }, [demoLibraryItems, stations]);
-  const stationMetadataCoverage = useMemo(() => {
-    const tracks = stations
-      .map((station) => station.liveTrack ?? station.shows.find((show) => show.state === "live")?.currentTrack)
-      .filter((track) => track != null);
-    return {
-      total: tracks.length,
-      genreKnown: tracks.filter((track) => canonicalGenres(track.genres).length > 0).length,
-      releaseYearKnown: tracks.filter((track) => track.releaseYear != null).length,
-    };
-  }, [stations]);
-  const firstDemoLibraryPage = demoLibraryData?.pages[0];
-  const songMetadataCoverage = firstDemoLibraryPage && "metadataCoverage" in firstDemoLibraryPage
-    ? firstDemoLibraryPage.metadataCoverage
-    : undefined;
-
+  }, [demoLibraryItems, focusedArtist]);
   const allArtists = useMemo(() => {
     const set = new Set<string>();
     for (const item of demoLibraryItems) {
@@ -1611,23 +1561,9 @@ function DemoMergedLibrary({
     const query = next.toString();
     setLocation(query ? `/library?${query}` : "/library");
   };
-  const updateMetadata = (mutate: (next: URLSearchParams) => void) => updateSearch(mutate);
-  const removeMatchFilter = (fact: MatchEvidence) => updateMetadata(
+  const removeMatchFilter = (fact: MatchEvidence) => updateSearch(
     (next) => removeLibraryMatchFilter(next, fact),
   );
-  const selectLens = (lens: LibraryLens) => updateSearch(next => {
-    writeLibraryLens(next, lens);
-    const currentSort = parseDemoSongSort(next.get("sort"));
-    const compatible = lens === "artist"
-      ? currentSort === "added" || currentSort === "artist" || currentSort === "title"
-      : lens === "genre"
-        ? currentSort === "added" || currentSort === "genre" || currentSort === "title"
-        : lens === "era"
-          ? currentSort === "added" || currentSort === "era" || currentSort === "title"
-          : true;
-    if (!compatible) next.delete("sort");
-  });
-
   const buildTabHref = (targetView: "stations" | "songs") => {
     const p = new URLSearchParams(search);
     if (targetView === "stations") {
@@ -1718,19 +1654,6 @@ function DemoMergedLibrary({
           </nav>
         </div>
         <div className="demo-merged-library__filters">
-          <label className="library-lens-select">
-            <span className="sr-only">Lens</span>
-            <select
-              aria-label="Lens"
-              value={libraryLens}
-              onChange={(event) => selectLens(event.target.value as LibraryLens)}
-            >
-              <option value="all">All</option>
-              <option value="artist">Artist</option>
-              <option value="genre">Genre</option>
-              <option value="era">Era</option>
-            </select>
-          </label>
           {libraryLens === "artist" && <ArtistLensControl
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
@@ -1767,41 +1690,6 @@ function DemoMergedLibrary({
               setLocation(qs ? `/library?${qs}` : "/library");
             }}
           />}
-          {libraryLens === "genre" && <LibraryMetadataFilters
-            mode="genre"
-            genres={selectedGenres}
-            ages={[]}
-            onGenresChange={(values) => updateMetadata(next => values.length ? next.set("genre", values.join(",")) : next.delete("genre"))}
-            onAgesChange={() => undefined}
-            onDecadeChange={() => undefined}
-            onReset={() => updateMetadata(next => next.delete("genre"))}
-          />}
-          {libraryLens === "era" && <LibraryMetadataFilters
-            mode="era"
-            genres={[]}
-            ages={selectedAges}
-            decade={decade}
-            decadeOptions={decadeOptions}
-            onGenresChange={() => undefined}
-            onAgesChange={(values) => updateMetadata(next => {
-              if (values.some(value => value === "current" || value === "catalog")
-                || (decade != null && !values.includes("deep"))) next.delete("decade");
-              if (values.length) next.set("age", values.join(","));
-              else next.delete("age");
-            })}
-            onDecadeChange={(value) => updateMetadata(next => {
-              if (value == null) next.delete("decade");
-              else {
-                next.set("decade", String(value));
-                next.set("age", "deep");
-              }
-            })}
-            onReset={() => updateMetadata(next => {
-              next.delete("age");
-              next.delete("decade");
-            })}
-          />}
-
           {view === "stations" && (
             <>
               <LibraryStationFilters
@@ -1818,6 +1706,18 @@ function DemoMergedLibrary({
                     .filter(cat => selected.has(cat));
                   if (ordered.length > 0) next.set("categories", ordered.join(","));
                   else next.delete("categories");
+                  if (!selected.has("specialist")) next.delete("specialistCategories");
+                })}
+                specialistSubcategories={specialistSubcategories}
+                onToggleSpecialistSubcategory={(subcategory) => updateSearch((next) => {
+                  const selected = new Set(specialistSubcategories);
+                  if (selected.has(subcategory)) selected.delete(subcategory);
+                  else selected.add(subcategory);
+                  const ordered = SPECIALIST_SUBCATEGORY_DEFINITIONS
+                    .map(({ id }) => id)
+                    .filter((id) => selected.has(id));
+                  if (ordered.length) next.set("specialistCategories", ordered.join(","));
+                  else next.delete("specialistCategories");
                 })}
                 onToggleBroZonesCollection={() => updateSearch((next) => {
                   writeBroZoneState(next, !broZoneState.active || activeBroZones.size > 0, new Set());
@@ -1830,6 +1730,7 @@ function DemoMergedLibrary({
                 })}
                 onClear={() => updateSearch(next => {
                   next.delete("categories");
+                  next.delete("specialistCategories");
                   writeBroZoneState(next, false, new Set());
                 })}
               />
@@ -1848,6 +1749,7 @@ function DemoMergedLibrary({
                 <option value="live">Live now</option>
                 <option value="discovery">Discovery</option>
                 <option value="name">A–Z</option>
+                <option value="newest">Newest music first</option>
               </select>
             </>
           )}
@@ -1866,20 +1768,12 @@ function DemoMergedLibrary({
                 }}
               >
                 <option value="added">Recently kept</option>
-                {libraryLens === "artist" && <option value="artist">Artist name</option>}
-                {libraryLens === "genre" && <option value="genre">Genre relevance</option>}
-                {libraryLens === "era" && <option value="era">Era relevance</option>}
-                {libraryLens === "all" && <option value="artist">Artist</option>}
+                <option value="artist">Artist name</option>
                 <option value="title">Title</option>
-                {libraryLens === "all" && (
-                  <optgroup label="Group">
-                    <option value="album">Album grouping</option>
-                    <option value="count">Most kept grouping</option>
-                  </optgroup>
-                )}
-                {libraryLens === "artist" && songSort === "album" && (
+                {(songSort === "album" || songSort === "count") && (
                   <optgroup label="Presentation">
                     <option value="album">Album grouping</option>
+                    <option value="count">Most kept grouping</option>
                   </optgroup>
                 )}
               </select>
@@ -1887,30 +1781,13 @@ function DemoMergedLibrary({
           )}
         </div>
       </header>
-      {(selectedGenres.length > 0 || selectedAges.length > 0 || decade != null) && (
-        <p className="library-filter-coverage" role="status">
-          {(() => {
-            const coverage = view === "stations" ? stationMetadataCoverage : songMetadataCoverage;
-            if (!coverage) return "Unknown metadata is excluded from this narrowed view.";
-            const facts = [
-              selectedGenres.length > 0
-                ? `${coverage.genreKnown.toLocaleString()} of ${coverage.total.toLocaleString()} with genre evidence`
-                : null,
-              selectedAges.length > 0 || decade != null
-                ? `${coverage.releaseYearKnown.toLocaleString()} of ${coverage.total.toLocaleString()} with release-year evidence`
-                : null,
-            ].filter(Boolean);
-            return `${facts.join(" · ")}. Tracks without the required metadata are excluded.`;
-          })()}
-        </p>
-      )}
-
       {view === "stations" && remoteLayout && !selectedStationSlug ? (
         <DemoStationRemote
           stations={filteredStations}
           hasData={hasSeeds || hasLibrary}
           focusedArtist={focusedArtist}
           sort={stationSort}
+          forceAllStations={activeCategories.size > 0 || broZoneState.active}
           matchFilters={matchFilters}
         />
       ) : view === "stations" ? (
@@ -1920,6 +1797,7 @@ function DemoMergedLibrary({
           hasLibrary={hasLibrary}
           showHeader={false}
           sort={stationSort}
+          forceAllStations={activeCategories.size > 0 || broZoneState.active}
           matchFilters={matchFilters}
           onRemoveMatchFilter={removeMatchFilter}
           focusedArtist={focusedArtist}
@@ -1946,9 +1824,9 @@ function DemoMergedLibrary({
           showArtistEditor={false}
           focusedState={{
             artist: focusedArtist,
-            genres: selectedGenres,
-            ages: selectedAges,
-            decade,
+            genres: [],
+            ages: [],
+            decade: undefined,
             sort: songSort,
           }}
         />
@@ -1967,7 +1845,7 @@ function LibraryContent({
   focusedState?: {
     artist: string | null;
     genres: string[];
-    ages: LibraryAge[];
+    ages: Array<"current" | "catalog" | "deep">;
     decade?: number;
     sort: DemoSongSort;
   };

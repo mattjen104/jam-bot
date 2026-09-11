@@ -14,7 +14,7 @@ import { toast } from "../hooks/use-toast";
 import { compareLibrarySongs, type LibrarySongSort } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 
-export type DemoSongSort = "added" | "artist" | "album" | "title" | "count" | "genre" | "era";
+export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
 
 function stationTrack(station: DialStation) {
   return station.liveTrack
@@ -145,7 +145,7 @@ function orderSongs(items: readonly LibraryItem[], sort: DemoSongSort): LibraryI
       artistCounts.set(artist, (artistCounts.get(artist) ?? 0) + 1);
     }
   }
-  if (sort === "genre" || sort === "era" || sort === "artist" || sort === "title" || sort === "added") {
+  if (sort === "artist" || sort === "title" || sort === "added") {
     return [...items].sort((a, b) => compareLibrarySongs(a, b, sort as LibrarySongSort));
   }
   return [...items].sort((a, b) => {
@@ -179,12 +179,14 @@ export function DemoStationRemote({
   hasData,
   focusedArtist,
   sort,
+  forceAllStations = false,
   matchFilters,
 }: {
   stations: DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
   sort: DemoStationSort;
+  forceAllStations?: boolean;
   matchFilters?: LibraryMatchFilters;
 }) {
   const orderedStations = useMemo(
@@ -193,8 +195,9 @@ export function DemoStationRemote({
       hasData,
       focusedArtist,
       sort,
+      forceAllStations,
     }).orderedStations,
-    [focusedArtist, hasData, sort, stations],
+    [focusedArtist, forceAllStations, hasData, sort, stations],
   );
 
   return (

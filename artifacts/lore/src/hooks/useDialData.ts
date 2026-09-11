@@ -214,6 +214,8 @@ export interface DialStation {
     artist: string;
     artworkUrl: string | null;
   }>;
+  /** Credible release years from distinct resolved tracks in the bounded recent-spin sample. */
+  recentReleaseYears: number[];
 }
 
 export interface LiveArtistSuggestion {
@@ -1208,15 +1210,15 @@ export function useDialData(
     },
   );
 
-  // ── recent spins (today only — station-level crossings come from the server) ─
-  // Yesterday's spins are no longer fetched: station ranking uses
-  // GET /api/me/crossings (a true NOW() − 24h server-side query), so the
-  // client only needs today's spins for per-show chip display.
+  // ── recent spins (bounded rolling three-day sample) ────────────────────────
+  // Crossings still come from /api/me/crossings. The server-capped rolling
+  // sample supports freshness ranking across midnight without turning unknown
+  // years into a filter.
   const { data: spinsData, isLoading: spinsLoading } = useGetStationsRecentSpins(
-    { date: today },
+    { hours: 72 },
     {
       query: {
-        queryKey: getGetStationsRecentSpinsQueryKey({ date: today }),
+        queryKey: getGetStationsRecentSpinsQueryKey({ hours: 72 }),
         enabled: !opts.deferEnrichment,
         staleTime: 60_000,
         refetchInterval: 2 * 60_000,
@@ -1721,6 +1723,18 @@ export function useDialData(
         : (liveBySlug.get(station.slug) ?? false);
       const rawRuns = runsBySlug.get(station.slug) ?? [];
       const rawSpins = spinsBySlug.get(station.slug) ?? [];
+      const seenReleaseTracks = new Set<string>();
+      const recentReleaseYears = rawSpins.flatMap((spin) => {
+        if (!spin.mbid || seenReleaseTracks.has(spin.mbid)) return [];
+        seenReleaseTracks.add(spin.mbid);
+        const year = spin.releaseYear;
+        return typeof year === "number"
+          && Number.isInteger(year)
+          && year >= 1900
+          && year <= new Date().getUTCFullYear() + 1
+          ? [year]
+          : [];
+      });
 
       // Sort runs oldest-first for the timeline
       const sortedRuns = [...rawRuns].sort(
@@ -1964,6 +1978,7 @@ export function useDialData(
         topArtistNames7d,
         topArtistNamesLifetime,
         albumCrossings,
+        recentReleaseYears,
         liveTrack: isLive ? (nowPlayingBySlug.get(station.slug) ?? null) : null,
       };
     })

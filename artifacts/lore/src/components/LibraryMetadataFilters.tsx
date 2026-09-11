@@ -1,119 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CANONICAL_GENRES, type CanonicalGenre } from "@workspace/song-enrichment";
-import { FilterDropdownMenu } from "./dial/FilterDropdownMenu";
 import { STATION_CATEGORY_DEFINITIONS, type StationCategory } from "../lib/dialCategories";
 import { BRO_ZONE_DEFINITIONS, type BroZone } from "../lib/broZones";
+import { SPECIALIST_SUBCATEGORY_DEFINITIONS, type SpecialistSubcategory } from "../lib/specialistCategories";
 
-export const LIBRARY_AGES = ["current", "catalog", "deep"] as const;
-export type LibraryAge = typeof LIBRARY_AGES[number];
+/** Legacy values remain accepted by URL migration callers, but never render
+ * as a selectable demo lens. */
 export type LibraryLens = "all" | "artist" | "genre" | "era";
 
-export const LIBRARY_GENRE_OPTIONS = CANONICAL_GENRES.map((genre) => ({
-  value: genre,
-  label: genre === "r&b"
-    ? "R&B"
-    : genre.split("-").map((part) => part[0]!.toUpperCase() + part.slice(1)).join(" "),
-  title: `Tracks positively classified as ${genre}`,
-}));
-export const LIBRARY_ERA_OPTIONS: Array<{ value: LibraryAge; label: string; title: string }> = [
-  { value: "current", label: "Current", title: "Released within the last 18 months" },
-  { value: "catalog", label: "Catalog", title: "Released 19–60 months ago" },
-  { value: "deep", label: "Deep Catalog", title: "Released more than 60 months ago" },
-];
+export function deriveLibraryLens(_search: string): LibraryLens {
+  return "artist";
+}
 
-export function deriveLibraryLens(search: string): LibraryLens {
+export function writeLibraryLens(params: URLSearchParams, _lens: LibraryLens): void {
+  const legacyGenre = params.get("genre");
+  const legacyEra = params.get("age") || params.get("decade");
+  params.set("libraryLens", "artist");
+  params.delete("genre");
+  params.delete("age");
+  params.delete("decade");
+  // Legacy specialist links become the station category filter. Preserve only
+  // values that map unambiguously to our shared station taxonomy.
+  if (legacyGenre || legacyEra) {
+    const categories = new Set(params.get("categories")?.split(",").filter(Boolean) ?? []);
+    categories.add("specialist");
+    params.set("categories", STATION_CATEGORY_DEFINITIONS
+      .map(({ cat }) => cat)
+      .filter((cat) => categories.has(cat))
+      .join(","));
+    const values = legacyGenre ? legacyGenre.split(",").map(value => {
+      const lower = value.trim().toLowerCase();
+      if (/ambient|chill|lounge/.test(lower)) return "ambient";
+      if (/folk|country|celtic/.test(lower)) return "folk";
+      if (/rock|metal|punk/.test(lower)) return "rock";
+      if (/jazz|blues/.test(lower)) return "jazz";
+      if (/electronic|dance|techno|house/.test(lower)) return "electronic";
+      if (/world|latin|reggae/.test(lower)) return "world";
+      if (/soul|funk|groove|r&b|rnb/.test(lower)) return "groove";
+      if (/classical|opera/.test(lower)) return "classical";
+      return null;
+    }).filter((value): value is NonNullable<typeof value> => value != null) : [];
+    if (legacyEra) (values as string[]).push("era");
+    if (values.length) params.set("specialistCategories", [...new Set(values)].join(","));
+  }
+}
+
+export function hasLegacyLibraryMetadata(search: string): boolean {
   const params = new URLSearchParams(search);
-  const explicit = params.get("libraryLens");
-  if (explicit === "all" || explicit === "artist" || explicit === "genre" || explicit === "era") {
-    return explicit;
-  }
-  if (params.get("focus")) return "artist";
-  if (params.get("genre")) return "genre";
-  if (params.get("age") || params.get("decade")) return "era";
-  return "all";
-}
-
-export function writeLibraryLens(params: URLSearchParams, lens: LibraryLens): void {
-  params.set("libraryLens", lens);
-  if (lens !== "artist") {
-    params.delete("focus");
-    params.delete("openAlbum");
-  }
-  if (lens !== "genre") params.delete("genre");
-  if (lens !== "era") {
-    params.delete("age");
-    params.delete("decade");
-  }
-}
-
-export interface LibraryMetadataFilterProps {
-  mode?: "all" | "genre" | "era";
-  genres: string[];
-  ages: LibraryAge[];
-  decade?: number;
-  decadeOptions?: number[];
-  onGenresChange: (genres: string[]) => void;
-  onAgesChange: (ages: LibraryAge[]) => void;
-  onDecadeChange: (decade?: number) => void;
-  onReset?: () => void;
-}
-
-/** Lens-specific choices. Only the active lens contributes eligibility state. */
-export function LibraryMetadataFilters({
-  mode = "all", genres, ages, decade, decadeOptions, onGenresChange, onAgesChange, onDecadeChange, onReset,
-}: LibraryMetadataFilterProps) {
-  const genreSet = new Set(genres.filter((genre): genre is CanonicalGenre =>
-    (CANONICAL_GENRES as readonly string[]).includes(genre),
-  ));
-  const ageSet = new Set(ages);
-  return (
-    <div className="library-metadata-filters" aria-label="Library lens choices">
-      {mode !== "era" && <FilterDropdownMenu
-        label="Choose genre"
-        ariaLabel="Track genres"
-        options={LIBRARY_GENRE_OPTIONS}
-        active={genreSet}
-        onToggle={(genre) => {
-          const next = new Set(genreSet);
-          if (next.has(genre)) next.delete(genre);
-          else next.add(genre);
-          onGenresChange(CANONICAL_GENRES.filter((candidate) => next.has(candidate)));
-        }}
-        variant="chips"
-        onClear={() => onGenresChange([])}
-      />}
-      {mode !== "genre" && <FilterDropdownMenu
-        label="Browse era"
-        ariaLabel="Track age"
-        options={LIBRARY_ERA_OPTIONS}
-        active={ageSet}
-        onToggle={(age) => {
-          const next = new Set(ageSet);
-          if (next.has(age)) next.delete(age);
-          else next.add(age);
-          onAgesChange(LIBRARY_AGES.filter((candidate) => next.has(candidate)));
-        }}
-        variant="chips"
-        onClear={() => onAgesChange([])}
-      />}
-      {onReset && (genres.length > 0 || ages.length > 0 || decade != null) ? (
-        <button type="button" className="library-metadata-filters__reset" onClick={onReset}>Reset</button>
-      ) : null}
-      {mode !== "genre" && <label>
-        <span className="sr-only">Decade</span>
-        <select aria-label="Decade" value={decade ?? ""} onChange={(event) => {
-          const value = Number(event.target.value);
-          onDecadeChange(Number.isFinite(value) && value > 0 ? value : undefined);
-        }}>
-          <option value="">Decade</option>
-          {(decadeOptions ?? []).map((value) => (
-            <option key={value} value={value}>{value}s</option>
-          ))}
-        </select>
-      </label>}
-    </div>
-  );
+  const lens = params.get("libraryLens");
+  return lens === "all"
+    || lens === "genre"
+    || lens === "era"
+    || params.has("genre")
+    || params.has("age")
+    || params.has("decade");
 }
 
 interface LibraryStationFiltersProps {
@@ -125,6 +65,8 @@ interface LibraryStationFiltersProps {
   onToggleBroZonesCollection: () => void;
   onToggleBroZone: (zone: BroZone) => void;
   onClear: () => void;
+  specialistSubcategories?: ReadonlySet<SpecialistSubcategory>;
+  onToggleSpecialistSubcategory?: (subcategory: SpecialistSubcategory) => void;
 }
 
 export function LibraryStationFilters({
@@ -136,11 +78,13 @@ export function LibraryStationFilters({
   onToggleBroZonesCollection,
   onToggleBroZone,
   onClear,
+  specialistSubcategories = new Set(),
+  onToggleSpecialistSubcategory,
 }: LibraryStationFiltersProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const activeCount = categories.size + (broZonesActive ? (broZones.size || 1) : 0);
+  const activeCount = categories.size + specialistSubcategories.size + (broZonesActive ? (broZones.size || 1) : 0);
   const close = useCallback((returnFocus = false) => {
     setOpen(false);
     if (returnFocus) triggerRef.current?.focus();
@@ -148,10 +92,38 @@ export function LibraryStationFilters({
 
   useEffect(() => {
     if (!open) return;
+    const focusableSelector = [
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      "[href]",
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(",");
+    const focusFirst = window.requestAnimationFrame(() => {
+      panelRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         close(true);
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusable = [...(panelRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])];
+        if (focusable.length === 0) {
+          event.preventDefault();
+          return;
+        }
+        const first = focusable[0]!;
+        const last = focusable.at(-1)!;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
     const onPointerDown = (event: MouseEvent) => {
@@ -161,6 +133,7 @@ export function LibraryStationFilters({
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("mousedown", onPointerDown);
     return () => {
+      window.cancelAnimationFrame(focusFirst);
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("mousedown", onPointerDown);
     };
@@ -183,7 +156,7 @@ export function LibraryStationFilters({
           ref={panelRef}
           className="library-station-filters__panel"
           role="dialog"
-          aria-modal="false"
+          aria-modal="true"
           aria-label="Station filters"
         >
           <div className="library-station-filters__heading">
@@ -199,6 +172,21 @@ export function LibraryStationFilters({
               </label>
             ))}
           </fieldset>
+          {categories.has("specialist") && onToggleSpecialistSubcategory ? (
+            <fieldset>
+              <legend>Specialist sounds</legend>
+              {SPECIALIST_SUBCATEGORY_DEFINITIONS.map(({ id, label }) => (
+                <label key={id}>
+                  <input
+                    type="checkbox"
+                    checked={specialistSubcategories.has(id)}
+                    onChange={() => onToggleSpecialistSubcategory(id)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
           <fieldset>
             <legend>Bro Zones</legend>
             <label>

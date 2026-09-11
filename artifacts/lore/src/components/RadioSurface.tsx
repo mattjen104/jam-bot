@@ -45,6 +45,7 @@ export function RadioSurface({
   showHeader = true,
   sort = "overlap",
   focusedArtist = null,
+  forceAllStations = false,
   selectedStationSlug = null,
   onFocusArtist,
   onOpenStationCrossings,
@@ -56,8 +57,9 @@ export function RadioSurface({
   hasSeeds: boolean;
   hasLibrary: boolean;
   showHeader?: boolean;
-  sort?: "overlap" | "live" | "discovery" | "name";
+  sort?: "overlap" | "live" | "discovery" | "name" | "newest";
   focusedArtist?: string | null;
+  forceAllStations?: boolean;
   selectedStationSlug?: string | null;
   onFocusArtist?: (artist: string) => void;
   onOpenStationCrossings?: (stationSlug: string) => void;
@@ -78,8 +80,9 @@ export function RadioSurface({
       hasData,
       focusedArtist,
       sort,
+      forceAllStations,
     }),
-    [focusedArtist, hasData, sort, stations],
+    [focusedArtist, forceAllStations, hasData, sort, stations],
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');

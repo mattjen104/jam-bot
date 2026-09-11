@@ -240,17 +240,18 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.getByText("historical-match")).toBeTruthy();
     expect(screen.getByText("wrong-genre")).toBeTruthy();
-    expect((screen.getByRole("combobox", { name: "Lens" }) as HTMLSelectElement).value).toBe("artist");
+    expect(screen.queryByRole("combobox", { name: "Lens" })).toBeNull();
+    const migrated = new URL(mockSetLocation.mock.calls[0]![0], "https://lore.test");
+    expect(migrated.searchParams.get("libraryLens")).toBe("artist");
+    expect(migrated.searchParams.has("genre")).toBe(false);
+    expect(migrated.searchParams.has("age")).toBe(false);
+    expect(migrated.searchParams.get("categories")).toBe("specialist");
+    expect(migrated.searchParams.get("specialistCategories")).toBe("electronic,era");
   });
 
   it("adds several autocomplete matches without closing or clearing the search", async () => {
     await renderLibrary();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Lens" }), { target: { value: "artist" } });
-    mockUseSearch.mockReturnValue("?libraryLens=artist");
-    mockUseLocation.mockReturnValue(["/library?libraryLens=artist", mockSetLocation]);
-    cleanup();
-    await renderLibrary();
     fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
     const input = screen.getByPlaceholderText("Search or add artist...");
     fireEvent.change(input, { target: { value: "king gizzard" } });
@@ -359,6 +360,39 @@ describe("focused Library URL navigation", () => {
     expect(url.searchParams.get("stationSort")).toBe("live");
   });
 
+  it("applies Specialist subcategories to stations by shared station classification", async () => {
+    mockUseSearch.mockReturnValue("?categories=specialist&specialistCategories=ambient");
+    mockUseLocation.mockReturnValue([
+      "/library?categories=specialist&specialistCategories=ambient",
+      mockSetLocation,
+    ]);
+    const station = (slug: string, tags: string[]) => ({
+      station: { slug, name: slug, tags },
+      liveTrack: null,
+      shows: [],
+      topArtistNames: [],
+      topArtistNames24h: [],
+      topArtistNames7d: [],
+      topArtistNamesLifetime: [],
+      albumCrossings: [],
+    });
+    mockUseDialData.mockReturnValue({
+      stations: [
+        station("ambient-station", ["ambient"]),
+        station("rock-station", ["punk"]),
+      ],
+      hasLibrary: true,
+      hasSeeds: false,
+    });
+
+    await renderLibrary();
+
+    expect(screen.getByText("ambient-station")).toBeTruthy();
+    expect(screen.queryByText("rock-station")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Sort stations" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "Newest music first" })).toBeTruthy();
+  });
+
   it("keeps station categories when temporarily viewing Songs without showing the control", async () => {
     mockUseSearch.mockReturnValue("?view=songs&categories=campus,public");
     mockUseLocation.mockReturnValue([
@@ -368,6 +402,8 @@ describe("focused Library URL navigation", () => {
     await renderLibrary();
 
     expect(screen.queryByRole("button", { name: /Filters/ })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Sort stations" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "Newest music first" })).toBeNull();
     expect(screen.getByRole("link", { name: /Stations/ }).getAttribute("href"))
       .toBe("/library?categories=campus%2Cpublic");
   });
@@ -423,8 +459,8 @@ describe("focused Library URL navigation", () => {
     mockUseSearch.mockReturnValue("?view=songs&libraryLens=genre&genre=electronic&sort=artist&openAlbum=Dots+and+Loops%1FStereolab");
     await renderLibrary();
 
-    expect((screen.getByRole("combobox", { name: "Sort songs" }) as HTMLSelectElement).value).toBe("added");
-    expect(screen.queryByTestId("library-artist-group")).toBeNull();
+    expect((screen.getByRole("combobox", { name: "Sort songs" }) as HTMLSelectElement).value).toBe("artist");
+    expect(screen.getAllByTestId("library-artist-group").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Broadcast" }));
 
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
