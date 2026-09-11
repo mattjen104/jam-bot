@@ -363,6 +363,14 @@ export const ListStationsQueryParams = zod.object({
     .describe(
       "Optional country code\/name used as the broadest locality ranking hint.",
     ),
+  collection: zod.coerce
+    .string()
+    .optional()
+    .describe("Reviewed geographic collection slug, currently bro-zones."),
+  zones: zod.coerce
+    .string()
+    .optional()
+    .describe("Comma-separated additive Bro Zones region slugs."),
 });
 
 export const listStationsResponseStationsItemPlaybackCandidatesMax = 4;
@@ -518,13 +526,34 @@ export const ListStationsResponse = zod.object({
           .describe(
             "Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.",
           ),
-        stationCategories: zod
-          .array(zod.string())
+        stationCategories: zod.array(zod.string()),
+        collections: zod
+          .array(
+            zod.object({
+              slug: zod.string(),
+              name: zod.string(),
+              zone: zod.string().nullable(),
+              stationCount: zod.number(),
+            }),
+          )
           .describe(
             'Safe, non-secret category labels derived from the station\'s metadata. Possible values: \"spinitron\" (now-playing comes from Spinitron or the Spinitron web adapter), \"college\" (confirmed campus\/college station), \"longtail\" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values.',
           ),
       })
       .describe("A curated radio station in the public directory."),
+  ),
+  collections: zod.array(
+    zod.object({
+      slug: zod.string(),
+      name: zod.string(),
+      stationCount: zod.number(),
+      zones: zod.array(
+        zod.object({
+          slug: zod.string(),
+          stationCount: zod.number(),
+        }),
+      ),
+    }),
   ),
 });
 
@@ -1274,8 +1303,16 @@ export const GetStationNowPlayingResponse = zod.object({
         .describe(
           "Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.",
         ),
-      stationCategories: zod
-        .array(zod.string())
+      stationCategories: zod.array(zod.string()),
+      collections: zod
+        .array(
+          zod.object({
+            slug: zod.string(),
+            name: zod.string(),
+            zone: zod.string().nullable(),
+            stationCount: zod.number(),
+          }),
+        )
         .describe(
           'Safe, non-secret category labels derived from the station\'s metadata. Possible values: \"spinitron\" (now-playing comes from Spinitron or the Spinitron web adapter), \"college\" (confirmed campus\/college station), \"longtail\" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values.',
         ),
@@ -2605,8 +2642,16 @@ export const GetStationArchiveResponse = zod.object({
         .describe(
           "Ordered, server-sanctioned playback sources. Derived only from the station row and approved mounts; URLs with credentials, fragments, or query strings are omitted. Older clients may continue using streamUrl, streamFormat, and relayUrl.",
         ),
-      stationCategories: zod
-        .array(zod.string())
+      stationCategories: zod.array(zod.string()),
+      collections: zod
+        .array(
+          zod.object({
+            slug: zod.string(),
+            name: zod.string(),
+            zone: zod.string().nullable(),
+            stationCount: zod.number(),
+          }),
+        )
         .describe(
           'Safe, non-secret category labels derived from the station\'s metadata. Possible values: \"spinitron\" (now-playing comes from Spinitron or the Spinitron web adapter), \"college\" (confirmed campus\/college station), \"longtail\" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values.',
         ),

@@ -222,6 +222,16 @@ paths:
           description: Optional country code/name used as the broadest locality ranking hint.
           schema:
             type: string
+        - name: collection
+          in: query
+          required: false
+          description: Reviewed geographic collection slug, currently bro-zones.
+          schema: { type: string }
+        - name: zones
+          in: query
+          required: false
+          description: Comma-separated additive Bro Zones region slugs.
+          schema: { type: string }
       responses:
         "200":
           description: Station directory
@@ -5533,6 +5543,10 @@ components:
           type: array
           items:
             type: string
+        collections:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationCollection"
           description: >-
             Safe, non-secret category labels derived from the station's
             metadata. Possible values: "spinitron" (now-playing comes from
@@ -5554,6 +5568,7 @@ components:
         - clickcount
         - upcomingShowCount
         - stationCategories
+        - collections
     NearbyStation:
       type: object
       description: A playable station with compatible station-base location evidence.
@@ -5767,8 +5782,36 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Station"
+        collections:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationCollectionReport"
       required:
         - stations
+        - collections
+    StationCollection:
+      type: object
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        zone: { type: ["string", "null"] }
+        stationCount: { type: integer }
+      required: [slug, name, zone, stationCount]
+    StationCollectionReport:
+      type: object
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        stationCount: { type: integer }
+        zones:
+          type: array
+          items:
+            type: object
+            properties:
+              slug: { type: string }
+              stationCount: { type: integer }
+            required: [slug, stationCount]
+      required: [slug, name, stationCount, zones]
     IndexItem:
       type: object
       description: A named public Index entity. href is null when no canonical identifier exists.

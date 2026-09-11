@@ -25,4 +25,12 @@ export type ListStationsParams = {
    * Optional country code/name used as the broadest locality ranking hint.
    */
   country?: string;
+  /**
+   * Reviewed geographic collection slug, currently bro-zones.
+   */
+  collection?: string;
+  /**
+   * Comma-separated additive Bro Zones region slugs.
+   */
+  zones?: string;
 };

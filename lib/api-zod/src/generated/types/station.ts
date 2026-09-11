@@ -7,6 +7,7 @@
  */
 import type { PlaybackCandidate } from "./playbackCandidate";
 import type { StationAutomationClass } from "./stationAutomationClass";
+import type { StationCollection } from "./stationCollection";
 import type { StationLocationConfidence } from "./stationLocationConfidence";
 import type { StationQualityTier } from "./stationQualityTier";
 
@@ -115,6 +116,7 @@ export interface Station {
    * @maxItems 4
    */
   playbackCandidates?: PlaybackCandidate[];
-  /** Safe, non-secret category labels derived from the station's metadata. Possible values: "spinitron" (now-playing comes from Spinitron or the Spinitron web adapter), "college" (confirmed campus/college station), "longtail" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values. */
   stationCategories: string[];
+  /** Safe, non-secret category labels derived from the station's metadata. Possible values: "spinitron" (now-playing comes from Spinitron or the Spinitron web adapter), "college" (confirmed campus/college station), "longtail" (sourced from the Radio Browser long-tail directory). Multiple labels can apply to one station. Never contains adapter secrets, API keys, or nowPlayingConfig values. */
+  collections: StationCollection[];
 }

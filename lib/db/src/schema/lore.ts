@@ -533,6 +533,40 @@ export const stationsTable = pgTable("stations", {
 export type Station = typeof stationsTable.$inferSelect;
 export type InsertStation = typeof stationsTable.$inferInsert;
 
+/** Reviewed geographic station collections. Unlike editorial categories, a
+ * station may belong to any number of collections. */
+export const stationCollectionsTable = pgTable("station_collections", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const stationCollectionMembershipsTable = pgTable(
+  "station_collection_memberships",
+  {
+    collectionId: integer("collection_id")
+      .notNull()
+      .references(() => stationCollectionsTable.id, { onDelete: "cascade" }),
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    zone: text("zone"),
+    reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+    evidenceUrl: text("evidence_url"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.collectionId, t.stationId] }),
+    index("station_collection_memberships_station_idx").on(t.stationId),
+    index("station_collection_memberships_zone_idx").on(t.collectionId, t.zone),
+  ],
+);
+
+export type StationCollection = typeof stationCollectionsTable.$inferSelect;
+export type StationCollectionMembership =
+  typeof stationCollectionMembershipsTable.$inferSelect;
+
 /** A show/program on a station (DJ-hosted block). */
 export const showsTable = pgTable("shows", {
   id: serial("id").primaryKey(),

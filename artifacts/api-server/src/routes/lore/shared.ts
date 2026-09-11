@@ -289,6 +289,12 @@ export function toStation(
   s: Station,
   qualityTier?: string | null,
   resolvedAutomationClass?: string | null,
+  collectionMemberships: Array<{
+    slug: string;
+    name: string;
+    zone: string | null;
+    stationCount?: number;
+  }> = [],
 ) {
   return {
     id: s.id,
@@ -332,6 +338,7 @@ export function toStation(
         : null,
     playbackCandidates: playbackCandidatesForStation(s),
     stationCategories: deriveStationCategories(s, qualityTier),
+    collections: collectionMemberships,
   };
 }
 

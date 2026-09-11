@@ -204,7 +204,81 @@ export const SEED_STATIONS: InsertStation[] = [
   ...canadianCampusStations(),
   ...spinitronJazzStations(),
   ...spinitronCanadianAdditions(),
+  ...broZonesVerifiedAdditions(),
 ];
+
+/**
+ * Bro Zones additions whose official stream mounts and ICY metadata are
+ * supported by the existing radio_browser_icy adapter. Keep this list small:
+ * a station is not enrolled merely because its website is interesting.
+ */
+function broZonesVerifiedAdditions(): InsertStation[] {
+  return [
+    {
+      slug: "xray-fm",
+      name: "XRAY.fm",
+      org: "XRAY.fm",
+      country: "US",
+      city: "Portland",
+      region: "OR",
+      streamUrl: "https://xray.streamguys1.com/xray.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://xray.fm/",
+      scheduleUrl: "https://xray.fm/schedule",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://xray.streamguys1.com/xray.mp3" },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      automationClass: "human",
+      tags: ["public"],
+      sortOrder: 725,
+    },
+    {
+      slug: "kuvo",
+      name: "KUVO 89.3 FM",
+      org: "KUVO",
+      country: "US",
+      city: "Denver",
+      region: "CO",
+      streamUrl: "https://kuvo-ice.streamguys1.com/kuvo.aac",
+      streamQuality: "128kbps AAC",
+      streamFormat: "aac",
+      homepageUrl: "https://www.kuvo.org/",
+      scheduleUrl: "https://www.kuvo.org/schedule",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://kuvo-ice.streamguys1.com/kuvo.aac" },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      automationClass: "human",
+      tags: ["public"],
+      sortOrder: 730,
+    },
+    {
+      slug: "wruw",
+      name: "WRUW 91.1 FM",
+      org: "Case Western Reserve University",
+      country: "US",
+      city: "Cleveland",
+      region: "OH",
+      streamUrl: "https://wruw.streamrewind.com/wruw",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wruw.org/",
+      scheduleUrl: "https://wruw.org/schedule",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://wruw.streamrewind.com/wruw" },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "community",
+      automationClass: "human",
+      tags: ["college"],
+      sortOrder: 735,
+    },
+  ];
+}
 
 const VERIFIED_SCHEDULE_SOURCE_REPAIRS = [
   {

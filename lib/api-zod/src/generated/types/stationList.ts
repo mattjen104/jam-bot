@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Station } from "./station";
+import type { StationCollectionReport } from "./stationCollectionReport";
 
 export interface StationList {
   stations: Station[];
+  collections: StationCollectionReport[];
 }

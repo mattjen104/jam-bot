@@ -242,5 +242,6 @@ export function addedStationToStation(s: AddedStation): Station {
     ianaTimezone: null,
     relayUrl: null,
     stationCategories: categoryForTags(s.tags),
+    collections: [],
   };
 }

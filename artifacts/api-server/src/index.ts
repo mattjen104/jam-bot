@@ -44,6 +44,10 @@ import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { applyShowDjNamesMigration } from "./lore/show-djnames-migration.js";
 import { applyCollegeTagMigration } from "./lore/college-tag-migration.js";
 import { applyLocalRosterRepair } from "./lore/local-roster-repair.js";
+import {
+  applyBroZonesMigration,
+  ensureBroZonesSchema,
+} from "./lore/bro-zones-migration.js";
 import { runMigration } from "./lore/boot-migrations.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startIsrcEnrichmentJob } from "./lore/isrc-enrichment.js";
@@ -178,6 +182,7 @@ async function startServer(): Promise<void> {
     // Playback telemetry is accepted immediately after listen, so its durable
     // store must exist before this process advertises readiness.
     await applyPlaybackHealthMigration();
+    await ensureBroZonesSchema();
     await prunePlaybackHealthRollups();
     startPlaybackHealthRetentionJob();
 
@@ -198,19 +203,6 @@ async function startServer(): Promise<void> {
  */
 async function bootLore(): Promise<void> {
   try {
-    // Kick off the now-playing base fill immediately so the first dial
-    // visitor after a restart doesn't pay the ~9s cold scan. Fire-and-forget;
-    // it only reads long-existing tables so it can run ahead of the
-    // ledger-gated migrations below.
-    // Await the small directory snapshot before any migrations or background
-    // work can occupy the shared DB pool. Requests racing boot join this same
-    // single-flight query, so the first front door never queues behind warmers.
-    await prewarmStationDirectoryCache();
-    // Do not eagerly build the full now-playing payload during boot. Its
-    // schedule-attribution query can run for minutes on a cold database and
-    // starve independent listener reads such as Stack and first-play history.
-    // The now-playing route retains its existing single-flight, on-demand
-    // fill when a listener actually opens the Dial.
     await markOrphanedImportJobsAsError();
     await markOrphanedSyncJobsAsError();
     wireSongEnrichment();
@@ -221,6 +213,20 @@ async function bootLore(): Promise<void> {
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
     await runMigration("applyStationLocationMigration", applyStationLocationMigration);
+    // The HTTP server starts before the longer seed/repair sequence finishes.
+    // Create the collection tables early so station-directory reads never fail
+    // during that startup window. The post-seed pass below adds memberships for
+    // any newly inserted curated stations.
+    await runMigration("ensureBroZonesSchema", applyBroZonesMigration);
+    // The directory cache now joins collection membership, so its schema must
+    // exist before the first prewarm. Requests racing boot join this same
+    // single-flight query after the lightweight schema pass completes.
+    await prewarmStationDirectoryCache();
+    // Do not eagerly build the full now-playing payload during boot. Its
+    // schedule-attribution query can run for minutes on a cold database and
+    // starve independent listener reads such as Stack and first-play history.
+    // The now-playing route retains its existing single-flight, on-demand
+    // fill when a listener actually opens the Dial.
     await backfillCoarseStationLocations();
      await runMigration("applyStoreAuditMigration", applyStoreAuditMigration);
     await runMigration("applyStationCullMetadataMigration", applyStationCullMetadataMigration);
@@ -284,6 +290,7 @@ async function bootLore(): Promise<void> {
     await ensurePicksUnifiedView();
     await seedStations();
     await runMigration("applyLocalRosterRepair", applyLocalRosterRepair);
+    await runMigration("applyBroZonesMigration", applyBroZonesMigration);
     // Sleep classification must run BEFORE the blocklist hide so its
     // sleep_mode=true marks exempt those rows from the permanent blocklist
     // predicates. Runs unconditionally (not ledger-once) because its UPDATE

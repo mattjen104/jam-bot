@@ -81,6 +81,14 @@ import {
   type StationCategory,
 } from "../lib/dialCategories";
 import {
+  BRO_ZONE_DEFINITIONS,
+  countBroZones,
+  filterBroZoneCollection,
+  parseBroZoneState,
+  writeBroZoneState,
+  type BroZone,
+} from "../lib/broZones";
+import {
   buildFocusedLibraryUrl,
   getArtistFromLibraryAlbumKey,
 } from "../lib/libraryFocusedNavigation";
@@ -1417,6 +1425,8 @@ function DemoMergedLibrary({
     }
     return selected;
   }, [search]);
+  const broZoneState = useMemo(() => parseBroZoneState(search), [search]);
+  const activeBroZones = broZoneState.regions;
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
@@ -1451,6 +1461,7 @@ function DemoMergedLibrary({
     () => demoLibraryData?.pages.flatMap((page) => page.items) ?? [],
     [demoLibraryData],
   );
+  const broZoneCounts = useMemo(() => countBroZones(stations), [stations]);
   useEffect(() => {
     if (
       view !== "songs"
@@ -1468,7 +1479,7 @@ function DemoMergedLibrary({
   ]);
 
   const filteredStations = useMemo(() => {
-    let list = stations;
+    let list = filterBroZoneCollection(stations, broZoneState.active, activeBroZones);
     if (selectedGenres.length || selectedAges.length || decade != null) {
       list = list.filter(ds => {
         const track = ds.liveTrack ?? ds.shows.find(show => show.state === "live")?.currentTrack;
@@ -1506,7 +1517,16 @@ function DemoMergedLibrary({
       }
     }
     return list;
-  }, [stations, focusedArtist, artistStationQuery.data, selectedGenres, selectedAges, decade]);
+  }, [
+    stations,
+    broZoneState.active,
+    activeBroZones,
+    focusedArtist,
+    artistStationQuery.data,
+    selectedGenres,
+    selectedAges,
+    decade,
+  ]);
 
   const filteredDemoItems = useMemo(() => {
     const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
@@ -1706,7 +1726,8 @@ function DemoMergedLibrary({
             onAgesChange={(values) => updateMetadata(next => {
               if (values.some(value => value === "current" || value === "catalog")
                 || (decade != null && !values.includes("deep"))) next.delete("decade");
-              values.length ? next.set("age", values.join(",")) : next.delete("age");
+              if (values.length) next.set("age", values.join(","));
+              else next.delete("age");
             })}
             onDecadeChange={(value) => updateMetadata(next => {
               if (value == null) {
@@ -1745,6 +1766,42 @@ function DemoMergedLibrary({
                 variant="chips"
                 leadingIcon={<SlidersHorizontal size={14} strokeWidth={2} />}
                 className="demo-merged-library__category-filter"
+              />
+              <FilterDropdownMenu<BroZone | "__all">
+                label={`Bro Zones · ${broZoneCounts.combined}`}
+                ariaLabel="Bro Zones regions"
+                options={[
+                  {
+                    value: "__all",
+                    label: `All Bro Zones · ${broZoneCounts.combined}`,
+                    title: "All reviewed Bro Zones stations",
+                  },
+                  ...BRO_ZONE_DEFINITIONS.map(({ key, label }) => ({
+                    value: key,
+                    label: `${label} · ${broZoneCounts.byZone[key]}`,
+                    title: `Reviewed ${label} station membership`,
+                  })),
+                ]}
+                active={
+                  broZoneState.active && activeBroZones.size === 0
+                    ? new Set(["__all" as const])
+                    : activeBroZones
+                }
+                onToggle={(zone) => updateSearch((next) => {
+                  if (zone === "__all") {
+                    writeBroZoneState(next, !broZoneState.active || activeBroZones.size > 0, new Set());
+                    return;
+                  }
+                  const selected = new Set(activeBroZones);
+                  if (selected.has(zone)) selected.delete(zone);
+                  else selected.add(zone);
+                  writeBroZoneState(next, selected.size > 0, selected);
+                })}
+                onClear={() => updateSearch(next => writeBroZoneState(next, false, new Set()))}
+                clearLabel="All stations"
+                variant="chips"
+                leadingIcon={<Radio size={14} strokeWidth={2} />}
+                className="demo-merged-library__bro-zone-filter"
               />
               <select
                 style={selectStyle}

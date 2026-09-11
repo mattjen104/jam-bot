@@ -39,6 +39,8 @@ import {
   scrapedShowsTable,
   scrapedShowExceptionsTable,
   stationQualityTable,
+  stationCollectionsTable,
+  stationCollectionMembershipsTable,
 } from "@workspace/db";
 import { eq, ne, and, or, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
@@ -169,6 +171,7 @@ type StationDirectoryMode = "default" | "sleep" | "era-genre";
 type StationDirectoryRow = {
   station: typeof stationsTable.$inferSelect;
   qualityTier: string | null;
+  collections: Array<{ slug: string; name: string; zone: string | null; stationCount: number }>;
 };
 type StationDirectoryCacheEntry = {
   builtAt: number;
@@ -233,7 +236,7 @@ function refreshStationRows(): Promise<StationDirectoryRow[]> {
   const p = (async () => {
     if (stationRowsRefreshGate) await stationRowsRefreshGate;
     stationRowsRefreshCount++;
-    return listenerDb
+    const rows = await listenerDb
       .select({
         station: stationsTable,
         qualityTier: stationQualityTable.qualityTier,
@@ -260,6 +263,29 @@ function refreshStationRows(): Promise<StationDirectoryRow[]> {
         asc(stationsTable.sortOrder),
         asc(stationsTable.name),
       );
+    const memberships = await listenerDb
+      .select({
+        stationId: stationCollectionMembershipsTable.stationId,
+        slug: stationCollectionsTable.slug,
+        name: stationCollectionsTable.name,
+        zone: stationCollectionMembershipsTable.zone,
+        stationCount: sql<number>`count(*) over (partition by ${stationCollectionsTable.id})`,
+      })
+      .from(stationCollectionMembershipsTable)
+      .innerJoin(
+        stationCollectionsTable,
+        eq(stationCollectionsTable.id, stationCollectionMembershipsTable.collectionId),
+      );
+    const byStation = new Map<number, StationDirectoryRow["collections"]>();
+    for (const membership of memberships) {
+      const list = byStation.get(membership.stationId) ?? [];
+      list.push({ ...membership, stationCount: Number(membership.stationCount) });
+      byStation.set(membership.stationId, list);
+    }
+    return rows.map((row) => ({
+      ...row,
+      collections: byStation.get(row.station.id) ?? [],
+    }));
   })()
     .then((rows) => {
       stationRowsSnapshot = rows;
@@ -512,7 +538,7 @@ function stationDirectoryResponse(
   rows: StationDirectoryRow[],
   resolvedClasses?: Map<number, string | null>,
 ): ReturnType<typeof ListStationsResponse.parse> {
-  const stations = rows.map(({ station, qualityTier }) => {
+  const stations = rows.map(({ station, qualityTier, collections }) => {
     const resolvedClass = resolvedClasses?.get(station.id);
     return toStation(
       station,
@@ -522,9 +548,27 @@ function stationDirectoryResponse(
         : station.automationClass === "mixed"
           ? "automated"
           : station.automationClass,
+      collections,
     );
   });
-  return ListStationsResponse.parse({ stations });
+  const reportMap = new Map<string, { slug: string; name: string; stationCount: number; zones: Map<string, number> }>();
+  for (const row of rows) {
+    for (const collection of row.collections) {
+      const report = reportMap.get(collection.slug) ?? {
+        slug: collection.slug, name: collection.name, stationCount: collection.stationCount,
+        zones: new Map<string, number>(),
+      };
+      if (collection.zone) report.zones.set(collection.zone, (report.zones.get(collection.zone) ?? 0) + 1);
+      reportMap.set(collection.slug, report);
+    }
+  }
+  const collections = [...reportMap.values()].map((report) => ({
+    slug: report.slug,
+    name: report.name,
+    stationCount: report.stationCount,
+    zones: [...report.zones.entries()].map(([slug, stationCount]) => ({ slug, stationCount })),
+  }));
+  return ListStationsResponse.parse({ stations, collections });
 }
 
 function enhanceStationDirectoryCache(
@@ -617,7 +661,7 @@ function rankStationDirectoryForLocality(
   locality: { city: string | null; region: string | null; country: string | null },
 ) {
   if (!locality.city && !locality.region && !locality.country) return response;
-  const rank = (station: (typeof response.stations)[number]) => {
+  const rank = (station: NonNullable<typeof response.stations>[number]) => {
     if (locality.city && normalizedLocality(station.city) === locality.city) return 0;
     if (locality.region && normalizedLocality(station.region) === locality.region) return 1;
     if (locality.country && normalizedLocality(station.country) === locality.country) return 2;
@@ -625,7 +669,7 @@ function rankStationDirectoryForLocality(
   };
   return {
     ...response,
-    stations: response.stations
+    stations: (response.stations ?? [])
       .map((station, index) => ({ station, index, rank: rank(station) }))
       .sort((a, b) => a.rank - b.rank || a.index - b.index)
       .map(({ station }) => station),
@@ -753,9 +797,23 @@ router.get("/stations", h(async (req, res) => {
     region: normalizedLocality(req.query.region),
     country: normalizedLocality(req.query.country),
   };
+  const collection = typeof req.query.collection === "string" ? req.query.collection.trim() : null;
+  const zones = typeof req.query.zones === "string"
+    ? new Set(req.query.zones.split(",").map((z) => z.trim()).filter(Boolean))
+    : new Set<string>();
+  const filterCollectionResponse = (response: ReturnType<typeof ListStationsResponse.parse>) => {
+    if (!collection && zones.size === 0) return response;
+    const stations = (response.stations ?? []).filter((station) => {
+      const matches = (station.collections ?? []).filter((c) =>
+        (!collection || c.slug === collection) && (zones.size === 0 || (c.zone != null && zones.has(c.zone))),
+      );
+      return matches.length > 0;
+    });
+    return { ...response, stations };
+  };
   const cached = stationDirectoryCache.get(mode);
   if (cached && Date.now() - cached.builtAt < STATION_DIRECTORY_CACHE_TTL_MS) {
-    return res.json(rankStationDirectoryForLocality(cached.response, locality));
+    return res.json(rankStationDirectoryForLocality(filterCollectionResponse(cached.response), locality));
   }
 
   const fill = fillStationDirectoryCache(mode);
@@ -765,11 +823,11 @@ router.get("/stations", h(async (req, res) => {
     void fill.catch(() => {
       // Keep serving stale; the next request retries.
     });
-    return res.json(rankStationDirectoryForLocality(cached.response, locality));
+    return res.json(rankStationDirectoryForLocality(filterCollectionResponse(cached.response), locality));
   }
 
   const entry = await fill;
-  return res.json(rankStationDirectoryForLocality(entry.response, locality));
+  return res.json(rankStationDirectoryForLocality(filterCollectionResponse(entry.response), locality));
 }));
 
 // GET /api/stations/now-playing — latest spin per station (the dial pulse).
