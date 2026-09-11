@@ -69,6 +69,11 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
 
+function stableId(v: unknown): string | undefined {
+  if (typeof v === "number" && Number.isSafeInteger(v)) return String(v);
+  return str(v);
+}
+
 /** Parse an ISO/date-ish string to a Date, or undefined when unusable. */
 function toDate(v: unknown): Date | undefined {
   const s = str(v);
@@ -256,7 +261,7 @@ function parseConfiguredHistoryItems(
         (str(config.sourceFamily) as HistorySourceFamily | undefined) ??
         "official_api",
     };
-    const id = str(pickPath(item, itemPath("idPath") ?? ""));
+    const id = stableId(pickPath(item, itemPath("idPath") ?? ""));
     if (id) spin.externalId = `${str(config.sourceKey) ?? "station"}:${id}`;
     const playedAt = toDate(pickPath(item, itemPath("playedAtPath") ?? ""));
     if (playedAt) spin.playedAt = playedAt;

@@ -12,6 +12,157 @@ export const BRO_ZONES_REVIEWED = [
   "north-carolina",
 ] as const;
 
+export type BroZonesCandidateAudit = {
+  slug: string;
+  station: string;
+  zone: (typeof BRO_ZONES_REVIEWED)[number];
+  qualified: boolean;
+  identityUrl: string;
+  streamUrl: string | null;
+  scheduleUrl: string;
+  historyUrl: string;
+  auditNote: string;
+};
+
+/**
+ * Reproduced 2026-09-11 against station-owned pages and endpoints. A candidate
+ * qualifies only when its official stream and schedule are accompanied by
+ * machine-readable track history with both a stable play id and timestamp.
+ */
+export const BRO_ZONES_CANDIDATE_AUDIT = [
+  {
+    slug: "knkx",
+    station: "KNKX",
+    zone: "seattle",
+    qualified: false,
+    identityUrl: "https://www.knkx.org/",
+    streamUrl:
+      "https://knkx-live-a.edge.audiocdn.com/6284_128k?aw_0_1st.playerid=knkx.org",
+    scheduleUrl: "https://www.knkx.org/schedule",
+    historyUrl: "https://www.knkx.org/playlist",
+    auditNote:
+      "The public Cadence playlist is backed by authenticated history endpoints; the station RSS feed contains no track rows.",
+  },
+  {
+    slug: "kbcs",
+    station: "KBCS",
+    zone: "seattle",
+    qualified: false,
+    identityUrl: "https://www.kbcs.fm/",
+    streamUrl: "https://stream.pacificaservice.org:9000/kbcs",
+    scheduleUrl: "https://www.kbcs.fm/program/",
+    historyUrl: "https://spinitron.com/KBCS/",
+    auditNote:
+      "Public Spinitron HTML is a rolling display, not the authenticated, timestamped history API supported by the adapter.",
+  },
+  {
+    slug: "kboo",
+    station: "KBOO",
+    zone: "portland",
+    qualified: false,
+    identityUrl: "https://kboo.fm/",
+    streamUrl: null,
+    scheduleUrl: "https://kboo.fm/program/",
+    historyUrl: "https://kboo.fm/program/playlists",
+    auditNote:
+      "Official playlist pages do not expose a stable play id and timestamp through a supported machine-readable endpoint.",
+  },
+  {
+    slug: "kmhd",
+    station: "KMHD",
+    zone: "portland",
+    qualified: false,
+    identityUrl: "https://www.kmhd.org/",
+    streamUrl: null,
+    scheduleUrl: "https://www.kmhd.org/schedule/",
+    historyUrl: "https://www.kmhd.org/playlist/",
+    auditNote:
+      "Embedded playlist JSON has timestamps but no stable per-play identity, so replay would not be safely idempotent.",
+  },
+  {
+    slug: "kgnu",
+    station: "KGNU",
+    zone: "denver",
+    qualified: false,
+    identityUrl: "https://kgnu.org/",
+    streamUrl: "https://kgnu.streamguys1.com/kgnu",
+    scheduleUrl: "https://kgnu.org/program-schedule/",
+    historyUrl:
+      "https://kgnu.org/wp-content/plugins/kgnu_comrad/src/kgnu_ajax.php",
+    auditNote:
+      "Official playlist responses include Unix times but no stable per-play identity.",
+  },
+  {
+    slug: "wjcu",
+    station: "WJCU",
+    zone: "cleveland",
+    qualified: true,
+    identityUrl: "https://www.wjcu.org/",
+    streamUrl:
+      "https://streaming.jcu.edu/listen/wjcu_radio/wjcu-aac-hi",
+    scheduleUrl: "https://www.wjcu.org/programs/schedule",
+    historyUrl:
+      "https://studio.creek.org/api/tracks?include=broadcast&studioId=s-wjcu",
+    auditNote:
+      "Official Creek JSON supplies stable track ids, UTC start timestamps, track metadata, ISRCs, and recording MBIDs.",
+  },
+  {
+    slug: "the-socal-sound",
+    station: "The SoCal Sound",
+    zone: "redlands-inland-empire",
+    qualified: false,
+    identityUrl: "https://www.thesocalsound.org/",
+    streamUrl: "https://www.streamvortex.com:8444/s/12200",
+    scheduleUrl: "https://www.thesocalsound.org/programs/",
+    historyUrl:
+      "https://www.thesocalsound.org/on-the-socal-sound/playlist/",
+    auditNote:
+      "Official playlist rows have timestamps but no stable per-play identity.",
+  },
+  {
+    slug: "wowd",
+    station: "Takoma Radio",
+    zone: "washington-dc",
+    qualified: false,
+    identityUrl: "https://takomaradio.org/",
+    streamUrl: null,
+    scheduleUrl: "https://takomaradio.org/schedule",
+    historyUrl:
+      "https://widgets.spinitron.com/widget/now-playing-v2?station=wowd",
+    auditNote:
+      "The official page exposes only a recent-play Spinitron widget; durable API history requires authentication.",
+  },
+  {
+    slug: "wncw",
+    station: "WNCW",
+    zone: "north-carolina",
+    qualified: false,
+    identityUrl: "https://www.wncw.org/",
+    streamUrl: "https://wncw-live-a.edge.audiocdn.com/6286_56k.aac",
+    scheduleUrl: "https://www.wncw.org/listen-live-radio-schedule",
+    historyUrl: "https://www.wncw.org/playlist-search",
+    auditNote:
+      "The public Cadence playlist UI does not expose its stable track history endpoint without authentication.",
+  },
+] as const satisfies readonly BroZonesCandidateAudit[];
+
+export const BRO_ZONES_MEMBERSHIPS = [
+  { slug: "kexp", zone: "seattle", evidenceUrl: "https://kexp.org/" },
+  { slug: "dublab", zone: "los-angeles", evidenceUrl: "https://dublab.com/" },
+  { slug: "kcrw-eclectic24", zone: "los-angeles", evidenceUrl: "https://www.kcrw.com/" },
+  { slug: "kxlu", zone: "los-angeles", evidenceUrl: "https://kxlu.com/" },
+  { slug: "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f", zone: "los-angeles", evidenceUrl: "https://kchungradio.org/" },
+  { slug: "kucr", zone: "redlands-inland-empire", evidenceUrl: "https://ucr.edu/" },
+  { slug: "wpfw", zone: "washington-dc", evidenceUrl: "https://www.wpfw.org/" },
+  { slug: "wknc", zone: "north-carolina", evidenceUrl: "https://wknc.org/" },
+  { slug: "wxdu", zone: "north-carolina", evidenceUrl: "https://wxdu.duke.edu/" },
+  { slug: "wxyc", zone: "north-carolina", evidenceUrl: "https://wxyc.org/" },
+  { slug: "xray-fm", zone: "portland", evidenceUrl: "https://xray.fm/" },
+  { slug: "kuvo", zone: "denver", evidenceUrl: "https://www.kuvo.org/" },
+  { slug: "wruw", zone: "cleveland", evidenceUrl: "https://wruw.org/" },
+  { slug: "wjcu", zone: "cleveland", evidenceUrl: "https://www.wjcu.org/programs/playlists" },
+] as const;
+
 /** Create only the tables needed by station-directory reads. This runs before
  * HTTP readiness; location repairs and memberships remain in the full boot
  * migration after the station/location schema and curated seed are ready. */
@@ -81,22 +232,18 @@ export async function applyBroZonesMigration(): Promise<void> {
     UPDATE stations SET city = 'Cleveland', region = 'OH', country = 'US',
       location_source = 'curated', location_confidence = 'verified', updated_at = now()
       WHERE slug = 'wruw';
+    UPDATE stations SET city = 'University Heights', region = 'OH', country = 'US',
+      location_source = 'curated', location_confidence = 'verified', updated_at = now()
+      WHERE slug = 'wjcu';
 
     WITH reviewed(slug, zone, evidence_url) AS (
-      VALUES
-        ('kexp','seattle','https://kexp.org/'),
-        ('dublab','los-angeles','https://dublab.com/'),
-        ('kcrw-eclectic24','los-angeles','https://www.kcrw.com/'),
-        ('kxlu','los-angeles','https://kxlu.com/'),
-        ('rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f','los-angeles','https://kchungradio.org/'),
-        ('kucr','redlands-inland-empire','https://ucr.edu/'),
-        ('wpfw','washington-dc','https://www.wpfw.org/'),
-        ('wknc','north-carolina','https://wknc.org/'),
-        ('wxdu','north-carolina','https://wxdu.duke.edu/'),
-        ('wxyc','north-carolina','https://wxyc.org/'),
-        ('xray-fm','portland','https://xray.fm/'),
-        ('kuvo','denver','https://www.kuvo.org/'),
-        ('wruw','cleveland','https://wruw.org/')
+      VALUES ${sql.join(
+        BRO_ZONES_MEMBERSHIPS.map(
+          ({ slug, zone, evidenceUrl }) =>
+            sql`(${slug}, ${zone}, ${evidenceUrl})`,
+        ),
+        sql`, `,
+      )}
     )
     INSERT INTO station_collection_memberships
       (collection_id, station_id, zone, evidence_url)
