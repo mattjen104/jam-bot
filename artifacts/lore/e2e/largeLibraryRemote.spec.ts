@@ -3,6 +3,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const SONG_COUNT = 2_500;
 const PREVIEW_INDEX = 1_900;
 const MISSING_ART_INDEX = 2_300;
+const DISTANT_FOCUS_BUDGET_MS = 3_000;
 
 function makeSong(index: number) {
   const ordinal = String(index + 1).padStart(4, "0");
@@ -120,7 +121,13 @@ test("defers offscreen artwork in the large visual Songs remote", async ({ page 
   expect(requestedArtwork.has(SONGS[PREVIEW_INDEX].recording.artworkUrl!)).toBe(false);
 
   const previewTile = tiles.nth(PREVIEW_INDEX);
+  const focusStartedAt = performance.now();
   await previewTile.focus();
+  const focusDurationMs = performance.now() - focusStartedAt;
+  expect(
+    focusDurationMs,
+    `focusing distant song tile took ${focusDurationMs.toFixed(0)}ms`,
+  ).toBeLessThan(DISTANT_FOCUS_BUDGET_MS);
   await expect(previewTile).toBeFocused();
   await expect(previewTile).toBeInViewport();
   await previewTile.press("Enter");
