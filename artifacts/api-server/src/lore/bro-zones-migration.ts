@@ -17,6 +17,16 @@ export type BroZonesCandidateAudit = {
   station: string;
   zone: (typeof BRO_ZONES_REVIEWED)[number];
   qualified: boolean;
+  access:
+    | {
+        provider: "spinitron";
+        secretName: `SPINITRON_KEY_${string}`;
+      }
+    | {
+        provider: "cadence";
+        secretName: `CADENCE_KEY_${string}`;
+      }
+    | null;
   identityUrl: string;
   streamUrl: string | null;
   scheduleUrl: string;
@@ -35,6 +45,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "KNKX",
     zone: "seattle",
     qualified: false,
+    access: { provider: "cadence", secretName: "CADENCE_KEY_KNKX" },
     identityUrl: "https://www.knkx.org/",
     streamUrl:
       "https://knkx-live-a.edge.audiocdn.com/6284_128k?aw_0_1st.playerid=knkx.org",
@@ -48,6 +59,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "KBCS",
     zone: "seattle",
     qualified: false,
+    access: { provider: "spinitron", secretName: "SPINITRON_KEY_KBCS" },
     identityUrl: "https://www.kbcs.fm/",
     streamUrl: "https://stream.pacificaservice.org:9000/kbcs",
     scheduleUrl: "https://www.kbcs.fm/program/",
@@ -60,6 +72,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "KBOO",
     zone: "portland",
     qualified: false,
+    access: { provider: "spinitron", secretName: "SPINITRON_KEY_KBOO" },
     identityUrl: "https://kboo.fm/",
     streamUrl: null,
     scheduleUrl: "https://kboo.fm/program/",
@@ -72,6 +85,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "KMHD",
     zone: "portland",
     qualified: false,
+    access: null,
     identityUrl: "https://www.kmhd.org/",
     streamUrl: null,
     scheduleUrl: "https://www.kmhd.org/schedule/",
@@ -84,6 +98,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "KGNU",
     zone: "denver",
     qualified: false,
+    access: null,
     identityUrl: "https://kgnu.org/",
     streamUrl: "https://kgnu.streamguys1.com/kgnu",
     scheduleUrl: "https://kgnu.org/program-schedule/",
@@ -97,6 +112,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "WJCU",
     zone: "cleveland",
     qualified: true,
+    access: null,
     identityUrl: "https://www.wjcu.org/",
     streamUrl:
       "https://streaming.jcu.edu/listen/wjcu_radio/wjcu-aac-hi",
@@ -111,6 +127,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "The SoCal Sound",
     zone: "redlands-inland-empire",
     qualified: false,
+    access: null,
     identityUrl: "https://www.thesocalsound.org/",
     streamUrl: "https://www.streamvortex.com:8444/s/12200",
     scheduleUrl: "https://www.thesocalsound.org/programs/",
@@ -124,6 +141,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "Takoma Radio",
     zone: "washington-dc",
     qualified: false,
+    access: { provider: "spinitron", secretName: "SPINITRON_KEY_WOWD" },
     identityUrl: "https://takomaradio.org/",
     streamUrl: null,
     scheduleUrl: "https://takomaradio.org/schedule",
@@ -137,6 +155,7 @@ export const BRO_ZONES_CANDIDATE_AUDIT = [
     station: "WNCW",
     zone: "north-carolina",
     qualified: false,
+    access: { provider: "cadence", secretName: "CADENCE_KEY_WNCW" },
     identityUrl: "https://www.wncw.org/",
     streamUrl: "https://wncw-live-a.edge.audiocdn.com/6286_56k.aac",
     scheduleUrl: "https://www.wncw.org/listen-live-radio-schedule",

@@ -63,6 +63,27 @@ describe("Bro Zones reviewed coverage", () => {
     ).toEqual(["wruw", "wjcu"]);
   });
 
+  it("documents secure access without treating an unaudited key as qualification", () => {
+    const pendingAccess = BRO_ZONES_CANDIDATE_AUDIT.filter(
+      ({ access }) => access !== null,
+    );
+    expect(
+      pendingAccess.map(({ slug, access }) => [slug, access!.secretName]),
+    ).toEqual([
+      ["knkx", "CADENCE_KEY_KNKX"],
+      ["kbcs", "SPINITRON_KEY_KBCS"],
+      ["kboo", "SPINITRON_KEY_KBOO"],
+      ["wowd", "SPINITRON_KEY_WOWD"],
+      ["wncw", "CADENCE_KEY_WNCW"],
+    ]);
+    expect(pendingAccess.every(({ qualified }) => !qualified)).toBe(true);
+    expect(
+      BRO_ZONES_MEMBERSHIPS.some(({ slug }) =>
+        pendingAccess.some((candidate) => candidate.slug === slug),
+      ),
+    ).toBe(false);
+  });
+
   it("maps WJCU's official Creek rows to stable, timestamped spins", () => {
     const station = SEED_STATIONS.find(({ slug }) => slug === "wjcu");
     expect(station).toMatchObject({
