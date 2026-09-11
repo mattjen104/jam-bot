@@ -121,7 +121,15 @@ describe("LibraryCrate demo song rows", () => {
       />,
     );
 
-    expect(screen.getByText("Matches · Electronic / Experimental · 1990s")).toBeTruthy();
-    expect(within(screen.getByText("Unknown Facts").closest("article")!).queryByText(/Matches/)).toBeNull();
+    const knownRow = within(screen.getByText("French Disko").closest("article")!);
+    expect(knownRow.getByText("Electronic")).toBeTruthy();
+    expect(knownRow.getByText("Experimental")).toBeTruthy();
+    expect(knownRow.getByText("1990s")).toBeTruthy();
+
+    const unknownRow = within(screen.getByText("Unknown Facts").closest("article")!);
+    expect(unknownRow.queryByText(/Matches/)).toBeNull();
+    expect(unknownRow.queryByText("Electronic")).toBeNull();
+    expect(unknownRow.queryByText("Experimental")).toBeNull();
+    expect(unknownRow.queryByText("1990s")).toBeNull();
   });
 });
