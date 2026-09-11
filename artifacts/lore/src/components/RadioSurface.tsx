@@ -120,6 +120,7 @@ export function RadioSurface({
         <div className="demo-radio__row demo-radio__row--compact" key={ds.station.slug}>
           <StationMark
             name={ds.station.name}
+            iconUrl={ds.station.stationIconUrl}
             logoUrl={ds.station.logoUrl}
             className="demo-radio__station-mark demo-radio__station-mark--compact"
           />
@@ -164,6 +165,7 @@ export function RadioSurface({
         <div className="demo-radio__row demo-radio__row--featured">
           <StationMark
             name={ds.station.name}
+            iconUrl={ds.station.stationIconUrl}
             logoUrl={ds.station.logoUrl}
             className="demo-radio__station-mark"
           />

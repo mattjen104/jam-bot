@@ -150,3 +150,4 @@
 - [Artist lens station membership](artist-lens-station-membership.md) — focused artists use exact all-history station membership; never filter bounded crossing summaries or wait for run-detail search.
 - [HLS pointer warmup safety](hls-pointer-warmup-safety.md) — never preload HLS by assigning its URL directly when the browser lacks native HLS; let hls.js attach to a clean audio element.
 - [Provider release evidence trust](provider-release-evidence-trust.md) — shared track-age facts require server-verified provider identity; rejected canonical links must leave the entire evidence packet immutable.
+- [Station icon vs logo roles](station-icon-logo-roles.md) — keep low-res square identity icons separate from high-res official logo art; shared provider branding qualifies for neither.

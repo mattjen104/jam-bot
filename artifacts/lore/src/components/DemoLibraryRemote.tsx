@@ -55,6 +55,7 @@ function StationRemoteTile({ station, matchFilters }: { station: DialStation; ma
     >
       <StationMark
         name={station.station.name}
+        iconUrl={station.station.stationIconUrl}
         logoUrl={station.station.logoUrl}
         variant="cube"
         faviconOnly

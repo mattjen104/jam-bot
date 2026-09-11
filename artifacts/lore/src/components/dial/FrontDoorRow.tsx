@@ -562,6 +562,7 @@ export function FrontDoorRow({ ds, show, ov: _ov, isActive, isSampling, onTuneIn
         {showStationMark && (
           <StationMark
             name={ds.station.name}
+            iconUrl={ds.station.stationIconUrl}
             logoUrl={ds.station.logoUrl}
             homepageUrl={ds.station.homepageUrl}
           />

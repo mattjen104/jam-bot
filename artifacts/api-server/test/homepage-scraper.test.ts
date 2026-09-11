@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  discoverStationIcon,
   discoverStationLogo,
   extractManifestLogoCandidates,
   extractDonateLink,
@@ -28,6 +29,11 @@ vi.mock("@workspace/db", async (importOriginal) => {
     logoUrl: "logoUrl",
     logoWidth: "logoWidth",
     logoHeight: "logoHeight",
+    stationIconCheckedAt: "stationIconCheckedAt",
+    stationIconSource: "stationIconSource",
+    stationIconUrl: "stationIconUrl",
+    stationIconWidth: "stationIconWidth",
+    stationIconHeight: "stationIconHeight",
     donateUrl: "donateUrl",
     storeUrl: "storeUrl",
     storeLabel: "storeLabel",
@@ -401,6 +407,65 @@ describe("station logo discovery", () => {
       vector: true,
     });
   });
+
+  it("accepts a low-resolution square favicon as the station icon", async () => {
+    const favicon = makePng(32, 32);
+    const fetchFn = vi.fn().mockResolvedValue(
+      imageResponse(favicon),
+    ) as unknown as typeof fetch;
+
+    await expect(
+      discoverStationIcon(
+        `<link rel="icon" sizes="32x32" href="/favicon.png">`,
+        "https://station.example",
+        { fetchFn, isSafeUrlFn: () => true },
+      ),
+    ).resolves.toEqual({
+      url: "https://station.example/favicon.png",
+      width: 32,
+      height: 32,
+      vector: false,
+    });
+  });
+
+  it("keeps rectangular artwork as a large logo but not as a station icon", async () => {
+    const rectangle = makePng(320, 160);
+    const fetchFn = vi.fn().mockResolvedValue(
+      imageResponse(rectangle),
+    ) as unknown as typeof fetch;
+    const html = `<img class="station-logo" src="/wide.png" width="320" height="160">`;
+
+    await expect(discoverStationLogo(html, "https://station.example", {
+      fetchFn,
+      isSafeUrlFn: () => true,
+    })).resolves.toEqual({
+      url: "https://station.example/wide.png",
+      width: 320,
+      height: 160,
+      vector: false,
+    });
+    await expect(discoverStationIcon(html, "https://station.example", {
+      fetchFn,
+      isSafeUrlFn: () => true,
+    })).resolves.toBeNull();
+  });
+
+  it("rejects shared Spinitron branding for both asset roles", async () => {
+    const image = makePng(256, 256);
+    const fetchFn = vi.fn().mockResolvedValue(
+      imageResponse(image),
+    ) as unknown as typeof fetch;
+    const html = `<img class="station-logo" src="https://widgets.spinitron.com/logo.png">`;
+
+    await expect(discoverStationLogo(html, "https://station.example", {
+      fetchFn,
+      isSafeUrlFn: () => true,
+    })).resolves.toBeNull();
+    await expect(discoverStationIcon(html, "https://station.example", {
+      fetchFn,
+      isSafeUrlFn: () => true,
+    })).resolves.toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -548,9 +613,11 @@ const safeScrapeOpts = {
     const { db } = await import("@workspace/db");
     const pageChain = makeDbUpdateChain();
     const logoChain = makeDbUpdateChain({ returnRows: [{ id: 42 }] });
+    const iconChain = makeDbUpdateChain();
     (db.update as ReturnType<typeof vi.fn>)
       .mockReturnValueOnce(pageChain.chain)
-      .mockReturnValueOnce(logoChain.chain);
+      .mockReturnValueOnce(logoChain.chain)
+      .mockReturnValueOnce(iconChain.chain);
 
     const fetchFn = vi
       .fn()
@@ -559,6 +626,7 @@ const safeScrapeOpts = {
         status: 200,
         text: async () => `<img class="station-logo" src="/logo.png">`,
       })
+      .mockResolvedValueOnce(imageResponse(makePng(256, 256)))
       .mockResolvedValueOnce(imageResponse(makePng(256, 256))) as unknown as typeof fetch;
 
     await scrapeStationHomepage(
@@ -581,7 +649,7 @@ const safeScrapeOpts = {
     const fetchFn = makeHtmlFetch(`<img class="station-logo" src="/logo.png">`);
 
     await scrapeStationHomepage(
-      { ...baseTarget, logoSource: "curated" },
+      { ...baseTarget, logoSource: "curated", stationIconSource: "curated" },
       { fetchFn, ...safeScrapeOpts },
     );
 

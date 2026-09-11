@@ -5457,6 +5457,9 @@ components:
           type: ["string", "null"]
         logoUrl:
           type: ["string", "null"]
+        stationIconUrl:
+          type: ["string", "null"]
+          description: Square station identity mark; may be a low-resolution favicon.
         attribution:
           type: boolean
         tags:

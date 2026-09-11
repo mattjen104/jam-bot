@@ -28,6 +28,7 @@ export interface StationMarkProps {
   /** Station name — used only for the fallback title; the visible/accessible
    *  station name is always rendered separately by the caller. */
   name: string;
+  iconUrl?: string | null;
   logoUrl?: string | null;
   homepageUrl?: string | null;
   /** "inline" sits beside text at cap height; "cube" is the larger block used
@@ -50,6 +51,7 @@ function isSharedProviderLogo(url: string): boolean {
 
 export function StationMark({
   name,
+  iconUrl,
   logoUrl,
   variant = "inline",
   faviconOnly = false,
@@ -58,8 +60,9 @@ export function StationMark({
   // Track the failed URL (not a boolean) so a later, different logoUrl gets
   // a fresh attempt instead of inheriting the failure.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const safeCandidate = safeHttpUrl(logoUrl);
-  const safe = safeCandidate && (!faviconOnly || !isSharedProviderLogo(safeCandidate))
+  const iconPolicy = Boolean(iconUrl) || faviconOnly;
+  const safeCandidate = safeHttpUrl(iconUrl ?? logoUrl);
+  const safe = safeCandidate && (!iconPolicy || !isSharedProviderLogo(safeCandidate))
     ? safeCandidate
     : null;
   const primarySrc = safe ? proxyArtUrl(safe) : null;
@@ -105,7 +108,7 @@ export function StationMark({
             <= Math.max(1, Math.round(Math.max(image.naturalWidth, image.naturalHeight) * 0.05));
         // The Library remote deliberately accepts small favicons, but only
         // square ones. Other surfaces retain the sharper 2x source-size rule.
-        if (faviconOnly ? !isSquare : (
+        if (iconPolicy ? !isSquare : (
           image.naturalWidth > 0 &&
           image.naturalHeight > 0 &&
           Math.min(image.naturalWidth, image.naturalHeight) <

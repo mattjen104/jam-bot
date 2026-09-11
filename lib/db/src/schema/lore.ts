@@ -275,6 +275,12 @@ export const stationsTable = pgTable("stations", {
   logoHeight: integer("logo_height"),
   /** Last completed station-logo discovery attempt. Null = never checked. */
   logoCheckedAt: timestamp("logo_checked_at"),
+  /** Square station identity mark; low-resolution favicons are valid here. */
+  stationIconUrl: text("station_icon_url"),
+  stationIconSource: text("station_icon_source"),
+  stationIconWidth: integer("station_icon_width"),
+  stationIconHeight: integer("station_icon_height"),
+  stationIconCheckedAt: timestamp("station_icon_checked_at"),
   /** Now-playing adapter key, e.g. "radio_paradise" | "kexp" | "bbc". */
   nowPlayingSource: text("now_playing_source"),
   /**

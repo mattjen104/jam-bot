@@ -639,6 +639,11 @@ export interface Station {
   donateUrl?: string | null;
   /** @nullable */
   logoUrl?: string | null;
+  /**
+   * Square station identity mark; may be a low-resolution favicon.
+   * @nullable
+   */
+  stationIconUrl?: string | null;
   attribution: boolean;
   /** @nullable */
   tags?: string[] | null;

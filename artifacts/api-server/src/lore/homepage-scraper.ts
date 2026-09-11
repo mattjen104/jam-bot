@@ -20,8 +20,9 @@ const MAX_HOMEPAGE_BYTES = 2_000_000;
 const MAX_ROBOTS_BYTES = 256_000;
 const MAX_MANIFEST_BYTES = 500_000;
 const MAX_LOGO_CANDIDATES = 8;
-/** The largest home mark is 58 CSS px; 112+ px stays crisp at roughly 2x. */
+/** The large station logo remains suitable for prominent/backdrop treatments. */
 export const MIN_STATION_LOGO_SIDE = 112;
+const MAX_SQUARE_ASPECT_DRIFT = 0.05;
 // Re-scrape cadence: a homepage that hasn't been (re)scraped in 30 days is
 // eligible again. New stations (homepageScrapedAt null) are always eligible.
 const RESCRAPE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
@@ -37,6 +38,7 @@ interface ScrapeTarget {
   slug: string;
   homepageUrl: string;
   logoSource?: string | null;
+  stationIconSource?: string | null;
 }
 
 export interface StationLogoCandidate {
@@ -69,6 +71,7 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
       slug: stationsTable.slug,
       homepageUrl: stationsTable.homepageUrl,
       logoSource: stationsTable.logoSource,
+      stationIconSource: stationsTable.stationIconSource,
     })
     .from(stationsTable)
     .where(
@@ -81,6 +84,8 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
           lt(stationsTable.homepageScrapedAt, cutoff),
           isNull(stationsTable.logoCheckedAt),
           lt(stationsTable.logoCheckedAt, cutoff),
+          isNull(stationsTable.stationIconCheckedAt),
+          lt(stationsTable.stationIconCheckedAt, cutoff),
           isNull(stationsTable.storeCheckedAt),
           lt(stationsTable.storeCheckedAt, cutoff),
         ),
@@ -98,6 +103,7 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
       slug: r.slug,
       homepageUrl: r.homepageUrl!,
       logoSource: r.logoSource,
+      stationIconSource: r.stationIconSource,
     }));
 }
 
@@ -159,6 +165,34 @@ function dedupeCandidates(candidates: StationLogoCandidate[]): StationLogoCandid
     if (!existing || entry.priority > existing.priority) byUrl.set(entry.url, entry);
   }
   return [...byUrl.values()].sort((a, b) => b.priority - a.priority);
+}
+
+export function isSharedProviderLogoUrl(rawUrl: string): boolean {
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase();
+    return hostname === "spinitron.com" || hostname.endsWith(".spinitron.com");
+  } catch {
+    return true;
+  }
+}
+
+function isSquareSize(width: number, height: number): boolean {
+  if (width <= 0 || height <= 0) return false;
+  return Math.abs(width - height) / Math.max(width, height) <= MAX_SQUARE_ASPECT_DRIFT;
+}
+
+function svgDimensions(svg: string): { width: number; height: number } | null {
+  const root = svg.match(/<svg\b([^>]*)>/i)?.[1];
+  if (!root) return null;
+  const attrs = tagAttributes(`<svg ${root}>`);
+  const width = Number.parseFloat(attrs.get("width") ?? "");
+  const height = Number.parseFloat(attrs.get("height") ?? "");
+  if (Number.isFinite(width) && Number.isFinite(height)) return { width, height };
+  const viewBox = attrs.get("viewbox")?.trim().split(/[\s,]+/).map(Number);
+  if (viewBox?.length === 4 && viewBox.every(Number.isFinite)) {
+    return { width: viewBox[2]!, height: viewBox[3]! };
+  }
+  return null;
 }
 
 /**
@@ -462,6 +496,7 @@ async function probeLogo(
   fetchFn: typeof fetch,
   safeUrl: SafeUrlFn,
 ): Promise<StationLogoResult | null> {
+  if (isSharedProviderLogoUrl(entry.url)) return null;
   if (
     entry.declaredWidth != null &&
     entry.declaredHeight != null &&
@@ -492,10 +527,78 @@ async function probeLogo(
   if (!contentType.startsWith("image/")) return null;
 
   const dimensions = readStationLogoDimensions(data, contentType);
-  if (!dimensions || Math.min(dimensions.width, dimensions.height) < MIN_STATION_LOGO_SIDE) {
+  if (
+    !dimensions ||
+    Math.min(dimensions.width, dimensions.height) < MIN_STATION_LOGO_SIDE
+  ) {
     return null;
   }
   return { url: entry.url, ...dimensions, vector: false };
+}
+
+async function probeStationIcon(
+  entry: StationLogoCandidate,
+  fetchFn: typeof fetch,
+  safeUrl: SafeUrlFn,
+): Promise<StationLogoResult | null> {
+  if (isSharedProviderLogoUrl(entry.url)) return null;
+  if (
+    entry.declaredWidth != null &&
+    entry.declaredHeight != null &&
+    !isSquareSize(entry.declaredWidth, entry.declaredHeight)
+  ) return null;
+
+  const fetched = await fetchSafe(entry.url, fetchFn, safeUrl, "image/*,*/*;q=0.8");
+  if (!fetched) return null;
+  const contentType = fetched.response.headers.get("content-type")?.toLowerCase() ?? "";
+  const data = await readBoundedResponse(fetched.response, MAX_LOGO_BYTES);
+  if (!data || data.length === 0) return null;
+  const svgText = data.toString("utf8");
+  if (contentType.includes("image/svg+xml")) {
+    const dimensions = svgDimensions(svgText);
+    const safeSvg = /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg\b/i.test(svgText)
+      && !/<(?:script|foreignObject|iframe|object|embed)\b/i.test(svgText);
+    if (!safeSvg || !dimensions || !isSquareSize(dimensions.width, dimensions.height)) return null;
+    return { url: entry.url, ...dimensions, vector: true };
+  }
+  if (!contentType.startsWith("image/")) return null;
+  const dimensions = readStationLogoDimensions(data, contentType);
+  if (!dimensions || !isSquareSize(dimensions.width, dimensions.height)) return null;
+  return { url: entry.url, ...dimensions, vector: false };
+}
+
+export async function discoverStationIcon(
+  html: string,
+  pageUrl: string,
+  opts: { fetchFn?: typeof fetch; isSafeUrlFn?: SafeUrlFn } = {},
+): Promise<StationLogoResult | null> {
+  const fetchFn = opts.fetchFn ?? fetch;
+  const safeUrl = opts.isSafeUrlFn ?? defaultSafeUrl;
+  let candidates = extractStationLogoCandidates(html, pageUrl);
+  const manifestUrl = extractManifestUrl(html, pageUrl);
+  if (manifestUrl) {
+    const fetched = await fetchSafe(manifestUrl, fetchFn, safeUrl, "application/manifest+json,application/json");
+    if (fetched) {
+      try {
+        const data = await readBoundedResponse(fetched.response, MAX_MANIFEST_BYTES);
+        if (data) candidates = dedupeCandidates([
+          ...candidates,
+          ...extractManifestLogoCandidates(JSON.parse(data.toString("utf8")), fetched.finalUrl),
+        ]);
+      } catch {
+        // Invalid manifest; page-declared candidates remain eligible.
+      }
+    }
+  }
+  const accepted: Array<{ result: StationLogoResult; score: number }> = [];
+  for (const entry of candidates.slice(0, MAX_LOGO_CANDIDATES)) {
+    const result = await probeStationIcon(entry, fetchFn, safeUrl);
+    if (!result) continue;
+    const size = Math.min(result.width ?? 0, result.height ?? 0);
+    accepted.push({ result, score: entry.priority + Math.min(160, size) });
+  }
+  accepted.sort((a, b) => b.score - a.score);
+  return accepted[0]?.result ?? null;
 }
 
 export async function discoverStationLogo(
@@ -775,6 +878,7 @@ export async function scrapeStationHomepage(
       .set({
         homepageScrapedAt: new Date(),
         logoCheckedAt: new Date(),
+        stationIconCheckedAt: new Date(),
         storeStatus: "unavailable",
         storeCheckedAt: new Date(),
       })
@@ -792,6 +896,7 @@ export async function scrapeStationHomepage(
       .set({
         homepageScrapedAt: new Date(),
         logoCheckedAt: new Date(),
+        stationIconCheckedAt: new Date(),
         storeStatus: "blocked",
         storeCheckedAt: new Date(),
       })
@@ -812,6 +917,7 @@ export async function scrapeStationHomepage(
         .set({
           homepageScrapedAt: new Date(),
           logoCheckedAt: new Date(),
+          stationIconCheckedAt: new Date(),
           storeStatus: "unavailable",
           storeCheckedAt: new Date(),
         })
@@ -828,6 +934,7 @@ export async function scrapeStationHomepage(
         .set({
           homepageScrapedAt: new Date(),
           logoCheckedAt: new Date(),
+          stationIconCheckedAt: new Date(),
           storeStatus: "blocked",
           storeCheckedAt: new Date(),
         })
@@ -844,6 +951,7 @@ export async function scrapeStationHomepage(
         .set({
           homepageScrapedAt: new Date(),
           logoCheckedAt: new Date(),
+          stationIconCheckedAt: new Date(),
           storeStatus: "unavailable",
           storeCheckedAt: new Date(),
         })
@@ -863,6 +971,13 @@ export async function scrapeStationHomepage(
             fetchFn,
             isSafeUrlFn: safeUrl,
           });
+    const discoveredIcon =
+      target.stationIconSource === "curated"
+        ? null
+        : await discoverStationIcon(html, fetched.finalUrl, {
+            fetchFn,
+            isSafeUrlFn: safeUrl,
+          });
 
     // Write blurb unconditionally (overwriting stale text is fine).
     // Write donate_url only when the DB value is currently null — manual
@@ -878,6 +993,7 @@ export async function scrapeStationHomepage(
         storeCheckedAt: new Date(),
         homepageScrapedAt: new Date(),
         logoCheckedAt: new Date(),
+        stationIconCheckedAt: new Date(),
       })
       .where(eq(stationsTable.id, target.id));
 
@@ -922,6 +1038,26 @@ export async function scrapeStationHomepage(
       }
     }
 
+    if (discoveredIcon) {
+      await db
+        .update(stationsTable)
+        .set({
+          stationIconUrl: discoveredIcon.url,
+          stationIconSource: "website",
+          stationIconWidth: discoveredIcon.width,
+          stationIconHeight: discoveredIcon.height,
+        })
+        .where(
+          and(
+            eq(stationsTable.id, target.id),
+            or(
+              isNull(stationsTable.stationIconSource),
+              inArray(stationsTable.stationIconSource, ["radio_browser", "website"]),
+            ),
+          ),
+        );
+    }
+
     return { scraped: Boolean(blurb), blocked: false };
   } catch (err) {
     console.warn(`[homepage-scraper] fetch failed for ${target.slug}`, err);
@@ -930,6 +1066,7 @@ export async function scrapeStationHomepage(
       .set({
         homepageScrapedAt: new Date(),
         logoCheckedAt: new Date(),
+        stationIconCheckedAt: new Date(),
         storeStatus: "unavailable",
         storeCheckedAt: new Date(),
       })

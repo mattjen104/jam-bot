@@ -261,6 +261,7 @@ export function DialFeedLane({
         >
           <StationMark
             name={row.ds.station.name}
+            iconUrl={row.ds.station.stationIconUrl}
             logoUrl={row.ds.station.logoUrl}
             homepageUrl={row.ds.station.homepageUrl}
             variant="cube"

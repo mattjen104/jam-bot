@@ -316,6 +316,7 @@ export function toStation(
     homepageUrl: s.homepageUrl,
     donateUrl: s.donateUrl,
     logoUrl: s.logoUrl,
+    stationIconUrl: s.stationIconUrl,
     attribution: s.attribution,
     tags: Array.isArray(s.tags) ? (s.tags as string[]) : null,
     mayHaveAds: s.mayHaveAds,

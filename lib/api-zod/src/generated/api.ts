@@ -436,6 +436,12 @@ export const ListStationsResponse = zod.object({
         homepageUrl: zod.string().nullish(),
         donateUrl: zod.string().nullish(),
         logoUrl: zod.string().nullish(),
+        stationIconUrl: zod
+          .string()
+          .nullish()
+          .describe(
+            "Square station identity mark; may be a low-resolution favicon.",
+          ),
         attribution: zod.boolean(),
         tags: zod.array(zod.string()).nullish(),
         mayHaveAds: zod
@@ -1213,6 +1219,12 @@ export const GetStationNowPlayingResponse = zod.object({
       homepageUrl: zod.string().nullish(),
       donateUrl: zod.string().nullish(),
       logoUrl: zod.string().nullish(),
+      stationIconUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Square station identity mark; may be a low-resolution favicon.",
+        ),
       attribution: zod.boolean(),
       tags: zod.array(zod.string()).nullish(),
       mayHaveAds: zod
@@ -2552,6 +2564,12 @@ export const GetStationArchiveResponse = zod.object({
       homepageUrl: zod.string().nullish(),
       donateUrl: zod.string().nullish(),
       logoUrl: zod.string().nullish(),
+      stationIconUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Square station identity mark; may be a low-resolution favicon.",
+        ),
       attribution: zod.boolean(),
       tags: zod.array(zod.string()).nullish(),
       mayHaveAds: zod

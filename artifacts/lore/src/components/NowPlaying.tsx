@@ -192,6 +192,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             <StationMark
               name={station.name}
+              iconUrl={station.stationIconUrl}
               logoUrl={station.logoUrl}
               homepageUrl={station.homepageUrl}
             />
