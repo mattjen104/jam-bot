@@ -33,19 +33,35 @@ export interface StationMarkProps {
   /** "inline" sits beside text at cap height; "cube" is the larger block used
    *  to the left of now-playing text in single-station lists. */
   variant?: "inline" | "cube";
+  /** Remote tiles should use compact station favicons, never shared provider
+   * branding or larger rectangular station artwork. */
+  faviconOnly?: boolean;
   className?: string;
+}
+
+function isSharedProviderLogo(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.toLowerCase().includes("spinitron.com");
+  } catch {
+    return false;
+  }
 }
 
 export function StationMark({
   name,
   logoUrl,
   variant = "inline",
+  faviconOnly = false,
   className,
 }: StationMarkProps) {
   // Track the failed URL (not a boolean) so a later, different logoUrl gets
   // a fresh attempt instead of inheriting the failure.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const safe = safeHttpUrl(logoUrl);
+  const safeCandidate = safeHttpUrl(logoUrl);
+  const safe = safeCandidate && (!faviconOnly || !isSharedProviderLogo(safeCandidate))
+    ? safeCandidate
+    : null;
   const primarySrc = safe ? proxyArtUrl(safe) : null;
   const src = primarySrc && failedSrc !== primarySrc ? primarySrc : null;
 
@@ -83,15 +99,18 @@ export function StationMark({
           image.clientHeight,
           variant === "cube" ? 22 : 14,
         );
-        // Require roughly 2x source pixels for the largest rendered edge. This
-        // accepts normal 128px station assets at the 58px home size while
-        // refusing 16/32px favicons that browsers would visibly blur.
-        if (
+        const isSquare = image.naturalWidth > 0
+          && image.naturalHeight > 0
+          && Math.abs(image.naturalWidth - image.naturalHeight)
+            <= Math.max(1, Math.round(Math.max(image.naturalWidth, image.naturalHeight) * 0.05));
+        // The Library remote deliberately accepts small favicons, but only
+        // square ones. Other surfaces retain the sharper 2x source-size rule.
+        if (faviconOnly ? !isSquare : (
           image.naturalWidth > 0 &&
           image.naturalHeight > 0 &&
           Math.min(image.naturalWidth, image.naturalHeight) <
             Math.ceil(renderedSide * 2)
-        ) {
+        )) {
           setFailedSrc(src);
         }
       }}
