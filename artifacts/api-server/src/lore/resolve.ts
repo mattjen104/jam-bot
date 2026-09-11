@@ -797,6 +797,8 @@ export interface SpinChangedEvent {
   releaseYear: number | null;
   /** MusicBrainz first-release date in partial-ISO form (YYYY / YYYY-MM / YYYY-MM-DD), used by the Dial First (premiere) tier. Null when unknown/unresolved. */
   releaseDate: string | null;
+  /** Canonical grounded genre tags carried with the terminal SSE replacement. */
+  genres: string[];
   /** True when this is the first time this recording (by MBID) has appeared in the archive. */
   isFirstSpin: boolean;
   /** When Lore observed the metadata (spin write time), ISO 8601. Mirrors spins.observed_at. */
@@ -1366,6 +1368,7 @@ async function logSpinIfChangedInner(
       let releaseGroupMbid: string | null = null;
       let releaseYear: number | null = null;
       let releaseDate: string | null = null;
+      let genres: string[] = [];
       if (r.mbid) {
         // Post-persist metadata is OPTIONAL enrichment for the SSE frame: the
         // spin is already written, so a failure here must never surface as
@@ -1393,6 +1396,7 @@ async function logSpinIfChangedInner(
               .select({
                 releaseYear: recordingsTable.releaseYear,
                 releaseDate: recordingsTable.releaseDate,
+                genres: recordingsTable.genres,
               })
               .from(recordingsTable)
               .where(eq(recordingsTable.mbid, r.mbid))
@@ -1402,6 +1406,7 @@ async function logSpinIfChangedInner(
           releaseGroupMbid = rgRow[0]?.rg ?? null;
           releaseYear = recRow[0]?.releaseYear ?? null;
           releaseDate = recRow[0]?.releaseDate ?? null;
+          genres = recRow[0]?.genres ?? [];
         } catch (metaErr) {
           console.warn(
             "[lore] post-persist metadata lookup failed; emitting spin-changed with fallback metadata",
@@ -1423,6 +1428,7 @@ async function logSpinIfChangedInner(
         releaseGroupMbid,
         releaseYear,
         releaseDate,
+        genres,
         isFirstSpin,
         observedAt: new Date().toISOString(),
         confidence: r.confidence,

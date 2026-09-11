@@ -31,7 +31,7 @@ import { eq, and, or, isNotNull, isNull, inArray, ne, desc, asc, sql, like, gte 
 import { getConnector } from "../../lore/serviceConnector.js";
 import { normalizeKey, isrcKey } from "../../lore/resolve.js";
 import { isJunkMetadata } from "../../lore/icy.js";
-import { createMbResolver } from "@workspace/song-enrichment";
+import { createMbResolver, canonicalGenres, releaseEra, type ReleaseEra } from "@workspace/song-enrichment";
 import { h } from "../../middlewares/asyncHandler.js";
 import {
   buildExport,
@@ -2781,14 +2781,38 @@ router.get("/me/library", h(async (req, res) => {
     typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
   const sortRaw =
     typeof req.query["sort"] === "string" ? req.query["sort"] : "added";
-  const sort: "added" | "artist" | "title" =
-    sortRaw === "artist" || sortRaw === "title" ? sortRaw : "added";
+  const sort: "added" | "artist" | "title" | "genre" | "era" =
+    sortRaw === "artist" || sortRaw === "title" || sortRaw === "genre" || sortRaw === "era" ? sortRaw : "added";
   const sourceRaw =
     typeof req.query["source"] === "string" ? req.query["source"] : "";
   const source: "keep" | "import" | "soft" | "critic" | "lore" | null =
     sourceRaw === "keep" || sourceRaw === "import" || sourceRaw === "soft" || sourceRaw === "critic" || sourceRaw === "lore"
       ? sourceRaw
       : null;
+  const genreRaw = typeof req.query["genre"] === "string" ? req.query["genre"].trim() : "";
+  const requestedGenres = canonicalGenres(genreRaw.split(",").filter(Boolean));
+  const genreSet = new Set(requestedGenres);
+  const ageRaw = typeof req.query["age"] === "string" ? req.query["age"].trim() : "";
+  const requestedAges = [...new Set(ageRaw.split(",").filter((v): v is ReleaseEra =>
+    v === "current" || v === "catalog" || v === "deep"))];
+  const decadeRaw = typeof req.query["decade"] === "string" ? req.query["decade"].trim() : "";
+  if (decadeRaw && !/^\d{4}$/.test(decadeRaw)) {
+    return res.status(400).json({ error: "Decade must be a four-digit decade year" });
+  }
+  const decade = /^\d{4}$/.test(decadeRaw) ? Number(decadeRaw) : undefined;
+  if (genreRaw && requestedGenres.length !== genreRaw.split(",").filter(Boolean).length) {
+    return res.status(400).json({ error: "Unknown canonical genre" });
+  }
+  if (ageRaw && requestedAges.length !== ageRaw.split(",").filter(Boolean).length) {
+    return res.status(400).json({ error: "Invalid age" });
+  }
+  if (decade !== undefined && (decade < 1000 || decade % 10 !== 0)) {
+    return res.status(400).json({ error: "Decade must be a decade year" });
+  }
+  if (decade !== undefined && requestedAges.some((age) => age !== "deep")) {
+    return res.status(400).json({ error: "Decade only applies to the deep age" });
+  }
+  const advancedLibraryView = Boolean(genreSet.size || requestedAges.length || decade !== undefined || sort === "genre" || sort === "era");
 
   const includeSoft = source !== "keep" && source !== "critic" && source !== "lore";
   const includeResolved = source !== "soft";
@@ -2834,7 +2858,7 @@ router.get("/me/library", h(async (req, res) => {
   let keepCount: number | undefined;
   let softCount: number | undefined;
   let criticCount: number | undefined;
-  if (!cursor) {
+  if (!cursor && !advancedLibraryView) {
     const [resolvedCount, rawSpotifySoftCount, rawAppleSoftCount, rawKeepCount, rawCriticCount] = await Promise.all([
       includeResolved
         ? db
@@ -2946,7 +2970,7 @@ router.get("/me/library", h(async (req, res) => {
       : sql<string>`lower(coalesce(${appleLibraryItemsTable.title}, '') || ' ' || coalesce(${appleLibraryItemsTable.artist}, ''))`;
 
   let legacyNameCursor = false;
-  if (cursor) {
+  if (cursor && !advancedLibraryView) {
     if (sort === "added") {
       // Deterministic keyset cursor: "<addedAt ISO>\u001f<mbid|spotifyId>".
       // The unique secondary key prevents rows sharing an addedAt timestamp
@@ -3002,11 +3026,12 @@ router.get("/me/library", h(async (req, res) => {
   type ResolvedRow = {
     mbid: string; provenance: LibraryItemProvenance; addedAt: Date; removedAt: Date | null;
     title: string | null; artist: string | null; artistMbid: string | null; artworkUrl: string | null;
-    links: Array<{ url: string }> | null; sortKey: string; albumTitle: string | null;
+     links: Array<{ url: string }> | null; sortKey: string; albumTitle: string | null; genres: string[] | null;
     releaseGroupMbid: string | null; releaseYear: number | null; appleMusicId: string | null;
   };
   let resolvedRows: ResolvedRow[] = [];
-  if (includeResolved) resolvedRows = await db
+  if (includeResolved) {
+    const resolvedQuery = db
     .select({
       mbid: libraryItemsTable.mbid,
       provenance: libraryItemsTable.provenance,
@@ -3018,6 +3043,7 @@ router.get("/me/library", h(async (req, res) => {
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
       releaseYear: recordingsTable.releaseYear,
+       genres: recordingsTable.genres,
       sortKey: sortKeyExpr.as("sort_key"),
       albumTitle: sql<string | null>`(
         SELECT title FROM recording_release_groups
@@ -3048,7 +3074,13 @@ router.get("/me/library", h(async (req, res) => {
         ? [desc(libraryItemsTable.addedAt), desc(sql`${libraryItemsTable.mbid} COLLATE "C"`)]
         : [asc(sortKeyExpr), asc(libraryItemsTable.addedAt)]),
     )
-    .limit(limit + 1);
+      // Genre/era views must filter the complete scoped result before slicing.
+      // Do not put an arbitrary cap on a listener's Library.
+      .$dynamic();
+    resolvedRows = advancedLibraryView
+      ? await resolvedQuery
+      : await resolvedQuery.limit(limit + 1);
+  }
 
   // Dual-source flag: an explicit keep of a track that was also imported
   // overwrites the row's provenance to "keep" (keep upsert), so the import
@@ -3117,7 +3149,7 @@ router.get("/me/library", h(async (req, res) => {
   };
   let softRows: SoftRow[] = [];
   if (includeSoft) {
-    const spotifyRows = await db
+    const spotifyQuery = db
       .select({
         provider: sql<"spotify">`'spotify'`,
         externalId: spotifyLibraryItemsTable.spotifyId,
@@ -3136,8 +3168,11 @@ router.get("/me/library", h(async (req, res) => {
           ? [desc(spotifyLibraryItemsTable.addedAt), desc(sql`${spotifyLibraryItemsTable.spotifyId} COLLATE "C"`)]
           : [asc(softSortKeyExpr), asc(spotifyLibraryItemsTable.addedAt)]),
       )
-      .limit(limit + 1);
-    const appleRows = await db
+       .$dynamic();
+    const spotifyRows = advancedLibraryView
+      ? await spotifyQuery
+      : await spotifyQuery.limit(limit + 1);
+    const appleQuery = db
       .select({
         provider: sql<"apple_music">`'apple_music'`,
         externalId: appleLibraryItemsTable.appleId,
@@ -3156,7 +3191,10 @@ router.get("/me/library", h(async (req, res) => {
           ? [desc(appleLibraryItemsTable.addedAt), desc(sql`${appleLibraryItemsTable.appleId} COLLATE "C"`)]
           : [asc(appleSoftSortKeyExpr), asc(appleLibraryItemsTable.addedAt)]),
       )
-      .limit(limit + 1);
+       .$dynamic();
+    const appleRows = advancedLibraryView
+      ? await appleQuery
+      : await appleQuery.limit(limit + 1);
     softRows = [...spotifyRows, ...appleRows];
   }
 
@@ -3215,6 +3253,7 @@ router.get("/me/library", h(async (req, res) => {
       albumTitle: r.albumTitle,
       releaseGroupMbid: r.releaseGroupMbid,
       releaseYear: r.releaseYear,
+       genres: r.genres,
       sortKey: r.sortKey,
     })),
     ...softRows.map((s) => ({
@@ -3239,9 +3278,59 @@ router.get("/me/library", h(async (req, res) => {
       albumTitle: s.albumName,
       releaseGroupMbid: null as string | null,
       releaseYear: null as number | null,
+       genres: null as string[] | null,
       sortKey: s.sortKey,
     })),
   ];
+  const metadataCoverage = {
+    total: unified.length,
+    genreKnown: unified.filter((row) => canonicalGenres(row.genres).length > 0).length,
+    releaseYearKnown: unified.filter((row) => row.releaseYear != null).length,
+  };
+
+  const filtered = unified.filter((row) => {
+    const canon = canonicalGenres(row.genres);
+    if (genreSet.size > 0 && !requestedGenres.some((g) => canon.includes(g))) return false;
+    const rowEra = releaseEra(row.releaseYear);
+    if (requestedAges.length > 0 && (rowEra == null || !requestedAges.includes(rowEra))) return false;
+    if (decade !== undefined && (row.releaseYear == null || releaseEra(row.releaseYear) !== "deep" || row.releaseYear < decade || row.releaseYear >= decade + 10)) return false;
+    return true;
+  });
+  unified.splice(0, unified.length, ...filtered);
+  if (advancedLibraryView && !cursor) {
+    total = unified.length;
+    keepCount = unified.filter((r) => !r.soft && (r.provenance as LibraryItemProvenance).kind === "keep").length;
+    softCount = unified.filter((r) => r.soft).length;
+    const filteredMbids = unified
+      .filter((r) => !r.soft && r.mbid)
+      .map((r) => r.mbid as string);
+    if (filteredMbids.length > 0) {
+      const criticRows = await db
+        .select({ mbid: recordingReleaseGroupsTable.recordingMbid })
+        .from(recordingReleaseGroupsTable)
+        .innerJoin(listEntriesTable, eq(listEntriesTable.releaseGroupMbid, recordingReleaseGroupsTable.releaseGroupMbid))
+        .where(and(
+          inArray(recordingReleaseGroupsTable.recordingMbid, filteredMbids),
+          or(eq(listEntriesTable.confidence, "exact"), eq(listEntriesTable.confirmed, true)),
+        ));
+      criticCount = new Set(criticRows.map((r) => r.mbid)).size;
+    } else {
+      criticCount = 0;
+    }
+  }
+
+  const rowIdentity = (row: typeof unified[number]) =>
+    row.mbid ?? row.spotifyId ?? row.appleMusicId ?? "";
+  const rowArtist = (row: typeof unified[number]) => (row.artist ?? "").toLocaleLowerCase();
+  const rowTitle = (row: typeof unified[number]) => (row.title ?? "").toLocaleLowerCase();
+  const rowEraRank = (row: typeof unified[number]) => {
+    const era = releaseEra(row.releaseYear);
+    return era === "current" ? 0 : era === "catalog" ? 1 : era === "deep" ? 2 : 3;
+  };
+  const rowTie = (a: typeof unified[number], b: typeof unified[number]) =>
+    rowArtist(a).localeCompare(rowArtist(b))
+    || rowTitle(a).localeCompare(rowTitle(b))
+    || rowIdentity(a).localeCompare(rowIdentity(b));
 
   if (sort === "added") {
     // Same total order as the per-table queries: addedAt DESC, then the
@@ -3249,11 +3338,22 @@ router.get("/me/library", h(async (req, res) => {
     unified.sort((a, b) => {
       const t = b.addedAt.getTime() - a.addedAt.getTime();
       if (t !== 0) return t;
-      const ka = a.mbid ?? a.spotifyId ?? a.appleMusicId ?? "";
-      const kb = b.mbid ?? b.spotifyId ?? b.appleMusicId ?? "";
+       const ka = rowIdentity(a);
+       const kb = rowIdentity(b);
       // Bytewise (code-unit) compare to match the SQL COLLATE "C" tie-break.
       return ka < kb ? 1 : ka > kb ? -1 : 0;
     });
+  } else if (sort === "genre") {
+    unified.sort((a, b) =>
+      (canonicalGenres(a.genres)[0] ?? "\uffff").localeCompare(canonicalGenres(b.genres)[0] ?? "\uffff")
+      || rowTie(a, b),
+    );
+  } else if (sort === "era") {
+    unified.sort((a, b) =>
+      rowEraRank(a) - rowEraRank(b)
+      || (b.releaseYear ?? -Infinity) - (a.releaseYear ?? -Infinity)
+      || rowTie(a, b),
+    );
   } else {
     unified.sort(
       (a, b) =>
@@ -3262,14 +3362,47 @@ router.get("/me/library", h(async (req, res) => {
     );
   }
 
+  const advancedCursorKey = (row: typeof unified[number]): string => {
+    const identity = rowIdentity(row);
+    const suffix = `${row.addedAt.toISOString()}${LIB_CURSOR_SEP}${identity}`;
+    if (sort === "genre") {
+      return `${canonicalGenres(row.genres)[0] ?? "\uffff"}${LIB_CURSOR_SEP}${rowArtist(row)}${LIB_CURSOR_SEP}${rowTitle(row)}${LIB_CURSOR_SEP}${identity}`;
+    }
+    if (sort === "era") {
+      return `${rowEraRank(row)}${LIB_CURSOR_SEP}${row.releaseYear ?? ""}${LIB_CURSOR_SEP}${rowArtist(row)}${LIB_CURSOR_SEP}${rowTitle(row)}${LIB_CURSOR_SEP}${identity}`;
+    }
+    if (sort === "added") {
+      return `${row.addedAt.toISOString()}${LIB_CURSOR_SEP}${identity}`;
+    }
+    return `${row.sortKey}${LIB_CURSOR_SEP}${suffix}`;
+  };
+
+  // Advanced views are intentionally evaluated over the complete result set;
+  // apply their opaque cursor only after the canonical sort, never in SQL's
+  // unrelated title/artist order.
+  if (advancedLibraryView && cursor) {
+    if (!cursor.includes(LIB_CURSOR_SEP)) {
+      return res.status(400).json({ error: "Malformed cursor for this view" });
+    }
+    const at = unified.findIndex((row) => advancedCursorKey(row) === cursor);
+    if (at < 0) return res.status(400).json({ error: "Cursor does not match this view" });
+    unified.splice(0, at + 1);
+  }
+
   const hasMore = unified.length > limit;
   const items = unified.slice(0, limit);
   const last = items[items.length - 1];
 
   const nextCursor = !hasMore || !last
     ? null
+    : advancedLibraryView
+      ? advancedCursorKey(last)
     : sort === "added"
       ? `${last.addedAt.toISOString()}${LIB_CURSOR_SEP}${last.mbid ?? last.spotifyId ?? last.appleMusicId ?? ""}`
+      : sort === "genre"
+        ? `${canonicalGenres(last.genres)[0] ?? ""}${LIB_CURSOR_SEP}${last.sortKey}${LIB_CURSOR_SEP}${last.addedAt.toISOString()}`
+        : sort === "era"
+          ? `${({ current: 0, catalog: 1, deep: 2 }[releaseEra(last.releaseYear) ?? "deep"])}${LIB_CURSOR_SEP}${last.sortKey}${LIB_CURSOR_SEP}${last.addedAt.toISOString()}`
       : `${last.sortKey}${LIB_CURSOR_SEP}${last.addedAt.toISOString()}`;
 
   return res.json({
@@ -3286,6 +3419,7 @@ router.get("/me/library", h(async (req, res) => {
             albumTitle: r.albumTitle ?? null,
             releaseGroupMbid: r.releaseGroupMbid ?? null,
             releaseYear: r.releaseYear ?? null,
+             genres: canonicalGenres(r.genres),
             spotifyUrl:
               r.links?.find((l) => l.url.includes("open.spotify.com"))?.url ?? null,
             appleMusicId: r.appleMusicId ?? null,
@@ -3307,6 +3441,7 @@ router.get("/me/library", h(async (req, res) => {
     ...(keepCount !== undefined ? { keepCount } : {}),
     ...(softCount !== undefined ? { softCount } : {}),
     ...(criticCount !== undefined ? { criticCount } : {}),
+    ...(!cursor ? { metadataCoverage } : {}),
   });
 }));
 

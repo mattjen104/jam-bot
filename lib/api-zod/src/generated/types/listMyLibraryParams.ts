@@ -17,5 +17,20 @@ export type ListMyLibraryParams = {
   limit?: number;
   q?: string;
   sort?: ListMyLibrarySort;
+  /**
+   * Comma-separated additive canonical listener genres. Unknown values are rejected.
+   */
+  genre?: string;
+  /**
+   * Comma-separated additive release-age buckets.
+   * @pattern ^(current|catalog|deep)(,(current|catalog|deep))*$
+   */
+  age?: string;
+  /**
+   * Release decade (for example 1990); implies the deep era.
+   * @minimum 1000
+   * @maximum 9990
+   */
+  decade?: number;
   source?: ListMyLibrarySource;
 };

@@ -15,6 +15,7 @@ export * from "./genius.js";
 export * from "./person.js";
 export * from "./knowledge.js";
 export * from "./genre.js";
+export * from "./taxonomy.js";
 export * from "./context.js";
 export * from "./catalogue.js";
 export * from "./odesli.js";

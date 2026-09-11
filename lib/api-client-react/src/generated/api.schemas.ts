@@ -128,6 +128,8 @@ export interface LibraryRecording {
   releaseYear: number | null;
   spotifyUrl: string | null;
   appleMusicId: string | null;
+  /** Canonical listener genres supported by Lore. */
+  genres: string[];
 }
 
 export interface LibraryItem {
@@ -144,6 +146,12 @@ export interface LibraryItem {
   dualSource?: boolean;
 }
 
+export type LibraryPageMetadataCoverage = {
+  total: number;
+  genreKnown: number;
+  releaseYearKnown: number;
+};
+
 export interface LibraryPage {
   items: LibraryItem[];
   nextCursor: string | null;
@@ -151,6 +159,7 @@ export interface LibraryPage {
   keepCount?: number;
   softCount?: number;
   criticCount?: number;
+  metadataCoverage?: LibraryPageMetadataCoverage;
 }
 
 export interface ImportedSetUploadRequest {
@@ -5274,6 +5283,21 @@ export type ListMyLibraryParams = {
   limit?: number;
   q?: string;
   sort?: ListMyLibrarySort;
+  /**
+   * Comma-separated additive canonical listener genres. Unknown values are rejected.
+   */
+  genre?: string;
+  /**
+   * Comma-separated additive release-age buckets.
+   * @pattern ^(current|catalog|deep)(,(current|catalog|deep))*$
+   */
+  age?: string;
+  /**
+   * Release decade (for example 1990); implies the deep era.
+   * @minimum 1000
+   * @maximum 9990
+   */
+  decade?: number;
   source?: ListMyLibrarySource;
 };
 
@@ -5284,6 +5308,8 @@ export const ListMyLibrarySort = {
   added: "added",
   artist: "artist",
   title: "title",
+  genre: "genre",
+  era: "era",
 } as const;
 
 export type ListMyLibrarySource =

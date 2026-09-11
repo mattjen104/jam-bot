@@ -7046,6 +7046,12 @@ export const listMyLibraryQueryLimitDefault = 50;
 export const listMyLibraryQueryLimitMax = 100;
 
 export const listMyLibraryQuerySortDefault = `added`;
+export const listMyLibraryQueryAgeRegExp = new RegExp(
+  "^(current|catalog|deep)(,(current|catalog|deep))\*$",
+);
+export const listMyLibraryQueryDecadeMin = 1000;
+export const listMyLibraryQueryDecadeMax = 9990;
+export const listMyLibraryQueryDecadeMultipleOf = 10;
 
 export const ListMyLibraryQueryParams = zod.object({
   cursor: zod.coerce.string().optional(),
@@ -7056,8 +7062,26 @@ export const ListMyLibraryQueryParams = zod.object({
     .default(listMyLibraryQueryLimitDefault),
   q: zod.coerce.string().optional(),
   sort: zod
-    .enum(["added", "artist", "title"])
+    .enum(["added", "artist", "title", "genre", "era"])
     .default(listMyLibraryQuerySortDefault),
+  genre: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Comma-separated additive canonical listener genres. Unknown values are rejected.",
+    ),
+  age: zod.coerce
+    .string()
+    .regex(listMyLibraryQueryAgeRegExp)
+    .optional()
+    .describe("Comma-separated additive release-age buckets."),
+  decade: zod.coerce
+    .number()
+    .min(listMyLibraryQueryDecadeMin)
+    .max(listMyLibraryQueryDecadeMax)
+    .multipleOf(listMyLibraryQueryDecadeMultipleOf)
+    .optional()
+    .describe("Release decade (for example 1990); implies the deep era."),
   source: zod.enum(["keep", "import", "soft", "critic", "lore"]).optional(),
 });
 
@@ -7093,6 +7117,9 @@ export const ListMyLibraryResponse = zod.object({
           releaseYear: zod.number().nullable(),
           spotifyUrl: zod.string().nullable(),
           appleMusicId: zod.string().nullable(),
+          genres: zod
+            .array(zod.string())
+            .describe("Canonical listener genres supported by Lore."),
         })
         .nullable(),
       soft: zod.boolean().optional(),
@@ -7109,6 +7136,13 @@ export const ListMyLibraryResponse = zod.object({
   keepCount: zod.number().optional(),
   softCount: zod.number().optional(),
   criticCount: zod.number().optional(),
+  metadataCoverage: zod
+    .object({
+      total: zod.number(),
+      genreKnown: zod.number(),
+      releaseYearKnown: zod.number(),
+    })
+    .optional(),
 });
 
 /**

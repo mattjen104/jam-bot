@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LibraryItem } from "./libraryItem";
+import type { LibraryPageMetadataCoverage } from "./libraryPageMetadataCoverage";
 
 export interface LibraryPage {
   items: LibraryItem[];
@@ -14,4 +15,5 @@ export interface LibraryPage {
   keepCount?: number;
   softCount?: number;
   criticCount?: number;
+  metadataCoverage?: LibraryPageMetadataCoverage;
 }

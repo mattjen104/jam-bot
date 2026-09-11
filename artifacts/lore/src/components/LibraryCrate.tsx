@@ -29,6 +29,7 @@ import {
   type CrateRelease,
   type ReleaseMetadata,
 } from "../lib/crate";
+import { compareLibrarySongs } from "../lib/librarySongOrdering";
 
 const OPENED_STORAGE_KEY = "lore:library-opened";
 
@@ -399,7 +400,7 @@ export interface LibraryCrateProps {
   items: LibraryItem[];
   seedArtists: string[];
   catalogue?: Record<string, { artistMbid: string | null; releases: ArtistCatalogueRelease[] }>;
-  sort: "added" | "artist" | "title";
+  sort: "added" | "artist" | "title" | "genre" | "era";
   unopenedOnly?: boolean;
   showKeptHeading?: boolean;
   hideAddedRail?: boolean;
@@ -453,6 +454,9 @@ export function LibraryCrate({
     () => visibleReleases.flatMap((release) =>
       release.items.map((item) => ({ item, release })),
     ).sort((a, b) => {
+      if (sort === "genre" || sort === "era") {
+        return compareLibrarySongs(a.item, b.item, sort) || a.item.mbid?.localeCompare(b.item.mbid ?? "") || 0;
+      }
       if (sort === "artist") {
         return (a.item.recording?.artist ?? "").localeCompare(b.item.recording?.artist ?? "")
           || (a.item.recording?.title ?? "").localeCompare(b.item.recording?.title ?? "");

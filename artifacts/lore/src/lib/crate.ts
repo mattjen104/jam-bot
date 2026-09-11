@@ -5,6 +5,7 @@
  * module instance and hooks crash with phantom "invalid hook call" errors.
  */
 import type { LibraryItem } from "./meHooks";
+import { compareLibrarySongs } from "./librarySongOrdering";
 
 export interface ReleaseMetadata {
   title: string;
@@ -202,7 +203,7 @@ export function buildCrateReleases(items: LibraryItem[]): CrateRelease[] {
 
 export function sortCrateReleases(
   releases: CrateRelease[],
-  sort: "added" | "artist" | "title",
+  sort: "added" | "artist" | "title" | "genre" | "era",
 ): CrateRelease[] {
   return [...releases].sort((a, b) => {
     if (sort === "artist") return a.artist.localeCompare(b.artist) || a.key.localeCompare(b.key);
@@ -210,6 +211,12 @@ export function sortCrateReleases(
       return (a.title ?? a.caught.recording?.title ?? "").localeCompare(
         b.title ?? b.caught.recording?.title ?? "",
       ) || a.key.localeCompare(b.key);
+    }
+    if (sort === "genre") {
+      return compareLibrarySongs(a.caught, b.caught, "genre") || a.key.localeCompare(b.key);
+    }
+    if (sort === "era") {
+      return compareLibrarySongs(a.caught, b.caught, "era") || a.key.localeCompare(b.key);
     }
     return (keepTimestamp(b.caught) ?? -Infinity) - (keepTimestamp(a.caught) ?? -Infinity)
       || a.key.localeCompare(b.key);

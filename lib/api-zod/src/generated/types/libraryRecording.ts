@@ -16,4 +16,6 @@ export interface LibraryRecording {
   releaseYear: number | null;
   spotifyUrl: string | null;
   appleMusicId: string | null;
+  /** Canonical listener genres supported by Lore. */
+  genres: string[];
 }

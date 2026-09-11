@@ -11,6 +11,7 @@ const {
   mockUseAppConfig,
   mockUseMyLibraryInfinite,
   mockUseDialData,
+  mockUseSearchArtistStations,
   mockAddSeed,
 } = vi.hoisted(() => {
   const mockSetLocation = vi.fn();
@@ -22,6 +23,7 @@ const {
     mockUseAppConfig: vi.fn(() => ({ data: { demoSurface: true }, isLoading: false })),
     mockUseMyLibraryInfinite: vi.fn(),
     mockUseDialData: vi.fn(() => ({ stations: [], hasLibrary: true, hasSeeds: false })),
+    mockUseSearchArtistStations: vi.fn(() => ({ data: { query: "", stations: [] } })),
     mockAddSeed,
   };
 });
@@ -60,7 +62,7 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const { makeApiClientMock } = await import("./helpers/apiClientMock");
   return makeApiClientMock(importOriginal, {
     useGetPickersDial: vi.fn(() => ({ data: null })),
-    useSearchArtistStations: vi.fn(() => ({ data: { query: "", stations: [] } })),
+    useSearchArtistStations: mockUseSearchArtistStations,
     useSuggestArchiveArtists: vi.fn(() => ({
       data: {
         query: "king gizzard",
@@ -88,8 +90,17 @@ vi.mock("../src/lib/local", () => ({ useFollows: () => [] }));
 vi.mock("../src/components/SearchOverlay", () => ({ SearchOverlay: () => null }));
 vi.mock("../src/components/KeepButton", () => ({ KeepButton: () => null }));
 vi.mock("../src/components/RadioSurface", () => ({
-  RadioSurface: ({ onOpenStationCrossings }: { onOpenStationCrossings?: (stationSlug: string) => void }) => (
-    <button onClick={() => onOpenStationCrossings?.("kexp")}>Has played your artists 12 times</button>
+  RadioSurface: ({
+    stations,
+    onOpenStationCrossings,
+  }: {
+    stations: Array<{ station: { slug: string } }>;
+    onOpenStationCrossings?: (stationSlug: string) => void;
+  }) => (
+    <div>
+      {stations.map((station) => <span key={station.station.slug}>{station.station.slug}</span>)}
+      <button onClick={() => onOpenStationCrossings?.("kexp")}>Has played your artists 12 times</button>
+    </div>
   ),
 }));
 vi.mock("../src/components/DemoLibraryRemote", () => ({
@@ -184,6 +195,7 @@ beforeEach(() => {
   mockUseAppConfig.mockReturnValue({ data: { demoSurface: true }, isLoading: false });
   mockUseMyLibraryInfinite.mockReturnValue(queryResult());
   mockUseDialData.mockClear();
+  mockUseSearchArtistStations.mockReturnValue({ data: { query: "", stations: [] } });
 });
 
 afterEach(() => {
@@ -193,6 +205,43 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
+  it("intersects historical artist station membership with current-track music filters", async () => {
+    mockUseSearch.mockReturnValue("?view=stations&focus=Broadcast&genre=electronic&age=deep");
+    mockUseLocation.mockReturnValue([
+      "/library?view=stations&focus=Broadcast&genre=electronic&age=deep",
+      mockSetLocation,
+    ]);
+    mockUseSearchArtistStations.mockReturnValue({
+      data: {
+        query: "Broadcast",
+        stations: [
+          { slug: "historical-match", name: "Historical Match", playCount: 4 },
+          { slug: "wrong-genre", name: "Wrong Genre", playCount: 2 },
+        ],
+      },
+    });
+    const station = (slug: string, genres: string[]) => ({
+      station: { slug, name: slug },
+      liveTrack: { artist: "Someone Else", title: "On Air", genres, releaseYear: 2005 },
+      shows: [],
+      topArtistNames: [],
+      topArtistNames24h: [],
+      topArtistNames7d: [],
+      topArtistNamesLifetime: [],
+      albumCrossings: [],
+    });
+    mockUseDialData.mockReturnValue({
+      stations: [station("historical-match", ["electronic"]), station("wrong-genre", ["rock"])],
+      hasLibrary: true,
+      hasSeeds: false,
+    });
+
+    await renderLibrary();
+
+    expect(screen.getByText("historical-match")).toBeTruthy();
+    expect(screen.queryByText("wrong-genre")).toBeNull();
+  });
+
   it("adds several autocomplete matches without closing or clearing the search", async () => {
     await renderLibrary();
 

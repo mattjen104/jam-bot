@@ -11,8 +11,9 @@ import { usePlayer } from "../player/PlayerProvider";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { useInlinePreview } from "../player/inlinePreview";
 import { toast } from "../hooks/use-toast";
+import { compareLibrarySongs, type LibrarySongSort } from "../lib/librarySongOrdering";
 
-export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
+export type DemoSongSort = "added" | "artist" | "album" | "title" | "count" | "genre" | "era";
 
 function stationTrack(station: DialStation) {
   return station.liveTrack
@@ -133,10 +134,13 @@ function orderSongs(items: readonly LibraryItem[], sort: DemoSongSort): LibraryI
       artistCounts.set(artist, (artistCounts.get(artist) ?? 0) + 1);
     }
   }
+  if (sort === "genre" || sort === "era" || sort === "artist" || sort === "title" || sort === "added") {
+    return [...items].sort((a, b) => compareLibrarySongs(a, b, sort as LibrarySongSort));
+  }
   return [...items].sort((a, b) => {
     const aRecording = a.recording;
     const bRecording = b.recording;
-    if (sort === "artist" || sort === "count") {
+    if (sort === "count") {
       const countDifference = sort === "count"
         ? (artistCounts.get(bRecording?.artist ?? "") ?? 0)
           - (artistCounts.get(aRecording?.artist ?? "") ?? 0)

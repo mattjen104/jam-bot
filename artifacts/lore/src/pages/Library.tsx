@@ -75,6 +75,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import { FilterDropdownMenu } from "../components/dial/FilterDropdownMenu";
+import { LibraryMetadataFilters, LIBRARY_AGES, type LibraryAge } from "../components/LibraryMetadataFilters";
 import {
   STATION_CATEGORY_DEFINITIONS,
   type StationCategory,
@@ -83,6 +84,7 @@ import {
   buildFocusedLibraryUrl,
   getArtistFromLibraryAlbumKey,
 } from "../lib/libraryFocusedNavigation";
+import { canonicalGenres, releaseEra } from "@workspace/song-enrichment";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -610,13 +612,15 @@ export interface ArtistGroup {
   albums: AlbumGroup[];
 }
 
-export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
+export type DemoSongSort = "added" | "artist" | "album" | "title" | "count" | "genre" | "era";
 
 export function parseDemoSongSort(value: string | null): DemoSongSort {
   return value === "artist"
     || value === "album"
     || value === "title"
     || value === "count"
+    || value === "genre"
+    || value === "era"
     ? value
     : "added";
 }
@@ -1392,6 +1396,18 @@ function DemoMergedLibrary({
       : "overlap";
   const sortParam = params.get("sort");
   const songSort = parseDemoSongSort(sortParam);
+  const selectedGenres = useMemo(
+    () => canonicalGenres((params.get("genre") ?? "").split(",")),
+    [search],
+  );
+  const selectedDecade = Number(params.get("decade"));
+  const decade = Number.isFinite(selectedDecade) && selectedDecade > 0 ? selectedDecade : undefined;
+  const selectedAges = useMemo<LibraryAge[]>(() => {
+    const ages = (params.get("age") ?? "")
+      .split(",")
+      .filter((v): v is LibraryAge => LIBRARY_AGES.includes(v as LibraryAge));
+    return decade != null && !ages.includes("deep") ? [...ages, "deep" as const] : ages;
+  }, [decade, search]);
   const activeCategories = useMemo(() => {
     const selected = new Set<StationCategory>();
     for (const value of new URLSearchParams(search).get("categories")?.split(",") ?? []) {
@@ -1415,7 +1431,10 @@ function DemoMergedLibrary({
     isFetchingNextPage: demoLibraryFetchingNextPage,
     fetchNextPage: fetchNextDemoLibraryPage,
   } = useMyLibraryInfinite({
-    sort: songSort === "artist" || songSort === "title" ? songSort : "added",
+    sort: songSort === "artist" || songSort === "title" || songSort === "genre" || songSort === "era" ? songSort : "added",
+    genre: selectedGenres.join(",") || undefined,
+    age: selectedAges.join(",") || undefined,
+    decade,
   }, 100);
   const artistStationQuery = useSearchArtistStations(
     { q: focusedArtist ?? "" },
@@ -1450,37 +1469,83 @@ function DemoMergedLibrary({
 
   const filteredStations = useMemo(() => {
     let list = stations;
+    if (selectedGenres.length || selectedAges.length || decade != null) {
+      list = list.filter(ds => {
+        const track = ds.liveTrack ?? ds.shows.find(show => show.state === "live")?.currentTrack;
+        if (!track) return false;
+        const trackGenres = canonicalGenres(track.genres);
+        if (selectedGenres.length && !trackGenres.some(genre => selectedGenres.includes(genre))) return false;
+        const trackEra = releaseEra(track.releaseYear);
+        if (selectedAges.length && (trackEra == null || !selectedAges.includes(trackEra))) return false;
+        if (decade != null && (track.releaseYear == null
+          || releaseEra(track.releaseYear) !== "deep"
+          || Math.floor(track.releaseYear / 10) * 10 !== decade)) return false;
+        return true;
+      });
+    }
     const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
     if (normalizedFocus) {
       if (artistStationQuery.data) {
         const matchingSlugs = new Set(
-          artistStationQuery.data.stations.map(station => station.slug),
+          artistStationQuery.data.stations.map((station) => station.slug),
         );
-        return list.filter(ds => matchingSlugs.has(ds.station.slug));
+        list = list.filter((ds) => matchingSlugs.has(ds.station.slug));
+      } else {
+        list = list.filter(ds => {
+          const matches = (artist: string | null | undefined) =>
+            artist?.trim().toLocaleLowerCase() === normalizedFocus;
+          if (matches(ds.liveTrack?.artist)) return true;
+          if (ds.shows.some(s => matches(s.currentTrack?.artist))) return true;
+          if (ds.topArtistNames.some(matches)) return true;
+          if (ds.topArtistNames24h.some(matches)) return true;
+          if (ds.topArtistNames7d.some(matches)) return true;
+          if (ds.topArtistNamesLifetime.some(matches)) return true;
+          if (ds.albumCrossings.some(ac => matches(ac.artist))) return true;
+          return false;
+        });
       }
-      list = list.filter(ds => {
-        const matches = (artist: string | null | undefined) =>
-          artist?.trim().toLocaleLowerCase() === normalizedFocus;
-        if (matches(ds.liveTrack?.artist)) return true;
-        if (ds.shows.some(s => matches(s.currentTrack?.artist))) return true;
-        if (ds.topArtistNames.some(matches)) return true;
-        if (ds.topArtistNames24h.some(matches)) return true;
-        if (ds.topArtistNames7d.some(matches)) return true;
-        if (ds.topArtistNamesLifetime.some(matches)) return true;
-        if (ds.albumCrossings.some(ac => matches(ac.artist))) return true;
-        return false;
-      });
     }
     return list;
-  }, [stations, focusedArtist, artistStationQuery.data]);
+  }, [stations, focusedArtist, artistStationQuery.data, selectedGenres, selectedAges, decade]);
 
   const filteredDemoItems = useMemo(() => {
-    if (!focusedArtist) return demoLibraryItems;
-    const normalizedFocus = focusedArtist.trim().toLocaleLowerCase();
-    return demoLibraryItems.filter(
-      i => i.recording?.artist.trim().toLocaleLowerCase() === normalizedFocus,
-    );
-  }, [demoLibraryItems, focusedArtist]);
+    const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
+    return demoLibraryItems.filter((item) => {
+      if (normalizedFocus && item.recording?.artist.trim().toLocaleLowerCase() !== normalizedFocus) return false;
+      if (selectedGenres.length && !canonicalGenres(item.recording?.genres).some(genre => selectedGenres.includes(genre))) return false;
+      if (decade != null && (item.recording?.releaseYear == null
+        || releaseEra(item.recording.releaseYear) !== "deep"
+        || Math.floor(item.recording.releaseYear / 10) * 10 !== decade)) return false;
+      return true;
+    });
+  }, [demoLibraryItems, focusedArtist, selectedGenres, decade]);
+  const decadeOptions = useMemo(() => {
+    const years: number[] = [];
+    for (const item of demoLibraryItems) {
+      if (item.recording?.releaseYear != null
+        && item.recording.releaseYear <= new Date().getUTCFullYear() - 5) {
+        years.push(item.recording.releaseYear);
+      }
+    }
+    for (const station of stations) {
+      const track = station.liveTrack ?? station.shows.find(show => show.state === "live")?.currentTrack;
+      if (track?.releaseYear != null && track.releaseYear <= new Date().getUTCFullYear() - 5) years.push(track.releaseYear);
+    }
+    return [...new Set(years.map(year => Math.floor(year / 10) * 10))]
+      .filter(year => year > 0 && releaseEra(year) === "deep")
+      .sort((a, b) => b - a);
+  }, [demoLibraryItems, stations]);
+  const stationMetadataCoverage = useMemo(() => {
+    const tracks = stations
+      .map((station) => station.liveTrack ?? station.shows.find((show) => show.state === "live")?.currentTrack)
+      .filter((track) => track != null);
+    return {
+      total: tracks.length,
+      genreKnown: tracks.filter((track) => canonicalGenres(track.genres).length > 0).length,
+      releaseYearKnown: tracks.filter((track) => track.releaseYear != null).length,
+    };
+  }, [stations]);
+  const songMetadataCoverage = demoLibraryData?.pages[0]?.metadataCoverage;
 
   const allArtists = useMemo(() => {
     const set = new Set<string>();
@@ -1505,6 +1570,7 @@ function DemoMergedLibrary({
     const query = next.toString();
     setLocation(query ? `/library?${query}` : "/library");
   };
+  const updateMetadata = (mutate: (next: URLSearchParams) => void) => updateSearch(mutate);
 
   const buildTabHref = (targetView: "stations" | "songs") => {
     const p = new URLSearchParams(search);
@@ -1631,6 +1697,31 @@ function DemoMergedLibrary({
               setLocation(qs ? `/library?${qs}` : "/library");
             }}
           />
+          <LibraryMetadataFilters
+            genres={selectedGenres}
+            ages={selectedAges}
+            decade={decade}
+            decadeOptions={decadeOptions}
+            onGenresChange={(values) => updateMetadata(next => values.length ? next.set("genre", values.join(",")) : next.delete("genre"))}
+            onAgesChange={(values) => updateMetadata(next => {
+              if (values.some(value => value === "current" || value === "catalog")
+                || (decade != null && !values.includes("deep"))) next.delete("decade");
+              values.length ? next.set("age", values.join(",")) : next.delete("age");
+            })}
+            onDecadeChange={(value) => updateMetadata(next => {
+              if (value == null) {
+                next.delete("decade");
+                return;
+              }
+              next.set("decade", String(value));
+              next.set("age", "deep");
+            })}
+            onReset={() => updateMetadata(next => {
+              next.delete("genre");
+              next.delete("age");
+              next.delete("decade");
+            })}
+          />
 
           {view === "stations" && (
             <>
@@ -1675,26 +1766,47 @@ function DemoMergedLibrary({
           )}
 
           {view === "songs" && (
-            <select
-              style={selectStyle}
-              aria-label="Sort songs"
-              value={songSort}
-              onChange={e => {
-                updateSearch((next) => {
-                  if (e.target.value !== "added") next.set("sort", e.target.value);
-                  else next.delete("sort");
-                });
-              }}
-            >
-              <option value="added">Recently kept</option>
-              <option value="artist">Artist</option>
-              <option value="album">Album</option>
-              <option value="title">Title</option>
-              <option value="count">Most kept</option>
-            </select>
+            <>
+              <select
+                style={selectStyle}
+                aria-label="Sort songs"
+                value={songSort}
+                onChange={e => {
+                  updateSearch((next) => {
+                    if (e.target.value !== "added") next.set("sort", e.target.value);
+                    else next.delete("sort");
+                  });
+                }}
+              >
+                <option value="added">Recently kept</option>
+                <option value="artist">Artist</option>
+                <option value="album">Album</option>
+                <option value="title">Title</option>
+                <option value="genre">Genre</option>
+                <option value="era">Era</option>
+                <option value="count">Most kept</option>
+              </select>
+            </>
           )}
         </div>
       </header>
+      {(selectedGenres.length > 0 || selectedAges.length > 0 || decade != null) && (
+        <p className="library-filter-coverage" role="status">
+          {(() => {
+            const coverage = view === "stations" ? stationMetadataCoverage : songMetadataCoverage;
+            if (!coverage) return "Unknown metadata is excluded from this narrowed view.";
+            const facts = [
+              selectedGenres.length > 0
+                ? `${coverage.genreKnown.toLocaleString()} of ${coverage.total.toLocaleString()} with genre evidence`
+                : null,
+              selectedAges.length > 0 || decade != null
+                ? `${coverage.releaseYearKnown.toLocaleString()} of ${coverage.total.toLocaleString()} with release-year evidence`
+                : null,
+            ].filter(Boolean);
+            return `${facts.join(" · ")}. Tracks without the required metadata are excluded.`;
+          })()}
+        </p>
+      )}
 
       {view === "stations" && remoteLayout && !selectedStationSlug ? (
         <DemoStationRemote
@@ -1773,13 +1885,12 @@ function LibraryContent({
   const sourceFilter = LENS_SOURCE[lens];
 
   // Sort — persisted in URL as ?sort=artist|title|album|count (default = "added", omitted from URL)
-  const sortFilter = useMemo((): "added" | "artist" | "title" | "count" | "album" => {
+  const sortFilter = useMemo((): DemoSongSort => {
     const v = new URLSearchParams(search).get("sort");
-    if (v === "artist" || v === "title" || v === "count" || v === "album") return v;
-    return "added";
+    return parseDemoSongSort(v);
   }, [search]);
 
-  const setSortFilter = (sort: "added" | "artist" | "title" | "count" | "album") => {
+  const setSortFilter = (sort: DemoSongSort) => {
     const p = new URLSearchParams(search);
     if (sort !== "added") p.set("sort", sort);
     else p.delete("sort");
@@ -1828,6 +1939,18 @@ function LibraryContent({
   };
   const handleDismissLedgerPrompt = () => { dismissLedgerPrompt(); setLedgerPromptHidden(true); };
 
+  const focusedMusicGenres = demoSurface
+    ? canonicalGenres((new URLSearchParams(search).get("genre") ?? "").split(","))
+    : [];
+  const focusedMusicAges = demoSurface
+    ? (new URLSearchParams(search).get("age") ?? "")
+      .split(",")
+      .filter((value): value is LibraryAge => LIBRARY_AGES.includes(value as LibraryAge))
+    : [];
+  const focusedDecadeRaw = demoSurface ? Number(new URLSearchParams(search).get("decade")) : NaN;
+  const focusedDecade = Number.isFinite(focusedDecadeRaw) && focusedDecadeRaw > 0
+    ? focusedDecadeRaw
+    : undefined;
   // Kept list (infinite scroll)
   const {
     data: keptData,
@@ -1840,6 +1963,9 @@ function LibraryContent({
   } = useMyLibraryInfinite({
     source: sourceFilter || undefined,
     sort: (sortFilter === "count" || sortFilter === "album") ? "added" : sortFilter,
+    genre: focusedMusicGenres.join(",") || undefined,
+    age: focusedMusicAges.join(",") || undefined,
+    decade: focusedDecade,
   }, 100);
   // Every lens is fully server-scoped (including From Lore via source=lore),
   // so rows arrive deduplicated, dual-source-labeled, and pre-filtered —
@@ -2121,9 +2247,8 @@ function LibraryContent({
   useEffect(() => {
     if (!openAlbumKey || albumGroups.length === 0) return;
     const t = setTimeout(() => {
-      const el = document.querySelector(
-        `[data-album-key="${CSS.escape(openAlbumKey)}"]`,
-      );
+      const el = [...document.querySelectorAll<HTMLElement>("[data-album-key]")]
+        .find((candidate) => candidate.dataset.albumKey === openAlbumKey);
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
     return () => clearTimeout(t);

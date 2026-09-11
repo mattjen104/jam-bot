@@ -117,6 +117,9 @@ describe("logSpinIfChanged — spin-changed push event", () => {
       expect(ev.rawArtist).toBe(ARTIST);
       expect(ev.rawTitle).toBe(TITLE);
       expect(ev.mbid).toBe(MBID);
+       // The terminal replacement carries the same grounded metadata used by
+       // station genre filters; an untagged recording is explicitly [].
+       expect(Array.isArray(ev.genres)).toBe(true);
        expect(ev.artworkUrl).toBe("http://example.invalid/art.jpg");
       expect(ev.confidence).toBe("text");
       // observedAt is a parseable ISO timestamp from around the write moment.

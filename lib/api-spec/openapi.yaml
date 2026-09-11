@@ -4065,7 +4065,21 @@ paths:
           schema: { type: string }
         - name: sort
           in: query
-          schema: { type: string, enum: [added, artist, title], default: added }
+          schema: { type: string, enum: [added, artist, title, genre, era], default: added }
+        - name: genre
+          in: query
+          description: Comma-separated additive canonical listener genres. Unknown values are rejected.
+          schema: { type: string }
+        - name: age
+          in: query
+          description: Comma-separated additive release-age buckets.
+          schema:
+            type: string
+            pattern: "^(current|catalog|deep)(,(current|catalog|deep))*$"
+        - name: decade
+          in: query
+          description: Release decade (for example 1990); implies the deep era.
+          schema: { type: integer, minimum: 1000, maximum: 9990, multipleOf: 10 }
         - name: source
           in: query
           schema: { type: string, enum: [keep, import, soft, critic, lore] }
@@ -4868,7 +4882,11 @@ components:
         releaseYear: { type: integer, nullable: true }
         spotifyUrl: { type: string, nullable: true }
         appleMusicId: { type: string, nullable: true }
-      required: [title, artist, artistMbid, artworkUrl, albumTitle, releaseGroupMbid, releaseYear, spotifyUrl, appleMusicId]
+        genres:
+          type: array
+          items: { type: string }
+          description: Canonical listener genres supported by Lore.
+      required: [title, artist, artistMbid, artworkUrl, albumTitle, releaseGroupMbid, releaseYear, spotifyUrl, appleMusicId, genres]
     LibraryItem:
       type: object
       properties:
@@ -4895,6 +4913,13 @@ components:
         keepCount: { type: integer }
         softCount: { type: integer }
         criticCount: { type: integer }
+        metadataCoverage:
+          type: object
+          properties:
+            total: { type: integer }
+            genreKnown: { type: integer }
+            releaseYearKnown: { type: integer }
+          required: [total, genreKnown, releaseYearKnown]
       required: [items, nextCursor]
     ImportedSetUploadRequest:
       type: object

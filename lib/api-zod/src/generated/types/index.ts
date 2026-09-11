@@ -183,6 +183,7 @@ export * from "./libraryCoverageList";
 export * from "./libraryCoverageResponse";
 export * from "./libraryItem";
 export * from "./libraryPage";
+export * from "./libraryPageMetadataCoverage";
 export * from "./libraryProvenance";
 export * from "./libraryRecording";
 export * from "./libraryRemovalRequest";

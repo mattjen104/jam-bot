@@ -1,3 +1,37 @@
+/* Compact metadata controls shared by Library list and grid surfaces. */
+.library-metadata-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.library-metadata-filters select {
+  min-height: 28px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  padding: 3px 20px 3px 7px;
+  font: 11px var(--app-font-mono);
+}
+.library-metadata-filters__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: hsl(var(--muted-foreground));
+  font: 10px var(--app-font-mono);
+  text-transform: capitalize;
+}
+.library-filter-coverage {
+  margin: 0 16px 10px;
+  color: hsl(var(--muted-foreground));
+  font: 10px var(--app-font-mono);
+}
+@media (max-width: 640px) {
+  .library-metadata-filters { width: 100%; gap: 5px; }
+  .library-metadata-filters select { flex: 1 1 90px; }
+  .library-metadata-filters__check { min-height: 28px; }
+}
 /* ── Unified bottom shell — fixed container for player + nav ─────────────── */
 /* .bottom-shell-wrap holds the fixed position; the artist-add strip sits
    above the shell border when on the Radio section.                          */

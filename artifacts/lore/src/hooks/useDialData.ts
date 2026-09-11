@@ -86,6 +86,8 @@ export interface DialSpin {
   releaseYear: number | null;
   /** MusicBrainz first-release date in partial-ISO form; null when unknown/unresolved. */
   releaseDate?: string | null;
+  /** Canonical genres attached to the resolved recording, when available. */
+  genres?: string[] | null;
   /**
    * Age tier derived from releaseYear + isFirstSpin, powering the Dial's
    * First/Current/Catalog/Deep filter. Null when the release year is unknown
@@ -632,6 +634,7 @@ interface SseSpinEntry {
   releaseYear: number | null;
   /** MusicBrainz first-release date in partial-ISO form (from the SSE payload); null when unknown. */
   releaseDate: string | null;
+  genres?: string[] | null;
   /** Server-computed hit flags — sent in the spin-changed SSE payload. */
   isLibraryHit: boolean;
   isArtistHit: boolean;
@@ -959,6 +962,7 @@ export function useDialData(
             playedAt: observedAt,
             releaseYear: ev.releaseYear ?? null,
             releaseDate: ev.releaseDate ?? null,
+            genres: (ev as unknown as { genres?: string[] | null }).genres ?? null,
             isFirstSpin: ev.isFirstSpin ?? false,
             // Hit flags are unknown until resolution completes.
             isLibraryHit: false,
@@ -986,6 +990,7 @@ export function useDialData(
           playedAt: ev.observedAt ?? new Date().toISOString(),
           releaseYear: ev.releaseYear ?? null,
           releaseDate: ev.releaseDate ?? null,
+          genres: (ev as unknown as { genres?: string[] | null }).genres ?? null,
           isFirstSpin: ev.isFirstSpin ?? false,
           // Hit flags computed server-side per listener at spin-write time.
           isLibraryHit: ev.isLibraryHit ?? false,
@@ -1414,13 +1419,14 @@ export function useDialData(
       const mbid = (np as { mbid?: string | null }).mbid ?? null;
       const artistMbid = (np as { artistMbid?: string | null }).artistMbid ?? null;
       // releaseYear/releaseDate live on the resolved recording sub-object.
-      const recording = (np as { recording?: { releaseGroupMbid?: string | null; releaseYear?: number | null; releaseDate?: string | null } | null }).recording;
+      const recording = (np as { recording?: { releaseGroupMbid?: string | null; releaseYear?: number | null; releaseDate?: string | null; genres?: string[] | null } | null }).recording;
       const releaseGroupMbid =
         recording?.releaseGroupMbid
         ?? (np as { releaseGroupMbid?: string | null }).releaseGroupMbid
         ?? null;
       const releaseYear = recording?.releaseYear ?? null;
       const releaseDate = recording?.releaseDate ?? null;
+      const genres = recording?.genres ?? (np as { genres?: string[] | null }).genres ?? null;
       const isFirstSpin = (np as { isFirstSpin?: boolean }).isFirstSpin ?? false;
       const sourcePlayedAt = (np as { playedAt?: string | null }).playedAt ?? null;
       if (!sourcePlayedAt || Number.isNaN(new Date(sourcePlayedAt).getTime())) continue;
@@ -1445,6 +1451,7 @@ export function useDialData(
         isFirstSpin,
         releaseYear,
         releaseDate,
+        genres,
         // Live rows: playedAt is ~now, so spinAgeTier's default (now) applies.
         ageTier: spinAgeTier(isFirstSpin, releaseYear, releaseDate),
         eventId: (np as { eventId?: number }).eventId,
@@ -1532,6 +1539,7 @@ export function useDialData(
         isFirstSpin: entry.isFirstSpin,
         releaseYear: entry.releaseYear,
         releaseDate: entry.releaseDate,
+         genres: entry.genres ?? null,
         ageTier: spinAgeTier(entry.isFirstSpin, entry.releaseYear, entry.releaseDate, entry.playedAt),
         // Propagate the resolving flag so FrontDoorRow can show the visual cue.
         ...(entry.resolving ? { resolving: true } : {}),

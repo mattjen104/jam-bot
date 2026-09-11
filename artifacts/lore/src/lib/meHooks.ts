@@ -61,6 +61,8 @@ export interface LibraryRecording {
    * release; absent on soft rows and older responses.
    */
   releaseYear?: number | null;
+  /** Canonical genre labels from recording enrichment, when available. */
+  genres?: string[] | null;
   /** Spotify track URL from Odesli resolution, when available. */
   spotifyUrl: string | null;
   /** Exact Apple catalog song ID supplied by MusicKit, never inferred. */
@@ -1068,7 +1070,13 @@ export interface LibraryQueryOptions {
   /** Case-insensitive substring match on title or artist. */
   q?: string;
   /** "added" (default, newest first) | "artist" | "title" (A→Z). */
-  sort?: "added" | "artist" | "title";
+  sort?: "added" | "artist" | "title" | "genre" | "era";
+  /** Canonical genre values, sent as a comma-separated API parameter. */
+  genre?: string;
+  /** Release-age buckets, sent as current,catalog,deep. */
+  age?: string;
+  /** First-release decade (e.g. 1990). */
+  decade?: number;
   /**
    * Filter by provenance kind: "keep" | "import" | "soft" | "critic", or
    * "lore" (keeps with radio provenance — the From Lore lens feed).
@@ -1080,7 +1088,10 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
   const q = opts.q?.trim() ?? "";
   const sort = opts.sort ?? "added";
   const source = opts.source ?? "";
-  const snapshotKey = [limit, q, sort, source] as const;
+  const genre = opts.genre?.trim() ?? "";
+  const age = opts.age?.trim() ?? "";
+  const decade = opts.decade;
+  const snapshotKey = [limit, q, sort, source, genre, age, decade ?? ""] as const;
   const initialPage = readLibrarySnapshot<{
     items: LibraryItem[];
     nextCursor: string | null;
@@ -1088,10 +1099,15 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
     softCount?: number;
     keepCount?: number;
     criticCount?: number;
+    metadataCoverage?: {
+      total: number;
+      genreKnown: number;
+      releaseYearKnown: number;
+    };
   }>(snapshotKey);
 
   return useInfiniteQuery({
-    queryKey: ["me", "library", "infinite", limit, q, sort, source] as const,
+    queryKey: ["me", "library", "infinite", limit, q, sort, source, genre, age, decade] as const,
     queryFn: ({ pageParam, signal }) => {
       return generatedOrNull(listMyLibrary({
         ...(pageParam ? { cursor: pageParam } : {}),
@@ -1099,7 +1115,8 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
         ...(q ? { q } : {}),
         ...(sort !== "added" ? { sort } : {}),
         ...(source ? { source } : {}),
-      }, { signal: withApiTimeout(signal) })).then((d) => {
+        ...((genre || age || decade != null) ? ({ genre, age, decade } as Record<string, unknown>) : {}),
+      } as Parameters<typeof listMyLibrary>[0], { signal: withApiTimeout(signal) })).then((d) => {
         const page = d ?? { items: [], nextCursor: null };
         if (pageParam === null) writeLibrarySnapshot(snapshotKey, page);
         return page;

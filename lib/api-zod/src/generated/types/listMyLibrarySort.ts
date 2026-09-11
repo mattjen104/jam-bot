@@ -13,4 +13,6 @@ export const ListMyLibrarySort = {
   added: "added",
   artist: "artist",
   title: "title",
+  genre: "genre",
+  era: "era",
 } as const;
