@@ -3911,6 +3911,16 @@
 .demo-library-remote__station-mark.station-mark--fallback {
   border: 0;
 }
+.demo-library-remote__song {
+  /*
+   * Keep the complete, correctly ordered remote in the document for native
+   * keyboard navigation while letting the browser skip offscreen tile work.
+   * The intrinsic size matches the grid's minimum tile size and is replaced
+   * by the measured size after a tile has been rendered.
+   */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 66px;
+}
 .demo-library-remote__song img {
   display: block;
   width: 100%;
