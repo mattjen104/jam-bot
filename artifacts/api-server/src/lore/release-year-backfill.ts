@@ -4,8 +4,8 @@ import { createMbResolver, musicbrainzEnabled } from "@workspace/song-enrichment
 
 /**
  * Release-year/-date backfill — fills `recordings.release_year` (and now the
- * full partial-ISO `release_date`) for recently-spun recordings that still
- * have no year after the genre-backfill pass.
+ * full partial-ISO `release_date`) for recently-spun or actively saved
+ * recordings that still have no year after the genre-backfill pass.
  *
  * Two target sets, processed most-recently-spun first within one batch:
  *
@@ -49,19 +49,24 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
 }> {
   // Shared predicates for both target sets.
   const notSynthetic = notLike(recordingsTable.mbid, "sp:%");
-  // Restrict to recordings that have actually aired — prioritises real
-  // listener-facing content and avoids touching picker-only catalogue rows
-  // that the genre-backfill will eventually reach in its own order.
+  // Restrict to recordings that have aired or are actively saved. This keeps
+  // the queue listener-facing while covering Library-only recordings.
   const hasSpins = sql`EXISTS (
     SELECT 1 FROM ${spinsTable}
     WHERE ${spinsTable.mbid} = ${recordingsTable.mbid}
   )`;
+  const isActivelySaved = sql`EXISTS (
+    SELECT 1 FROM library_items
+    WHERE library_items.mbid = ${recordingsTable.mbid}
+      AND library_items.removed_at IS NULL
+  )`;
+  const isListenerFacing = sql`(${hasSpins}) OR (${isActivelySaved})`;
 
   const yearTarget = and(
     isNull(recordingsTable.releaseYear),
     isNull(recordingsTable.yearCheckedAt),
     notSynthetic,
-    hasSpins,
+    isListenerFacing,
   );
 
   // Set B: recent enough to ever be a premiere, and the date lookup hasn't
@@ -73,19 +78,20 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
     isNull(recordingsTable.releaseDate),
     isNull(recordingsTable.releaseDateCheckedAt),
     notSynthetic,
-    hasSpins,
+    isListenerFacing,
   );
 
   const targetWhere = sql`(${yearTarget}) OR (${dateTarget})`;
 
-  // Order by most-recently-spun first so tracks currently in rotation get
-  // years/dates before older historical recordings.
+  // Current station tracks remain first; saved-only rows follow newest-save
+  // order. Both paths stay off the request path and within the same batch cap.
   const rows = await db
     .select({ mbid: recordingsTable.mbid })
     .from(recordingsTable)
     .where(targetWhere)
     .orderBy(
       sql`(SELECT MAX(played_at) FROM spins WHERE spins.mbid = ${recordingsTable.mbid}) DESC NULLS LAST`,
+      sql`(SELECT MAX(added_at) FROM library_items WHERE library_items.mbid = ${recordingsTable.mbid} AND removed_at IS NULL) DESC NULLS LAST`,
     )
     .limit(batchSize);
 

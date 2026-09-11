@@ -1572,6 +1572,7 @@ export const libraryItemsTable = pgTable(
   (t) => [
     uniqueIndex("library_items_user_mbid_idx").on(t.userId, t.mbid),
     index("library_items_user_added_idx").on(t.userId, t.addedAt),
+    index("library_items_mbid_idx").on(t.mbid),
     index("library_items_spin_idx").on(t.spinId),
   ],
 );

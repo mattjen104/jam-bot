@@ -12,6 +12,7 @@ import { fetchGenreAndYear } from "@workspace/song-enrichment";
 export const GENRE_RECENT_WINDOW_DAYS = 30;
 export const GENRE_TRANSIENT_RETRY_MINUTES = 15;
 const FRONT_DOOR_STATION_SHARE = 1;
+const LIBRARY_BATCH_SHARE = 0.25;
 
 type GenreCandidate = {
   mbid: string;
@@ -111,11 +112,15 @@ export async function backfillGenreBatch(batchSize = 25): Promise<{
  * Return a recent-first batch with a bounded share for each active,
  * non-hidden, crossing-eligible station. The SQL window gives every station
  * the same first-slot opportunity even when one station has many more spins.
- * A global fallback fills unused slots with the remaining recent queue and
- * picker-only rows, preserving eventual historical convergence.
+ * A quarter of each batch is reserved for active Library recordings so
+ * saved-only music converges instead of sitting behind the much larger spin
+ * history. A global fallback fills unused slots, preserving eventual
+ * historical convergence.
  */
 async function selectFairGenreCandidates(batchSize: number): Promise<GenreCandidate[]> {
   if (batchSize <= 0) return [];
+  const libraryLimit = Math.max(1, Math.ceil(batchSize * LIBRARY_BATCH_SHARE));
+  const stationLimit = Math.max(0, batchSize - libraryLimit);
 
   const fairResult = await db.execute(sql`
     WITH front_door AS (
@@ -125,7 +130,7 @@ async function selectFairGenreCandidates(batchSize: number): Promise<GenreCandid
         AND hidden = false
         AND crossing_eligible = true
     ),
-    ranked AS (
+    station_ranked AS (
       SELECT
         r.mbid AS "mbid",
         r.artist AS "artist",
@@ -154,17 +159,52 @@ async function selectFairGenreCandidates(batchSize: number): Promise<GenreCandid
         AND s.played_at >=
           now() - (${GENRE_RECENT_WINDOW_DAYS} * interval '1 day')
       GROUP BY r.mbid, r.artist, r.artist_mbid, s.station_id
-    )
-    SELECT "mbid", "artist", "artistMbid", "stationId", "lastPlayedAt"
-    FROM ranked
-    WHERE station_rank <= GREATEST(
-      ${FRONT_DOOR_STATION_SHARE},
-      CEIL(
-        ${batchSize}::numeric /
-        GREATEST((SELECT count(*) FROM front_door), 1)
+    ),
+    station_candidates AS (
+      SELECT "mbid", "artist", "artistMbid", "stationId", "lastPlayedAt"
+      FROM station_ranked
+      WHERE station_rank <= GREATEST(
+        ${FRONT_DOOR_STATION_SHARE},
+        CEIL(
+          ${stationLimit}::numeric /
+          GREATEST((SELECT count(*) FROM front_door), 1)
+        )
       )
+      ORDER BY station_rank, "lastPlayedAt" DESC NULLS LAST, "stationId", "mbid"
+      LIMIT ${stationLimit}
+    ),
+    library_candidates AS (
+      SELECT
+        r.mbid AS "mbid",
+        r.artist AS "artist",
+        r.artist_mbid AS "artistMbid",
+        NULL::integer AS "stationId",
+        max(li.added_at) AS "lastPlayedAt"
+      FROM recordings r
+      INNER JOIN library_items li ON li.mbid = r.mbid
+      WHERE li.removed_at IS NULL
+        AND (
+          r.genre_enrichment_status = 'pending'
+          OR (
+            r.genre_enrichment_status = 'transient_failure'
+            AND (
+              r.genre_enrichment_attempted_at IS NULL
+              OR r.genre_enrichment_attempted_at <=
+                now() - (${GENRE_TRANSIENT_RETRY_MINUTES} * interval '1 minute')
+            )
+          )
+        )
+        AND r.mbid NOT LIKE 'sp:%'
+        AND NOT EXISTS (
+          SELECT 1 FROM station_candidates sc WHERE sc."mbid" = r.mbid
+        )
+      GROUP BY r.mbid, r.artist, r.artist_mbid
+      ORDER BY max(li.added_at) DESC, r.mbid
+      LIMIT ${libraryLimit}
     )
-    ORDER BY station_rank, "lastPlayedAt" DESC NULLS LAST, "stationId", "mbid"
+    SELECT * FROM station_candidates
+    UNION ALL
+    SELECT * FROM library_candidates
     LIMIT ${batchSize}
   `);
 

@@ -10,13 +10,21 @@
  *   - Transient failure (5xx / network) → sentinels NOT set (retried later)
  *   - 4xx permanent failure → treated as no-date, sentinels set
  *   - Synthetic `sp:` MBIDs → excluded from target set, never passed to resolver
+ *   - Active Library recordings qualify even when they have never aired
  *   - Bounded date re-check: rows with release_year ≥ currentYear − 1 AND
  *     release_date IS NULL re-enter regardless of year_checked_at (the
  *     genre/live enrichment path writes release_year without that sentinel)
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { db, recordingsTable, spinsTable, stationsTable } from "@workspace/db";
+import {
+  db,
+  libraryItemsTable,
+  loreUsersTable,
+  recordingsTable,
+  spinsTable,
+  stationsTable,
+} from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { backfillReleaseYearBatch } from "../src/lore/release-year-backfill.js";
 
@@ -109,14 +117,21 @@ async function getRecording(id: string) {
 }
 
 let stationId: number;
+let userId: number;
 
 beforeAll(async () => {
   if (!dbAvailable) return;
   stationId = await insertStation(STATION_ID_BASE);
+  const [user] = await db
+    .insert(loreUsersTable)
+    .values({ deviceKey: `test-rybf-user-${RUN}` })
+    .returning({ id: loreUsersTable.id });
+  userId = user!.id;
 });
 
 afterAll(async () => {
   if (!dbAvailable) return;
+  await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
   // Clean up in FK-safe order. Delete ALL spins for the test station (covers
   // both normal and sp: MBIDs that don't match the recording LIKE pattern).
   await db.execute(sql`DELETE FROM spins WHERE station_id = ${stationId}`);
@@ -124,6 +139,7 @@ afterAll(async () => {
   // Synthetic sp: recordings inserted in tests — safe to clean up by pattern.
   await db.execute(sql`DELETE FROM recordings WHERE mbid LIKE ${"sp:test-rybf-" + RUN + "-%"}`);
   await db.execute(sql`DELETE FROM stations WHERE slug = ${STATION_ID_BASE}`);
+  await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
 });
 
 describe("backfillReleaseYearBatch", () => {
@@ -333,16 +349,26 @@ describe("backfillReleaseYearBatch", () => {
   );
 
   it.skipIf(!dbAvailable)(
-    "skips recordings with no spins (not in the target set)",
+    "enriches an active Library recording even when it has no spins",
     async () => {
       const id = mbid("no-spin");
       await insertRecording(id);
-      // Intentionally no spin inserted
-      mockFetchReleaseDateInfo.mockClear();
+      await db.insert(libraryItemsTable).values({
+        userId,
+        mbid: id,
+        provenance: { kind: "keep" },
+      });
+      mockFetchReleaseDateInfo.mockResolvedValueOnce({
+        year: 1984,
+        releaseDate: "1984",
+      });
 
       await backfillReleaseYearBatch(10);
 
-      expect(mockFetchReleaseDateInfo).not.toHaveBeenCalledWith(id, expect.anything());
+      const row = await getRecording(id);
+      expect(mockFetchReleaseDateInfo).toHaveBeenCalledWith(id, expect.anything());
+      expect(row?.releaseYear).toBe(1984);
+      expect(row?.yearCheckedAt).not.toBeNull();
     },
   );
 });
