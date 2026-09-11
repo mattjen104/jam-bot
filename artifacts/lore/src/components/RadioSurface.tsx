@@ -9,6 +9,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft, Play } from "lucide-react";
 import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
+import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
+import { LibraryMatchEvidence } from "./LibraryMatchEvidence";
 
 function usableArtistName(
   rawArtist: string | null | undefined,
@@ -48,6 +50,7 @@ export function RadioSurface({
   onOpenStationCrossings,
   onCloseStationCrossings,
   matchFilters,
+  onRemoveMatchFilter,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
@@ -60,6 +63,7 @@ export function RadioSurface({
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
   matchFilters?: LibraryMatchFilters;
+  onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }) {
   const { radio } = usePlayer();
 
@@ -132,9 +136,7 @@ export function RadioSurface({
             <div className="demo-radio__reason">
               {selectorLine ? `${selectorLine} · no overlap yet` : "No overlap yet"}
             </div>
-            {matchEvidence.length > 0 ? (
-              <div className="library-match-evidence">Matches · {matchEvidence.join(" · ")}</div>
-            ) : null}
+            <LibraryMatchEvidence facts={matchEvidence} onRemove={onRemoveMatchFilter} />
           </div>
           <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={14} fill="currentColor" />
@@ -176,9 +178,7 @@ export function RadioSurface({
               <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
             )}
             {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
-            {matchEvidence.length > 0 ? (
-              <div className="library-match-evidence">Matches · {matchEvidence.join(" · ")}</div>
-            ) : null}
+            <LibraryMatchEvidence facts={matchEvidence} onRemove={onRemoveMatchFilter} />
           </div>
           <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={16} fill="currentColor" />

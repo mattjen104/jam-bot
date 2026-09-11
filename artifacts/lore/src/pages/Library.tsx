@@ -62,6 +62,10 @@ import {
 import { YourWeekCard } from "../components/YourWeekCard";
 import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
 import { LibraryCrate } from "../components/LibraryCrate";
+import {
+  removeLibraryMatchFilter,
+  type LibraryMatchEvidence as MatchEvidence,
+} from "../lib/libraryMatchEvidence";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
@@ -1608,6 +1612,9 @@ function DemoMergedLibrary({
     setLocation(query ? `/library?${query}` : "/library");
   };
   const updateMetadata = (mutate: (next: URLSearchParams) => void) => updateSearch(mutate);
+  const removeMatchFilter = (fact: MatchEvidence) => updateMetadata(
+    (next) => removeLibraryMatchFilter(next, fact),
+  );
   const selectLens = (lens: LibraryLens) => updateSearch(next => {
     writeLibraryLens(next, lens);
     const currentSort = parseDemoSongSort(next.get("sort"));
@@ -1914,6 +1921,7 @@ function DemoMergedLibrary({
           showHeader={false}
           sort={stationSort}
           matchFilters={matchFilters}
+          onRemoveMatchFilter={removeMatchFilter}
           focusedArtist={focusedArtist}
           selectedStationSlug={selectedStationSlug}
           onFocusArtist={(artist) => updateSearch((next) => {
@@ -2993,6 +3001,12 @@ function LibraryContent({
               genres: focusedMusicGenres,
               ages: focusedMusicAges,
               decade: focusedDecade,
+            } : undefined}
+            onRemoveMatchFilter={demoSurface ? (fact) => {
+              const next = new URLSearchParams(search);
+              removeLibraryMatchFilter(next, fact);
+              const qs = next.toString();
+              setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
             } : undefined}
             onArtistFocus={demoSurface ? focusLibraryArtist : undefined}
             onAlbumFocus={demoSurface ? focusLibraryAlbum : undefined}

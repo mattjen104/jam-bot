@@ -31,6 +31,8 @@ import {
 } from "../lib/crate";
 import { compareLibrarySongs } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
+import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
+import { LibraryMatchEvidence } from "./LibraryMatchEvidence";
 
 const OPENED_STORAGE_KEY = "lore:library-opened";
 
@@ -86,6 +88,7 @@ function CrateTrackCard({
   onAlbumFocus,
   demoSurface,
   matchFilters,
+  onRemoveMatchFilter,
 }: {
   item: LibraryItem;
   release: CrateRelease;
@@ -98,6 +101,7 @@ function CrateTrackCard({
   onAlbumFocus?: (albumKey: string) => void;
   demoSurface: boolean;
   matchFilters?: LibraryMatchFilters;
+  onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }) {
   const rec = item.recording;
   const title = rec?.title ?? "Unresolved recording";
@@ -183,9 +187,7 @@ function CrateTrackCard({
                 artist
               )}
             </div>
-            {matchEvidence.length > 0 ? (
-              <div className="library-match-evidence">Matches · {matchEvidence.join(" · ")}</div>
-            ) : null}
+            <LibraryMatchEvidence facts={matchEvidence} onRemove={onRemoveMatchFilter} />
           </>
         ) : (
           <>
@@ -417,6 +419,7 @@ export interface LibraryCrateProps {
   onArtistFocus?: (artistName: string) => void;
   onAlbumFocus?: (albumKey: string) => void;
   matchFilters?: LibraryMatchFilters;
+  onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }
 
 export function LibraryCrate({
@@ -431,6 +434,7 @@ export function LibraryCrate({
   onAlbumFocus,
   demoSurface = false,
   matchFilters,
+  onRemoveMatchFilter,
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -542,6 +546,7 @@ export function LibraryCrate({
                 onAlbumFocus={onAlbumFocus}
                 demoSurface={demoSurface}
                 matchFilters={matchFilters}
+                onRemoveMatchFilter={onRemoveMatchFilter}
               />
             ))}
           </div>

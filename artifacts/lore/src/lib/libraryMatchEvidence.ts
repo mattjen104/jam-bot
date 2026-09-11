@@ -15,6 +15,10 @@ export interface LibraryMatchFilters {
   decade?: number;
 }
 
+export type LibraryMatchEvidence =
+  | { kind: "genre"; value: string; label: string }
+  | { kind: "era"; value: ReleaseEra; label: string };
+
 function genreLabel(genre: string): string {
   return genre === "r&b"
     ? "R&B"
@@ -31,13 +35,17 @@ function eraLabel(era: ReleaseEra): string {
 export function libraryMatchEvidence(
   recording: LibraryMatchEvidenceInput | null | undefined,
   filters: LibraryMatchFilters,
-): string[] {
+): LibraryMatchEvidence[] {
   if (!recording) return [];
-  const facts: string[] = [];
+  const facts: LibraryMatchEvidence[] = [];
   if (filters.genres.length > 0) {
     const active = new Set(canonicalGenres(filters.genres));
     const matchedGenres = canonicalGenres(recording.genres).filter((genre) => active.has(genre));
-    if (matchedGenres.length > 0) facts.push(matchedGenres.map(genreLabel).join(" / "));
+    facts.push(...matchedGenres.map((genre) => ({
+      kind: "genre" as const,
+      value: genre,
+      label: genreLabel(genre),
+    })));
   }
 
   const era = releaseEra(recording.releaseYear);
@@ -48,7 +56,32 @@ export function libraryMatchEvidence(
       || (era === "deep"
         && Math.floor(recording.releaseYear! / 10) * 10 === filters.decade))
   ) {
-    facts.push(filters.decade != null ? `${filters.decade}s` : eraLabel(era));
+    facts.push({
+      kind: "era",
+      value: era,
+      label: filters.decade != null ? `${filters.decade}s` : eraLabel(era),
+    });
   }
   return facts;
+}
+
+export function removeLibraryMatchFilter(
+  params: URLSearchParams,
+  fact: LibraryMatchEvidence,
+): void {
+  if (fact.kind === "genre") {
+    const genres = canonicalGenres((params.get("genre") ?? "").split(","))
+      .filter((genre) => genre !== fact.value);
+    if (genres.length > 0) params.set("genre", genres.join(","));
+    else params.delete("genre");
+    return;
+  }
+
+  const ages = (params.get("age") ?? "")
+    .split(",")
+    .filter((age): age is ReleaseEra => age === "current" || age === "catalog" || age === "deep")
+    .filter((age) => age !== fact.value);
+  if (ages.length > 0) params.set("age", ages.join(","));
+  else params.delete("age");
+  if (fact.value === "deep") params.delete("decade");
 }

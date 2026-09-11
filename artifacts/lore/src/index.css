@@ -3186,6 +3186,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.library-match-evidence__remove {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.library-match-evidence__remove:hover,
+.library-match-evidence__remove:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .demo-radio__reason--featured {
   width: 100%;
   border-right: 0;
