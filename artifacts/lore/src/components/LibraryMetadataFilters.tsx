@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Filter } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { STATION_CATEGORY_DEFINITIONS, type StationCategory } from "../lib/dialCategories";
 import { BRO_ZONE_DEFINITIONS, type BroZone } from "../lib/broZones";
 import { SPECIALIST_SUBCATEGORY_DEFINITIONS, type SpecialistSubcategory } from "../lib/specialistCategories";
@@ -150,7 +150,7 @@ export function LibraryStationFilters({
         aria-expanded={open}
         onClick={() => setOpen(value => !value)}
       >
-        <Filter aria-hidden="true" />
+        <SlidersHorizontal aria-hidden="true" />
         Filters{activeCount ? ` · ${activeCount}` : ""}
       </button>
       {open && createPortal(
