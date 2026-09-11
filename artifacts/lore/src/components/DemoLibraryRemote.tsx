@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { LibraryItem } from "../lib/meHooks";
-import type { DialStation } from "../hooks/useDialData";
+import type { DialStation, DialShow } from "../hooks/useDialData";
 import {
   buildDemoRadioSections,
   type DemoStationSort,
@@ -13,6 +13,8 @@ import { useInlinePreview } from "../player/inlinePreview";
 import { toast } from "../hooks/use-toast";
 import { compareLibrarySongs, type LibrarySongSort } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
+import { crossingScopeDetail } from "../lib/crossingScope";
+import { crossingSentence } from "./dialViewHelpers";
 
 export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
 
@@ -22,25 +24,45 @@ function stationTrack(station: DialStation) {
     ?? null;
 }
 
-function StationRemoteTile({ station, matchFilters }: { station: DialStation; matchFilters?: LibraryMatchFilters }) {
+function StationRemoteTile({ station }: { station: DialStation }) {
   const { radio } = usePlayer();
   const playable = resolvePlaybackSource(station.station) !== null;
   const selected = radio.station?.slug === station.station.slug;
-  const track = stationTrack(station);
-  const nowPlaying = track?.artist?.trim()
-    ? `Playing ${track.artist}`
-    : "Not broadcasting track details";
-  const label = `${station.station.name}. ${nowPlaying}`;
-  const matchEvidence = matchFilters ? libraryMatchEvidence(track, matchFilters) : [];
-  const evidenceLabel = matchEvidence.length > 0 ? `. Matches ${matchEvidence.join(", ")}` : "";
+
+  const detail = crossingScopeDetail(station, "7d");
+  const dummyShow = station.shows.find(s => s.state === 'live') ?? {
+    state: "live", showName: null, djName: null, djNames: [],
+    crossings: 0, artistCrossings: 0, topArtists: [], topArtistNames: [], spins: [], currentTrack: null
+  } as unknown as DialShow;
+  
+  // Clear out liveTrack to ensure now-playing information is removed.
+  const showWithoutTrack = { ...dummyShow, currentTrack: null } as DialShow;
+
+  const sentence = crossingSentence(
+    station.station.name,
+    showWithoutTrack,
+    "personal",
+    undefined,
+    undefined,
+    "7d",
+    detail
+  );
+
+  const evidenceNode = sentence 
+    ? sentence.node 
+    : detail.count > 0 
+      ? `${detail.count} ${detail.count === 1 ? 'crossing' : 'crossings'} in the last 7d.` 
+      : "No crossings in the last 7d.";
+
+  const label = `${station.station.name}`;
 
   return (
     <button
       type="button"
       className={`demo-library-remote__tile demo-library-remote__station${selected ? " is-selected" : ""}`}
-      aria-label={`Tune in to ${label}${evidenceLabel}`}
+      aria-label={`Tune in to ${label}`}
       aria-pressed={selected}
-      title={`${label}${evidenceLabel}`}
+      title={label}
       disabled={!playable}
       onPointerDown={() => radio.warmup(station.station)}
       onPointerUp={radio.releaseWarmup}
@@ -61,9 +83,8 @@ function StationRemoteTile({ station, matchFilters }: { station: DialStation; ma
         faviconOnly
         className="demo-library-remote__station-mark"
       />
-      {matchEvidence.length > 0 ? (
-        <span className="demo-library-remote__evidence">Matches · {matchEvidence.join(" · ")}</span>
-      ) : null}
+      <span className="demo-library-remote__station-name">{station.station.name}</span>
+      <span className="demo-library-remote__evidence">{evidenceNode}</span>
     </button>
   );
 }
@@ -86,7 +107,7 @@ function SongRemoteTile({ item, matchFilters }: { item: LibraryItem; matchFilter
   const loading = item.mbid != null && loadingMbid === item.mbid;
   const description = `${title} — ${artist} · ${album}`;
   const matchEvidence = matchFilters ? libraryMatchEvidence(recording, matchFilters) : [];
-  const evidenceLabel = matchEvidence.length > 0 ? `. Matches ${matchEvidence.join(", ")}` : "";
+  const evidenceLabel = matchEvidence.length > 0 ? `. Matches ${matchEvidence.map(e => e.label).join(", ")}` : "";
 
   return (
     <button
@@ -133,7 +154,7 @@ function SongRemoteTile({ item, matchFilters }: { item: LibraryItem; matchFilter
       {loading ? <span className={`demo-library-remote__status${matchEvidence.length ? " demo-library-remote__status--with-evidence" : ""}`} aria-hidden="true">…</span> : null}
       {playing ? <span className={`demo-library-remote__status${matchEvidence.length ? " demo-library-remote__status--with-evidence" : ""}`} aria-hidden="true">■</span> : null}
       {matchEvidence.length > 0 ? (
-        <span className="demo-library-remote__evidence">Matches · {matchEvidence.join(" · ")}</span>
+        <span className="demo-library-remote__evidence">Matches · {matchEvidence.map(e => e.label).join(" · ")}</span>
       ) : null}
     </button>
   );
@@ -207,7 +228,7 @@ export function DemoStationRemote({
       {orderedStations.length > 0 ? (
         <div className="demo-library-remote__grid">
           {orderedStations.map((station) => (
-            <StationRemoteTile key={station.station.slug} station={station} matchFilters={matchFilters} />
+              <StationRemoteTile key={station.station.slug} station={station} />
           ))}
         </div>
       ) : (

@@ -1825,7 +1825,8 @@ export function DialView() {
         // 5. Rung asc as final tiebreaker; r=0 ("no data") sorts last of all.
         const sortR = (r: number) => r === 0 ? 99 : r;
         if (sortR(a.rz.r) !== sortR(b.rz.r)) return sortR(a.rz.r) - sortR(b.rz.r);
-        return a.ds.station.name.localeCompare(b.ds.station.name);
+         return a.ds.station.name.localeCompare(b.ds.station.name) ||
+           a.ds.station.slug.localeCompare(b.ds.station.slug);
       });
   }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode, crossingScope, stationSortMetric, skipped, stationFilterSlug, followedSlugs]);
 

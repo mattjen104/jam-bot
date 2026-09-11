@@ -77,6 +77,8 @@ const MAX_ALBUM_CROSSINGS_PER_STATION = 24;
  */
 export const CROSSING_SCORE_PRIOR_MEAN = 0.05;
 export const CROSSING_SCORE_PRIOR_STRENGTH = 10;
+/** Increment whenever the ranking semantics change; old cache rows are rejected. */
+export const CROSSING_SCORE_VERSION = 3;
 export interface CrossingScorePrior {
   mean: number;
   strength: number;
@@ -143,6 +145,8 @@ function hasAlbumCrossingShape(data: CrossingsRow[]): boolean {
 /** Reject pre-score/partial cache rows rather than serving incomparable data. */
 export function hasCrossingScoreShape(data: CrossingsRow[]): boolean {
   return data.every((row) =>
+    row.scoreVersion === CROSSING_SCORE_VERSION
+    &&
     typeof row.resolvedTracks24h === "number" && Number.isFinite(row.resolvedTracks24h) && row.resolvedTracks24h >= 0
     && typeof row.resolvedTracks7d === "number" && Number.isFinite(row.resolvedTracks7d) && row.resolvedTracks7d >= 0
     && typeof row.resolvedTracks30d === "number" && Number.isFinite(row.resolvedTracks30d) && row.resolvedTracks30d >= 0
@@ -364,6 +368,148 @@ export function applyPooledCrossingScores<T extends CrossingsRow>(rows: T[]): T[
   }));
 }
 
+export interface ArtistFirstScoreRow {
+  stationSlug: string;
+  /** Canonical key is used for IDF; name is always used for display. */
+  artists: Array<string | { key: string; name: string; canonical?: boolean; recordings?: string[]; firstAtStation?: string[] }>;
+  recordings: string[];
+  crossings: number;
+  artistCrossings: number;
+  repeats?: Record<string, number>;
+  /** Distinct matched recordings whose first selected-window play is on this station. */
+  novelRecordings?: number;
+  stationCount?: number;
+}
+
+interface CrossingArtistFact {
+  key: string;
+  name: string;
+  canonical: boolean;
+  recording: string;
+  spinId?: number;
+}
+
+export interface ArtistScoreSample {
+  artist: string;
+  weight: number;
+}
+
+/**
+ * Artist-first rarity score.  The baseline is deliberately supplied as a
+ * complete rolling-window set, rather than queried per station: this keeps the
+ * hot path bounded and makes ties deterministic.  Every artist contributes
+ * once, the top two recordings can move the result by at most 20%, and repeat
+ * confidence can move it by at most 8%.
+ */
+export function artistFirstStationScore(
+  row: ArtistFirstScoreRow,
+  baseline: ReadonlyArray<ArtistFirstScoreRow>,
+): { score: number; samples: ArtistScoreSample[] } {
+  const artistEntries = row.artists.map((value) => typeof value === "string"
+    ? { key: value, name: value, canonical: false, recordings: [] as string[], firstAtStation: [] as string[] }
+    : value)
+    .filter((value) => validScoringArtist(value.name));
+  const artists = [...new Map(artistEntries.map((value) => [value.key, value])).values()];
+  const recordings = [...new Set(row.recordings.filter(Boolean))];
+  const stationCount = Math.max(1, row.stationCount ?? baseline.length);
+  const artistDf = new Map<string, number>();
+  const recordingDf = new Map<string, number>();
+  for (const candidate of baseline) {
+    for (const artist of new Set(candidate.artists.map((value) => typeof value === "string" ? value : value.key))) {
+      artistDf.set(artist, (artistDf.get(artist) ?? 0) + 1);
+    }
+    const candidateRecordings = [
+      ...candidate.recordings,
+      ...candidate.artists.flatMap((value) => typeof value === "string" ? [] : (value.recordings ?? [])),
+    ];
+    for (const recording of new Set(candidateRecordings)) recordingDf.set(recording, (recordingDf.get(recording) ?? 0) + 1);
+  }
+  const artistWeights = artists.map((entry) => {
+    const idf = Math.log((stationCount + 1) / ((artistDf.get(entry.key) ?? 0) + 1));
+    const identityWeight = entry.canonical === false ? 0.7 : 1;
+    const confidence = 1 + Math.min(0.08, 0.025 * Math.log(1 + (row.repeats?.[entry.key] ?? 1)));
+    const artistRecordings = [...new Set(entry.recordings ?? [])];
+    const recordingRarity = artistRecordings
+      .map((recording) => Math.log((stationCount + 1) / ((recordingDf.get(recording) ?? 0) + 1)))
+      .sort((a, b) => b - a).slice(0, 2);
+    const maximumRarity = Math.max(Number.EPSILON, Math.log((stationCount + 1) / 2));
+    const averageRecordingRarity = recordingRarity.length > 0
+      ? recordingRarity.reduce((sum, value) => sum + value, 0) / recordingRarity.length
+      : 0;
+    const recordingModifier = 1 + 0.20 * Math.min(1, averageRecordingRarity / maximumRarity);
+    return { artist: entry.name, weight: idf * identityWeight * confidence * recordingModifier };
+  }).sort((a, b) => b.weight - a.weight || a.artist.localeCompare(b.artist));
+  const top = artistWeights.slice(0, 20);
+  const discountedArtists = top.reduce((sum, item, index) => sum + item.weight / Math.sqrt(index + 1), 0);
+  const evidence = artists.length / (artists.length + 3);
+  const breadth = 0.5 * Math.log(1 + artists.length);
+  const noveltyRate = ((row.novelRecordings ?? 0) + 3) / (recordings.length + 15);
+  const novelty = Math.max(0.95, Math.min(1.15, 0.95 + 0.20 * noveltyRate));
+  const raw = (discountedArtists + breadth) * evidence * novelty;
+  return { score: Math.max(0, Math.min(1, 1 - Math.exp(-raw / 8))), samples: top.slice(0, 5) };
+}
+
+const INVALID_SCORING_ARTIST = /^(unknown(?: artist)?|various artists|n[-/ ]?a)$/i;
+const SCORING_URL = /^(?:https?:\/\/|www\.)|[a-z0-9.-]+\.(?:com|net|org|edu|gov|io|fm|co)(?:[/?#\s]|$)/i;
+export function validScoringArtist(name: string): boolean {
+  const value = name.trim();
+  return !!value && !INVALID_SCORING_ARTIST.test(value) && !SCORING_URL.test(value);
+}
+
+export function applyArtistFirstCrossingScores<T extends CrossingsRow>(rows: T[]): T[] {
+  const facts = (row: T, window: "7d" | "30d") => {
+    const source = window === "7d" ? row.crossingArtistFacts7d : row.crossingArtistFacts30d;
+    const grouped = new Map<string, { key: string; name: string; canonical: boolean; recordings: string[] }>();
+    const repeats: Record<string, number> = {};
+    for (const fact of source ?? []) {
+      const item = grouped.get(fact.key) ?? { key: fact.key, name: fact.name, canonical: fact.canonical, recordings: [] };
+      if (!item.recordings.includes(fact.recording)) item.recordings.push(fact.recording);
+      grouped.set(fact.key, item);
+      repeats[fact.key] = (repeats[fact.key] ?? 0) + 1;
+    }
+    return { artists: [...grouped.values()], repeats };
+  };
+  const baseline = rows.map((row) => ({
+    stationSlug: row.stationSlug,
+    // IDF denominator is intentionally the stable rolling 30-day population,
+    // even when the selected display scope is 7d/24h.
+    artists: facts(row, "30d").artists,
+    recordings: row.crossingRecordings30d ?? row.crossingRecordings7d ?? [],
+    crossings: row.weekCrossings,
+    artistCrossings: row.weekArtistCrossings,
+    stationCount: row.stationCount,
+  }));
+  const score = (row: T, artists: ArtistFirstScoreRow["artists"], recordings: string[], crossings: number, artistCrossings: number) =>
+    artistFirstStationScore({
+      stationSlug: row.stationSlug,
+      artists, recordings, crossings, artistCrossings,
+      stationCount: row.stationCount,
+    }, baseline);
+  const scored = rows.map((row) => {
+    const day = score(row, row.crossingArtists24h ?? [], row.crossingRecordings24h ?? [], row.crossings, row.artistCrossings);
+    const weekFacts = facts(row, "7d");
+    const week = artistFirstStationScore({
+      stationSlug: row.stationSlug,
+      artists: weekFacts.artists,
+      recordings: row.crossingRecordings7d ?? [],
+      crossings: row.weekCrossings,
+      artistCrossings: row.weekArtistCrossings,
+      repeats: weekFacts.repeats,
+      novelRecordings: row.novelRecordings7d,
+      stationCount: row.stationCount,
+    }, baseline);
+    const month = score(row, row.crossingArtists30d ?? row.topArtistNames30d ?? [], row.crossingRecordings30d ?? [], row.monthCrossings, row.monthArtistCrossings);
+    return { ...row, scoreVersion: CROSSING_SCORE_VERSION, score24h: day.score, score7d: week.score, score30d: month.score, topArtistSamples7d: week.samples };
+  });
+  // Preserve the same model for selectable ranges while keeping the default 7d
+  // model authoritative. Scopes without samples use their raw counts as a
+  // deterministic, bounded fallback rather than scanning lifetime history.
+  return scored.map((row) => ({
+    ...row,
+    scoreLifetime: row.score30d,
+  }));
+}
+
 type LifetimeFact = {
   stationSlug: string;
   lifetimeCrossings: number;
@@ -527,6 +673,14 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       )
   )`;
   const crossingHit = sql`(${libHit} or (${notLibHit} and ${artistMatch}))`;
+  // Ranking evidence is narrower than the raw crossing count: an exact saved
+  // recording or a saved artist can explain rarity. Album widening remains a
+  // valid crossing, but does not let a compilation/related release inflate the
+  // artist-first discovery score.
+  const rarityHit = sql`(
+    ${spinsTable.mbid} in (${userLibMbids})
+    or ${artistMatch}
+  )`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
@@ -555,7 +709,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
   )`;
 
   const lifetimeFacts = await readValidLifetimeFacts(userId);
-  const [rows, albumRows] = await Promise.all([
+  const [rows, albumRows, eligibleStationRows] = await Promise.all([
     // ── Bounded rolling query (scanCutoff = 30 days) ─────────────────────────
     // Uses spins_station_played_at_idx; computes 24h / 7d / 30d rolling counts.
     db
@@ -577,7 +731,23 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         // can rank by frequency in JS.  FILTER keeps only crossing spins.
         topArtistNamesRaw24h: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${libHit} or (${notLibHit} and ${artistMatch})))`,
         topArtistNamesRaw7d:  sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWeek}   and (${libHit} or (${notLibHit} and ${artistMatch})))`,
-        topArtistNamesRaw30d: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inMonth}  and (${libHit} or (${notLibHit} and ${artistMatch})))`,
+         topArtistNamesRaw30d: sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inMonth}  and (${libHit} or (${notLibHit} and ${artistMatch})))`,
+         crossingArtists24h: sql<string[] | null>`array_agg(distinct coalesce(${recordingsTable.artistMbid}, lower(trim(${recordingsTable.artist})))) filter (where ${inWindow} and ${rarityHit})`,
+         crossingArtists7d: sql<string[] | null>`array_agg(distinct coalesce(${recordingsTable.artistMbid}, lower(trim(${recordingsTable.artist})))) filter (where ${inWeek} and ${rarityHit})`,
+         crossingArtists30d: sql<string[] | null>`array_agg(distinct coalesce(${recordingsTable.artistMbid}, lower(trim(${recordingsTable.artist})))) filter (where ${inMonth} and ${rarityHit})`,
+         crossingArtistFacts7d: sql<CrossingArtistFact[] | null>`jsonb_agg(jsonb_build_object('key', coalesce(${recordingsTable.artistMbid}, lower(trim(${recordingsTable.artist}))), 'name', trim(${recordingsTable.artist}), 'canonical', ${recordingsTable.artistMbid} is not null, 'recording', ${recordingsTable.mbid}, 'spinId', ${spinsTable.id})) filter (where ${inWeek} and ${rarityHit})`,
+         crossingArtistFacts30d: sql<CrossingArtistFact[] | null>`jsonb_agg(jsonb_build_object('key', coalesce(${recordingsTable.artistMbid}, lower(trim(${recordingsTable.artist}))), 'name', trim(${recordingsTable.artist}), 'canonical', ${recordingsTable.artistMbid} is not null, 'recording', ${recordingsTable.mbid}, 'spinId', ${spinsTable.id})) filter (where ${inMonth} and ${rarityHit})`,
+         crossingRecordings24h: sql<string[] | null>`array_agg(distinct ${recordingsTable.mbid}) filter (where ${inWindow} and ${rarityHit})`,
+         crossingRecordings7d: sql<string[] | null>`array_agg(distinct ${recordingsTable.mbid}) filter (where ${inWeek} and ${rarityHit})`,
+         crossingRecordings30d: sql<string[] | null>`array_agg(distinct ${recordingsTable.mbid}) filter (where ${inMonth} and ${rarityHit})`,
+         novelRecordings7d: sql<number>`count(distinct ${recordingsTable.mbid}) filter (where ${inWeek} and ${rarityHit} and not exists (
+           select 1 from ${spinsTable} prior where prior.mbid = ${spinsTable.mbid}
+             and prior.station_id = ${spinsTable.stationId}
+             and (
+               prior.played_at < ${spinsTable.playedAt}
+               or (prior.played_at = ${spinsTable.playedAt} and prior.id < ${spinsTable.id})
+             )
+         ))::int`,
       })
       .from(spinsTable)
       .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -592,7 +762,8 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       .where(
         and(
           isNotNull(spinsTable.mbid),
-          eq(stationsTable.hidden, false),
+           eq(stationsTable.hidden, false),
+           eq(stationsTable.active, true),
           sql`${spinsTable.playedAt} >= ${scanCutoff}`,
         ),
       )
@@ -639,7 +810,9 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
         recordingsTable.artist,
         recordingsTable.artworkUrl,
       )
-      .orderBy(sql`max(${spinsTable.playedAt}) desc`),
+       .orderBy(sql`max(${spinsTable.playedAt}) desc`),
+    db.select({ stationSlug: stationsTable.slug }).from(stationsTable)
+      .where(and(eq(stationsTable.hidden, false), eq(stationsTable.active, true))),
   ]);
 
   // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
@@ -689,16 +862,29 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
       // Lifetime exposure is supplied by the background cache, never inferred
       // from the MBID-filtered crossing query (which is not a denominator).
       resolvedTracksLifetime:  lifetimeExposureMap.get(slug) ?? 0,
-      score24h: 0, score7d: 0, score30d: 0, scoreLifetime: 0,
+       scoreVersion: CROSSING_SCORE_VERSION,
+       score24h: 0, score7d: 0, score30d: 0, scoreLifetime: 0,
       lifetimeFirstPlayCrossings: l?.lifetimeFirstPlayCrossings ?? 0,
       topArtistNames24h:       topArtistsFromRaw(r?.topArtistNamesRaw24h ?? null),
       topArtistNames7d:        topArtistsFromRaw(r?.topArtistNamesRaw7d  ?? null),
       topArtistNames30d:       topArtistsFromRaw(r?.topArtistNamesRaw30d ?? null),
+       crossingArtists24h:      r?.crossingArtists24h ?? [],
+       crossingArtists7d:       r?.crossingArtists7d ?? [],
+       crossingArtists30d:      r?.crossingArtists30d ?? [],
+       crossingArtistFacts7d:   Array.isArray(r?.crossingArtistFacts7d) ? r!.crossingArtistFacts7d : [],
+       crossingArtistFacts30d:  Array.isArray(r?.crossingArtistFacts30d) ? r!.crossingArtistFacts30d : [],
+       stationCount: eligibleStationRows.length,
+       novelRecordings7d:       Number(r?.novelRecordings7d ?? 0),
+       crossingRecordings24h:   r?.crossingRecordings24h ?? [],
+       crossingRecordings7d:    r?.crossingRecordings7d ?? [],
+       crossingRecordings30d:   r?.crossingRecordings30d ?? [],
       topArtistNamesLifetime:  l?.topArtistNamesLifetime ?? [],
       albumCrossings:          albumsBySlug.get(slug) ?? [],
     };
   });
-  return applyPooledCrossingScores(result);
+  // Blended rows have no listener-specific library artist universe, so IDF and
+  // novelty would be fabricated here. Keep the established pooled rate model.
+  return applyArtistFirstCrossingScores(result);
 }
 
 /**
@@ -1602,6 +1788,8 @@ export async function computeBlendedCrossings(
       topArtistNames30d:       blendedTopArtists(r?.topArtistNamesRaw30d ?? null),
     };
   });
+  // Blended rows have no listener-specific library artist universe, so IDF and
+  // novelty would be fabricated here. Keep the established pooled rate model.
   return applyPooledCrossingScores(result);
 }
 

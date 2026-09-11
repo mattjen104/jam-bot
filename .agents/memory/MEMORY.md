@@ -151,3 +151,4 @@
 - [HLS pointer warmup safety](hls-pointer-warmup-safety.md) — never preload HLS by assigning its URL directly when the browser lacks native HLS; let hls.js attach to a clean audio element.
 - [Provider release evidence trust](provider-release-evidence-trust.md) — shared track-age facts require server-verified provider identity; rejected canonical links must leave the entire evidence packet immutable.
 - [Station icon vs logo roles](station-icon-logo-roles.md) — keep low-res square identity icons separate from high-res official logo art; shared provider branding qualifies for neither.
+- [Ranking simulation parity](ranking-simulation-parity.md) — ranking previews must reuse the production candidate and match semantics; nearby approximations can produce convincing but unreproducible top lists.

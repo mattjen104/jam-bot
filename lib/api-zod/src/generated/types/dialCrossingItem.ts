@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DialCrossingItemAlbumCrossingsItem } from "./dialCrossingItemAlbumCrossingsItem";
+import type { DialCrossingItemTopArtistSamples7dItem } from "./dialCrossingItemTopArtistSamples7dItem";
 
 export interface DialCrossingItem {
   stationSlug: string;
@@ -25,6 +26,8 @@ export interface DialCrossingItem {
   lifetimeArtistCrossings: number;
   /** Top crossing artist names in the rolling 30-day window. */
   topArtistNames30d?: string[];
+  /** Weighted top artist evidence behind the default 7-day station score. */
+  topArtistSamples7d?: DialCrossingItemTopArtistSamples7dItem[];
   /** Distinct resolved recording MBIDs aired in the rolling 24-hour window. */
   resolvedTracks24h: number;
   /** Distinct resolved recording MBIDs aired in the rolling 7-day window. */

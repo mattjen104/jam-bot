@@ -2718,6 +2718,8 @@ export type InsertAppleLibraryItem = typeof appleLibraryItemsTable.$inferInsert;
  * field in only one place fails typecheck instead of silently drifting.
  */
 export interface CrossingsRow {
+  /** Versioned artist-first station score payload; old Bayesian rows are rejected. */
+  scoreVersion?: number;
   stationSlug: string;
   crossings: number;
   artistCrossings: number;
@@ -2767,6 +2769,20 @@ export interface CrossingsRow {
    * Optional for the same backward-compat reason as topArtistNames24h.
    */
   topArtistNamesLifetime?: string[];
+  /** Distinct crossing artist identities/recordings used by the bounded scorer. */
+  crossingArtists24h?: string[];
+  crossingArtists7d?: string[];
+  crossingArtists30d?: string[];
+  crossingArtistNames7d?: string[];
+  novelRecordings7d?: number;
+  stationCount?: number;
+  crossingArtistFacts7d?: Array<{ key: string; name: string; canonical: boolean; recording: string; spinId?: number }>;
+  crossingArtistFacts30d?: Array<{ key: string; name: string; canonical: boolean; recording: string; spinId?: number }>;
+  crossingRecordings24h?: string[];
+  crossingRecordings7d?: string[];
+  crossingRecordings30d?: string[];
+  /** Weighted artist samples used by the card explanation sentence. */
+  topArtistSamples7d?: Array<{ artist: string; weight: number }>;
   /** Exact crate albums this station has aired, newest crossing first. */
   albumCrossings?: Array<{
     releaseGroupMbid: string | null;

@@ -1,16 +1,17 @@
 import { useMemo } from "react";
 import { usePlayer } from "../player/PlayerProvider";
-import { eligibleDjNames, normalizeAttributionName } from "@workspace/lore-attribution";
+import { normalizeAttributionName } from "@workspace/lore-attribution";
 import { StationChangeCountdown } from "./StationChangeCountdown";
 import { StationMark } from "./StationMark";
-import type { DialStation } from "../hooks/useDialData";
+import type { DialStation, DialShow } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft, Play } from "lucide-react";
 import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
-import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
+import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
-import { LibraryMatchEvidence } from "./LibraryMatchEvidence";
+import { crossingScopeDetail } from "../lib/crossingScope";
+import { crossingSentence } from "./dialViewHelpers";
 
 function usableArtistName(
   rawArtist: string | null | undefined,
@@ -88,33 +89,31 @@ export function RadioSurface({
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
 
   const renderRow = (ds: DialStation, demoted: boolean) => {
-    const track = ds.liveTrack ?? ds.shows.find(s => s.state === 'live')?.currentTrack;
-    const isLive = ds.isLive && !!track && !track.resolving && (track.isLibraryHit || track.isArtistHit);
+    const detail = crossingScopeDetail(ds, "7d");
+    const dummyShow = ds.shows.find(s => s.state === 'live') ?? {
+      state: "live", showName: null, djName: null, djNames: [],
+      crossings: 0, artistCrossings: 0, topArtists: [], topArtistNames: [], spins: [], currentTrack: null
+    } as unknown as DialShow;
     
-    // Gap handling
-    const rawTitle = track?.title;
-    const rawArtist = track?.artist;
-    const title = rawTitle || "—";
-    const artist = rawArtist || (rawTitle ? "Unknown artist" : "Artist unknown");
-    const actionableArtist = usableArtistName(
-      rawArtist,
-      track?.artistMbid,
-      ds.artistActionExclusions ?? [],
+    // Clear out liveTrack to ensure now-playing information is removed.
+    const showWithoutTrack = { ...dummyShow, currentTrack: null } as DialShow;
+
+    const sentence = crossingSentence(
+      ds.station.name,
+      showWithoutTrack,
+      "personal",
+      undefined,
+      undefined,
+      "7d",
+      detail
     );
 
-    const liveShow = ds.shows.find(s => s.state === 'live');
-    const djNames = eligibleDjNames({
-      name: liveShow?.showName ?? "",
-      djName: liveShow?.djName ?? undefined,
-      djNames: liveShow?.djNames
-    }, {
-      artist,
-      title,
-      showTitle: liveShow?.showName,
-      stationName: ds.station.name
-    });
-    const selectorLine = djNames.length === 1 ? `Selected by ${djNames[0]}` : null;
-    const matchEvidence = matchFilters ? libraryMatchEvidence(track, matchFilters) : [];
+    const evidenceNode = sentence 
+      ? sentence.node 
+      : detail.count > 0 
+        ? `${detail.count} ${detail.count === 1 ? 'crossing' : 'crossings'} in the last 7d.` 
+        : "No crossings in the last 7d.";
+
     if (demoted) {
       return (
         <div className="demo-radio__row demo-radio__row--compact" key={ds.station.slug}>
@@ -125,26 +124,10 @@ export function RadioSurface({
             className="demo-radio__station-mark demo-radio__station-mark--compact"
           />
           <div className="demo-radio__body">
-            {actionableArtist && onFocusArtist ? (
-              <button
-                type="button"
-                className="demo-radio__compact-title demo-radio__artist-focus"
-                onClick={() => onFocusArtist(actionableArtist)}
-              >
-                {artist}
-              </button>
-            ) : (
-              <div className="demo-radio__compact-title">{artist}</div>
-            )}
-            <div className="demo-radio__compact-song">{title}</div>
-            <div className="demo-radio__station-identity demo-radio__station-identity--meta">
-              <strong>{ds.station.name}</strong>
-              {ds.station.city ? <span>{ds.station.city}</span> : null}
-            </div>
+            <div className="demo-radio__compact-title">{ds.station.name}</div>
             <div className="demo-radio__reason">
-              {selectorLine ? `${selectorLine} · no overlap yet` : "No overlap yet"}
+              {evidenceNode}
             </div>
-            <LibraryMatchEvidence facts={matchEvidence} onRemove={onRemoveMatchFilter} />
           </div>
           <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={14} fill="currentColor" />
@@ -152,13 +135,6 @@ export function RadioSurface({
         </div>
       );
     }
-
-    const lifetimeTotal = ds.lifetimeCrossings + ds.lifetimeArtistCrossings;
-    const reasonLine = focusedArtist
-      ? `Has played ${focusedArtist} from your music`
-      : ds.topArtistNamesLifetime.length > 0
-      ? `Has played your artists ${lifetimeTotal} times · ${ds.topArtistNamesLifetime.length === 1 ? `mostly ${ds.topArtistNamesLifetime[0]}` : ds.topArtistNamesLifetime.slice(0,2).join(", ")}`
-      : "";
 
     return (
       <div key={ds.station.slug} className="demo-radio__featured">
@@ -170,42 +146,21 @@ export function RadioSurface({
             className="demo-radio__station-mark"
           />
           <div className="demo-radio__body">
-            {actionableArtist && onFocusArtist ? (
-              <button
-                type="button"
-                className="demo-radio__artist demo-radio__artist--primary demo-radio__artist-focus"
-                onClick={() => onFocusArtist(actionableArtist)}
-              >
-                {artist}
-              </button>
-            ) : (
-              <div className="demo-radio__artist demo-radio__artist--primary">{artist}</div>
-            )}
-            <div className="demo-radio__title">{title}</div>
-            <div className="demo-radio__station-identity demo-radio__station-identity--meta">
-              <strong>{ds.station.name}</strong>
-              {ds.station.city ? <span>{ds.station.city}</span> : null}
-            </div>
-            {isLive && <span className="demo-radio__pill">Library match · on air</span>}
-            {selectorLine ? <div className="demo-radio__byline">{selectorLine}</div> : null}
-            <LibraryMatchEvidence facts={matchEvidence} onRemove={onRemoveMatchFilter} />
+            <div className="demo-radio__artist demo-radio__artist--primary">{ds.station.name}</div>
           </div>
           <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
             <Play size={16} fill="currentColor" />
-            {radio.station?.slug === ds.station.slug ? <StationChangeCountdown track={track} /> : null}
           </button>
         </div>
-        {reasonLine && (
-          <button
-            type="button"
-            className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
-            onClick={() => onOpenStationCrossings?.(ds.station.slug)}
-            disabled={!onOpenStationCrossings}
-            aria-label={`Open every crossing for ${ds.station.name}`}
-          >
-            {reasonLine}
-          </button>
-        )}
+        <button
+          type="button"
+          className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
+          onClick={() => onOpenStationCrossings?.(ds.station.slug)}
+          disabled={!onOpenStationCrossings}
+          aria-label={`Open every crossing for ${ds.station.name}`}
+        >
+          {evidenceNode}
+        </button>
       </div>
     );
   };

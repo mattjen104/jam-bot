@@ -3728,6 +3728,11 @@ export interface MePressCrossingsResponse {
   hasTaste: boolean;
 }
 
+export type DialCrossingItemTopArtistSamples7dItem = {
+  artist: string;
+  weight: number;
+};
+
 export type DialCrossingItemAlbumCrossingsItem = {
   releaseGroupMbid: string | null;
   recordingMbid: string;
@@ -3754,6 +3759,8 @@ export interface DialCrossingItem {
   lifetimeArtistCrossings: number;
   /** Top crossing artist names in the rolling 30-day window. */
   topArtistNames30d?: string[];
+  /** Weighted top artist evidence behind the default 7-day station score. */
+  topArtistSamples7d?: DialCrossingItemTopArtistSamples7dItem[];
   /** Distinct resolved recording MBIDs aired in the rolling 24-hour window. */
   resolvedTracks24h: number;
   /** Distinct resolved recording MBIDs aired in the rolling 7-day window. */

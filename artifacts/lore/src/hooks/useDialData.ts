@@ -214,6 +214,7 @@ export interface DialStation {
    * Top crossing artist names over all time (personal mode only; up to 3).
    */
   topArtistNamesLifetime: string[];
+  topArtistSamples7d?: Array<{ artist: string; weight: number }>;
   albumCrossings: Array<{
     releaseGroupMbid: string | null;
     recordingMbid: string;
@@ -1325,6 +1326,7 @@ export function useDialData(
       topArtistNames7d: string[];
       topArtistNames30d: string[];
       topArtistNamesLifetime: string[];
+      topArtistSamples7d?: Array<{ artist: string; weight: number }>;
       albumCrossings: Array<{
         releaseGroupMbid: string | null;
         recordingMbid: string;
@@ -1356,6 +1358,7 @@ export function useDialData(
         topArtistNames7d: cx.topArtistNames7d ?? [],
         topArtistNames30d: (cx as DialCrossing & { topArtistNames30d?: string[] }).topArtistNames30d ?? [],
         topArtistNamesLifetime: cx.topArtistNamesLifetime ?? [],
+        topArtistSamples7d: cx.topArtistSamples7d ?? [],
         albumCrossings: cx.albumCrossings ?? [],
       });
     }
@@ -2007,6 +2010,7 @@ export function useDialData(
         topArtistNames7d,
         topArtistNames30d,
         topArtistNamesLifetime,
+        topArtistSamples7d: serverCx?.topArtistSamples7d ?? [],
         albumCrossings,
         recentReleaseYears,
         liveTrack: isLive ? (nowPlayingBySlug.get(station.slug) ?? null) : null,

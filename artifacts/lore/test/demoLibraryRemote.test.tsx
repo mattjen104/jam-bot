@@ -233,7 +233,8 @@ describe("demo Library visual remotes", () => {
     );
 
     const stationTiles = screen.getAllByTestId("demo-station-remote-tile");
-    expect(stationTiles[0]?.textContent).toContain("Matches · Experimental / Electronic · 1990s");
+    // Station tiles no longer show now-playing-derived metadata matches
+    expect(stationTiles[0]?.textContent).not.toContain("Matches");
     expect(stationTiles[1]?.textContent).not.toContain("Matches");
 
     playerState.playingMbid = "known-song";
@@ -252,7 +253,7 @@ describe("demo Library visual remotes", () => {
     );
 
     const songTiles = screen.getAllByTestId("demo-song-remote-tile");
-    expect(songTiles[0]?.textContent).toContain("Matches · Experimental / Electronic · 1990s");
+    expect(songTiles[0]?.textContent).toContain("Matches · Experimental · Electronic · 1990s");
     expect(songTiles[0]?.querySelector(".demo-library-remote__status--with-evidence")).toBeTruthy();
     expect(songTiles[1]?.textContent).not.toContain("Matches");
   });

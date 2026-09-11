@@ -73,6 +73,7 @@ export * from "./datedScheduleExceptionExtraction";
 export * from "./deleteAllListensParams";
 export * from "./dialCrossingItem";
 export * from "./dialCrossingItemAlbumCrossingsItem";
+export * from "./dialCrossingItemTopArtistSamples7dItem";
 export * from "./discogsListRequest";
 export * from "./discogsPressing";
 export * from "./discoveryScore";

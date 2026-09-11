@@ -6164,6 +6164,17 @@ export const GetMyCrossingsResponse = zod.object({
         .array(zod.string())
         .optional()
         .describe("Top crossing artist names in the rolling 30-day window."),
+      topArtistSamples7d: zod
+        .array(
+          zod.object({
+            artist: zod.string(),
+            weight: zod.number(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Weighted top artist evidence behind the default 7-day station score.",
+        ),
       resolvedTracks24h: zod
         .number()
         .describe(
@@ -6735,6 +6746,17 @@ export const GetMyBlendedCrossingsResponse = zod.object({
         .array(zod.string())
         .optional()
         .describe("Top crossing artist names in the rolling 30-day window."),
+      topArtistSamples7d: zod
+        .array(
+          zod.object({
+            artist: zod.string(),
+            weight: zod.number(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Weighted top artist evidence behind the default 7-day station score.",
+        ),
       resolvedTracks24h: zod
         .number()
         .describe(

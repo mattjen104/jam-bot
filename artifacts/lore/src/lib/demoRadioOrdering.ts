@@ -30,6 +30,12 @@ function crossingTotal(station: DialStation): number {
   return station.lifetimeCrossings + station.lifetimeArtistCrossings;
 }
 
+function discoveryScore(station: DialStation): number {
+  return typeof station.score7d === "number" && Number.isFinite(station.score7d)
+    ? station.score7d
+    : crossingTotal(station);
+}
+
 export function buildDemoRadioSections({
   stations,
   hasData,
@@ -50,7 +56,7 @@ export function buildDemoRadioSections({
 } {
   const crossingStations = focusedArtist || sort === "newest" || forceAllStations
     ? [...stations]
-    : stations.filter((station) => crossingTotal(station) > 0);
+    : stations.filter((station) => discoveryScore(station) > 0);
 
   crossingStations.sort((a, b) => {
     if (sort === "name") return a.station.name.localeCompare(b.station.name);
@@ -64,12 +70,15 @@ export function buildDemoRadioSections({
     }
     if (sort === "live") {
       return Number(b.isLive) - Number(a.isLive)
-        || crossingTotal(b) - crossingTotal(a);
+        || discoveryScore(b) - discoveryScore(a)
+        || a.station.slug.localeCompare(b.station.slug);
     }
     if (sort === "discovery") {
-      return crossingTotal(a) - crossingTotal(b);
+      return discoveryScore(a) - discoveryScore(b)
+        || a.station.slug.localeCompare(b.station.slug);
     }
-    return crossingTotal(b) - crossingTotal(a);
+    return discoveryScore(b) - discoveryScore(a)
+      || a.station.slug.localeCompare(b.station.slug);
   });
 
   const showCrossings = (hasData || forceAllStations || sort === "newest")

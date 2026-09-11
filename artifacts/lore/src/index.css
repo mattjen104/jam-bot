@@ -3962,6 +3962,25 @@
 .demo-library-remote__station-mark.station-mark--fallback {
   border: 0;
 }
+.demo-library-remote__station-name {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  left: 3px;
+  z-index: 1;
+  overflow: hidden;
+  padding: 3px 4px;
+  border-radius: 3px;
+  background: hsl(var(--background) / 0.9);
+  color: hsl(var(--foreground));
+  font-family: var(--lore-font-home-heading);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .demo-library-remote__song {
   /*
    * Keep the complete, correctly ordered remote in the document for native

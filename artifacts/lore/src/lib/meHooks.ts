@@ -623,6 +623,8 @@ export interface DialCrossing {
   topArtistNames30d?: string[];
   /** Top crossing artist names over all time (personal mode; up to 3). */
   topArtistNamesLifetime?: string[];
+  /** Weighted artist evidence used to explain the artist-first score. */
+  topArtistSamples7d?: Array<{ artist: string; weight: number }>;
   albumCrossings?: Array<{
     releaseGroupMbid: string | null;
     recordingMbid: string;

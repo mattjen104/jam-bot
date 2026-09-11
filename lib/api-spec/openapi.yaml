@@ -9477,6 +9477,15 @@ components:
           description: Top crossing artist names in the rolling 30-day window.
           items:
             type: string
+        topArtistSamples7d:
+          type: array
+          description: Weighted top artist evidence behind the default 7-day station score.
+          items:
+            type: object
+            properties:
+              artist: { type: string }
+              weight: { type: number }
+            required: [artist, weight]
         resolvedTracks24h:
           type: integer
           description: Distinct resolved recording MBIDs aired in the rolling 24-hour window.

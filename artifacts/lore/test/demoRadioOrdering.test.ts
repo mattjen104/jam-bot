@@ -37,6 +37,25 @@ function station(name: string, years: Array<number | null>): DialStation {
 }
 
 describe("newest-music station ordering", () => {
+  it("uses the seven-day rarity score for the default overlap order", () => {
+    const rawLeader = station("Raw leader", [2020, 2021]);
+    rawLeader.lifetimeCrossings = 100;
+    rawLeader.score7d = 0.2;
+    const rarityLeader = station("Rarity leader", [2020, 2021]);
+    rarityLeader.lifetimeCrossings = 2;
+    rarityLeader.score7d = 0.9;
+
+    const result = buildDemoRadioSections({
+      stations: [rawLeader, rarityLeader],
+      hasData: true,
+      focusedArtist: null,
+      sort: "overlap",
+    });
+
+    expect(result.crossingStations.map((item) => item.station.name))
+      .toEqual(["Rarity leader", "Raw leader"]);
+  });
+
   it("uses a robust median and requires sufficient resolved evidence", () => {
     expect(stationFreshness(station("Outlier", [1968, 1970, 2026]))).toBe(1970);
     expect(stationFreshness(station("Even", [1980, 2024]))).toBe(2002);
