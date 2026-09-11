@@ -1,43 +1,16 @@
 import { useMemo } from "react";
 import { usePlayer } from "../player/PlayerProvider";
-import { normalizeAttributionName } from "@workspace/lore-attribution";
-import { StationChangeCountdown } from "./StationChangeCountdown";
 import { StationMark } from "./StationMark";
 import type { DialStation, DialShow } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ArrowLeft, Play } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
 import { crossingScopeDetail } from "../lib/crossingScope";
 import { crossingSentence } from "./dialViewHelpers";
-
-function usableArtistName(
-  rawArtist: string | null | undefined,
-  artistMbid: string | null | undefined,
-  attributionExclusions: string[],
-): string | null {
-  const artist = rawArtist?.trim();
-  if (!artist) return null;
-  const normalized = artist.toLocaleLowerCase();
-  if (
-    normalized === "unknown artist"
-    || normalized === "artist unknown"
-    || normalized === "unknown"
-    || normalized === "—"
-    || normalized === "-"
-  ) return null;
-  if (artistMbid) return artist;
-  const attributionName = normalizeAttributionName(artist);
-  if (
-    attributionName
-    && attributionExclusions.some(
-      (candidate) => normalizeAttributionName(candidate) === attributionName,
-    )
-  ) return null;
-  return artist;
-}
+import { stationLocationAndType } from "../lib/stationDisplayMetadata";
 
 export function RadioSurface({ 
   stations, 
@@ -48,11 +21,8 @@ export function RadioSurface({
   focusedArtist = null,
   forceAllStations = false,
   selectedStationSlug = null,
-  onFocusArtist,
   onOpenStationCrossings,
   onCloseStationCrossings,
-  matchFilters,
-  onRemoveMatchFilter,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
@@ -114,44 +84,27 @@ export function RadioSurface({
         ? `${detail.count} ${detail.count === 1 ? 'crossing' : 'crossings'} in the last 7d.` 
         : "No crossings in the last 7d.";
 
-    if (demoted) {
-      return (
-        <div className="demo-radio__row demo-radio__row--compact" key={ds.station.slug}>
-          <StationMark
-            name={ds.station.name}
-            iconUrl={ds.station.stationIconUrl}
-            logoUrl={ds.station.logoUrl}
-            className="demo-radio__station-mark demo-radio__station-mark--compact"
-          />
-          <div className="demo-radio__body">
-            <div className="demo-radio__compact-title">{ds.station.name}</div>
-            <div className="demo-radio__reason">
-              {evidenceNode}
-            </div>
-          </div>
-          <button className="demo-radio__play demo-radio__play--quiet" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
-            <Play size={14} fill="currentColor" />
-          </button>
-        </div>
-      );
-    }
-
     return (
-      <div key={ds.station.slug} className="demo-radio__featured">
-        <div className="demo-radio__row demo-radio__row--featured">
+      <div key={ds.station.slug} className={`demo-radio__featured${demoted ? " demo-radio__featured--secondary" : ""}`}>
+        <button
+          type="button"
+          className="demo-radio__station-tune"
+          aria-label={`Listen to ${ds.station.name}`}
+          onClick={() => radio.toggle(ds.station)}
+        >
           <StationMark
             name={ds.station.name}
             iconUrl={ds.station.stationIconUrl}
             logoUrl={ds.station.logoUrl}
+            variant="cube"
+            faviconOnly
             className="demo-radio__station-mark"
           />
-          <div className="demo-radio__body">
-            <div className="demo-radio__artist demo-radio__artist--primary">{ds.station.name}</div>
-          </div>
-          <button className="demo-radio__play" aria-label={`Listen to ${ds.station.name}`} onClick={() => radio.toggle(ds.station)}>
-            <Play size={16} fill="currentColor" />
-          </button>
-        </div>
+          <span className="demo-radio__station-name-overlay">{ds.station.name}</span>
+          <span className="demo-radio__station-meta-overlay">
+            {stationLocationAndType(ds.station)}
+          </span>
+        </button>
         <button
           type="button"
           className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"

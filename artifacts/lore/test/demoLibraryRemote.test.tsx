@@ -158,21 +158,22 @@ describe("demo Library visual remotes", () => {
     expect(toggleRadio).toHaveBeenCalledWith(frequent.station);
   });
 
-  test("opens the same station crossing lens as the detailed list", () => {
-    const onOpenStationCrossings = vi.fn();
+  test("shows city and specialist subtype instead of crossing copy", () => {
+    const station = dialStation("jazz", "Jazz FM", 4);
+    station.station.city = "London";
+    station.station.tags = ["jazz"];
+    station.station.stationCategories = ["specialist"];
     render(
       <DemoStationRemote
-        stations={[dialStation("kexp", "KEXP", 4)]}
+        stations={[station]}
         hasData
         focusedArtist={null}
         sort="overlap"
-        onOpenStationCrossings={onOpenStationCrossings}
       />,
     );
 
-    fireEvent.click(screen.getByTestId("demo-station-remote-crossings"));
-    expect(onOpenStationCrossings).toHaveBeenCalledWith("kexp");
-    expect(toggleRadio).not.toHaveBeenCalled();
+    expect(screen.getByText("London · Jazz / Blues")).toBeTruthy();
+    expect(screen.queryByText(/crossings?/i)).toBeNull();
   });
 
   test("shows station initials when a logo is missing and marks the tuned tile", () => {

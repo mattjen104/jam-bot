@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { LibraryItem } from "../lib/meHooks";
-import type { DialStation, DialShow } from "../hooks/useDialData";
+import type { DialStation } from "../hooks/useDialData";
 import {
   buildDemoRadioSections,
   type DemoStationSort,
@@ -13,46 +13,18 @@ import { useInlinePreview } from "../player/inlinePreview";
 import { toast } from "../hooks/use-toast";
 import { compareLibrarySongs, type LibrarySongSort } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
-import { crossingScopeDetail } from "../lib/crossingScope";
-import { crossingSentence } from "./dialViewHelpers";
+import { stationLocationAndType } from "../lib/stationDisplayMetadata";
 
 export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
 
 function StationRemoteTile({
   station,
-  onOpenCrossings,
 }: {
   station: DialStation;
-  onOpenCrossings?: (stationSlug: string) => void;
 }) {
   const { radio } = usePlayer();
   const playable = resolvePlaybackSource(station.station) !== null;
   const selected = radio.station?.slug === station.station.slug;
-
-  const detail = crossingScopeDetail(station, "7d");
-  const dummyShow = station.shows.find(s => s.state === 'live') ?? {
-    state: "live", showName: null, djName: null, djNames: [],
-    crossings: 0, artistCrossings: 0, topArtists: [], topArtistNames: [], spins: [], currentTrack: null
-  } as unknown as DialShow;
-  
-  // Clear out liveTrack to ensure now-playing information is removed.
-  const showWithoutTrack = { ...dummyShow, currentTrack: null } as DialShow;
-
-  const sentence = crossingSentence(
-    station.station.name,
-    showWithoutTrack,
-    "personal",
-    undefined,
-    undefined,
-    "7d",
-    detail
-  );
-
-  const evidenceNode = sentence 
-    ? sentence.node 
-    : detail.count > 0 
-      ? `${detail.count} ${detail.count === 1 ? 'crossing' : 'crossings'} in the last 7d.` 
-      : "No crossings in the last 7d.";
 
   const label = `${station.station.name}`;
 
@@ -88,16 +60,9 @@ function StationRemoteTile({
       />
       <span className="demo-library-remote__station-name">{station.station.name}</span>
     </button>
-      <button
-        type="button"
-        className="demo-library-remote__evidence demo-library-remote__crossings-link"
-        onClick={() => onOpenCrossings?.(station.station.slug)}
-        disabled={!onOpenCrossings}
-        aria-label={`Open every crossing for ${station.station.name}`}
-        data-testid="demo-station-remote-crossings"
-      >
-        {evidenceNode}
-      </button>
+      <span className="demo-library-remote__evidence demo-library-remote__station-meta">
+        {stationLocationAndType(station.station)}
+      </span>
     </div>
   );
 }
@@ -216,14 +181,12 @@ export function DemoStationRemote({
   focusedArtist,
   sort,
   forceAllStations = false,
-  onOpenStationCrossings,
 }: {
   stations: DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
   sort: DemoStationSort;
   forceAllStations?: boolean;
-  onOpenStationCrossings?: (stationSlug: string) => void;
 }) {
   const orderedStations = useMemo(
     () => buildDemoRadioSections({
@@ -244,7 +207,6 @@ export function DemoStationRemote({
             <StationRemoteTile
               key={station.station.slug}
               station={station}
-              onOpenCrossings={onOpenStationCrossings}
             />
           ))}
         </div>
