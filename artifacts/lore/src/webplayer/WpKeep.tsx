@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bookmark, Check, Loader2 } from "lucide-react";
+import { Bookmark, Check, Loader2, Plus } from "lucide-react";
 import {
   useMyConnections,
   useMyKeepStatus,
@@ -23,12 +23,15 @@ export function WpKeep({
   spinId,
   provenance,
   onSuccess,
+  appearance = "default",
 }: {
   mbid?: string | null;
   spinId?: number | null;
   provenance?: Partial<LibraryProvenance>;
   /** Called only after the keep request succeeds (not on auth/connect). */
   onSuccess?: () => void;
+  /** The main playback panel alone uses the circular transport-sized action. */
+  appearance?: "default" | "mainCircular";
 }) {
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
@@ -94,6 +97,7 @@ export function WpKeep({
   if (connLoading) return null;
 
   const isKept = isAuthenticated && kept;
+  const isMainCircular = appearance === "mainCircular";
   const title = !isAuthenticated
     ? "Connect Spotify to keep this track"
     : isKept
@@ -111,7 +115,10 @@ export function WpKeep({
       aria-label={title}
       aria-pressed={isKept}
       data-testid="wp-keep-button"
-      style={{
+      className={isMainCircular
+        ? `wp-main-keep${isKept ? " is-kept" : ""}${pendingOnly ? " is-pending" : ""}`
+        : undefined}
+      style={isMainCircular ? undefined : {
         fontSize: 15,
         whiteSpace: "nowrap",
         display: "inline-flex",
@@ -128,13 +135,15 @@ export function WpKeep({
       }}
     >
       {isPending ? (
-        <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+        <Loader2 size={isMainCircular ? 18 : 14} className="animate-spin" aria-hidden="true" />
       ) : isKept ? (
-        <Check size={14} aria-hidden="true" />
+        <Check size={isMainCircular ? 20 : 14} aria-hidden="true" />
+      ) : isMainCircular ? (
+        <Plus size={22} aria-hidden="true" />
       ) : (
         <Bookmark size={14} aria-hidden="true" />
       )}
-      {isKept ? (pendingOnly ? "Saved" : "Kept") : "Keep"}
+      {!isMainCircular && (isKept ? (pendingOnly ? "Saved" : "Kept") : "Keep")}
     </button>
   );
 }

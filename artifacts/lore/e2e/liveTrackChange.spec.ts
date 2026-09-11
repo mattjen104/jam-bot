@@ -253,7 +253,7 @@ test.describe("WebPlayer live track change via SSE", () => {
     });
   });
 
-  test("spin-raw frame shows new track with resolving cue; spin-changed clears it", async ({
+  test("spin updates stay hidden in identity-led station cards", async ({
     page,
   }) => {
     await injectFakeEventSource(page);
@@ -261,14 +261,10 @@ test.describe("WebPlayer live track change via SSE", () => {
 
     await page.goto("/lore/player");
 
-    // The WebPlayer ON AIR tab should render with the initial track.
+    // The WebPlayer ON AIR tab renders station context, never track metadata.
     const row = page.locator(`[data-testid="wp-onair-${SLUG}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row).toContainText("Old Artist");
-    // No resolving cue on the initial polled data.
-    await expect(
-      page.locator(`[data-testid="wp-resolving-${SLUG}"]`),
-    ).not.toBeVisible();
+    await expect(row).not.toContainText("Old Artist");
 
     // -----------------------------------------------------------------------
     // Step 1: deliver a spin-raw (provisional) frame.
@@ -283,13 +279,10 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    // The new artist+title must appear immediately (no REST poll round-trip).
-    await expect(row).toContainText("New Artist", { timeout: 5_000 });
-    await expect(row).toContainText("New Track");
-
-    // The resolving cue must be visible.
+    await expect(row).not.toContainText("New Artist");
+    await expect(row).not.toContainText("New Track");
     const cue = page.locator(`[data-testid="wp-resolving-${SLUG}"]`);
-    await expect(cue).toBeVisible({ timeout: 5_000 });
+    await expect(cue).toHaveCount(0);
 
     // -----------------------------------------------------------------------
     // Step 2: deliver the matching spin-changed (resolved) frame.
@@ -304,14 +297,11 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    // Track still visible — it did not disappear on resolution.
-    await expect(row).toContainText("New Artist", { timeout: 5_000 });
-
-    // Resolving cue must be gone.
-    await expect(cue).not.toBeVisible({ timeout: 5_000 });
+    await expect(row).not.toContainText("New Artist");
+    await expect(cue).toHaveCount(0);
   });
 
-  test("resolved artwork appears without polling and unavailable artwork restores the fallback", async ({
+  test("track artwork stays hidden from station cards while SSE avoids polling", async ({
     page,
   }) => {
     await injectFakeEventSource(page);
@@ -337,9 +327,7 @@ test.describe("WebPlayer live track change via SSE", () => {
     await page.goto("/lore/player");
     const row = page.locator(`[data-testid="wp-onair-${SLUG}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.locator(`[data-testid="wp-onair-artwork-fallback-${SLUG}"]`),
-    ).toBeVisible();
+    await expect(page.locator(`[data-testid^="wp-onair-artwork-"]`)).toHaveCount(0);
     expect(onAirRequests).toBe(1);
 
     await dispatchSseFrame(page, {
@@ -352,17 +340,9 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    const artwork = page.locator(`[data-testid="wp-onair-artwork-${SLUG}"]`);
-    await expect(artwork).toBeVisible({ timeout: 5_000 });
-    await expect(artwork).toHaveAttribute(
-      "src",
-      `/api/art?src=${encodeURIComponent(ALBUM_ART)}`,
-    );
-    await expect
-      .poll(async () => artwork.evaluate((image) => (image as HTMLImageElement).naturalWidth))
-      .toBeGreaterThan(0);
-    await expect(row).toContainText("Art Artist");
-    await expect(row).toContainText("Art Track");
+    await expect(page.locator(`[data-testid^="wp-onair-artwork-"]`)).toHaveCount(0);
+    await expect(row).not.toContainText("Art Artist");
+    await expect(row).not.toContainText("Art Track");
     expect(onAirRequests).toBe(1);
 
     await dispatchSseFrame(page, {
@@ -375,17 +355,10 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    await expect
-      .poll(() => failedArtworkRequests)
-      .toBe(1);
-    await expect(
-      page.locator(`[data-testid="wp-onair-artwork-fallback-${SLUG}"]`),
-    ).toBeVisible({ timeout: 5_000 });
-    await expect(
-      page.locator(`[data-testid="wp-onair-artwork-${SLUG}"]`),
-    ).toHaveCount(0);
-    await expect(row).toContainText("Broken Cover Artist");
-    await expect(row).toContainText("Broken Cover Track");
+    expect(failedArtworkRequests).toBe(0);
+    await expect(page.locator(`[data-testid^="wp-onair-artwork-"]`)).toHaveCount(0);
+    await expect(row).not.toContainText("Broken Cover Artist");
+    await expect(row).not.toContainText("Broken Cover Track");
 
     await dispatchSseFrame(page, {
       stationSlug: SLUG,
@@ -397,15 +370,12 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    await expect(
-      page.locator(`[data-testid="wp-onair-artwork-fallback-${SLUG}"]`),
-    ).toBeVisible({ timeout: 5_000 });
-    await expect(artwork).not.toBeVisible();
-    await expect(row).toContainText("No Art Artist");
+    await expect(page.locator(`[data-testid^="wp-onair-artwork-"]`)).toHaveCount(0);
+    await expect(row).not.toContainText("No Art Artist");
     expect(onAirRequests).toBe(1);
   });
 
-  test("spin-raw-failed frame reverts the row to the pre-provisional track", async ({
+  test("spin-raw-failed frames never leak provisional metadata into the station card", async ({
     page,
   }) => {
     await injectFakeEventSource(page);
@@ -415,7 +385,7 @@ test.describe("WebPlayer live track change via SSE", () => {
 
     const row = page.locator(`[data-testid="wp-onair-${SLUG}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row).toContainText("Old Artist");
+    await expect(row).not.toContainText("Old Artist");
 
     // Deliver provisional frame.
     await dispatchSseFrame(page, {
@@ -428,10 +398,8 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    await expect(row).toContainText("Phantom Artist", { timeout: 5_000 });
-    await expect(
-      page.locator(`[data-testid="wp-resolving-${SLUG}"]`),
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(row).not.toContainText("Phantom Artist");
+    await expect(page.locator(`[data-testid="wp-resolving-${SLUG}"]`)).toHaveCount(0);
 
     // Deliver the failure frame — the track never persisted.
     await dispatchSseFrame(page, {
@@ -444,12 +412,8 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    // The pre-provisional track must be restored.
-    await expect(row).toContainText("Old Artist", { timeout: 5_000 });
-    // Resolving cue must be gone.
-    await expect(
-      page.locator(`[data-testid="wp-resolving-${SLUG}"]`),
-    ).not.toBeVisible({ timeout: 5_000 });
+    await expect(row).not.toContainText("Old Artist");
+    await expect(page.locator(`[data-testid="wp-resolving-${SLUG}"]`)).toHaveCount(0);
   });
 
   test("a later spin-raw-failed for a superseded track does not clobber the current display", async ({
@@ -473,7 +437,7 @@ test.describe("WebPlayer live track change via SSE", () => {
       type: "spin-raw",
       observedAt: new Date().toISOString(),
     });
-    await expect(row).toContainText("First Provisional", { timeout: 5_000 });
+    await expect(row).not.toContainText("First Provisional");
 
     // Second provisional track supersedes the first.
     await dispatchSseFrame(page, {
@@ -485,7 +449,7 @@ test.describe("WebPlayer live track change via SSE", () => {
       type: "spin-raw",
       observedAt: new Date().toISOString(),
     });
-    await expect(row).toContainText("Second Provisional", { timeout: 5_000 });
+    await expect(row).not.toContainText("Second Provisional");
 
     // spin-raw-failed for the FIRST (now-superseded) provisional track.
     // The artist/title no longer matches the current display, so the revert
@@ -500,8 +464,8 @@ test.describe("WebPlayer live track change via SSE", () => {
       observedAt: new Date().toISOString(),
     });
 
-    // Current display must remain "Second Provisional" (not reverted).
-    await expect(row).toContainText("Second Provisional", { timeout: 5_000 });
+    await expect(row).not.toContainText("First Provisional");
+    await expect(row).not.toContainText("Second Provisional");
   });
 
   test("resume performs one cursor catch-up and stale REST cannot replace newer SSE", async ({
@@ -521,7 +485,8 @@ test.describe("WebPlayer live track change via SSE", () => {
 
     await page.goto("/lore/player");
     const row = page.locator(`[data-testid="wp-onair-${SLUG}"]`);
-    await expect(row).toContainText("Old Artist", { timeout: 15_000 });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(row).not.toContainText("Old Artist");
 
     await dispatchSseFrame(
       page,
@@ -568,7 +533,7 @@ test.describe("WebPlayer live track change via SSE", () => {
       },
       { lastEventId: "4" },
     );
-    await expect(row).toContainText("Recovered Artist", { timeout: 5_000 });
+    await expect(row).not.toContainText("Recovered Artist");
 
     const beforeResume = onAirRequests;
     await page.evaluate(() => {
@@ -577,7 +542,7 @@ test.describe("WebPlayer live track change via SSE", () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await expect.poll(() => onAirRequests, { timeout: 5_000 }).toBe(beforeResume + 1);
-    await expect(row).toContainText("Recovered Artist");
+    await expect(row).not.toContainText("Recovered Artist");
     const urls = await page.evaluate(
 
       () => (window as any).__fakeEsUrls as string[],

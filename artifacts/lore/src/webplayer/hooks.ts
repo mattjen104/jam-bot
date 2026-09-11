@@ -93,6 +93,8 @@ export interface WpOnAirItem {
   earlier: string[];
   /** null when anonymous */
   matchCount: number | null;
+  /** Grounded artist overlap from this listener's taste and station spins. */
+  crossing?: { artist: string; matchCount: number } | null;
 }
 
 export interface WpOnAirResponse {

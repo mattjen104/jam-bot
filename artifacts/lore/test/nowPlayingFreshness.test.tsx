@@ -93,8 +93,8 @@ function makeItem(overrides: Partial<WpOnAirItem["now"]> = {}): WpOnAirItem {
   };
 }
 
-describe("OnAirRow stale indicator", () => {
-  it('shows "may be delayed" when the current track is classified stale', () => {
+describe("OnAirRow track freshness privacy", () => {
+  it("does not expose stale track state on identity-led station cards", () => {
     render(
       <OnAirRow
         item={makeItem({ freshness: "stale" })}
@@ -103,7 +103,8 @@ describe("OnAirRow stale indicator", () => {
         onOpenRun={() => {}}
       />,
     );
-    expect(screen.getByTestId("wp-stale-kexp").textContent).toContain("may be delayed");
+    expect(screen.queryByTestId("wp-stale-kexp")).toBeNull();
+    expect(screen.queryByText(/may be delayed/i)).toBeNull();
   });
 
   it("shows no indicator for fresh tracks", () => {

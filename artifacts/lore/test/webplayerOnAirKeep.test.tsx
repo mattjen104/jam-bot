@@ -21,11 +21,14 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import WebPlayer from "../src/webplayer/WebPlayer";
 import { LibraryTab } from "../src/webplayer/LibraryTab";
+import { WpKeep } from "../src/webplayer/WpKeep";
 import { useWpOnAir, useWpLoreCounts, type WpOnAirItem } from "../src/webplayer/hooks";
 import {
   useIsAuthenticated,
   useMyLibraryInfinite,
   useMutationKeep,
+  useMyConnections,
+  useMyKeepStatus,
   type LibraryItem,
 } from "../src/lib/meHooks";
 
@@ -100,7 +103,14 @@ function wrap(ui: React.ReactElement, qc?: QueryClient) {
 }
 
 const onAirItem = (over: Partial<WpOnAirItem["now"]> = {}): WpOnAirItem => ({
-  station: { slug: "kutx", name: "KUTX", streamUrl: "https://example.com/stream" } as WpOnAirItem["station"],
+  station: {
+    slug: "kutx",
+    name: "KUTX",
+    city: "Austin",
+    region: "Texas",
+    logoUrl: "https://example.com/kutx.png",
+    streamUrl: "https://example.com/stream",
+  } as WpOnAirItem["station"],
   show: { name: "Left of the Dial", djName: "Rae" },
   now: {
     mbid: "mbid-1",
@@ -113,6 +123,7 @@ const onAirItem = (over: Partial<WpOnAirItem["now"]> = {}): WpOnAirItem => ({
   },
   earlier: [],
   matchCount: 3,
+  crossing: { artist: "Fleetwood Mac", matchCount: 3 },
 });
 
 function mockOnAir(items: WpOnAirItem[], authenticated: boolean) {
@@ -150,6 +161,76 @@ describe("OnAirKeep visibility", () => {
   });
 });
 
+describe("identity-led station cards", () => {
+  it("shows station identity, location, show, DJ, and grounded crossing without song metadata", () => {
+    mockOnAir([onAirItem()], true);
+    wrap(<WebPlayer />);
+
+    const card = screen.getByTestId("wp-onair-kutx");
+    expect(card.textContent).toContain("KUTX");
+    expect(card.textContent).toContain("Austin, Texas");
+    expect(card.textContent).toContain("Left of the Dial");
+    expect(card.textContent).toContain("Rae");
+    expect(card.textContent).toContain("You and KUTX cross at Fleetwood Mac.");
+    expect(card.textContent).not.toContain("Dreams");
+    expect(card.querySelector("[data-station-mark='logo']")).not.toBeNull();
+    expect(card.querySelector("[data-testid^='wp-onair-artwork']")).toBeNull();
+  });
+
+  it("uses honest fallbacks when location, show, and crossing are unavailable", () => {
+    const item = onAirItem({ resolved: false, resolving: true, title: "Hidden title", artist: "Hidden artist" });
+    item.station = { ...item.station, city: null, region: null, country: null, org: null };
+    item.show = null;
+    item.crossing = null;
+    mockOnAir([item], true);
+    wrap(<WebPlayer />);
+
+    const card = screen.getByTestId("wp-onair-kutx");
+    expect(card.textContent).toContain("Live broadcast");
+    expect(card.textContent).toContain("No listener overlap found yet.");
+    expect(card.textContent).not.toContain("Hidden title");
+    expect(card.textContent).not.toContain("Hidden artist");
+    expect(card.textContent).not.toContain("resolving");
+  });
+});
+
+describe("main now-playing keep control", () => {
+  it("renders the unkept state as the dedicated circular plus action", () => {
+    vi.mocked(useMyConnections).mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useMyConnections>);
+    vi.mocked(useMyKeepStatus).mockReturnValue({ data: new Set() } as ReturnType<typeof useMyKeepStatus>);
+    wrap(<WpKeep mbid="mbid-main" appearance="mainCircular" />);
+
+    const button = screen.getByTestId("wp-keep-button");
+    expect(button.classList.contains("wp-main-keep")).toBe(true);
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(button.querySelector(".lucide-plus")).not.toBeNull();
+    expect(button.textContent).toBe("");
+  });
+
+  it("renders an accessible check state without adopting station-row styling", () => {
+    vi.mocked(useMyConnections).mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useMyConnections>);
+    vi.mocked(useMyKeepStatus).mockReturnValue({ data: new Set(["mbid-main"]) } as ReturnType<typeof useMyKeepStatus>);
+    wrap(<WpKeep mbid="mbid-main" appearance="mainCircular" />);
+
+    const button = screen.getByTestId("wp-keep-button");
+    expect(button.classList.contains("is-kept")).toBe(true);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(button.querySelector(".lucide-check")).not.toBeNull();
+    expect(button.classList.contains("wp-onair-actions")).toBe(false);
+  });
+
+  it("keeps shared sheet actions labeled instead of applying the main-player circle", () => {
+    vi.mocked(useMyConnections).mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useMyConnections>);
+    vi.mocked(useMyKeepStatus).mockReturnValue({ data: new Set() } as ReturnType<typeof useMyKeepStatus>);
+    wrap(<WpKeep mbid="mbid-sheet" />);
+
+    const button = screen.getByTestId("wp-keep-button");
+    expect(button.classList.contains("wp-main-keep")).toBe(false);
+    expect(button.textContent).toContain("Keep");
+    expect(button.querySelector(".lucide-bookmark")).not.toBeNull();
+  });
+});
+
 describe("OnAirRow attribution-only stations (no stream, no relay)", () => {
   const attributionOnlyItem = (
     station: Partial<WpOnAirItem["station"]>,
@@ -184,7 +265,7 @@ describe("OnAirRow attribution-only stations (no stream, no relay)", () => {
     );
     wrap(<WebPlayer />);
     expect(screen.queryByTestId("wp-onair-site-wvum")).toBeNull();
-    expect(screen.getByLabelText(/Play Left of the Dial/)).toBeTruthy();
+    expect(screen.getByLabelText(/Play Left of the Dial on WVUM/)).toBeTruthy();
   });
 });
 

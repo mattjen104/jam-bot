@@ -65,6 +65,14 @@ function normalizedCrossingArtist(col: unknown): ReturnType<typeof sql> {
   return sql`nullif(regexp_replace(regexp_replace(lower(${col}), '^the[[:space:]]+', ''), '[[:space:][:punct:]]+', '', 'g'), '')`;
 }
 
+function normalizedCrossingArtistValue(value: string | null | undefined): string | null {
+  const normalized = value?.toLocaleLowerCase().replace(/^the\s+/, "").replace(/[\s\p{P}]+/gu, "") ?? "";
+  return normalized || null;
+}
+
+const JUNK_CROSSING_ARTIST_RE =
+  /(^https?:\/\/|[.](com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)([/?#\s]|$))/i;
+
 /**
  * Bounded, stable archive read model for both Dial surfaces. This deliberately
  * stays a plain JSON endpoint: history is a read model, not a generated
@@ -377,14 +385,17 @@ router.get("/player/onair", h(async (req, res) => {
     .orderBy(desc(spinsTable.playedAt))
     .limit(600);
 
-  // Library match counts per station (distinct library MBIDs ever spun).
+  // Preserve the existing exact-track overlap count used for sorting.
   const matchByStation = new Map<number, number>();
+  // Display context is broader: an artist crossing can be grounded in active
+  // library, unresolved Spotify, or seed taste plus a bounded on-air spin.
+  const crossingByStation = new Map<number, { artist: string; matchCount: number }>();
   if (user) {
     const userLib = listenerDb
       .select({ mbid: libraryItemsTable.mbid })
       .from(libraryItemsTable)
       .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt)));
-    const rows = await listenerDb
+    const exactRows = await listenerDb
       .select({
         stationId: spinsTable.stationId,
         matches: sql<number>`count(distinct ${spinsTable.mbid})::int`,
@@ -392,8 +403,54 @@ router.get("/player/onair", h(async (req, res) => {
       .from(spinsTable)
       .where(and(isNotNull(spinsTable.mbid), inArray(spinsTable.mbid, userLib)))
       .groupBy(spinsTable.stationId);
-    for (const r of rows) {
-      if (r.stationId != null) matchByStation.set(r.stationId, r.matches);
+    for (const row of exactRows) {
+      if (row.stationId != null) matchByStation.set(row.stationId, row.matches);
+    }
+
+    const [libraryArtists, spotifyArtists, seedArtists] = await Promise.all([
+      listenerDb.selectDistinct({ artist: recordingsTable.artist })
+        .from(libraryItemsTable)
+        .innerJoin(recordingsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
+        .where(and(eq(libraryItemsTable.userId, user.id), isNull(libraryItemsTable.removedAt))),
+      listenerDb.selectDistinct({ artist: spotifyLibraryItemsTable.artist })
+        .from(spotifyLibraryItemsTable)
+        .where(and(
+          eq(spotifyLibraryItemsTable.userId, user.id),
+          isNull(spotifyLibraryItemsTable.removedAt),
+        )),
+      listenerDb.selectDistinct({ artist: tasteSeedsTable.artistName })
+        .from(tasteSeedsTable)
+        .where(eq(tasteSeedsTable.userId, user.id)),
+    ]);
+    const tasteArtists = new Set(
+      [...libraryArtists, ...spotifyArtists, ...seedArtists]
+        .map((row) => normalizedCrossingArtistValue(row.artist))
+        .filter((artist): artist is string => artist != null),
+    );
+    const evidence = [
+      ...latest.map((row) => ({
+        stationId: row.stationId,
+        artist: row.artist ?? row.rawArtist,
+      })),
+      ...recent.map((row) => ({
+        stationId: row.stationId,
+        artist: row.artist ?? row.rawArtist,
+      })),
+    ];
+    const matchedArtists = new Map<number, Set<string>>();
+    for (const row of evidence) {
+      if (row.stationId == null || !row.artist || JUNK_CROSSING_ARTIST_RE.test(row.artist)) continue;
+      const artistKey = normalizedCrossingArtistValue(row.artist);
+      if (!artistKey || !tasteArtists.has(artistKey)) continue;
+      const stationMatches = matchedArtists.get(row.stationId) ?? new Set<string>();
+      stationMatches.add(artistKey);
+      matchedArtists.set(row.stationId, stationMatches);
+      if (!crossingByStation.has(row.stationId)) {
+        crossingByStation.set(row.stationId, { artist: row.artist, matchCount: 0 });
+      }
+    }
+    for (const [stationId, crossing] of crossingByStation) {
+      crossing.matchCount = matchedArtists.get(stationId)?.size ?? 1;
     }
   }
 
@@ -478,6 +535,7 @@ router.get("/player/onair", h(async (req, res) => {
         },
         earlier,
         matchCount: user ? matchByStation.get(s.id) ?? 0 : null,
+        crossing: user ? crossingByStation.get(s.id) ?? null : null,
       };
     });
   const items = itemsRaw.filter((x): x is NonNullable<typeof x> => x !== null)

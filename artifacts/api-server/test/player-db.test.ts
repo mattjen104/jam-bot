@@ -180,11 +180,12 @@ describe("GET /api/player/onair", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       items: Array<{
-        station: { slug: string };
+        station: { slug: string; city: string | null; region: string | null; country: string | null };
         show: { name: string; djName: string | null } | null;
         now: { mbid: string | null; artist: string; resolved: boolean };
         earlier: string[];
         matchCount: number | null;
+        crossing: { artist: string; matchCount: number } | null;
       }>;
       authenticated: boolean;
     };
@@ -201,6 +202,42 @@ describe("GET /api/player/onair", () => {
     expect(mine!.earlier).toContain(`Beta Artist ${run}`);
     expect(mine!.earlier).not.toContain(`Alpha Artist ${run}`);
     expect(mine!.matchCount).toBeNull();
+    expect(mine!.crossing).toBeNull();
+  });
+
+  it("returns grounded artist crossing context without changing exact-track match counts", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const sid = randomUUID();
+    const [user] = await db.insert(loreUsersTable).values({
+      spotifyUserId: `test-wp-onair-crossing-${run}`,
+      deviceKey: sid,
+    }).returning({ id: loreUsersTable.id });
+    try {
+      await db.insert(tasteSeedsTable).values({
+        userId: user!.id,
+        artistName: `alpha artist ${run}`,
+      });
+      const res = await fetch(`${baseUrl}/api/player/onair`, {
+        headers: { cookie: `lore_sid=${sid}` },
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        items: Array<{
+          station: { slug: string };
+          matchCount: number | null;
+          crossing: { artist: string; matchCount: number } | null;
+        }>;
+      };
+      const mine = body.items.find((item) => item.station.slug === slug);
+      expect(mine?.crossing).toEqual({
+        artist: `Alpha Artist ${run}`,
+        matchCount: 1,
+      });
+      expect(mine?.matchCount).toBe(0);
+    } finally {
+      await db.delete(tasteSeedsTable).where(eq(tasteSeedsTable.userId, user!.id));
+      await db.delete(loreUsersTable).where(eq(loreUsersTable.id, user!.id));
+    }
   });
 
   it("suppresses a DJ name that collides with the current artist", async (ctx) => {

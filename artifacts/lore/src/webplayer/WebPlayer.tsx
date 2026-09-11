@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays, Disc3 } from "lucide-react";
+import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays, Plus } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
@@ -232,7 +232,11 @@ function NowPlayingCard({
           the button renders disabled rather than disappearing. */}
       {!scanHop && radio.station && (
         nowMbid ? (
-          <WpKeep mbid={nowMbid} provenance={{ kind: "station", stationSlug: radio.station.slug }} />
+          <WpKeep
+            mbid={nowMbid}
+            provenance={{ kind: "station", stationSlug: radio.station.slug }}
+            appearance="mainCircular"
+          />
         ) : (
           <button
             type="button"
@@ -240,16 +244,9 @@ function NowPlayingCard({
             title="Keep becomes available once the track is identified"
             aria-label="Keep unavailable — track not identified yet"
             data-testid="wp-keep-button-disabled"
-            style={{
-              fontSize: 15,
-              whiteSpace: "nowrap",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              opacity: 0.45,
-            }}
+            className="wp-main-keep"
           >
-            <Bookmark size={14} aria-hidden="true" /> Keep
+            <Plus size={22} aria-hidden="true" />
           </button>
         )
       )}
@@ -488,109 +485,41 @@ export function OnAirRow({
 }) {
   const { radio, scan } = usePlayer();
   const { enabled: socialEnabled } = useSocialMode();
-  const [failedArtworkUrl, setFailedArtworkUrl] = useState<string | null>(null);
   const isPlaying = radio.station?.slug === item.station.slug && radio.status !== "idle";
-  const title = item.show?.name ?? item.station.name;
-  // When a show name is the title, keep the station as context; otherwise the
-  // trailing station label would just repeat the title — hide it.
-  const stationContext = item.show?.name ? item.station.name : null;
+  const actionIdentity = item.show?.name ?? item.station.name;
   // Attribution-only stations (no direct stream, no relay) can't play in-app;
   // show a "Listen on site" link in the play-button slot instead.
   const playable = resolvePlaybackSource(item.station) != null;
   const siteHref = playable ? null : safeHttpUrl(item.station.homepageUrl);
-  const oneLine: React.CSSProperties = {
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  };
-  const artworkUrl = item.now.artworkUrl ? proxyArtUrl(item.now.artworkUrl) : null;
-  const showArtwork = artworkUrl != null && artworkUrl !== failedArtworkUrl;
+  const location = [item.station.city, item.station.region]
+    .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
+    .join(", ") || item.station.country || item.station.org || null;
+  const crossingCopy = item.crossing
+    ? `You and ${item.station.name} cross at ${item.crossing.artist}.`
+    : authenticated
+      ? "No listener overlap found yet."
+      : `Discover what ${item.station.name} is airing.`;
 
   return (
     <div
       style={{
-        display: "flex",
+        display: "grid",
+        gridTemplateColumns: "52px minmax(0, 1fr) auto",
         alignItems: "center",
-        gap: 10,
-        padding: "7px 12px",
+        gap: 12,
+        padding: "12px",
         borderBottom: "0.5px solid var(--wp-border)",
       }}
+      className={`wp-onair-card${isPlaying ? " is-active" : ""}`}
       data-testid={`wp-onair-${item.station.slug}`}
     >
-      {playable ? (
-        <button
-          type="button"
-          className="wp-play wp-play-sm"
-          aria-label={`${isPlaying ? "Stop" : "Play"} ${title}`}
-          onClick={() => {
-            // Stop preview-mode scan before switching to a broadcast station.
-            if (scan.active) scan.toggle();
-            radio.toggle(item.station);
-          }}
-          style={
-            isPlaying
-              ? {
-                  background: "var(--wp-fill-primary)",
-                  color: "var(--wp-on-primary)",
-                  border: "none",
-                }
-              : undefined
-          }
-        >
-          {isPlaying ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
-        </button>
-      ) : siteHref ? (
-        <a
-          className="wp-play wp-play-sm"
-          href={siteHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`Listen on ${item.station.name} site`}
-          title={`Listen on ${item.station.name} site`}
-          data-testid={`wp-onair-site-${item.station.slug}`}
-          style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-        >
-          ↗
-        </a>
-      ) : (
-        <span className="wp-play wp-play-sm" aria-hidden="true" style={{ visibility: "hidden" }} />
-      )}
-      {showArtwork ? (
-        <img
-          src={artworkUrl}
-          alt=""
-          width={36}
-          height={36}
-          loading="lazy"
-          onError={() => setFailedArtworkUrl(artworkUrl)}
-          data-testid={`wp-onair-artwork-${item.station.slug}`}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 5,
-            objectFit: "cover",
-            flexShrink: 0,
-          }}
-        />
-      ) : (
-        <div
-          aria-label="Album artwork unavailable"
-          data-testid={`wp-onair-artwork-fallback-${item.station.slug}`}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 5,
-            background: "var(--wp-surface-2)",
-            color: "var(--wp-text-muted)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Disc3 size={16} aria-hidden="true" />
-        </div>
-      )}
+      <StationMark
+        name={item.station.name}
+        logoUrl={item.station.logoUrl}
+        homepageUrl={item.station.homepageUrl}
+        variant="cube"
+        className="wp-station-mark wp-onair-logo"
+      />
       <button
         type="button"
         onClick={() => onOpenRun(item.station.slug)}
@@ -604,46 +533,21 @@ export function OnAirRow({
           textAlign: "left",
           cursor: "pointer",
         }}
-        aria-label={`Open tonight's run for ${title}`}
+        aria-label={`Open current run for ${actionIdentity} on ${item.station.name}`}
       >
-        <p style={{ margin: 0, fontSize: 15, fontWeight: 400, ...oneLine }}>
-          <StationMark
-            name={item.station.name}
-            logoUrl={item.station.logoUrl}
-            homepageUrl={item.station.homepageUrl}
-            variant="cube"
-            className="wp-station-mark"
-          />{" "}
-          {title}
-          {item.show?.djName && (
-            <span style={{ fontSize: 13, color: "var(--wp-text-muted)", fontWeight: 400 }}>
-              {" "}
-              · {item.show.djName}
-            </span>
-          )}
-          {stationContext && (
-            <span className="wp-mono" style={{ fontSize: 12, color: "var(--wp-text-muted)", fontWeight: 400 }}>
-              {" "}
-              · {stationContext}
-            </span>
-          )}
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 500 }}>
+          {item.station.name}
         </p>
-        {item.now.resolved ? (
-          <p style={{ margin: "1px 0 0", fontSize: 14, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
-            {item.now.artist} — {item.now.title}
-            {isStaleNowPlaying(item.now) && (
+        {location && <p className="wp-onair-location">{location}</p>}
+        <p className="wp-onair-show">
+          {item.show?.name ?? "Live broadcast"}
+          {item.show?.djName && <span> · {item.show.djName}</span>}
+        </p>
+        <p className="wp-onair-crossing">
+          {crossingCopy}
+          {socialEnabled && presence != null && presence.count > 1 && (
               <span
-                className="wp-mono"
-                style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}
-                data-testid={`wp-stale-${item.station.slug}`}
-                title="This station's feed hasn't updated in a while — the track may have changed."
-              >
-                may be delayed
-              </span>
-            )}
-            {socialEnabled && presence != null && presence.count > 1 && (
-              <span
-                style={{ display: "inline-flex", alignItems: "center", fontSize: 12, color: "var(--wp-text-muted)", marginLeft: 5, opacity: 0.8 }}
+                style={{ display: "inline-flex", alignItems: "center", marginLeft: 5, opacity: 0.8 }}
                 title={`${presence.count} anonymous listeners here now`}
               >
                 {presence.avatars.length > 0 && (
@@ -669,59 +573,45 @@ export function OnAirRow({
                 )}
                 · {presence.avatars.length > 0 ? "listening here" : `${presence.count} here`}
               </span>
-            )}
-          </p>
-        ) : (
-          <p style={{ margin: "1px 0 0", fontSize: 14, color: "var(--wp-text-muted)", ...oneLine }}>
-            {item.now.resolving
-              ? `${item.now.artist} — ${item.now.title}`
-              : (item.now.title ?? "resolving spins…")}
-            {item.now.resolving && (
-              <span
-                className="wp-mono wp-resolving"
-                style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}
-                data-testid={`wp-resolving-${item.station.slug}`}
-                title="New track just detected — details still resolving"
-              >
-                resolving…
-              </span>
-            )}
-            {isStaleNowPlaying(item.now) && (
-              <span
-                className="wp-mono"
-                style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}
-                data-testid={`wp-stale-${item.station.slug}`}
-                title="This station's feed hasn't updated in a while — the track may have changed."
-              >
-                may be delayed
-              </span>
-            )}
-          </p>
-        )}
+          )}
+        </p>
       </button>
-      {authenticated && item.now.resolved && item.now.mbid && (
-        <OnAirKeep
+      <div className="wp-onair-actions">
+        {playable ? (
+          <button
+            type="button"
+            className="wp-play"
+            aria-label={`${isPlaying ? "Stop" : "Play"} ${actionIdentity} on ${item.station.name}`}
+            onClick={() => {
+              if (scan.active) scan.toggle();
+              radio.toggle(item.station);
+            }}
+          >
+            {isPlaying ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+          </button>
+        ) : siteHref ? (
+          <a
+            className="wp-play"
+            href={siteHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Listen on ${item.station.name} site`}
+            title={`Listen on ${item.station.name} site`}
+            data-testid={`wp-onair-site-${item.station.slug}`}
+          >
+            ↗
+          </a>
+        ) : null}
+        {authenticated && item.now.resolved && item.now.mbid && <OnAirKeep
           // Key by mbid: remounting on track change resets the optimistic
           // justKept flag so a new track never inherits kept state.
           key={item.now.mbid}
           mbid={item.now.mbid}
           stationSlug={item.station.slug}
           inLibrary={nowInLibrary}
-        />
-      )}
-      {authenticated ? (
-        item.matchCount ? (
-          <span
-            className="wp-mono"
-            style={{ fontSize: 13, fontWeight: 400, color: "var(--wp-text-success)", flexShrink: 0 }}
-            title={`${item.matchCount} matches with your taste`}
-          >
-            {item.matchCount}✦
-          </span>
-        ) : null
-      ) : (
-        <ChevronRight size={14} style={{ color: "var(--wp-text-muted)", flexShrink: 0 }} aria-hidden="true" />
-      )}
+        />}
+        <ChevronRight size={14} style={{ color: "var(--wp-text-muted)" }} aria-hidden="true" />
+      </div>
     </div>
   );
 }

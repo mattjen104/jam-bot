@@ -121,6 +121,94 @@
   height: 26px;
 }
 
+.wp .wp-main-keep {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  flex: 0 0 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--wp-text-primary);
+}
+
+.wp .wp-main-keep.is-kept {
+  background: var(--wp-bg-success);
+  color: var(--wp-text-success);
+}
+
+.wp .wp-main-keep.is-pending {
+  color: var(--wp-text-secondary);
+  border-style: dashed;
+}
+
+.wp .wp-onair-card {
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.wp .wp-onair-card.is-active {
+  background: var(--wp-bg-live);
+  box-shadow: inset 3px 0 0 var(--wp-fill-primary);
+}
+
+.wp .wp-onair-logo,
+.wp .wp-onair-logo img {
+  width: 52px;
+  height: 52px;
+}
+
+.wp .wp-onair-location,
+.wp .wp-onair-show,
+.wp .wp-onair-crossing {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.wp .wp-onair-location {
+  color: var(--wp-text-muted);
+  font: 12px var(--wp-font-mono);
+}
+
+.wp .wp-onair-show {
+  color: var(--wp-text-secondary);
+  font-size: 14px;
+}
+
+.wp .wp-onair-crossing {
+  color: var(--wp-text-muted);
+  font-size: 13px;
+}
+
+.wp .wp-onair-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.wp .wp-onair-actions .wp-play {
+  text-decoration: none;
+}
+
+@media (max-width: 520px) {
+  .wp .wp-onair-card {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+  }
+
+  .wp .wp-onair-logo,
+  .wp .wp-onair-logo img {
+    width: 44px;
+    height: 44px;
+  }
+
+  .wp .wp-onair-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
 /* Bottom navigation — the four main sections (ON AIR / LIBRARY / SELECTORS /
    SCHEDULE), fixed to the viewport bottom per the approved mockup. */
 .wp-bottomnav {
