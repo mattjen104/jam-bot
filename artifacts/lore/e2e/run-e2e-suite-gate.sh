@@ -9,6 +9,8 @@
 # Included specs:
 #   - spotifyConnectCallback.spec.ts   (?library=connected callback + /taste-map redirect)
 #   - librarySyncLifecycle.spec.ts     (direct Library sync lifecycle)
+#   - largeLibraryRemote.spec.ts       (thousands of visual Songs tiles retain
+#                                       offscreen rendering containment)
 #   - fallbackNotice.spec.ts           (archive-run fallback notice; all API routes
 #                                       intercepted with fixtures)
 #   - cornerNavTappability.spec.ts     (mobile shell navigation and player dock)
@@ -97,6 +99,7 @@ free_port() {
 RUN_SPECS=(
   e2e/spotifyConnectCallback.spec.ts
   e2e/librarySyncLifecycle.spec.ts
+  e2e/largeLibraryRemote.spec.ts
   e2e/fallbackNotice.spec.ts
   e2e/cornerNavTappability.spec.ts
   e2e/microDialRemote.spec.ts
