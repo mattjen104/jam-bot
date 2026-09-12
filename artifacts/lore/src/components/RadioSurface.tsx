@@ -4,7 +4,7 @@ import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ArrowLeft, Play } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
@@ -72,6 +72,12 @@ export function RadioSurface({
 
     return (
       <article key={ds.station.slug} className="demo-radio__featured">
+        <button
+          type="button"
+          className="demo-radio__card-tune"
+          aria-label={`Listen to ${ds.station.name}`}
+          onClick={() => radio.toggle(ds.station)}
+        />
         <StationMark
           name={ds.station.name}
           iconUrl={ds.station.stationIconUrl}
@@ -84,7 +90,10 @@ export function RadioSurface({
           <button
             type="button"
             className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
-            onClick={() => onOpenStationCrossings?.(ds.station.slug)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenStationCrossings?.(ds.station.slug);
+            }}
             disabled={!onOpenStationCrossings}
             aria-label={`Open every crossing for ${ds.station.name}`}
           >
@@ -96,14 +105,6 @@ export function RadioSurface({
           </button>
           {metadata ? <span className="demo-radio__crossing-station-meta">{metadata}</span> : null}
         </div>
-        <button
-          type="button"
-          className="demo-radio__play"
-          aria-label={`Listen to ${ds.station.name}`}
-          onClick={() => radio.toggle(ds.station)}
-        >
-          <Play size={18} fill="currentColor" aria-hidden="true" />
-        </button>
       </article>
     );
   };

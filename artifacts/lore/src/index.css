@@ -3055,6 +3055,7 @@
   border-top: 1px solid hsl(var(--border));
 }
 .demo-radio__featured {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -3064,13 +3065,33 @@
   padding: 14px 16px;
   background: #161616;
 }
+.demo-radio__card-tune {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.demo-radio__card-tune:hover {
+  background: rgb(255 255 255 / .025);
+}
+.demo-radio__card-tune:focus-visible {
+  outline: 2px solid hsl(var(--accent) / .75);
+  outline-offset: 2px;
+}
 .demo-radio__crossing-panel {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   min-width: 0;
   flex-direction: column;
   padding: 0;
   background: transparent;
+  pointer-events: none;
 }
 .demo-radio__crossing-station-name {
   overflow: hidden;
@@ -3111,6 +3132,8 @@
   border-bottom: 1px solid hsl(var(--border) / .75);
 }
 .demo-radio__station-mark {
+  position: relative;
+  z-index: 1;
   flex: 0 0 56px;
   width: 56px;
   height: 56px;
@@ -3285,6 +3308,7 @@
   text-decoration: none;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  pointer-events: auto;
 }
 .demo-radio__crossing-count { color: rgb(255 255 255 / .9); }
 .demo-radio__crossing-artists { color: rgb(255 255 255 / .6); }
@@ -3307,28 +3331,6 @@
 }
 .demo-radio__crossings-link {
   cursor: pointer;
-}
-.demo-radio__play {
-  display: grid;
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  margin-top: 8px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid rgb(255 255 255 / .3);
-  border-radius: 50%;
-  background: transparent;
-  color: rgb(255 255 255 / .9);
-  cursor: pointer;
-}
-.demo-radio__play:hover,
-.demo-radio__play:focus-visible {
-  border-color: rgb(255 255 255 / .65);
-}
-.demo-radio__play:focus-visible {
-  outline: 2px solid hsl(var(--accent) / .75);
-  outline-offset: 2px;
 }
 @media (max-width: 520px) {
   .demo-radio__featured {

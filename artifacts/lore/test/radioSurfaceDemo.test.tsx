@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { DialStation } from "../src/hooks/useDialData";
 
@@ -81,7 +81,7 @@ describe("demo Radio station cards", () => {
     expect(screen.queryByText(/Has played your artists 6 times/)).toBeNull();
   });
 
-  test("omits placeholder metadata and uses a dedicated play control", () => {
+  test("omits placeholder metadata and tunes from the card", () => {
     const station = matchingStation();
     station.station.city = null;
     station.station.stationCategories = [];
@@ -97,7 +97,8 @@ describe("demo Radio station cards", () => {
     );
 
     expect(screen.queryByText(/Location unavailable|Unknown/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Listen to KEXP 90.3 FM" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Listen to KEXP 90.3 FM" }));
+    expect(toggle).toHaveBeenCalledWith(station.station);
   });
 
   test("does not make placeholder artist metadata interactive", () => {
