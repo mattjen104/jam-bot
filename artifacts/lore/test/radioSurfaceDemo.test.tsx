@@ -25,6 +25,8 @@ function matchingStation(): DialStation {
       name: "KEXP 90.3 FM",
       city: "Seattle",
       logoUrl: "https://example.com/kexp.png",
+      stationIconUrl: "https://kexp.org/favicon.png",
+      stationCategories: ["anchor"],
     },
     isLive: true,
     liveTrack: {
@@ -37,6 +39,8 @@ function matchingStation(): DialStation {
       isArtistHit: true,
     },
     shows: [],
+    weekCrossings: 4,
+    weekArtistCrossings: 0,
     lifetimeCrossings: 4,
     lifetimeArtistCrossings: 2,
     topArtistNames: ["Stereolab"],
@@ -68,13 +72,32 @@ describe("demo Radio station cards", () => {
 
     expect(screen.getByText("Stations that play Stereolab")).toBeTruthy();
     expect(screen.getAllByText("KEXP 90.3 FM").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Seattle · Station").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Seattle · Core").length).toBeGreaterThan(0);
     expect(screen.queryByText("French Disko")).toBeNull();
     expect(screen.queryByText("Library match · on air")).toBeNull();
     expect(screen.queryByText("Open set")).toBeNull();
     expect(screen.queryByText("Stereolab", { selector: ".demo-radio__artist" })).toBeNull();
     expect(screen.getAllByText(/crossings?/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Has played your artists 6 times/)).toBeNull();
+  });
+
+  test("omits placeholder metadata and uses a dedicated play control", () => {
+    const station = matchingStation();
+    station.station.city = null;
+    station.station.stationCategories = [];
+    render(
+      <RadioSurface
+        stations={[station]}
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+        focusedArtist="Stereolab"
+        onOpenStationCrossings={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/Location unavailable|Unknown/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Listen to KEXP 90.3 FM" })).toBeTruthy();
   });
 
   test("does not make placeholder artist metadata interactive", () => {

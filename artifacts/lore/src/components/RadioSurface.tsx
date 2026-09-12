@@ -4,29 +4,20 @@ import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Play } from "lucide-react";
 import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
 import { crossingScopeDetail } from "../lib/crossingScope";
-import { stationLocationAndType } from "../lib/stationDisplayMetadata";
+import { stationCardMetadata } from "../lib/stationDisplayMetadata";
 
-function sevenDayCrossingSentence(ds: DialStation): string {
+function sevenDayCrossingSummary(ds: DialStation) {
   const detail = crossingScopeDetail(ds, "7d");
-  if (detail.count <= 0) return "No crossings in the last 7d.";
-
-  const artists = detail.artists
-    .map((artist) => artist.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-  const count = `${detail.count} ${detail.count === 1 ? "crossing" : "crossings"}`;
-  if (artists.length === 0) return `${count} in the last 7d.`;
-
-  const names = new Intl.ListFormat("en", {
-    style: "long",
-    type: "conjunction",
-  }).format(artists);
-  return `${names} (${count}) in the last 7d.`;
+  return {
+    count: detail.count,
+    countText: `${detail.count} ${detail.count === 1 ? "crossing" : "crossings"} this week`,
+    artistText: detail.artists.slice(0, 3).join(", "),
+  };
 }
 
 export function RadioSurface({ 
@@ -60,7 +51,6 @@ export function RadioSurface({
   const hasData = hasSeeds || hasLibrary;
   const {
     crossingStations: allCrossings,
-    rosterStations,
     showCrossings,
   } = useMemo(
     () => buildDemoRadioSections({
@@ -75,26 +65,20 @@ export function RadioSurface({
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
 
-  const renderRow = (ds: DialStation, demoted: boolean) => {
-    const evidenceText = sevenDayCrossingSentence(ds);
+  const renderRow = (ds: DialStation) => {
+    const summary = sevenDayCrossingSummary(ds);
+    if (summary.count <= 0) return null;
+    const metadata = stationCardMetadata(ds.station);
 
     return (
-      <div key={ds.station.slug} className={`demo-radio__featured${demoted ? " demo-radio__featured--secondary" : ""}`}>
-        <button
-          type="button"
-          className="demo-radio__station-tune"
-          aria-label={`Listen to ${ds.station.name}`}
-          onClick={() => radio.toggle(ds.station)}
-        >
-          <StationMark
-            name={ds.station.name}
-            iconUrl={ds.station.stationIconUrl}
-            logoUrl={ds.station.logoUrl}
-            variant="cube"
-            faviconOnly
-            className="demo-radio__station-mark"
-          />
-        </button>
+      <article key={ds.station.slug} className="demo-radio__featured">
+        <StationMark
+          name={ds.station.name}
+          iconUrl={ds.station.stationIconUrl}
+          variant="cube"
+          faviconOnly
+          className="demo-radio__station-mark"
+        />
         <div className="demo-radio__crossing-panel">
           <span className="demo-radio__crossing-station-name">{ds.station.name}</span>
           <button
@@ -104,13 +88,23 @@ export function RadioSurface({
             disabled={!onOpenStationCrossings}
             aria-label={`Open every crossing for ${ds.station.name}`}
           >
-            {evidenceText}
+            <span className="demo-radio__crossing-count">{summary.countText}</span>
+            {summary.artistText ? (
+              <span className="demo-radio__crossing-artists">{` · ${summary.artistText}`}</span>
+            ) : null}
+            <span className="demo-radio__crossing-chevron" aria-hidden="true">›</span>
           </button>
-          <span className="demo-radio__crossing-station-meta">
-            {stationLocationAndType(ds.station)}
-          </span>
+          {metadata ? <span className="demo-radio__crossing-station-meta">{metadata}</span> : null}
         </div>
-      </div>
+        <button
+          type="button"
+          className="demo-radio__play"
+          aria-label={`Listen to ${ds.station.name}`}
+          onClick={() => radio.toggle(ds.station)}
+        >
+          <Play size={18} fill="currentColor" aria-hidden="true" />
+        </button>
+      </article>
     );
   };
 
@@ -142,21 +136,13 @@ export function RadioSurface({
       ) : null}
 
       {showCrossings ? (
-        allCrossings.map(ds => renderRow(ds, false))
+        allCrossings.map(ds => renderRow(ds))
       ) : (
         <div className="demo-radio__empty">
           <p>Keep a song, or add artists you love, and the stations that play your music will show up here.</p>
         </div>
       )}
 
-      <div className="demo-radio__section-label demo-radio__section-label--secondary">
-        <span>{showCrossings ? "Also on air" : "On air now"}</span>
-      </div>
-
-      {rosterStations.map(ds => renderRow(ds, showCrossings))}
-      {rosterStations.length === 0 ? (
-        <p className="demo-radio__unavailable">The editorial stations are temporarily unavailable.</p>
-      ) : null}
     </section>
   );
 }

@@ -35,3 +35,20 @@ export function stationLocationAndType(station: Station): string {
   const location = station.city?.trim() || "Location unavailable";
   return `${location} · ${stationTypeLabel(station)}`;
 }
+
+export function curatedStationTypeLabel(station: Station): string | null {
+  const supplied = station.stationCategories?.[0];
+  if (!supplied || !STATION_CATEGORIES.has(supplied as StationCategory)) return null;
+  const category = supplied as StationCategory;
+  return category === "specialist"
+    ? specialistSubcategoryLabel(specialistSubcategoryForStation(station))
+    : stationCategoryShortLabel(category);
+}
+
+export function stationCardMetadata(station: Station): string | null {
+  const parts = [
+    station.city?.trim() || null,
+    curatedStationTypeLabel(station),
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
