@@ -3306,6 +3306,16 @@
   font-size: clamp(12px, 1.8vw, 17px);
   line-height: 1.5;
   cursor: pointer;
+  text-decoration: none;
+}
+.demo-radio__reason--featured > *,
+.demo-radio__reason--featured b,
+.demo-radio__reason--featured strong,
+.demo-radio__reason--featured span {
+  display: inline;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
 }
 .demo-radio__reason--featured:hover,
 .demo-radio__reason--featured:focus-visible {
@@ -3321,9 +3331,6 @@
 }
 .demo-radio__crossings-link {
   cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: hsl(var(--muted-foreground) / .55);
-  text-underline-offset: 3px;
 }
 @media (max-width: 520px) {
   .demo-radio__featured {
