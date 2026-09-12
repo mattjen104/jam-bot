@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationMark } from "./StationMark";
-import type { DialStation, DialShow } from "../hooks/useDialData";
+import type { DialStation } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
@@ -9,8 +9,25 @@ import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
 import { crossingScopeDetail } from "../lib/crossingScope";
-import { crossingSentence } from "./dialViewHelpers";
 import { stationLocationAndType } from "../lib/stationDisplayMetadata";
+
+function sevenDayCrossingSentence(ds: DialStation): string {
+  const detail = crossingScopeDetail(ds, "7d");
+  if (detail.count <= 0) return "No crossings in the last 7d.";
+
+  const artists = detail.artists
+    .map((artist) => artist.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const count = `${detail.count} ${detail.count === 1 ? "crossing" : "crossings"}`;
+  if (artists.length === 0) return `${count} in the last 7d.`;
+
+  const names = new Intl.ListFormat("en", {
+    style: "long",
+    type: "conjunction",
+  }).format(artists);
+  return `${names} (${count}) in the last 7d.`;
+}
 
 export function RadioSurface({ 
   stations, 
@@ -59,30 +76,7 @@ export function RadioSurface({
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
 
   const renderRow = (ds: DialStation, demoted: boolean) => {
-    const detail = crossingScopeDetail(ds, "7d");
-    const dummyShow = ds.shows.find(s => s.state === 'live') ?? {
-      state: "live", showName: null, djName: null, djNames: [],
-      crossings: 0, artistCrossings: 0, topArtists: [], topArtistNames: [], spins: [], currentTrack: null
-    } as unknown as DialShow;
-    
-    // Clear out liveTrack to ensure now-playing information is removed.
-    const showWithoutTrack = { ...dummyShow, currentTrack: null } as DialShow;
-
-    const sentence = crossingSentence(
-      ds.station.name,
-      showWithoutTrack,
-      "personal",
-      undefined,
-      undefined,
-      "7d",
-      detail
-    );
-
-    const evidenceNode = sentence 
-      ? sentence.node 
-      : detail.count > 0 
-        ? `${detail.count} ${detail.count === 1 ? 'crossing' : 'crossings'} in the last 7d.` 
-        : "No crossings in the last 7d.";
+    const evidenceText = sevenDayCrossingSentence(ds);
 
     return (
       <div key={ds.station.slug} className={`demo-radio__featured${demoted ? " demo-radio__featured--secondary" : ""}`}>
@@ -112,7 +106,7 @@ export function RadioSurface({
           disabled={!onOpenStationCrossings}
           aria-label={`Open every crossing for ${ds.station.name}`}
         >
-          {evidenceNode}
+          {evidenceText}
         </button>
       </div>
     );

@@ -3308,15 +3308,6 @@
   cursor: pointer;
   text-decoration: none;
 }
-.demo-radio__reason--featured > *,
-.demo-radio__reason--featured b,
-.demo-radio__reason--featured strong,
-.demo-radio__reason--featured span {
-  display: inline;
-  color: inherit;
-  font: inherit;
-  text-decoration: none;
-}
 .demo-radio__reason--featured:hover,
 .demo-radio__reason--featured:focus-visible {
   color: #fff;
