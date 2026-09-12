@@ -3084,42 +3084,34 @@
   outline: 2px solid hsl(var(--foreground));
   outline-offset: -2px;
 }
-.demo-radio__station-name-overlay {
-  position: absolute;
-  top: 11px;
-  right: 11px;
-  left: 11px;
+.demo-radio__crossing-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(14px, 3vw, 26px);
+  background: #000;
+}
+.demo-radio__crossing-station-name {
   overflow: hidden;
-  padding: 4px 5px;
-  border-radius: 3px;
-  background: hsl(var(--background) / .9);
-  color: hsl(var(--foreground));
+  color: #fff;
   font-family: var(--lore-font-home-heading);
-  font-size: 10px;
+  font-size: clamp(11px, 1.4vw, 14px);
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.2;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.demo-radio__station-meta-overlay {
-  position: absolute;
-  right: 11px;
-  bottom: 11px;
-  left: 11px;
-  display: -webkit-box;
+.demo-radio__crossing-station-meta {
   overflow: hidden;
-  padding: 4px 5px;
-  border-radius: 3px;
-  background: hsl(var(--background) / .9);
-  color: hsl(var(--foreground) / .82);
+  color: rgb(255 255 255 / .58);
   font-family: var(--app-font-mono);
-  font-size: 8px;
+  font-size: clamp(8px, 1vw, 10px);
   line-height: 1.2;
   text-align: left;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .demo-radio__row {
   display: grid;
@@ -3298,11 +3290,12 @@
   align-items: center;
   width: 100%;
   min-width: 0;
+  flex: 0 0 auto;
   border: 0;
   background: #000;
   color: #fff;
   text-align: left;
-  padding: clamp(14px, 4vw, 30px);
+  padding: 8px 0;
   font-size: clamp(12px, 1.8vw, 17px);
   line-height: 1.5;
   cursor: pointer;
@@ -3330,16 +3323,13 @@
   .demo-radio__station-tune {
     padding: 6px;
   }
-  .demo-radio__station-name-overlay {
-    top: 9px;
-    right: 9px;
-    left: 9px;
+  .demo-radio__crossing-panel {
+    padding: 12px;
+  }
+  .demo-radio__crossing-station-name {
     font-size: 8px;
   }
-  .demo-radio__station-meta-overlay {
-    right: 9px;
-    bottom: 9px;
-    left: 9px;
+  .demo-radio__crossing-station-meta {
     font-size: 7px;
   }
   .demo-radio__reason--featured {

@@ -94,20 +94,22 @@ export function RadioSurface({
             faviconOnly
             className="demo-radio__station-mark"
           />
-          <span className="demo-radio__station-name-overlay">{ds.station.name}</span>
-          <span className="demo-radio__station-meta-overlay">
+        </button>
+        <div className="demo-radio__crossing-panel">
+          <span className="demo-radio__crossing-station-name">{ds.station.name}</span>
+          <button
+            type="button"
+            className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
+            onClick={() => onOpenStationCrossings?.(ds.station.slug)}
+            disabled={!onOpenStationCrossings}
+            aria-label={`Open every crossing for ${ds.station.name}`}
+          >
+            {evidenceText}
+          </button>
+          <span className="demo-radio__crossing-station-meta">
             {stationLocationAndType(ds.station)}
           </span>
-        </button>
-        <button
-          type="button"
-          className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
-          onClick={() => onOpenStationCrossings?.(ds.station.slug)}
-          disabled={!onOpenStationCrossings}
-          aria-label={`Open every crossing for ${ds.station.name}`}
-        >
-          {evidenceText}
-        </button>
+        </div>
       </div>
     );
   };
