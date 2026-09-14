@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
@@ -7,9 +7,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import {
   buildDemoRadioSections,
-  selectBeyondHighlightStations,
-  selectSpecialistHighlightStations,
-  selectSpecialistSubcategoryHighlightStations,
+  selectEditorialHighlightStations,
 } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
@@ -20,7 +18,6 @@ import {
   normalizeDemoArtist,
   type DemoStationEvidence,
 } from "../lib/demoStationEvidence";
-import { specialistSubcategoryForStation } from "../lib/specialistCategories";
 
 export function RadioSurface({ 
   stations, 
@@ -40,8 +37,7 @@ export function RadioSurface({
   broZoneStations = [],
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
-  onEnterSpecialistStations,
-  onEnterEraStations,
+  onEnterBroZoneStations,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
@@ -60,13 +56,11 @@ export function RadioSurface({
   broZoneStations?: DialStation[];
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
-  onEnterSpecialistStations?: () => void;
-  onEnterEraStations?: () => void;
+  onEnterBroZoneStations?: () => void;
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }) {
   const { radio } = usePlayer();
-  const [broZoneExpanded, setBroZoneExpanded] = useState(false);
 
   const hasData = hasSeeds || hasLibrary;
   const broZoneSlugs = useMemo(
@@ -96,48 +90,19 @@ export function RadioSurface({
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
-  const eraStations = mode === "highlights"
-    ? selectSpecialistSubcategoryHighlightStations(
-      sectionStations,
-      "era",
-      broZoneSlugs,
-    )
-    : [];
-  const eraSlugs = new Set(eraStations.map((station) => station.station.slug));
   const visibleForYou = mode === "highlights"
     ? allCrossings
-      .filter((station) => !eraSlugs.has(station.station.slug))
       .slice(0, 4)
     : allCrossings;
-  const specialistExcludedSlugs = new Set([
+  const editorialStations = mode === "highlights"
+    ? selectEditorialHighlightStations(sectionStations, new Set([
     ...broZoneSlugs,
     ...visibleForYou.map((station) => station.station.slug),
-    ...eraSlugs,
-  ]);
-  const generalSpecialistStations = sectionStations.filter(
-    (station) => specialistSubcategoryForStation(station.station) !== "era",
-  );
-  const specialistStations = mode === "highlights"
-    ? selectSpecialistHighlightStations(
-      generalSpecialistStations,
-      new Set([
-        ...specialistExcludedSlugs,
-      ]),
-    )
+    ]))
     : [];
-  const visibleRoster = mode === "highlights"
-    ? selectBeyondHighlightStations(
-      sectionStations,
-      new Set([
-        ...specialistExcludedSlugs,
-        ...specialistStations.map((station) => station.station.slug),
-        ...eraStations.map((station) => station.station.slug),
-      ]),
-    )
-    : rosterStations;
   const missionSlugs = new Set([
     ...rosterStations,
-    ...visibleRoster,
+    ...editorialStations,
   ].map((station) => station.station.slug));
 
   const renderRow = (ds: DialStation) => {
@@ -298,30 +263,28 @@ export function RadioSurface({
             <>
               <div className="demo-radio__section-label">
                 <span>{broZoneLocationLabel ? "Near you (& bros)" : "Bro Zone"}</span>
-                {onRequestBroZoneZip ? (
-                  <button
-                    type="button"
-                    className="demo-station-section-action"
-                    onClick={onRequestBroZoneZip}
-                  >
-                    {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
-                  </button>
-                ) : null}
+                <span className="demo-radio__section-actions">
+                  {onRequestBroZoneZip ? (
+                    <button
+                      type="button"
+                      className="demo-station-section-action"
+                      onClick={onRequestBroZoneZip}
+                    >
+                      {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
+                    </button>
+                  ) : null}
+                  {onEnterBroZoneStations ? (
+                    <button
+                      type="button"
+                      className="demo-station-section-action"
+                      onClick={onEnterBroZoneStations}
+                    >
+                      Browse nearby
+                    </button>
+                  ) : null}
+                </span>
               </div>
-              {(broZoneExpanded ? broZoneStations : broZoneStations.slice(0, 1))
-                .map((station) => renderRow(station))}
-              {broZoneStations.length > 1 ? (
-                <button
-                  type="button"
-                  className="demo-radio__group-expand"
-                  aria-expanded={broZoneExpanded}
-                  onClick={() => setBroZoneExpanded((expanded) => !expanded)}
-                >
-                  {broZoneExpanded
-                    ? "Show nearest only"
-                    : `Show all ${broZoneStations.length} Bro Zone stations`}
-                </button>
-              ) : null}
+              {broZoneStations.slice(0, 1).map((station) => renderRow(station))}
             </>
           ) : null}
           {allCrossings.length > 0 ? (
@@ -341,55 +304,21 @@ export function RadioSurface({
               {visibleForYou.map((ds) => renderRow(ds))}
             </>
           ) : null}
-          {specialistStations.length > 0 ? (
+          {editorialStations.length > 0 ? (
             <>
               <div className="demo-radio__section-label demo-radio__section-label--secondary">
-                <span>Specialist sounds</span>
-                {onEnterSpecialistStations ? (
-                  <button
-                    type="button"
-                    className="demo-station-section-action"
-                    onClick={onEnterSpecialistStations}
-                  >
-                    See all specialist sounds
-                  </button>
-                ) : null}
-              </div>
-              {specialistStations.slice(0, 3).map((station) => renderRow(station))}
-            </>
-          ) : null}
-          {eraStations.length > 0 ? (
-            <>
-              <div className="demo-radio__section-label demo-radio__section-label--secondary">
-                <span>Era / Retro / Oldies</span>
-                {onEnterEraStations ? (
-                  <button
-                    type="button"
-                    className="demo-station-section-action"
-                    onClick={onEnterEraStations}
-                  >
-                    See all Era / Retro / Oldies
-                  </button>
-                ) : null}
-              </div>
-              {eraStations.map((station) => renderRow(station))}
-            </>
-          ) : null}
-          {visibleRoster.length > 0 ? (
-            <>
-              <div className="demo-radio__section-label demo-radio__section-label--secondary">
-                <span>Beyond your Library</span>
+                <span>Try something different</span>
                 {onEnterAllStations && (
                   <button
                     type="button"
                     onClick={() => onEnterAllStations("discovery")}
                     className="demo-station-section-action"
                   >
-                    See discovery
+                    Browse all stations
                   </button>
                 )}
               </div>
-              {visibleRoster.slice(0, 4).map((ds) => renderRow(ds))}
+              {editorialStations.map((ds) => renderRow(ds))}
             </>
           ) : null}
         </>

@@ -3217,21 +3217,11 @@
   text-transform: none;
   cursor: pointer;
 }
-.demo-radio__group-expand,
-.demo-library-remote__group-expand {
-  border: 0;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  font-family: var(--app-font-mono);
-  font-size: 11px;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  cursor: pointer;
-}
-.demo-radio__group-expand {
-  width: 100%;
-  min-height: 36px;
-  text-align: left;
+.demo-radio__section-actions {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 12px;
 }
 .demo-library-remote__section-heading {
   grid-column: 1 / -1;
@@ -3247,9 +3237,6 @@
 }
 .demo-library-remote__group--secondary {
   margin-top: 24px;
-}
-.demo-library-remote__group-expand {
-  min-height: 44px;
 }
 .demo-radio__section-label--secondary {
   margin-top: 16px;

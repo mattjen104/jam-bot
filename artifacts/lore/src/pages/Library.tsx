@@ -1919,17 +1919,11 @@ function DemoMergedLibrary({
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
-          onEnterSpecialistStations={() => updateSearch((next) => {
+          onEnterBroZoneStations={() => updateSearch((next) => {
             next.set("stationMode", "all");
-            next.set("categories", "specialist");
+            writeBroZoneState(next, true, new Set());
+            next.delete("categories");
             next.delete("specialistCategories");
-            next.delete("broZones");
-          })}
-          onEnterEraStations={() => updateSearch((next) => {
-            next.set("stationMode", "all");
-            next.set("categories", "specialist");
-            next.set("specialistCategories", "era");
-            next.delete("broZones");
           })}
           stations={filteredStations}
           hasData={hasSeeds || hasLibrary}
@@ -1956,17 +1950,11 @@ function DemoMergedLibrary({
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
-          onEnterSpecialistStations={() => updateSearch((next) => {
+          onEnterBroZoneStations={() => updateSearch((next) => {
             next.set("stationMode", "all");
-            next.set("categories", "specialist");
+            writeBroZoneState(next, true, new Set());
+            next.delete("categories");
             next.delete("specialistCategories");
-            next.delete("broZones");
-          })}
-          onEnterEraStations={() => updateSearch((next) => {
-            next.set("stationMode", "all");
-            next.set("categories", "specialist");
-            next.set("specialistCategories", "era");
-            next.delete("broZones");
           })}
           stations={filteredStations}
           hasSeeds={hasSeeds}

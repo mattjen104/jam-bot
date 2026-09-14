@@ -242,10 +242,12 @@ describe("demo Radio station cards", () => {
       />,
     );
 
-    const headings = screen.getAllByText(/Near you \(& bros\)|For you|Beyond your Library/)
+    const headings = screen.getAllByText(/Near you \(& bros\)|For you|Try something different/)
       .map((element) => element.textContent);
-    expect(headings).toEqual(["Near you (& bros)", "For you", "Beyond your Library"]);
+    expect(headings).toEqual(["Near you (& bros)", "For you", "Try something different"]);
     expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
     expect(screen.getByText("HEADY")).toBeTruthy();
+    expect(screen.queryByText("Specialist sounds")).toBeNull();
+    expect(screen.queryByText("Era / Retro / Oldies")).toBeNull();
   });
 });

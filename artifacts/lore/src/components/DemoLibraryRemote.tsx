@@ -3,9 +3,7 @@ import type { LibraryItem } from "../lib/meHooks";
 import type { DialStation } from "../hooks/useDialData";
 import {
   buildDemoRadioSections,
-  selectBeyondHighlightStations,
-  selectSpecialistHighlightStations,
-  selectSpecialistSubcategoryHighlightStations,
+  selectEditorialHighlightStations,
   type DemoStationSort,
 } from "../lib/demoRadioOrdering";
 import {
@@ -13,7 +11,6 @@ import {
   missionStationEvidence,
   type DemoStationEvidence,
 } from "../lib/demoStationEvidence";
-import { specialistSubcategoryForStation } from "../lib/specialistCategories";
 import { StationMark } from "./StationMark";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { usePlayer } from "../player/PlayerProvider";
@@ -263,8 +260,7 @@ export function DemoStationRemote({
   broZoneStations = [],
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
-  onEnterSpecialistStations,
-  onEnterEraStations,
+  onEnterBroZoneStations,
 }: {
   mode?: "highlights" | "all";
   onEnterAllStations?: (sort: "overlap" | "discovery") => void;
@@ -280,13 +276,11 @@ export function DemoStationRemote({
   broZoneStations?: DialStation[];
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
-  onEnterSpecialistStations?: () => void;
-  onEnterEraStations?: () => void;
+  onEnterBroZoneStations?: () => void;
 }) {
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [touchSlug, setTouchSlug] = useState<string | null>(null);
-  const [broZoneExpanded, setBroZoneExpanded] = useState(false);
   const broZoneSlugs = useMemo(
     () => new Set(broZoneStations.map((station) => station.station.slug)),
     [broZoneStations],
@@ -309,51 +303,27 @@ export function DemoStationRemote({
     [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sectionStations, sort],
   );
   const orderedStations = sections.orderedStations;
-  const eraStations = mode === "highlights"
-    ? selectSpecialistSubcategoryHighlightStations(
-      sectionStations,
-      "era",
-      broZoneSlugs,
-    )
-    : [];
-  const eraSlugs = new Set(eraStations.map((station) => station.station.slug));
   const visibleForYou = mode === "highlights"
     ? sections.crossingStations
-      .filter((station) => !eraSlugs.has(station.station.slug))
       .slice(0, 4)
     : sections.crossingStations;
-  const specialistStations = mode === "highlights"
-    ? selectSpecialistHighlightStations(
-      sectionStations.filter(
-        (station) => specialistSubcategoryForStation(station.station) !== "era",
-      ),
+  const editorialStations = mode === "highlights"
+    ? selectEditorialHighlightStations(
+      sectionStations,
       new Set([
         ...broZoneSlugs,
         ...visibleForYou.map((station) => station.station.slug),
       ]),
     )
     : [];
-  const visibleRoster = mode === "highlights"
-    ? selectBeyondHighlightStations(
-      sectionStations,
-      new Set([
-        ...broZoneSlugs,
-        ...visibleForYou.map((station) => station.station.slug),
-        ...specialistStations.map((station) => station.station.slug),
-        ...eraStations.map((station) => station.station.slug),
-      ]),
-    )
-    : sections.rosterStations;
   const highlightStations = [
     ...broZoneStations,
     ...visibleForYou,
-    ...specialistStations,
-    ...eraStations,
-    ...visibleRoster,
+    ...editorialStations,
   ];
   const missionSlugs = new Set([
     ...sections.rosterStations,
-    ...visibleRoster,
+    ...editorialStations,
   ].map((station) => station.station.slug));
   const selectedSlug = radio.station?.slug ?? touchSlug;
   const inspectableStations = mode === "highlights" ? highlightStations : orderedStations;
@@ -400,18 +370,28 @@ export function DemoStationRemote({
             <div className="demo-library-remote__grid">
               <div className="demo-library-remote__section-heading">
                 <span>{broZoneLocationLabel ? "Near you (& bros)" : "Bro Zone"}</span>
-                {onRequestBroZoneZip ? (
-                  <button
-                    type="button"
-                    className="demo-station-section-action"
-                    onClick={onRequestBroZoneZip}
-                  >
-                    {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
-                  </button>
-                ) : null}
+                <span className="demo-radio__section-actions">
+                  {onRequestBroZoneZip ? (
+                    <button
+                      type="button"
+                      className="demo-station-section-action"
+                      onClick={onRequestBroZoneZip}
+                    >
+                      {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
+                    </button>
+                  ) : null}
+                  {onEnterBroZoneStations ? (
+                    <button
+                      type="button"
+                      className="demo-station-section-action"
+                      onClick={onEnterBroZoneStations}
+                    >
+                      Browse nearby
+                    </button>
+                  ) : null}
+                </span>
               </div>
-              {(broZoneExpanded ? broZoneStations : broZoneStations.slice(0, 4))
-                .map((station) => (
+              {broZoneStations.slice(0, 1).map((station) => (
                   <StationRemoteTile
                     key={station.station.slug}
                     station={station}
@@ -425,18 +405,6 @@ export function DemoStationRemote({
                     }}
                   />
                 ))}
-              {broZoneStations.length > 1 ? (
-                <button
-                  type="button"
-                  className="demo-library-remote__group-expand"
-                  aria-expanded={broZoneExpanded}
-                  onClick={() => setBroZoneExpanded((expanded) => !expanded)}
-                >
-                  {broZoneExpanded
-                    ? "Show nearest four"
-                    : `Show all ${broZoneStations.length}`}
-                </button>
-              ) : null}
             </div>
           ) : null}
           {sections.crossingStations.length > 0 ? (
@@ -469,81 +437,21 @@ export function DemoStationRemote({
               ))}
             </div>
           ) : null}
-          {specialistStations.length > 0 ? (
+          {editorialStations.length > 0 ? (
             <div className="demo-library-remote__grid demo-library-remote__group--secondary">
               <div className="demo-library-remote__section-heading">
-                <span>Specialist sounds</span>
-                {onEnterSpecialistStations ? (
-                  <button
-                    type="button"
-                    className="demo-station-section-action"
-                    onClick={onEnterSpecialistStations}
-                  >
-                    See all specialist sounds
-                  </button>
-                ) : null}
-              </div>
-              {specialistStations.map((station) => (
-                <StationRemoteTile
-                  key={station.station.slug}
-                  station={station}
-                  selected={selectedSlug === station.station.slug}
-                  focusedMatch={false}
-                  onPreview={() => setPreviewSlug(station.station.slug)}
-                  onLeave={() => setPreviewSlug(null)}
-                  onTune={() => {
-                    setTouchSlug(station.station.slug);
-                    void radio.toggle(station.station);
-                  }}
-                />
-              ))}
-            </div>
-          ) : null}
-          {eraStations.length > 0 ? (
-            <div className="demo-library-remote__grid demo-library-remote__group--secondary">
-              <div className="demo-library-remote__section-heading">
-                <span>Era / Retro / Oldies</span>
-                {onEnterEraStations ? (
-                  <button
-                    type="button"
-                    className="demo-station-section-action"
-                    onClick={onEnterEraStations}
-                  >
-                    See all Era / Retro / Oldies
-                  </button>
-                ) : null}
-              </div>
-              {eraStations.map((station) => (
-                <StationRemoteTile
-                  key={station.station.slug}
-                  station={station}
-                  selected={selectedSlug === station.station.slug}
-                  focusedMatch={false}
-                  onPreview={() => setPreviewSlug(station.station.slug)}
-                  onLeave={() => setPreviewSlug(null)}
-                  onTune={() => {
-                    setTouchSlug(station.station.slug);
-                    void radio.toggle(station.station);
-                  }}
-                />
-              ))}
-            </div>
-          ) : null}
-          {visibleRoster.length > 0 ? (
-            <div className="demo-library-remote__grid demo-library-remote__group--secondary">
-              <div className="demo-library-remote__section-heading">
-                <span>Beyond your Library</span>
+                <span>Try something different</span>
                 {onEnterAllStations && (
                   <button
                     type="button"
                     onClick={() => onEnterAllStations("discovery")}
                     className="demo-station-section-action"
                   >
-                    See discovery
+                    Browse all stations
                   </button>
                 )}
               </div>
-              {visibleRoster.slice(0, 4).map((station) => (
+              {editorialStations.map((station) => (
                 <StationRemoteTile
                   key={station.station.slug}
                   station={station}

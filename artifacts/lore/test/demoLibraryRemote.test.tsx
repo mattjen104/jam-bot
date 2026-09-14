@@ -325,4 +325,39 @@ describe("demo Library visual remotes", () => {
     expect(screen.getByRole("complementary").textContent)
       .toContain("Give the Drummer Radio · Doug Schulkind");
   });
+
+  test("keeps Highlights to local, personal, and one editorial discovery group", () => {
+    const local = dialStation("local", "Local FM", 9);
+    const personal = dialStation("personal", "Personal FM", 8);
+    const specialist = dialStation("jazz", "Jazz FM", 4);
+    specialist.station.stationCategories = ["specialist"];
+    specialist.station.tags = ["jazz"];
+    const era = dialStation("fifties", "1950s Radio", 3);
+    era.station.stationCategories = ["specialist"];
+    era.station.tags = ["50s"];
+    era.station.eraGenreMode = true;
+    const mission = dialStation("wfmu", "WFMU", 0);
+    mission.station.automationClass = "human";
+
+    render(
+      <DemoStationRemote
+        mode="highlights"
+        stations={[local, personal, specialist, era, mission]}
+        broZoneStations={[local]}
+        broZoneLocationLabel="Seattle, WA"
+        hasData
+        focusedArtist={null}
+        sort="overlap"
+        onEnterAllStations={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Near you (& bros)")).toBeTruthy();
+    expect(screen.getByText("For you")).toBeTruthy();
+    expect(screen.getByText("Try something different")).toBeTruthy();
+    expect(screen.queryByText("Specialist sounds")).toBeNull();
+    expect(screen.queryByText("Era / Retro / Oldies")).toBeNull();
+    expect(screen.getByRole("button", { name: "Browse all stations" })).toBeTruthy();
+    expect(screen.getAllByTestId("demo-station-remote-tile")).toHaveLength(5);
+  });
 });

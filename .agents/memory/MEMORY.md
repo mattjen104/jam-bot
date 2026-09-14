@@ -154,3 +154,4 @@
 - [Ranking simulation parity](ranking-simulation-parity.md) — ranking previews must reuse the production candidate and match semantics; nearby approximations can produce convincing but unreproducible top lists.
 - [Radio catalog paging and evidence cost](radio-catalog-paging.md) — page the eligible catalog server-side; compute live/current-track evidence only for filters and sorts that need it.
 - [Kept-credit identity boundaries](kept-credit-identity-boundaries.md) — credits are kept-scoped normalized facts; labels belong to specific release editions, never recordings.
+- [Library station Highlights balance](library-station-highlights-balance.md) — Highlights stays at three roles and ≤9 picks; All stations/remote own complete browsing.

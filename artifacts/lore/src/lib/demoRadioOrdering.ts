@@ -147,6 +147,43 @@ export function selectBeyondHighlightStations(
   return [...missionStations, ...fillers].slice(0, limit);
 }
 
+export function selectEditorialHighlightStations(
+  stations: readonly DialStation[],
+  excludedSlugs: ReadonlySet<string>,
+  limit = 4,
+): DialStation[] {
+  const specialist = selectSpecialistHighlightStations(
+    stations.filter((station) => specialistSubcategoryForStation(station.station) !== "era"),
+    excludedSlugs,
+    limit,
+  );
+  const era = selectSpecialistSubcategoryHighlightStations(
+    stations,
+    "era",
+    excludedSlugs,
+    limit,
+  );
+  const beyond = selectBeyondHighlightStations(stations, excludedSlugs, limit);
+  const groups = [specialist, era, beyond];
+  const selected: DialStation[] = [];
+  const selectedSlugs = new Set(excludedSlugs);
+
+  for (let index = 0; selected.length < limit; index += 1) {
+    let added = false;
+    for (const group of groups) {
+      const station = group[index];
+      if (!station || selectedSlugs.has(station.station.slug)) continue;
+      selected.push(station);
+      selectedSlugs.add(station.station.slug);
+      added = true;
+      if (selected.length === limit) break;
+    }
+    if (!added && groups.every((group) => index >= group.length)) break;
+  }
+
+  return selected;
+}
+
 export function buildDemoRadioSections({
   stations,
   hasData,

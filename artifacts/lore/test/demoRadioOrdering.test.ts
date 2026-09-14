@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDemoRadioSections,
+  selectEditorialHighlightStations,
   selectSpecialistSubcategoryHighlightStations,
   stationFreshness,
 } from "../src/lib/demoRadioOrdering";
@@ -86,6 +87,37 @@ describe("newest-music station ordering", () => {
       "80s Leader", "1950s Radio", "60s Radio", "2000s Radio",
     ]));
     expect(result).not.toContain(eightiesRunnerUp);
+  });
+
+  it("mixes specialist, era, and mission picks into one bounded editorial set", () => {
+    const ambient = station("Ambient FM", [2020, 2021]);
+    ambient.station.stationCategories = ["specialist"];
+    ambient.station.tags = ["ambient"];
+    const jazz = station("Jazz FM", [2020, 2021]);
+    jazz.station.stationCategories = ["specialist"];
+    jazz.station.tags = ["jazz"];
+    const fifties = station("1950s Radio", [1955, 1956]);
+    fifties.station.stationCategories = ["specialist"];
+    fifties.station.tags = ["50s"];
+    fifties.station.eraGenreMode = true;
+    const sixties = station("1960s Radio", [1965, 1966]);
+    sixties.station.stationCategories = ["specialist"];
+    sixties.station.tags = ["60s"];
+    sixties.station.eraGenreMode = true;
+    const wfmu = missionStation("wfmu", "WFMU");
+
+    const result = selectEditorialHighlightStations(
+      [ambient, jazz, fifties, sixties, wfmu],
+      new Set(),
+    );
+
+    expect(result).toHaveLength(4);
+    expect(new Set(result.map((item) => item.station.slug))).toEqual(new Set([
+      "ambient fm",
+      "jazz fm",
+      "1950s radio",
+      "wfmu",
+    ]));
   });
 
   it("uses the seven-day rarity score for the default overlap order", () => {
