@@ -152,3 +152,4 @@
 - [Provider release evidence trust](provider-release-evidence-trust.md) — shared track-age facts require server-verified provider identity; rejected canonical links must leave the entire evidence packet immutable.
 - [Station icon vs logo roles](station-icon-logo-roles.md) — keep low-res square identity icons separate from high-res official logo art; shared provider branding qualifies for neither.
 - [Ranking simulation parity](ranking-simulation-parity.md) — ranking previews must reuse the production candidate and match semantics; nearby approximations can produce convincing but unreproducible top lists.
+- [Radio catalog paging and evidence cost](radio-catalog-paging.md) — page the eligible catalog server-side; compute live/current-track evidence only for filters and sorts that need it.

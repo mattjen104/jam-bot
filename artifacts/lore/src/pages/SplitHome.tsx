@@ -11,58 +11,29 @@ import type { DialLaneRow } from "../components/dial/DialFeedLane";
 import { useSeedManager } from "../hooks/useSeedManager";
 import { DialCliBar } from "../components/dial/DialCliBar";
 import { ArtistDocument } from "../components/ArtistDocument";
-import { FirstRunSidebar } from "../components/FirstRunSidebar";
-import { usePlayer } from "../player/PlayerProvider";
-import type { DialStation } from "../hooks/useDialData";
 import { AdaptiveNow } from "../components/AdaptiveNow";
-import { useLatestImportJob, useAppConfig } from "../lib/meHooks";
+import { useLatestImportJob } from "../lib/meHooks";
 import { deriveAdaptiveListeningState } from "../lib/adaptiveListening";
-import {
-  DEFAULT_ACTIVE_STATION_CATEGORIES,
-  toggleStationCategory,
-} from "../lib/dialFilterState";
 import type { StationCategory } from "../lib/dialCategories";
-import { catchNextSong } from "../lib/firstRunCatch";
-import { RadioSurface } from "../components/RadioSurface";
-
-const FIRST_RUN_INTERACTION_KEY = "lore:firstRunStationInteraction";
-
-function hasFirstRunInteraction(): boolean {
-  try {
-    return localStorage.getItem(FIRST_RUN_INTERACTION_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function rememberFirstRunInteraction(): void {
-  try {
-    localStorage.setItem(FIRST_RUN_INTERACTION_KEY, "1");
-  } catch {
-    // Playback must still work when storage is unavailable.
-  }
-}
+import { RadioBrowseControls } from "../components/RadioBrowseControls";
+import { useRadioBrowseState } from "../hooks/useRadioBrowseState";
+import { joinCatalogRows, useRadioCatalog } from "../hooks/useRadioCatalog";
+import {
+  focusForYou,
+  radioBrowseProvenance,
+  toggleRadioFilter,
+  type RadioBrowseState,
+} from "../lib/radioBrowseState";
 
 export default function SplitHome() {
   const [, navigate] = useLocation();
-  const { radio } = usePlayer();
   const { visibleSeeds, addSeed, replaceSeeds } = useSeedManager();
   const { data: importJob } = useLatestImportJob();
-  const { data: appConfig } = useAppConfig();
   const [activeCategories, setActiveCategories] = useState<Set<StationCategory>>(
-    () => new Set(DEFAULT_ACTIVE_STATION_CATEGORIES),
+    () => new Set(),
   );
-  const [supportOnly, setSupportOnly] = useState(false);
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
   const [artistDocumentOpen, setArtistDocumentOpen] = useState(false);
-  const [firstRunCandidate] = useState(() => !hasFirstRunInteraction());
-
-  const handleToggleCategory = useCallback((category: StationCategory) => {
-    setActiveCategories((previous) => toggleStationCategory(previous, category));
-  }, []);
-  const handleSetCategories = useCallback((categories: ReadonlySet<StationCategory>) => {
-    setActiveCategories(new Set(categories));
-  }, []);
 
   const handleAddArtists = useCallback((names: string[]) => {
     const unique = [...new Map(names.map((name) => [name.trim().toLowerCase(), name.trim()])).values()]
@@ -81,27 +52,49 @@ export default function SplitHome() {
     isCoreLoading,
     hasLibrary,
     hasSeeds,
+    stationsError,
+    refetchStations,
   } = useDialData("personal", {
     // Home applies its category selection inside AdaptiveNow.
-    // Keep the source pool unfiltered so first-run can always select its exact
-    // editorial roster before any listener filter exists.
+    // Keep the source pool unfiltered; the canonical catalog owns eligibility
+    // and ordering while this operational list supplies playback metadata.
     categories: undefined,
     includeAllStations: true,
     crossingsEnabled: true,
     deferEnrichment: false,
   });
+  const hasTasteEvidence = hasLibrary || hasSeeds || visibleSeeds.length > 0;
+  const radioBrowse = useRadioBrowseState({ hasTasteEvidence });
+  const radioCatalog = useRadioCatalog(radioBrowse.state, hasTasteEvidence);
+  const handleBrowseStateChange = useCallback((next: RadioBrowseState) => {
+    radioBrowse.setState(next);
+    setActiveCategories(new Set(next.filters.stationTypes.map((type) =>
+      type === "core" ? "anchor" : type === "independent-dj" ? "indie" : type,
+    ) as StationCategory[]));
+  }, [radioBrowse]);
+  const handleToggleCategory = useCallback((category: StationCategory) => {
+    const canonical = category === "anchor" ? "core" : category === "indie" ? "independent-dj" : category;
+    const next = toggleRadioFilter(radioBrowse.state.filters.stationTypes, canonical);
+    handleBrowseStateChange({
+      ...radioBrowse.state,
+      filters: { ...radioBrowse.state.filters, stationTypes: [...next] },
+    });
+  }, [handleBrowseStateChange, radioBrowse.state]);
+  const handleSetCategories = useCallback((categories: ReadonlySet<StationCategory>) => {
+    handleBrowseStateChange({
+      ...radioBrowse.state,
+      filters: {
+        ...radioBrowse.state.filters,
+        stationTypes: [...categories].map((type) =>
+          type === "anchor" ? "core" : type === "indie" ? "independent-dj" : type,
+        ),
+      },
+    });
+  }, [handleBrowseStateChange, radioBrowse.state]);
+  const handleFocusArtist = useCallback((artist: string) => {
+    handleBrowseStateChange(focusForYou(radioBrowse.state, artist));
+  }, [handleBrowseStateChange, radioBrowse.state]);
 
-  const playFirstRunStation = useCallback((station: DialStation) => {
-    rememberFirstRunInteraction();
-    radio.toggle(station.station);
-  }, [radio]);
-  const catchFirstRunStation = useCallback(
-    (station: DialStation) => {
-      rememberFirstRunInteraction();
-      return catchNextSong(station, playFirstRunStation);
-    },
-    [playFirstRunStation],
-  );
   const allRows = useMemo<DialLaneRow[]>(
     () => stations
       .map((ds) => {
@@ -129,30 +122,19 @@ export default function SplitHome() {
       }),
     [stations],
   );
-
-  if (appConfig?.demoSurface) {
-    return (
-      <main className="split-home split-home--front-door">
-        <RadioSurface
-          stations={stations}
-          hasSeeds={hasSeeds}
-          hasLibrary={hasLibrary}
-          onFocusArtist={(artist) => {
-            const params = new URLSearchParams();
-            params.set("focus", artist);
-            navigate(`/library?${params.toString()}`);
-          }}
-          onOpenStationCrossings={(stationSlug) => {
-            const params = new URLSearchParams();
-            params.set("stationCrossings", stationSlug);
-            navigate(`/library?${params.toString()}`);
-          }}
-        />
-      </main>
+  const browseRows = useMemo(() => {
+    const catalogItems = radioCatalog.data?.stations ?? [];
+    // The API read model is the source of eligibility, verified proximity,
+    // filters, and lens order. Join only returned slugs; never reinsert broad
+    // pool rows or apply a second, post-pagination filter in the client.
+    return joinCatalogRows(
+      catalogItems.map((item) => item.station.slug),
+      allRows,
+      (row) => row.ds.station.slug,
     );
-  }
+  }, [allRows, radioCatalog.data?.stations]);
 
-  const coldStartSession = firstRunCandidate && !isCoreLoading && !hasLibrary && !hasSeeds;
+  const coldStartSession = !isCoreLoading && !hasLibrary && !hasSeeds;
   const confirmedLiveCrossings = allRows.filter((row) => {
     const track = row.ds.liveTrack ?? row.show?.currentTrack;
     return Boolean(track && !track.resolving && (track.isLibraryHit || track.isArtistHit));
@@ -169,7 +151,7 @@ export default function SplitHome() {
         <header className="front-door-header" data-testid="now-header">
           <div className="front-door-header__intro">
             <p className="front-door-eyebrow">Now</p>
-            <h1>{coldStartSession ? "Twelve ways into live radio." : "Choose or continue what to hear."}</h1>
+            <h1>{coldStartSession ? "Four ways into live radio." : "Choose or continue what to hear."}</h1>
             <p className="front-door-subtitle">
               {!coldStartSession && <button
                 type="button"
@@ -221,29 +203,89 @@ export default function SplitHome() {
           ) : null}
         </div>
 
-        {coldStartSession ? (
-          <FirstRunSidebar
-            stations={stations}
-            seeds={visibleSeeds}
-            onAddSeed={(artist) => {
-              rememberFirstRunInteraction();
-              void addSeed(artist);
-            }}
-            onPlay={playFirstRunStation}
-            onCatchNext={catchFirstRunStation}
-          />
-        ) : (
-          <AdaptiveNow
-            rows={allRows}
+        <RadioBrowseControls
+          state={radioBrowse.state}
+          onStateChange={handleBrowseStateChange}
+          onLocalityChange={radioBrowse.setLocality}
+          resultCount={radioCatalog.data?.metadata.eligibleCount ?? browseRows.length}
+          hasTasteEvidence={hasTasteEvidence || Boolean(radioBrowse.state.focusedArtist)}
+        />
+
+        <AdaptiveNow
+            rows={browseRows}
             state={adaptiveState}
             importJob={importJob}
             activeCategories={activeCategories}
-            supportOnly={supportOnly}
+            supportOnly={radioBrowse.state.filters.supportOnly}
             onToggleCategory={handleToggleCategory}
             onSetCategories={handleSetCategories}
-            onToggleSupport={() => setSupportOnly((active) => !active)}
+            onToggleSupport={() => handleBrowseStateChange({
+              ...radioBrowse.state,
+              filters: {
+                ...radioBrowse.state.filters,
+                supportOnly: !radioBrowse.state.filters.supportOnly,
+              },
+            })}
+            preserveOrder
+             browseEligibleCount={radioCatalog.data?.metadata.eligibleCount}
+            browsePage={radioBrowse.state.page}
+            onBrowsePageChange={(page) => handleBrowseStateChange({ ...radioBrowse.state, page })}
+            browseExplanations={new Map((radioCatalog.data?.stations ?? []).map((item) => [
+              item.station.slug,
+              item.explanation,
+            ]))}
+            onFocusArtist={handleFocusArtist}
+            hideLegacyFilters
+            browseProvenance={radioCatalog.data?.metadata.claim
+              ?? radioBrowseProvenance(radioBrowse.state, browseRows.length)}
           />
-        )}
+        {isCoreLoading || radioCatalog.isLoading ? (
+          <div className="radio-browse-status" role="status" data-testid="radio-browse-loading">
+            {isCoreLoading ? "Loading live station data…" : "Loading this station page…"}
+          </div>
+        ) : null}
+        {stationsError || radioCatalog.error ? (
+          <div className="radio-browse-status radio-browse-status--error" role="alert" data-testid="radio-browse-error">
+            <span>We couldn’t load the station deck. Your current browse state is still available to retry.</span>
+            <button type="button" onClick={() => {
+              refetchStations();
+              radioCatalog.retry();
+            }}>Retry</button>
+            <button type="button" onClick={() => {
+              radioBrowse.setState({
+                ...radioBrowse.state,
+                lens: "local",
+                sort: "recommended",
+                focusedArtist: null,
+                focusedSound: null,
+                page: 1,
+                filters: {
+                  stationTypes: [],
+                  specialistFormats: [],
+                  decades: [],
+                  playingNow: [],
+                  broZones: [],
+                  followedOnly: false,
+                  supportOnly: false,
+                },
+              });
+              refetchStations();
+              radioCatalog.retry();
+            }}>Reset browse</button>
+          </div>
+        ) : null}
+        {radioCatalog.data?.metadata.partial && (
+          radioCatalog.data.metadata.partial.locality
+          || radioCatalog.data.metadata.partial.personalization
+          || radioCatalog.data.metadata.omittedUnknownLocation > 0
+        ) ? (
+          <div className="radio-browse-status radio-browse-status--partial" role="status" data-testid="radio-browse-partial">
+            Some catalog evidence is still partial
+            {radioCatalog.data.metadata.partial.locality ? " — locality is not fully verified." : ""}
+            {radioCatalog.data.metadata.partial.personalization ? " — Library evidence is not available yet." : ""}
+            {radioCatalog.data.metadata.omittedUnknownLocation > 0 ? " — some stations have no verified location." : ""}
+          </div>
+        ) : null}
       </div>
     </main>
   );

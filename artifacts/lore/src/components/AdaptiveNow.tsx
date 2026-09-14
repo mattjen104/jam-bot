@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import type { DialLaneRow } from "./dial/DialFeedLane";
 import type { StationCategory } from "../lib/dialCategories";
@@ -29,6 +29,20 @@ interface AdaptiveNowProps {
   onToggleCategory: (category: StationCategory) => void;
   onSetCategories: (categories: ReadonlySet<StationCategory>) => void;
   onToggleSupport: () => void;
+  /** When true, the canonical Radio browse remote already ordered these rows. */
+  preserveOrder?: boolean;
+  /** Evidence sentence shown directly above the stable browse deck. */
+  browseProvenance?: string;
+  /** Canonical page state owned by the Radio browse remote. */
+  browsePage?: number;
+  onBrowsePageChange?: (page: number) => void;
+  /** Server-reported eligible total for the current catalog query. */
+  browseEligibleCount?: number;
+  browseExplanations?: ReadonlyMap<string, string>;
+  /** Open the canonical For You lens for an artist seen in this deck. */
+  onFocusArtist?: (artist: string) => void;
+  /** The front door owns the canonical Radio browse controls. */
+  hideLegacyFilters?: boolean;
 }
 
 function trackFor(row: DialLaneRow) {
@@ -60,14 +74,27 @@ function crossingReasonFor(row: DialLaneRow): string | null {
   );
 }
 
+function crossingArtistFor(row: DialLaneRow): string | null {
+  const names = [...new Set(
+    row.ds.topArtistNames24h
+      .map((name) => name.trim())
+      .filter(Boolean),
+  )];
+  return names.length === 1 ? names[0] : null;
+}
+
 function Row({
   row,
   state,
   onInspect,
+  browseExplanation,
+  onFocusArtist,
 }: {
   row: DialLaneRow;
   state: AdaptiveListeningState;
   onInspect: (row: DialLaneRow) => void;
+  browseExplanation?: string;
+  onFocusArtist?: (artist: string) => void;
 }) {
   const { radio } = usePlayer();
   const { isFollowing, toggleFollow } = useStationFollows();
@@ -78,6 +105,7 @@ function Row({
   const artist = track?.artist?.trim() || "Live metadata unavailable";
   const title = track?.title?.trim();
   const crossingReason = crossingReasonFor(row);
+  const crossingArtist = crossingArtistFor(row);
 
   return (
     <article className={`adaptive-now__row${active ? " is-active" : ""}`} data-testid="adaptive-now-row">
@@ -99,14 +127,22 @@ function Row({
       </button>
       <div className="adaptive-now__body">
         {crossingReason ? (
-          <Link
-            className="adaptive-now__reason adaptive-now__reason--link"
-            href={`/feed?station=${encodeURIComponent(row.ds.station.slug)}`}
-          >
-            {crossingReason}
-          </Link>
+          onFocusArtist && crossingArtist ? (
+            <button
+              type="button"
+              className="adaptive-now__reason adaptive-now__reason--link"
+              onClick={() => onFocusArtist(crossingArtist)}
+              aria-label={`Focus For You on ${crossingArtist} from this Library crossing`}
+            >
+              {crossingReason}
+            </button>
+          ) : (
+            <span className="adaptive-now__reason">
+              {crossingReason}
+            </span>
+          )
         ) : (
-          <span className="adaptive-now__reason">{reasonFor(row, state)}</span>
+          <span className="adaptive-now__reason">{browseExplanation ?? reasonFor(row, state)}</span>
         )}
         <button
           type="button"
@@ -120,6 +156,16 @@ function Row({
           </span>
         </button>
       </div>
+      {onFocusArtist && track?.artist?.trim() ? (
+        <button
+          type="button"
+          className="adaptive-now__focus-artist"
+          onClick={() => onFocusArtist(track.artist.trim())}
+          aria-label={`Focus For You on ${track.artist.trim()}`}
+        >
+          For You
+        </button>
+      ) : null}
       <button
         type="button"
         className="adaptive-now__active"
@@ -202,18 +248,42 @@ export function AdaptiveNow({
   onToggleCategory,
   onSetCategories,
   onToggleSupport,
+  preserveOrder = false,
+  browseProvenance,
+  browsePage: controlledBrowsePage,
+  onBrowsePageChange,
+  browseEligibleCount,
+  browseExplanations,
+  onFocusArtist,
+  hideLegacyFilters = false,
 }: AdaptiveNowProps) {
   const [expanded, setExpanded] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [inspected, setInspected] = useState<DialLaneRow | null>(null);
+  const [browsePage, setBrowsePage] = useState(1);
+  const currentBrowsePage = controlledBrowsePage ?? browsePage;
+  const changeBrowsePage = (page: number) => {
+    if (onBrowsePageChange) onBrowsePageChange(page);
+    else setBrowsePage(page);
+  };
   const { isFollowing, toggleFollow } = useStationFollows();
   const copy = adaptiveListeningCopy(state);
   const progress = importProgressLabel(importJob);
   const visibleRows = useMemo(() => {
-    const sorted = [...rows]
-      .filter((row) => !supportOnly || Boolean(row.ds.station.donateUrl))
-      .filter((row) => activeCategories.size === 0 || activeCategories.has(categoryFor(row)!))
-      .sort((a, b) => {
+    // The canonical Radio remote already receives an eligibility-complete,
+    // ordered catalog. Applying filters here would filter after the catalog
+    // was paged and make later pages silently under-filled.
+    const eligible = preserveOrder
+      ? [...rows]
+      : [...rows]
+        .filter((row) => !supportOnly || Boolean(row.ds.station.donateUrl))
+        .filter((row) => activeCategories.size === 0 || activeCategories.has(categoryFor(row)!));
+    if (preserveOrder) {
+      // The catalog request is already paged server-side. Do not slice again:
+      // rows contains exactly the current four-station page.
+      return eligible;
+    }
+    const sorted = eligible.sort((a, b) => {
         const aCross = Number(isConfirmedCrossing(trackFor(a)));
         const bCross = Number(isConfirmedCrossing(trackFor(b)));
         return bCross - aCross
@@ -221,12 +291,18 @@ export function AdaptiveNow({
           || a.ds.station.name.localeCompare(b.ds.station.name);
       });
     return expanded ? sorted : sorted.slice(0, 6);
-  }, [activeCategories, expanded, rows, supportOnly]);
+  }, [activeCategories, currentBrowsePage, expanded, preserveOrder, rows, supportOnly]);
   const totalRows = useMemo(
-    () => rows.filter((row) => !supportOnly || Boolean(row.ds.station.donateUrl))
-      .filter((row) => activeCategories.size === 0 || activeCategories.has(categoryFor(row)!)).length,
-    [activeCategories, rows, supportOnly],
+    () => preserveOrder
+      ? (browseEligibleCount ?? rows.length)
+      : rows.filter((row) => !supportOnly || Boolean(row.ds.station.donateUrl))
+        .filter((row) => activeCategories.size === 0 || activeCategories.has(categoryFor(row)!)).length,
+    [activeCategories, browseEligibleCount, preserveOrder, rows, supportOnly],
   );
+  const browsePageCount = Math.max(1, Math.ceil(totalRows / 4));
+  useEffect(() => {
+    if (currentBrowsePage > browsePageCount) changeBrowsePage(browsePageCount);
+  }, [browsePageCount, currentBrowsePage]);
   const crossingCount = rows.filter((row) => isConfirmedCrossing(trackFor(row))).length;
 
   return (
@@ -235,7 +311,7 @@ export function AdaptiveNow({
         <div>
           <p className="adaptive-now__eyebrow">{copy.eyebrow}</p>
           <h2 id="adaptive-now-heading">{copy.title}</h2>
-          <p>{copy.description}</p>
+          <p>{browseProvenance ?? copy.description}</p>
         </div>
         <div className="adaptive-now__context" data-testid="adaptive-now-context">
           {usePlayerStatusLabel()}
@@ -248,7 +324,7 @@ export function AdaptiveNow({
         </p>
       ) : null}
 
-      <div className="adaptive-now__filters" aria-label="Now filters">
+      {!hideLegacyFilters ? <div className="adaptive-now__filters" aria-label="Now filters">
         <button
           type="button"
           className={activeCategories.size === 0 ? "is-active" : ""}
@@ -274,16 +350,44 @@ export function AdaptiveNow({
         <button type="button" className={supportOnly ? "is-active" : ""} aria-pressed={supportOnly} onClick={onToggleSupport}>
           Support
         </button>
-      </div>
+      </div> : null}
 
       <div className="adaptive-now__list">
         {visibleRows.length > 0 ? visibleRows.map((row) => (
-          <Row key={row.ds.station.slug} row={row} state={state} onInspect={setInspected} />
+          <Row
+            key={row.ds.station.slug}
+            row={row}
+            state={state}
+            onInspect={setInspected}
+            browseExplanation={browseExplanations?.get(row.ds.station.slug)}
+            onFocusArtist={onFocusArtist}
+          />
         )) : <p className="adaptive-now__empty">No stations match these filters. Choose All to reopen the dial.</p>}
       </div>
       <div className="adaptive-now__footer">
         <span>Showing {visibleRows.length} of {totalRows} eligible stations</span>
-        {totalRows > 6 ? (
+        {preserveOrder && browsePageCount > 1 ? (
+          <span className="adaptive-now__pager" role="group" aria-label="Station deck pages">
+            <button
+              type="button"
+              disabled={currentBrowsePage <= 1}
+              onClick={() => changeBrowsePage(Math.max(1, currentBrowsePage - 1))}
+              aria-label="Previous station deck"
+            >
+              Previous
+            </button>
+            <span aria-live="polite">Deck {currentBrowsePage} of {browsePageCount}</span>
+            <button
+              type="button"
+              disabled={currentBrowsePage >= browsePageCount}
+              onClick={() => changeBrowsePage(Math.min(browsePageCount, currentBrowsePage + 1))}
+              aria-label="Next station deck"
+            >
+              Next
+            </button>
+          </span>
+        ) : null}
+        {!preserveOrder && totalRows > 6 ? (
           <button type="button" onClick={() => setExpanded((value) => !value)}>
             {expanded ? "Show fewer stations" : `More stations (${totalRows - 6})`}
           </button>
@@ -302,9 +406,11 @@ export function AdaptiveNow({
       ) : null}
       {pickerOpen ? (
         <StationPicker
-          rows={[...rows]
-            .filter((row) => !supportOnly || Boolean(row.ds.station.donateUrl))
-            .filter((row) => activeCategories.size === 0 || activeCategories.has(categoryFor(row)!))}
+          rows={preserveOrder
+            ? rows
+            : [...rows]
+              .filter((row) => !supportOnly || Boolean(row.ds.station.donateUrl))
+              .filter((row) => activeCategories.size === 0 || activeCategories.has(categoryFor(row)!))}
           onClose={() => setPickerOpen(false)}
         />
       ) : null}

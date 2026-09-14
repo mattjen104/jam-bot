@@ -3,17 +3,64 @@
  * stays plain JSON: it composes persisted station facts and schedule evidence,
  * rather than becoming another generated CRUD resource.
  */
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { h } from "../middlewares/asyncHandler.js";
 import { getUserForListenerRead } from "../lore/userSession.js";
-import { distanceMiles, isNearbyRadius, resolveUsZip, usableCoordinates } from "../lore/station-location.js";
+import { coarseUsCityLocation, distanceMiles, isNearbyRadius, resolveUsZip, usableCoordinates } from "../lore/station-location.js";
+import {
+  CATALOG_LENSES,
+  CATALOG_FORMATS,
+  CATALOG_DECADES,
+  CATALOG_SORTS,
+  CATALOG_STATION_TYPES,
+  CATALOG_PLAYING_NOW,
+  composeStationCatalog,
+  type CatalogFilters,
+  type CatalogFormat,
+  type CatalogDecade,
+  type CatalogPlayingNow,
+  type CatalogLens,
+  type CatalogSort,
+  type CatalogStation,
+} from "../lore/station-catalog.js";
+import { BRO_ZONES_REVIEWED } from "../lore/bro-zones-migration.js";
 
 const router: IRouter = Router();
 const MAX_LIMIT = 30;
 const MODES = new Set(["location", "station", "artist", "genre", "newness", "library-crossing"]);
 export type ExploreMode = "location" | "station" | "artist" | "genre" | "newness" | "library-crossing";
+type CatalogDbRow = Record<string, unknown> & {
+  slug: string;
+  name: string;
+  org: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_source: string | null;
+  location_confidence: string | null;
+  stream_url: string | null;
+  active: boolean;
+  hidden: boolean;
+  crossing_eligible: boolean;
+  station_class: string | null;
+  tags: string[] | null;
+  era_genre_mode: boolean;
+  sleep_mode: boolean;
+  discovery_score: number | null;
+  library_crossings: number;
+  library_artist_crossings: number;
+  focused_artist_crossings: number;
+  live: boolean;
+  current_age_tier: CatalogPlayingNow | null;
+  bro_zones: string[] | null;
+  support: boolean;
+  followed: boolean;
+  sort_order: number | null;
+};
 type ExploreDbRow = Record<string, unknown> & {
   slug: string; name: string; city: string | null; region: string | null;
   latitude: number | null; longitude: number | null; discovery_score: number | null;
@@ -84,7 +131,383 @@ export function composeExplore(
     .slice(0, limit);
 }
 
+function csvQuery(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  return [...new Set(value.split(",").map((part) => part.trim().toLowerCase()).filter(Boolean))];
+}
+
+const SAFE_FOLLOWED_SLUG = /^[a-z0-9][a-z0-9-]{0,199}$/;
+
+/**
+ * Device-local follows have no server identity.  When the client asks for
+ * followed-only results it must send the complete, authoritative slug set;
+ * never accept arbitrary SQL-ish values or silently treat a missing set as
+ * "all stations".
+ */
+function parseFollowedSlugs(value: unknown): string[] | null {
+  if (typeof value !== "string") return null;
+  if (value.trim() === "") return [];
+  const slugs = [...new Set(value.split(",").map((slug) => slug.trim().toLowerCase()))];
+  if (slugs.some((slug) => !slug || !SAFE_FOLLOWED_SLUG.test(slug)) || slugs.length > 500) return null;
+  return slugs;
+}
+
+function normalizeDecadeFilter(values: string[]): CatalogDecade[] | null {
+  const normalized = values.map((value) => value
+    .replace(/^decade[:=-]?/, "")
+    .replace(/^era[:=-]?/, ""));
+  if (normalized.some((value) => !CATALOG_DECADES.includes(value as CatalogDecade))) return null;
+  return normalized as CatalogDecade[];
+}
+
+function parseOffset(value: unknown): number | null {
+  if (value == null || value === "") return 0;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 100_000 ? parsed : null;
+}
+
+function encodeCatalogCursor(offset: number): string {
+  return Buffer.from(JSON.stringify({ offset }), "utf8").toString("base64url");
+}
+
+function decodeCatalogCursor(value: unknown): number | null {
+  if (typeof value !== "string" || value.length > 200) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { offset?: unknown };
+    return parseOffset(parsed.offset);
+  } catch {
+    return null;
+  }
+}
+
+function catalogRowToStation(row: CatalogDbRow): CatalogStation {
+  return {
+    slug: row.slug,
+    name: row.name,
+    org: row.org,
+    city: row.city,
+    region: row.region,
+    country: row.country,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    locationSource: row.location_source,
+    locationConfidence: row.location_confidence,
+    streamUrl: row.stream_url,
+    active: row.active,
+    hidden: row.hidden,
+    crossingEligible: row.crossing_eligible,
+    stationClass: row.station_class,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    eraGenreMode: row.era_genre_mode,
+    sleepMode: row.sleep_mode,
+    discoveryScore: row.discovery_score == null ? null : Number(row.discovery_score),
+    libraryCrossings: Number(row.library_crossings ?? 0),
+    libraryArtistCrossings: Number(row.library_artist_crossings ?? 0),
+    focusedArtistCrossings: Number(row.focused_artist_crossings ?? 0),
+    live: Boolean(row.live),
+    currentAgeTier: row.current_age_tier as CatalogPlayingNow | null,
+    broZones: Array.isArray(row.bro_zones) ? row.bro_zones : [],
+    support: Boolean(row.support),
+    followed: Boolean(row.followed),
+    sortOrder: row.sort_order == null ? null : Number(row.sort_order),
+  };
+}
+
+/**
+ * Unified listener station catalog.  This is intentionally an /explore
+ * variant rather than a second stations directory: operational station routes
+ * keep ownership of playback, now-playing, and hidden mode pools.
+ */
+async function handleCatalog(req: Request, res: Response) {
+  const rawLens = typeof req.query.lens === "string" ? req.query.lens.trim().toLowerCase() : "";
+  const rawMode = typeof req.query.mode === "string" ? req.query.mode.trim().toLowerCase() : "";
+  const lensValue = rawLens || (CATALOG_LENSES.includes(rawMode as CatalogLens) ? rawMode : "");
+  if (!CATALOG_LENSES.includes(lensValue as CatalogLens)) {
+    return res.status(400).json({ code: "invalid_lens", error: "lens must be local, for-you, or all." });
+  }
+  const lens = lensValue as CatalogLens;
+  const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 12;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+    return res.status(400).json({ code: "invalid_limit", error: `limit must be an integer from 1 to ${MAX_LIMIT}.` });
+  }
+  const radiusMiles = typeof req.query.radiusMiles === "string" ? Number(req.query.radiusMiles) : 50;
+  if (!isNearbyRadius(radiusMiles)) {
+    return res.status(400).json({ code: "invalid_radius", error: "radiusMiles must be 25, 50, 100, or 250." });
+  }
+  const sortValue = typeof req.query.sort === "string" ? req.query.sort.trim().toLowerCase() : "recommended";
+  if (!CATALOG_SORTS.includes(sortValue as CatalogSort)) {
+    return res.status(400).json({ code: "invalid_sort", error: "sort must be recommended, nearest, best-match, rarest-crossing, live-now, or name." });
+  }
+  const sort = sortValue as CatalogSort;
+  if ((sort === "nearest" && lens !== "local") ||
+      ((sort === "best-match" || sort === "rarest-crossing") && lens !== "for-you")) {
+    return res.status(400).json({ code: "invalid_sort_for_lens", error: `sort "${sort}" is not available for the ${lens} lens.` });
+  }
+
+  const decadeValues = normalizeDecadeFilter(csvQuery(req.query.decade));
+  if (decadeValues === null) {
+    return res.status(400).json({ code: "invalid_decade", error: "decade filters must be explicit values such as 1980s." });
+  }
+  const stationTypes = csvQuery(req.query.stationType || req.query.type);
+  if (stationTypes.some((value) => !CATALOG_STATION_TYPES.includes(value as (typeof CATALOG_STATION_TYPES)[number]))) {
+    return res.status(400).json({ code: "invalid_station_type", error: "stationType contains an unsupported editorial category." });
+  }
+  const formats = csvQuery(req.query.format || req.query.specialistFormat);
+  if (formats.some((value) => !CATALOG_FORMATS.includes(value as CatalogFormat))) {
+    return res.status(400).json({ code: "invalid_format", error: "format contains an unsupported Specialist format." });
+  }
+  const playingNow = csvQuery(req.query.playing);
+  if (playingNow.some((value) => !CATALOG_PLAYING_NOW.includes(value as CatalogPlayingNow))) {
+    return res.status(400).json({ code: "invalid_playing", error: "playing filters must be first, current, catalog, or deep." });
+  }
+  const collection = typeof req.query.collection === "string" ? req.query.collection.trim().toLowerCase() : "";
+  if (collection && collection !== "bro-zones") {
+    return res.status(400).json({ code: "invalid_collection", error: "collection must be bro-zones." });
+  }
+  const broZones = csvQuery(req.query.broZones || req.query.zone || req.query.broZone || req.query.zones);
+  if (broZones.some((zone) => !BRO_ZONES_REVIEWED.includes(zone as (typeof BRO_ZONES_REVIEWED)[number]))) {
+    return res.status(400).json({ code: "invalid_bro_zone", error: "zone contains an unsupported Bro Zone." });
+  }
+  const followedOnly = ["1", "true"].includes(String(req.query.followed ?? "").toLowerCase());
+  const supportOnly = ["1", "true"].includes(String(req.query.support ?? "").toLowerCase());
+  const followedSlugs = followedOnly
+    ? parseFollowedSlugs(req.query.followedSlugs ?? req.query.followedStations)
+    : null;
+  if (followedOnly && followedSlugs === null) {
+    return res.status(400).json({
+      code: "missing_followed_slugs",
+      error: "followed filtering requires the complete comma-separated followedSlugs list.",
+    });
+  }
+  const offsetValue = parseOffset(req.query.offset);
+  if (offsetValue === null) {
+    return res.status(400).json({ code: "invalid_offset", error: "offset must be a non-negative integer no greater than 100000." });
+  }
+  const cursorOffset = req.query.cursor == null ? null : decodeCatalogCursor(req.query.cursor);
+  if (req.query.cursor != null && cursorOffset === null) {
+    return res.status(400).json({ code: "invalid_cursor", error: "cursor is invalid or expired." });
+  }
+  if (req.query.cursor != null && req.query.offset != null) {
+    return res.status(400).json({ code: "invalid_pagination", error: "use either cursor or offset, not both." });
+  }
+  const filters: CatalogFilters = {
+    stationTypes: stationTypes as CatalogFilters["stationTypes"],
+    formats: formats as CatalogFormat[],
+    decades: decadeValues,
+    playingNow: playingNow as CatalogPlayingNow[],
+    broZones,
+    broZonesCollectionOnly: collection === "bro-zones",
+    followedOnly,
+    supportOnly,
+  };
+
+  const zip = typeof req.query.zip === "string" ? req.query.zip.trim() : "";
+  const city = typeof req.query.city === "string" ? req.query.city.trim() : "";
+  const region = typeof req.query.region === "string" ? req.query.region.trim() : "";
+  const country = typeof req.query.country === "string" ? req.query.country.trim() : "US";
+  const origin = zip
+    ? resolveUsZip(zip)
+    : city && region
+      ? (() => {
+        const coarse = coarseUsCityLocation({ city, region, country });
+        return coarse && usableCoordinates(coarse.latitude, coarse.longitude)
+          ? { city, region, country: "US" as const, latitude: coarse.latitude, longitude: coarse.longitude as number }
+          : null;
+      })()
+      : null;
+  if (lens === "local" && !origin) {
+    return res.status(400).json({ code: "invalid_locality", error: "local lens requires a known US ZIP or city and state." });
+  }
+
+  const user = lens === "for-you" ? await getUserForListenerRead(req) : null;
+  const focusedArtist = typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+  if (focusedArtist.length > 100) {
+    return res.status(400).json({ code: "invalid_artist", error: "artist focus must be at most 100 characters." });
+  }
+  if (focusedArtist && lens !== "for-you") {
+    return res.status(400).json({ code: "invalid_artist_lens", error: "artist focus is only available on the For You lens." });
+  }
+  const crossingSql = user ? sql`
+    (SELECT count(*)::int FROM spins sp
+      JOIN library_items li ON li.mbid=sp.mbid
+      WHERE sp.station_id=s.id AND li.user_id=${user.id} AND li.removed_at IS NULL
+        AND sp.played_at >= now()-interval '90 days')` : sql`0`;
+  const artistCrossingSql = user ? sql`
+    (SELECT count(*)::int FROM spins sp
+      JOIN recordings r ON r.mbid=sp.mbid
+      WHERE sp.station_id=s.id
+        AND NOT EXISTS (
+          SELECT 1 FROM library_items exact_li
+          WHERE exact_li.user_id=${user.id} AND exact_li.mbid=sp.mbid
+            AND exact_li.removed_at IS NULL
+        )
+        AND (
+          (r.artist_mbid IS NOT NULL AND EXISTS (
+            SELECT 1
+            FROM library_items artist_li
+            JOIN recordings library_recording ON library_recording.mbid=artist_li.mbid
+            WHERE artist_li.user_id=${user.id} AND artist_li.removed_at IS NULL
+              AND library_recording.artist_mbid=r.artist_mbid
+          ))
+          OR lower(trim(r.artist)) IN (
+            SELECT lower(trim(artist)) FROM spotify_library_items
+            WHERE user_id=${user.id} AND mbid IS NULL AND removed_at IS NULL
+          )
+          OR lower(trim(r.artist)) IN (
+            SELECT lower(trim(artist_name)) FROM taste_seeds
+            WHERE user_id=${user.id}
+          )
+        )
+        AND sp.played_at >= now()-interval '90 days')` : sql`0`;
+  const focusedArtistCrossingSql = user && focusedArtist ? sql`
+    (SELECT count(*)::int
+       FROM spins focused_sp
+       JOIN recordings focused_recording ON focused_recording.mbid=focused_sp.mbid
+      WHERE focused_sp.station_id=s.id
+        AND focused_sp.played_at >= now()-interval '90 days'
+        AND (
+          lower(trim(focused_recording.artist))=lower(trim(${focusedArtist}))
+          OR focused_recording.artist_mbid=${focusedArtist}
+        ))` : sql`0`;
+  // The latest-spin and prior-spin lookups are among the most expensive parts
+  // of this catalog query. They are only observable through the playing-now
+  // filter or the live-now sort; the default recommended catalog must not pay
+  // that cost for every station.
+  const needsNowPlayingEvidence = playingNow.length > 0 || sort === "live-now";
+  const currentTrackSelect = needsNowPlayingEvidence
+    ? sql`current_track.age_tier`
+    : sql`NULL::text`;
+  const liveSelect = needsNowPlayingEvidence
+    ? sql`EXISTS (
+        SELECT 1 FROM spins current_spin
+        WHERE current_spin.station_id=s.id
+          AND COALESCE(current_spin.observed_at, current_spin.created_at) >= now()-interval '15 minutes'
+      )`
+    : sql`false`;
+  const currentTrackJoin = needsNowPlayingEvidence ? sql`
+    LEFT JOIN LATERAL (
+      SELECT CASE
+        WHEN r.release_year IS NULL THEN NULL
+        WHEN NOT EXISTS (
+          SELECT 1 FROM spins prior
+          WHERE prior.mbid=latest.mbid AND prior.played_at < latest.played_at
+        ) AND r.release_year >= EXTRACT(YEAR FROM now())::int THEN 'first'
+        WHEN (EXTRACT(YEAR FROM now())::int-r.release_year)*12 <= 18 THEN 'current'
+        WHEN (EXTRACT(YEAR FROM now())::int-r.release_year)*12 <= 60 THEN 'catalog'
+        ELSE 'deep'
+      END AS age_tier
+      FROM spins latest
+      JOIN recordings r ON r.mbid=latest.mbid
+      WHERE latest.station_id=s.id
+        AND COALESCE(latest.observed_at, latest.created_at) >= now()-interval '15 minutes'
+      ORDER BY COALESCE(latest.observed_at, latest.created_at) DESC, latest.id DESC
+      LIMIT 1
+    ) current_track ON true
+  ` : sql``;
+  const rows = await db.execute<CatalogDbRow>(sql`
+    SELECT s.*,
+      ${crossingSql} AS library_crossings,
+      ${artistCrossingSql} AS library_artist_crossings,
+      ${focusedArtistCrossingSql} AS focused_artist_crossings,
+      COALESCE((
+        SELECT array_agg(DISTINCT scm.zone ORDER BY scm.zone)
+        FROM station_collection_memberships scm
+        JOIN station_collections sc ON sc.id=scm.collection_id
+        WHERE scm.station_id=s.id AND sc.slug='bro-zones' AND scm.zone IS NOT NULL
+      ), ARRAY[]::text[]) AS bro_zones,
+      (NULLIF(trim(COALESCE(s.donate_url, '')), '') IS NOT NULL
+        OR NULLIF(trim(COALESCE(s.store_url, '')), '') IS NOT NULL) AS support,
+      false AS followed,
+      ${currentTrackSelect} AS current_age_tier,
+      ${liveSelect} AS live
+    FROM stations s
+    ${currentTrackJoin}
+    WHERE s.active=true AND s.hidden=false AND s.crossing_eligible=true
+      AND s.stream_url IS NOT NULL AND s.stream_url <> ''
+    ORDER BY s.sort_order ASC NULLS LAST, s.name ASC, s.slug ASC
+  `);
+  const followedSet = followedSlugs === null ? null : new Set(followedSlugs);
+  const composed = composeStationCatalog(
+    rows.rows
+      .map(catalogRowToStation)
+      .map((station) => ({
+        ...station,
+        followed: followedSet ? followedSet.has(station.slug.toLowerCase()) : false,
+      }))
+      .filter((station) => !followedOnly || station.followed === true),
+    lens,
+    filters,
+    sort,
+    origin,
+    radiusMiles,
+    limit,
+    cursorOffset ?? offsetValue,
+  );
+  const stations = composed.items.map((item) => ({
+    station: {
+      slug: item.station.slug,
+      name: item.station.name,
+      org: item.station.org ?? null,
+      city: item.station.city,
+      region: item.station.region,
+      country: item.station.country ?? null,
+      streamUrl: item.station.streamUrl ?? null,
+      stationType: item.stationType,
+      formats: item.formats,
+      decades: item.decades,
+      broZones: item.station.broZones ?? [],
+      support: item.station.support === true,
+      followed: item.station.followed === true,
+      currentAgeTier: item.station.currentAgeTier ?? null,
+    },
+    proximity: item.proximity,
+    evidence: item.evidence,
+    score: item.score,
+    explanation: lens === "local"
+      ? item.proximity.verified
+        ? `${item.proximity.distanceMiles} miles from the supplied locality.`
+        : "No verified station-base location."
+      : lens === "for-you"
+        ? focusedArtist
+          ? item.evidence.focusedArtistCrossings > 0
+            ? `${item.evidence.focusedArtistCrossings} recent play${item.evidence.focusedArtistCrossings === 1 ? "" : "s"} for ${focusedArtist}.`
+            : `No recent play evidence for ${focusedArtist}; shown as an eligible fallback.`
+          : item.evidence.libraryCrossings > 0
+          ? `${item.evidence.libraryCrossings} Library crossing${item.evidence.libraryCrossings === 1 ? "" : "s"} in the last 90 days.`
+          : "No Library crossing evidence yet; shown as an eligible fallback."
+        : "Eligible catalog station; no personalized ranking claim.",
+  }));
+  return res.json({
+    stations,
+    items: stations,
+    total: composed.composition.eligibleCount,
+    nextCursor: (cursorOffset ?? offsetValue) + composed.items.length < composed.composition.eligibleCount
+      ? encodeCatalogCursor((cursorOffset ?? offsetValue) + composed.items.length)
+      : null,
+    metadata: {
+      ...composed.composition,
+      locality: origin ? { city: origin.city, region: origin.region, country: origin.country } : null,
+      radiusMiles: lens === "local" ? radiusMiles : null,
+      personalCrossings: Boolean(user),
+      focusedArtist: focusedArtist || null,
+      followedSource: followedOnly ? "client-authoritative-slugs" : null,
+      pagination: {
+        total: composed.composition.eligibleCount,
+        offset: cursorOffset ?? offsetValue,
+        limit,
+        nextCursor: (cursorOffset ?? offsetValue) + composed.items.length < composed.composition.eligibleCount
+          ? encodeCatalogCursor((cursorOffset ?? offsetValue) + composed.items.length)
+          : null,
+      },
+    },
+  });
+}
+
 router.get("/explore", h(async (req, res) => {
+  if (typeof req.query.lens === "string" ||
+      (typeof req.query.mode === "string" && CATALOG_LENSES.includes(req.query.mode.trim().toLowerCase() as CatalogLens))) {
+    return handleCatalog(req, res);
+  }
   const toIso = (value: Date | string) => value instanceof Date ? value.toISOString() : new Date(value).toISOString();
   const mode = typeof req.query.mode === "string" ? req.query.mode : "";
   if (!MODES.has(mode)) return res.status(400).json({ code: "invalid_mode", error: "mode must be location, station, artist, genre, newness, or library-crossing." });
