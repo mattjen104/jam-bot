@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
 import { Link, useLocation, useSearch } from "wouter";
@@ -94,8 +94,13 @@ import {
   countBroZones,
   filterBroZoneCollection,
   parseBroZoneState,
+  stationBroZones,
   writeBroZoneState,
 } from "../lib/broZones";
+import {
+  sortBroZoneStationsByDistance,
+  type BroZoneOrigin,
+} from "../lib/broZoneProximity";
 import {
   buildFocusedLibraryUrl,
   buildLibraryEntityUrl,
@@ -1421,6 +1426,10 @@ function DemoMergedLibrary({
   const remoteLayout = params.get("layout") === "grid";
   const focusedArtist = params.get("focus");
   const focusedArtistMbid = params.get("focusId");
+  const hasActiveFilters = params.has("categories") || params.has("specialistCategories") || params.has("broZones") || params.has("stationSort");
+  const stationMode = params.get("stationMode") === "highlights" ? "highlights"
+    : params.get("stationMode") === "all" || hasActiveFilters ? "all"
+    : "highlights";
   const stationSortParam = params.get("stationSort");
   const stationSort: "overlap" | "live" | "discovery" | "name" | "newest" =
     stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name" || stationSortParam === "newest"
@@ -1450,6 +1459,12 @@ function DemoMergedLibrary({
   }, [search]);
   const broZoneState = useMemo(() => parseBroZoneState(search), [search]);
   const activeBroZones = broZoneState.regions;
+  const [broZoneOrigin, setBroZoneOrigin] = useState<BroZoneOrigin | null>(null);
+  const [broZoneLocationLabel, setBroZoneLocationLabel] = useState<string | null>(null);
+  const [broZipOpen, setBroZipOpen] = useState(false);
+  const [broZip, setBroZip] = useState("");
+  const [broZipError, setBroZipError] = useState<string | null>(null);
+  const [broZipLoading, setBroZipLoading] = useState(false);
 
   useEffect(() => {
     const raw = params.get("scroll");
@@ -1498,6 +1513,13 @@ function DemoMergedLibrary({
     [demoLibraryData],
   );
   const broZoneCounts = useMemo(() => countBroZones(stations), [stations]);
+  const broZoneStations = useMemo(
+    () => sortBroZoneStationsByDistance(
+      stations.filter((station) => stationBroZones(station).size > 0),
+      broZoneOrigin,
+    ),
+    [broZoneOrigin, stations],
+  );
   useEffect(() => {
     if (
       view !== "songs"
@@ -1581,6 +1603,31 @@ function DemoMergedLibrary({
     mutate(next);
     const query = next.toString();
     setLocation(query ? `/library?${query}` : "/library");
+  };
+
+  const submitBroZoneZip = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBroZipLoading(true);
+    setBroZipError(null);
+    try {
+      const response = await fetch(`/api/stations/zip-origin?zip=${encodeURIComponent(broZip.trim())}`);
+      const body = await response.json().catch(() => null) as {
+        origin?: BroZoneOrigin & { city?: string; region?: string };
+        error?: string;
+      } | null;
+      if (!response.ok || !body?.origin) {
+        throw new Error(body?.error ?? "That ZIP could not be checked.");
+      }
+      setBroZoneOrigin(body.origin);
+      setBroZoneLocationLabel(
+        [body.origin.city, body.origin.region].filter(Boolean).join(", ") || broZip.trim(),
+      );
+      setBroZipOpen(false);
+    } catch (error) {
+      setBroZipError(error instanceof Error ? error.message : "That ZIP could not be checked.");
+    } finally {
+      setBroZipLoading(false);
+    }
   };
   const removeMatchFilter = (fact: MatchEvidence) => updateSearch(
     (next) => removeLibraryMatchFilter(next, fact),
@@ -1714,8 +1761,27 @@ function DemoMergedLibrary({
           />}
           {view === "stations" && (
             <>
-              <LibraryStationFilters
-                categories={activeCategories}
+              <button
+                type="button"
+                className="demo-merged-library__station-mode"
+                onClick={() => updateSearch((next) => {
+                  if (stationMode === "highlights") {
+                    next.set("stationMode", "all");
+                  } else {
+                    next.delete("stationMode");
+                    next.delete("stationSort");
+                    next.delete("categories");
+                    next.delete("specialistCategories");
+                    next.delete("broZones");
+                  }
+                })}
+              >
+                {stationMode === "highlights" ? "All stations" : "Highlights"}
+              </button>
+              {stationMode === "all" && (
+                <>
+                  <LibraryStationFilters
+                    categories={activeCategories}
                 broZonesActive={broZoneState.active}
                 broZones={activeBroZones}
                 broZoneCounts={broZoneCounts}
@@ -1776,6 +1842,8 @@ function DemoMergedLibrary({
                   <option value="newest">Newest music first</option>
                 </select>
               </span>
+              </>
+              )}
             </>
           )}
 
@@ -1805,9 +1873,52 @@ function DemoMergedLibrary({
             </>
           )}
         </div>
+        {view === "stations" && stationMode === "highlights" && broZipOpen ? (
+          <form className="demo-merged-library__zip-form" onSubmit={submitBroZoneZip}>
+            <label htmlFor="demo-bro-zone-zip">Sort the Bro Zone from a US ZIP</label>
+            <div>
+              <input
+                id="demo-bro-zone-zip"
+                inputMode="numeric"
+                autoComplete="postal-code"
+                maxLength={5}
+                pattern="[0-9]{5}"
+                placeholder="ZIP"
+                value={broZip}
+                onChange={(event) => setBroZip(event.target.value.replace(/\D/g, "").slice(0, 5))}
+              />
+              <button type="submit" disabled={broZip.length !== 5 || broZipLoading}>
+                {broZipLoading ? "Checking…" : "Use ZIP"}
+              </button>
+              <button type="button" onClick={() => {
+                setBroZipOpen(false);
+                setBroZipError(null);
+              }}>
+                Cancel
+              </button>
+              {broZoneOrigin ? (
+                <button type="button" onClick={() => {
+                  setBroZoneOrigin(null);
+                  setBroZoneLocationLabel(null);
+                  setBroZip("");
+                  setBroZipOpen(false);
+                }}>
+                  Use unsorted Bro Zone
+                </button>
+              ) : null}
+            </div>
+            {broZipError ? <p role="alert">{broZipError}</p> : null}
+            <small>ZIP stays on this page and is used only to order reviewed station locations.</small>
+          </form>
+        ) : null}
       </header>
       {view === "stations" && remoteLayout && !selectedStationSlug ? (
         <DemoStationRemote
+          mode={stationMode}
+          onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
+          broZoneStations={broZoneStations}
+          broZoneLocationLabel={broZoneLocationLabel}
+          onRequestBroZoneZip={() => setBroZipOpen(true)}
           stations={filteredStations}
           hasData={hasSeeds || hasLibrary}
           focusedArtist={focusedArtist}
@@ -1828,6 +1939,11 @@ function DemoMergedLibrary({
         />
       ) : view === "stations" ? (
         <RadioSurface
+          mode={stationMode}
+          onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
+          broZoneStations={broZoneStations}
+          broZoneLocationLabel={broZoneLocationLabel}
+          onRequestBroZoneZip={() => setBroZipOpen(true)}
           stations={filteredStations}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}

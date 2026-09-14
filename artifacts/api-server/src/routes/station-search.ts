@@ -73,7 +73,7 @@ export function createStationSearchLimiter(limit: number) {
 const defaultSearchLimiter = createStationSearchLimiter(SEARCH_RATE_LIMIT);
 const searchLimiterGuard: RequestHandler = (req, res, next) =>
   process.env["VITEST"] ? next() : defaultSearchLimiter(req, res, next);
-router.use(["/stations/search", "/stations/nearby"], searchLimiterGuard);
+router.use(["/stations/search", "/stations/nearby", "/stations/zip-origin"], searchLimiterGuard);
 
 /**
  * Short-lived single-flight cache for identical searches. Stores the
@@ -301,6 +301,25 @@ function catalogResult(
     inLoreCatalog: true,
   };
 }
+
+// GET /api/stations/zip-origin
+// Resolves a request-scoped ZIP centroid for client-side sorting of the
+// already-loaded curated catalog. The ZIP is never stored.
+router.get("/stations/zip-origin", h(async (req, res) => {
+  const zip = typeof req.query.zip === "string" ? req.query.zip.trim() : "";
+  if (!/^\d{5}$/.test(zip)) {
+    return res.status(400).json({ code: "invalid_zip", error: "Enter a 5-digit US ZIP code." });
+  }
+  const origin = resolveUsZip(zip);
+  if (!origin) {
+    return res.status(404).json({ code: "unknown_zip", error: "That ZIP code is not in the US location dataset." });
+  }
+  return res.json({
+    origin,
+    distanceMeaning: "Approximate straight-line distance from the ZIP centroid to where each station is based; not a reception-coverage claim.",
+    dataset: ZIP_DATASET,
+  });
+}));
 
 // GET /api/stations/nearby
 router.get("/stations/nearby", h(async (req, res) => {

@@ -245,6 +245,8 @@ function EvidenceLinks({
 }
 
 export function DemoStationRemote({
+  mode = "all",
+  onEnterAllStations,
   stations,
   hasData,
   focusedArtist,
@@ -254,7 +256,12 @@ export function DemoStationRemote({
   onFocusArtist,
   onOpenStationCrossings,
   returnContext,
+  broZoneStations = [],
+  broZoneLocationLabel = null,
+  onRequestBroZoneZip,
 }: {
+  mode?: "highlights" | "all";
+  onEnterAllStations?: (sort: "overlap" | "discovery") => void;
   stations: DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
@@ -264,20 +271,34 @@ export function DemoStationRemote({
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
   onOpenStationCrossings?: (slug: string) => void;
   returnContext?: string;
+  broZoneStations?: DialStation[];
+  broZoneLocationLabel?: string | null;
+  onRequestBroZoneZip?: () => void;
 }) {
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [touchSlug, setTouchSlug] = useState<string | null>(null);
+  const [broZoneExpanded, setBroZoneExpanded] = useState(false);
+  const broZoneSlugs = useMemo(
+    () => new Set(broZoneStations.map((station) => station.station.slug)),
+    [broZoneStations],
+  );
+  const sectionStations = useMemo(
+    () => mode === "highlights"
+      ? stations.filter((station) => !broZoneSlugs.has(station.station.slug))
+      : stations,
+    [broZoneSlugs, mode, stations],
+  );
   const sections = useMemo(
     () => buildDemoRadioSections({
-      stations,
+      stations: sectionStations,
       hasData,
       focusedArtist,
       focusedArtistMbid,
       sort,
       forceAllStations,
     }),
-    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sort, stations],
+    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sectionStations, sort],
   );
   const orderedStations = sections.orderedStations;
   const missionSlugs = new Set(
@@ -321,7 +342,113 @@ export function DemoStationRemote({
           {evidence.liveContext ? <span> · {evidence.liveContext}</span> : null}
         </RemoteInspector>
       ) : null}
-      {orderedStations.length > 0 ? (
+      {mode === "highlights" && !focusedArtist ? (
+        <>
+          {broZoneStations.length > 0 ? (
+            <div className="demo-library-remote__grid">
+              <div className="demo-library-remote__section-heading">
+                <span>{broZoneLocationLabel ? "Near you (& bros)" : "Bro Zone"}</span>
+                {onRequestBroZoneZip ? (
+                  <button
+                    type="button"
+                    className="demo-station-section-action"
+                    onClick={onRequestBroZoneZip}
+                  >
+                    {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
+                  </button>
+                ) : null}
+              </div>
+              {(broZoneExpanded ? broZoneStations : broZoneStations.slice(0, 1))
+                .map((station) => (
+                  <StationRemoteTile
+                    key={station.station.slug}
+                    station={station}
+                    selected={selectedSlug === station.station.slug}
+                    focusedMatch={false}
+                    onPreview={() => setPreviewSlug(station.station.slug)}
+                    onLeave={() => setPreviewSlug(null)}
+                    onTune={() => {
+                      setTouchSlug(station.station.slug);
+                      void radio.toggle(station.station);
+                    }}
+                  />
+                ))}
+              {broZoneStations.length > 1 ? (
+                <button
+                  type="button"
+                  className="demo-library-remote__group-expand"
+                  aria-expanded={broZoneExpanded}
+                  onClick={() => setBroZoneExpanded((expanded) => !expanded)}
+                >
+                  {broZoneExpanded
+                    ? "Show nearest only"
+                    : `Show all ${broZoneStations.length}`}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {sections.crossingStations.length > 0 ? (
+            <div className="demo-library-remote__grid demo-library-remote__group--secondary">
+              <div className="demo-library-remote__section-heading">
+                <span>For you</span>
+                {onEnterAllStations && (
+                  <button
+                    type="button"
+                    onClick={() => onEnterAllStations("overlap")}
+                    className="demo-station-section-action"
+                  >
+                    See all {sections.crossingStations.length}
+                  </button>
+                )}
+              </div>
+              {sections.crossingStations.slice(0, 4).map((station) => (
+                <StationRemoteTile
+                  key={station.station.slug}
+                  station={station}
+                  selected={selectedSlug === station.station.slug}
+                  focusedMatch={false}
+                  onPreview={() => setPreviewSlug(station.station.slug)}
+                  onLeave={() => setPreviewSlug(null)}
+                  onTune={() => {
+                    setTouchSlug(station.station.slug);
+                    void radio.toggle(station.station);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          {sections.rosterStations.length > 0 ? (
+            <div className="demo-library-remote__grid demo-library-remote__group--secondary">
+              <div className="demo-library-remote__section-heading">
+                <span>Beyond your Library</span>
+                {onEnterAllStations && (
+                  <button
+                    type="button"
+                    onClick={() => onEnterAllStations("discovery")}
+                    className="demo-station-section-action"
+                  >
+                    See editorial
+                  </button>
+                )}
+              </div>
+              {sections.rosterStations.slice(0, 4).map((station) => (
+                <StationRemoteTile
+                  key={station.station.slug}
+                  station={station}
+                  selected={selectedSlug === station.station.slug}
+                  focusedMatch={false}
+                  onPreview={() => setPreviewSlug(station.station.slug)}
+                  onLeave={() => setPreviewSlug(null)}
+                  onTune={() => {
+                    setTouchSlug(station.station.slug);
+                    void radio.toggle(station.station);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : orderedStations.length > 0 ? (
         <div className="demo-library-remote__grid">
           {orderedStations.map((station, index) => {
             const stationEvidence = missionSlugs.has(station.station.slug)
@@ -342,7 +469,7 @@ export function DemoStationRemote({
               <div key={station.station.slug} style={{ display: "contents" }}>
               {sections.rosterStations.length > 0
                 && index === orderedStations.length - sections.rosterStations.length ? (
-                  <div className="demo-library-remote__section-label">Beyond your Library</div>
+                  <div className="demo-library-remote__section-label" style={{ gridColumn: "1 / -1", color: "hsl(var(--muted-foreground))", fontFamily: "var(--app-font-mono)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginTop: 12, marginBottom: 2 }}>Beyond your Library</div>
                 ) : null}
               <StationRemoteTile
                 station={station}

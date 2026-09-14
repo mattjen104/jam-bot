@@ -214,4 +214,38 @@ describe("demo Radio station cards", () => {
     expect(screen.getByText(/Listener-supported freeform radio/)).toBeTruthy();
     expect(screen.queryByText(/This set/)).toBeNull();
   });
+
+  test("leads Highlights with an expandable Bro Zone and keeps it out of For you", () => {
+    const bro = matchingStation();
+    const personal = matchingStation();
+    personal.station.slug = "heady";
+    personal.station.name = "HEADY";
+    const mission = matchingStation();
+    mission.station.slug = "wfmu";
+    mission.station.name = "WFMU";
+    mission.station.streamUrl = "https://radio.example/wfmu";
+    mission.station.automationClass = "human";
+    mission.weekCrossings = 0;
+    mission.lifetimeCrossings = 0;
+    mission.lifetimeArtistCrossings = 0;
+    mission.liveTrack = null;
+
+    render(
+      <RadioSurface
+        mode="highlights"
+        stations={[bro, personal, mission]}
+        broZoneStations={[bro]}
+        broZoneLocationLabel="Seattle, WA"
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+      />,
+    );
+
+    const headings = screen.getAllByText(/Near you \(& bros\)|For you|Beyond your Library/)
+      .map((element) => element.textContent);
+    expect(headings).toEqual(["Near you (& bros)", "For you", "Beyond your Library"]);
+    expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
+    expect(screen.getByText("HEADY")).toBeTruthy();
+  });
 });

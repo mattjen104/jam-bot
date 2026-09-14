@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationMark } from "./StationMark";
 import type { DialStation } from "../hooks/useDialData";
@@ -21,6 +21,8 @@ export function RadioSurface({
   hasSeeds,
   hasLibrary,
   showHeader = true,
+  mode = "all",
+  onEnterAllStations,
   sort = "overlap",
   focusedArtist = null,
   forceAllStations = false,
@@ -29,11 +31,16 @@ export function RadioSurface({
   onFocusArtist,
   onOpenStationCrossings,
   onCloseStationCrossings,
+  broZoneStations = [],
+  broZoneLocationLabel = null,
+  onRequestBroZoneZip,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
   hasLibrary: boolean;
   showHeader?: boolean;
+  mode?: "highlights" | "all";
+  onEnterAllStations?: (sort: "overlap" | "discovery") => void;
   sort?: "overlap" | "live" | "discovery" | "name" | "newest";
   focusedArtist?: string | null;
   forceAllStations?: boolean;
@@ -42,26 +49,40 @@ export function RadioSurface({
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
+  broZoneStations?: DialStation[];
+  broZoneLocationLabel?: string | null;
+  onRequestBroZoneZip?: () => void;
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }) {
   const { radio } = usePlayer();
+  const [broZoneExpanded, setBroZoneExpanded] = useState(false);
 
   const hasData = hasSeeds || hasLibrary;
+  const broZoneSlugs = useMemo(
+    () => new Set(broZoneStations.map((station) => station.station.slug)),
+    [broZoneStations],
+  );
+  const sectionStations = useMemo(
+    () => mode === "highlights"
+      ? stations.filter((station) => !broZoneSlugs.has(station.station.slug))
+      : stations,
+    [broZoneSlugs, mode, stations],
+  );
   const {
     crossingStations: allCrossings,
     rosterStations,
     orderedStations,
   } = useMemo(
     () => buildDemoRadioSections({
-      stations,
+      stations: sectionStations,
       hasData,
       focusedArtist,
       focusedArtistMbid,
       sort,
       forceAllStations,
     }),
-    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sort, stations],
+    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sectionStations, sort],
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
@@ -219,7 +240,74 @@ export function RadioSurface({
         </div>
       ) : null}
 
-      {orderedStations.length > 0 ? (
+      {mode === "highlights" && !focusedArtist ? (
+        <>
+          {broZoneStations.length > 0 ? (
+            <>
+              <div className="demo-radio__section-label">
+                <span>{broZoneLocationLabel ? "Near you (& bros)" : "Bro Zone"}</span>
+                {onRequestBroZoneZip ? (
+                  <button
+                    type="button"
+                    className="demo-station-section-action"
+                    onClick={onRequestBroZoneZip}
+                  >
+                    {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
+                  </button>
+                ) : null}
+              </div>
+              {(broZoneExpanded ? broZoneStations : broZoneStations.slice(0, 1))
+                .map((station) => renderRow(station))}
+              {broZoneStations.length > 1 ? (
+                <button
+                  type="button"
+                  className="demo-radio__group-expand"
+                  aria-expanded={broZoneExpanded}
+                  onClick={() => setBroZoneExpanded((expanded) => !expanded)}
+                >
+                  {broZoneExpanded
+                    ? "Show nearest only"
+                    : `Show all ${broZoneStations.length} Bro Zone stations`}
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {allCrossings.length > 0 ? (
+            <>
+              <div className="demo-radio__section-label demo-radio__section-label--secondary">
+                <span>For you</span>
+                {onEnterAllStations && (
+                  <button
+                    type="button"
+                    onClick={() => onEnterAllStations("overlap")}
+                    className="demo-station-section-action"
+                  >
+                    See all {allCrossings.length}
+                  </button>
+                )}
+              </div>
+              {allCrossings.slice(0, 4).map((ds) => renderRow(ds))}
+            </>
+          ) : null}
+          {rosterStations.length > 0 ? (
+            <>
+              <div className="demo-radio__section-label demo-radio__section-label--secondary">
+                <span>Beyond your Library</span>
+                {onEnterAllStations && (
+                  <button
+                    type="button"
+                    onClick={() => onEnterAllStations("discovery")}
+                    className="demo-station-section-action"
+                  >
+                    See editorial
+                  </button>
+                )}
+              </div>
+              {rosterStations.slice(0, 4).map((ds) => renderRow(ds))}
+            </>
+          ) : null}
+        </>
+      ) : orderedStations.length > 0 ? (
         <>
           {orderedStations.map((ds, index) => (
             <div key={ds.station.slug} style={{ display: "contents" }}>
